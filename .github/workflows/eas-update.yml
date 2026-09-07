@@ -1,0 +1,29 @@
+name: Publish EAS Update
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Publish Android EAS Update
+        run: npx eas-cli update --channel production --platform android --message "Fix AnimatedSplash native driver crash"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
