@@ -1,0 +1,14 @@
+{
+  "name": "functions-gamebot",
+  "description": "Standalone Cloud Functions codebase for the mysheba GameBot. Deployed separately from the main app's functions/ codebase. Writes only to roomChats/*/messages, gameBotSessions/*, gamePoints/*, gamePointsLedger/*; read-only on roomChats/{roomId} itself (to see which game is active) — never wallets, transactions, salary data, or the room doc.",
+  "engines": { "node": "20" },
+  "main": "index.js",
+  "scripts": {
+    "deploy": "firebase deploy --only functions:gamebot"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0",
+    "firebase-functions": "^5.0.0"
+  },
+  "private": true
+}

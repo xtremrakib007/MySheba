@@ -1,0 +1,133 @@
+// Forgot Password - server half.
+//
+// The app's login is phone+password against a deterministic pseudo email
+// (see src/firebase/authService.js's phoneToEmail/APP_EMAIL_DOMAIN), so
+// there's no real inbox Firebase's built-in sendPasswordResetEmail could
+// reach. Instead, exactly like registration (customerRegistration.js) and
+// the device-switch challenge (deviceSessionService.js), we require a
+// FRESH real verification - either real Firebase Phone Auth SMS
+// (phoneVerification.js) or real Firebase email-link (emailVerification.js)
+// - proving the person owns the phone or email already on file for this
+// account, then use the Admin SDK to set a new password directly.
+//
+// Client call (src/firebase/authService.js resetPassword):
+//   const fn = httpsCallable(functions, 'resetPassword');
+//   await fn({ phone, email, newPassword, phoneIdToken, emailIdToken });
+//   // pass exactly ONE of phoneIdToken/emailIdToken, matching whichever
+//   // channel src/screens/ForgotPasswordScreen.js sent the code/link on.
+//
+// Security notes:
+//   - The email path requires the email to match the ACCOUNT's own email
+//     on file (not just any verified email) - otherwise someone could
+//     verify ownership of their own unrelated email and reset a stranger's
+//     phone-based account.
+//   - Every other device is signed out afterward (revokeRefreshTokens),
+//     same as a device switch - a password reset is exactly the kind of
+//     event that should end existing sessions.
+//   - activeSessionId/activeDeviceId/pendingDeviceApproval are cleared so
+//     the next login is treated as fresh rather than as a device switch
+//     needing its own OTP - the reset itself was already a strong
+//     re-verification of identity.
+
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const admin = require('firebase-admin');
+const { assertPhoneVerified } = require('./phoneVerification');
+const { assertEmailVerified } = require('./emailVerification');
+const { logAudit, logServerError } = require('./logService');
+
+function normalizePhone(phone) {
+  return String(phone || '').replace(/[^0-9]/g, '');
+}
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+function isValidPassword(pin) {
+  const value = String(pin || '');
+  return value.length >= 6 && value.length <= 20;
+}
+
+exports.resetPassword = onCall(async (request) => {
+  const { phone, phoneE164, dialCode, email, newPassword, phoneIdToken, emailIdToken } = request.data || {};
+
+  const normalizedPhone = normalizePhone(phone);
+  const normalizedE164 = normalizePhone(phoneE164 || '');
+  if (!normalizedPhone) throw new HttpsError('invalid-argument', 'Please enter a valid phone number.');
+  if (!isValidPassword(newPassword)) throw new HttpsError('invalid-argument', 'Password must be 6-20 characters.');
+  if (!phoneIdToken && !emailIdToken) {
+    throw new HttpsError('invalid-argument', 'Please verify your phone or email first.');
+  }
+
+  const db = admin.firestore();
+  let snap = normalizedE164 ? await db.collection('users').where('phoneE164', '==', `+${normalizedE164}`).limit(1).get() : { empty: true, docs: [] };
+  if (snap.empty) snap = await db.collection('users').where('phone', '==', normalizedPhone).limit(1).get();
+  if (snap.empty) {
+    throw new HttpsError('not-found', 'No account found with that phone number.');
+  }
+  const userDoc = snap.docs[0];
+  const userData = userDoc.data();
+  const realUid = userDoc.id;
+
+  if (userData.suspended) {
+    throw new HttpsError('permission-denied', 'This account has been suspended. Please contact support.');
+  }
+
+  // Verify via whichever channel the client actually sent a code/link on -
+  // never trust the client's word alone that it happened (same pattern as
+  // customerRegistration.js/deviceSessionService.js).
+  let tempAuthUid;
+  if (phoneIdToken) {
+    try {
+      tempAuthUid = await assertPhoneVerified(phoneIdToken, phoneE164 || normalizedPhone, phoneE164 ? undefined : dialCode);
+    } catch (err) {
+      throw new HttpsError('failed-precondition', err.message || 'Please verify your phone number first.');
+    }
+  } else {
+    const accountEmail = normalizeEmail(userData.email || '');
+    if (!accountEmail) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This account has no email on file - please reset via SMS instead.'
+      );
+    }
+    if (normalizeEmail(email) !== accountEmail) {
+      throw new HttpsError('failed-precondition', 'That email is not associated with this phone number.');
+    }
+    try {
+      tempAuthUid = await assertEmailVerified(emailIdToken, accountEmail);
+    } catch (err) {
+      throw new HttpsError('failed-precondition', err.message || 'Please verify your email address first.');
+    }
+  }
+
+  try {
+    await admin.auth().updateUser(realUid, { password: String(newPassword) });
+  } catch (err) {
+    await logServerError('resetPassword.updateUser', err, { userId: realUid });
+    throw new HttpsError('internal', 'Could not reset your password right now. Please try again.');
+  }
+
+  // End every existing session (same rationale as a device switch) and
+  // clear device-session state so the next login is treated as fresh.
+  await admin.auth().revokeRefreshTokens(realUid).catch(() => {});
+  await userDoc.ref.update({
+    activeSessionId: null,
+    activeDeviceId: null,
+    pendingDeviceApproval: null,
+  }).catch(() => {});
+
+  // Clean up the throwaway phone/email-auth identity - it has no further
+  // use once we have the verification result.
+  if (tempAuthUid) {
+    await admin.auth().deleteUser(tempAuthUid).catch(() => {});
+  }
+
+  await logAudit({
+    action: 'password_reset',
+    targetUid: realUid,
+    performedBy: realUid,
+    performedByRole: userData.role,
+    details: { via: phoneIdToken ? 'sms' : 'email' },
+  });
+
+  return { success: true };
+});

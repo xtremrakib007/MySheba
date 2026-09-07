@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2020"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true
+  },
+  // Deliberately scoped to ONLY the new advertisement-system type/constant
+  // files (see PHASE 1 notes in src/types/ads.ts). allowJs/checkJs are left
+  // off on purpose - the rest of the app is plain JS with no type
+  // annotations, so turning on JS checking here would immediately fail
+  // against hundreds of pre-existing files that were never written to
+  // satisfy a type checker. This tsconfig's only job right now is to let
+  // `npx tsc --noEmit` validate the ad-system types compile, in complete
+  // isolation from everything else.
+  "include": ["src/types/**/*.ts", "src/constants/ad*.ts"]
+}

@@ -1,0 +1,87 @@
+{
+  "project_info": {
+    "project_number": "632456211568",
+    "project_id": "satulink-solutions",
+    "storage_bucket": "satulink-solutions.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:632456211568:android:cba06ecdacc00c87fa58b5",
+        "android_client_info": {
+          "package_name": "com.satulink.mysheba"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "632456211568-2qd00mt4tfnt1kkeut5o8hv8qerftv8f.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.satulink.mysheba",
+            "certificate_hash": "ea64cfd85b1332d5221cef0aa8e7df3c6a6a527c"
+          }
+        },
+        {
+          "client_id": "632456211568-3etgjajts5fd8nrp2vjtvsk7f746qbi5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.satulink.mysheba",
+            "certificate_hash": "e82a52dd32dddb4676b4b55a6eedde77e7ae570e"
+          }
+        },
+        {
+          "client_id": "632456211568-d35k59fd131abot5985oe6cudr2si29e.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.satulink.mysheba",
+            "certificate_hash": "b6cac80078fe8e30ede9b14b14eeb7e5f94f3054"
+          }
+        },
+        {
+          "client_id": "632456211568-eek46tvr1tpi58ivdt3mf8ldvon4sflr.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.satulink.mysheba",
+            "certificate_hash": "9da2f1bfec48c3f60f592f422d4b7c0ff7d6aec9"
+          }
+        },
+        {
+          "client_id": "632456211568-md69m5rf43q4jgbfbne1h1mg9u015bq9.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.satulink.mysheba",
+            "certificate_hash": "81b576c79b23bbfd12680580939042b4da28316c"
+          }
+        },
+        {
+          "client_id": "632456211568-nce6ptjm7n1vtu85jkil1ksecrhk25jo.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.satulink.mysheba",
+            "certificate_hash": "c8b1a99fb266c119dd57e3a82ee85df101103278"
+          }
+        },
+        {
+          "client_id": "632456211568-v5f370netearu5lb8ld48lhr28erbp9p.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCShfvfRTBQ66qTTtw7a4ofWNU5M-zyzmU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "632456211568-v5f370netearu5lb8ld48lhr28erbp9p.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

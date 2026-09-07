@@ -1,0 +1,29 @@
+--- a/src/context/AppContext.js
++++ b/src/context/AppContext.js
+@@ -196,10 +196,15 @@
+-  useEffect(() => {
+-    const prev = prevScreenRef.current;
+-    if (prev !== screen) {
+-      if (!isPoppingRef.current) {
+-        screenHistoryRef.current.push(prev);
+-      }
+-      isPoppingRef.current = false;
+-      prevScreenRef.current = screen;
+-    }
+-  }, [screen]);
++  // Screens that exist only before/during authentication - once left behind,
++  // hardware back should never be able to land here again (there's no valid
++  // "go back to login" while signed in), so they're never pushed onto the
++  // back-history stack below.
++  const PRE_AUTH_SCREENS = ['login', 'register', 'deviceVerify'];
++
++  useEffect(() => {
++    const prev = prevScreenRef.current;
++    if (prev !== screen) {
++      if (!isPoppingRef.current && !PRE_AUTH_SCREENS.includes(prev)) {
++        screenHistoryRef.current.push(prev);
++      }
++      isPoppingRef.current = false;
++      prevScreenRef.current = screen;
++    }
++  }, [screen]);
