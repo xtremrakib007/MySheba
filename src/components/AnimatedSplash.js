@@ -1,3 +1,4 @@
+console.log('MYSHEBA_ANIMATION_FIX_V2_LOADED');
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, Animated, Easing, StyleSheet, Image } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
