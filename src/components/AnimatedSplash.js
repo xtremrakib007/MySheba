@@ -269,11 +269,11 @@ export default function AnimatedSplash({ ready, onFinished }) {
           { opacity: nameOpacity, transform: [{ translateY: nameTranslate }] },
         ]}
       >
-        MySheba
+        {'MySheba'}
       </Animated.Text>
 
       <Animated.Text style={[styles.tagline, { opacity: taglineOpacity }]}>
-        Wherever you're, We're here.
+        {"Wherever you're, We're here."}
       </Animated.Text>
 
       <Animated.View style={[styles.progressSection, { opacity: progressOpacity }]}>
@@ -306,7 +306,7 @@ export default function AnimatedSplash({ ready, onFinished }) {
           },
         ]}
       >
-        Powered By - SATULINK SOLUTIONS SDN BHD
+        {'Powered By - SATULINK SOLUTIONS SDN BHD'}
       </Animated.Text>
     </Animated.View>
   );
