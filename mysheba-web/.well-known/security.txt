@@ -1,0 +1,3 @@
+Contact: https://mysheba.top/contact/
+Expires: 2027-09-01T00:00:00Z
+Canonical: https://mysheba.top/.well-known/security.txt

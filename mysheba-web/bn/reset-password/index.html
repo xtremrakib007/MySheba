@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#0b7a53">
+<link rel="icon" href="/assets/images/favicon.png" type="image/png">
+<link rel="stylesheet" href="/assets/css/style.css">
+<title>পাসওয়ার্ড রিসেট – MySheba</title>
+<style>
+  .reset-wrap{min-height:calc(100vh - 150px);display:flex;align-items:center;justify-content:center;padding:48px 16px}
+  .reset-card{width:100%;max-width:460px;background:#fff;border-radius:16px;padding:32px;box-shadow:0 10px 35px rgba(0,0,0,.10)}
+  .reset-card h1{margin:0 0 10px}.reset-card p{color:#555;line-height:1.55}
+  .reset-form{margin-top:24px}.field{margin-bottom:16px}.field label{display:block;font-weight:600;margin-bottom:7px}
+  .field input{width:100%;box-sizing:border-box;padding:12px 14px;border:1px solid #ccc;border-radius:9px;font-size:16px}
+  .field input:focus{outline:2px solid rgba(11,122,83,.22);border-color:#0b7a53}
+  .reset-btn{width:100%;border:0;border-radius:9px;padding:13px 16px;font-size:16px;font-weight:700;cursor:pointer;background:#0b7a53;color:#fff}
+  .reset-btn:disabled{opacity:.6;cursor:not-allowed}.status{display:none;margin-top:16px;padding:12px 14px;border-radius:9px;line-height:1.45}.status.show{display:block}
+  .status.error{background:#fff0f0;color:#a12626}.status.success{background:#edf9f2;color:#17663d}.hidden{display:none!important}
+  .requirements{font-size:13px;color:#666;margin:5px 0 0}.brand{text-align:center;margin-bottom:18px}.brand img{height:48px;width:auto}
+  .back{text-align:center;margin-top:18px}.back a{color:#0b7a53;text-decoration:none;font-weight:600}
+  @media(max-width:480px){.reset-card{padding:24px}}
+</style>
+</head>
+<body>
+<header class="site-header" role="banner">
+  <div class="container">
+    <a aria-label="MySheba Home" class="logo" href="/">
+      <picture><source srcset="/assets/images/logo-nav.webp" type="image/webp"><img src="/assets/images/logo-nav.png" alt="MySheba" class="logo-icon" width="40" height="40"></picture>
+      MySheba
+    </a>
+  </div>
+</header>
+
+<main id="main-content" class="reset-wrap">
+  <section class="reset-card" aria-labelledby="page-title">
+    <div class="brand"><img src="/assets/images/logo.png" alt="MySheba"></div>
+    <h1 id="page-title">পাসওয়ার্ড রিসেট করুন</h1>
+    <p id="intro">আপনার MySheba অ্যাকাউন্টের জন্য একটি নতুন পাসওয়ার্ড নির্বাচন করুন।</p>
+
+    <form id="reset-form" class="reset-form" novalidate>
+      <div class="field">
+        <label for="password">নতুন পাসওয়ার্ড</label>
+        <input id="password" name="password" type="password" autocomplete="new-password" minlength="6" required>
+        <div class="requirements">কমপক্ষে ৬টি অক্ষর ব্যবহার করুন।</div>
+      </div>
+      <div class="field">
+        <label for="confirm-password">নতুন পাসওয়ার্ড নিশ্চিত করুন</label>
+        <input id="confirm-password" name="confirm-password" type="password" autocomplete="new-password" minlength="6" required>
+      </div>
+      <button id="submit-btn" class="reset-btn" type="submit">পাসওয়ার্ড রিসেট করুন</button>
+      <div id="status" class="status" role="alert" aria-live="polite"></div>
+    </form>
+
+    <div id="success-actions" class="back hidden">
+      <a href="/">MySheba-তে ফিরে যান</a>
+    </div>
+    <div id="back-home" class="back"><a href="/">MySheba-তে ফিরে যান</a></div>
+  </section>
+</main>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+import { getAuth, verifyPasswordResetCode, confirmPasswordReset } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
+import { firebaseConfig } from "/assets/js/firebase-config.js";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const params = new URLSearchParams(window.location.search);
+const mode = params.get("mode");
+const oobCode = params.get("oobCode");
+const continueUrl = params.get("continueUrl");
+
+const form = document.getElementById("reset-form");
+const password = document.getElementById("password");
+const confirmPassword = document.getElementById("confirm-password");
+const submitBtn = document.getElementById("submit-btn");
+const status = document.getElementById("status");
+const intro = document.getElementById("intro");
+const successActions = document.getElementById("success-actions");
+const backHome = document.getElementById("back-home");
+
+function showStatus(message, type = "error") {
+  status.textContent = message;
+  status.className = `status show ${type}`;
+}
+
+function lockForm() {
+  form.classList.add("hidden");
+}
+
+function firebaseErrorMessage(error) {
+  switch (error?.code) {
+    case "auth/expired-action-code": return "এই পাসওয়ার্ড রিসেট লিংকের মেয়াদ শেষ হয়েছে। অনুগ্রহ করে নতুন লিংক নিন।";
+    case "auth/invalid-action-code": return "এই পাসওয়ার্ড রিসেট লিংকটি ভুল অথবা ইতিমধ্যে ব্যবহার করা হয়েছে। অনুগ্রহ করে নতুন লিংক নিন।";
+    case "auth/user-disabled": return "এই অ্যাকাউন্টটি নিষ্ক্রিয় করা হয়েছে। MySheba সাপোর্টে যোগাযোগ করুন।";
+    case "auth/user-not-found": return "এই রিসেট লিংকের সাথে সম্পর্কিত অ্যাকাউন্ট পাওয়া যায়নি।";
+    case "auth/weak-password": return "আরও শক্তিশালী পাসওয়ার্ড দিন (কমপক্ষে ৬ অক্ষর)।";
+    default: return "পাসওয়ার্ড রিসেট করা যায়নি। অনুগ্রহ করে নতুন রিসেট লিংক নিয়ে আবার চেষ্টা করুন।";
+  }
+}
+
+async function validateLink() {
+  if (mode && mode !== "resetPassword") {
+    lockForm();
+    showStatus("এই লিংকটি পাসওয়ার্ড রিসেট লিংক নয়।");
+    return false;
+  }
+  if (!oobCode) {
+    lockForm();
+    showStatus("এই পাসওয়ার্ড রিসেট লিংকে নিরাপত্তা কোড নেই। অনুগ্রহ করে নতুন লিংক নিন।");
+    return false;
+  }
+  try {
+    await verifyPasswordResetCode(auth, oobCode);
+    return true;
+  } catch (error) {
+    lockForm();
+    showStatus(firebaseErrorMessage(error));
+    return false;
+  }
+}
+
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const newPassword = password.value;
+  const confirmation = confirmPassword.value;
+
+  if (newPassword.length < 6) {
+    showStatus("আপনার নতুন পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।");
+    password.focus();
+    return;
+  }
+  if (newPassword !== confirmation) {
+    showStatus("পাসওয়ার্ড দুটি মিলছে না।");
+    confirmPassword.focus();
+    return;
+  }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = "রিসেট হচ্ছে…";
+  status.className = "status";
+
+  try {
+    await confirmPasswordReset(auth, oobCode, newPassword);
+    form.classList.add("hidden");
+    backHome.classList.add("hidden");
+    intro.textContent = "আপনার পাসওয়ার্ড সফলভাবে পরিবর্তন হয়েছে। এখন নতুন পাসওয়ার্ড দিয়ে সাইন ইন করতে পারবেন।";
+    showStatus("পাসওয়ার্ড সফলভাবে রিসেট হয়েছে।", "success");
+    successActions.classList.remove("hidden");
+    setTimeout(() => {
+      if (continueUrl) {
+        try {
+          const url = new URL(continueUrl, window.location.origin);
+          if (url.origin === window.location.origin) window.location.assign(url.href);
+        } catch (_) {}
+      }
+    }, 1200);
+  } catch (error) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "পাসওয়ার্ড রিসেট করুন";
+    showStatus(firebaseErrorMessage(error));
+  }
+});
+
+validateLink();
+</script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import 'tailwindcss';
+
+/* Design tokens, sourced directly from the mobile app's theme.js so the
+   admin console reads as the same product, not a re-skin. */
+@theme {
+  --font-display: 'Manrope', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --color-primary: #00a99d;
+  --color-primary-dark: #00897b;
+  --color-secondary: #1a73e8;
+  --color-navy: #0b2447;
+  --color-bg: #f3f7fb;
+  --color-card: #ffffff;
+  --color-ink: #202124;
+  --color-ink-soft: #5f6368;
+  --color-line: #e0e0e0;
+  --color-success: #4caf50;
+  --color-warning: #fbbc04;
+  --color-danger: #ea4335;
+  --color-purple: #7c4dff;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background: var(--color-bg);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  color: var(--color-ink);
+  margin: 0;
+}

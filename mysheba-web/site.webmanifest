@@ -1,0 +1,20 @@
+{
+  "name": "MySheba",
+  "short_name": "MySheba",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#0b7a53",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/assets/images/favicon.png",
+      "sizes": "any",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/images/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

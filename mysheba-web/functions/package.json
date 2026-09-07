@@ -1,0 +1,17 @@
+{
+  "name": "mysheba-functions",
+  "private": true,
+  "description": "MySheba Firebase Cloud Functions",
+  "engines": {
+    "node": "22"
+  },
+  "main": "index.js",
+  "scripts": {
+    "lint": "node --check index.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.3.0",
+    "firebase-functions": "^7.3.2",
+    "resend": "^6.25.0"
+  }
+}
