@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#0b7a53">
+<link rel="icon" href="/assets/images/favicon.png" type="image/png">
+<link rel="stylesheet" href="/assets/css/style.css">
+<title>Verify Sign-In – MySheba</title>
+<style>
+  .verify-wrap{min-height:calc(100vh - 150px);display:flex;align-items:center;justify-content:center;padding:48px 16px}
+  .verify-card{width:100%;max-width:460px;background:#fff;border-radius:16px;padding:32px;box-shadow:0 10px 35px rgba(0,0,0,.10);text-align:center}
+  .verify-card h1{margin:0 0 10px}.verify-card p{color:#555;line-height:1.55}
+  .verify-form{margin-top:24px;text-align:left}.field{margin-bottom:16px}.field label{display:block;font-weight:600;margin-bottom:7px}
+  .field input{width:100%;box-sizing:border-box;padding:12px 14px;border:1px solid #ccc;border-radius:9px;font-size:16px}
+  .field input:focus{outline:2px solid rgba(11,122,83,.22);border-color:#0b7a53}
+  .verify-btn{width:100%;border:0;border-radius:9px;padding:13px 16px;font-size:16px;font-weight:700;cursor:pointer;background:#0b7a53;color:#fff;text-decoration:none;display:inline-block;box-sizing:border-box}
+  .verify-btn:disabled{opacity:.6;cursor:not-allowed}
+  .status{display:none;margin-top:16px;padding:12px 14px;border-radius:9px;line-height:1.45;text-align:left}.status.show{display:block}
+  .status.error{background:#fff0f0;color:#a12626}.status.success{background:#edf9f2;color:#17663d}.hidden{display:none!important}
+  .brand{text-align:center;margin-bottom:18px}.brand img{height:48px;width:auto}
+  .back{text-align:center;margin-top:18px}.back a{color:#0b7a53;text-decoration:none;font-weight:600}
+  .spinner{width:34px;height:34px;border:3px solid #d7ecdf;border-top-color:#0b7a53;border-radius:50%;margin:0 auto 18px;animation:spin 0.8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media(max-width:480px){.verify-card{padding:24px}}
+</style>
+</head>
+<body>
+<header class="site-header" role="banner">
+  <div class="container">
+    <a aria-label="MySheba Home" class="logo" href="/">
+      <picture><source srcset="/assets/images/logo-nav.webp" type="image/webp"><img src="/assets/images/logo-nav.png" alt="MySheba" class="logo-icon" width="40" height="40"></picture>
+      MySheba
+    </a>
+  </div>
+</header>
+
+<main id="main-content" class="verify-wrap">
+  <section class="verify-card" aria-labelledby="page-title">
+    <div class="brand"><img src="/assets/images/logo.png" alt="MySheba"></div>
+
+    <div id="loading-state">
+      <div class="spinner"></div>
+      <h1 id="page-title">Verifying your sign-in…</h1>
+      <p>Please wait a moment.</p>
+    </div>
+
+    <div id="email-prompt-state" class="hidden">
+      <h1>Confirm it's you</h1>
+      <p>For your security, please re-enter the email address this link was sent to.</p>
+      <form id="email-form" class="verify-form" novalidate>
+        <div class="field">
+          <label for="email-input">Email address</label>
+          <input id="email-input" name="email" type="email" autocomplete="email" required>
+        </div>
+        <button id="email-submit-btn" class="verify-btn" type="submit">Continue</button>
+      </form>
+    </div>
+
+    <div id="success-state" class="hidden">
+      <h1>You're verified!</h1>
+      <p>Return to the MySheba app to continue signing in.</p>
+      <a id="open-app-btn" class="verify-btn" href="#" style="margin-top:10px;">Open MySheba App</a>
+      <p style="margin-top:16px;font-size:13px;color:#888;">If the app doesn't open automatically, switch to it manually — it will pick up from here.</p>
+    </div>
+
+    <div id="error-state" class="hidden">
+      <h1>Verification link problem</h1>
+    </div>
+
+    <div id="status" class="status" role="alert" aria-live="polite"></div>
+    <div class="back"><a href="/">Back to MySheba</a></div>
+  </section>
+</main>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+import { getAuth, isSignInWithEmailLink, signInWithEmailLink } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
+
+// IMPORTANT: this MUST be the satulink-solutions project's Web API config
+// (the app's own Firebase project), NOT the mysheba.top website's project
+// (mysheba2, in /assets/js/firebase-config.js) - admin sign-in verification
+// is checked against satulink-solutions's Auth, so signing in against the
+// wrong project here will make every link fail with auth/invalid-action-code
+// even though the page itself loads fine.
+// Get this from: Firebase Console -> satulink-solutions -> Project Settings
+// -> General -> Your apps -> Web app (register one if none exists yet -
+// no rebuild needed, this is a console-only step).
+const firebaseConfig = {
+  apiKey: "REPLACE_WITH_SATULINK_SOLUTIONS_API_KEY",
+  authDomain: "REPLACE_WITH_SATULINK_SOLUTIONS_AUTH_DOMAIN", // e.g. satulink-solutions.firebaseapp.com
+  projectId: "satulink-solutions",
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+
+const EMAIL_STORAGE_KEY = "mysheba_emailForSignIn"; // written by the app if it initiated on this same device/browser
+
+const loadingState = document.getElementById("loading-state");
+const emailPromptState = document.getElementById("email-prompt-state");
+const successState = document.getElementById("success-state");
+const errorState = document.getElementById("error-state");
+const status = document.getElementById("status");
+const emailForm = document.getElementById("email-form");
+const emailInput = document.getElementById("email-input");
+const emailSubmitBtn = document.getElementById("email-submit-btn");
+const openAppBtn = document.getElementById("open-app-btn");
+
+function showOnly(el) {
+  [loadingState, emailPromptState, successState, errorState].forEach((s) => s.classList.add("hidden"));
+  el.classList.remove("hidden");
+}
+
+function showStatus(message, type = "error") {
+  status.textContent = message;
+  status.className = `status show ${type}`;
+}
+
+function firebaseErrorMessage(error) {
+  switch (error?.code) {
+    case "auth/expired-action-code": return "This verification link has expired. Please request a new one from the app.";
+    case "auth/invalid-action-code": return "This verification link is invalid or has already been used. Please request a new one from the app.";
+    case "auth/user-disabled": return "This account has been disabled. Please contact MySheba support.";
+    case "auth/invalid-email": return "That email address doesn't match this verification link. Please try again.";
+    default: return "We could not verify this link. Please request a new one from the app and try again.";
+  }
+}
+
+// Hands the verified user's ID token back to the app via the SAME custom
+// scheme mysheba://listing/<id> deep links already use (see App.js /
+// AppContext.js handleDeepLink) - no App/Universal Link setup needed,
+// works purely because the app is already registered for the mysheba://
+// scheme. AppContext.js's handleDeepLink needs a small addition to react
+// to this path (see accompanying note) - that's a plain JS change,
+// shippable via `eas update`, no rebuild.
+function redirectToApp(idToken) {
+  const deepLink = `mysheba://verify-email-complete?idToken=${encodeURIComponent(idToken)}`;
+  openAppBtn.href = deepLink;
+  // Best-effort auto-attempt - harmless no-op if the app isn't installed
+  // or isn't the foreground/backgrounded app on this device.
+  window.location.href = deepLink;
+}
+
+async function completeSignIn(email, link) {
+  try {
+    const result = await signInWithEmailLink(auth, email, link);
+    const idToken = await result.user.getIdToken();
+    try { window.localStorage.removeItem(EMAIL_STORAGE_KEY); } catch (_) {}
+    showOnly(successState);
+    redirectToApp(idToken);
+  } catch (error) {
+    showOnly(errorState);
+    showStatus(firebaseErrorMessage(error));
+  }
+}
+
+emailForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const email = emailInput.value.trim();
+  if (!email) return;
+  emailSubmitBtn.disabled = true;
+  emailSubmitBtn.textContent = "Verifying…";
+  completeSignIn(email, window.location.href);
+});
+
+(function init() {
+  const link = window.location.href;
+  if (!isSignInWithEmailLink(auth, link)) {
+    showOnly(errorState);
+    showStatus("This link is not a valid MySheba sign-in link. Please request a new one from the app.");
+    return;
+  }
+
+  let email = null;
+  try { email = window.localStorage.getItem(EMAIL_STORAGE_KEY); } catch (_) {}
+
+  if (email) {
+    completeSignIn(email, link);
+  } else {
+    // Different device/browser than the one that requested the link -
+    // ask for the email, same fallback Firebase's own docs recommend.
+    showOnly(emailPromptState);
+  }
+})();
+</script>
+</body>
+</html>
