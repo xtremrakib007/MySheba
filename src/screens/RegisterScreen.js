@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Linking } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Linking, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
-import { useTheme } from "../theme/ThemeContext";
+import { useTheme } from '../theme/ThemeContext';
 import { useLanguage } from '../i18n/LanguageContext';
 import HeaderDecor from '../components/HeaderDecor';
 import { GoogleButton, OrDivider } from '../components/ui';
@@ -36,16 +36,15 @@ export default function RegisterScreen() {
   const [localError, setLocalError] = useState('');
   const [otpBusy, setOtpBusy] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (step !== 'emailLink') return undefined;
     let mounted = true;
     const handleUrl = (url) => {
       if (mounted && url && emailVerification.isEmailSignInLink(url)) onConfirmEmailLink(url);
     };
-    Linking.getInitialURL().then((url) => handleUrl(url)).catch(() => {});
+    Linking.getInitialURL().then(handleUrl).catch(() => {});
     const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url));
     return () => { mounted = false; sub.remove(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
   const validateDetails = () => {
@@ -120,50 +119,59 @@ export default function RegisterScreen() {
   const busy = otpBusy || authBusy;
 
   return (
-    <View style={styles.screen}>
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <LinearGradient colors={brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
         <HeaderDecor />
         <TouchableOpacity style={styles.backBtn} onPress={() => { if (step === 'emailLink') setStep('phoneOtp'); else if (step === 'phoneOtp') setStep('details'); else setScreen('login'); }}><Text style={styles.backText}>←</Text></TouchableOpacity>
         <Text style={styles.headerTitle}>{step === 'emailLink' ? t('register.verifyEmail') : step === 'phoneOtp' ? t('register.verifyPhone') : t('register.createAccount')}</Text>
       </LinearGradient>
-
-      {step === 'details' ? (
-        <View style={styles.body}>
-          <View style={styles.formGroup}><Text style={styles.label}>{t('register.fullName')}</Text><TextInput style={styles.input} placeholder={t('register.fullNamePlaceholder')} value={name} onChangeText={setName} /></View>
-          <View style={styles.formGroup}><Text style={styles.label}>{t('register.phoneNumber')}</Text><View style={{flexDirection:'row',alignItems:'center',marginBottom:6}}><TouchableOpacity onPress={()=>setCountryPicker(true)} style={{padding:12,borderWidth:1,borderColor:'#ddd',borderRadius:8,marginRight:6,flexDirection:'row',alignItems:'center'}}><Text style={{fontSize:20}}>{phoneCountry.flag}</Text><Text style={{marginLeft:5,fontWeight:'600'}}>{phoneCountry.dial}</Text></TouchableOpacity><TextInput style={styles.input} placeholder="Phone number" keyboardType="phone-pad" value={phone} onChangeText={setPhone} /></View></View>
-          <View style={styles.formGroup}><Text style={styles.label}>{t('register.emailAddress')}</Text><TextInput style={styles.input} placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} value={email} onChangeText={setEmail} /><Text style={styles.hint}>{t('register.emailHint')}</Text></View>
-          <View style={styles.formGroup}><Text style={styles.label}>{t('register.password')}</Text><TextInput style={styles.input} placeholder={t('register.passwordPlaceholder')} secureTextEntry maxLength={20} autoCapitalize="none" value={password} onChangeText={setPassword} /></View>
-          <View style={styles.formGroup}><Text style={styles.label}>{t('register.confirmPassword')}</Text><TextInput style={styles.input} placeholder={t('register.confirmPasswordPlaceholder')} secureTextEntry maxLength={20} autoCapitalize="none" value={confirmPassword} onChangeText={setConfirmPassword} /></View>
-          <View style={styles.formGroup}><Text style={styles.label}>{t('register.dealerCode')}</Text><TextInput style={styles.input} placeholder={t('register.dealerCodePlaceholder')} keyboardType="phone-pad" value={dealerCode} onChangeText={setDealerCode} /><Text style={styles.hint}>{t('register.dealerCodeHint')}</Text></View>
-          <View style={styles.formGroup}><Text style={styles.label}>{t('register.resellerCode')}</Text><TextInput style={styles.input} placeholder={t('register.resellerCodePlaceholder')} keyboardType="phone-pad" value={resellerCode} onChangeText={setResellerCode} /><Text style={styles.hint}>{t('register.resellerCodeHint')}</Text></View>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+        {step === 'details' ? <>
+          <Field label={t('register.fullName')} value={name} setValue={setName} placeholder={t('register.fullNamePlaceholder')} styles={styles}/>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>{t('register.phoneNumber')}</Text>
+            <View style={styles.phoneRow}>
+              <TouchableOpacity onPress={() => setCountryPicker(true)} style={styles.countryButton}>
+                <Text style={styles.countryFlag}>{phoneCountry.flag}</Text>
+                <Text style={styles.countryName} numberOfLines={1}>{phoneCountry.name}</Text>
+                <Text style={styles.countryDial}>{phoneCountry.dial}</Text>
+                <Text style={styles.countryChevron}>▾</Text>
+              </TouchableOpacity>
+              <TextInput style={styles.phoneInput} placeholder={t('register.phoneNumber')} placeholderTextColor="#999" keyboardType="phone-pad" value={phone} onChangeText={setPhone}/>
+            </View>
+          </View>
+          <Field label={t('register.emailAddress')} value={email} setValue={setEmail} placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" styles={styles}/>
+          <Field label={t('register.password')} value={password} setValue={setPassword} placeholder={t('register.passwordPlaceholder')} secureTextEntry maxLength={20} styles={styles}/>
+          <Field label={t('register.confirmPassword')} value={confirmPassword} setValue={setConfirmPassword} placeholder={t('register.confirmPasswordPlaceholder')} secureTextEntry maxLength={20} styles={styles}/>
+          <Field label={t('register.dealerCode')} value={dealerCode} setValue={setDealerCode} placeholder={t('register.dealerCodePlaceholder')} keyboardType="phone-pad" styles={styles}/>
+          <Field label={t('register.resellerCode')} value={resellerCode} setValue={setResellerCode} placeholder={t('register.resellerCodePlaceholder')} keyboardType="phone-pad" styles={styles}/>
           {!!(localError || authError) && <Text style={styles.errorText}>{localError || authError}</Text>}
-          <TouchableOpacity style={[styles.btn,busy&&styles.btnDisabled]} onPress={onSendPhoneCode} disabled={busy}>{busy?<ActivityIndicator color="white"/>:<Text style={styles.btnText}>{t('register.sendVerificationCode')}</Text>}</TouchableOpacity>
-          <OrDivider /><GoogleButton label={t('register.signUpWithGoogle')} onPress={doGoogleLogin} disabled={busy} />
-        </View>
-      ) : step === 'phoneOtp' ? (
-        <View style={styles.body}>
-          <Text style={styles.otpHint}>{t('register.otpHintSms',{phone:phone.replace(/[^0-9]/g,'').replace(/^0+/,'')})}</Text>
-          <View style={styles.formGroup}><Text style={styles.label}>{t('register.smsCode')}</Text><TextInput style={styles.input} placeholder="123456" keyboardType="number-pad" maxLength={6} value={phoneCode} onChangeText={setPhoneCode} /></View>
+          <TouchableOpacity style={[styles.btn,busy&&styles.btnDisabled]} onPress={onSendPhoneCode} disabled={busy}>{busy?<ActivityIndicator color="#fff"/>:<Text style={styles.btnText}>{t('register.sendVerificationCode')}</Text>}</TouchableOpacity>
+          <OrDivider/><GoogleButton label={t('register.signUpWithGoogle')} onPress={doGoogleLogin} disabled={busy}/>
+        </> : step === 'phoneOtp' ? <>
+          <Text style={styles.stepTitle}>{t('register.verifyPhone')}</Text>
+          <Text style={styles.otpHint}>{t('register.otpHintSms',{phone:`${phoneCountry.dial} ${phone.replace(/[^0-9]/g,'').replace(/^0+/,'')}`})}</Text>
+          <Field label={t('register.smsCode')} value={phoneCode} setValue={setPhoneCode} placeholder="123456" keyboardType="number-pad" maxLength={6} styles={styles} otp/>
           {!!(localError||authError)&&<Text style={styles.errorText}>{localError||authError}</Text>}
-          <TouchableOpacity style={[styles.btn,busy&&styles.btnDisabled]} onPress={onVerifyPhoneAndSendEmailLink} disabled={busy}>{busy?<ActivityIndicator color="white"/>:<Text style={styles.btnText}>{t('register.verifyPhoneBtn')}</Text>}</TouchableOpacity>
+          <TouchableOpacity style={[styles.btn,busy&&styles.btnDisabled]} onPress={onVerifyPhoneAndSendEmailLink} disabled={busy}>{busy?<ActivityIndicator color="#fff"/>:<Text style={styles.btnText}>{t('register.verifyPhoneBtn')}</Text>}</TouchableOpacity>
           <TouchableOpacity style={styles.resendBtn} onPress={onResendPhoneCode} disabled={busy}><Text style={styles.resendText}>{t('register.resend')}</Text></TouchableOpacity>
-        </View>
-      ) : (
-        <View style={styles.body}>
+        </> : <>
+          <Text style={styles.stepTitle}>{t('register.verifyEmail')}</Text>
           <Text style={styles.otpHint}>{t('register.emailLinkHint',{email})}</Text>
-          <Text style={styles.methodHint}>Use the magic link in the email, or enter the 6-digit code from the same email.</Text>
-          <View style={styles.formGroup}><Text style={styles.label}>Email verification code</Text><TextInput style={styles.input} placeholder="123456" keyboardType="number-pad" maxLength={6} value={emailCode} onChangeText={setEmailCode} /></View>
+          <Text style={styles.methodHint}>Use the verification link in the email, or enter the 6-digit code from the same email.</Text>
+          <Field label="Email verification code" value={emailCode} setValue={setEmailCode} placeholder="123456" keyboardType="number-pad" maxLength={6} styles={styles} otp/>
           {!!(localError||authError)&&<Text style={styles.errorText}>{localError||authError}</Text>}
-          <TouchableOpacity style={[styles.btn,busy&&styles.btnDisabled]} onPress={onConfirmEmailOtp} disabled={busy}>{busy?<ActivityIndicator color="white"/>:<Text style={styles.btnText}>Verify with OTP</Text>}</TouchableOpacity>
+          <TouchableOpacity style={[styles.btn,busy&&styles.btnDisabled]} onPress={onConfirmEmailOtp} disabled={busy}>{busy?<ActivityIndicator color="#fff"/>:<Text style={styles.btnText}>Verify with OTP</Text>}</TouchableOpacity>
           <Text style={styles.orText}>OR</Text>
-          {busy&&<ActivityIndicator color={colors.primary} style={{marginBottom:10}}/>}
           <TouchableOpacity style={styles.resendBtn} onPress={onResendEmailLink} disabled={busy}><Text style={styles.resendText}>Send link + OTP again</Text></TouchableOpacity>
-        </View>
-      )}
-      <PhoneCountryPicker visible={countryPicker} value={phoneCountry} onSelect={(c)=>{setPhoneCountry(c);setCountryPicker(false);}} onClose={()=>setCountryPicker(false)} />
-    </View>
+        </>}
+      </ScrollView>
+      <PhoneCountryPicker visible={countryPicker} value={phoneCountry} onSelect={(c)=>{setPhoneCountry(c);setCountryPicker(false)}} onClose={()=>setCountryPicker(false)}/>
+    </KeyboardAvoidingView>
   );
 }
 
+function Field({label,value,setValue,placeholder,styles,otp,...props}) { return <View style={styles.formGroup}><Text style={styles.label}>{label}</Text><TextInput style={otp?styles.otpInput:styles.input} placeholder={placeholder} placeholderTextColor="#999" value={value} onChangeText={setValue} autoCorrect={false} {...props}/></View>; }
+
 function createStyles(colors){return StyleSheet.create({
-  screen:{flex:1,backgroundColor:colors.bg},header:{flexDirection:'row',alignItems:'center',gap:10,padding:12,backgroundColor:colors.primary,overflow:'hidden'},backBtn:{padding:4},backText:{color:'white',fontSize:20},headerTitle:{color:'white',fontWeight:'600',fontSize:16},body:{padding:20},formGroup:{marginBottom:14},label:{fontWeight:'500',marginBottom:5,fontSize:13},hint:{fontSize:11,color:'#888',marginTop:5},input:{width:'100%',paddingVertical:12,paddingHorizontal:14,borderWidth:1,borderColor:colors.border,borderRadius:radius.md,fontSize:14,backgroundColor:'white'},btn:{backgroundColor:colors.primary,paddingVertical:12,borderRadius:radius.md,alignItems:'center'},btnDisabled:{opacity:0.6},btnText:{color:'white',fontWeight:'600',fontSize:14},errorText:{color:colors.error,fontSize:12,marginBottom:10,textAlign:'center'},otpHint:{fontSize:13,color:'#666',marginBottom:16,textAlign:'center'},methodHint:{fontSize:12,color:'#666',marginBottom:16,textAlign:'center'},orText:{textAlign:'center',marginTop:14,color:'#888',fontSize:12},resendBtn:{alignItems:'center',marginTop:14},resendText:{color:colors.primary,fontSize:12,fontWeight:'500'}});}
+  screen:{flex:1,backgroundColor:'#050505'},scroll:{flex:1,backgroundColor:'#050505'},header:{flexDirection:'row',alignItems:'center',gap:10,padding:12,backgroundColor:'#080808',overflow:'hidden',borderBottomWidth:1,borderBottomColor:'#292929'},backBtn:{padding:4},backText:{color:'#fff',fontSize:22},headerTitle:{color:'#fff',fontWeight:'700',fontSize:16},body:{padding:20,paddingBottom:40,backgroundColor:'#050505'},formGroup:{marginBottom:14},label:{fontWeight:'700',marginBottom:7,fontSize:13,color:'#fff'},input:{width:'100%',paddingVertical:13,paddingHorizontal:14,borderWidth:1,borderColor:'#444',borderRadius:radius.md,fontSize:14,backgroundColor:'#111',color:'#fff'},phoneRow:{flexDirection:'row',alignItems:'stretch',gap:7},countryButton:{minHeight:48,borderWidth:1,borderColor:'#555',borderRadius:radius.md,backgroundColor:'#111',paddingHorizontal:9,flexDirection:'row',alignItems:'center',maxWidth:'58%'},countryFlag:{fontSize:19},countryName:{color:'#fff',fontSize:12,fontWeight:'700',marginLeft:6,flexShrink:1},countryDial:{color:'#fff',fontSize:12,fontWeight:'800',marginLeft:5},countryChevron:{color:'#ccc',fontSize:14,marginLeft:5},phoneInput:{flex:1,minWidth:0,paddingVertical:13,paddingHorizontal:12,borderWidth:1,borderColor:'#444',borderRadius:radius.md,fontSize:14,backgroundColor:'#111',color:'#fff'},hint:{fontSize:11,color:'#aaa',marginTop:5},btn:{backgroundColor:colors.primary,paddingVertical:14,borderRadius:radius.md,alignItems:'center'},btnDisabled:{opacity:.6},btnText:{color:'#fff',fontWeight:'800',fontSize:14},errorText:{color:'#ff7777',fontSize:12,marginBottom:10,textAlign:'center'},stepTitle:{fontSize:20,fontWeight:'800',color:'#fff',textAlign:'center',marginBottom:8},otpHint:{fontSize:13,color:'#ddd',marginBottom:16,textAlign:'center',lineHeight:20},methodHint:{fontSize:12,color:'#aaa',marginBottom:16,textAlign:'center',lineHeight:18},otpInput:{width:'100%',paddingVertical:15,paddingHorizontal:14,borderWidth:1,borderColor:'#666',borderRadius:radius.md,fontSize:20,letterSpacing:5,textAlign:'center',backgroundColor:'#111',color:'#fff'},orText:{textAlign:'center',marginTop:14,color:'#aaa',fontSize:12},resendBtn:{alignItems:'center',marginTop:14},resendText:{color:'#fff',fontSize:13,fontWeight:'700',textDecorationLine:'underline'}});}
