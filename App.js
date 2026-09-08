@@ -139,6 +139,28 @@ function Root() {
   // run its "Ready" check + fade-out instead of the app snapping in.
   const [splashVisible, setSplashVisible] = useState(true);
 
+  // onFinished (below) fires from inside an Animated .start() callback, on
+  // the same tick React is still settling the PRIOR screen transition
+  // (auth/session resolving into a specific `screen` value - see
+  // AppContext.js's doLogin). For fast logins this timing is harmless, but
+  // slower logins (admin/superadmin: extra checkDeviceSession/MFA
+  // round-trips before `screen` settles - see functions/deviceSessionService.js)
+  // widen the window enough that unmounting AnimatedSplash and mounting
+  // the real screen tree can land in the same Fiber commit as that other
+  // still-in-flight state update, which is the likely cause of an
+  // intermittent "Text strings must be rendered within a <Text> component"
+  // crash observed specifically on superadmin login (chat history
+  // 2026-09-08) - not reproduced by static review of any single screen's
+  // JSX, consistent with a timing/commit-order issue rather than a fixed
+  // bad value. Deferring this one setState to its own macrotask (0ms
+  // setTimeout, not requestAnimationFrame - this needs to run AFTER
+  // React's current commit finishes, not just before the next paint)
+  // ensures splash-teardown and whatever `screen` transition is already
+  // pending never get batched into the same commit.
+  const handleSplashFinished = () => {
+    setTimeout(() => setSplashVisible(false), 0);
+  };
+
   // Handles mysheba://listing/<id> - tapped from the "Open in App" button
   // on the mysheba.top preview page, or any other mysheba:// link. Covers
   // both cases: the link launching the app cold (getInitialURL) and the
@@ -155,7 +177,7 @@ function Root() {
     return (
       <SafeAreaView style={styles.app} edges={['top', 'bottom']}>
         <StatusBar style={isDark ? 'light' : 'dark'} />
-        <AnimatedSplash ready={!authLoading} onFinished={() => setSplashVisible(false)} />
+        <AnimatedSplash ready={!authLoading} onFinished={handleSplashFinished} />
       </SafeAreaView>
     );
   }

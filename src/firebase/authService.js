@@ -199,6 +199,11 @@ export async function login(phone, pin, dialCode = '+60') {
         email: sessionResult.email,
         phone: sessionResult.phone,
         reason: sessionResult.reason,
+        // Only meaningful for reason: 'admin_mfa' - which of 'sms'/'email'
+        // the account actually has on file, so DeviceVerifyScreen can
+        // offer a toggle (both) or skip straight to the only option
+        // (one). Undefined for 'new_device', which is always email-only.
+        availableMfaMethods: sessionResult.availableMfaMethods,
       },
     };
   }
@@ -318,6 +323,7 @@ async function finishGoogleSignIn(ensureProfileArgs) {
         email: sessionResult.email,
         phone: sessionResult.phone,
         reason: sessionResult.reason,
+        availableMfaMethods: sessionResult.availableMfaMethods,
       },
     };
   }
@@ -427,10 +433,10 @@ export async function confirmGoogleAccountMerge(code) {
  * that the same way doLogin does, by staying on this screen with the new
  * reason instead of assuming success.
  */
-export async function retryDeviceSession(uid, phoneIdToken) {
+export async function retryDeviceSession(uid, phoneIdToken, emailIdToken) {
   const deviceId = await getDeviceId();
   const sessionFn = httpsCallable(functions, 'checkDeviceSession');
-  const { data: sessionResult } = await sessionFn({ deviceId, deviceLabel: getDeviceLabel(), phoneIdToken });
+  const { data: sessionResult } = await sessionFn({ deviceId, deviceLabel: getDeviceLabel(), phoneIdToken, emailIdToken });
 
   if (sessionResult.requiresOtp) {
     return {
@@ -440,6 +446,7 @@ export async function retryDeviceSession(uid, phoneIdToken) {
         email: sessionResult.email,
         phone: sessionResult.phone,
         reason: sessionResult.reason,
+        availableMfaMethods: sessionResult.availableMfaMethods,
       },
     };
   }

@@ -1998,6 +1998,7 @@ export function AppProvider({ children }) {
           email: p.pendingDeviceApproval.email,
           phone: p.pendingDeviceApproval.phone,
           reason: p.pendingDeviceApproval.reason,
+          availableMfaMethods: p.pendingDeviceApproval.availableMfaMethods,
         });
         setScreen('deviceVerify');
         return true;
@@ -2031,6 +2032,7 @@ export function AppProvider({ children }) {
           email: p.pendingDeviceApproval.email,
           phone: p.pendingDeviceApproval.phone,
           reason: p.pendingDeviceApproval.reason,
+          availableMfaMethods: p.pendingDeviceApproval.availableMfaMethods,
         });
         setScreen('deviceVerify');
         return true;
@@ -2080,6 +2082,7 @@ export function AppProvider({ children }) {
           email: p.pendingDeviceApproval.email,
           phone: p.pendingDeviceApproval.phone,
           reason: p.pendingDeviceApproval.reason,
+          availableMfaMethods: p.pendingDeviceApproval.availableMfaMethods,
         });
         setScreen('deviceVerify');
         return true;
@@ -2138,7 +2141,7 @@ export function AppProvider({ children }) {
     setAuthError('');
     try {
       const p = pendingDeviceVerification.reason === 'admin_mfa'
-        ? await authService.retryDeviceSession(pendingDeviceVerification.uid, phoneIdToken)
+        ? await authService.retryDeviceSession(pendingDeviceVerification.uid, phoneIdToken, emailIdToken)
         : await authService.confirmDeviceLogin(pendingDeviceVerification.uid, emailIdToken);
 
       if (p.pendingDeviceApproval) {
@@ -2147,6 +2150,7 @@ export function AppProvider({ children }) {
           email: p.pendingDeviceApproval.email,
           phone: p.pendingDeviceApproval.phone,
           reason: p.pendingDeviceApproval.reason,
+          availableMfaMethods: p.pendingDeviceApproval.availableMfaMethods,
         });
         return false;
       }

@@ -122,6 +122,10 @@ function normalizePhone(phone) {
   return String(phone || '').replace(/[^0-9]/g, '');
 }
 
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
 function isPrivilegedRole(role) {
   return role === 'admin' || role === 'superadmin';
 }
@@ -274,23 +278,32 @@ async function sendNewDeviceAlert({ email, pushToken, deviceId, ip }) {
  *
  * Admin/superadmin accounts have a second, independent gate ahead of all of
  * that: every login from a device that ISN'T already trusted must prove a
- * fresh Firebase Phone Auth verification for the account's phone number,
- * checked via assertPhoneVerified (functions/phoneVerification.js - the
- * SAME real-SMS mechanism registration uses to confirm a phone number, not
- * the email-OTP flow the device-SWITCH challenge below still uses). The
- * first call (no phoneIdToken yet) returns { requiresOtp: true, reason:
- * 'admin_mfa', phone } so the client (DeviceVerifyScreen.js) can run
- * src/firebase/phoneVerification.js's sendPhoneOtp/confirmPhoneOtp and get
- * back an ID token; it then re-calls this same function (rather than a
- * separate "confirm" endpoint) with that token as `phoneIdToken`, so the
- * normal device-switch check still runs (in the rare case an admin is also
+ * fresh verification, via EITHER method the account has on file - real
+ * Firebase Phone Auth (assertPhoneVerified, functions/phoneVerification.js,
+ * the SAME real-SMS mechanism registration uses) or the email-link flow
+ * (assertEmailVerified, functions/emailVerification.js, the SAME mechanism
+ * the device-SWITCH challenge below uses). SMS requires the Firebase
+ * Console Phone provider to be enabled; email has no such external
+ * dependency, so it's the practical default while that isn't configured -
+ * see chat history 2026-09-08. The first call (no phoneIdToken/emailIdToken
+ * yet) returns { requiresOtp: true, reason: 'admin_mfa', phone, email,
+ * availableMfaMethods } - availableMfaMethods lists which of 'sms'/'email'
+ * are actually usable (i.e. that field is non-empty on the account), so the
+ * client (DeviceVerifyScreen.js) can offer a toggle between them, or skip
+ * straight to the only one available. Whichever the admin picks, the client
+ * runs that method's send/confirm flow (src/firebase/phoneVerification.js's
+ * sendPhoneOtp/confirmPhoneOtp, or src/firebase/emailVerification.js's
+ * sendEmailLink/confirmEmailLink) and gets back an ID token; it then
+ * re-calls this same function (rather than a separate "confirm" endpoint)
+ * with that token as `phoneIdToken` or `emailIdToken`, so the normal
+ * device-switch check still runs (in the rare case an admin is also
  * switching devices) once MFA is satisfied. Never trusts the client's word
- * that verification happened - assertPhoneVerified independently decodes
- * the token and checks it's recent and for the right phone number. This is
- * checked in a plain read BEFORE the transaction below, since it has no
- * business inside this doc's optimistic-concurrency snapshot, and this path
- * never writes anything on failure - an unverified admin login should leave
- * no trace on the account's session state.
+ * that verification happened - assertPhoneVerified/assertEmailVerified
+ * independently decode the token and check it's recent and for the right
+ * phone/email. This is checked in a plain read BEFORE the transaction
+ * below, since it has no business inside this doc's optimistic-concurrency
+ * snapshot, and this path never writes anything on failure - an unverified
+ * admin login should leave no trace on the account's session state.
  *
  * Trusted devices (users/{uid}.trustedDevices, keyed by deviceId - see
  * withTrustedDevice above): once an admin/superadmin has verified an OTP
@@ -328,10 +341,21 @@ exports.checkDeviceSession = onCall(async (request) => {
     const privileged = isPrivilegedRole(preData.role);
     if (privileged) {
       const phone = normalizePhone(preData.phone || '');
-      if (!phone) {
+      const email = normalizeEmail(preData.email || '');
+      // Admin MFA can be satisfied by EITHER a fresh phone verification
+      // (assertPhoneVerified, real SMS via Firebase Phone Auth) or a
+      // fresh email verification (assertEmailVerified, the same
+      // email-link flow the new_device challenge already uses) - the
+      // account needs at least one of the two on file, not both. SMS
+      // requires the Firebase Console Phone provider to be enabled,
+      // which this project doesn't currently have configured, so email
+      // is the practical default for now; the client (DeviceVerifyScreen)
+      // offers a toggle when both are available and the admin can pick
+      // either.
+      if (!phone && !email) {
         throw new HttpsError(
           'failed-precondition',
-          'This admin account has no phone number on file, so sign-in verification can\u2019t be completed. Please contact support.'
+          'This admin account has no phone number or email on file, so sign-in verification can\u2019t be completed. Please contact support.'
         );
       }
 
@@ -354,14 +378,24 @@ exports.checkDeviceSession = onCall(async (request) => {
           details: { deviceId, ip },
         });
       } else {
-        const phoneIdToken = (request.data || {}).phoneIdToken;
+        const { phoneIdToken, emailIdToken } = request.data || {};
         let verified = false;
+        let verifiedVia = null;
         if (phoneIdToken) {
           try {
             await assertPhoneVerified(phoneIdToken, phone);
             verified = true;
+            verifiedVia = 'sms';
           } catch (verifyErr) {
             throw new HttpsError('failed-precondition', verifyErr.message || 'Please verify your phone number first.');
+          }
+        } else if (emailIdToken) {
+          try {
+            await assertEmailVerified(emailIdToken, email);
+            verified = true;
+            verifiedVia = 'email';
+          } catch (verifyErr) {
+            throw new HttpsError('failed-precondition', verifyErr.message || 'Please verify your email address first.');
           }
         }
 
@@ -373,15 +407,22 @@ exports.checkDeviceSession = onCall(async (request) => {
             performedByRole: preData.role,
             details: { deviceId, ip },
           });
-          return { requiresOtp: true, reason: 'admin_mfa', phone };
+          // Both are included whenever on file so the client can offer a
+          // toggle between them - availableMfaMethods tells it which
+          // buttons to actually show (an account with only one on file
+          // shouldn't offer a dead option for the other).
+          const availableMfaMethods = [phone && 'sms', email && 'email'].filter(Boolean);
+          return { requiresOtp: true, reason: 'admin_mfa', phone, email, availableMfaMethods };
         }
 
-        // Phone was just verified for this not-yet-trusted device (the
-        // client's retry after DeviceVerifyScreen) - trust it going
+        // Phone/email was just verified for this not-yet-trusted device
+        // (the client's retry after DeviceVerifyScreen) - trust it going
         // forward so this admin isn't asked again on every future login
         // from the SAME device. A different device, or this one again
         // after being revoked from Settings > Trusted Devices, still gets
-        // the full challenge.
+        // the full challenge. verifiedVia is logged purely for the audit
+        // trail (Activity Logs) - it doesn't change trust behavior, which
+        // is per-device rather than per-method.
         try {
           await ref.update({ trustedDevices: withTrustedDevice(trustedDevices, deviceId, { ip, label: deviceLabel }) });
         } catch (updateErr) {

@@ -11,16 +11,23 @@ import * as phoneVerification from '../firebase/phoneVerification';
 // Shown mid-login for two distinct reasons (see checkDeviceSession's doc
 // comment, functions/deviceSessionService.js):
 //   'new_device' - this account is already active on a different device.
-//                  Uses the real Firebase email-link flow
+//                  Always uses the real Firebase email-link flow
 //                  (emailVerification.js), same as RegisterScreen's
 //                  email-verify step - tap the link, this screen moves on
-//                  automatically.
+//                  automatically. No method choice here.
 //   'admin_mfa'  - this is an admin/superadmin account, which requires
-//                  fresh phone verification on every login, regardless of
-//                  device. Uses real Firebase Phone Auth (SMS - see
-//                  phoneVerification.js), the same mechanism registration
-//                  uses to confirm a phone number, rather than an emailed
-//                  link.
+//                  fresh verification on every login, regardless of
+//                  device - via EITHER real Firebase Phone Auth (SMS -
+//                  phoneVerification.js) or the same email-link flow
+//                  new_device uses (emailVerification.js), whichever the
+//                  account has on file. pendingDeviceVerification.
+//                  availableMfaMethods (['sms', 'email'], one or both)
+//                  says which to offer - a toggle when both are
+//                  available, or straight to the only option when just
+//                  one is. SMS requires the Firebase Console Phone
+//                  provider to be enabled; email has no such dependency,
+//                  so it's picked by default when both are on offer (see
+//                  chat history 2026-09-08).
 // Either way: send the code/link, confirm it, then confirmDeviceVerification()
 // (AppContext.js) picks the right follow-up call per reason and lands on
 // the normal role-based dashboard.
@@ -38,19 +45,49 @@ export default function DeviceVerifyScreen() {
   const email = pendingDeviceVerification?.email || '';
   const phone = pendingDeviceVerification?.phone || '';
   const isAdminMfa = pendingDeviceVerification?.reason === 'admin_mfa';
+  // Defaults to ['email'] rather than ['sms'] for logins from an OLDER
+  // client build that predates this field (checkDeviceSession simply
+  // won't have sent it) - email has no external Firebase Console
+  // dependency, so it's the safer assumption if we don't actually know.
+  const availableMfaMethods = pendingDeviceVerification?.availableMfaMethods
+    && pendingDeviceVerification.availableMfaMethods.length
+    ? pendingDeviceVerification.availableMfaMethods
+    : ['email'];
+  const canChooseMfaMethod = isAdminMfa && availableMfaMethods.length > 1;
+  // Which method the admin is currently using, for admin_mfa specifically.
+  // Defaults to email when both are offered (see file header) or to
+  // whichever single method is actually available.
+  const [mfaMethod, setMfaMethod] = useState(
+    availableMfaMethods.includes('email') ? 'email' : availableMfaMethods[0]
+  );
+  const isAdminEmailMethod = isAdminMfa && mfaMethod === 'email';
+  const isAdminSmsMethod = isAdminMfa && mfaMethod === 'sms';
+
   const [code, setCode] = useState('');
   const [localError, setLocalError] = useState('');
   const [otpBusy, setOtpBusy] = useState(false);
   const [sent, setSent] = useState(false);
-  // Only used for the admin_mfa (phone) path - the confirmation object
+  // Only used for the admin_mfa SMS path - the confirmation object
   // rnfbAuth().signInWithPhoneNumber returns, needed to check the code the
   // admin types in against the SMS that was actually sent.
   const [phoneConfirmation, setPhoneConfirmation] = useState(null);
 
-  // Only relevant for the non-admin (email link) path: a link tapped while
-  // this screen is mounted arrives via this 'url' event.
+  // Switching method (when both are available) resets any in-progress
+  // send/code state from the method just left, so e.g. a typed SMS code
+  // doesn't linger after switching to email.
+  const onSwitchMfaMethod = (method) => {
+    if (method === mfaMethod) return;
+    setMfaMethod(method);
+    setSent(false);
+    setCode('');
+    setPhoneConfirmation(null);
+    setLocalError('');
+  };
+
+  // Relevant whenever this screen resolves via a tapped email link -
+  // new_device always, admin_mfa only when email was the chosen method.
   useEffect(() => {
-    if (isAdminMfa || !sent) return;
+    if (isAdminSmsMethod || !sent) return;
     const sub = Linking.addEventListener('url', ({ url }) => {
       if (emailVerification.isEmailSignInLink(url)) {
         onConfirmEmailLink(url);
@@ -58,13 +95,13 @@ export default function DeviceVerifyScreen() {
     });
     return () => sub.remove();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdminMfa, sent]);
+  }, [isAdminSmsMethod, sent]);
 
   const onSendCode = async () => {
     setLocalError('');
     setOtpBusy(true);
     try {
-      if (isAdminMfa) {
+      if (isAdminSmsMethod) {
         const confirmation = await phoneVerification.sendPhoneOtp(phone);
         setPhoneConfirmation(confirmation);
       } else {
@@ -78,8 +115,8 @@ export default function DeviceVerifyScreen() {
     }
   };
 
-  // admin_mfa only - the phone code is typed in, unlike the email path
-  // below which resolves itself once the link is tapped.
+  // admin_mfa + SMS only - the phone code is typed in, unlike the email
+  // path below which resolves itself once the link is tapped.
   const onVerifyPhoneCode = async () => {
     if (!code.trim()) {
       setLocalError('Please enter the code we sent you.');
@@ -102,8 +139,8 @@ export default function DeviceVerifyScreen() {
     await confirmDeviceVerification(phoneIdToken);
   };
 
-  // new_device only - fired by the Linking listener above once the person
-  // taps the emailed link.
+  // new_device, and admin_mfa + email - fired by the Linking listener
+  // above once the person taps the emailed link.
   const onConfirmEmailLink = async (url) => {
     setLocalError('');
     setOtpBusy(true);
@@ -130,17 +167,38 @@ export default function DeviceVerifyScreen() {
       </LinearGradient>
 
       <View style={styles.body}>
+        {canChooseMfaMethod && (
+          <View style={styles.methodToggle}>
+            <TouchableOpacity
+              style={[styles.methodBtn, mfaMethod === 'email' && styles.methodBtnActive]}
+              onPress={() => onSwitchMfaMethod('email')}
+              disabled={busy}
+            >
+              <Text style={[styles.methodBtnText, mfaMethod === 'email' && styles.methodBtnTextActive]}>Email</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.methodBtn, mfaMethod === 'sms' && styles.methodBtnActive]}
+              onPress={() => onSwitchMfaMethod('sms')}
+              disabled={busy}
+            >
+              <Text style={[styles.methodBtnText, mfaMethod === 'sms' && styles.methodBtnTextActive]}>SMS</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <Text style={styles.intro}>
-          {isAdminMfa
+          {isAdminSmsMethod
             ? `Admin accounts require a verification code at every sign-in. Enter the code we text to ${phone || 'your phone'}.`
+            : isAdminEmailMethod
+            ? `Admin accounts require a verification code at every sign-in. Verify it's you by tapping the link we send to ${email || 'your email'}.`
             : `Your account is already signed in on another device. To switch to this one, verify it's you by tapping the link we send to ${email || 'your email'}.`}
         </Text>
 
         {!sent ? (
           <TouchableOpacity style={[styles.btn, busy && styles.btnDisabled]} onPress={onSendCode} disabled={busy}>
-            {busy ? <ActivityIndicator color="white" /> : <Text style={styles.btnText}>{isAdminMfa ? 'Send Verification Code' : 'Send Verification Link'}</Text>}
+            {busy ? <ActivityIndicator color="white" /> : <Text style={styles.btnText}>{isAdminSmsMethod ? 'Send Verification Code' : 'Send Verification Link'}</Text>}
           </TouchableOpacity>
-        ) : isAdminMfa ? (
+        ) : isAdminSmsMethod ? (
           <>
             <View style={styles.formGroup}>
               <Text style={styles.label}>Verification Code</Text>
@@ -188,6 +246,11 @@ function createStyles(colors) {
     header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, backgroundColor: colors.primary, overflow: 'hidden' },
     headerTitle: { color: 'white', fontWeight: '600', fontSize: 16 },
     body: { padding: 20 },
+    methodToggle: { flexDirection: 'row', backgroundColor: colors.border || '#eee', borderRadius: radius.md, padding: 4, marginBottom: 18 },
+    methodBtn: { flex: 1, paddingVertical: 8, borderRadius: radius.md - 2, alignItems: 'center' },
+    methodBtnActive: { backgroundColor: colors.primary },
+    methodBtnText: { fontSize: 13, fontWeight: '600', color: colors.navy || '#333' },
+    methodBtnTextActive: { color: 'white' },
     intro: { fontSize: 13, color: '#666', marginBottom: 20, textAlign: 'center', lineHeight: 19 },
     formGroup: { marginBottom: 14 },
     label: { fontWeight: '500', marginBottom: 5, fontSize: 13 },
