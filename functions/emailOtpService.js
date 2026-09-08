@@ -4,6 +4,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { sendEmail } = require('./mailerService');
 
 const CHALLENGE_TTL_MS = 10 * 60 * 1000;
+const RESEND_COOLDOWN_MS = 30 * 1000;
 const MAX_OTP_ATTEMPTS = 5;
 const ACTION_CODE_SETTINGS = {
   url: 'https://mysheba.top/verifyEmail',
@@ -24,9 +25,14 @@ async function sendEmailVerificationChallenge(data) {
   const oldSnap = await challengeRef.get();
   if (oldSnap.exists) {
     const old = oldSnap.data();
+    if (old.lastSentAt && Date.now() - Number(old.lastSentAt) < RESEND_COOLDOWN_MS) {
+      const wait = Math.ceil((RESEND_COOLDOWN_MS - (Date.now() - Number(old.lastSentAt))) / 1000);
+      throw new HttpsError('resource-exhausted', `Please wait ${wait} seconds before requesting another email.`);
+    }
     if (old.uid) await admin.auth().deleteUser(old.uid).catch(() => {});
     await challengeRef.delete().catch(() => {});
   }
+
   const code = String(Math.floor(100000 + Math.random() * 900000));
   const salt = crypto.randomBytes(16).toString('hex');
   const otpHash = hashCode(code, salt);
@@ -45,8 +51,9 @@ async function sendEmailVerificationChallenge(data) {
     await auth.deleteUser(tempUser.uid).catch(() => {});
     throw new HttpsError('failed-precondition', err.message || 'Could not create the email verification link.');
   }
+
   const expiresAt = Date.now() + CHALLENGE_TTL_MS;
-  await challengeRef.set({ uid: tempUser.uid, salt, otpHash, expiresAt, attempts: 0, used: false, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+  await challengeRef.set({ uid: tempUser.uid, salt, otpHash, expiresAt, attempts: 0, used: false, lastSentAt: Date.now(), createdAt: admin.firestore.FieldValue.serverTimestamp() });
   const subject = 'MySheba email verification';
   const text = ['Verify your MySheba email address.', '', `6-digit verification code: ${code}`, '', 'Or verify instantly with this secure link:', link, '', 'The code expires in 10 minutes. The verification link can only be used once.', 'If you did not create a MySheba account, you can ignore this email.'].join('\n');
   const html = `<!doctype html><html><body style="font-family:Arial,sans-serif;line-height:1.5;color:#222"><h2>Verify your MySheba email</h2><p>Use either option below:</p><p><strong>6-digit verification code</strong></p><div style="font-size:32px;font-weight:700;letter-spacing:8px;margin:12px 0">${code}</div><p><a href="${link}" style="display:inline-block;padding:12px 20px;background:#1a73e8;color:#fff;text-decoration:none;border-radius:8px">Verify with Magic Link</a></p><p>This code expires in 10 minutes. The link can only be used once.</p><p>If you did not create a MySheba account, ignore this email.</p></body></html>`;
