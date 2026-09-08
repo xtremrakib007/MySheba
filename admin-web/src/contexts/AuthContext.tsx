@@ -30,19 +30,10 @@ interface AuthContextValue {
   firebaseUser: User | null;
   profile: AdminProfile | null;
   loading: boolean;
-  // Set when a real Firebase user exists but is not an admin/superadmin,
-  // or when their user doc is missing. Distinguishing this from "not
-  // logged in" lets the login screen show a clear reason.
   accessDenied: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
-
-  // --- Device-lock / OTP ---
-  // True once credentials + role check pass but this browser isn't a
-  // trusted device yet. `profile` stays null the whole time this is true,
-  // so ProtectedRoute keeps redirecting to /login - LoginPage renders the
-  // OTP step instead of the credentials form while this is set.
   deviceVerificationRequired: boolean;
   otpMethod: OtpMethod | null;
   otpDestination: string | null;
@@ -54,24 +45,24 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-
 const ADMIN_ROLES: AdminRole[] = ['admin', 'superadmin'];
+
+function normalizeRole(value: unknown): AdminRole | null {
+  if (typeof value !== 'string') return null;
+  const role = value.trim().toLowerCase();
+  return ADMIN_ROLES.includes(role as AdminRole) ? (role as AdminRole) : null;
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<AdminProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
-
   const [deviceVerificationRequired, setDeviceVerificationRequired] = useState(false);
   const [otpMethod, setOtpMethod] = useState<OtpMethod | null>(null);
   const [otpDestination, setOtpDestination] = useState<string | null>(null);
   const [otpError, setOtpError] = useState<string | null>(null);
   const [otpSubmitting, setOtpSubmitting] = useState(false);
-
-  // Holds the profile that's ready to be granted as soon as OTP clears.
-  // Not exposed via context - only `profile` is, and it stays null until
-  // the device is trusted.
   const pendingProfileRef = useRef<AdminProfile | null>(null);
 
   useEffect(() => {
@@ -90,15 +81,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      setLoading(true);
       try {
-        const snap = await getDoc(doc(db, 'users', user.uid));
-        const data = snap.exists() ? snap.data() : null;
-        const role = data?.role as AdminRole | undefined;
+        // Admin authorization is based on the Firebase Auth UID. The Firestore
+        // document must therefore be users/{user.uid}.
+        const userRef = doc(db, 'users', user.uid);
+        const snap = await getDoc(userRef);
 
-        if (!role || !ADMIN_ROLES.includes(role)) {
-          // Logged in with valid Firebase credentials, but this account
-          // isn't an admin/superadmin - deny access rather than showing
-          // an empty dashboard.
+        if (!snap.exists()) {
+          console.error('Admin profile missing:', {
+            collection: 'users',
+            documentId: user.uid,
+            email: user.email,
+          });
+          setProfile(null);
+          setAccessDenied(true);
+          await firebaseSignOut(auth);
+          return;
+        }
+
+        const data = snap.data();
+        const role = normalizeRole(data.role);
+
+        if (!role) {
+          console.error('Admin role rejected:', {
+            uid: user.uid,
+            email: user.email,
+            role: data.role,
+          });
           setProfile(null);
           setAccessDenied(true);
           await firebaseSignOut(auth);
@@ -108,32 +118,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const adminProfile: AdminProfile = {
           uid: user.uid,
           email: user.email,
-          name: data?.name ?? data?.displayName,
+          name: typeof data.name === 'string' ? data.name : typeof data.displayName === 'string' ? data.displayName : undefined,
           role,
         };
 
-        // Device trust is an optional extra security layer. Do not block a valid
-        // admin login when the device-auth Cloud Function is unavailable.
-        const deviceId = getOrCreateDeviceId();
+        // Device trust is an optional extra security layer. If the device-auth
+        // function is unavailable, a valid admin account can still enter.
         try {
+          const deviceId = getOrCreateDeviceId();
           const trusted = await isDeviceTrusted(user.uid, deviceId);
           if (trusted) {
             setProfile(adminProfile);
-          } else {
-            pendingProfileRef.current = adminProfile;
-            setDeviceVerificationRequired(true);
-            setProfile(null);
-            try {
-              const { maskedDestination, method } = await requestLoginOtp('email');
-              setOtpMethod(method);
-              setOtpDestination(maskedDestination);
-            } catch (err) {
-              console.warn('Device verification unavailable; allowing authenticated admin login:', err);
-              setOtpError(null);
-              setDeviceVerificationRequired(false);
-              setProfile(adminProfile);
-              pendingProfileRef.current = null;
-            }
+            return;
+          }
+
+          pendingProfileRef.current = adminProfile;
+          setDeviceVerificationRequired(true);
+
+          try {
+            const { maskedDestination, method } = await requestLoginOtp('email');
+            setOtpMethod(method);
+            setOtpDestination(maskedDestination);
+          } catch (err) {
+            console.warn('Device verification OTP unavailable; allowing authenticated admin login:', err);
+            setOtpError(null);
+            setDeviceVerificationRequired(false);
+            setProfile(adminProfile);
+            pendingProfileRef.current = null;
           }
         } catch (err) {
           console.warn('Device trust check unavailable; allowing authenticated admin login:', err);
@@ -143,16 +154,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           pendingProfileRef.current = null;
         }
       } catch (err) {
-            console.error('Failed to send login OTP:', err);
-            setOtpError(
-              err instanceof Error ? err.message : 'Could not send a verification code. Try again.'
-            );
-          }
-        }
-      } catch (err) {
         console.error('Failed to load admin profile:', err);
         setProfile(null);
         setAccessDenied(true);
+        await firebaseSignOut(auth).catch(() => undefined);
       } finally {
         setLoading(false);
       }
@@ -162,25 +167,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email, password);
-    // onAuthStateChanged above handles role verification + device check.
+    setAccessDenied(false);
+    setProfile(null);
+    await signInWithEmailAndPassword(auth, email.trim(), password);
   };
 
   const signInWithGoogle = async () => {
-    // Matches the mobile app's auth method, so admins who signed up via
-    // Google on mobile can use the same account here.
+    setAccessDenied(false);
+    setProfile(null);
     const provider = new GoogleAuthProvider();
     await signInWithPopup(auth, provider);
-    // onAuthStateChanged above handles role verification + device check.
   };
 
   const signOut = async () => {
+    pendingProfileRef.current = null;
     await firebaseSignOut(auth);
   };
 
-  // Re-request the OTP, or switch channel (email <-> sms). Same function
-  // for both "Resend code" and "Use SMS instead" - the Cloud Function
-  // enforces its own resend cooldown, surfaced here as otpError.
   const requestOtp = async (method: OtpMethod) => {
     setOtpError(null);
     setOtpSubmitting(true);
@@ -201,20 +204,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setOtpSubmitting(true);
     try {
       const deviceId = getOrCreateDeviceId();
-      await verifyLoginOtp(code, deviceId, getDeviceLabel());
-      // Server marked this device trusted - safe to grant the held profile.
+      await verifyLoginOtp(code.trim(), deviceId, getDeviceLabel());
       setProfile(pendingProfileRef.current);
       setDeviceVerificationRequired(false);
       pendingProfileRef.current = null;
     } catch (err) {
-      setOtpError(err instanceof Error ? err.message : 'That code didn\u2019t work. Try again.');
+      setOtpError(err instanceof Error ? err.message : 'That code did not work. Try again.');
     } finally {
       setOtpSubmitting(false);
     }
   };
 
-  // "Cancel" on the OTP screen - there's no partial state worth keeping,
-  // so just sign the Firebase session out and return to a clean login form.
   const cancelDeviceVerification = async () => {
     pendingProfileRef.current = null;
     setDeviceVerificationRequired(false);
