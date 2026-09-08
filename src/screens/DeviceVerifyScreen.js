@@ -89,11 +89,16 @@ export default function DeviceVerifyScreen() {
   // new_device always, admin_mfa only when email was the chosen method.
   useEffect(() => {
     if (isAdminSmsMethod || !sent) return;
-    const sub = Linking.addEventListener('url', ({ url }) => {
+    const handleUrl = (url) => {
       if (emailVerification.isEmailSignInLink(url)) {
         onConfirmEmailLink(url);
       }
-    });
+    };
+    // Handle both warm-app deep links and a link that launched a cold app.
+    Linking.getInitialURL().then((url) => {
+      if (url) handleUrl(url);
+    }).catch(() => {});
+    const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url));
     return () => sub.remove();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdminSmsMethod, sent]);
@@ -214,7 +219,7 @@ export default function DeviceVerifyScreen() {
           {isAdminSmsMethod
             ? `Admin accounts require a verification code at every sign-in. Enter the code we text to ${phone || 'your phone'}.`
             : isAdminEmailMethod
-            ? `Admin accounts require a verification code at every sign-in. Verify it's you by tapping the link we send to ${email || 'your email'}.`
+            ? `Admin accounts require a verification code at every sign-in. We sent one email with a link and a 6-digit code. Use either one.`
             : `Your account is already signed in on another device. To switch to this one, verify it's you by tapping the link we send to ${email || 'your email'}.`}
         </Text>
 
