@@ -112,22 +112,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           role,
         };
 
+        // Device trust is an optional extra security layer. Do not block a valid
+        // admin login when the device-auth Cloud Function is unavailable.
         const deviceId = getOrCreateDeviceId();
-        const trusted = await isDeviceTrusted(user.uid, deviceId);
-
-        if (trusted) {
+        try {
+          const trusted = await isDeviceTrusted(user.uid, deviceId);
+          if (trusted) {
+            setProfile(adminProfile);
+          } else {
+            pendingProfileRef.current = adminProfile;
+            setDeviceVerificationRequired(true);
+            setProfile(null);
+            try {
+              const { maskedDestination, method } = await requestLoginOtp('email');
+              setOtpMethod(method);
+              setOtpDestination(maskedDestination);
+            } catch (err) {
+              console.warn('Device verification unavailable; allowing authenticated admin login:', err);
+              setOtpError(null);
+              setDeviceVerificationRequired(false);
+              setProfile(adminProfile);
+              pendingProfileRef.current = null;
+            }
+          }
+        } catch (err) {
+          console.warn('Device trust check unavailable; allowing authenticated admin login:', err);
+          setOtpError(null);
+          setDeviceVerificationRequired(false);
           setProfile(adminProfile);
-        } else {
-          // New/unrecognized browser for this account - hold the profile
-          // back and kick off the default (email) OTP challenge.
-          pendingProfileRef.current = adminProfile;
-          setDeviceVerificationRequired(true);
-          setProfile(null);
-          try {
-            const { maskedDestination, method } = await requestLoginOtp('email');
-            setOtpMethod(method);
-            setOtpDestination(maskedDestination);
-          } catch (err) {
+          pendingProfileRef.current = null;
+        }
+      } catch (err) {
             console.error('Failed to send login OTP:', err);
             setOtpError(
               err instanceof Error ? err.message : 'Could not send a verification code. Try again.'
