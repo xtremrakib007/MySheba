@@ -126,6 +126,110 @@ function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
 }
 
+const EMAIL_CHALLENGE_TTL_MS = 10 * 60 * 1000;
+const EMAIL_CHALLENGE_RESEND_MS = 30 * 1000;
+const EMAIL_CHALLENGE_MAX_ATTEMPTS = 5;
+
+function generateEmailOtp() {
+  return String(crypto.randomInt(100000, 1000000));
+}
+
+function hashEmailOtp(code) {
+  return crypto.createHash('sha256').update(String(code).trim()).digest('hex');
+}
+
+const EMAIL_LINK_ACTION_CODE_SETTINGS = {
+  url: 'https://mysheba.top/verifyEmail',
+  handleCodeInApp: true,
+  android: {
+    packageName: 'com.satulink.mysheba',
+    installApp: true,
+    minimumVersion: '1',
+  },
+};
+
+async function sendCombinedEmailChallenge({ db, uid, email, deviceId, reason, displayName }) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!isValidEmail(normalizedEmail)) {
+    throw new HttpsError('failed-precondition', 'No valid email address is available for verification.');
+  }
+  const ref = userRef(db, uid);
+  const snap = await ref.get();
+  const current = snap.exists ? snap.data() : {};
+  const existing = current.pendingAdminEmailChallenge || null;
+  const lastSent = existing?.createdAt?.toMillis?.() || 0;
+  if (Date.now() - lastSent < EMAIL_CHALLENGE_RESEND_MS) {
+    throw new HttpsError('resource-exhausted', 'Please wait a few seconds before requesting another verification email.');
+  }
+
+  const code = generateEmailOtp();
+  let link;
+  try {
+    link = await admin.auth().generateSignInWithEmailLink(normalizedEmail, EMAIL_LINK_ACTION_CODE_SETTINGS);
+  } catch (err) {
+    await logServerError('sendCombinedEmailChallenge.generateLink', err, { userId: uid });
+    throw new HttpsError('failed-precondition', 'Could not create the email verification link. Please try again.');
+  }
+
+  await ref.update({
+    pendingAdminEmailChallenge: {
+      deviceId,
+      reason: reason || 'admin_mfa',
+      email: normalizedEmail,
+      codeHash: hashEmailOtp(code),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + EMAIL_CHALLENGE_TTL_MS),
+      attempts: 0,
+    },
+  });
+
+  const safeName = String(displayName || '').trim();
+  const greeting = safeName ? `Hello ${safeName},` : 'Hello,';
+  const text =
+    `${greeting}\n\nWe received a MySheba sign-in verification request.\n\n` +
+    `Option 1 — Open the verification link in this email:\n${link}\n\n` +
+    `Option 2 — Enter this 6-digit verification code in the MySheba app:\n${code}\n\n` +
+    `The code expires in 10 minutes. If you did not request this, you can ignore this email.`;
+
+  const html =
+    `<div style="font-family:Arial,sans-serif;line-height:1.6;max-width:600px;margin:auto">` +
+    `<h2>MySheba sign-in verification</h2><p>${greeting}</p>` +
+    `<p>We received a request to verify your MySheba sign-in.</p>` +
+    `<p><b>Option 1: Use the verification link</b></p>` +
+    `<p><a href="${link}" style="display:inline-block;padding:12px 18px;background:#08aaa0;color:#fff;text-decoration:none;border-radius:8px">Verify Sign-In</a></p>` +
+    `<p><b>Option 2: Use the 6-digit code</b></p>` +
+    `<div style="font-size:28px;font-weight:700;letter-spacing:8px;padding:14px 18px;background:#f3f4f6;border-radius:8px;text-align:center">${code}</div>` +
+    `<p>The code expires in 10 minutes. Either the link or the code can complete verification.</p>` +
+    `<p style="color:#777;font-size:12px">If you did not request this, you can ignore this email.</p></div>`;
+
+  await mailerService.sendEmail({
+    to: normalizedEmail,
+    subject: 'MySheba sign-in verification — link + 6-digit code',
+    text,
+    html,
+    context: 'deviceSessionService.emailChallenge',
+  });
+  return { method: 'email', email: normalizedEmail };
+}
+
+function verifyEmailOtpChallenge(challenge, code, deviceId, email) {
+  if (!challenge || challenge.deviceId !== deviceId) {
+    throw new HttpsError('failed-precondition', 'No active email verification challenge. Please request a new email.');
+  }
+  if (normalizeEmail(challenge.email) !== normalizeEmail(email)) {
+    throw new HttpsError('failed-precondition', 'The verification email does not match this account.');
+  }
+  if (challenge.expiresAt?.toMillis?.() < Date.now()) {
+    throw new HttpsError('deadline-exceeded', 'That verification code expired. Request a new email.');
+  }
+  if ((challenge.attempts || 0) >= EMAIL_CHALLENGE_MAX_ATTEMPTS) {
+    throw new HttpsError('resource-exhausted', 'Too many attempts. Request a new verification email.');
+  }
+  if (hashEmailOtp(code) !== challenge.codeHash) {
+    throw new HttpsError('invalid-argument', 'Incorrect verification code.');
+  }
+}
+
 function isPrivilegedRole(role) {
   return role === 'admin' || role === 'superadmin';
 }
@@ -378,9 +482,10 @@ exports.checkDeviceSession = onCall(async (request) => {
           details: { deviceId, ip },
         });
       } else {
-        const { phoneIdToken, emailIdToken } = request.data || {};
+        const { phoneIdToken, emailIdToken, emailOtp, resendEmailChallenge } = request.data || {};
         let verified = false;
         let verifiedVia = null;
+
         if (phoneIdToken) {
           try {
             await assertPhoneVerified(phoneIdToken, phone);
@@ -393,26 +498,38 @@ exports.checkDeviceSession = onCall(async (request) => {
           try {
             await assertEmailVerified(emailIdToken, email);
             verified = true;
-            verifiedVia = 'email';
+            verifiedVia = 'email_link';
           } catch (verifyErr) {
             throw new HttpsError('failed-precondition', verifyErr.message || 'Please verify your email address first.');
           }
+        } else if (emailOtp) {
+          verifyEmailOtpChallenge(preData.pendingAdminEmailChallenge, emailOtp, deviceId, email);
+          verified = true;
+          verifiedVia = 'email_otp';
         }
 
         if (!verified) {
+          if (email && (resendEmailChallenge || !preData.pendingAdminEmailChallenge)) {
+            await sendCombinedEmailChallenge({
+              db, uid, email, deviceId, reason: 'admin_mfa',
+              displayName: preData.name || preData.displayName,
+            });
+          }
           await logAudit({
             action: 'admin_mfa_challenge',
             targetUid: uid,
             performedBy: uid,
             performedByRole: preData.role,
-            details: { deviceId, ip },
+            details: { deviceId, ip, emailChallenge: Boolean(email) },
           });
-          // Both are included whenever on file so the client can offer a
-          // toggle between them - availableMfaMethods tells it which
-          // buttons to actually show (an account with only one on file
-          // shouldn't offer a dead option for the other).
           const availableMfaMethods = [phone && 'sms', email && 'email'].filter(Boolean);
-          return { requiresOtp: true, reason: 'admin_mfa', phone, email, availableMfaMethods };
+          return { requiresOtp: true, reason: 'admin_mfa', phone, email, availableMfaMethods, emailChallengeSent: Boolean(email) };
+        }
+
+        if (emailIdToken || emailOtp) {
+          await ref.update({ pendingAdminEmailChallenge: admin.firestore.FieldValue.delete() }).catch(async (e) => {
+            await logServerError('checkDeviceSession.clearEmailChallenge', e, { userId: uid });
+          });
         }
 
         // Phone/email was just verified for this not-yet-trusted device
