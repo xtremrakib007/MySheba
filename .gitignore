@@ -1,2 +1,44 @@
+# Dependencies
 node_modules/
+
+# Secrets - never commit these
+.env
+.env.*
+functions/.env
+functions/.env.*
+*.jks
+*.keystore
+google-services.json
+GoogleService-Info.plist
+
+# Expo / EAS
+.expo/
 dist/
+web-build/
+
+# Build outputs
+*.apk
+*.aab
+*.ipa
+
+# Native
+android/app/build/
+ios/build/
+ios/Pods/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Firebase
+.firebase/
+firebase-debug.log
+
+# Misc temp
+*.tmp
+/tmp/
