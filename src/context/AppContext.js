@@ -2135,13 +2135,13 @@ export function AppProvider({ children }) {
    *     assuming success.
    * Either way, on final success this lands on the normal role-based
    * dashboard, same as a plain doLogin. */
-  const confirmDeviceVerification = useCallback(async (phoneIdToken, emailIdToken) => {
+  const confirmDeviceVerification = useCallback(async (phoneIdToken, emailIdToken, emailOtp) => {
     if (!pendingDeviceVerification) return false;
     setAuthBusy(true);
     setAuthError('');
     try {
       const p = pendingDeviceVerification.reason === 'admin_mfa'
-        ? await authService.retryDeviceSession(pendingDeviceVerification.uid, phoneIdToken, emailIdToken)
+        ? await authService.retryDeviceSession(pendingDeviceVerification.uid, phoneIdToken, emailIdToken, emailOtp)
         : await authService.confirmDeviceLogin(pendingDeviceVerification.uid, emailIdToken);
 
       if (p.pendingDeviceApproval) {
