@@ -6,17 +6,15 @@
 // users/{uid} profile exists:
 //
 //   - First time this uid has ever signed in, and no existing account
-//     already uses this email, and a valid, not-already-used phone number
-//     was given -> no profile yet -> create one as role: 'customer', with
-//     a unique numeric userId (same reservation scheme as phone+PIN
-//     registration and staff-created accounts - see userId.js). A phone
-//     number is mandatory here, same "one phone per account" rule as
-//     phone+PIN registration (functions/customerRegistration.js) - see the
-//     phone check below.
-//   - First time this uid has ever signed in, but no phone was given yet
-//     -> throw PHONE_REQUIRED (see below) without creating anything or
-//     touching the Auth user, so the client can prompt for a phone number
-//     and call this again with it - src/screens/GooglePhoneScreen.js.
+//     already uses this email or (if one was given) the phone number ->
+//     no profile yet -> create one as role: 'customer', with a unique
+//     numeric userId (same reservation scheme as phone+PIN registration
+//     and staff-created accounts - see userId.js). Phone is OPTIONAL here
+//     (see the phone handling below) - it's collected on a best-effort
+//     basis and left blank (phoneVerified: false) rather than blocking
+//     sign-in when it isn't provided; GooglePhoneScreen.js can still
+//     supply one up front when the client build supports it, but nothing
+//     here requires it anymore.
 //   - First time this uid has ever signed in, but the email matches an
 //     existing account (typically one created via phone+PIN sign-up,
 //     using the same real email for OTP verification) -> refuse to create
@@ -56,20 +54,23 @@ exports.ensureGoogleProfile = onCall(async (request) => {
     return { uid, ...snap.data(), isNew: false };
   }
 
-  // Google Sign-In collects no phone number of its own - a mobile number
-  // is mandatory for every account (same "one phone per account" rule as
-  // phone+PIN sign-up), so the very first Google sign-in for a brand-new
-  // account must supply one. This throws a specific, non-user-facing
-  // marker message (not shown as-is - see authService.signInWithGoogle,
-  // which turns it into a needsPhone-flagged error) so the client can tell
-  // "please collect a phone number and call me again" apart from a real
-  // failure, without creating a profile OR touching the Auth user this
-  // call auto-provisioned - that same uid is reused on the follow-up call
-  // once a phone number is provided.
-  const phone = normalizePhone((request.data || {}).phone);
-  if (!isValidPhone(phone)) {
-    throw new HttpsError('failed-precondition', 'PHONE_REQUIRED');
-  }
+  // Google Sign-In collects no phone number of its own. Phone used to be
+  // mandatory here (same "one phone per account" rule as phone+PIN
+  // sign-up), requiring a PHONE_REQUIRED round-trip through
+  // GooglePhoneScreen.js before the profile was created. That client-side
+  // handling never made it to the currently-installed app build, so old
+  // clients only ever saw the raw PHONE_REQUIRED error with no way to
+  // proceed - see chat history 2026-09-08. Backend-only fix (no client
+  // rebuild/OTA available): phone is now OPTIONAL on first Google
+  // sign-in. A blank phone is allowed through; the account is created
+  // with phone: '' rather than blocking, so sign-in succeeds immediately
+  // on any existing client. This intentionally breaks the "one phone per
+  // account" guarantee for Google sign-ups until a "complete your
+  // profile" phone-collection step is added elsewhere (e.g. Settings) -
+  // see phoneVerified below, which flags this so other code can gate on
+  // it later rather than assuming every account has a real phone.
+  const rawPhone = normalizePhone((request.data || {}).phone);
+  const phone = isValidPhone(rawPhone) ? rawPhone : '';
 
   // One phone number, one account - same rule registerWithDealerCode
   // already enforces for phone+PIN sign-up
@@ -78,15 +79,21 @@ exports.ensureGoogleProfile = onCall(async (request) => {
   // phone-derived synthetic email colliding in Firebase Auth). Google
   // accounts authenticate with the person's real email rather than that
   // synthetic address, so nothing else would ever catch a duplicate phone
-  // here - this check is the only thing enforcing it for this signup path.
-  const phoneSnap = await db.collection('users').where('phone', '==', phone).limit(1).get();
-  if (!phoneSnap.empty) {
-    // Same cleanup as the email-duplicate branch below: this uid was only
-    // ever a throwaway auto-provisioned-by-signInWithCredential identity
-    // with no profile - delete it rather than leaving it to linger and
-    // hit this same block again.
-    await admin.auth().deleteUser(uid).catch(() => {});
-    throw new HttpsError('already-exists', 'This phone number is already registered to another account.');
+  // here - this check is the only thing enforcing it for this signup
+  // path. Only runs when a phone was actually supplied - a blank phone
+  // can't collide with anything, and every Google sign-up without one
+  // would otherwise collide with every OTHER phone-less Google sign-up
+  // on this same empty-string check.
+  if (phone) {
+    const phoneSnap = await db.collection('users').where('phone', '==', phone).limit(1).get();
+    if (!phoneSnap.empty) {
+      // Same cleanup as the email-duplicate branch below: this uid was only
+      // ever a throwaway auto-provisioned-by-signInWithCredential identity
+      // with no profile - delete it rather than leaving it to linger and
+      // hit this same block again.
+      await admin.auth().deleteUser(uid).catch(() => {});
+      throw new HttpsError('already-exists', 'This phone number is already registered to another account.');
+    }
   }
 
   // One email, one account - same rule registerWithDealerCode already
@@ -165,6 +172,14 @@ exports.ensureGoogleProfile = onCall(async (request) => {
     name: token.name || '',
     email,
     phone,
+    // False whenever phone is blank (the new no-phone-collected path) or,
+    // for symmetry, if a future caller ever passes a phone here without
+    // it having gone through actual OTP/SMS verification - this flag is
+    // specifically "do we have a phone we can trust", not "is phone
+    // non-empty", so other code can gate phone-dependent features (e.g.
+    // wallet/dealer resolution) on it rather than assuming every account
+    // has a real, verified number.
+    phoneVerified: false,
     role: 'customer',
     dealerId: resolvedDealerId,
     walletBalance: 0,
