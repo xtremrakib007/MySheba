@@ -60,9 +60,9 @@
 
     <div id="success-state" class="hidden">
       <h1>You're verified!</h1>
-      <p>Return to the MySheba app to continue signing in.</p>
+      <p>Your email-link sign-in was completed successfully. Return to the MySheba app to continue.</p>
       <a id="open-app-btn" class="verify-btn" href="#" style="margin-top:10px;">Open MySheba App</a>
-      <p style="margin-top:16px;font-size:13px;color:#888;">If the app doesn't open automatically, switch to it manually — it will pick up from here.</p>
+      <p style="margin-top:16px;font-size:13px;color:#888;">If the app doesn't open automatically, switch to it manually.</p>
     </div>
 
     <div id="error-state" class="hidden">
@@ -78,25 +78,17 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
 import { getAuth, isSignInWithEmailLink, signInWithEmailLink } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
 
-// IMPORTANT: this MUST be the satulink-solutions project's Web API config
-// (the app's own Firebase project), NOT the mysheba.top website's project
-// (mysheba2, in /assets/js/firebase-config.js) - admin sign-in verification
-// is checked against satulink-solutions's Auth, so signing in against the
-// wrong project here will make every link fail with auth/invalid-action-code
-// even though the page itself loads fine.
-// Get this from: Firebase Console -> satulink-solutions -> Project Settings
-// -> General -> Your apps -> Web app (register one if none exists yet -
-// no rebuild needed, this is a console-only step).
 const firebaseConfig = {
   apiKey: "AIzaSyDvuBqLFIbhCIRku-sO7NOeDBBiGy3YmmY",
-  authDomain: "satulink-solutions.firebaseapp.com", // e.g. satulink-solutions.firebaseapp.com
+  authDomain: "satulink-solutions.firebaseapp.com",
   projectId: "satulink-solutions",
+  storageBucket: "satulink-solutions.firebasestorage.app",
+  messagingSenderId: "632456211568"
 };
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-
-const EMAIL_STORAGE_KEY = "mysheba_emailForSignIn"; // written by the app if it initiated on this same device/browser
+const EMAIL_STORAGE_KEY = "mysheba_emailForSignIn";
 
 const loadingState = document.getElementById("loading-state");
 const emailPromptState = document.getElementById("email-prompt-state");
@@ -119,57 +111,81 @@ function showStatus(message, type = "error") {
 }
 
 function firebaseErrorMessage(error) {
-  switch (error?.code) {
-    case "auth/expired-action-code": return "This verification link has expired. Please request a new one from the app.";
-    case "auth/invalid-action-code": return "This verification link is invalid or has already been used. Please request a new one from the app.";
-    case "auth/user-disabled": return "This account has been disabled. Please contact MySheba support.";
-    case "auth/invalid-email": return "That email address doesn't match this verification link. Please try again.";
-    default: return "We could not verify this link. Please request a new one from the app and try again.";
+  const code = error?.code || "";
+  switch (code) {
+    case "auth/expired-action-code":
+      return "This verification link has expired. Please request a new verification email from the MySheba app.";
+    case "auth/invalid-action-code":
+      return "This verification link is invalid or has already been used. Please request a new verification email from the MySheba app.";
+    case "auth/invalid-email":
+      return "The email address does not match this verification link.";
+    case "auth/unauthorized-domain":
+      return "MySheba's verification domain is not authorized in Firebase Authentication. Add mysheba.top to Firebase Authentication → Settings → Authorized domains.";
+    case "auth/network-request-failed":
+      return "Could not contact Firebase. Check your internet connection and try the verification link again.";
+    case "auth/operation-not-allowed":
+      return "Email-link sign-in is not enabled in the MySheba Firebase project. Enable Email link (passwordless sign-in) in Firebase Authentication → Sign-in method.";
+    case "auth/user-disabled":
+      return "This account has been disabled. Please contact MySheba support.";
+    default:
+      return `We could not verify this link${code ? ` (${code})` : ""}. Please request a new one and try again.`;
   }
 }
 
-// Hands the verified user's ID token back to the app via the SAME custom
-// scheme mysheba://listing/<id> deep links already use (see App.js /
-// AppContext.js handleDeepLink) - no App/Universal Link setup needed,
-// works purely because the app is already registered for the mysheba://
-// scheme. AppContext.js's handleDeepLink needs a small addition to react
-// to this path (see accompanying note) - that's a plain JS change,
-// shippable via `eas update`, no rebuild.
 function redirectToApp(idToken) {
   const deepLink = `mysheba://verify-email-complete?idToken=${encodeURIComponent(idToken)}`;
   openAppBtn.href = deepLink;
-  // Best-effort auto-attempt - harmless no-op if the app isn't installed
-  // or isn't the foreground/backgrounded app on this device.
-  window.location.href = deepLink;
+  setTimeout(() => { window.location.href = deepLink; }, 100);
 }
 
 async function completeSignIn(email, link) {
+  emailSubmitBtn.disabled = true;
+  emailSubmitBtn.textContent = "Verifying…";
+  showOnly(loadingState);
+  showStatus("Contacting Firebase…", "success");
+
   try {
-    const result = await signInWithEmailLink(auth, email, link);
-    const idToken = await result.user.getIdToken();
+    // Never leave the user on the spinner forever if Firebase cannot respond.
+    const result = await Promise.race([
+      signInWithEmailLink(auth, email, link),
+      new Promise((_, reject) => setTimeout(() => {
+        const error = new Error("Firebase verification timed out");
+        error.code = "auth/network-request-failed";
+        reject(error);
+      }, 20000))
+    ]);
+
+    const idToken = await result.user.getIdToken(true);
     try { window.localStorage.removeItem(EMAIL_STORAGE_KEY); } catch (_) {}
+
     showOnly(successState);
+    status.className = "status";
     redirectToApp(idToken);
   } catch (error) {
+    console.error("MySheba email-link verification failed:", error);
     showOnly(errorState);
     showStatus(firebaseErrorMessage(error));
+    emailSubmitBtn.disabled = false;
+    emailSubmitBtn.textContent = "Continue";
   }
 }
 
 emailForm.addEventListener("submit", (event) => {
   event.preventDefault();
   const email = emailInput.value.trim();
-  if (!email) return;
-  emailSubmitBtn.disabled = true;
-  emailSubmitBtn.textContent = "Verifying…";
+  if (!email) {
+    showStatus("Please enter your email address.");
+    return;
+  }
   completeSignIn(email, window.location.href);
 });
 
 (function init() {
   const link = window.location.href;
+
   if (!isSignInWithEmailLink(auth, link)) {
     showOnly(errorState);
-    showStatus("This link is not a valid MySheba sign-in link. Please request a new one from the app.");
+    showStatus("This is not a valid MySheba email sign-in link. Please request a new verification email from the app.");
     return;
   }
 
@@ -179,8 +195,6 @@ emailForm.addEventListener("submit", (event) => {
   if (email) {
     completeSignIn(email, link);
   } else {
-    // Different device/browser than the one that requested the link -
-    // ask for the email, same fallback Firebase's own docs recommend.
     showOnly(emailPromptState);
   }
 })();
