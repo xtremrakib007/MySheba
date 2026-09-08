@@ -32,15 +32,15 @@ function withTimeout(promise, ms, message) {
 }
 
 /** Returns the original Firebase URL when the link arrived through our
- * HTTPS Hosting bridge (mysheba://verify-email-link?link=...). */
+ * HTTPS Hosting bridge (mysheba://verify-email-link?link=...). URLSearchParams
+ * already percent-decodes the parameter, so do not decode it a second time. */
 export function unwrapEmailSignInLink(url) {
   if (!url) return null;
   const value = String(url);
   if (!value.startsWith(EMAIL_BRIDGE_SCHEME)) return value;
   try {
     const parsed = new URL(value);
-    const original = parsed.searchParams.get('link');
-    return original ? decodeURIComponent(original) : null;
+    return parsed.searchParams.get('link');
   } catch {
     return null;
   }
