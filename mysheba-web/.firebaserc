@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "satulink-solutions"
+  },
+  "targets": {
+    "satulink-solutions": {
+      "hosting": {
+        "myshebas": [
+          "myshebas"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}
