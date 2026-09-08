@@ -433,10 +433,10 @@ export async function confirmGoogleAccountMerge(code) {
  * that the same way doLogin does, by staying on this screen with the new
  * reason instead of assuming success.
  */
-export async function retryDeviceSession(uid, phoneIdToken, emailIdToken) {
+export async function retryDeviceSession(uid, phoneIdToken, emailIdToken, emailOtp, resendEmailChallenge = false) {
   const deviceId = await getDeviceId();
   const sessionFn = httpsCallable(functions, 'checkDeviceSession');
-  const { data: sessionResult } = await sessionFn({ deviceId, deviceLabel: getDeviceLabel(), phoneIdToken, emailIdToken });
+  const { data: sessionResult } = await sessionFn({ deviceId, deviceLabel: getDeviceLabel(), phoneIdToken, emailIdToken, emailOtp, resendEmailChallenge });
 
   if (sessionResult.requiresOtp) {
     return {
