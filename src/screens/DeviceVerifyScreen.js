@@ -7,6 +7,7 @@ import { useTheme } from "../theme/ThemeContext";
 import HeaderDecor from '../components/HeaderDecor';
 import * as emailVerification from '../firebase/emailVerification';
 import * as phoneVerification from '../firebase/phoneVerification';
+import * as authService from '../firebase/authService';
 
 // Shown mid-login for two distinct reasons (see checkDeviceSession's doc
 // comment, functions/deviceSessionService.js):
@@ -66,7 +67,7 @@ export default function DeviceVerifyScreen() {
   const [code, setCode] = useState('');
   const [localError, setLocalError] = useState('');
   const [otpBusy, setOtpBusy] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [sent, setSent] = useState(isAdminEmailMethod);
   // Only used for the admin_mfa SMS path - the confirmation object
   // rnfbAuth().signInWithPhoneNumber returns, needed to check the code the
   // admin types in against the SMS that was actually sent.
@@ -104,6 +105,10 @@ export default function DeviceVerifyScreen() {
       if (isAdminSmsMethod) {
         const confirmation = await phoneVerification.sendPhoneOtp(phone);
         setPhoneConfirmation(confirmation);
+      } else if (isAdminEmailMethod) {
+        // The server sends one email containing both the Firebase link and
+        // the 6-digit OTP. This call is only used for resend.
+        await authService.retryDeviceSession(pendingDeviceVerification?.uid, undefined, undefined, undefined, true);
       } else {
         await emailVerification.sendEmailLink(email);
       }
@@ -137,6 +142,25 @@ export default function DeviceVerifyScreen() {
     // confirmDeviceVerification sets authBusy/authError and, on success,
     // navigates itself (same contract as doLogin/doRegister).
     await confirmDeviceVerification(phoneIdToken);
+  };
+
+  // Admin email verification can be completed either by tapping the link
+  // or by entering the 6-digit OTP from that same email.
+  const onVerifyEmailOtp = async () => {
+    const otp = code.trim();
+    if (!/^\d{6}$/.test(otp)) {
+      setLocalError('Please enter the 6-digit code from the email.');
+      return;
+    }
+    setLocalError('');
+    setOtpBusy(true);
+    try {
+      await confirmDeviceVerification(undefined, undefined, otp);
+    } catch (e) {
+      setLocalError(e.message || 'Incorrect verification code. Please try again.');
+    } finally {
+      setOtpBusy(false);
+    }
   };
 
   // new_device, and admin_mfa + email - fired by the Linking listener
@@ -218,6 +242,30 @@ export default function DeviceVerifyScreen() {
 
             <TouchableOpacity style={styles.resendBtn} onPress={onSendCode} disabled={busy}>
               <Text style={styles.resendText}>Didn't get a code? Resend</Text>
+            </TouchableOpacity>
+          </>
+        ) : isAdminEmailMethod ? (
+          <>
+            <Text style={styles.intro}>
+              We sent one email with two ways to verify. Tap the verification link,
+              or enter the 6-digit code below.
+            </Text>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>6-digit verification code</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="123456"
+                keyboardType="number-pad"
+                maxLength={6}
+                value={code}
+                onChangeText={setCode}
+              />
+            </View>
+            <TouchableOpacity style={[styles.btn, busy && styles.btnDisabled]} onPress={onVerifyEmailOtp} disabled={busy}>
+              {busy ? <ActivityIndicator color="white" /> : <Text style={styles.btnText}>Verify with Code</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.resendBtn} onPress={onSendCode} disabled={busy}>
+              <Text style={styles.resendText}>Didn't get the email? Resend</Text>
             </TouchableOpacity>
           </>
         ) : (
