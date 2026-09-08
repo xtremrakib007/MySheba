@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#0b7a53">
+<link rel="icon" href="/assets/images/favicon.png" type="image/png">
+<link rel="stylesheet" href="/assets/css/style.css">
+<title>Reset Password – MySheba</title>
+<style>
+  .reset-wrap{min-height:calc(100vh - 150px);display:flex;align-items:center;justify-content:center;padding:48px 16px}
+  .reset-card{width:100%;max-width:460px;background:#fff;border-radius:16px;padding:32px;box-shadow:0 10px 35px rgba(0,0,0,.10)}
+  .reset-card h1{margin:0 0 10px}.reset-card p{color:#555;line-height:1.55}
+  .reset-form{margin-top:24px}.field{margin-bottom:16px}.field label{display:block;font-weight:600;margin-bottom:7px}
+  .field input{width:100%;box-sizing:border-box;padding:12px 14px;border:1px solid #ccc;border-radius:9px;font-size:16px}
+  .field input:focus{outline:2px solid rgba(11,122,83,.22);border-color:#0b7a53}
+  .reset-btn{width:100%;border:0;border-radius:9px;padding:13px 16px;font-size:16px;font-weight:700;cursor:pointer;background:#0b7a53;color:#fff}
+  .reset-btn:disabled{opacity:.6;cursor:not-allowed}.status{display:none;margin-top:16px;padding:12px 14px;border-radius:9px;line-height:1.45}.status.show{display:block}
+  .status.error{background:#fff0f0;color:#a12626}.status.success{background:#edf9f2;color:#17663d}.hidden{display:none!important}
+  .requirements{font-size:13px;color:#666;margin:5px 0 0}.brand{text-align:center;margin-bottom:18px}.brand img{height:48px;width:auto}
+  .back{text-align:center;margin-top:18px}.back a{color:#0b7a53;text-decoration:none;font-weight:600}
+  @media(max-width:480px){.reset-card{padding:24px}}
+</style>
+</head>
+<body>
+<header class="site-header" role="banner">
+  <div class="container">
+    <a aria-label="MySheba Home" class="logo" href="/">
+      <picture><source srcset="/assets/images/logo-nav.webp" type="image/webp"><img src="/assets/images/logo-nav.png" alt="MySheba" class="logo-icon" width="40" height="40"></picture>
+      MySheba
+    </a>
+  </div>
+</header>
+
+<main id="main-content" class="reset-wrap">
+  <section class="reset-card" aria-labelledby="page-title">
+    <div class="brand"><img src="/assets/images/logo.png" alt="MySheba"></div>
+    <h1 id="page-title">Reset your password</h1>
+    <p id="intro">Choose a new password for your MySheba account.</p>
+
+    <form id="reset-form" class="reset-form" novalidate>
+      <div class="field">
+        <label for="password">New password</label>
+        <input id="password" name="password" type="password" autocomplete="new-password" minlength="6" required>
+        <div class="requirements">Use at least 6 characters.</div>
+      </div>
+      <div class="field">
+        <label for="confirm-password">Confirm new password</label>
+        <input id="confirm-password" name="confirm-password" type="password" autocomplete="new-password" minlength="6" required>
+      </div>
+      <button id="submit-btn" class="reset-btn" type="submit">Reset password</button>
+      <div id="status" class="status" role="alert" aria-live="polite"></div>
+    </form>
+
+    <div id="success-actions" class="back hidden">
+      <a href="/">Return to MySheba</a>
+    </div>
+    <div id="back-home" class="back"><a href="/">Back to MySheba</a></div>
+  </section>
+</main>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+import { getAuth, verifyPasswordResetCode, confirmPasswordReset } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
+import { firebaseConfig } from "/assets/js/firebase-config.js";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const params = new URLSearchParams(window.location.search);
+const mode = params.get("mode");
+const oobCode = params.get("oobCode");
+const continueUrl = params.get("continueUrl");
+
+const form = document.getElementById("reset-form");
+const password = document.getElementById("password");
+const confirmPassword = document.getElementById("confirm-password");
+const submitBtn = document.getElementById("submit-btn");
+const status = document.getElementById("status");
+const intro = document.getElementById("intro");
+const successActions = document.getElementById("success-actions");
+const backHome = document.getElementById("back-home");
+
+function showStatus(message, type = "error") {
+  status.textContent = message;
+  status.className = `status show ${type}`;
+}
+
+function lockForm() {
+  form.classList.add("hidden");
+}
+
+function firebaseErrorMessage(error) {
+  switch (error?.code) {
+    case "auth/expired-action-code": return "This password reset link has expired. Please request a new one.";
+    case "auth/invalid-action-code": return "This password reset link is invalid or has already been used. Please request a new one.";
+    case "auth/user-disabled": return "This account has been disabled. Please contact MySheba support.";
+    case "auth/user-not-found": return "The account associated with this reset link could not be found.";
+    case "auth/weak-password": return "Please choose a stronger password (at least 6 characters).";
+    default: return "We could not reset your password. Please request a new reset link and try again.";
+  }
+}
+
+async function validateLink() {
+  if (mode && mode !== "resetPassword") {
+    lockForm();
+    showStatus("This link is not a password reset link.");
+    return false;
+  }
+  if (!oobCode) {
+    lockForm();
+    showStatus("This password reset link is missing its security code. Please request a new link.");
+    return false;
+  }
+  try {
+    await verifyPasswordResetCode(auth, oobCode);
+    return true;
+  } catch (error) {
+    lockForm();
+    showStatus(firebaseErrorMessage(error));
+    return false;
+  }
+}
+
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const newPassword = password.value;
+  const confirmation = confirmPassword.value;
+
+  if (newPassword.length < 6) {
+    showStatus("Your new password must be at least 6 characters.");
+    password.focus();
+    return;
+  }
+  if (newPassword !== confirmation) {
+    showStatus("The passwords do not match.");
+    confirmPassword.focus();
+    return;
+  }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Resetting…";
+  status.className = "status";
+
+  try {
+    await confirmPasswordReset(auth, oobCode, newPassword);
+    form.classList.add("hidden");
+    backHome.classList.add("hidden");
+    intro.textContent = "Your password has been changed successfully. You can now sign in with your new password.";
+    showStatus("Password reset successful.", "success");
+    successActions.classList.remove("hidden");
+    setTimeout(() => {
+      if (continueUrl) {
+        try {
+          const url = new URL(continueUrl, window.location.origin);
+          if (url.origin === window.location.origin) window.location.assign(url.href);
+        } catch (_) {}
+      }
+    }, 1200);
+  } catch (error) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Reset password";
+    showStatus(firebaseErrorMessage(error));
+  }
+});
+
+validateLink();
+</script>
+</body>
+</html>
