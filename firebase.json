@@ -28,11 +28,24 @@
   "storage": {
     "rules": "storage.rules"
   },
-  "hosting": {
-    "public": "public",
-    "ignore": ["firebase.json", "**/.*", "!.well-known/**"],
-    "rewrites": [
-      { "source": "/listing/**", "function": "listingPreview" }
-    ]
-  }
+  "hosting": [
+    {
+      "target": "myshebas",
+      "public": "mysheba-web/dist",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "!.well-known/**"
+      ]
+    },
+    {
+      "target": "admin-web",
+      "public": "admin-web/dist",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "!.well-known/**"
+      ]
+    }
+  ]
 }
