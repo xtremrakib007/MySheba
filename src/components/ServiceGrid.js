@@ -80,6 +80,8 @@ const MORE_FEATURES = [
   // webview - just opens NotepadScreen. See AppContext.openNotepad +
   // src/screens/NotepadScreen.js.
   { key: 'notepad', icon: '🗒️', bg: '#FFFDE7', accent: '#F9A825', name: 'Notepad', kind: 'notepad' },
+  { key: 'gamePoints', icon: '🎮', bg: '#E8EAF6', accent: '#5E35B1', name: 'Game Points', kind: 'gamePoints' },
+  { key: 'gamePointsGift', icon: '🎁', bg: '#FCE4EC', accent: '#D81B60', name: 'Gifts', kind: 'gamePointsGift' },
 ];
 
 // Home grid holds the first 11 entries in SERVICES (Recharge...Passport -
@@ -234,6 +236,8 @@ export function useServiceAction() {
     if (s.kind === 'history') return setScreen('history');
     if (s.kind === 'myaccount') return setScreen('myAccount');
     if (s.kind === 'profile') return setScreen('profile');
+    if (s.kind === 'gamePoints') return setScreen('gamePoints');
+    if (s.kind === 'gamePointsGift') return setScreen('gamePointsGift');
     return startService(s.key);
   };
 }

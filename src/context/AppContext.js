@@ -977,13 +977,21 @@ export function AppProvider({ children }) {
 
               const localSessionId = await deviceSessionService.getLocalSessionId();
               if (localSessionId && p.activeSessionId && p.activeSessionId !== localSessionId) {
-                if (!initialRouteDone) { initialRouteDone = true; setAuthLoading(false); }
-                await authService.logout();
-                setProfile(null);
-                screenHistoryRef.current = [];
-                setScreen('login');
-                showAlert('Signed Out', 'Your account was signed in on another device, so you were signed out here.');
-                return;
+                // Do not sign the user out merely because the app was closed,
+                // backgrounded, or restored after a device-session refresh.
+                // Firebase Auth persistence is the source of truth for app
+                // restart. A deliberate logout still goes through authService.logout().
+                // While the app is actively running, a changed active session
+                // is handled on the next profile update rather than destroying
+                // the persisted login during bootstrap.
+                if (initialRouteDone) {
+                  await authService.logout();
+                  setProfile(null);
+                  screenHistoryRef.current = [];
+                  setScreen('login');
+                  showAlert('Signed Out', 'Your account was signed in on another device, so you were signed out here.');
+                  return;
+                }
               }
             } catch (e) {
               // fall through to normal routing below
