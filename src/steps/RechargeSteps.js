@@ -1,30 +1,36 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { countries, rechargeOperators, getRechargeRate, amountToPoints } from '../data/countries';
 import { getOperatorBrand } from '../data/operatorBrand';
-import { FormLabel, Grid3, SelectCard, OperatorCard, AmountButton, FormInput, SummaryCard } from '../components/ui';
+import { FormLabel, FormInput, SummaryCard } from '../components/ui';
 import { radius } from '../theme/theme';
+import { useTheme } from '../theme/ThemeContext';
 
-// Mirrors buildRechargeStep() - 4 steps: country -> operator -> phone -> amount
+// Recharge flow: country -> operator -> mobile number -> amount.
+// The recharge tiles and input are explicitly theme-aware so their
+// foreground/background never become unreadable when switching modes.
 export default function RechargeStep({ step }) {
   const { serviceData, updateServiceData, nextStep, rates } = useApp();
+  const { colors, isDark } = useTheme();
+  const styles = createStyles(colors, isDark);
 
   if (step === 0) {
     return (
       <View>
         <FormLabel>Select Country</FormLabel>
-        <Grid3>
+        <View style={styles.grid3}>
           {countries.map((c) => (
-            <SelectCard
+            <RechargeSelectCard
               key={c.code}
               flag={c.flag}
               name={c.name}
               selected={serviceData.country === c.code}
               onPress={() => { updateServiceData({ country: c.code, currency: c.curr }); nextStep(); }}
+              styles={styles}
             />
           ))}
-        </Grid3>
+        </View>
       </View>
     );
   }
@@ -34,11 +40,11 @@ export default function RechargeStep({ step }) {
     return (
       <View>
         <FormLabel>Select Operator</FormLabel>
-        <Grid3>
+        <View style={styles.grid3}>
           {list.map((o) => {
             const brand = getOperatorBrand(o);
             return (
-              <OperatorCard
+              <RechargeOperatorCard
                 key={o}
                 name={o}
                 logo={brand.logo}
@@ -46,10 +52,12 @@ export default function RechargeStep({ step }) {
                 initials={brand.initials}
                 selected={serviceData.operator === o}
                 onPress={() => { updateServiceData({ operator: o }); nextStep(); }}
+                styles={styles}
+                primaryColor={colors.primary}
               />
             );
           })}
-        </Grid3>
+        </View>
       </View>
     );
   }
@@ -60,9 +68,11 @@ export default function RechargeStep({ step }) {
         <FormLabel>Enter Mobile Number</FormLabel>
         <FormInput
           placeholder="Enter number"
+          placeholderTextColor={isDark ? '#9AA6BA' : '#777777'}
           keyboardType="phone-pad"
           value={serviceData.phone || ''}
           onChangeText={(v) => updateServiceData({ phone: v })}
+          style={styles.phoneInput}
         />
       </View>
     );
@@ -82,28 +92,27 @@ export default function RechargeStep({ step }) {
             <Text style={styles.rateBoxText}>💱 Rate: 1 MYR = {cur} {rate}</Text>
           </View>
         )}
-        <Grid3>
+        <View style={styles.grid3}>
           {amounts.map((a) => (
-            <AmountButton
+            <RechargeAmountButton
               key={a}
               label={`${cur} ${a}`}
               selected={serviceData.amount === a}
               onPress={() => updateServiceData({ amount: a })}
+              styles={styles}
             />
           ))}
-        </Grid3>
+        </View>
         <FormInput
           placeholder="Custom amount"
           keyboardType="numeric"
-          style={{ marginTop: 10 }}
+          style={styles.phoneInput}
           value={serviceData.amount != null ? String(serviceData.amount) : ''}
           onChangeText={(v) => updateServiceData({ amount: parseFloat(v) || 0 })}
         />
         {isForeign && serviceData.amount > 0 && (
           <SummaryCard
-            rows={[
-              { label: 'Amount', value: `${cur} ${Number(serviceData.amount).toFixed(2)}` },
-            ]}
+            rows={[{ label: 'Amount', value: `${cur} ${Number(serviceData.amount).toFixed(2)}` }]}
             totalLabel="Points to be deducted"
             totalValue={`${points.toFixed(2)} pts`}
           />
@@ -115,8 +124,38 @@ export default function RechargeStep({ step }) {
   return null;
 }
 
-// Required-field checks the wizard calls before advancing to the next step.
-// Returns null when the step is complete, or a user-facing message when not.
+function RechargeSelectCard({ flag, name, selected, onPress, styles }) {
+  return (
+    <TouchableOpacity style={[styles.selectCard, selected && styles.selectCardSelected]} onPress={onPress} activeOpacity={0.8}>
+      <View style={styles.countryFlagWrap}><Text style={styles.countryFlag}>{flag}</Text></View>
+      <Text style={[styles.selectName, selected && styles.selectNameSelected]} numberOfLines={2}>{String(name || '')}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function RechargeOperatorCard({ name, logo, color, initials, selected, onPress, styles, primaryColor }) {
+  return (
+    <TouchableOpacity style={[styles.selectCard, styles.operatorCard, selected && styles.selectCardSelected]} onPress={onPress} activeOpacity={0.8}>
+      {logo ? (
+        <Image source={logo} style={styles.operatorLogo} resizeMode="contain" />
+      ) : (
+        <View style={[styles.operatorBadge, { backgroundColor: color || primaryColor }]}>
+          <Text style={styles.operatorBadgeText}>{initials}</Text>
+        </View>
+      )}
+      <Text style={[styles.selectName, styles.operatorName, selected && styles.selectNameSelected]} numberOfLines={2}>{String(name || '')}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function RechargeAmountButton({ label, selected, onPress, styles }) {
+  return (
+    <TouchableOpacity style={[styles.amountBtn, selected && styles.amountBtnSelected]} onPress={onPress} activeOpacity={0.8}>
+      <Text style={[styles.amountBtnText, selected && styles.amountBtnTextSelected]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
 export function validateStep(step, serviceData) {
   if (step === 0 && !serviceData.country) return 'Please select a country.';
   if (step === 1 && !serviceData.operator) return 'Please select an operator.';
@@ -125,7 +164,35 @@ export function validateStep(step, serviceData) {
   return null;
 }
 
-const styles = StyleSheet.create({
-  rateBox: { backgroundColor: '#E3F2FD', padding: 10, borderRadius: radius.md, marginBottom: 14 },
-  rateBoxText: { fontSize: 13, fontWeight: '600', color: '#1565C0' },
-});
+function createStyles(colors, isDark) {
+  const tileBg = isDark ? '#000000' : '#FFFFFF';
+  const tileText = isDark ? '#FFFFFF' : '#000000';
+  return StyleSheet.create({
+    grid3: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    selectCard: {
+      width: '30%', height: 96, backgroundColor: tileBg,
+      borderWidth: 1, borderColor: colors.border, borderRadius: radius.md,
+      paddingVertical: 10, paddingHorizontal: 4, alignItems: 'center',
+      justifyContent: 'center', marginBottom: 10,
+      shadowColor: '#000', shadowOpacity: isDark ? 0 : 0.08,
+      shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2,
+    },
+    selectCardSelected: { borderColor: colors.primary, backgroundColor: isDark ? colors.primary : '#F0F7FF', borderWidth: 2 },
+    countryFlagWrap: { width: 50, height: 50, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 6, backgroundColor: isDark ? '#111111' : '#F3F7FB' },
+    countryFlag: { fontSize: 32 },
+    selectName: { fontSize: 11, fontWeight: '700', marginTop: 2, textAlign: 'center', color: tileText },
+    selectNameSelected: { color: '#FFFFFF' },
+    operatorCard: { paddingVertical: 14, paddingHorizontal: 8 },
+    operatorLogo: { width: 44, height: 44 },
+    operatorBadge: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+    operatorBadgeText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+    operatorName: { marginTop: 8 },
+    phoneInput: { backgroundColor: tileBg, color: tileText, borderColor: colors.border },
+    amountBtn: { flexBasis: '31%', paddingVertical: 10, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: tileBg, alignItems: 'center', marginBottom: 8 },
+    amountBtnSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+    amountBtnText: { fontWeight: '500', fontSize: 13, color: tileText },
+    amountBtnTextSelected: { color: '#FFFFFF' },
+    rateBox: { backgroundColor: isDark ? '#102033' : '#E3F2FD', padding: 10, borderRadius: radius.md, marginBottom: 14 },
+    rateBoxText: { fontSize: 13, fontWeight: '600', color: isDark ? '#FFFFFF' : '#1565C0' },
+  });
+}
