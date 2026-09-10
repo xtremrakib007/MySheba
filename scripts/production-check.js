@@ -25,7 +25,7 @@ if (!exists('storage.rules')) fail('storage.rules is missing.');
 
 const functionsIndex = read('functions/index.js');
 if (!functionsIndex.includes('setGlobalOptions')) fail('Cloud Functions global options are not configured.');
-if (!functionsIndex.includes('enforceAppCheck: true')) fail('Firebase App Check enforcement is not enabled.');
+if (!functionsIndex.includes('enforceAppCheck: false')) fail('App Check enforcement must remain staged until the production client is verified.');
 if (!functionsIndex.includes('maxInstances: 50')) fail('Cloud Functions maxInstances safety cap is missing.');
 
 const entry = read('index.js');
@@ -39,6 +39,9 @@ if (!entry.includes('displayIncomingCallNotification(data)')) {
 const packageJson = JSON.parse(read('package.json'));
 if (!packageJson.scripts || !packageJson.scripts['build:aab']) fail('Production AAB build script is missing.');
 if (!packageJson.scripts || !packageJson.scripts['audit:prod']) fail('Production dependency audit script is missing.');
+
+const eas = JSON.parse(read('eas.json'));
+if (eas?.build?.production?.environment !== 'production') fail('Production AAB profile must use the EAS production environment.');
 
 // Syntax-check the backend JavaScript without executing Firebase services.
 const files = [];
