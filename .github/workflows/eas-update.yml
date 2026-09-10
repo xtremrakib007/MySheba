@@ -7,9 +7,27 @@ on:
       - main
 
 jobs:
-  update:
+  verify:
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Production readiness gate
+        run: npm run production:check
+
+  update:
+    needs: verify
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,6 +42,6 @@ jobs:
         run: npm ci
 
       - name: Publish Android EAS Update
-        run: npx eas-cli update --channel production --platform android --message "Fix AnimatedSplash native driver crash"
+        run: npx eas-cli update --channel production --platform android --message "Production-readiness verified"
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
