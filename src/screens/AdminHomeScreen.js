@@ -1526,17 +1526,17 @@ export default function AdminHomeScreen() {
               </View>
               {tx.status === 'pending' && (
                 <View style={styles.copyRow}>
-                  <TouchableOpacity style={styles.successBtn} onPress={() => acceptTx(tx.id)} disabled={busyTxId === tx.id}>
+                  <TouchableOpacity style={styles.successBtn} onPress={(event) => { event.stopPropagation(); acceptTx(tx.id); }} disabled={busyTxId === tx.id}>
                     <Text style={styles.actionBtnText}>✓ Accept</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.errorBtn} onPress={() => setRejectTxId({ id: tx.id, service: tx.service })} disabled={busyTxId === tx.id}>
+                  <TouchableOpacity style={styles.errorBtn} onPress={(event) => { event.stopPropagation(); setRejectTxId({ id: tx.id, service: tx.service }); }} disabled={busyTxId === tx.id}>
                     <Text style={styles.actionBtnText}>✕ Reject</Text>
                   </TouchableOpacity>
                 </View>
               )}
               {tx.status === 'processing' && (
                 <View style={styles.copyRow}>
-                  <TouchableOpacity style={styles.primaryBtn} onPress={() => onCompleteTx(tx)} disabled={busyTxId === tx.id}>
+                  <TouchableOpacity style={styles.primaryBtn} onPress={(event) => { event.stopPropagation(); onCompleteTx(tx); }} disabled={busyTxId === tx.id}>
                     <Text style={styles.actionBtnText}>✓ Complete</Text>
                   </TouchableOpacity>
                 </View>

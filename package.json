@@ -8,8 +8,11 @@
     "android": "expo run:android",
     "prebuild": "expo prebuild",
     "bump-version": "node scripts/bump-version.js",
-    "build:apk": "npm run bump-version && eas build -p android --profile preview",
-    "build:aab": "npm run bump-version && eas build -p android --profile production"
+    "test:security": "node --test tests/security-regression.test.js",
+    "production:check": "node scripts/production-check.js",
+    "audit:prod": "npm audit --omit=dev --audit-level=high",
+    "build:apk": "eas build -p android --profile preview",
+    "build:aab": "eas build -p android --profile production"
   },
   "dependencies": {
     "expo": "~53.0.0",

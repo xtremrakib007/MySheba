@@ -439,6 +439,14 @@ export async function retryDeviceSession(uid, phoneIdToken, emailIdToken, emailO
   const { data: sessionResult } = await sessionFn({ deviceId, deviceLabel: getDeviceLabel(), phoneIdToken, emailIdToken, emailOtp, resendEmailChallenge });
 
   if (sessionResult.requiresOtp) {
+    // A verified email link may race the single-device check: if another
+    // device is active, checkDeviceSession can return the legacy
+    // `new_device` reason even though this call already supplied the freshly
+    // verified email token. Finalize that pending switch immediately instead
+    // of sending the user back to DeviceVerifyScreen for a second challenge.
+    if (emailIdToken && sessionResult.reason === 'new_device') {
+      return confirmDeviceLogin(uid, emailIdToken);
+    }
     return {
       uid,
       pendingDeviceApproval: {
