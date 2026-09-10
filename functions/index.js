@@ -1,10 +1,6 @@
 // MySheba push notifications - the SERVER half.
 const { setGlobalOptions } = require('firebase-functions/v2');
-// Protect every 2nd-gen callable function from untrusted clients and keep
-// accidental traffic spikes from creating an unbounded bill. Callable
-// functions reject requests with missing/invalid App Check tokens.
 setGlobalOptions({ enforceAppCheck: true, maxInstances: 50 });
-
 const { onDocumentCreated, onDocumentUpdated, onDocumentWritten, onDocumentDeleted } = require('firebase-functions/v2/firestore');
 const admin = require('firebase-admin');
 const progressionService = require('./progressionService');
@@ -58,7 +54,7 @@ exports.updateAdFeatureControl = require('./adControlsService').updateAdFeatureC
 exports.bulkUpdateAdFeatureControls = require('./adControlsService').bulkUpdateAdFeatureControls;
 exports.deleteAdCreative = require('./adCreativeService').deleteAdCreative;
 exports.onAdImpressionCreated = require('./adTrackingService').onAdImpressionCreated;
-exports.onAdClickCreated = require('./adTrackingService').onAdTrackingService;
+exports.onAdClickCreated = require('./adTrackingService').onAdClickCreated;
 exports.createAdPayment = require('./adPaymentService').createAdPayment;
 exports.updateAdPaymentStatus = require('./adPaymentService').updateAdPaymentStatus;
 exports.listApiProviders = require('./apiProviderService').listApiProviders;
@@ -78,7 +74,7 @@ async function getUserPushTarget(uid){if(!uid)return null;const snap=await db.co
 async function notifyUser(uid,title,body,data,extra){const token=await getUserPushTarget(uid);if(token)await sendExpoPush([{to:token,title,body,data:data||{},...(extra||{})}]);}
 async function notifyRoles(roles,title,body,data){const snap=await db.collection('users').where('role','in',roles).get();const messages=[];snap.forEach(doc=>{const u=doc.data();if(u.pushToken&&!(u.notifPrefs&&u.notifPrefs.pushEnabled===false))messages.push({to:u.pushToken,title,body,data:data||{}});});await sendExpoPush(messages);}
 exports.onTransactionCreated=onDocumentCreated('transactions/{id}',async event=>{const tx=event.data.data();const body=`${tx.service} - MYR ${Number(tx.total||0).toFixed(2)}`;if(tx.resellerId)await notifyUser(tx.resellerId,'🆕 New order',body,{type:'transaction',id:event.params.id});else await notifyRoles(['dealer'],'🆕 New order',body,{type:'transaction',id:event.params.id});});
-exports.onTransactionUpdated=onDocumentUpdated('transactions/{id}',async event=>{const b=event.data.before.data(),a=event.data.after.data();if(!b.dealerId&&a.dealerId)await notifyUser(a.dealerId,'🆕 New order',`${a.service} - MYR ${Number(a.total||0).toFixed(2)}`,{type:'transaction',id:event.params.id});if(b.status!=='completed'&&a.status==='completed'&&TIER_QUALIFYING_SERVICES.includes(a.service))await progressionService.incrementTierPoints(a.customerId);if(b.status===a.status&&b.rejected===a.rejected)return;let title='Order update',body=`${a.service} is now ${a.status}.`;if(a.rejected){title='❌ Order rejected';body=`${a.service}: ${a.rejectReason||'Rejected by dealer.'`;}else if(a.status==='processing'){title='🔄 Order accepted';body=`${a.service} is being processed.`;}else if(a.status==='completed'){title='✅ Order completed';body=a.pin?`${a.service} is ready. Collection PIN: ${a.pin}`:`${a.service} has been completed.`;}await notifyUser(a.customerId,title,body,{type:'transaction',id:event.params.id});});
+exports.onTransactionUpdated=onDocumentUpdated('transactions/{id}',async event=>{const b=event.data.before.data(),a=event.data.after.data();if(!b.dealerId&&a.dealerId)await notifyUser(a.dealerId,'🆕 New order',`${a.service} - MYR ${Number(a.total||0).toFixed(2)}`,{type:'transaction',id:event.params.id});if(b.status!=='completed'&&a.status==='completed'&&TIER_QUALIFYING_SERVICES.includes(a.service))await progressionService.incrementTierPoints(a.customerId);if(b.status===a.status&&b.rejected===a.rejected)return;let title='Order update',body=`${a.service} is now ${a.status}.`;if(a.rejected){title='❌ Order rejected';body=`${a.service}: ${a.rejectReason||'Rejected by dealer.'}`;}else if(a.status==='processing'){title='🔄 Order accepted';body=`${a.service} is being processed.`;}else if(a.status==='completed'){title='✅ Order completed';body=a.pin?`${a.service} is ready. Collection PIN: ${a.pin}`:`${a.service} has been completed.`;}await notifyUser(a.customerId,title,body,{type:'transaction',id:event.params.id});});
 exports.onGamePointsLedgerCreated=onDocumentCreated('gamePointsLedger/{id}',async event=>{const e=event.data.data();if(e.reason==='entry_fee')await progressionService.incrementLevelPoints(e.uid);});
 exports.onTopupCreated=onDocumentCreated('topups/{id}',async event=>{const t=event.data.data();await notifyRoles(ADMIN_ROLES,'💰 New top-up request',`${t.userName||'A user'} requested MYR ${Number(t.amount||0).toFixed(2)}`,{type:'topup',id:event.params.id});});
 exports.onTopupUpdated=onDocumentUpdated('topups/{id}',async event=>{const b=event.data.before.data(),a=event.data.after.data();if(b.status===a.status)return;if(a.status==='approved')await notifyUser(a.userId,'✅ Top-up approved',`MYR ${Number(a.amount||0).toFixed(2)} (${Number(a.points||0).toFixed(2)} pts) has been credited to your wallet.`,{type:'topup',id:event.params.id});else if(a.status==='rejected')await notifyUser(a.userId,'❌ Top-up rejected',a.rejectReason||'Your top-up request was rejected.',{type:'topup',id:event.params.id});});
