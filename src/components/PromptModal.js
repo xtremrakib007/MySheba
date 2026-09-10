@@ -1,19 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Modal, View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { radius } from '../theme/theme';
-import { useTheme } from "../theme/ThemeContext";
+import { useTheme } from '../theme/ThemeContext';
 import AppModalHeader from './AppModalHeader';
 
-// Small reusable text-prompt modal - stands in for the web prototype's
-// window.prompt(), which has no Android equivalent.
 export default function PromptModal({ visible, title, placeholder, secure, maxLength, onSubmit, onCancel }) {
-  const {
-    colors
-  } = useTheme();
-
+  const { colors } = useTheme();
   const styles = createStyles(colors);
   const [value, setValue] = useState('');
-
   useEffect(() => { if (visible) setValue(''); }, [visible]);
 
   return (
@@ -26,12 +20,14 @@ export default function PromptModal({ visible, title, placeholder, secure, maxLe
             <TextInput
               style={styles.input}
               placeholder={placeholder}
+              placeholderTextColor={colors.textSecondary}
               secureTextEntry={secure}
               maxLength={maxLength}
               keyboardType={secure ? 'number-pad' : 'default'}
               value={value}
               onChangeText={setValue}
               autoFocus
+              selectionColor={colors.primary}
             />
             <View style={styles.row}>
               <TouchableOpacity style={styles.cancelBtn} onPress={onCancel}>
@@ -51,14 +47,14 @@ export default function PromptModal({ visible, title, placeholder, secure, maxLe
 function createStyles(colors) {
   return StyleSheet.create({
     overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
-    box: { backgroundColor: 'white', borderRadius: radius.lg, width: '85%', maxWidth: 340, overflow: 'hidden' },
+    box: { backgroundColor: colors.card, borderRadius: radius.lg, width: '85%', maxWidth: 340, overflow: 'hidden' },
     content: { padding: 20 },
-    title: { fontWeight: '600', fontSize: 15, marginBottom: 10 },
-    input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingVertical: 10, paddingHorizontal: 12, fontSize: 14, marginBottom: 14 },
+    title: { fontWeight: '600', fontSize: 15, marginBottom: 10, color: colors.text },
+    input: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, color: colors.text, borderRadius: radius.md, paddingVertical: 10, paddingHorizontal: 12, fontSize: 14, marginBottom: 14 },
     row: { flexDirection: 'row', gap: 10 },
     cancelBtn: { flex: 1, paddingVertical: 10, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
-    cancelText: { color: '#666', fontWeight: '600' },
+    cancelText: { color: colors.text, fontWeight: '600' },
     okBtn: { flex: 1, paddingVertical: 10, borderRadius: radius.md, backgroundColor: colors.primary, alignItems: 'center' },
-    okText: { color: 'white', fontWeight: '600' },
+    okText: { color: colors.onPrimary, fontWeight: '600' },
   });
 }
