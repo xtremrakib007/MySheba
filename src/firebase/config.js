@@ -6,17 +6,12 @@
 // object). If you ever need to point the app at a different Firebase
 // project, this is the only file to change.
 import { initializeApp, getApps, getApp } from 'firebase/app';
-// NOTE: getReactNativePersistence lives on the main 'firebase/auth' entry,
-// not a 'firebase/auth/react-native' subpath (that subpath doesn't exist in
-// firebase v10.x and Metro fails to resolve it). Metro's "react-native"
-// export condition automatically swaps in @firebase/auth's RN-specific
-// build for the plain 'firebase/auth' import, so this one import covers both.
 import { initializeAuth, getAuth, getReactNativePersistence } from 'firebase/auth';
 import { initializeFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getFunctions } from 'firebase/functions';
 import { Platform } from 'react-native';
-import { secureAsyncStorage } from './secureLocalStorage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyDvuBqLFIbhCIRku-sO7NOeDBBiGy3YmmY',
@@ -30,18 +25,24 @@ const firebaseConfig = {
 
 export const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// Auth: on native (Android/iOS via Expo) we need persistent storage or the
-// user gets signed out every time the app restarts. secureAsyncStorage
-// (src/firebase/secureLocalStorage.js) is a drop-in for AsyncStorage that
-// transparently AES-encrypts everything it stores, keyed by a hardware-
-// backed secret in SecureStore - so the persisted session (ID/refresh
-// tokens) never sits on disk as plain JSON the way raw AsyncStorage would
-// leave it. On web (e.g. `expo start --web`) initializeAuth with RN
-// persistence throws, so fall back to the default getAuth() there.
+// Firebase Auth persistence:
+// Native Android/iOS uses Firebase's supported React Native persistence
+// backed directly by AsyncStorage. This is deliberately kept separate from
+// the app's encrypted local preferences. Firebase Auth manages/refreshes its
+// own ID + refresh-token session and this persistence layer is the reliable
+// supported path for restoring that session after the process is killed or
+// the app is reopened.
+//
+// IMPORTANT: this must NOT be confused with logging out. Nothing here calls
+// signOut(), and closing/force-stopping the app does not clear the Firebase
+// Auth session. The explicit logout action in authService.js remains the only
+// normal way to clear the account session.
+//
+// On web, getAuth() uses the browser's normal persistence implementation.
 export const auth =
   Platform.OS === 'web'
     ? getAuth(app)
-    : initializeAuth(app, { persistence: getReactNativePersistence(secureAsyncStorage) });
+    : initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) });
 
 // Firestore - long-polling auto-detection avoids connectivity issues some
 // Android devices/emulators have with gRPC streaming.
