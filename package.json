@@ -10,7 +10,7 @@
     "bump-version": "node scripts/bump-version.js",
     "test:security": "node --test tests/security-regression.test.js",
     "production:check": "node scripts/production-check.js",
-    "audit:prod": "npm audit --audit-level=high",
+    "audit:prod": "npm audit --omit=dev --audit-level=high",
     "build:apk": "eas build -p android --profile preview",
     "build:aab": "eas build -p android --profile production"
   },
@@ -62,7 +62,7 @@
   "devDependencies": {
     "@babel/core": "^7.24.0",
     "@types/react": "~19.0.10",
-    "babel-plugin-transform-remove-console": "^6.9.4",
+    "babel-plugin-transform-remove-console": "^6.9.0",
     "typescript": "~5.8.3"
   },
   "overrides": {
