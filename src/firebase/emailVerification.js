@@ -22,6 +22,16 @@ export async function sendEmailOtp(email) {
 }
 export const sendEmailLink = sendEmailOtp;
 
+export async function sendDeviceVerificationEmail(deviceId) {
+  if (!deviceId) throw new Error('This device could not be identified. Please sign in again.');
+  try {
+    const fn = httpsCallable(functions, 'sendDeviceVerification');
+    const r = await timeout(fn({ deviceId }), TIMEOUT, 'Sending the device verification email took too long. Please try again.');
+    await AsyncStorage.setItem(EMAIL_FOR_SIGN_IN_KEY, normalize(r?.data?.email));
+    return r.data;
+  } catch (err) { throw new Error(friendly(err)); }
+}
+
 export function isEmailSignInLink(url) { const original=unwrapEmailSignInLink(url); if(!original) return false; try{return rnfbAuth().isSignInWithEmailLink(original);}catch{return false;} }
 
 export async function confirmEmailLink(url, expectedEmail) {
@@ -38,5 +48,15 @@ export async function verifyEmailOtp(email, code) {
   catch(err){throw new Error(friendly(err));}
 }
 export const confirmEmailOtp = verifyEmailOtp;
+
+export async function confirmDeviceEmailOtp(deviceId, code) {
+  const c = String(code || '').trim();
+  if (!deviceId) throw new Error('This device could not be identified. Please sign in again.');
+  if (!/^\d{6}$/.test(c)) throw new Error('Enter the 6-digit verification code.');
+  try {
+    const fn = httpsCallable(functions, 'confirmDeviceEmailOtp');
+    return (await timeout(fn({ deviceId, code: c }), TIMEOUT, 'Device verification took too long. Please try again.')).data;
+  } catch (err) { throw new Error(friendly(err)); }
+}
 
 function friendly(err){ const code=err?.code; if(code==='functions/invalid-argument') return err.message||'Enter the 6-digit verification code.'; if(code==='functions/failed-precondition') return err.message||'That code has expired. Please request a new one.'; if(code==='functions/already-exists') return err.message||'This email address is already registered.'; if(code==='functions/resource-exhausted') return err.message||'Too many attempts. Please wait and try again.'; if(code==='functions/internal') return err.message||'The verification email could not be sent. Please try again.'; if(code==='auth/invalid-action-code'||code==='auth/expired-action-code') return 'That verification link has expired or was already used. Please request a new one.'; if(code==='auth/unauthorized-domain') return 'The verification domain is not authorized in Firebase Authentication.'; if(code==='auth/operation-not-allowed') return 'Email-link sign-in is not enabled in Firebase Authentication.'; return err?.message||'Could not verify your email address. Please try again.'; }
