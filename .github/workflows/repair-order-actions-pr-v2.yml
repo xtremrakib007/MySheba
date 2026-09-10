@@ -1,0 +1,60 @@
+name: Repair order action touch handling (PR v2)
+
+on:
+  pull_request:
+    branches:
+      - production-readiness-fixes
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+      - name: Patch nested transaction actions
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          files = [Path('src/screens/DealerHomeScreen.js'), Path('src/screens/ResellerHomeScreen.js'), Path('src/screens/AdminHomeScreen.js')]
+          replacements = {
+              'onPress={() => accept(tx.id)}': 'onPress={(event) => { event.stopPropagation(); accept(tx.id); }}',
+              'onPress={() => setRejectId({ id: tx.id, service: tx.service })}': 'onPress={(event) => { event.stopPropagation(); setRejectId({ id: tx.id, service: tx.service }); }}',
+              'onPress={() => onComplete(tx)}': 'onPress={(event) => { event.stopPropagation(); onComplete(tx); }}',
+              'onPress={() => messageCustomer(tx)}': 'onPress={(event) => { event.stopPropagation(); messageCustomer(tx); }}',
+              'onPress={() => acceptTx(tx.id)}': 'onPress={(event) => { event.stopPropagation(); acceptTx(tx.id); }}',
+              'onPress={() => setRejectTxId({ id: tx.id, service: tx.service })}': 'onPress={(event) => { event.stopPropagation(); setRejectTxId({ id: tx.id, service: tx.service }); }}',
+              'onPress={() => onCompleteTx(tx)}': 'onPress={(event) => { event.stopPropagation(); onCompleteTx(tx); }}',
+              'onPress={() => messageCustomer(tx)}': 'onPress={(event) => { event.stopPropagation(); messageCustomer(tx); }}',
+          }
+          for path in files:
+              text = path.read_text(); original = text
+              for old, new in replacements.items(): text = text.replace(old, new)
+              if text == original: raise SystemExit(f'No transaction action replacement matched in {path}')
+              path.write_text(text)
+          PY
+      - name: Stop copy button bubbling from cards
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/components/CopyButton.js'); text = path.read_text()
+          old = 'onPress={copyToClipboard}'; new = 'onPress={(event) => { event.stopPropagation(); copyToClipboard(); }}'
+          if old in text: path.write_text(text.replace(old, new, 1))
+          PY
+      - name: Validate JavaScript syntax
+        run: |
+          node --check src/screens/DealerHomeScreen.js
+          node --check src/screens/ResellerHomeScreen.js
+          node --check src/screens/AdminHomeScreen.js
+          node --check src/components/CopyButton.js
+      - name: Commit repair to head branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/screens/DealerHomeScreen.js src/screens/ResellerHomeScreen.js src/screens/AdminHomeScreen.js src/components/CopyButton.js
+          git diff --cached --quiet && exit 0
+          git commit -m 'fix: prevent order action presses opening detail modal [skip ci]'
+          git push origin HEAD:${{ github.head_ref }}
