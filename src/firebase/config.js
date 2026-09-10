@@ -12,6 +12,7 @@ import { getStorage } from 'firebase/storage';
 import { getFunctions } from 'firebase/functions';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureAsyncStorage } from './secureLocalStorage';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyDvuBqLFIbhCIRku-sO7NOeDBBiGy3YmmY',
@@ -25,20 +26,49 @@ const firebaseConfig = {
 
 export const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// IMPORTANT: Firebase's official React Native persistence adapter is used
-// directly here. The Auth session (including its refresh token) must survive
-// Android/iOS process death and app restart. Firebase documents
-// getReactNativePersistence(AsyncStorage) as the supported React Native
-// setup; using a custom encrypted wrapper here caused cold-start restoration
-// to be unreliable on some Android builds.
+// Firebase's official React Native persistence implementation is backed by
+// @react-native-async-storage/async-storage. New Auth state is therefore
+// stored directly in AsyncStorage and survives Android/iOS process death and
+// app restart. This avoids putting Firebase's own persistence protocol behind
+// a custom crypto adapter, which was the source of unreliable cold-start
+// restoration in the previous build.
 //
-// secureLocalStorage remains available for other sensitive app data, but it
-// must not wrap Firebase Auth's persistence adapter. Firebase owns the format
-// and lifecycle of this storage entry.
+// One-time compatibility: previous MySheba builds stored the Firebase Auth
+// entry through secureAsyncStorage. If that old encrypted entry exists and
+// there is no native entry yet, read/decrypt it once, copy the JSON into the
+// official native store, and use native AsyncStorage for all future reads and
+// writes. This prevents an update from unnecessarily forcing an existing user
+// to log in again.
+const firebaseAuthPersistence = {
+  async getItem(key) {
+    const nativeValue = await AsyncStorage.getItem(key);
+    if (nativeValue != null) return nativeValue;
+
+    try {
+      const legacyValue = await secureAsyncStorage.getItem(key);
+      if (legacyValue != null) {
+        await AsyncStorage.setItem(key, legacyValue);
+        return legacyValue;
+      }
+    } catch (_) {
+      // If the legacy key cannot be opened, Firebase simply starts without a
+      // persisted user. A normal explicit login will create the new native
+      // persistence entry from that point onward.
+    }
+    return null;
+  },
+  async setItem(key, value) {
+    await AsyncStorage.setItem(key, value);
+  },
+  async removeItem(key) {
+    await AsyncStorage.removeItem(key);
+  },
+};
+
 export const auth =
   Platform.OS === 'web'
     ? getAuth(app)
-    : initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) });
+    : initializeAuth(app, { persistence: getReactNativePersistence(firebaseAuthPersistence) });
 
 // Firestore - long-polling auto-detection avoids connectivity issues some
 // Android devices/emulators have with gRPC streaming.
