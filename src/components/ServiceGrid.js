@@ -97,7 +97,7 @@ export default function ServiceGrid({ extraTiles = [] }) {
   const handlePress = useServiceAction();
   return (
     <View>
-      <View style={styles.sectionHead}><Text style={styles.sectionTitle}>🎯 Quick Services</Text></View>
+      <View style={styles.sectionHead}><Text style={styles.sectionTitle}>Quick Services</Text></View>
       <View style={styles.grid}>
         {PRIMARY_SERVICES.map((s) => <Tile key={s.key} s={s} disabled={s.kind === 'webview' && webViewBusy} onPress={() => handlePress(s)} />)}
         <Tile s={MORE_FEATURES_TILE} onPress={() => handlePress(MORE_FEATURES_TILE)} />
