@@ -1,55 +1,32 @@
-// Self-service registration, moved server-side for one reason: every
-// customer must be assigned to a dealer (dealerId), and resolving a
-// "dealer code" (a dealer's own phone number) to that dealer's uid means
-// reading another user's profile - which a brand-new, not-yet-staff
-// customer account can never do under firestore.rules (users/{uid} read
-// requires isStaff() or being that exact uid). The Admin SDK here bypasses
-// that, same pattern as manageUser.js.
-
+// Self-service registration is server-side so dealer/reseller lookup and
+// account creation are performed with Admin SDK privileges.
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
-const { assertEmailVerified } = require('./emailVerification');
+const { assertEmailVerified, assertEmailOtpVerified } = require('./emailVerification');
 const { assertPhoneVerified } = require('./phoneVerification');
 const { assignUniqueUserId } = require('./userId');
 const { logAudit, logServerError } = require('./logService');
 const emailOtpService = require('./emailOtpService');
 
 const APP_EMAIL_DOMAIN = 'mysheba.app';
-
-function normalizePhone(phone) {
-  return String(phone || '').replace(/[^0-9]/g, '');
-}
-function normalizeEmail(email) {
-  return String(email || '').trim().toLowerCase();
-}
-function phoneToEmail(phone) {
-  return `${normalizePhone(phone)}@${APP_EMAIL_DOMAIN}`;
-}
-function isValidPhone(phone) {
-  return normalizePhone(phone).length >= 8;
-}
-function isValidEmail(email) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email));
-}
-function isValidPin(pin) {
-  const value = String(pin || '');
-  return value.length >= 6 && value.length <= 20;
-}
+function normalizePhone(phone) { return String(phone || '').replace(/[^0-9]/g, ''); }
+function normalizeEmail(email) { return String(email || '').trim().toLowerCase(); }
+function phoneToEmail(phone) { return `${normalizePhone(phone)}@${APP_EMAIL_DOMAIN}`; }
+function isValidPhone(phone) { return normalizePhone(phone).length >= 8; }
+function isValidEmail(email) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email)); }
+function isValidPin(pin) { const value = String(pin || ''); return value.length >= 6 && value.length <= 20; }
 
 exports.registerWithDealerCode = onCall(async (request) => {
   const data = request.data || {};
 
-  // The same callable is deliberately used for the pre-registration email
-  // challenge so no new public callable endpoint is required in index.js.
-  // These actions do not create a customer account and do not require auth.
-  if (data.action === 'sendEmailVerificationChallenge') {
-    return emailOtpService.sendEmailVerificationChallengeInternal(data);
-  }
-  if (data.action === 'verifyEmailOtp') {
-    return emailOtpService.verifyEmailOtpInternal(data);
-  }
+  // Public pre-registration email challenge. No customer account is created here.
+  if (data.action === 'sendEmailVerificationOtp') return emailOtpService.sendEmailVerificationOtpInternal(data);
+  if (data.action === 'verifyEmailVerificationOtp') return emailOtpService.verifyEmailVerificationOtpInternal(data);
+  // Backward-compatible aliases for older clients; they use the same new proof flow.
+  if (data.action === 'sendEmailVerificationChallenge') return emailOtpService.sendEmailVerificationOtpInternal(data);
+  if (data.action === 'verifyEmailOtp') return emailOtpService.verifyEmailVerificationOtpInternal(data);
 
-  const { name, phone, phoneE164, dialCode, email, pin, dealerCode, resellerCode, phoneIdToken, emailIdToken } = data;
+  const { name, phone, phoneE164, dialCode, email, pin, dealerCode, resellerCode, phoneIdToken, emailIdToken, emailOtpVerificationId } = data;
   if (!name || !name.trim()) throw new HttpsError('invalid-argument', 'Please enter your full name.');
   if (!isValidPhone(phone)) throw new HttpsError('invalid-argument', 'Please enter a valid phone number.');
   if (!isValidEmail(email)) throw new HttpsError('invalid-argument', 'Please enter a valid email address.');
@@ -62,30 +39,41 @@ exports.registerWithDealerCode = onCall(async (request) => {
     throw new HttpsError('failed-precondition', err.message || 'Please verify your phone number first.');
   }
 
-  let emailAuthUid;
-  try {
-    emailAuthUid = await assertEmailVerified(emailIdToken, email);
-  } catch (err) {
-    throw new HttpsError('failed-precondition', err.message || 'Please verify your email address first.');
+  // Email can be proven by either the real Firebase email link or the
+  // server-issued one-time OTP proof. If both are supplied, prefer the link
+  // but fall back to OTP when the link token is invalid/expired.
+  let emailAuthUid = null;
+  let emailOtpUsed = false;
+  if (emailIdToken) {
+    try {
+      emailAuthUid = await assertEmailVerified(emailIdToken, email);
+    } catch (linkErr) {
+      if (!emailOtpVerificationId) {
+        throw new HttpsError('failed-precondition', linkErr.message || 'Please verify your email address first.');
+      }
+    }
   }
+  if (!emailAuthUid && emailOtpVerificationId) {
+    try {
+      await assertEmailOtpVerified(emailOtpVerificationId, email);
+      emailOtpUsed = true;
+    } catch (err) {
+      throw new HttpsError('failed-precondition', err.message || 'Please verify your email address first.');
+    }
+  }
+  if (!emailAuthUid && !emailOtpUsed) throw new HttpsError('failed-precondition', 'Please verify your email address first.');
 
   const db = admin.firestore();
   const emailSnap = await db.collection('users').where('email', '==', normalizeEmail(email)).limit(1).get();
-  if (!emailSnap.empty) {
-    throw new HttpsError('already-exists', 'This email address is already registered to another account.');
-  }
+  if (!emailSnap.empty) throw new HttpsError('already-exists', 'This email address is already registered to another account.');
   const phoneSnap = await db.collection('users').where('phone', '==', normalizePhone(phone)).limit(1).get();
-  if (!phoneSnap.empty) {
-    throw new HttpsError('already-exists', 'This phone number is already registered to another account.');
-  }
+  if (!phoneSnap.empty) throw new HttpsError('already-exists', 'This phone number is already registered to another account.');
 
   let resolvedDealerId = null;
   if (dealerCode && normalizePhone(dealerCode)) {
-    const dealerSnap = await db
-      .collection('users')
+    const dealerSnap = await db.collection('users')
       .where('phone', '==', normalizePhone(dealerCode))
-      .where('role', 'in', ['dealer'])
-      .limit(1).get();
+      .where('role', 'in', ['dealer']).limit(1).get();
     if (dealerSnap.empty) throw new HttpsError('not-found', 'That dealer code was not recognized.');
     const dealerDoc = dealerSnap.docs[0];
     const dealerData = dealerDoc.data();
@@ -95,11 +83,9 @@ exports.registerWithDealerCode = onCall(async (request) => {
 
   let resolvedResellerId = null;
   if (resellerCode && normalizePhone(resellerCode)) {
-    const resellerSnap = await db
-      .collection('users')
+    const resellerSnap = await db.collection('users')
       .where('phone', '==', normalizePhone(resellerCode))
-      .where('role', '==', 'reseller')
-      .limit(1).get();
+      .where('role', '==', 'reseller').limit(1).get();
     if (resellerSnap.empty) throw new HttpsError('not-found', 'That reseller code was not recognized.');
     resolvedResellerId = resellerSnap.docs[0].id;
   }
@@ -129,17 +115,17 @@ exports.registerWithDealerCode = onCall(async (request) => {
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   };
   if (resolvedResellerId) profile.resellerId = resolvedResellerId;
-  await db.collection('users').doc(userRecord.uid).set(profile);
+  try {
+    await db.collection('users').doc(userRecord.uid).set(profile);
+  } catch (err) {
+    await admin.auth().deleteUser(userRecord.uid).catch(() => {});
+    await logServerError('registerWithDealerCode.profile', err, { userId: userRecord.uid });
+    throw new HttpsError('internal', 'Could not finish creating the account.');
+  }
+
   await db.collection('otps').doc(normalizeEmail(email)).delete().catch(() => {});
-  await db.collection('emailVerificationChallenges').doc(normalizeEmail(email)).delete().catch(() => {});
-  if (phoneAuthUid) await admin.auth().deleteUser(phoneAuthUid).catch(() => {});
   if (emailAuthUid) await admin.auth().deleteUser(emailAuthUid).catch(() => {});
-  await logAudit({
-    action: 'account_created',
-    targetUid: userRecord.uid,
-    performedBy: 'system',
-    performedByRole: null,
-    details: { role: 'customer', dealerId: resolvedDealerId, resellerId: resolvedResellerId, method: 'phone_pin' },
-  });
+  if (phoneAuthUid) await admin.auth().deleteUser(phoneAuthUid).catch(() => {});
+  await logAudit({ action: 'account_created', targetUid: userRecord.uid, performedBy: 'system', performedByRole: null, details: { role: 'customer', dealerId: resolvedDealerId, resellerId: resolvedResellerId, method: 'phone_pin', emailVerification: emailOtpUsed ? 'otp' : 'firebase_link' } });
   return { uid: userRecord.uid, dealerId: resolvedDealerId, resellerId: resolvedResellerId };
 });
