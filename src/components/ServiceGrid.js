@@ -47,15 +47,26 @@ const PRIMARY_SERVICES = SERVICES.slice(0, PRIMARY_COUNT);
 const MORE_SERVICES = [...SERVICES.slice(PRIMARY_COUNT), ...MORE_FEATURES];
 const MORE_FEATURES_TILE = { key: 'moreFeaturesTile', icon: 'sparkles-outline', bg: '#EDE7F6', accent: '#5E35B1', name: 'More Features', kind: 'moreFeaturesLink' };
 
+// Some role-home screens append a legacy emoji icon to the shared grid.
+// Normalize those legacy values here so every ServiceGrid tile renders with
+// the same crisp vector icon set on Android and iOS. This also makes the
+// shared grid safe for future role-specific tiles that still use old icon
+// values without reintroducing blurry platform emoji glyphs.
+const LEGACY_ICON_MAP = {
+  '🛠️': 'construct-outline',
+  '🛠': 'construct-outline',
+};
+
 export function Tile({ s, onPress, disabled }) {
   const { colors } = useTheme();
   const { t } = useLanguage();
   const styles = createStyles(colors);
   const label = t(`service.${s.key}`, s.name);
+  const iconName = LEGACY_ICON_MAP[s.icon] || s.icon || 'apps-outline';
   return (
     <TouchableOpacity style={[styles.item, { width: ITEM_WIDTH, backgroundColor: colors.card }, disabled && styles.itemDisabled]} activeOpacity={0.7} disabled={disabled} onPress={onPress}>
       <View style={[styles.iconWrap, { backgroundColor: s.bg }]}>
-        <Ionicons name={s.icon} size={27} color={s.accent || colors.primary} />
+        <Ionicons name={iconName} size={27} color={s.accent || colors.primary} />
       </View>
       <Text style={styles.name} numberOfLines={2}>{label}</Text>
     </TouchableOpacity>
