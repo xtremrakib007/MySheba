@@ -444,7 +444,6 @@ exports.checkDeviceSession = onCall(async (request) => {
     }
 
     const privileged = isPrivilegedRole(preData.role);
-    if (privileged) {
       const phone = normalizePhone(preData.phone || '');
       const email = normalizeEmail(preData.email || '');
       // Admin MFA can be satisfied by EITHER a fresh phone verification
@@ -460,7 +459,7 @@ exports.checkDeviceSession = onCall(async (request) => {
       if (!phone && !email) {
         throw new HttpsError(
           'failed-precondition',
-          'This admin account has no phone number or email on file, so sign-in verification can\u2019t be completed. Please contact support.'
+          'This account has no phone number or email on file, so sign-in verification can\u2019t be completed. Please contact support.'
         );
       }
 
@@ -554,7 +553,6 @@ exports.checkDeviceSession = onCall(async (request) => {
           details: { deviceId, ip },
         });
       }
-    }
 
     const result = await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
