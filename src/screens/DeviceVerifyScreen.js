@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Linking, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
@@ -27,15 +27,28 @@ export default function DeviceVerifyScreen() {
   const [otpBusy, setOtpBusy] = useState(false);
   const [sent, setSent] = useState(isEmail);
   const [phoneConfirmation, setPhoneConfirmation] = useState(null);
+  const handledLinks = useRef(new Set());
 
   const switchMethod = (method) => { if (method === mfaMethod) return; setMfaMethod(method); setSent(false); setCode(''); setPhoneConfirmation(null); setLocalError(''); };
 
   useEffect(() => {
     if (isSms || !sent) return undefined;
-    const handleUrl = (url) => { if (emailVerification.isEmailSignInLink(url)) onConfirmEmailLink(url); };
-    Linking.getInitialURL().then(url => { if (url) handleUrl(url); }).catch(() => {});
-    const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url));
-    return () => sub.remove();
+    let mounted = true;
+    const handleUrl = async (url) => {
+      if (!mounted || !url) return;
+      const key = String(url);
+      if (handledLinks.current.has(key)) return;
+      handledLinks.current.add(key);
+      try {
+        if (await emailVerification.isEmailSignInLink(url)) await onConfirmEmailLink(url);
+        else handledLinks.current.delete(key);
+      } catch {
+        handledLinks.current.delete(key);
+      }
+    };
+    Linking.getInitialURL().then(handleUrl).catch(() => {});
+    const sub = Linking.addEventListener('url', ({ url }) => { handleUrl(url); });
+    return () => { mounted = false; sub.remove(); };
   }, [isSms, sent]);
 
   const onSendCode = async () => {
@@ -105,4 +118,4 @@ export default function DeviceVerifyScreen() {
 }
 
 function createStyles(colors){return StyleSheet.create({
-  screen:{flex:1,backgroundColor:'#050505'},scroll:{flex:1,backgroundColor:'#050505'},header:{flexDirection:'row',alignItems:'center',gap:10,padding:12,backgroundColor:'#080808',overflow:'hidden',borderBottomWidth:1,borderBottomColor:'#292929'},headerTitle:{color:'#fff',fontWeight:'700',fontSize:16},body:{padding:20,paddingBottom:40,backgroundColor:'#050505'},methodToggle:{flexDirection:'row',backgroundColor:'#161616',borderRadius:radius.md,padding:4,marginBottom:18,borderWidth:1,borderColor:'#333'},methodBtn:{flex:1,paddingVertical:9,borderRadius:radius.md-2,alignItems:'center'},methodBtnActive:{backgroundColor:colors.primary},methodBtnText:{fontSize:13,fontWeight:'700',color:'#ccc'},methodBtnTextActive:{color:'#fff'},intro:{fontSize:13,color:'#ddd',marginBottom:20,textAlign:'center',lineHeight:20},methodHint:{fontSize:12,color:'#aaa',marginBottom:16,textAlign:'center',lineHeight:19},formGroup:{marginBottom:14},label:{fontWeight:'700',marginBottom:7,fontSize:13,color:'#fff'},input:{width:'100%',paddingVertical:13,paddingHorizontal:14,borderWidth:1,borderColor:'#444',borderRadius:radius.md,fontSize:14,backgroundColor:'#111',color:'#fff'},otpInput:{width:'100%',paddingVertical:15,paddingHorizontal:14,borderWidth:1,borderColor:'#666',borderRadius:radius.md,fontSize:20,letterSpacing:5,textAlign:'center',backgroundColor:'#111',color:'#fff'},btn:{backgroundColor:colors.primary,paddingVertical:14,borderRadius:radius.md,alignItems:'center'},btnDisabled:{opacity:.6},btnText:{color:'#fff',fontWeight:'800',fontSize:14},errorText:{color:'#ff7777',fontSize:12,marginTop:10,textAlign:'center'},resendBtn:{alignItems:'center',marginTop:15},resendText:{color:'#fff',fontSize:13,fontWeight:'700',textDecorationLine:'underline'},cancelBtn:{alignItems:'center',marginTop:28},cancelText:{color:'#888',fontSize:12,fontWeight:'600'}});}
+  screen:{flex:1,backgroundColor:'#050505'},scroll:{flex:1,backgroundColor:'#050505'},header:{flexDirection:'row',alignItems:'center',gap:10,padding:12,backgroundColor:'#080808',overflow:'hidden',borderBottomWidth:1,borderBottomColor:'#292929'},headerTitle:{color:'#fff',fontWeight:'700',fontSize:16},body:{padding:20,paddingBottom:40,backgroundColor:'#050505'},methodToggle:{flexDirection:'row',backgroundColor:'#161616',borderRadius:radius.md,padding:4,marginBottom:18,borderWidth:1,borderColor:'#333'},methodBtn:{flex:1,paddingVertical:9,borderRadius:radius.md-2,alignItems:'center'},methodBtnActive:{backgroundColor:colors.primary},methodBtnText:{fontSize:13,fontWeight:'700',color:'#ccc'},methodBtnTextActive:{color:'#fff'},intro:{fontSize:13,color:'#ddd',marginBottom:20,textAlign:'center',lineHeight:20},methodHint:{fontSize:12,color:'#aaa',marginBottom:16,textAlign:'center',lineHeight:19},formGroup:{marginBottom:14},label:{fontWeight:'700',marginBottom:7,fontSize:13,color:'#fff'},input:{width:'100%',paddingVertical:13,paddingHorizontal:14,borderWidth:1,borderColor:'#444',borderRadius:radius.md,fontSize:14,backgroundColor:'#111',color:'#fff'},otpInput:{width:'100%',paddingVertical:15,paddingHorizontal:14,borderWidth:1,borderColor:'#666',borderRadius:radius.md,fontSize:20,letterSpacing:5,textAlign:'center',backgroundColor:'#111',color:'#fff'},btn:{backgroundColor:colors.primary,paddingVertical:14,borderRadius:radius.md,alignItems:'center'},btnDisabled:{opacity:.6},btnText:{color:'#fff',fontWeight:'800',fontSize:14},errorText:{color:'#ff7777',fontSize:12,marginTop:10,textAlign:'center'},resendBtn:{alignItems:'center',marginTop:15},resendText:{color:'#fff',fontSize:13,fontWeight:'700',textDecorationLine:'underline'},cancelBtn:{alignItems:'center',marginTop:28},cancelText:{color:'#888',fontSize:12,fontWeight:'600'}});} 
