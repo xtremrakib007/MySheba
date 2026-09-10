@@ -1,0 +1,50 @@
+name: Unify OTP for all roles
+
+on:
+  push:
+    branches: [production-readiness-fixes]
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, 'Unify OTP verification for all roles') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: production-readiness-fixes
+      - name: Patch device-session MFA gate
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const p = 'functions/deviceSessionService.js';
+          let s = fs.readFileSync(p, 'utf8');
+          const start = s.indexOf('    const privileged = isPrivilegedRole(preData.role);');
+          const endMarker = '\n\n    const result = await db.runTransaction(async (tx) => {';
+          const end = s.indexOf(endMarker, start);
+          if (start < 0 || end < 0) throw new Error('MFA block markers not found');
+          let block = s.slice(start, end);
+          block = block.replace('    if (privileged) {\n', '');
+          const close = block.lastIndexOf('\n    }');
+          if (close < 0) throw new Error('MFA outer closing brace not found');
+          block = block.slice(0, close) + block.slice(close + '\n    }'.length);
+          block = block.replace(
+            'This admin account has no phone number or email on file, so sign-in verification can\\u2019t be completed. Please contact support.',
+            'This account has no phone number or email on file, so sign-in verification can\\u2019t be completed. Please contact support.'
+          );
+          s = s.slice(0, start) + block + s.slice(end);
+          fs.writeFileSync(p, s);
+          NODE
+      - name: Verify syntax and diff
+        run: |
+          node --check functions/deviceSessionService.js
+          git diff --check
+          git diff -- functions/deviceSessionService.js
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add functions/deviceSessionService.js
+          git commit -m "Unify OTP verification for all roles"
+          git push origin production-readiness-fixes
