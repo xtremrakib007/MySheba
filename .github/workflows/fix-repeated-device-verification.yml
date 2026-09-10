@@ -1,0 +1,39 @@
+name: Fix repeated device verification
+
+on:
+  push:
+    branches: [production-readiness-fixes]
+
+jobs:
+  fix:
+    if: ${{ !contains(github.event.head_commit.message, 'Fix repeated device verification after email link') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: production-readiness-fixes
+      - name: Patch verified email-link completion
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/firebase/authService.js')
+          s = p.read_text()
+          old = '''  if (sessionResult.requiresOtp) {\n    return {\n      uid,\n      pendingDeviceApproval: {\n        deviceId,\n        email: sessionResult.email,\n        phone: sessionResult.phone,\n        reason: sessionResult.reason,\n        availableMfaMethods: sessionResult.availableMfaMethods,\n      },\n    };\n  }\n\n  await setLocalSessionId(sessionResult.sessionId);'''
+          new = '''  if (sessionResult.requiresOtp) {\n    // A verified email link may race the single-device check: if another\n    // device is active, checkDeviceSession can return the legacy\n    // `new_device` reason even though this call already supplied the freshly\n    // verified email token. Finalize that pending switch immediately instead\n    // of sending the user back to DeviceVerifyScreen for a second challenge.\n    if (emailIdToken && sessionResult.reason === 'new_device') {\n      return confirmDeviceLogin(uid, emailIdToken);\n    }\n    return {\n      uid,\n      pendingDeviceApproval: {\n        deviceId,\n        email: sessionResult.email,\n        phone: sessionResult.phone,\n        reason: sessionResult.reason,\n        availableMfaMethods: sessionResult.availableMfaMethods,\n      },\n    };\n  }\n\n  await setLocalSessionId(sessionResult.sessionId);'''
+          if old not in s:
+              raise SystemExit('target block not found; aborting without changes')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+          PY
+          node --check src/firebase/authService.js
+          git diff --check
+      - name: Commit and remove one-time workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm .github/workflows/fix-repeated-device-verification.yml
+          git add src/firebase/authService.js .github/workflows/fix-repeated-device-verification.yml
+          git commit -m "Fix repeated device verification after email link"
+          git push origin production-readiness-fixes
