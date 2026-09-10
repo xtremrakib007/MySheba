@@ -12,6 +12,7 @@ import { getStorage } from 'firebase/storage';
 import { getFunctions } from 'firebase/functions';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureAsyncStorage } from './secureLocalStorage';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyDvuBqLFIbhCIRku-sO7NOeDBBiGy3YmmY',
@@ -25,24 +26,52 @@ const firebaseConfig = {
 
 export const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// Firebase Auth persistence:
-// Native Android/iOS uses Firebase's supported React Native persistence
-// backed directly by AsyncStorage. This is deliberately kept separate from
-// the app's encrypted local preferences. Firebase Auth manages/refreshes its
-// own ID + refresh-token session and this persistence layer is the reliable
-// supported path for restoring that session after the process is killed or
-// the app is reopened.
+// Firebase Auth persistence on native uses Firebase's supported React Native
+// persistence implementation backed by AsyncStorage. This is the reliable
+// path for restoring the Firebase session after the Android/iOS process is
+// killed or the app is reopened.
 //
-// IMPORTANT: this must NOT be confused with logging out. Nothing here calls
-// signOut(), and closing/force-stopping the app does not clear the Firebase
-// Auth session. The explicit logout action in authService.js remains the only
-// normal way to clear the account session.
-//
-// On web, getAuth() uses the browser's normal persistence implementation.
+// Compatibility/migration: older MySheba builds stored Firebase's persisted
+// auth object through secureAsyncStorage (AES encrypted). On the first launch
+// after this fix, if an old encrypted Firebase session is still present, read
+// it through the legacy storage and copy the decrypted JSON into AsyncStorage
+// so the user does NOT have to log in again. New Firebase Auth writes use the
+// normal native persistence path from then on.
+const firebaseAuthPersistence = {
+  async getItem(key) {
+    const raw = await AsyncStorage.getItem(key);
+    if (raw != null) {
+      // New/native Firebase persistence is JSON. Old secure persistence is
+      // stored as "ivHex:ciphertextHex", so do not hand that ciphertext to
+      // Firebase's JSON parser.
+      if (raw.trim().startsWith('{') || raw.trim().startsWith('[') || raw === 'null') {
+        return raw;
+      }
+    }
+
+    // Try the previous encrypted storage format for an existing session.
+    const legacy = await secureAsyncStorage.getItem(key);
+    if (legacy != null) {
+      // Migrate only values that look like Firebase's JSON persistence data.
+      if (typeof legacy === 'string' && (legacy.trim().startsWith('{') || legacy.trim().startsWith('['))) {
+        try { await AsyncStorage.setItem(key, legacy); } catch (_) { /* migration is best-effort */ }
+        return legacy;
+      }
+    }
+    return raw;
+  },
+  async setItem(key, value) {
+    await AsyncStorage.setItem(key, value);
+  },
+  async removeItem(key) {
+    await AsyncStorage.removeItem(key);
+  },
+};
+
 export const auth =
   Platform.OS === 'web'
     ? getAuth(app)
-    : initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) });
+    : initializeAuth(app, { persistence: getReactNativePersistence(firebaseAuthPersistence) });
 
 // Firestore - long-polling auto-detection avoids connectivity issues some
 // Android devices/emulators have with gRPC streaming.
