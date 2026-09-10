@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Linking, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
@@ -27,13 +27,25 @@ export default function RegisterScreen() {
   const [phoneCode, setPhoneCode] = useState(''); const [emailCode, setEmailCode] = useState('');
   const [phoneConfirmation, setPhoneConfirmation] = useState(null); const [phoneIdToken, setPhoneIdToken] = useState('');
   const [localError, setLocalError] = useState(''); const [otpBusy, setOtpBusy] = useState(false);
+  const handledLinks = useRef(new Set());
 
   useEffect(() => {
     if (step !== 'emailLink') return undefined;
     let mounted = true;
-    const handleUrl = (url) => { if (mounted && url && emailVerification.isEmailSignInLink(url)) onConfirmEmailLink(url); };
+    const handleUrl = async (url) => {
+      if (!mounted || !url) return;
+      const key = String(url);
+      if (handledLinks.current.has(key)) return;
+      handledLinks.current.add(key);
+      try {
+        if (await emailVerification.isEmailSignInLink(url)) await onConfirmEmailLink(url);
+        else handledLinks.current.delete(key);
+      } catch {
+        handledLinks.current.delete(key);
+      }
+    };
     Linking.getInitialURL().then(handleUrl).catch(() => {});
-    const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url));
+    const sub = Linking.addEventListener('url', ({ url }) => { handleUrl(url); });
     return () => { mounted = false; sub.remove(); };
   }, [step]);
 
