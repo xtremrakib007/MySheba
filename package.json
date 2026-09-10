@@ -62,7 +62,7 @@
   "devDependencies": {
     "@babel/core": "^7.24.0",
     "@types/react": "~19.0.10",
-    "babel-plugin-transform-remove-console": "^6.9.0",
+    "babel-plugin-transform-remove-console": "^6.9.4",
     "typescript": "~5.8.3"
   },
   "overrides": {
