@@ -1,30 +1,46 @@
 // Client half of the secondary "security PIN" gate (My Documents
-// view/share, Transfer Points send, Notepad). Server half + full flow
-// docs live in functions/securityPinService.js. See SecurityPinGate.js /
-// SecurityPinModal.js for where these get called, and AppContext's
-// requireSecurityPin() for how a screen asks for the gate in the first
-// place.
+// view/share, Transfer Points send, Notepad).
 import { httpsCallable } from 'firebase/functions';
 import { functions } from './config';
 
-/** First-time setup. Throws (with a user-facing message) if a PIN is already set. */
+function friendlyPinError(err, fallback) {
+  const code = err?.code || '';
+  if (code === 'functions/invalid-argument') return err.message || 'Please enter a valid PIN.';
+  if (code === 'functions/permission-denied') return 'Incorrect PIN.';
+  if (code === 'functions/resource-exhausted') return err.message || 'Too many attempts. Please wait and try again.';
+  if (code === 'functions/failed-precondition') return err.message || 'Security PIN is not set up yet.';
+  if (code === 'functions/already-exists') return err.message || 'A security PIN is already set.';
+  if (code === 'functions/unauthenticated') return 'Your session has expired. Please sign in again.';
+  if (code === 'functions/internal' || code === 'internal') return 'We could not verify your security PIN right now. Please try again.';
+  return err?.message || fallback;
+}
+
 export async function setupSecurityPin(pin) {
-  const fn = httpsCallable(functions, 'setupSecurityPin');
-  const { data } = await fn({ pin });
-  return data;
+  try {
+    const fn = httpsCallable(functions, 'setupSecurityPin');
+    const { data } = await fn({ pin });
+    return data;
+  } catch (err) {
+    throw new Error(friendlyPinError(err, 'Could not set up your security PIN. Please try again.'));
+  }
 }
 
-/** Verifies a PIN attempt. Throws (with a user-facing message) if it's wrong, or the account is temporarily locked out. */
 export async function verifySecurityPin(pin) {
-  const fn = httpsCallable(functions, 'verifySecurityPin');
-  const { data } = await fn({ pin });
-  return data;
+  try {
+    const fn = httpsCallable(functions, 'verifySecurityPin');
+    const { data } = await fn({ pin });
+    return data;
+  } catch (err) {
+    throw new Error(friendlyPinError(err, 'Incorrect PIN.'));
+  }
 }
 
-/** Replaces an existing PIN (or creates one if somehow missing). Caller must have just
- * reauthenticated with the account's login password - see AppContext.resetSecurityPin. */
 export async function resetSecurityPin(pin) {
-  const fn = httpsCallable(functions, 'resetSecurityPin');
-  const { data } = await fn({ pin });
-  return data;
+  try {
+    const fn = httpsCallable(functions, 'resetSecurityPin');
+    const { data } = await fn({ pin });
+    return data;
+  } catch (err) {
+    throw new Error(friendlyPinError(err, 'Could not reset your security PIN. Please try again.'));
+  }
 }
