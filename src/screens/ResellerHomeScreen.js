@@ -416,7 +416,7 @@ export default function ResellerHomeScreen() {
                 <View style={styles.actions}>
                   <TouchableOpacity
                     style={styles.messageBtn}
-                    onPress={() => messageCustomer(tx)}
+                    onPress={(event) => { event.stopPropagation(); messageCustomer(tx); }}
                     disabled={messagingId === tx.id}
                   >
                     <Text style={styles.messageBtnText}>{messagingId === tx.id ? '…' : '💬 Message'}</Text>
@@ -426,10 +426,10 @@ export default function ResellerHomeScreen() {
                 {resellerTab === 'pending' && (
                   <>
                     <View style={styles.actions}>
-                      <TouchableOpacity style={styles.successBtn} onPress={() => accept(tx.id)} disabled={busyId === tx.id}>
+                      <TouchableOpacity style={styles.successBtn} onPress={(event) => { event.stopPropagation(); accept(tx.id); }} disabled={busyId === tx.id}>
                         <Text style={styles.actionBtnText}>✓ Accept</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={styles.errorBtn} onPress={() => setRejectId({ id: tx.id, service: tx.service })} disabled={busyId === tx.id}>
+                      <TouchableOpacity style={styles.errorBtn} onPress={(event) => { event.stopPropagation(); setRejectId({ id: tx.id, service: tx.service }); }} disabled={busyId === tx.id}>
                         <Text style={styles.actionBtnText}>✕ Reject</Text>
                       </TouchableOpacity>
                     </View>
@@ -438,7 +438,7 @@ export default function ResellerHomeScreen() {
 
                 {resellerTab === 'processing' && (
                   <View style={styles.actions}>
-                    <TouchableOpacity style={styles.primaryBtn} onPress={() => onComplete(tx)} disabled={busyId === tx.id}>
+                    <TouchableOpacity style={styles.primaryBtn} onPress={(event) => { event.stopPropagation(); onComplete(tx); }} disabled={busyId === tx.id}>
                       <Text style={styles.actionBtnText}>✓ Complete</Text>
                     </TouchableOpacity>
                   </View>

@@ -262,7 +262,7 @@ export default function DealerHomeScreen() {
                 <View style={styles.actions}>
                   <TouchableOpacity
                     style={styles.messageBtn}
-                    onPress={() => messageCustomer(tx)}
+                    onPress={(event) => { event.stopPropagation(); messageCustomer(tx); }}
                     disabled={messagingId === tx.id}
                   >
                     <Text style={styles.messageBtnText}>{messagingId === tx.id ? '…' : '💬 Message'}</Text>
@@ -272,14 +272,14 @@ export default function DealerHomeScreen() {
                   <View style={styles.actions}>
                     <TouchableOpacity
                       style={styles.successBtn}
-                      onPress={() => accept(tx.id)}
+                      onPress={(event) => { event.stopPropagation(); accept(tx.id); }}
                       disabled={busyId === tx.id || !canActOnOrder(tx)}
                     >
                       <Text style={styles.actionBtnText}>✓ Accept</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.errorBtn}
-                      onPress={() => setRejectId({ id: tx.id, service: tx.service })}
+                      onPress={(event) => { event.stopPropagation(); setRejectId({ id: tx.id, service: tx.service }); }}
                       disabled={busyId === tx.id || !canActOnOrder(tx) || !!tx.rejectedBy?.[authUser?.uid]}
                     >
                       <Text style={styles.actionBtnText}>{tx.rejectedBy?.[authUser?.uid] ? '✓ Rejected by me' : '✕ Reject'}</Text>
@@ -290,7 +290,7 @@ export default function DealerHomeScreen() {
                   <View style={styles.actions}>
                     <TouchableOpacity
                       style={styles.primaryBtn}
-                      onPress={() => onComplete(tx)}
+                      onPress={(event) => { event.stopPropagation(); onComplete(tx); }}
                       disabled={busyId === tx.id || tx.claimedBy !== authUser?.uid}
                     >
                       <Text style={styles.actionBtnText}>✓ Complete</Text>
