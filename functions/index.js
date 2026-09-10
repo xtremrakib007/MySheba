@@ -1,4 +1,10 @@
 // MySheba push notifications - the SERVER half.
+const { setGlobalOptions } = require('firebase-functions/v2');
+// Protect every 2nd-gen callable function from untrusted clients and keep
+// accidental traffic spikes from creating an unbounded bill. Callable
+// functions reject requests with missing/invalid App Check tokens.
+setGlobalOptions({ enforceAppCheck: true, maxInstances: 50 });
+
 const { onDocumentCreated, onDocumentUpdated, onDocumentWritten, onDocumentDeleted } = require('firebase-functions/v2/firestore');
 const admin = require('firebase-admin');
 const progressionService = require('./progressionService');
@@ -52,7 +58,7 @@ exports.updateAdFeatureControl = require('./adControlsService').updateAdFeatureC
 exports.bulkUpdateAdFeatureControls = require('./adControlsService').bulkUpdateAdFeatureControls;
 exports.deleteAdCreative = require('./adCreativeService').deleteAdCreative;
 exports.onAdImpressionCreated = require('./adTrackingService').onAdImpressionCreated;
-exports.onAdClickCreated = require('./adTrackingService').onAdClickCreated;
+exports.onAdClickCreated = require('./adTrackingService').onAdTrackingService;
 exports.createAdPayment = require('./adPaymentService').createAdPayment;
 exports.updateAdPaymentStatus = require('./adPaymentService').updateAdPaymentStatus;
 exports.listApiProviders = require('./apiProviderService').listApiProviders;
