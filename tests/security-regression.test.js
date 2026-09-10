@@ -22,8 +22,8 @@ test('Storage rules contain sensitive-file restrictions', () => {
   assert.match(storageRules, /size/);
 });
 
-test('Callable Functions have App Check enforcement and a concurrency ceiling', () => {
-  assert.match(functionsIndex, /setGlobalOptions\(\{[\s\S]*enforceAppCheck:\s*true/);
+test('App Check rollout is staged and Functions have a concurrency ceiling', () => {
+  assert.match(functionsIndex, /setGlobalOptions\(\{[\s\S]*enforceAppCheck:\s*false/);
   assert.match(functionsIndex, /maxInstances:\s*50/);
 });
 
