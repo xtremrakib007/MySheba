@@ -40,17 +40,9 @@ export default function DeviceVerifyScreen() {
   const onSendCode = async () => {
     setLocalError(''); setOtpBusy(true);
     try {
-      if (isSms) {
-        setPhoneConfirmation(await phoneVerification.sendPhoneOtp(phone));
-      } else {
-        await authService.retryDeviceSession(
-          pendingDeviceVerification?.uid,
-          undefined,
-          undefined,
-          undefined,
-          true
-        );
-      }
+      if (isSms) setPhoneConfirmation(await phoneVerification.sendPhoneOtp(phone));
+      else if (isAdminMfa) await authService.retryDeviceSession(pendingDeviceVerification?.uid, undefined, undefined, undefined, true);
+      else await emailVerification.sendEmailLink(email);
       setSent(true);
     } catch (e) { setLocalError(e.message || 'Could not send the verification code. Please try again.'); }
     finally { setOtpBusy(false); }
