@@ -32,10 +32,17 @@ export async function sendDeviceVerificationEmail(deviceId) {
   } catch (err) { throw new Error(friendly(err)); }
 }
 
-export function isEmailSignInLink(url) { const original=unwrapEmailSignInLink(url); if(!original) return false; try{return rnfbAuth().isSignInWithEmailLink(original);}catch{return false;} }
+// React Native Firebase returns a Promise<boolean> here. Keep this helper
+// async so callers cannot accidentally treat the Promise as a truthy result.
+export async function isEmailSignInLink(url) {
+  const original = unwrapEmailSignInLink(url);
+  if (!original) return false;
+  try { return Boolean(await rnfbAuth().isSignInWithEmailLink(original)); } catch { return false; }
+}
 
 export async function confirmEmailLink(url, expectedEmail) {
-  const link=unwrapEmailSignInLink(url); if(!link || !isEmailSignInLink(link)) throw new Error('This verification link is invalid. Please request a new one.');
+  const link=unwrapEmailSignInLink(url);
+  if(!link || !(await isEmailSignInLink(link))) throw new Error('This verification link is invalid. Please request a new one.');
   const stored=await AsyncStorage.getItem(EMAIL_FOR_SIGN_IN_KEY).catch(()=>null); const email=stored||normalize(expectedEmail); if(!email) throw new Error('Please enter your email address again to finish verifying.');
   try { const c=await timeout(rnfbAuth().signInWithEmailLink(email,link),TIMEOUT,'Email verification took too long. Check your internet connection and try again.'); const idToken=await timeout(c.user.getIdToken(),TIMEOUT,'Getting your verification result took too long. Please try again.'); return {idToken,email}; }
   catch(err){throw new Error(friendly(err));}
