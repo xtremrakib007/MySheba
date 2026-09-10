@@ -72,6 +72,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const crypto = require('crypto');
 const admin = require('firebase-admin');
+const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 const { assertEmailVerified } = require('./emailVerification');
 const { assertPhoneVerified } = require('./phoneVerification');
 const { logAudit, logServerError } = require('./logService');
@@ -177,8 +178,8 @@ async function sendCombinedEmailChallenge({ db, uid, email, deviceId, reason, di
       reason: reason || 'admin_mfa',
       email: normalizedEmail,
       codeHash: hashEmailOtp(code),
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + EMAIL_CHALLENGE_TTL_MS),
+      createdAt: FieldValue.serverTimestamp(),
+      expiresAt: Timestamp.fromMillis(Date.now() + EMAIL_CHALLENGE_TTL_MS),
       attempts: 0,
     },
   });
@@ -248,7 +249,7 @@ function userRef(db, uid) {
  * themselves so this stays easy to unit-test and keeps the actual
  * Firestore write next to the rest of that call's update. */
 function withTrustedDevice(trustedDevices, deviceId, { ip, label }) {
-  const now = admin.firestore.Timestamp.now();
+  const now = Timestamp.now();
   const existing = (trustedDevices && trustedDevices[deviceId]) || null;
   const next = {
     ...(trustedDevices || {}),
@@ -430,7 +431,7 @@ exports.checkDeviceSession = onCall(async (request) => {
   const deviceId = requireDeviceId(request);
   const deviceLabel = optionalDeviceLabel(request);
 
-  const db = admin.firestore();
+  const db = getFirestore();
   const ref = userRef(db, uid);
   const ip = getClientIp(request);
 
@@ -527,7 +528,7 @@ exports.checkDeviceSession = onCall(async (request) => {
         }
 
         if (emailIdToken || emailOtp) {
-          await ref.update({ pendingAdminEmailChallenge: admin.firestore.FieldValue.delete() }).catch(async (e) => {
+          await ref.update({ pendingAdminEmailChallenge: FieldValue.delete() }).catch(async (e) => {
             await logServerError('checkDeviceSession.clearEmailChallenge', e, { userId: uid });
           });
         }
@@ -573,7 +574,7 @@ exports.checkDeviceSession = onCall(async (request) => {
           activeSessionId: sessionId,
           activeDeviceId: deviceId,
           pendingDeviceApproval: null,
-          lastLoginAt: admin.firestore.FieldValue.serverTimestamp(),
+          lastLoginAt: FieldValue.serverTimestamp(),
         });
         return { requiresOtp: false, sessionId };
       }
@@ -592,7 +593,7 @@ exports.checkDeviceSession = onCall(async (request) => {
         pendingDeviceApproval: {
           deviceId,
           email,
-          requestedAt: admin.firestore.FieldValue.serverTimestamp(),
+          requestedAt: FieldValue.serverTimestamp(),
         },
       });
       return { requiresOtp: true, reason: 'new_device', email };
@@ -648,7 +649,7 @@ exports.confirmDeviceSwitch = onCall(async (request) => {
   const ip = getClientIp(request);
   const { emailIdToken } = request.data || {};
 
-  const db = admin.firestore();
+  const db = getFirestore();
   const ref = userRef(db, uid);
 
   let emailAuthUid;
@@ -673,7 +674,7 @@ exports.confirmDeviceSwitch = onCall(async (request) => {
       activeSessionId: sessionId,
       activeDeviceId: deviceId,
       pendingDeviceApproval: null,
-      lastLoginAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastLoginAt: FieldValue.serverTimestamp(),
     });
 
     // Backstop for the previously-active device: its live profile listener
@@ -739,7 +740,7 @@ exports.clearActiveSession = onCall(async (request) => {
   const uid = requireAuth(request);
   const deviceId = requireDeviceId(request);
 
-  const db = admin.firestore();
+  const db = getFirestore();
   const ref = userRef(db, uid);
 
   try {
@@ -780,7 +781,7 @@ exports.listTrustedDevices = onCall(async (request) => {
   const uid = requireAuth(request);
   const currentDeviceId = (request.data || {}).currentDeviceId || null;
 
-  const db = admin.firestore();
+  const db = getFirestore();
   const ref = userRef(db, uid);
 
   try {
@@ -825,11 +826,11 @@ exports.revokeTrustedDevice = onCall(async (request) => {
   const uid = requireAuth(request);
   const deviceId = requireDeviceId(request);
 
-  const db = admin.firestore();
+  const db = getFirestore();
   const ref = userRef(db, uid);
 
   try {
-    await ref.update({ [`trustedDevices.${deviceId}`]: admin.firestore.FieldValue.delete() });
+    await ref.update({ [`trustedDevices.${deviceId}`]: FieldValue.delete() });
     await logAudit({
       action: 'admin_trusted_device_revoked',
       targetUid: uid,
