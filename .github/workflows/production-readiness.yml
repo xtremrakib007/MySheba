@@ -24,6 +24,9 @@ jobs:
       - name: Install app dependencies
         run: npm ci
 
+      - name: Security regression tests
+        run: npm run test:security
+
       - name: Production readiness gate
         run: npm run production:check
 
