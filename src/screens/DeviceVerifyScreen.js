@@ -7,6 +7,7 @@ import { useTheme } from '../theme/ThemeContext';
 import HeaderDecor from '../components/HeaderDecor';
 import * as emailVerification from '../firebase/emailVerification';
 import * as phoneVerification from '../firebase/phoneVerification';
+import * as deviceSessionService from '../firebase/deviceSessionService';
 import * as authService from '../firebase/authService';
 
 export default function DeviceVerifyScreen() {
@@ -42,7 +43,10 @@ export default function DeviceVerifyScreen() {
     try {
       if (isSms) setPhoneConfirmation(await phoneVerification.sendPhoneOtp(phone));
       else if (isAdminMfa) await authService.retryDeviceSession(pendingDeviceVerification?.uid, undefined, undefined, undefined, true);
-      else await emailVerification.sendEmailLink(email);
+      else {
+        const deviceId = await deviceSessionService.getDeviceId();
+        await emailVerification.sendDeviceVerificationEmail(deviceId);
+      }
       setSent(true);
     } catch (e) { setLocalError(e.message || 'Could not send the verification code. Please try again.'); }
     finally { setOtpBusy(false); }
@@ -60,7 +64,7 @@ export default function DeviceVerifyScreen() {
     if (!/^\d{6}$/.test(code.trim())) { setLocalError('Please enter the 6-digit email code.'); return; }
     setLocalError(''); setOtpBusy(true);
     try { await confirmDeviceVerification(undefined, undefined, code.trim()); }
-    catch (e) { setLocalError(e.message || 'Incorrect verification code. Please try again.'); }
+    catch (e) { setLocalError(e.message || 'Incorrect code. Please try again.'); }
     finally { setOtpBusy(false); }
   };
 
