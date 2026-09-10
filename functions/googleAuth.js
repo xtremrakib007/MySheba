@@ -28,6 +28,7 @@
 // firestore.rules.
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { assignUniqueUserId } = require('./userId');
 const { logAudit, logServerError } = require('./logService');
 
@@ -47,7 +48,7 @@ exports.ensureGoogleProfile = onCall(async (request) => {
   }
   const uid = request.auth.uid;
   const token = request.auth.token || {};
-  const db = admin.firestore();
+  const db = getFirestore();
   const ref = db.collection('users').doc(uid);
   const snap = await ref.get();
   if (snap.exists) {
@@ -185,7 +186,7 @@ exports.ensureGoogleProfile = onCall(async (request) => {
     walletBalance: 0,
     notifPrefs: { pushEnabled: true, emailEnabled: true, rateAlerts: false },
     authProvider: 'google',
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
   };
   if (resolvedResellerId) profile.resellerId = resolvedResellerId;
   try {
