@@ -5,7 +5,7 @@
       "namespace": "android_app",
       "package_name": "com.satulink.mysheba",
       "sha256_cert_fingerprints": [
-        "REPLACE_WITH_YOUR_APP_SIGNING_SHA256_FINGERPRINT"
+        "60:67:C2:87:A2:D5:4C:41:3C:59:E4:9F:29:B7:1D:E3:94:10:B2:41:43:3A:A3:5C:AD:0E:C9:82:09:3F:61:25"
       ]
     }
   }
