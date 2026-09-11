@@ -5,25 +5,16 @@ import { radius } from '../theme/theme';
 
 import { useTheme } from "../theme/ThemeContext";
 
-// Small tap-to-copy chip used on Dealer/Admin order cards. Copies `value`
-// to the clipboard and flips its own label to "✓ Copied" for ~1.5s as
-// feedback, then reverts - a confirmation this small doesn't need an Alert
-// dialog the user has to dismiss.
+// Small tap-to-copy chip used on Dealer/Admin order cards.
 export default function CopyButton({ value, label = 'Copy' }) {
-  const {
-    colors
-  } = useTheme();
-
+  const { colors } = useTheme();
   const styles = createStyles(colors);
   const [copied, setCopied] = useState(false);
   const timeoutRef = useRef(null);
 
-  useEffect(
-    () => () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    },
-    []
-  );
+  useEffect(() => () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+  }, []);
 
   const onPress = async () => {
     if (!value) return;
@@ -32,15 +23,18 @@ export default function CopyButton({ value, label = 'Copy' }) {
       setCopied(true);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       timeoutRef.current = setTimeout(() => setCopied(false), 1500);
-    } catch (e) {
-      // Not worth interrupting the user over - the text is still visible
-      // on screen for them to copy by hand if the clipboard write fails.
-    }
+    } catch (e) {}
   };
 
   return (
-    <TouchableOpacity style={[styles.btn, copied && styles.btnCopied]} onPress={onPress} activeOpacity={0.7}>
-      <Text style={[styles.text, copied && styles.textCopied]}>{copied ? '✓ Copied' : `📋 ${label}`}</Text>
+    <TouchableOpacity
+      style={[styles.btn, copied && styles.btnCopied]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <Text style={[styles.text, copied && styles.textCopied]}>
+        {copied ? '✓ Copied' : `📋 ${label}`}
+      </Text>
     </TouchableOpacity>
   );
 }
@@ -48,14 +42,23 @@ export default function CopyButton({ value, label = 'Copy' }) {
 function createStyles(colors) {
   return StyleSheet.create({
     btn: {
-      backgroundColor: '#F0F0F0',
+      backgroundColor: colors.surfaceVariant || colors.card,
+      borderColor: colors.border,
+      borderWidth: StyleSheet.hairlineWidth,
       paddingVertical: 4,
       paddingHorizontal: 10,
       borderRadius: radius.sm,
       alignSelf: 'flex-start',
     },
-    btnCopied: { backgroundColor: '#E8F5E9' },
-    text: { fontSize: 10, fontWeight: '600', color: '#555' },
+    btnCopied: {
+      backgroundColor: colors.card,
+      borderColor: colors.success,
+    },
+    text: {
+      fontSize: 10,
+      fontWeight: '600',
+      color: colors.textSecondary,
+    },
     textCopied: { color: colors.success },
   });
 }
