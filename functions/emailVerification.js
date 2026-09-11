@@ -1,11 +1,13 @@
 const admin = require('firebase-admin');
 
-const VERIFIED_WINDOW_MS = 15 * 60 * 1000;
-
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
 }
 
+// The Firebase ID token already has a bounded lifetime and is cryptographically
+// verified by Admin SDK. Do not impose a second 15-minute auth_time window here:
+// doing so can make a successfully verified email appear unverified when the
+// registration flow is resumed after a short delay or app-link round trip.
 exports.assertEmailVerified = async (idToken, email) => {
   if (!idToken) throw new Error('Please verify your email address first.');
   let decoded;
@@ -14,12 +16,8 @@ exports.assertEmailVerified = async (idToken, email) => {
   } catch {
     throw new Error('Please verify your email address first.');
   }
-  if (normalizeEmail(decoded.email) !== normalizeEmail(email) || !decoded.email_verified) {
+  if (normalizeEmail(decoded.email) !== normalizeEmail(email) || decoded.email_verified !== true) {
     throw new Error('The verified email address does not match.');
-  }
-  const authTimeMs = (decoded.auth_time || 0) * 1000;
-  if (!authTimeMs || Date.now() - authTimeMs > VERIFIED_WINDOW_MS) {
-    throw new Error('Your email verification has expired. Please verify again.');
   }
   return decoded.uid;
 };
