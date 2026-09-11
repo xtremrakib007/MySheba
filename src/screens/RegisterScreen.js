@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Linking, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { httpsCallable } from 'firebase/functions';
@@ -34,17 +34,36 @@ export default function RegisterScreen() {
   const [phoneConfirmation, setPhoneConfirmation] = useState(null);
   const [localError, setLocalError] = useState('');
   const [otpBusy, setOtpBusy] = useState(false);
+  const [pendingEmailLink, setPendingEmailLink] = useState('');
+  const lastEmailLinkRef = useRef('');
 
+  // Always listen for the verification link, even while the registration
+  // screen is still on the details step. Previously the listener only existed
+  // after step === 'email', so a link opened while the screen was on details
+  // could be received and then lost. Keep the URL pending until the email step
+  // is active, and also handle cold-start links reliably.
   useEffect(() => {
-    if (step !== 'email') return undefined;
     let mounted = true;
-    const handleUrl = (url) => {
-      if (mounted && url && emailVerification.isEmailSignInLink(url)) onConfirmEmailLink(url);
+    const captureUrl = (url) => {
+      if (!mounted || !url || !emailVerification.isEmailSignInLink(url)) return;
+      if (lastEmailLinkRef.current === url) return;
+      lastEmailLinkRef.current = url;
+      setPendingEmailLink(url);
     };
-    Linking.getInitialURL().then(handleUrl).catch(() => {});
-    const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url));
+    Linking.getInitialURL().then(captureUrl).catch(() => {});
+    const sub = Linking.addEventListener('url', ({ url }) => captureUrl(url));
     return () => { mounted = false; sub.remove(); };
-  }, [step]);
+  }, []);
+
+  // Once registration reaches the email-verification step, consume a link
+  // captured before or during navigation. The existing OTP flow remains
+  // independent, so either link or 6-digit OTP can complete registration.
+  useEffect(() => {
+    if (step !== 'email' || !pendingEmailLink || otpBusy) return;
+    const url = pendingEmailLink;
+    setPendingEmailLink('');
+    onConfirmEmailLink(url);
+  }, [step, pendingEmailLink]);
 
   const validateDetails = () => {
     if (!name.trim()) return t('register.errNoName');
