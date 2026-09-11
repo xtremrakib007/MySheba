@@ -18,6 +18,16 @@ function luminance(hex) {
   return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
 }
 function contrastText(hex) { return luminance(hex) > 0.55 ? '#000000' : '#FFFFFF'; }
+function gridCanvas(gridStyle, colors, isDark) {
+  const dark = isDark ? {
+    bordered: '#0B0F12', classic: '#0B1220', soft: '#101418', minimal: 'transparent', glass: '#0E1A24',
+    threeD: '#0D1116', gradient: '#17122A', neon: '#050709', bento: '#0C1015', adaptive: '#0B1512'
+  } : {
+    bordered: '#F5F7FA', classic: '#EEF5FF', soft: '#F7FAFC', minimal: 'transparent', glass: '#EAF6FF',
+    threeD: '#EEF1F5', gradient: '#F0ECFF', neon: '#EEF2F5', bento: '#F4F0FF', adaptive: '#ECF9F3'
+  };
+  return dark[gridStyle] || colors.bg;
+}
 
 export default function FeatureGrid({ title, items, activeKey, onPress, numColumns = 4 }) {
   const { colors, isDark, gridStyle } = useTheme();
@@ -28,56 +38,58 @@ export default function FeatureGrid({ title, items, activeKey, onPress, numColum
   return (
     <View>
       {!!title && <View style={styles.sectionHead}><Text style={styles.sectionTitle}>{title}</Text></View>}
-      <View style={styles.grid}>
-        {items.map((it, index) => {
-          const active = it.key === activeKey;
-          const bento = gridStyle === 'bento' && index % 6 === 0;
-          const adaptive = gridStyle === 'adaptive' && index < 4;
-          const itemStyle = [
-            styles.item,
-            { width: bento ? width * 2 + COLUMN_GAP : width },
-            gridStyle === 'bordered' && styles.bordered,
-            gridStyle === 'classic' && styles.classic,
-            gridStyle === 'soft' && styles.soft,
-            gridStyle === 'minimal' && styles.minimal,
-            gridStyle === 'glass' && styles.glass,
-            gridStyle === 'threeD' && styles.threeD,
-            gridStyle === 'neon' && styles.neon,
-            gridStyle === 'bento' && styles.bento,
-            gridStyle === 'adaptive' && styles.adaptive,
-            adaptive && styles.itemAdaptive,
-            active && styles.itemActive,
-          ];
-          const iconBg = isDark ? '#FFFFFF14' : (it.bg || '#E3F2FD');
-          const labelStyle = [styles.name, active && styles.nameActive, gridStyle === 'neon' && { color: colors.text }, gridStyle === 'gradient' && { color: gradientText }];
-          const content = (
-            <>
-              {it.badge !== undefined && it.badge !== null && it.badge !== '' && (
-                <View style={styles.badge}><Text style={styles.badgeText}>{String(it.badge)}</Text></View>
-              )}
-              <View style={[styles.iconWrap, { backgroundColor: iconBg }, (gridStyle === 'neon' || gridStyle === 'gradient') && styles.iconWrapBright]}>
-                <Text style={styles.iconText}>{it.icon}</Text>
-              </View>
-              <Text style={labelStyle} numberOfLines={2}>{String(it.name || '')}</Text>
-            </>
-          );
-          if (gridStyle === 'gradient') {
+      <View style={[styles.gridCanvas, { backgroundColor: gridCanvas(gridStyle, colors, isDark) }, gridStyle === 'minimal' && styles.gridCanvasMinimal]}>
+        <View style={styles.grid}>
+          {items.map((it, index) => {
+            const active = it.key === activeKey;
+            const bento = gridStyle === 'bento' && index % 6 === 0;
+            const adaptive = gridStyle === 'adaptive' && index < 4;
+            const itemStyle = [
+              styles.item,
+              { width: bento ? width * 2 + COLUMN_GAP : width },
+              gridStyle === 'bordered' && styles.bordered,
+              gridStyle === 'classic' && styles.classic,
+              gridStyle === 'soft' && styles.soft,
+              gridStyle === 'minimal' && styles.minimal,
+              gridStyle === 'glass' && styles.glass,
+              gridStyle === 'threeD' && styles.threeD,
+              gridStyle === 'neon' && styles.neon,
+              gridStyle === 'bento' && styles.bento,
+              gridStyle === 'adaptive' && styles.adaptive,
+              adaptive && styles.itemAdaptive,
+              active && styles.itemActive,
+            ];
+            const iconBg = isDark ? '#FFFFFF14' : (it.bg || '#E3F2FD');
+            const labelStyle = [styles.name, active && styles.nameActive, gridStyle === 'neon' && { color: '#FFFFFF' }, gridStyle === 'gradient' && { color: gradientText }];
+            const content = (
+              <>
+                {it.badge !== undefined && it.badge !== null && it.badge !== '' && (
+                  <View style={styles.badge}><Text style={styles.badgeText}>{String(it.badge)}</Text></View>
+                )}
+                <View style={[styles.iconWrap, { backgroundColor: iconBg }, (gridStyle === 'neon' || gridStyle === 'gradient') && styles.iconWrapBright]}>
+                  <Text style={styles.iconText}>{it.icon}</Text>
+                </View>
+                <Text style={labelStyle} numberOfLines={2}>{String(it.name || '')}</Text>
+              </>
+            );
+            if (gridStyle === 'gradient') {
+              return (
+                <TouchableOpacity key={it.key} style={itemStyle} activeOpacity={0.82} onPress={() => onPress(it.key)}>
+                  <LinearGradient colors={gradientColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradientFill}>
+                    {content}
+                  </LinearGradient>
+                </TouchableOpacity>
+              );
+            }
             return (
               <TouchableOpacity key={it.key} style={itemStyle} activeOpacity={0.82} onPress={() => onPress(it.key)}>
-                <LinearGradient colors={gradientColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradientFill}>
-                  {content}
-                </LinearGradient>
+                {gridStyle === 'classic' && <View style={[styles.classicBar, { backgroundColor: it.accent || colors.primary }]} />}
+                {gridStyle === 'adaptive' && adaptive && <View style={[styles.adaptiveBar, { backgroundColor: colors.primary }]} />}
+                {content}
               </TouchableOpacity>
             );
-          }
-          return (
-            <TouchableOpacity key={it.key} style={itemStyle} activeOpacity={0.82} onPress={() => onPress(it.key)}>
-              {gridStyle === 'classic' && <View style={[styles.classicBar, { backgroundColor: it.accent || colors.primary }]} />}
-              {gridStyle === 'adaptive' && adaptive && <View style={[styles.adaptiveBar, { backgroundColor: colors.primary }]} />}
-              {content}
-            </TouchableOpacity>
-          );
-        })}
+          })}
+        </View>
       </View>
     </View>
   );
@@ -87,6 +99,8 @@ function createStyles(colors) {
   return StyleSheet.create({
     sectionHead: { paddingHorizontal: 14, paddingTop: 8, paddingBottom: 10 },
     sectionTitle: { fontSize: 15, fontWeight: '600', color: colors.navy },
+    gridCanvas: { marginHorizontal: 4, borderRadius: radius.xl, paddingVertical: 8, overflow: 'hidden' },
+    gridCanvasMinimal: { paddingVertical: 0 },
     grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: GRID_PADDING, gap: COLUMN_GAP },
     item: { minHeight: 92, borderRadius: radius.lg, paddingVertical: 10, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
     bordered: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
