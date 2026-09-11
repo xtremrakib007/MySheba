@@ -2,7 +2,7 @@
   "expo": {
     "name": "MySheba",
     "slug": "rakib",
-    "version": "5.4.0.6",
+    "version": "5.4.1.2",
     "runtimeVersion": {
       "policy": "sdkVersion"
     },
@@ -22,7 +22,7 @@
     "android": {
       "package": "com.satulink.mysheba",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 25,
+      "versionCode": 36,
       "blockedPermissions": [
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_MEDIA_VIDEO"
