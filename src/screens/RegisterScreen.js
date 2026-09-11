@@ -22,7 +22,6 @@ export default function RegisterScreen() {
   const { t } = useLanguage();
   const { setScreen, doLogin, doGoogleLogin, authError, authBusy } = useApp();
   const [step, setStep] = useState('details');
-  const [method, setMethod] = useState(null);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [phoneCountry, setPhoneCountry] = useState(DEFAULT_PHONE_COUNTRY);
@@ -33,7 +32,6 @@ export default function RegisterScreen() {
   const [phoneCode, setPhoneCode] = useState('');
   const [emailCode, setEmailCode] = useState('');
   const [phoneConfirmation, setPhoneConfirmation] = useState(null);
-  const [phoneIdToken, setPhoneIdToken] = useState('');
   const [localError, setLocalError] = useState('');
   const [otpBusy, setOtpBusy] = useState(false);
 
@@ -60,50 +58,38 @@ export default function RegisterScreen() {
   const startEmailVerification = async () => {
     const err = validateDetails();
     if (err) { setLocalError(err); return; }
-    setLocalError('');
-    setOtpBusy(true);
+    setLocalError(''); setOtpBusy(true);
     try {
       await emailVerification.sendEmailOtp(email.trim());
-      setEmailCode('');
-      setMethod('email');
-      setStep('email');
-    } catch (e) {
-      setLocalError(e.message || 'Could not send the verification email. Please try again.');
-    } finally { setOtpBusy(false); }
+      setEmailCode(''); setStep('email');
+    } catch (e) { setLocalError(e.message || 'Could not send the verification email. Please try again.'); }
+    finally { setOtpBusy(false); }
   };
 
   const startPhoneVerification = async () => {
     const err = validateDetails();
     if (err) { setLocalError(err); return; }
-    setLocalError('');
-    setOtpBusy(true);
+    setLocalError(''); setOtpBusy(true);
     try {
       const confirmation = await phoneVerification.sendPhoneOtp(phone, phoneCountry.dial);
-      setPhoneConfirmation(confirmation);
-      setPhoneCode('');
-      setMethod('sms');
-      setStep('phone');
-    } catch (e) {
-      setLocalError(e.message || 'Could not send the SMS code. Please try again.');
-    } finally { setOtpBusy(false); }
+      setPhoneConfirmation(confirmation); setPhoneCode(''); setStep('phone');
+    } catch (e) { setLocalError(e.message || 'Could not send the SMS code. Please try again.'); }
+    finally { setOtpBusy(false); }
   };
 
   const resendPhoneCode = async () => {
     setLocalError(''); setOtpBusy(true);
     try {
       const confirmation = await phoneVerification.sendPhoneOtp(phone, phoneCountry.dial);
-      setPhoneConfirmation(confirmation);
-      setPhoneCode('');
+      setPhoneConfirmation(confirmation); setPhoneCode('');
     } catch (e) { setLocalError(e.message || 'Could not resend the SMS code. Please try again.'); }
     finally { setOtpBusy(false); }
   };
 
   const resendEmail = async () => {
     setLocalError(''); setOtpBusy(true);
-    try {
-      await emailVerification.sendEmailOtp(email.trim());
-      setEmailCode('');
-    } catch (e) { setLocalError(e.message || 'Could not resend the email verification. Please try again.'); }
+    try { await emailVerification.sendEmailOtp(email.trim()); setEmailCode(''); }
+    catch (e) { setLocalError(e.message || 'Could not resend the email verification. Please try again.'); }
     finally { setOtpBusy(false); }
   };
 
@@ -120,8 +106,6 @@ export default function RegisterScreen() {
       emailIdToken: emailToken || undefined,
       emailOtpVerificationId: emailProof || undefined,
     });
-    // The real customer account uses phone-derived email/password under the hood.
-    // Reusing the normal login path also preserves device-session handling.
     await doLogin(phone, password, phoneCountry.dial);
   };
 
@@ -130,11 +114,9 @@ export default function RegisterScreen() {
     setLocalError(''); setOtpBusy(true);
     try {
       const { idToken } = await phoneVerification.confirmPhoneOtp(phoneConfirmation, phoneCode.trim());
-      setPhoneIdToken(idToken);
       await finishRegistration({ phoneToken: idToken });
-    } catch (e) {
-      setLocalError(e.message || 'Could not complete phone verification. Please try again.');
-    } finally { setOtpBusy(false); }
+    } catch (e) { setLocalError(e.message || 'Could not complete phone verification. Please try again.'); }
+    finally { setOtpBusy(false); }
   };
 
   const onConfirmEmailLink = async (url) => {
@@ -142,9 +124,8 @@ export default function RegisterScreen() {
     try {
       const result = await emailVerification.confirmEmailLink(url, email.trim());
       await finishRegistration({ emailToken: result.idToken });
-    } catch (e) {
-      setLocalError(e.message || 'Could not verify your email address. Please try again.');
-    } finally { setOtpBusy(false); }
+    } catch (e) { setLocalError(e.message || 'Could not verify your email address. Please try again.'); }
+    finally { setOtpBusy(false); }
   };
 
   const onConfirmEmailOtp = async () => {
@@ -153,14 +134,13 @@ export default function RegisterScreen() {
     try {
       const result = await emailVerification.verifyEmailOtp(email.trim(), emailCode.trim());
       await finishRegistration({ emailProof: result.verificationId });
-    } catch (e) {
-      setLocalError(e.message || 'Could not verify the email code. Please try again.');
-    } finally { setOtpBusy(false); }
+    } catch (e) { setLocalError(e.message || 'Could not verify the email code. Please try again.'); }
+    finally { setOtpBusy(false); }
   };
 
   const busy = otpBusy || authBusy;
   const back = () => {
-    if (step === 'email' || step === 'phone') { setStep('details'); setMethod(null); setLocalError(''); }
+    if (step === 'email' || step === 'phone') { setStep('details'); setLocalError(''); }
     else setScreen('login');
   };
 
@@ -184,7 +164,7 @@ export default function RegisterScreen() {
                 <Text style={styles.countryDial}>{phoneCountry.dial}</Text>
                 <Text style={styles.countryChevron}>▾</Text>
               </TouchableOpacity>
-              <TextInput style={styles.phoneInput} placeholder={t('register.phoneNumber')} placeholderTextColor={colors.placeholder || colors.textSecondary} keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
+              <TextInput style={styles.phoneInput} placeholder={t('register.phoneNumber')} placeholderTextColor={styles.placeholderColor} keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
             </View>
           </View>
           <Field label={t('register.emailAddress')} value={email} setValue={setEmail} placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" styles={styles} />
@@ -194,13 +174,8 @@ export default function RegisterScreen() {
           <Text style={styles.verifyTitle}>Choose verification method</Text>
           <Text style={styles.verifyHint}>Verify your account by email or SMS. Either method can complete registration.</Text>
           {!!(localError || authError) && <Text style={styles.errorText}>{localError || authError}</Text>}
-
-          <TouchableOpacity style={[styles.btn, busy && styles.btnDisabled]} onPress={startEmailVerification} disabled={busy}>
-            {busy ? <ActivityIndicator color={colors.onPrimary} /> : <Text style={styles.btnText}>Verify by Email</Text>}
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.secondaryBtn, busy && styles.btnDisabled]} onPress={startPhoneVerification} disabled={busy}>
-            <Text style={styles.secondaryBtnText}>Verify by SMS</Text>
-          </TouchableOpacity>
+          <TouchableOpacity style={[styles.btn, busy && styles.btnDisabled]} onPress={startEmailVerification} disabled={busy}>{busy ? <ActivityIndicator color={styles.onPrimaryColor} /> : <Text style={styles.btnText}>Verify by Email</Text>}</TouchableOpacity>
+          <TouchableOpacity style={[styles.secondaryBtn, busy && styles.btnDisabled]} onPress={startPhoneVerification} disabled={busy}><Text style={styles.secondaryBtnText}>Verify by SMS</Text></TouchableOpacity>
           <OrDivider />
           <GoogleButton label={t('register.signUpWithGoogle')} onPress={doGoogleLogin} disabled={busy} />
         </> : step === 'phone' ? <>
@@ -208,7 +183,7 @@ export default function RegisterScreen() {
           <Text style={styles.otpHint}>{t('register.otpHintSms', { phone: `${phoneCountry.dial} ${phone.replace(/[^0-9]/g, '').replace(/^0+/, '')}` })}</Text>
           <Field label={t('register.smsCode')} value={phoneCode} setValue={setPhoneCode} placeholder="123456" keyboardType="number-pad" maxLength={6} styles={styles} otp />
           {!!(localError || authError) && <Text style={styles.errorText}>{localError || authError}</Text>}
-          <TouchableOpacity style={[styles.btn, busy && styles.btnDisabled]} onPress={onVerifyPhone} disabled={busy}>{busy ? <ActivityIndicator color={colors.onPrimary} /> : <Text style={styles.btnText}>Verify SMS & Create Account</Text>}</TouchableOpacity>
+          <TouchableOpacity style={[styles.btn, busy && styles.btnDisabled]} onPress={onVerifyPhone} disabled={busy}>{busy ? <ActivityIndicator color={styles.onPrimaryColor} /> : <Text style={styles.btnText}>Verify SMS & Create Account</Text>}</TouchableOpacity>
           <TouchableOpacity style={styles.resendBtn} onPress={resendPhoneCode} disabled={busy}><Text style={styles.resendText}>{t('register.resend')}</Text></TouchableOpacity>
         </> : <>
           <Text style={styles.stepTitle}>{t('register.verifyEmail')}</Text>
@@ -216,7 +191,7 @@ export default function RegisterScreen() {
           <Text style={styles.methodHint}>The email contains both a verification link and a 6-digit OTP. Either one can complete registration.</Text>
           <Field label="Email verification code" value={emailCode} setValue={setEmailCode} placeholder="123456" keyboardType="number-pad" maxLength={6} styles={styles} otp />
           {!!(localError || authError) && <Text style={styles.errorText}>{localError || authError}</Text>}
-          <TouchableOpacity style={[styles.btn, busy && styles.btnDisabled]} onPress={onConfirmEmailOtp} disabled={busy}>{busy ? <ActivityIndicator color={colors.onPrimary} /> : <Text style={styles.btnText}>Verify Email OTP & Create Account</Text>}</TouchableOpacity>
+          <TouchableOpacity style={[styles.btn, busy && styles.btnDisabled]} onPress={onConfirmEmailOtp} disabled={busy}>{busy ? <ActivityIndicator color={styles.onPrimaryColor} /> : <Text style={styles.btnText}>Verify Email OTP & Create Account</Text>}</TouchableOpacity>
           <Text style={styles.orText}>OR</Text>
           <TouchableOpacity style={styles.resendBtn} onPress={resendEmail} disabled={busy}><Text style={styles.resendText}>Send link + OTP again</Text></TouchableOpacity>
         </>}
@@ -234,14 +209,12 @@ function Field({ label, value, setValue, placeholder, styles, otp, ...props }) {
 }
 
 function createStyles(colors) {
-  return StyleSheet.create({
-    screen: { flex: 1, backgroundColor: colors.bg },
-    scroll: { flex: 1, backgroundColor: colors.bg },
+  const sheet = StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.bg }, scroll: { flex: 1, backgroundColor: colors.bg },
     header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, overflow: 'hidden', borderBottomWidth: 1, borderBottomColor: colors.border },
     backBtn: { padding: 4 }, backText: { color: colors.onPrimary, fontSize: 22 }, headerTitle: { color: colors.onPrimary, fontWeight: '700', fontSize: 16 },
     body: { padding: 20, paddingBottom: 40, backgroundColor: colors.bg }, formGroup: { marginBottom: 14 }, label: { fontWeight: '700', marginBottom: 7, fontSize: 13, color: colors.text },
     input: { width: '100%', paddingVertical: 13, paddingHorizontal: 14, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, fontSize: 14, backgroundColor: colors.inputBg, color: colors.text },
-    placeholderColor: colors.placeholder || colors.textSecondary,
     phoneRow: { flexDirection: 'row', alignItems: 'stretch', gap: 7 }, countryButton: { minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.inputBg, paddingHorizontal: 9, flexDirection: 'row', alignItems: 'center', maxWidth: '58%' },
     countryFlag: { fontSize: 19 }, countryName: { color: colors.text, fontSize: 12, fontWeight: '700', marginLeft: 6, flexShrink: 1 }, countryDial: { color: colors.text, fontSize: 12, fontWeight: '800', marginLeft: 5 }, countryChevron: { color: colors.textSecondary, fontSize: 14, marginLeft: 5 },
     phoneInput: { flex: 1, minWidth: 0, paddingVertical: 13, paddingHorizontal: 12, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, fontSize: 14, backgroundColor: colors.inputBg, color: colors.text },
@@ -253,4 +226,5 @@ function createStyles(colors) {
     otpInput: { width: '100%', paddingVertical: 15, paddingHorizontal: 14, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, fontSize: 20, letterSpacing: 5, textAlign: 'center', backgroundColor: colors.inputBg, color: colors.text },
     orText: { textAlign: 'center', marginTop: 14, color: colors.textSecondary, fontSize: 12 }, resendBtn: { alignItems: 'center', marginTop: 14 }, resendText: { color: colors.text, fontSize: 13, fontWeight: '700', textDecorationLine: 'underline' },
   });
+  return { ...sheet, placeholderColor: colors.placeholder || colors.textSecondary, onPrimaryColor: colors.onPrimary };
 }
