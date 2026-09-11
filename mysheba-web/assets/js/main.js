@@ -2,6 +2,18 @@
    MySheba Website — Global Scripts
    ============================================ */
 
+/* Google AdSense Auto Ads — loaded globally on every page that uses this file. */
+(function loadMyShebaAdSense() {
+  const publisherId = 'ca-pub-5028998697615030';
+  if (!document.querySelector('script[src*="pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"]')) {
+    const adsenseScript = document.createElement('script');
+    adsenseScript.async = true;
+    adsenseScript.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=' + publisherId;
+    adsenseScript.crossOrigin = 'anonymous';
+    document.head.appendChild(adsenseScript);
+  }
+})();
+
 document.addEventListener('DOMContentLoaded', function() {
   // Mobile Menu Toggle
   const menuToggle = document.querySelector('.menu-toggle');
@@ -141,7 +153,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const py = (e.clientY - rect.top) / rect.height;
         card.style.setProperty('--sx', px * 100 + '%');
         card.style.setProperty('--sy', py * 100 + '%');
-        const tiltMax = 5; // degrees — kept subtle for a premium, not gimmicky, feel
+        const tiltMax = 5;
         const rotY = (px - 0.5) * tiltMax * 2;
         const rotX = (0.5 - py) * tiltMax * 2;
         card.style.transform = `perspective(900px) rotateX(${rotX}deg) rotateY(${rotY}deg) translateY(-4px)`;
@@ -151,7 +163,7 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     });
 
-    // Magnetic pull on primary buttons — nudges toward the cursor within a small radius
+    // Magnetic pull on primary buttons
     document.querySelectorAll('.btn-primary, .btn-outline, .store-btn').forEach(btn => {
       const strength = 0.28;
       const maxPull = 8;
@@ -180,11 +192,7 @@ document.addEventListener('DOMContentLoaded', function() {
     track.style.setProperty('--marquee-duration', Math.max(items.length * 2.2, 20) + 's');
     row.parentNode.insertBefore(wrap, row);
     wrap.appendChild(track);
-    // Move the original items straight into the track (not nested inside `row`)
-    // so both halves of the loop are flat, identically-spaced flex children.
     items.forEach(item => track.appendChild(item));
-    // Duplicate the set once for a seamless loop — strip reveal-on-scroll state
-    // since these clones sit off the initial viewport and would otherwise stay hidden
     items.forEach(item => {
       const clone = item.cloneNode(true);
       clone.classList.remove('reveal', 'in-view');
@@ -211,12 +219,10 @@ document.addEventListener('DOMContentLoaded', function() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
 
-  // Combined scroll effects: header shadow/hide, progress bar, back-to-top visibility
+  // Combined scroll effects
   const header = document.querySelector('.site-header');
   const headerHeight = header ? header.offsetHeight : 0;
   const heroVisual = document.querySelector('.hero-visual');
-  // Release the entrance animation's grip on `transform` once it finishes,
-  // so the scroll-driven parallax below can take over the same property.
   if (heroVisual) {
     heroVisual.addEventListener('animationend', () => { heroVisual.style.animation = 'none'; }, { once: true });
   }
@@ -239,7 +245,6 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
 
-    // Gentle parallax drift on the hero visual (desktop, motion allowed)
     if (heroVisual && canHover && !prefersReducedMotion) {
       const shift = Math.min(scrollY * 0.08, 40);
       heroVisual.style.transform = `translateY(${shift}px)`;
@@ -295,21 +300,17 @@ document.addEventListener('DOMContentLoaded', function() {
       const event = this.dataset.track;
       const category = this.dataset.category || 'engagement';
       const label = this.dataset.label || '';
-
-      // Google Analytics 4 event
       if (typeof gtag !== 'undefined') {
         gtag('event', event, {
           event_category: category,
           event_label: label
         });
       }
-
-      // Console log for debugging
       console.log('Track:', { event, category, label });
     });
   });
 
-  // Cross-page fade transition — gives the multi-page site an app-like feel
+  // Cross-page fade transition
   if (!prefersReducedMotion) {
     document.body.classList.add('is-loaded');
     const veil = document.createElement('div');
@@ -338,7 +339,6 @@ document.addEventListener('DOMContentLoaded', function() {
   // App deep link handling
   document.querySelectorAll('a[href^="intent://"], a[href^="mysheba://"]').forEach(link => {
     link.addEventListener('click', function(e) {
-      // If on mobile, try to open app; fallback to download page
       const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
       if (!isMobile) {
         e.preventDefault();
@@ -347,4 +347,3 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 });
-
