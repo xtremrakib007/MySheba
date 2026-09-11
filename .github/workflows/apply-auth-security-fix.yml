@@ -1,0 +1,423 @@
+name: Apply unified auth security fix
+
+on:
+  push:
+    branches: [production-readiness-fixes]
+    paths: [.github/workflows/apply-auth-security-fix.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: production-readiness-fixes
+          fetch-depth: 0
+
+      - name: Apply auth/session changes
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          def read(p): return Path(p).read_text()
+          def write(p, s): Path(p).write_text(s)
+
+          # ---------- deviceSessionService.js ----------
+          p = 'functions/deviceSessionService.js'
+          s = read(p)
+
+          start = s.index('    const privileged = isPrivilegedRole(preData.role);')
+          end = s.index('    const result = await db.runTransaction(async (tx) => {', start)
+          new_pre = r'''    const privileged = isPrivilegedRole(preData.role);
+    const phone = normalizePhone(preData.phone || '');
+    const phoneE164 = String(preData.phoneE164 || '').trim();
+    const phoneCountryCode = String(preData.phoneCountryCode || '+60').trim();
+    const email = normalizeEmail(preData.email || '');
+    const trustedDevices = preData.trustedDevices || {};
+
+    // A normal app reopen never reaches this function: Firebase Auth keeps
+    // the user signed in and AppContext gates the UI with PIN/biometric.
+    // This function is for an actual credential login. Verification is
+    // required after an explicit logout, or when another device is already
+    // active. A device already present in the privileged trusted-device list
+    // is recognized and may skip the challenge unless the account was
+    // explicitly logged out (manual logout always requires verification).
+    const differentActiveDevice = Boolean(
+      preData.activeDeviceId && preData.activeDeviceId !== deviceId
+    );
+    const forcedAfterLogout = Boolean(preData.requireLoginVerification);
+    const trustedCurrentDevice = Boolean(trustedDevices[deviceId]);
+    const verificationRequired = forcedAfterLogout || (differentActiveDevice && !trustedCurrentDevice);
+    const verificationReason = forcedAfterLogout ? 'login_verification' : 'new_device';
+
+    if (!phone && !email) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This account has no phone number or email on file, so sign-in verification can\'t be completed. Please contact support.'
+      );
+    }
+
+    let verificationSatisfied = !verificationRequired;
+    let verifiedVia = null;
+
+    if (verificationRequired) {
+      const { phoneIdToken, emailIdToken, emailOtp, resendEmailChallenge } = request.data || {};
+
+      if (phoneIdToken) {
+        try {
+          await assertPhoneVerified(phoneIdToken, phoneE164 || phone, phoneCountryCode);
+          verificationSatisfied = true;
+          verifiedVia = 'sms';
+        } catch (verifyErr) {
+          throw new HttpsError('failed-precondition', verifyErr.message || 'Please verify your phone number first.');
+        }
+      } else if (emailIdToken) {
+        try {
+          await assertEmailVerified(emailIdToken, email);
+          verificationSatisfied = true;
+          verifiedVia = 'email_link';
+        } catch (verifyErr) {
+          throw new HttpsError('failed-precondition', verifyErr.message || 'Please verify your email address first.');
+        }
+      } else if (emailOtp) {
+        verifyEmailOtpChallenge(preData.pendingAdminEmailChallenge, emailOtp, deviceId, email);
+        verificationSatisfied = true;
+        verifiedVia = 'email_otp';
+      }
+
+      if (!verificationSatisfied) {
+        if (email && (resendEmailChallenge || !preData.pendingAdminEmailChallenge)) {
+          await sendCombinedEmailChallenge({
+            db,
+            uid,
+            email,
+            deviceId,
+            reason: verificationReason,
+            displayName: preData.name || preData.displayName,
+          });
+        }
+        await logAudit({
+          action: verificationReason === 'new_device' ? 'device_switch_requested' : 'login_verification_challenge',
+          targetUid: uid,
+          performedBy: uid,
+          performedByRole: preData.role,
+          details: {
+            deviceId,
+            ip,
+            emailChallenge: Boolean(email),
+            smsAvailable: Boolean(phone),
+          },
+        });
+        return {
+          requiresOtp: true,
+          reason: verificationReason,
+          phone: phoneE164 || phone,
+          email,
+          availableMfaMethods: [phone && 'sms', email && 'email'].filter(Boolean),
+          emailChallengeSent: Boolean(email && (resendEmailChallenge || !preData.pendingAdminEmailChallenge)),
+        };
+      }
+
+      // The verification proof was just checked server-side. Clear the
+      // email challenge so an old 6-digit code cannot be replayed.
+      if (emailIdToken || emailOtp) {
+        await ref.update({ pendingAdminEmailChallenge: FieldValue.delete() }).catch(async (e) => {
+          await logServerError('checkDeviceSession.clearEmailChallenge', e, { userId: uid });
+        });
+      }
+    }
+
+'''
+          s = s[:start] + new_pre + s[end:]
+
+          # Replace the transaction body with one that understands both
+          # manual-logout verification and verified device takeover.
+          tx_start = s.index('    const result = await db.runTransaction(async (tx) => {')
+          tx_end = s.index('\n    if (result.requiresOtp)', tx_start)
+          new_tx = r'''    const result = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError('not-found', 'No profile found for this account.');
+      const data = snap.data();
+
+      if (data.suspended) {
+        throw new HttpsError('permission-denied', 'This account has been suspended. Please contact support.');
+      }
+
+      const differentDevice = Boolean(data.activeDeviceId && data.activeDeviceId !== deviceId);
+      const forcedLogout = Boolean(data.requireLoginVerification);
+      const trustedDevice = Boolean((data.trustedDevices || {})[deviceId]);
+      const mustVerifyNow = forcedLogout || (differentDevice && !trustedDevice);
+
+      // Re-check the security condition inside the transaction. This closes
+      // the race where another login/logout changes the account between the
+      // pre-read and this write.
+      if (mustVerifyNow && !verificationSatisfied) {
+        throw new HttpsError('failed-precondition', 'Sign-in verification is required. Please verify by SMS or email.');
+      }
+
+      const sessionId = generateSessionId();
+      const patch = {
+        activeSessionId: sessionId,
+        activeDeviceId: deviceId,
+        pendingDeviceApproval: null,
+        requireLoginVerification: false,
+        lastLoginAt: FieldValue.serverTimestamp(),
+      };
+
+      tx.update(ref, patch);
+      return {
+        requiresOtp: false,
+        sessionId,
+        switchedDevice: differentDevice,
+        verifiedVia,
+      };
+    });
+'''
+          s = s[:tx_start] + new_tx + s[tx_end:]
+
+          # The old post-transaction branch logged a switch request when
+          # result.requiresOtp. Keep only successful login/switch auditing.
+          old_post = r'''    if (result.requiresOtp) {
+      await logAudit({
+        action: 'device_switch_requested',
+        targetUid: uid,
+        performedBy: uid,
+        performedByRole: preData.role,
+        details: { deviceId, ip },
+      });
+    } else if (privileged) {
+      // Successful privileged-account login only reaches here once MFA
+      // (above) has already been satisfied - this is the "landed on a
+      // dashboard" event admins want an IP trail for, not the challenge
+      // itself (already logged as admin_mfa_challenge above).
+      await logAudit({
+        action: 'admin_login',
+        targetUid: uid,
+        performedBy: uid,
+        performedByRole: preData.role,
+        details: { deviceId, ip },
+      });
+    }
+'''
+          if old_post in s:
+              s = s.replace(old_post, '')
+          else:
+              # Remove any remaining exact old post branch conservatively.
+              s = re.sub(r'    if \(result\.requiresOtp\) \{.*?    \}\n    if \(!result\.requiresOtp\)', '    if (!result.requiresOtp)', s, count=1, flags=re.S)
+
+          # Add successful login/switch audit before anomaly check.
+          marker = '    if (!result.requiresOtp) {\n'
+          insert = r'''    if (result.switchedDevice) {
+      await logAudit({
+        action: 'device_switch_confirmed',
+        targetUid: uid,
+        performedBy: uid,
+        performedByRole: preData.role,
+        details: { deviceId, ip, verifiedVia },
+      });
+      try {
+        await admin.auth().revokeRefreshTokens(uid);
+      } catch (revokeErr) {
+        await logServerError('checkDeviceSession.revokeRefreshTokens', revokeErr, { userId: uid });
+      }
+      try {
+        await sendNewDeviceAlert({
+          email: email || null,
+          pushToken: preData.pushToken || null,
+          deviceId,
+          ip,
+        });
+      } catch (alertErr) {
+        await logServerError('checkDeviceSession.sendNewDeviceAlert', alertErr, { userId: uid });
+      }
+    } else if (privileged) {
+      await logAudit({
+        action: 'admin_login',
+        targetUid: uid,
+        performedBy: uid,
+        performedByRole: preData.role,
+        details: { deviceId, ip, verifiedVia },
+      });
+    }
+'''
+          if marker not in s:
+              raise SystemExit('Could not find post-transaction marker')
+          s = s.replace(marker, insert + marker, 1)
+
+          # Make confirmDeviceSwitch reject stale/incorrect paths gracefully;
+          # the unified checkDeviceSession path is now the normal finalizer.
+          # Keep the callable for backward compatibility with older clients.
+
+          # Manual logout must mark the next credential login as requiring
+          # verification, while a pending new-device cancellation must not
+          # disturb the active device.
+          old_clear = '''      if (data.activeDeviceId === deviceId) {
+        patch.activeSessionId = null;
+        patch.activeDeviceId = null;
+      }
+      if (data.pendingDeviceApproval && data.pendingDeviceApproval.deviceId === deviceId) {
+        patch.pendingDeviceApproval = null;
+      }
+'''
+          new_clear = '''      if (data.activeDeviceId === deviceId) {
+        patch.activeSessionId = null;
+        patch.activeDeviceId = null;
+        patch.requireLoginVerification = true;
+      }
+      if (data.pendingDeviceApproval && data.pendingDeviceApproval.deviceId === deviceId) {
+        patch.pendingDeviceApproval = null;
+      }
+'''
+          if old_clear not in s:
+              raise SystemExit('Could not find clearActiveSession block')
+          s = s.replace(old_clear, new_clear, 1)
+
+          write(p, s)
+
+          # ---------- authService.js ----------
+          p = 'src/firebase/authService.js'
+          s = read(p)
+          s = s.replace(
+            "export async function retryDeviceSession(uid, phoneIdToken, emailIdToken, emailOtp, resendEmailChallenge = false) {",
+            "export async function retryDeviceSession(uid, phoneIdToken, emailIdToken, emailOtp, resendEmailChallenge = false) {"
+          )
+          # Remove the old email-link race shortcut. The server now verifies
+          # the supplied proof and finalizes the session itself for both
+          # email and SMS, so every method follows exactly one path.
+          s = re.sub(
+            r"    // A verified email link may race the single-device check:.*?    if \(emailIdToken && sessionResult\.reason === 'new_device'\) \{\s*return confirmDeviceLogin\(uid, emailIdToken\);\s*\}\n",
+            "",
+            s,
+            count=1,
+            flags=re.S,
+          )
+          # Registration proof forwarding: preserve/apply if the branch still
+          # has the older signature.
+          s = s.replace(
+            "export async function registerCustomer({ name, phone, phoneE164, dialCode, email, pin, dealerCode, resellerCode, phoneIdToken }) {",
+            "export async function registerCustomer({ name, phone, phoneE164, dialCode, email, pin, dealerCode, resellerCode, phoneIdToken, emailIdToken, emailOtpVerificationId }) {"
+          )
+          s = s.replace(
+            "  if (!dealerCode || !normalizePhone(dealerCode)) throw new Error('Please enter a dealer code.');\n",
+            ""
+          )
+          s = s.replace(
+            "  await registerFn({ name, phone, phoneE164, dialCode, email, pin, dealerCode, resellerCode, phoneIdToken });",
+            "  await registerFn({ name, phone, phoneE164, dialCode, email, pin, dealerCode, resellerCode, phoneIdToken, emailIdToken, emailOtpVerificationId });"
+          )
+          write(p, s)
+
+          # ---------- DeviceVerifyScreen.js ----------
+          p = 'src/screens/DeviceVerifyScreen.js'
+          s = read(p)
+          s = s.replace(
+            "  const phone = pendingDeviceVerification?.phone || '';\n  const isAdminMfa = pendingDeviceVerification?.reason === 'admin_mfa';\n  const availableMfaMethods = pendingDeviceVerification?.availableMfaMethods?.length ? pendingDeviceVerification.availableMfaMethods : ['email'];\n  const canChooseMfaMethod = isAdminMfa && availableMfaMethods.length > 1;",
+            "  const phone = pendingDeviceVerification?.phone || '';\n  const phoneE164 = pendingDeviceVerification?.phoneE164 || phone;\n  const availableMfaMethods = pendingDeviceVerification?.availableMfaMethods?.length ? pendingDeviceVerification.availableMfaMethods : ['email'];\n  const canChooseMfaMethod = availableMfaMethods.length > 1;"
+          )
+          s = s.replace(
+            "  const [mfaMethod, setMfaMethod] = useState(availableMfaMethods.includes('email') ? 'email' : availableMfaMethods[0]);",
+            "  const [mfaMethod, setMfaMethod] = useState(availableMfaMethods.includes('email') ? 'email' : availableMfaMethods[0]);"
+          )
+          s = s.replace(
+            "      if (isSms) setPhoneConfirmation(await phoneVerification.sendPhoneOtp(phone));\n      else if (isAdminMfa) await authService.retryDeviceSession(pendingDeviceVerification?.uid, undefined, undefined, undefined, true);\n      else {\n        const deviceId = await deviceSessionService.getDeviceId();\n        await emailVerification.sendDeviceVerificationEmail(deviceId);\n      }",
+            "      if (isSms) setPhoneConfirmation(await phoneVerification.sendPhoneOtp(phoneE164));\n      else await authService.retryDeviceSession(pendingDeviceVerification?.uid, undefined, undefined, undefined, true);"
+          )
+          s = s.replace(
+            "      try { const result = await phoneVerification.confirmPhoneOtp(phoneConfirmation, code.trim()); await confirmDeviceVerification(result.idToken); }",
+            "      try { const result = await phoneVerification.confirmPhoneOtp(phoneConfirmation, code.trim()); await confirmDeviceVerification(result.idToken); }"
+          )
+          s = s.replace(
+            "  return <View style={styles.screen}>\n    <LinearGradient colors={brandGradient} start={{x:0,y:0}} end={{x:1,y:0}} style={styles.header}><HeaderDecor/><Text style={styles.headerTitle}>{isAdminMfa?'Verify Your Sign-In':'Verify This Device'}</Text></LinearGradient>",
+            "  const verificationTitle = pendingDeviceVerification?.reason === 'login_verification' ? 'Verify Your Sign-In' : 'Verify This Device';\n  return <View style={styles.screen}>\n    <LinearGradient colors={brandGradient} start={{x:0,y:0}} end={{x:1,y:0}} style={styles.header}><HeaderDecor/><Text style={styles.headerTitle}>{verificationTitle}</Text></LinearGradient>"
+          )
+          # Replace the remaining admin-only email/code rendering with the
+          # universal email branch.
+          s = s.replace(
+            "      </> : isAdminMfa ? <>",
+            "      </> : <>",
+          )
+          s = s.replace(
+            "      </> : <>\n        <Text style={styles.methodHint}>Tap the verification link on this device. This screen will continue automatically.</Text>\n        {busy&&<ActivityIndicator color=\"#fff\" style={{marginBottom:12}}/>\n        <TouchableOpacity style={styles.resendBtn} onPress={onSendCode} disabled={busy}><Text style={styles.resendText}>Didn't get a link? Resend</Text></TouchableOpacity>\n      </>}",
+            "      </>}"
+          )
+          # Email link/OTP are now valid for all verification reasons. The
+          # simple branch above already renders the code form for email.
+          write(p, s)
+
+          # ---------- AppContext.js ----------
+          p = 'src/context/AppContext.js'
+          s = read(p)
+          s = s.replace(
+            "          phone: p.pendingDeviceApproval.phone,\n          reason: p.pendingDeviceApproval.reason,",
+            "          phone: p.pendingDeviceApproval.phone,\n          phoneE164: p.pendingDeviceApproval.phoneE164 || p.pendingDeviceApproval.phone,\n          reason: p.pendingDeviceApproval.reason,"
+          )
+          old_confirm = re.search(
+            r"  const confirmDeviceVerification = useCallback\(async \(phoneIdToken, emailIdToken, emailOtp\) => \{.*?\n  \}, \[pendingDeviceVerification\]\);",
+            s,
+            flags=re.S,
+          )
+          if not old_confirm:
+              raise SystemExit('Could not find confirmDeviceVerification')
+          new_confirm = r'''  const confirmDeviceVerification = useCallback(async (phoneIdToken, emailIdToken, emailOtp) => {
+    if (!pendingDeviceVerification) return false;
+    setAuthBusy(true);
+    setAuthError('');
+    try {
+      // All device/login verification methods now use the same server-side
+      // check. The server independently validates SMS/email proof and then
+      // creates the active session (or takes over the previous device).
+      const p = await authService.retryDeviceSession(
+        pendingDeviceVerification.uid,
+        phoneIdToken,
+        emailIdToken,
+        emailOtp
+      );
+      if (p.pendingDeviceApproval) {
+        setPendingDeviceVerification({
+          uid: p.uid,
+          email: p.pendingDeviceApproval.email,
+          phone: p.pendingDeviceApproval.phone,
+          phoneE164: p.pendingDeviceApproval.phoneE164 || p.pendingDeviceApproval.phone,
+          reason: p.pendingDeviceApproval.reason,
+          availableMfaMethods: p.pendingDeviceApproval.availableMfaMethods,
+        });
+        return false;
+      }
+      setPendingDeviceVerification(null);
+      setProfile(p);
+      if (p.role === 'dealer' || p.role === 'dealer') { setDealerTab('pending'); setScreen('dealerHome'); }
+      else if (p.role === 'reseller') { setResellerTab('pending'); setScreen('resellerHome'); }
+      else if (p.role === 'admin' || p.role === 'superadmin') { setAdminTab('all'); setScreen('adminHome'); }
+      else setScreen('customerHome');
+      return true;
+    } catch (err) {
+      setAuthError(err.message || 'Verification failed.');
+      return false;
+    } finally {
+      setAuthBusy(false);
+    }
+  }, [pendingDeviceVerification]);'''
+          s = s[:old_confirm.start()] + new_confirm + s[old_confirm.end():]
+          write(p, s)
+
+          # ---------- remove this temporary workflow ----------
+          Path('.github/workflows/apply-auth-security-fix.yml').unlink()
+          PY
+
+          git diff --check
+          git status --short
+
+      - name: Commit changes and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add functions/deviceSessionService.js src/firebase/authService.js src/screens/DeviceVerifyScreen.js src/context/AppContext.js .github/workflows/apply-auth-security-fix.yml
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: require email or SMS after logout and on new devices"
+          git push origin production-readiness-fixes
