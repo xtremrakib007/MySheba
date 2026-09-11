@@ -97,7 +97,12 @@ exports.confirmDeviceEmailOtp = onCall(async (request) => {
 
   if (phoneIdToken) {
     try {
-      await assertPhoneVerified(phoneIdToken, data.phone || pending.phone || '');
+      // Always compare against the stored E.164 phone number/country.
+      // Using profile.phone alone silently defaulted to +60 and broke SMS
+      // device verification for non-Malaysian users.
+      const expectedPhone = data.phoneE164 || pending.phoneE164 || data.phone || pending.phone || '';
+      const expectedDialCode = data.phoneCountryCode || pending.dialCode || '+60';
+      await assertPhoneVerified(phoneIdToken, expectedPhone, expectedDialCode);
       verified = true;
       verifiedVia = 'sms';
     } catch (err) {
