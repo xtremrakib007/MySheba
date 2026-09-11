@@ -2,34 +2,62 @@ import React from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { radius } from '../theme/theme';
-import { useTheme } from "../theme/ThemeContext";
+import { useTheme } from '../theme/ThemeContext';
 import AppModalHeader from './AppModalHeader';
 
-// Settings > "Theme Color" row. Lets the user pick one of the accent
-// palettes defined in theme/theme.js (accentThemes) - each swatch here
-// shows that accent's light-mode primary color regardless of the app's
-// current light/dark setting, since it's meant to identify the color
-// choice itself, not preview it under the active mode. The actual
-// primary/primaryDark/secondary swap (and its dark-mode equivalents)
-// happens in ThemeContext via setAccent, which is passed in as onSelect.
+// Settings > Theme Color. The selected accent is persisted by ThemeContext
+// and is used by the rest of the app through colors.primary/secondary.
 export default function ThemeColorModal({ visible, selected, onSelect, onClose }) {
-  const {
-    colors,
-    accentThemes,
-    accentList
-  } = useTheme();
-
+  const { colors, accentThemes, accentList } = useTheme();
   const styles = createStyles(colors);
+  const selectedTheme = accentThemes[selected] || accentThemes.teal;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={styles.box}>
           <AppModalHeader />
-          <View style={styles.content}>
-            <Text style={styles.title}>Theme Color</Text>
-            <Text style={styles.subtitle}>Choose an accent color for buttons, headers, and highlights.</Text>
 
+          <View style={styles.content}>
+            <Text style={styles.title}>Front Color</Text>
+            <Text style={styles.subtitle}>
+              Choose the main app color. It updates buttons, headers, icons, highlights and supported cards while keeping text readable in Light and Dark mode.
+            </Text>
+
+            <View style={styles.preview}>
+              {selectedTheme.gradientSwatch ? (
+                <LinearGradient
+                  colors={selectedTheme.gradientSwatch}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.previewHeader}
+                >
+                  <Text style={styles.previewHeaderText}>MySheba</Text>
+                  <Text style={styles.previewHeaderSub}>Front color preview</Text>
+                </LinearGradient>
+              ) : (
+                <View style={[styles.previewHeader, { backgroundColor: selectedTheme.swatch }]}>
+                  <Text style={styles.previewHeaderText}>MySheba</Text>
+                  <Text style={styles.previewHeaderSub}>Front color preview</Text>
+                </View>
+              )}
+              <View style={styles.previewBody}>
+                <View style={styles.previewRow}>
+                  <View style={[styles.previewIcon, { backgroundColor: selectedTheme.swatch }]}>
+                    <Text style={styles.previewIconText}>✓</Text>
+                  </View>
+                  <View style={styles.previewCopy}>
+                    <Text style={styles.previewTitle}>Selected theme</Text>
+                    <Text style={styles.previewSub}>{selectedTheme.label}</Text>
+                  </View>
+                  <View style={[styles.previewButton, { backgroundColor: colors.primary }]}>
+                    <Text style={[styles.previewButtonText, { color: colors.onPrimary }]}>Action</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            <Text style={styles.sectionLabel}>Available colors</Text>
             <View style={styles.grid}>
               {accentList.map((key) => {
                 const theme = accentThemes[key];
@@ -37,9 +65,18 @@ export default function ThemeColorModal({ visible, selected, onSelect, onClose }
                 return (
                   <TouchableOpacity
                     key={key}
-                    style={[styles.swatchCard, isSelected && { borderColor: theme.swatch, backgroundColor: `${theme.swatch}14` }]}
+                    style={[
+                      styles.swatchCard,
+                      isSelected && {
+                        borderColor: theme.swatch,
+                        backgroundColor: `${theme.swatch}14`,
+                      },
+                    ]}
                     onPress={() => onSelect(key)}
-                    activeOpacity={0.7}
+                    activeOpacity={0.75}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    accessibilityLabel={`${theme.label}${isSelected ? ', selected' : ''}`}
                   >
                     {theme.gradientSwatch ? (
                       <LinearGradient
@@ -55,7 +92,10 @@ export default function ThemeColorModal({ visible, selected, onSelect, onClose }
                         {isSelected && <Text style={styles.check}>✓</Text>}
                       </View>
                     )}
-                    <Text style={[styles.swatchLabel, isSelected && { color: theme.swatch, fontWeight: '700' }]} numberOfLines={1}>
+                    <Text
+                      style={[styles.swatchLabel, isSelected && { color: theme.swatch, fontWeight: '700' }]}
+                      numberOfLines={1}
+                    >
                       {theme.label}
                     </Text>
                   </TouchableOpacity>
@@ -63,8 +103,14 @@ export default function ThemeColorModal({ visible, selected, onSelect, onClose }
               })}
             </View>
 
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-              <Text style={styles.closeText}>Done</Text>
+            <TouchableOpacity
+              style={styles.closeBtn}
+              onPress={onClose}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Done"
+            >
+              <Text style={[styles.closeText, { color: colors.onPrimary }]}>Done</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -75,25 +121,62 @@ export default function ThemeColorModal({ visible, selected, onSelect, onClose }
 
 function createStyles(colors) {
   return StyleSheet.create({
-    overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
-    box: { backgroundColor: 'white', borderRadius: radius.lg, width: '88%', maxWidth: 380, overflow: 'hidden' },
-    content: { padding: 20 },
-    title: { fontWeight: '600', fontSize: 15, color: colors.text },
-    subtitle: { fontSize: 12, color: '#888', marginTop: 4, marginBottom: 16, lineHeight: 17 },
-    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between' },
-    swatchCard: {
-      width: '31%',
+    overlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.6)',
       alignItems: 'center',
-      paddingVertical: 12,
+      justifyContent: 'center',
+      padding: 16,
+    },
+    box: {
+      backgroundColor: colors.card,
+      borderRadius: radius.lg,
+      width: '100%',
+      maxWidth: 400,
+      maxHeight: '92%',
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    content: { padding: 20 },
+    title: { fontWeight: '700', fontSize: 18, color: colors.text },
+    subtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 5, marginBottom: 16, lineHeight: 18 },
+    preview: {
+      borderRadius: radius.md,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 18,
+    },
+    previewHeader: { minHeight: 72, paddingHorizontal: 16, paddingVertical: 12, justifyContent: 'center' },
+    previewHeaderText: { color: '#FFFFFF', fontWeight: '800', fontSize: 17 },
+    previewHeaderSub: { color: '#FFFFFF', opacity: 0.9, fontSize: 11, marginTop: 2 },
+    previewBody: { backgroundColor: colors.surface, padding: 12 },
+    previewRow: { flexDirection: 'row', alignItems: 'center' },
+    previewIcon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+    previewIconText: { color: '#FFFFFF', fontWeight: '800', fontSize: 17 },
+    previewCopy: { flex: 1, marginHorizontal: 10 },
+    previewTitle: { color: colors.text, fontWeight: '700', fontSize: 12 },
+    previewSub: { color: colors.textSecondary, fontSize: 11, marginTop: 2 },
+    previewButton: { borderRadius: radius.sm, paddingHorizontal: 12, paddingVertical: 8 },
+    previewButtonText: { fontWeight: '700', fontSize: 11 },
+    sectionLabel: { color: colors.text, fontSize: 12, fontWeight: '700', marginBottom: 10 },
+    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between' },
+    swatchCard: {
+      width: '31.5%',
+      minHeight: 82,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 10,
       paddingHorizontal: 4,
       borderRadius: radius.md,
       borderWidth: 1.5,
       borderColor: colors.border,
     },
-    swatchCircle: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-    check: { color: 'white', fontWeight: '700', fontSize: 16 },
-    swatchLabel: { fontSize: 11, color: colors.text, textAlign: 'center' },
-    closeBtn: { marginTop: 20, paddingVertical: 12, borderRadius: radius.md, backgroundColor: colors.primary, alignItems: 'center' },
-    closeText: { color: 'white', fontWeight: '600', fontSize: 14 },
+    swatchCircle: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 7 },
+    check: { color: '#FFFFFF', fontWeight: '800', fontSize: 17 },
+    swatchLabel: { fontSize: 10.5, color: colors.text, textAlign: 'center' },
+    closeBtn: { marginTop: 18, paddingVertical: 12, borderRadius: radius.md, backgroundColor: colors.primary, alignItems: 'center' },
+    closeText: { fontWeight: '700', fontSize: 14 },
   });
 }
