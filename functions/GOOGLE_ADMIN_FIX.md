@@ -1,0 +1,1 @@
+Temporary implementation note: existing admin Google accounts must map to their existing users/{uid} identity; never create a duplicate admin profile.
