@@ -1,93 +1,182 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Linking, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { signInWithCredential, GoogleAuthProvider } from 'firebase/auth';
 import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
-import { useTheme } from "../theme/ThemeContext";
+import { useTheme } from '../theme/ThemeContext';
 import HeaderDecor from '../components/HeaderDecor';
+import PhoneCountryPicker from '../components/PhoneCountryPicker';
+import { DEFAULT_PHONE_COUNTRY } from '../data/phoneCountries';
+import * as emailVerification from '../firebase/emailVerification';
+import * as phoneVerification from '../firebase/phoneVerification';
+import * as securityPinService from '../firebase/securityPinService';
+import { auth } from '../firebase/config';
+import { getGoogleIdToken } from '../firebase/googleAuth';
 
-// Shown right after a brand-new Google account's first sign-in
-// (doGoogleLogin in AppContext.js catches ensureGoogleProfile's
-// PHONE_REQUIRED, see functions/googleAuth.js) - Google itself never hands
-// us a phone number, but every MySheba account needs one, unique to that
-// account. completeGooglePhone (AppContext.js) reuses the Google
-// credential already signed in from that first attempt, so this only ever
-// needs the phone number itself, not a redo of the Google picker.
+// New Google accounts follow one deterministic onboarding sequence:
+// Google -> verify the real Google email (link OR 6-digit OTP) -> verify a
+// phone number by SMS OTP -> create the MySheba profile -> set the security
+// PIN. The existing Google credential is preserved by re-authenticating with
+// Google after an email-link verification, because confirmEmailLink uses a
+// temporary email-link identity internally.
 export default function GooglePhoneScreen() {
-  const {
-    colors,
-    brandGradient
-  } = useTheme();
-
+  const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
   const { completeGooglePhone, cancelGooglePhone, authError, authBusy } = useApp();
+  const [step, setStep] = useState('email');
+  const [emailCode, setEmailCode] = useState('');
+  const [emailSent, setEmailSent] = useState(false);
+  const [email, setEmail] = useState(auth.currentUser?.email || '');
   const [phone, setPhone] = useState('');
+  const [phoneCountry, setPhoneCountry] = useState(DEFAULT_PHONE_COUNTRY);
+  const [countryPicker, setCountryPicker] = useState(false);
+  const [phoneCode, setPhoneCode] = useState('');
+  const [phoneConfirmation, setPhoneConfirmation] = useState(null);
+  const [pin, setPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
   const [localError, setLocalError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
 
-  const onSubmit = async () => {
-    if (String(phone).replace(/[^0-9]/g, '').length < 8) {
-      setLocalError('Please enter a valid phone number.');
-      return;
-    }
-    setLocalError('');
-    await completeGooglePhone(phone.trim());
+  const sendEmail = async () => {
+    const address = String(email || auth.currentUser?.email || '').trim();
+    if (!address) { setLocalError('We could not find your Google email. Please start Google sign-in again.'); return; }
+    setLocalError(''); setBusy(true);
+    try {
+      await emailVerification.sendEmailOtp(address);
+      setEmailSent(true); setEmailCode('');
+    } catch (e) { setLocalError(e.message || 'Could not send the email verification. Please try again.'); }
+    finally { setBusy(false); }
   };
+
+  const verifyEmailOtp = async () => {
+    if (!/^\d{6}$/.test(emailCode.trim())) { setLocalError('Enter the 6-digit email verification code.'); return; }
+    setLocalError(''); setBusy(true);
+    try {
+      await emailVerification.verifyEmailOtp(email.trim(), emailCode.trim());
+      setEmailVerified(true); setStep('phone'); setLocalError('');
+    } catch (e) { setLocalError(e.message || 'Could not verify the email code. Please try again.'); }
+    finally { setBusy(false); }
+  };
+
+  const verifyEmailLink = async (url) => {
+    setLocalError(''); setBusy(true);
+    try {
+      await emailVerification.confirmEmailLink(url, email.trim());
+      // confirmEmailLink temporarily signs in with the email-link identity
+      // and then signs out. Restore the original Google Auth identity before
+      // continuing the Google onboarding flow.
+      const googleToken = await getGoogleIdToken();
+      await signInWithCredential(auth, GoogleAuthProvider.credential(googleToken));
+      setEmailVerified(true); setStep('phone');
+    } catch (e) { setLocalError(e.message || 'Could not verify your email link. Please try again.'); }
+    finally { setBusy(false); }
+  };
+
+  useEffect(() => {
+    if (step !== 'email' || !emailSent) return undefined;
+    const handleUrl = (url) => { if (emailVerification.isEmailSignInLink(url)) verifyEmailLink(url); };
+    Linking.getInitialURL().then((url) => { if (url) handleUrl(url); }).catch(() => {});
+    const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url));
+    return () => sub.remove();
+  }, [step, emailSent, email]);
+
+  const sendPhone = async () => {
+    if (String(phone).replace(/[^0-9]/g, '').length < 8) { setLocalError('Please enter a valid phone number.'); return; }
+    setLocalError(''); setBusy(true);
+    try {
+      const confirmation = await phoneVerification.sendPhoneOtp(phone, phoneCountry.dial);
+      setPhoneConfirmation(confirmation); setPhoneCode(''); setStep('phoneOtp');
+    } catch (e) { setLocalError(e.message || 'Could not send the SMS verification code. Please try again.'); }
+    finally { setBusy(false); }
+  };
+
+  const verifyPhone = async () => {
+    if (!/^\d{6}$/.test(phoneCode.trim())) { setLocalError('Enter the 6-digit SMS verification code.'); return; }
+    setLocalError(''); setBusy(true);
+    try {
+      const result = await phoneVerification.confirmPhoneOtp(phoneConfirmation, phoneCode.trim());
+      setPhoneCode('');
+      // completeGooglePhone creates the customer profile using the already
+      // authenticated Google UID and verified phone. Only after that exists
+      // can the server-side security PIN be attached to users/{uid}.
+      await completeGooglePhone(phone.trim());
+      setStep('pin');
+      setLocalError('');
+    } catch (e) { setLocalError(e.message || 'Could not complete phone verification. Please try again.'); }
+    finally { setBusy(false); }
+  };
+
+  const finishPin = async () => {
+    if (!/^\d{4,8}$/.test(pin.trim())) { setLocalError('PIN must be 4-8 digits.'); return; }
+    if (pin !== confirmPin) { setLocalError('PINs do not match.'); return; }
+    setLocalError(''); setBusy(true);
+    try {
+      await securityPinService.setupSecurityPin(pin.trim());
+      setStep('done');
+    } catch (e) { setLocalError(e.message || 'Could not set your security PIN. Please try again.'); }
+    finally { setBusy(false); }
+  };
+
+  const busyNow = busy || authBusy;
 
   return (
     <View style={styles.screen}>
       <LinearGradient colors={brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
         <HeaderDecor />
-        <Text style={styles.headerTitle}>One Last Step</Text>
+        <Text style={styles.headerTitle}>Finish Google Sign-Up</Text>
       </LinearGradient>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+        {step === 'email' && <>
+          <Text style={styles.stepTitle}>Verify Your Email</Text>
+          <Text style={styles.intro}>Confirm your Google email before we create your MySheba account. We send one email containing a verification link and a 6-digit OTP. Either one works.</Text>
+          <View style={styles.formGroup}><Text style={styles.label}>Google Email</Text><TextInput style={styles.input} value={email} editable={false} autoCapitalize="none"/></View>
+          {!emailSent ? <TouchableOpacity style={[styles.btn, busyNow && styles.btnDisabled]} onPress={sendEmail} disabled={busyNow}>{busyNow ? <ActivityIndicator color="#fff"/> : <Text style={styles.btnText}>Send Email Link + OTP</Text>}</TouchableOpacity> : <>
+            <View style={styles.formGroup}><Text style={styles.label}>6-digit Email OTP</Text><TextInput style={styles.otpInput} placeholder="123456" placeholderTextColor="#999" keyboardType="number-pad" maxLength={6} value={emailCode} onChangeText={setEmailCode}/></View>
+            <TouchableOpacity style={[styles.btn, busyNow && styles.btnDisabled]} onPress={verifyEmailOtp} disabled={busyNow}>{busyNow ? <ActivityIndicator color="#fff"/> : <Text style={styles.btnText}>Verify Email OTP</Text>}</TouchableOpacity>
+            <Text style={styles.methodHint}>Or tap the verification link from the same email.</Text>
+            <TouchableOpacity style={styles.resendBtn} onPress={sendEmail} disabled={busyNow}><Text style={styles.resendText}>Send link + OTP again</Text></TouchableOpacity>
+          </>}
+        </>}
 
-      <View style={styles.body}>
-        <Text style={styles.intro}>
-          Every MySheba account needs a mobile number. Enter yours to finish setting up your account.
-        </Text>
+        {step === 'phone' && <>
+          <Text style={styles.stepTitle}>Add Your Phone Number</Text>
+          <Text style={styles.intro}>Your phone number is required for your MySheba account and will be verified by SMS OTP.</Text>
+          <View style={styles.formGroup}><Text style={styles.label}>Phone Number</Text><View style={styles.phoneRow}>
+            <TouchableOpacity onPress={() => setCountryPicker(true)} style={styles.countryButton}><Text style={styles.countryFlag}>{phoneCountry.flag}</Text><Text style={styles.countryName} numberOfLines={1}>{phoneCountry.name}</Text><Text style={styles.countryDial}>{phoneCountry.dial}</Text><Text style={styles.countryChevron}>▾</Text></TouchableOpacity>
+            <TextInput style={styles.phoneInput} placeholder="Phone number" placeholderTextColor="#999" keyboardType="phone-pad" value={phone} onChangeText={setPhone}/>
+          </View></View>
+          <TouchableOpacity style={[styles.btn, busyNow && styles.btnDisabled]} onPress={sendPhone} disabled={busyNow}>{busyNow ? <ActivityIndicator color="#fff"/> : <Text style={styles.btnText}>Send SMS OTP</Text>}</TouchableOpacity>
+        </>}
 
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Phone Number</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Phone number"
-            keyboardType="phone-pad"
-            value={phone}
-            onChangeText={setPhone}
-            autoFocus
-          />
-          <Text style={styles.hint}>This number can only be used for one account.</Text>
-        </View>
+        {step === 'phoneOtp' && <>
+          <Text style={styles.stepTitle}>Verify Your Phone</Text>
+          <Text style={styles.intro}>Enter the 6-digit SMS code sent to {phoneCountry.dial} {phone}.</Text>
+          <View style={styles.formGroup}><Text style={styles.label}>SMS OTP</Text><TextInput style={styles.otpInput} placeholder="123456" placeholderTextColor="#999" keyboardType="number-pad" maxLength={6} value={phoneCode} onChangeText={setPhoneCode}/></View>
+          <TouchableOpacity style={[styles.btn, busyNow && styles.btnDisabled]} onPress={verifyPhone} disabled={busyNow}>{busyNow ? <ActivityIndicator color="#fff"/> : <Text style={styles.btnText}>Verify Phone & Continue</Text>}</TouchableOpacity>
+          <TouchableOpacity style={styles.resendBtn} onPress={sendPhone} disabled={busyNow}><Text style={styles.resendText}>Resend SMS OTP</Text></TouchableOpacity>
+        </>}
+
+        {step === 'pin' && <>
+          <Text style={styles.stepTitle}>Set Your MySheba PIN</Text>
+          <Text style={styles.intro}>Create a 4-8 digit security PIN. You can use it to unlock protected actions and as a backup to biometric unlock.</Text>
+          <View style={styles.formGroup}><Text style={styles.label}>PIN</Text><TextInput style={styles.otpInput} placeholder="••••" placeholderTextColor="#777" keyboardType="number-pad" secureTextEntry maxLength={8} value={pin} onChangeText={setPin}/></View>
+          <View style={styles.formGroup}><Text style={styles.label}>Confirm PIN</Text><TextInput style={styles.otpInput} placeholder="••••" placeholderTextColor="#777" keyboardType="number-pad" secureTextEntry maxLength={8} value={confirmPin} onChangeText={setConfirmPin}/></View>
+          <TouchableOpacity style={[styles.btn, busyNow && styles.btnDisabled]} onPress={finishPin} disabled={busyNow}>{busyNow ? <ActivityIndicator color="#fff"/> : <Text style={styles.btnText}>Set PIN & Continue</Text>}</TouchableOpacity>
+        </>}
+
+        {step === 'done' && <View><Text style={styles.stepTitle}>Account Ready</Text><Text style={styles.intro}>Your Google account, email, phone number and PIN are now verified. MySheba will continue to your Home screen and offer biometric unlock if your device supports it.</Text></View>}
 
         {!!(localError || authError) && <Text style={styles.errorText}>{localError || authError}</Text>}
-
-        <TouchableOpacity style={[styles.btn, authBusy && styles.btnDisabled]} onPress={onSubmit} disabled={authBusy}>
-          {authBusy ? <ActivityIndicator color="white" /> : <Text style={styles.btnText}>Continue</Text>}
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.cancelBtn} onPress={cancelGooglePhone} disabled={authBusy}>
-          <Text style={styles.cancelText}>Cancel and sign out</Text>
-        </TouchableOpacity>
-      </View>
+        <TouchableOpacity style={styles.cancelBtn} onPress={cancelGooglePhone} disabled={busyNow}><Text style={styles.cancelText}>Cancel and sign out</Text></TouchableOpacity>
+      </ScrollView>
+      <PhoneCountryPicker visible={countryPicker} value={phoneCountry} onSelect={(c) => { setPhoneCountry(c); setCountryPicker(false); }} onClose={() => setCountryPicker(false)} />
     </View>
   );
 }
 
 function createStyles(colors) {
   return StyleSheet.create({
-    screen: { flex: 1, backgroundColor: colors.bg },
-    header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, backgroundColor: colors.primary, overflow: 'hidden' },
-    headerTitle: { color: 'white', fontWeight: '600', fontSize: 16 },
-    body: { padding: 20 },
-    intro: { fontSize: 13, color: '#666', marginBottom: 20, textAlign: 'center', lineHeight: 19 },
-    formGroup: { marginBottom: 14 },
-    label: { fontWeight: '500', marginBottom: 5, fontSize: 13 },
-    hint: { fontSize: 11, color: '#888', marginTop: 5 },
-    input: { width: '100%', paddingVertical: 12, paddingHorizontal: 14, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, fontSize: 14, backgroundColor: 'white' },
-    btn: { backgroundColor: colors.primary, paddingVertical: 12, borderRadius: radius.md, alignItems: 'center' },
-    btnDisabled: { opacity: 0.6 },
-    btnText: { color: 'white', fontWeight: '600', fontSize: 14 },
-    errorText: { color: colors.error, fontSize: 12, marginTop: 10, textAlign: 'center' },
-    cancelBtn: { alignItems: 'center', marginTop: 24 },
-    cancelText: { color: '#999', fontSize: 12, fontWeight: '500' },
-  });
+    screen:{flex:1,backgroundColor:colors.bg},scroll:{flex:1,backgroundColor:colors.bg},header:{flexDirection:'row',alignItems:'center',gap:10,padding:12,backgroundColor:colors.primary,overflow:'hidden'},headerTitle:{color:colors.onPrimary,fontWeight:'700',fontSize:16},body:{padding:20,paddingBottom:40},stepTitle:{fontSize:19,fontWeight:'800',color:colors.text,textAlign:'center',marginBottom:10},intro:{fontSize:13,color:colors.textSecondary,marginBottom:20,textAlign:'center',lineHeight:20},formGroup:{marginBottom:14},label:{fontWeight:'700',marginBottom:7,fontSize:13,color:colors.text},input:{width:'100%',paddingVertical:13,paddingHorizontal:14,borderWidth:1,borderColor:colors.border,borderRadius:radius.md,fontSize:14,backgroundColor:colors.inputBg,color:colors.text},phoneRow:{flexDirection:'row',alignItems:'stretch',gap:7},countryButton:{minHeight:48,borderWidth:1,borderColor:colors.border,borderRadius:radius.md,backgroundColor:colors.inputBg,paddingHorizontal:9,flexDirection:'row',alignItems:'center',maxWidth:'58%'},countryFlag:{fontSize:19},countryName:{color:colors.text,fontSize:12,fontWeight:'700',marginLeft:6,flexShrink:1},countryDial:{color:colors.text,fontSize:12,fontWeight:'800',marginLeft:5},countryChevron:{color:colors.textSecondary,fontSize:14,marginLeft:5},phoneInput:{flex:1,minWidth:0,paddingVertical:13,paddingHorizontal:12,borderWidth:1,borderColor:colors.border,borderRadius:radius.md,fontSize:14,backgroundColor:colors.inputBg,color:colors.text},otpInput:{width:'100%',paddingVertical:15,paddingHorizontal:14,borderWidth:1,borderColor:colors.border,borderRadius:radius.md,fontSize:20,letterSpacing:5,textAlign:'center',backgroundColor:colors.inputBg,color:colors.text},btn:{backgroundColor:colors.primary,paddingVertical:14,borderRadius:radius.md,alignItems:'center'},btnDisabled:{opacity:.6},btnText:{color:'#fff',fontWeight:'800',fontSize:14},methodHint:{fontSize:12,color:colors.textSecondary,marginVertical:14,textAlign:'center',lineHeight:19},resendBtn:{alignItems:'center',marginTop:15},resendText:{color:colors.primary,fontSize:13,fontWeight:'700',textDecorationLine:'underline'},errorText:{color:colors.error,fontSize:12,marginTop:10,textAlign:'center'},cancelBtn:{alignItems:'center',marginTop:28},cancelText:{color:colors.textSecondary,fontSize:12,fontWeight:'600'}});
 }
