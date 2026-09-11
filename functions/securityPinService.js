@@ -2,6 +2,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const crypto = require('crypto');
 const admin = require('firebase-admin');
+const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 const { logAudit, logServerError } = require('./logService');
 
 const MAX_ATTEMPTS = 5;
@@ -22,12 +23,12 @@ exports.setupSecurityPin = onCall(async (request) => {
   const uid = requireAuth(request);
   const { pin } = request.data || {};
   if (!isValidPin(pin)) throw new HttpsError('invalid-argument', 'PIN must be 4-8 digits.');
-  const db = admin.firestore(); const ref = pinDocRef(db, uid);
+  const db = getFirestore(); const ref = pinDocRef(db, uid);
   try {
     const existing = await ref.get();
     if (existing.exists) throw new HttpsError('already-exists', 'A security PIN is already set. Use reset instead.');
     const salt = crypto.randomBytes(16).toString('hex');
-    await ref.set({ hash: hashPin(pin, salt), salt, attempts: 0, lockedUntil: null, createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    await ref.set({ hash: hashPin(pin, salt), salt, attempts: 0, lockedUntil: null, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
     await db.collection('users').doc(uid).set({ securityPinSet: true }, { merge: true });
     await logAudit({ action: 'security_pin_setup', targetUid: uid, performedBy: uid, performedByRole: 'self', details: {} });
     return { ok: true };
@@ -42,7 +43,7 @@ exports.verifySecurityPin = onCall(async (request) => {
   const uid = requireAuth(request);
   const { pin } = request.data || {};
   if (!isValidPin(pin)) throw new HttpsError('invalid-argument', 'Enter your PIN.');
-  const db = admin.firestore(); const ref = pinDocRef(db, uid);
+  const db = getFirestore(); const ref = pinDocRef(db, uid);
   try {
     const snap = await ref.get();
     if (!snap.exists) throw new HttpsError('failed-precondition', 'No security PIN is set up yet.');
@@ -77,7 +78,7 @@ exports.verifySecurityPin = onCall(async (request) => {
     const patch = { attempts };
     if (attempts >= MAX_ATTEMPTS) {
       patch.attempts = 0;
-      patch.lockedUntil = admin.firestore.Timestamp.fromMillis(Date.now() + LOCKOUT_MINUTES * 60000);
+      patch.lockedUntil = Timestamp.fromMillis(Date.now() + LOCKOUT_MINUTES * 60000);
     }
     await ref.update(patch);
     if (patch.lockedUntil) throw new HttpsError('resource-exhausted', `Too many attempts. Try again in ${LOCKOUT_MINUTES} minutes.`);
@@ -85,7 +86,7 @@ exports.verifySecurityPin = onCall(async (request) => {
   } catch (err) {
     if (err instanceof HttpsError) throw err;
     await logServerError('verifySecurityPin', err, { userId: uid });
-    throw new HttpsError('internal', 'Could not verify your PIN. Please try again.');
+    throw new HttpsError('internal', 'Could not verify your security PIN. Please try again.');
   }
 });
 
@@ -93,10 +94,10 @@ exports.resetSecurityPin = onCall(async (request) => {
   const uid = requireAuth(request);
   const { pin } = request.data || {};
   if (!isValidPin(pin)) throw new HttpsError('invalid-argument', 'PIN must be 4-8 digits.');
-  const db = admin.firestore(); const ref = pinDocRef(db, uid);
+  const db = getFirestore(); const ref = pinDocRef(db, uid);
   try {
     const salt = crypto.randomBytes(16).toString('hex');
-    await ref.set({ hash: hashPin(pin, salt), salt, attempts: 0, lockedUntil: null, createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: false });
+    await ref.set({ hash: hashPin(pin, salt), salt, attempts: 0, lockedUntil: null, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }, { merge: false });
     await db.collection('users').doc(uid).set({ securityPinSet: true }, { merge: true });
     await logAudit({ action: 'security_pin_reset', targetUid: uid, performedBy: uid, performedByRole: 'self', details: {} });
     return { ok: true };
