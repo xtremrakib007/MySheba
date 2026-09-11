@@ -1,6 +1,10 @@
 User-agent: *
 Allow: /
 
+# Allow Google's ad crawlers to verify ads.txt/app-ads.txt.
+User-agent: Google-adstxt
+Disallow:
+
 Disallow: /admin/
 Disallow: /login/
 Disallow: /dashboard/
