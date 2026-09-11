@@ -15,15 +15,7 @@ import { functions } from '../firebase/config';
 export default function DeviceVerifyScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const {
-    profile,
-    pendingDeviceVerification,
-    setScreen,
-    authError,
-    authBusy,
-    cancelDeviceVerification,
-  } = useApp();
-
+  const { profile, pendingDeviceVerification, setScreen, authError, authBusy, cancelDeviceVerification } = useApp();
   const email = pendingDeviceVerification?.email || profile?.email || '';
   const phone = pendingDeviceVerification?.phone || profile?.phone || '';
   const [method, setMethod] = useState('email');
@@ -35,7 +27,6 @@ export default function DeviceVerifyScreen() {
   const [sent, setSent] = useState(false);
   const [phoneConfirmation, setPhoneConfirmation] = useState(null);
   const [verifiedCredential, setVerifiedCredential] = useState(null);
-
   const needsPin = !!profile?.securityPinSet;
 
   const homeForRole = (role) => {
@@ -50,33 +41,34 @@ export default function DeviceVerifyScreen() {
     try {
       const deviceId = await deviceSessionService.getDeviceId();
       await httpsCallable(functions, 'sendDeviceVerification')({ deviceId });
-      setSent(true);
-      setCode('');
-    } catch (e) {
-      setLocalError(e.message || 'Could not send the verification email. Please try again.');
-    } finally { setBusy(false); }
+      setSent(true); setCode('');
+    } catch (e) { setLocalError(e.message || 'Could not send the verification email. Please try again.'); }
+    finally { setBusy(false); }
   };
 
   const sendSms = async () => {
     setLocalError(''); setBusy(true);
     try {
       const confirmation = await phoneVerification.sendPhoneOtp(phone);
-      setPhoneConfirmation(confirmation);
-      setSent(true);
-      setCode('');
-    } catch (e) {
-      setLocalError(e.message || 'Could not send the SMS verification code. Please try again.');
-    } finally { setBusy(false); }
+      setPhoneConfirmation(confirmation); setSent(true); setCode('');
+    } catch (e) { setLocalError(e.message || 'Could not send the SMS verification code. Please try again.'); }
+    finally { setBusy(false); }
+  };
+
+  const requirePinOrApprove = async (credential) => {
+    setVerifiedCredential(credential);
+    if (needsPin) {
+      setStep('pin');
+      return;
+    }
+    await approveDevice(credential);
   };
 
   const verifyEmailOtp = async () => {
     if (!/^\d{6}$/.test(code.trim())) { setLocalError('Enter the 6-digit email verification code.'); return; }
     setLocalError(''); setBusy(true);
-    try {
-      setVerifiedCredential({ emailOtp: code.trim() });
-      setStep(needsPin ? 'pin' : 'complete');
-      if (!needsPin) await approveDevice({ emailOtp: code.trim() });
-    } catch (e) { setLocalError(e.message || 'Could not verify the email code. Please try again.'); }
+    try { await requirePinOrApprove({ emailOtp: code.trim() }); }
+    catch (e) { setLocalError(e.message || 'Could not verify the email code. Please try again.'); }
     finally { setBusy(false); }
   };
 
@@ -84,9 +76,7 @@ export default function DeviceVerifyScreen() {
     setLocalError(''); setBusy(true);
     try {
       const result = await emailVerification.confirmEmailLink(url, email);
-      setVerifiedCredential({ emailIdToken: result.idToken });
-      if (needsPin) setStep('pin');
-      else await approveDevice({ emailIdToken: result.idToken });
+      await requirePinOrApprove({ emailIdToken: result.idToken });
     } catch (e) { setLocalError(e.message || 'Could not verify your email link. Please try again.'); }
     finally { setBusy(false); }
   };
@@ -96,9 +86,7 @@ export default function DeviceVerifyScreen() {
     setLocalError(''); setBusy(true);
     try {
       const result = await phoneVerification.confirmPhoneOtp(phoneConfirmation, code.trim());
-      setVerifiedCredential({ phoneIdToken: result.idToken });
-      if (needsPin) setStep('pin');
-      else await approveDevice({ phoneIdToken: result.idToken });
+      await requirePinOrApprove({ phoneIdToken: result.idToken });
     } catch (e) { setLocalError(e.message || 'Could not verify the SMS code. Please try again.'); }
     finally { setBusy(false); }
   };
@@ -106,15 +94,13 @@ export default function DeviceVerifyScreen() {
   async function approveDevice(credential = verifiedCredential) {
     setLocalError(''); setBusy(true);
     try {
-      if (needsPin && step === 'pin') {
+      if (needsPin) {
         if (!/^\d{4,8}$/.test(pin.trim())) {
           setLocalError('Enter your 4-8 digit security PIN.');
-          setBusy(false);
           return;
         }
         await securityPinService.verifySecurityPin(pin.trim());
       }
-
       const deviceId = await deviceSessionService.getDeviceId();
       const fn = httpsCallable(functions, 'confirmDeviceEmailOtp');
       const { data } = await fn({
@@ -148,41 +134,27 @@ export default function DeviceVerifyScreen() {
 
   return <View style={styles.screen}>
     <LinearGradient colors={brandGradient} start={{x:0,y:0}} end={{x:1,y:0}} style={styles.header}>
-      <HeaderDecor />
-      <Text style={styles.headerTitle}>Verify This Device</Text>
+      <HeaderDecor /><Text style={styles.headerTitle}>Verify This Device</Text>
     </LinearGradient>
     <ScrollView style={styles.scroll} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
       {step === 'verify' ? <>
         <View style={styles.methodToggle}>
-          <TouchableOpacity style={[styles.methodBtn, method === 'email' && styles.methodBtnActive]} onPress={() => switchMethod('email')} disabled={busy}>
-            <Text style={[styles.methodBtnText, method === 'email' && styles.methodBtnTextActive]}>Email</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.methodBtn, method === 'sms' && styles.methodBtnActive]} onPress={() => switchMethod('sms')} disabled={busy}>
-            <Text style={[styles.methodBtnText, method === 'sms' && styles.methodBtnTextActive]}>SMS</Text>
-          </TouchableOpacity>
+          <TouchableOpacity style={[styles.methodBtn, method === 'email' && styles.methodBtnActive]} onPress={() => switchMethod('email')} disabled={busy}><Text style={[styles.methodBtnText, method === 'email' && styles.methodBtnTextActive]}>Email</Text></TouchableOpacity>
+          <TouchableOpacity style={[styles.methodBtn, method === 'sms' && styles.methodBtnActive]} onPress={() => switchMethod('sms')} disabled={busy}><Text style={[styles.methodBtnText, method === 'sms' && styles.methodBtnTextActive]}>SMS</Text></TouchableOpacity>
         </View>
-
         {method === 'email' ? <>
           <Text style={styles.intro}>We will send one email containing a verification link and a 6-digit code to {email || 'your email'}. Use either one.</Text>
-          {!sent ? <TouchableOpacity style={[styles.btn, busy && styles.btnDisabled]} onPress={sendEmail} disabled={busy}>
-            {busy ? <ActivityIndicator color="#fff"/> : <Text style={styles.btnText}>Send Email Verification</Text>}
-          </TouchableOpacity> : <>
+          {!sent ? <TouchableOpacity style={[styles.btn, busy && styles.btnDisabled]} onPress={sendEmail} disabled={busy}>{busy ? <ActivityIndicator color="#fff"/> : <Text style={styles.btnText}>Send Email Verification</Text>}</TouchableOpacity> : <>
             <Text style={styles.methodHint}>Tap the link in the email, or enter the 6-digit code below.</Text>
             <View style={styles.formGroup}><Text style={styles.label}>Email verification code</Text><TextInput style={styles.otpInput} placeholder="123456" placeholderTextColor="#999" keyboardType="number-pad" maxLength={6} value={code} onChangeText={setCode}/></View>
-            <TouchableOpacity style={[styles.btn, busy && styles.btnDisabled]} onPress={verifyEmailOtp} disabled={busy}>
-              {busy ? <ActivityIndicator color="#fff"/> : <Text style={styles.btnText}>Verify Email Code</Text>}
-            </TouchableOpacity>
+            <TouchableOpacity style={[styles.btn, busy && styles.btnDisabled]} onPress={verifyEmailOtp} disabled={busy}>{busy ? <ActivityIndicator color="#fff"/> : <Text style={styles.btnText}>Verify Email Code</Text>}</TouchableOpacity>
             <TouchableOpacity style={styles.resendBtn} onPress={sendEmail} disabled={busy}><Text style={styles.resendText}>Send link + code again</Text></TouchableOpacity>
           </>}
         </> : <>
           <Text style={styles.intro}>We will send a 6-digit SMS verification code to {phone || 'your phone number'}.</Text>
-          {!sent ? <TouchableOpacity style={[styles.btn, busy && styles.btnDisabled]} onPress={sendSms} disabled={busy}>
-            {busy ? <ActivityIndicator color="#fff"/> : <Text style={styles.btnText}>Send SMS Code</Text>}
-          </TouchableOpacity> : <>
+          {!sent ? <TouchableOpacity style={[styles.btn, busy && styles.btnDisabled]} onPress={sendSms} disabled={busy}>{busy ? <ActivityIndicator color="#fff"/> : <Text style={styles.btnText}>Send SMS Code</Text>}</TouchableOpacity> : <>
             <View style={styles.formGroup}><Text style={styles.label}>SMS verification code</Text><TextInput style={styles.otpInput} placeholder="123456" placeholderTextColor="#999" keyboardType="number-pad" maxLength={6} value={code} onChangeText={setCode}/></View>
-            <TouchableOpacity style={[styles.btn, busy && styles.btnDisabled]} onPress={verifySms} disabled={busy}>
-              {busy ? <ActivityIndicator color="#fff"/> : <Text style={styles.btnText}>Verify SMS</Text>}
-            </TouchableOpacity>
+            <TouchableOpacity style={[styles.btn, busy && styles.btnDisabled]} onPress={verifySms} disabled={busy}>{busy ? <ActivityIndicator color="#fff"/> : <Text style={styles.btnText}>Verify SMS</Text>}</TouchableOpacity>
             <TouchableOpacity style={styles.resendBtn} onPress={sendSms} disabled={busy}><Text style={styles.resendText}>Resend SMS</Text></TouchableOpacity>
           </>}
         </>}
@@ -190,11 +162,8 @@ export default function DeviceVerifyScreen() {
         <Text style={styles.stepTitle}>Verify Your Security PIN</Text>
         <Text style={styles.intro}>Your account already has a security PIN. Enter it to finish approving this device.</Text>
         <View style={styles.formGroup}><Text style={styles.label}>Security PIN</Text><TextInput style={styles.otpInput} placeholder="••••" placeholderTextColor="#777" keyboardType="number-pad" secureTextEntry maxLength={8} value={pin} onChangeText={setPin}/></View>
-        <TouchableOpacity style={[styles.btn, busy && styles.btnDisabled]} onPress={() => approveDevice()} disabled={busy}>
-          {busy ? <ActivityIndicator color="#fff"/> : <Text style={styles.btnText}>Verify PIN & Continue</Text>}
-        </TouchableOpacity>
+        <TouchableOpacity style={[styles.btn, busy && styles.btnDisabled]} onPress={() => approveDevice()} disabled={busy}>{busy ? <ActivityIndicator color="#fff"/> : <Text style={styles.btnText}>Verify PIN & Continue</Text>}</TouchableOpacity>
       </> : <ActivityIndicator color={colors.primary} style={{marginTop:30}}/>}
-
       {!!(localError || authError) && <Text style={styles.errorText}>{localError || authError}</Text>}
       <TouchableOpacity style={styles.cancelBtn} onPress={cancelDeviceVerification} disabled={busy}><Text style={styles.cancelText}>Cancel and sign out</Text></TouchableOpacity>
     </ScrollView>
