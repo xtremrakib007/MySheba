@@ -60,40 +60,19 @@
       ["expo-camera", { "cameraPermission": "Allow MySheba to access your camera to scan a contact's QR code and for video calls." }],
       "@react-native-google-signin/google-signin",
       "@react-native-firebase/app",
-      [
-        "react-native-google-mobile-ads",
-        {
-          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
-          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
-        }
-      ],
-      [
-        "react-native-share",
-        {
-          "ios": ["whatsapp", "fb", "instagram", "instagram-stories", "twitter", "linkedin"],
-          "android": ["com.whatsapp", "com.facebook.katana", "com.instagram.android", "com.twitter.android", "com.linkedin.android"]
-        }
-      ],
+      ["react-native-google-mobile-ads", { "androidAppId": "ca-app-pub-3940256099942544~3347511713", "iosAppId": "ca-app-pub-3940256099942544~1458002511" }],
+      ["react-native-share", { "ios": ["whatsapp", "fb", "instagram", "instagram-stories", "twitter", "linkedin"], "android": ["com.whatsapp", "com.facebook.katana", "com.instagram.android", "com.twitter.android", "com.linkedin.android"] }],
       ["expo-location", { "locationWhenInUsePermission": "Allow MySheba to access your location to show nearby listings, properties, and service providers on the map." }],
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "compileSdkVersion": 36,
-            "targetSdkVersion": 36,
-            "buildToolsVersion": "36.0.0",
-            "enableProguardInReleaseBuilds": true,
-            "enableShrinkResourcesInReleaseBuilds": true
-          }
-        }
-      ],
+      ["expo-build-properties", { "android": { "compileSdkVersion": 36, "targetSdkVersion": 36, "buildToolsVersion": "36.0.0", "enableProguardInReleaseBuilds": true, "enableShrinkResourcesInReleaseBuilds": true } }],
       "./plugins/withRemoveUnusedPermissions",
       "./plugins/withFixNotificationColorMerge"
     ],
     "extra": {
       "eas": { "projectId": "5f0bbeb3-e2d9-4a46-af9f-66379fada1c8" },
       "googleWebClientId": "632456211568-v5f370netearu5lb8ld48lhr28erbp9p.apps.googleusercontent.com",
-      "googleMapsApiKey": "GOOGLE_MAPS_API_KEY_PLACEHOLDER"
+      "googleMapsApiKey": "GOOGLE_MAPS_API_KEY_PLACEHOLDER",
+      "admobAndroidBannerId": "ca-app-pub-3940256099942544/9214589741",
+      "admobIosBannerId": "ca-app-pub-3940256099942544/2934735716"
     },
     "owner": "xtremrakib5s-team"
   }
