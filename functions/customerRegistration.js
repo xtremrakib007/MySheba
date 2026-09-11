@@ -93,7 +93,18 @@ exports.registerWithDealerCode = onCall(async (request) => {
   const authEmail = phoneToEmail(phoneE164 || phone);
   let userRecord;
   try {
-    userRecord = await admin.auth().createUser({ email: authEmail, password: pin, displayName: name.trim() });
+    // IMPORTANT: the real email address has already been verified by either
+    // the Firebase email-link flow or the server-issued 6-digit OTP above.
+    // The Firebase Auth account we create for phone+PIN login uses a
+    // deterministic internal email, so it must inherit that verified state.
+    // Otherwise the account is born with emailVerified=false and the user
+    // can be asked to verify the same email a SECOND time after registration.
+    userRecord = await admin.auth().createUser({
+      email: authEmail,
+      password: pin,
+      displayName: name.trim(),
+      emailVerified: true,
+    });
   } catch (err) {
     if (err.code === 'auth/email-already-exists') throw new HttpsError('already-exists', 'An account with this phone number already exists.');
     await logServerError('registerWithDealerCode', err, { userId: null });
