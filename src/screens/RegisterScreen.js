@@ -235,7 +235,10 @@ export default function RegisterScreen() {
 }
 
 function Field({ label, value, setValue, placeholder, styles, otp, ...props }) {
-  return <View style={styles.formGroup}><Text style={styles.label}>{label}</Text><TextInput style={otp ? styles.otpInput : styles.input} placeholder={placeholder} placeholderTextColor={styles.placeholderColor} value={value} onChangeText={setValue} autoCorrect={false} {...props} /></View>;
+  return <View style={styles.formGroup}>
+    <Text style={styles.label}>{label}</Text>
+    <TextInput style={otp ? styles.otpInput : styles.input} placeholder={placeholder} placeholderTextColor={styles.placeholderColor} value={value} onChangeText={setValue} autoCorrect={false} {...props} />
+  </View>;
 }
 
 function createStyles(colors) {
