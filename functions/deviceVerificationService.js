@@ -2,6 +2,8 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const crypto = require('crypto');
 const admin = require('firebase-admin');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
+const { assertEmailVerified } = require('./emailVerification');
+const { assertPhoneVerified } = require('./phoneVerification');
 const mailerService = require('./mailerService');
 
 const TTL_MS = 10 * 60 * 1000;
@@ -75,8 +77,9 @@ exports.confirmDeviceEmailOtp = onCall(async (request) => {
   const uid = requireAuth(request);
   const deviceId = String(request.data?.deviceId || '').trim();
   const otp = String(request.data?.code || '').trim();
+  const emailIdToken = typeof request.data?.emailIdToken === 'string' ? request.data.emailIdToken : '';
+  const phoneIdToken = typeof request.data?.phoneIdToken === 'string' ? request.data.phoneIdToken : '';
   if (!deviceId || deviceId.length > 100) throw new HttpsError('invalid-argument', 'Missing or invalid device id.');
-  if (!/^\d{6}$/.test(otp)) throw new HttpsError('invalid-argument', 'Please enter the 6-digit verification code.');
 
   const db = getFirestore();
   const userRef = ref(db, uid);
@@ -84,16 +87,47 @@ exports.confirmDeviceEmailOtp = onCall(async (request) => {
   if (!snap.exists) throw new HttpsError('not-found', 'No profile found for this account.');
   const data = snap.data();
   const pending = data.pendingDeviceApproval;
-  const challenge = data.pendingDeviceEmailChallenge;
-  if (!pending || pending.deviceId !== deviceId || !challenge || challenge.deviceId !== deviceId) {
-    throw new HttpsError('failed-precondition', 'No active verification challenge. Please request a new email.');
+  if (!pending || pending.deviceId !== deviceId) {
+    throw new HttpsError('failed-precondition', 'No pending verification for this device. Please sign in again.');
   }
-  if (challenge.expiresAt?.toMillis?.() < Date.now()) throw new HttpsError('deadline-exceeded', 'That verification code expired. Request a new email.');
-  if ((challenge.attempts || 0) >= MAX_ATTEMPTS) throw new HttpsError('resource-exhausted', 'Too many attempts. Request a new verification email.');
-  if (hash(otp) !== challenge.codeHash) {
-    await userRef.update({ 'pendingDeviceEmailChallenge.attempts': FieldValue.increment(1) });
-    throw new HttpsError('invalid-argument', 'Incorrect verification code.');
+
+  let verified = false;
+  let emailAuthUid = null;
+  let verifiedVia = null;
+
+  if (phoneIdToken) {
+    try {
+      await assertPhoneVerified(phoneIdToken, data.phone || pending.phone || '');
+      verified = true;
+      verifiedVia = 'sms';
+    } catch (err) {
+      throw new HttpsError('failed-precondition', err.message || 'Please verify your phone number first.');
+    }
+  } else if (emailIdToken) {
+    try {
+      emailAuthUid = await assertEmailVerified(emailIdToken, pending.email || data.email || '');
+      verified = true;
+      verifiedVia = 'email_link';
+    } catch (err) {
+      throw new HttpsError('failed-precondition', err.message || 'Please verify your email address first.');
+    }
+  } else {
+    if (!/^\d{6}$/.test(otp)) throw new HttpsError('invalid-argument', 'Please enter the 6-digit verification code.');
+    const challenge = data.pendingDeviceEmailChallenge;
+    if (!challenge || challenge.deviceId !== deviceId) {
+      throw new HttpsError('failed-precondition', 'No active email verification challenge. Please request a new email.');
+    }
+    if (challenge.expiresAt?.toMillis?.() < Date.now()) throw new HttpsError('deadline-exceeded', 'That verification code expired. Request a new email.');
+    if ((challenge.attempts || 0) >= MAX_ATTEMPTS) throw new HttpsError('resource-exhausted', 'Too many attempts. Request a new verification email.');
+    if (hash(otp) !== challenge.codeHash) {
+      await userRef.update({ 'pendingDeviceEmailChallenge.attempts': FieldValue.increment(1) });
+      throw new HttpsError('invalid-argument', 'Incorrect verification code.');
+    }
+    verified = true;
+    verifiedVia = 'email_otp';
   }
+
+  if (!verified) throw new HttpsError('failed-precondition', 'Verification is required.');
 
   const sessionId = crypto.randomBytes(24).toString('hex');
   await userRef.update({
@@ -104,5 +138,7 @@ exports.confirmDeviceEmailOtp = onCall(async (request) => {
     lastLoginAt: FieldValue.serverTimestamp(),
   });
   try { await admin.auth().revokeRefreshTokens(uid); } catch (err) { console.error('[deviceVerification] revoke tokens failed', err); }
+  if (emailAuthUid) await admin.auth().deleteUser(emailAuthUid).catch(() => {});
+  console.log(`[deviceVerification] device approved via ${verifiedVia}`, { uid, deviceId });
   return { requiresOtp: false, sessionId };
 });
