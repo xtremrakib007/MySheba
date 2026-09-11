@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Linking, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { signInWithCredential, GoogleAuthProvider } from 'firebase/auth';
+import { httpsCallable } from 'firebase/functions';
 import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
@@ -11,15 +12,14 @@ import { DEFAULT_PHONE_COUNTRY } from '../data/phoneCountries';
 import * as emailVerification from '../firebase/emailVerification';
 import * as phoneVerification from '../firebase/phoneVerification';
 import * as securityPinService from '../firebase/securityPinService';
-import { auth } from '../firebase/config';
+import { auth, functions } from '../firebase/config';
 import { getGoogleIdToken } from '../firebase/googleAuth';
 
 // New Google accounts follow one deterministic onboarding sequence:
 // Google -> verify the real Google email (link OR 6-digit OTP) -> verify a
 // phone number by SMS OTP -> create the MySheba profile -> set the security
-// PIN. The existing Google credential is preserved by re-authenticating with
-// Google after an email-link verification, because confirmEmailLink uses a
-// temporary email-link identity internally.
+// PIN. Profile creation must happen before setupSecurityPin because the PIN
+// service also updates users/{uid}.
 export default function GooglePhoneScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
@@ -28,11 +28,13 @@ export default function GooglePhoneScreen() {
   const [emailCode, setEmailCode] = useState('');
   const [emailSent, setEmailSent] = useState(false);
   const [email, setEmail] = useState(auth.currentUser?.email || '');
+  const [emailProof, setEmailProof] = useState({ emailIdToken: '', emailOtpVerificationId: '' });
   const [phone, setPhone] = useState('');
   const [phoneCountry, setPhoneCountry] = useState(DEFAULT_PHONE_COUNTRY);
   const [countryPicker, setCountryPicker] = useState(false);
   const [phoneCode, setPhoneCode] = useState('');
   const [phoneConfirmation, setPhoneConfirmation] = useState(null);
+  const [phoneIdToken, setPhoneIdToken] = useState('');
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [localError, setLocalError] = useState('');
@@ -45,7 +47,7 @@ export default function GooglePhoneScreen() {
     setLocalError(''); setBusy(true);
     try {
       await emailVerification.sendEmailOtp(address);
-      setEmailSent(true); setEmailCode('');
+      setEmailSent(true); setEmailCode(''); setEmailProof({ emailIdToken: '', emailOtpVerificationId: '' });
     } catch (e) { setLocalError(e.message || 'Could not send the email verification. Please try again.'); }
     finally { setBusy(false); }
   };
@@ -54,7 +56,8 @@ export default function GooglePhoneScreen() {
     if (!/^\d{6}$/.test(emailCode.trim())) { setLocalError('Enter the 6-digit email verification code.'); return; }
     setLocalError(''); setBusy(true);
     try {
-      await emailVerification.verifyEmailOtp(email.trim(), emailCode.trim());
+      const result = await emailVerification.verifyEmailOtp(email.trim(), emailCode.trim());
+      setEmailProof({ emailIdToken: '', emailOtpVerificationId: result.verificationId });
       setEmailVerified(true); setStep('phone'); setLocalError('');
     } catch (e) { setLocalError(e.message || 'Could not verify the email code. Please try again.'); }
     finally { setBusy(false); }
@@ -63,12 +66,14 @@ export default function GooglePhoneScreen() {
   const verifyEmailLink = async (url) => {
     setLocalError(''); setBusy(true);
     try {
-      await emailVerification.confirmEmailLink(url, email.trim());
+      const result = await emailVerification.confirmEmailLink(url, email.trim());
       // confirmEmailLink temporarily signs in with the email-link identity
       // and then signs out. Restore the original Google Auth identity before
-      // continuing the Google onboarding flow.
+      // continuing the Google onboarding flow, and retain the verified token
+      // as proof for ensureGoogleProfile.
       const googleToken = await getGoogleIdToken();
       await signInWithCredential(auth, GoogleAuthProvider.credential(googleToken));
+      setEmailProof({ emailIdToken: result.idToken, emailOtpVerificationId: '' });
       setEmailVerified(true); setStep('phone');
     } catch (e) { setLocalError(e.message || 'Could not verify your email link. Please try again.'); }
     finally { setBusy(false); }
@@ -94,14 +99,28 @@ export default function GooglePhoneScreen() {
 
   const verifyPhone = async () => {
     if (!/^\d{6}$/.test(phoneCode.trim())) { setLocalError('Enter the 6-digit SMS verification code.'); return; }
+    if (!phoneConfirmation) { setLocalError('This SMS verification session expired. Please resend.'); return; }
     setLocalError(''); setBusy(true);
     try {
       const result = await phoneVerification.confirmPhoneOtp(phoneConfirmation, phoneCode.trim());
+      const token = result?.idToken || '';
+      if (!token) throw new Error('The SMS verification result was incomplete. Please resend the code.');
       setPhoneCode('');
-      // completeGooglePhone creates the customer profile using the already
-      // authenticated Google UID and verified phone. Only after that exists
-      // can the server-side security PIN be attached to users/{uid}.
-      await completeGooglePhone(phone.trim());
+      setPhoneIdToken(token);
+
+      // IMPORTANT: create the real users/{uid} profile now, but do not run
+      // completeGooglePhone yet because it also performs device-session
+      // routing. The PIN must be created before final Home navigation.
+      const ensureProfileFn = httpsCallable(functions, 'ensureGoogleProfile');
+      await ensureProfileFn({
+        phone: phone.trim(),
+        phoneE164: phoneVerification.phoneToE164(phone, phoneCountry.dial),
+        phoneCountryCode: phoneCountry.dial,
+        phoneIdToken: token,
+        emailIdToken: emailProof.emailIdToken || undefined,
+        emailOtpVerificationId: emailProof.emailOtpVerificationId || undefined,
+      });
+
       setStep('pin');
       setLocalError('');
     } catch (e) { setLocalError(e.message || 'Could not complete phone verification. Please try again.'); }
@@ -113,9 +132,15 @@ export default function GooglePhoneScreen() {
     if (pin !== confirmPin) { setLocalError('PINs do not match.'); return; }
     setLocalError(''); setBusy(true);
     try {
+      // Profile already exists from the verified email + SMS step, so the
+      // security PIN service can safely create securityPins/{uid} and update
+      // users/{uid}.securityPinSet.
       await securityPinService.setupSecurityPin(pin.trim());
       setStep('done');
-    } catch (e) { setLocalError(e.message || 'Could not set your security PIN. Please try again.'); }
+      // completeGooglePhone is intentionally LAST: it checks the device
+      // session, stores the local session, and routes to the role dashboard.
+      await completeGooglePhone(phone.trim());
+    } catch (e) { setLocalError(e.message || 'Could not finish your Google account setup. Please try again.'); }
     finally { setBusy(false); }
   };
 
