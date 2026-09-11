@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
@@ -46,23 +47,76 @@ const PRIMARY_SERVICES = SERVICES.slice(0, PRIMARY_COUNT);
 const MORE_SERVICES = [...SERVICES.slice(PRIMARY_COUNT), ...MORE_FEATURES];
 const MORE_FEATURES_TILE = { key: 'moreFeaturesTile', icon: '✨', bg: '#EDE7F6', accent: '#5E35B1', name: 'More Features', kind: 'moreFeaturesLink' };
 
-export function Tile({ s, onPress, disabled }) {
-  const { colors } = useTheme();
+function hexLuminance(hex) {
+  const raw = String(hex || '').replace('#', '');
+  if (raw.length !== 6) return 1;
+  const rgb = [0, 2, 4].map((i) => parseInt(raw.slice(i, i + 2), 16) / 255);
+  const linear = rgb.map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+  return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+}
+
+function contrastText(hex) {
+  return hexLuminance(hex) > 0.55 ? '#000000' : '#FFFFFF';
+}
+
+export function Tile({ s, onPress, disabled, index = 0 }) {
+  const { colors, isDark, gridStyle } = useTheme();
   const { t } = useLanguage();
   const styles = createStyles(colors);
   const label = t(`service.${s.key}`, s.name);
+  const gradientColors = isDark ? [colors.primary, colors.secondary] : [colors.primary, colors.secondary];
+  const gradientText = contrastText(gradientColors[0]);
+  const bento = gridStyle === 'bento' && index % 6 === 0;
+  const adaptive = gridStyle === 'adaptive' && index < 4;
+  const iconBg = isDark ? '#FFFFFF14' : s.bg;
+
+  const content = (
+    <>
+      <View style={[styles.iconWrap, { backgroundColor: iconBg }, (gridStyle === 'neon' || gridStyle === 'gradient') && styles.iconWrapBright]}>
+        <Text style={styles.iconText}>{s.icon}</Text>
+      </View>
+      <Text style={[styles.name, (gridStyle === 'gradient') && { color: gradientText }, (gridStyle === 'neon') && { color: colors.text }]} numberOfLines={2}>{label}</Text>
+    </>
+  );
+
+  const common = [
+    styles.item,
+    { width: bento ? ITEM_WIDTH * 2 + COLUMN_GAP : ITEM_WIDTH },
+    disabled && styles.itemDisabled,
+    adaptive && styles.itemAdaptive,
+  ];
+
+  if (gridStyle === 'gradient') {
+    return (
+      <TouchableOpacity style={common} activeOpacity={0.82} disabled={disabled} onPress={onPress}>
+        <LinearGradient colors={gradientColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradientFill}>
+          {content}
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  }
 
   return (
     <TouchableOpacity
-      style={[styles.item, { width: ITEM_WIDTH, backgroundColor: colors.card }, disabled && styles.itemDisabled]}
-      activeOpacity={0.7}
+      style={[
+        ...common,
+        gridStyle === 'bordered' && styles.bordered,
+        gridStyle === 'classic' && styles.classic,
+        gridStyle === 'soft' && styles.soft,
+        gridStyle === 'minimal' && styles.minimal,
+        gridStyle === 'glass' && styles.glass,
+        gridStyle === 'threeD' && styles.threeD,
+        gridStyle === 'neon' && styles.neon,
+        gridStyle === 'bento' && styles.bento,
+        gridStyle === 'adaptive' && styles.adaptive,
+      ]}
+      activeOpacity={0.82}
       disabled={disabled}
       onPress={onPress}
     >
-      <View style={[styles.iconWrap, { backgroundColor: s.bg }]}> 
-        <Text style={styles.iconText}>{s.icon}</Text>
-      </View>
-      <Text style={styles.name} numberOfLines={2}>{label}</Text>
+      {gridStyle === 'classic' && <View style={[styles.classicBar, { backgroundColor: s.accent }]} />}
+      {gridStyle === 'adaptive' && adaptive && <View style={[styles.adaptiveBar, { backgroundColor: colors.primary }]} />}
+      {content}
     </TouchableOpacity>
   );
 }
@@ -108,9 +162,9 @@ export default function ServiceGrid({ extraTiles = [] }) {
     <View>
       <View style={styles.sectionHead}><Text style={styles.sectionTitle}>🎯 Quick Services</Text></View>
       <View style={styles.grid}>
-        {PRIMARY_SERVICES.map((s) => <Tile key={s.key} s={s} disabled={s.kind === 'webview' && webViewBusy} onPress={() => handlePress(s)} />)}
-        <Tile s={MORE_FEATURES_TILE} onPress={() => handlePress(MORE_FEATURES_TILE)} />
-        {extraTiles.map((t) => <Tile key={t.key} s={t} onPress={t.onPress} />)}
+        {PRIMARY_SERVICES.map((s, index) => <Tile key={s.key} s={s} index={index} disabled={s.kind === 'webview' && webViewBusy} onPress={() => handlePress(s)} />)}
+        <Tile s={MORE_FEATURES_TILE} index={PRIMARY_SERVICES.length} onPress={() => handlePress(MORE_FEATURES_TILE)} />
+        {extraTiles.map((t, index) => <Tile key={t.key} s={t} index={PRIMARY_SERVICES.length + index + 1} onPress={t.onPress} />)}
       </View>
     </View>
   );
@@ -124,24 +178,35 @@ function createStyles(colors) {
     sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.navy },
     grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: GRID_PADDING, gap: COLUMN_GAP },
     item: {
-      height: 92,
+      minHeight: 92,
       borderRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
       paddingVertical: 10,
       paddingHorizontal: 4,
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: 0,
-      shadowColor: '#000000',
-      shadowOpacity: 0.08,
-      shadowRadius: 3,
-      shadowOffset: { width: 0, height: 1 },
-      elevation: 2,
+      overflow: 'hidden',
     },
-    itemDisabled: { opacity: 0.55 },
+    bordered: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+    classic: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}66` },
+    soft: { backgroundColor: isLight(colors) ? '#F7FAFC' : '#101010', borderWidth: 0 },
+    minimal: { backgroundColor: 'transparent', borderWidth: 0 },
+    glass: { backgroundColor: isLight(colors) ? '#FFFFFFD9' : '#FFFFFF12', borderWidth: 1, borderColor: isLight(colors) ? '#FFFFFF' : '#FFFFFF30', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 3 },
+    threeD: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}55`, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 0, shadowOffset: { width: 0, height: 4 }, elevation: 5, transform: [{ translateY: -1 }] },
+    neon: { backgroundColor: isLight(colors) ? '#10151A' : '#080A0C', borderWidth: 1, borderColor: `${colors.primary}99`, shadowColor: colors.primary, shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 4 },
+    bento: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}55`, minHeight: 108, paddingHorizontal: 8 },
+    adaptive: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}44` },
+    itemAdaptive: { shadowColor: colors.primary, shadowOpacity: 0.18, shadowRadius: 7, shadowOffset: { width: 0, height: 2 }, elevation: 4 },
+    classicBar: { position: 'absolute', top: 0, left: 0, right: 0, height: 4 },
+    adaptiveBar: { position: 'absolute', top: 0, left: 0, right: 0, height: 3 },
+    gradientFill: { flex: 1, width: '100%', minHeight: 92, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 4 },
     iconWrap: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+    iconWrapBright: { borderWidth: 1, borderColor: '#FFFFFF30' },
     iconText: { fontSize: 27 },
-    name: { fontSize: 11, fontWeight: '700', textAlign: 'center', color: colors.text, lineHeight: 14 },
+    name: { fontSize: 11, fontWeight: '700', textAlign: 'center', color: colors.text, lineHeight: 15, flexShrink: 1 },
+    itemDisabled: { opacity: 0.55 },
   });
+}
+
+function isLight(colors) {
+  return colors && colors.bg === '#FFFFFF';
 }
