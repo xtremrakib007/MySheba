@@ -121,10 +121,11 @@ exports.ensureGoogleProfile = onCall(async (request) => {
   if (email) {
     const emailSnap = await db.collection('users').where('email', '==', email).limit(1).get();
     if (!emailSnap.empty) {
+      const existingProfile = emailSnap.docs[0].data() || {};
       await admin.auth().deleteUser(uid).catch(() => {});
       throw new HttpsError(
         'already-exists',
-        'An account with this email already exists. Sign in with your phone number and password, then use "Link Google Account" in Settings to enable Google sign-in for it.'
+        'This email is already registered to a MySheba account. Sign in to your existing account with your phone number and password, then use "Link Google Account" in Settings to enable Google sign-in. This works for customer, dealer, reseller, admin and superadmin accounts.'
       );
     }
   }
