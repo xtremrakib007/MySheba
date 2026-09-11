@@ -32,7 +32,22 @@ export const accentThemes = {
 
 export const accentList = Object.keys(accentThemes);
 export const DEFAULT_ACCENT = 'teal';
-export const gridStyles = { bordered: { label: 'Bordered Cards' }, classic: { label: 'Classic' }, soft: { label: 'Soft' }, minimal: { label: 'Minimal' } };
+
+// Ten user-selectable visual styles. All styles share the same content/action
+// layer; only presentation changes. The rendering components also enforce
+// contrast, wrapping and minimum touch targets in both light and dark mode.
+export const gridStyles = {
+  bordered: { label: 'Bordered Cards', description: 'Crisp professional cards' },
+  classic: { label: 'Classic', description: 'Familiar business tile layout' },
+  soft: { label: 'Soft', description: 'Rounded and comfortable' },
+  minimal: { label: 'Minimal', description: 'Clean, distraction-free' },
+  glass: { label: 'Premium Glass', description: 'Layered translucent premium look' },
+  threeD: { label: 'Modern 3D', description: 'Depth with restrained elevation' },
+  gradient: { label: 'Dynamic Gradient', description: 'Bold commercial gradients' },
+  neon: { label: 'Neon Dark', description: 'Premium dark glow accents' },
+  bento: { label: 'Bento Grid', description: 'Mixed-size visual hierarchy' },
+  adaptive: { label: 'Adaptive Dynamic', description: 'Highlights important services' },
+};
 export const gridStyleList = Object.keys(gridStyles);
 export const DEFAULT_GRID_STYLE = 'bordered';
 export const gradients = { purple: ['#667eea', '#764ba2'], pink: ['#f093fb', '#f5576c'], blue: ['#4facfe', '#00f2fe'], orange: ['#fa8231', '#f7b731'], green: ['#20bf6b', '#0fb9b1'] };
