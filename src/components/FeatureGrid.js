@@ -9,14 +9,22 @@ const COLUMN_GAP = 8;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CONTAINER_WIDTH = Math.min(SCREEN_WIDTH, 480) - GRID_PADDING * 2;
 function itemWidth(numColumns) { return (CONTAINER_WIDTH - COLUMN_GAP * (numColumns - 1)) / numColumns; }
-
 function isLight(colors) { return colors && colors.bg === '#FFFFFF'; }
+function luminance(hex) {
+  const raw = String(hex || '').replace('#', '');
+  if (raw.length !== 6) return 1;
+  const rgb = [0, 2, 4].map((i) => parseInt(raw.slice(i, i + 2), 16) / 255);
+  const linear = rgb.map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+  return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+}
+function contrastText(hex) { return luminance(hex) > 0.55 ? '#000000' : '#FFFFFF'; }
 
 export default function FeatureGrid({ title, items, activeKey, onPress, numColumns = 4 }) {
   const { colors, isDark, gridStyle } = useTheme();
   const styles = createStyles(colors);
   const width = itemWidth(numColumns);
   const gradientColors = [colors.primary, colors.secondary];
+  const gradientText = contrastText(gradientColors[0]);
   return (
     <View>
       {!!title && <View style={styles.sectionHead}><Text style={styles.sectionTitle}>{title}</Text></View>}
@@ -41,7 +49,7 @@ export default function FeatureGrid({ title, items, activeKey, onPress, numColum
             active && styles.itemActive,
           ];
           const iconBg = isDark ? '#FFFFFF14' : (it.bg || '#E3F2FD');
-          const labelStyle = [styles.name, active && styles.nameActive, gridStyle === 'neon' && { color: colors.text }];
+          const labelStyle = [styles.name, active && styles.nameActive, gridStyle === 'neon' && { color: colors.text }, gridStyle === 'gradient' && { color: gradientText }];
           const content = (
             <>
               {it.badge !== undefined && it.badge !== null && it.badge !== '' && (
