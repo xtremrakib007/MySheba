@@ -36,12 +36,11 @@ export default function RegisterScreen() {
   const [otpBusy, setOtpBusy] = useState(false);
   const [pendingEmailLink, setPendingEmailLink] = useState('');
   const lastEmailLinkRef = useRef('');
+  const verificationInProgressRef = useRef(false);
+  const registrationFinishedRef = useRef(false);
+  const emailVerificationCompletedRef = useRef(false);
+  const phoneVerificationCompletedRef = useRef(false);
 
-  // Always listen for the verification link, even while the registration
-  // screen is still on the details step. Previously the listener only existed
-  // after step === 'email', so a link opened while the screen was on details
-  // could be received and then lost. Keep the URL pending until the email step
-  // is active, and also handle cold-start links reliably.
   useEffect(() => {
     let mounted = true;
     const captureUrl = (url) => {
@@ -55,11 +54,8 @@ export default function RegisterScreen() {
     return () => { mounted = false; sub.remove(); };
   }, []);
 
-  // Once registration reaches the email-verification step, consume a link
-  // captured before or during navigation. The existing OTP flow remains
-  // independent, so either link or 6-digit OTP can complete registration.
   useEffect(() => {
-    if (step !== 'email' || !pendingEmailLink || otpBusy) return;
+    if (step !== 'email' || !pendingEmailLink || otpBusy || verificationInProgressRef.current || emailVerificationCompletedRef.current || registrationFinishedRef.current) return;
     const url = pendingEmailLink;
     setPendingEmailLink('');
     onConfirmEmailLink(url);
@@ -113,48 +109,71 @@ export default function RegisterScreen() {
   };
 
   const finishRegistration = async ({ phoneToken = '', emailToken = '', emailProof = '' } = {}) => {
-    const registerFn = httpsCallable(functions, 'registerWithDealerCode');
-    await registerFn({
-      name: name.trim(),
-      phone,
-      phoneE164: phoneVerification.phoneToE164(phone, phoneCountry.dial),
-      dialCode: phoneCountry.dial,
-      email: email.trim(),
-      pin: password,
-      phoneIdToken: phoneToken || undefined,
-      emailIdToken: emailToken || undefined,
-      emailOtpVerificationId: emailProof || undefined,
-    });
-    await doLogin(phone, password, phoneCountry.dial);
+    if (registrationFinishedRef.current) return;
+    registrationFinishedRef.current = true;
+    try {
+      const registerFn = httpsCallable(functions, 'registerWithDealerCode');
+      await registerFn({
+        name: name.trim(),
+        phone,
+        phoneE164: phoneVerification.phoneToE164(phone, phoneCountry.dial),
+        dialCode: phoneCountry.dial,
+        email: email.trim(),
+        pin: password,
+        phoneIdToken: phoneToken || undefined,
+        emailIdToken: emailToken || undefined,
+        emailOtpVerificationId: emailProof || undefined,
+      });
+      await doLogin(phone, password, phoneCountry.dial);
+    } catch (error) {
+      registrationFinishedRef.current = false;
+      throw error;
+    }
   };
 
   const onVerifyPhone = async () => {
+    if (verificationInProgressRef.current || phoneVerificationCompletedRef.current || registrationFinishedRef.current) return;
     if (!/^\d{6}$/.test(phoneCode.trim())) { setLocalError('Enter the 6-digit SMS verification code.'); return; }
+    if (!phoneConfirmation) { setLocalError('This SMS verification session expired. Please resend.'); return; }
+    verificationInProgressRef.current = true;
     setLocalError(''); setOtpBusy(true);
     try {
       const { idToken } = await phoneVerification.confirmPhoneOtp(phoneConfirmation, phoneCode.trim());
+      phoneVerificationCompletedRef.current = true;
       await finishRegistration({ phoneToken: idToken });
-    } catch (e) { setLocalError(e.message || 'Could not complete phone verification. Please try again.'); }
-    finally { setOtpBusy(false); }
+    } catch (e) {
+      phoneVerificationCompletedRef.current = false;
+      setLocalError(e.message || 'Could not complete phone verification. Please try again.');
+    } finally { verificationInProgressRef.current = false; setOtpBusy(false); }
   };
 
   const onConfirmEmailLink = async (url) => {
+    if (verificationInProgressRef.current || emailVerificationCompletedRef.current || registrationFinishedRef.current) return;
+    verificationInProgressRef.current = true;
     setLocalError(''); setOtpBusy(true);
     try {
       const result = await emailVerification.confirmEmailLink(url, email.trim());
+      emailVerificationCompletedRef.current = true;
       await finishRegistration({ emailToken: result.idToken });
-    } catch (e) { setLocalError(e.message || 'Could not verify your email address. Please try again.'); }
-    finally { setOtpBusy(false); }
+    } catch (e) {
+      emailVerificationCompletedRef.current = false;
+      setLocalError(e.message || 'Could not verify your email address. Please try again.');
+    } finally { verificationInProgressRef.current = false; setOtpBusy(false); }
   };
 
   const onConfirmEmailOtp = async () => {
+    if (verificationInProgressRef.current || emailVerificationCompletedRef.current || registrationFinishedRef.current) return;
     if (!/^\d{6}$/.test(emailCode.trim())) { setLocalError('Enter the 6-digit email verification code.'); return; }
+    verificationInProgressRef.current = true;
     setLocalError(''); setOtpBusy(true);
     try {
       const result = await emailVerification.verifyEmailOtp(email.trim(), emailCode.trim());
+      emailVerificationCompletedRef.current = true;
       await finishRegistration({ emailProof: result.verificationId });
-    } catch (e) { setLocalError(e.message || 'Could not verify the email code. Please try again.'); }
-    finally { setOtpBusy(false); }
+    } catch (e) {
+      emailVerificationCompletedRef.current = false;
+      setLocalError(e.message || 'Could not verify the email code. Please try again.');
+    } finally { verificationInProgressRef.current = false; setOtpBusy(false); }
   };
 
   const busy = otpBusy || authBusy;
@@ -170,7 +189,6 @@ export default function RegisterScreen() {
         <TouchableOpacity style={styles.backBtn} onPress={back}><Text style={styles.backText}>←</Text></TouchableOpacity>
         <Text style={styles.headerTitle}>{step === 'email' ? t('register.verifyEmail') : step === 'phone' ? t('register.verifyPhone') : t('register.createAccount')}</Text>
       </LinearGradient>
-
       <ScrollView style={styles.scroll} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
         {step === 'details' ? <>
           <Field label={t('register.fullName')} value={name} setValue={setName} placeholder={t('register.fullNamePlaceholder')} styles={styles} />
@@ -178,10 +196,7 @@ export default function RegisterScreen() {
             <Text style={styles.label}>{t('register.phoneNumber')}</Text>
             <View style={styles.phoneRow}>
               <TouchableOpacity onPress={() => setCountryPicker(true)} style={styles.countryButton}>
-                <Text style={styles.countryFlag}>{phoneCountry.flag}</Text>
-                <Text style={styles.countryName} numberOfLines={1}>{phoneCountry.name}</Text>
-                <Text style={styles.countryDial}>{phoneCountry.dial}</Text>
-                <Text style={styles.countryChevron}>▾</Text>
+                <Text style={styles.countryFlag}>{phoneCountry.flag}</Text><Text style={styles.countryName} numberOfLines={1}>{phoneCountry.name}</Text><Text style={styles.countryDial}>{phoneCountry.dial}</Text><Text style={styles.countryChevron}>▾</Text>
               </TouchableOpacity>
               <TextInput style={styles.phoneInput} placeholder={t('register.phoneNumber')} placeholderTextColor={styles.placeholderColor} keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
             </View>
@@ -189,7 +204,6 @@ export default function RegisterScreen() {
           <Field label={t('register.emailAddress')} value={email} setValue={setEmail} placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" styles={styles} />
           <Field label={t('register.password')} value={password} setValue={setPassword} placeholder={t('register.passwordPlaceholder')} secureTextEntry maxLength={20} styles={styles} />
           <Field label={t('register.confirmPassword')} value={confirmPassword} setValue={setConfirmPassword} placeholder={t('register.confirmPasswordPlaceholder')} secureTextEntry maxLength={20} styles={styles} />
-
           <Text style={styles.verifyTitle}>Choose verification method</Text>
           <Text style={styles.verifyHint}>Verify your account by email or SMS. Either method can complete registration.</Text>
           {!!(localError || authError) && <Text style={styles.errorText}>{localError || authError}</Text>}
@@ -221,10 +235,7 @@ export default function RegisterScreen() {
 }
 
 function Field({ label, value, setValue, placeholder, styles, otp, ...props }) {
-  return <View style={styles.formGroup}>
-    <Text style={styles.label}>{label}</Text>
-    <TextInput style={otp ? styles.otpInput : styles.input} placeholder={placeholder} placeholderTextColor={styles.placeholderColor} value={value} onChangeText={setValue} autoCorrect={false} {...props} />
-  </View>;
+  return <View style={styles.formGroup}><Text style={styles.label}>{label}</Text><TextInput style={otp ? styles.otpInput : styles.input} placeholder={placeholder} placeholderTextColor={styles.placeholderColor} value={value} onChangeText={setValue} autoCorrect={false} {...props} /></View>;
 }
 
 function createStyles(colors) {
