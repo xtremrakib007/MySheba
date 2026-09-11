@@ -10,6 +10,7 @@ import BannerSlider from '../components/BannerSlider';
 import ServiceGrid from '../components/ServiceGrid';
 import HeaderDecor from '../components/HeaderDecor';
 import SmartAd from '../components/SmartAd';
+import AdMobBanner from '../components/AdMobBanner';
 import SocialHomeScreen from './SocialHomeScreen';
 import { getHomepageModules } from '../firebase/homepageConfigService';
 
@@ -67,6 +68,7 @@ export default function CustomerHomeScreen() {
 
       <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
         <InfoBar />
+        <AdMobBanner feature="home" />
         <SmartAd placement="HOME_TOP" feature="home" height={140} />
         <BannerSlider />
         <SmartAd placement="HOME_MIDDLE" feature="home" height={140} />
