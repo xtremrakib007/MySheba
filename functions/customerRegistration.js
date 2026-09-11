@@ -1,6 +1,7 @@
 // Self-service customer registration. Dealer/reseller codes are no longer required.
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const crypto = require('crypto');
 const { assertEmailVerified, assertEmailOtpVerified } = require('./emailVerification');
 const { assertPhoneVerified } = require('./phoneVerification');
 const { assignUniqueUserId } = require('./userId');
@@ -8,6 +9,7 @@ const { logAudit, logServerError } = require('./logService');
 const emailOtpService = require('./emailOtpService');
 
 const APP_EMAIL_DOMAIN = 'mysheba.app';
+const REGISTRATION_LOCK_MS = 120000;
 function normalizePhone(phone) { return String(phone || '').replace(/[^0-9]/g, ''); }
 function normalizeEmail(email) { return String(email || '').trim().toLowerCase(); }
 function toE164(phone, dialCode = '+60') {
@@ -71,51 +73,74 @@ exports.registerWithDealerCode = onCall(async (request) => {
   }
 
   const db = admin.firestore();
-  const emailSnap = await db.collection('users').where('email', '==', normalizedEmail).limit(1).get();
-  if (!emailSnap.empty) throw new HttpsError('already-exists', 'This email address is already registered to another account.');
-
-  const phoneSnap = await db.collection('users').where('phoneE164', '==', verifiedPhoneE164).limit(1).get();
-  if (!phoneSnap.empty) throw new HttpsError('already-exists', 'This phone number is already registered to another account.');
-
-  const authEmail = phoneToEmail(verifiedPhoneE164);
-  let userRecord;
-  try {
-    userRecord = await admin.auth().createUser({ email: authEmail, password: pin, displayName: name.trim() });
-  } catch (err) {
-    if (err.code === 'auth/email-already-exists') throw new HttpsError('already-exists', 'An account with this phone number already exists.');
-    await logServerError('registerWithDealerCode', err, { userId: null });
-    throw new HttpsError('internal', 'Could not create the account.');
-  }
-
-  const profile = {
-    uid: userRecord.uid,
-    userId: await assignUniqueUserId(db, userRecord.uid),
-    name: name.trim(),
-    phone: normalizePhone(phone),
-    phoneE164: verifiedPhoneE164,
-    phoneCountryCode: dialCode || '+60',
-    email: normalizedEmail,
-    role: 'customer',
-    walletBalance: 0,
-    notifPrefs: { pushEnabled: true, emailEnabled: true, rateAlerts: false },
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  };
+  const lockKey = crypto.createHash('sha256').update(`${normalizedEmail}|${verifiedPhoneE164}`).digest('hex');
+  const lockRef = db.collection('registrationLocks').doc(lockKey);
+  let lockAcquired = false;
 
   try {
-    await db.collection('users').doc(userRecord.uid).set(profile);
-  } catch (err) {
-    await admin.auth().deleteUser(userRecord.uid).catch(() => {});
-    await logServerError('registerWithDealerCode.profile', err, { userId: userRecord.uid });
-    throw new HttpsError('internal', 'Could not finish creating the account.');
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(lockRef);
+      const expiresAtMs = snap.exists ? snap.data()?.expiresAt?.toMillis?.() : 0;
+      if (snap.exists && expiresAtMs > Date.now()) {
+        throw new HttpsError('resource-exhausted', 'Registration is already being processed. Please wait a few seconds and try again.');
+      }
+      tx.set(lockRef, {
+        email: normalizedEmail,
+        phoneE164: verifiedPhoneE164,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + REGISTRATION_LOCK_MS),
+      });
+    });
+    lockAcquired = true;
+
+    const emailSnap = await db.collection('users').where('email', '==', normalizedEmail).limit(1).get();
+    if (!emailSnap.empty) throw new HttpsError('already-exists', 'This email address is already registered to another account.');
+
+    const phoneSnap = await db.collection('users').where('phoneE164', '==', verifiedPhoneE164).limit(1).get();
+    if (!phoneSnap.empty) throw new HttpsError('already-exists', 'This phone number is already registered to another account.');
+
+    const authEmail = phoneToEmail(verifiedPhoneE164);
+    let userRecord;
+    try {
+      userRecord = await admin.auth().createUser({ email: authEmail, password: pin, displayName: name.trim() });
+    } catch (err) {
+      if (err.code === 'auth/email-already-exists') throw new HttpsError('already-exists', 'An account with this phone number already exists.');
+      await logServerError('registerWithDealerCode', err, { userId: null });
+      throw new HttpsError('internal', 'Could not create the account.');
+    }
+
+    const profile = {
+      uid: userRecord.uid,
+      userId: await assignUniqueUserId(db, userRecord.uid),
+      name: name.trim(),
+      phone: normalizePhone(phone),
+      phoneE164: verifiedPhoneE164,
+      phoneCountryCode: dialCode || '+60',
+      email: normalizedEmail,
+      role: 'customer',
+      walletBalance: 0,
+      notifPrefs: { pushEnabled: true, emailEnabled: true, rateAlerts: false },
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    try {
+      await db.collection('users').doc(userRecord.uid).set(profile);
+    } catch (err) {
+      await admin.auth().deleteUser(userRecord.uid).catch(() => {});
+      await logServerError('registerWithDealerCode.profile', err, { userId: userRecord.uid });
+      throw new HttpsError('internal', 'Could not finish creating the account.');
+    }
+
+    await db.collection('otps').doc(normalizedEmail).delete().catch(() => {});
+    if (emailAuthUid) await admin.auth().deleteUser(emailAuthUid).catch(() => {});
+    if (phoneAuthUid) await admin.auth().deleteUser(phoneAuthUid).catch(() => {});
+
+    await logAudit({
+      action: 'account_created', targetUid: userRecord.uid, performedBy: 'system', performedByRole: null,
+      details: { role: 'customer', method: 'phone_pin', verification: verifiedBy, emailVerification: emailOtpUsed ? 'otp' : (emailAuthUid ? 'firebase_link' : null) },
+    });
+    return { uid: userRecord.uid, role: 'customer', verification: verifiedBy };
+  } finally {
+    if (lockAcquired) await lockRef.delete().catch(() => {});
   }
-
-  await db.collection('otps').doc(normalizedEmail).delete().catch(() => {});
-  if (emailAuthUid) await admin.auth().deleteUser(emailAuthUid).catch(() => {});
-  if (phoneAuthUid) await admin.auth().deleteUser(phoneAuthUid).catch(() => {});
-
-  await logAudit({
-    action: 'account_created', targetUid: userRecord.uid, performedBy: 'system', performedByRole: null,
-    details: { role: 'customer', method: 'phone_pin', verification: verifiedBy, emailVerification: emailOtpUsed ? 'otp' : (emailAuthUid ? 'firebase_link' : null) },
-  });
-  return { uid: userRecord.uid, role: 'customer', verification: verifiedBy };
 });
