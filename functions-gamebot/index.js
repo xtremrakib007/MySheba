@@ -39,7 +39,7 @@ const BOT_NAME = 'GameBot';
  * (roomChatService.setRoomGameBot / removeRoomGameBot), which writes a
  * `gameBotGame` field directly on the roomChats/{roomId} doc. This function
  * reads that field. This is the ONLY read this codebase does outside its
- * own four collections (roomChats/*/messages, gameBotSessions/*,
+ * own four collections (roomChats/{roomId}/messages, gameBotSessions/*,
  * gamePoints/*, gamePointsLedger/*) - it is read-only, this codebase never
  * writes to the roomChats document itself, only to its messages
  * subcollection (see postMessage below).
