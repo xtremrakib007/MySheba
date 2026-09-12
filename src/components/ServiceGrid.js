@@ -65,10 +65,6 @@ export function Tile({ s, onPress, disabled, index = 0 }) {
   const label = t(`service.${s.key}`, s.name);
   const gradientColors = [colors.primary, colors.secondary];
   const gradientText = contrastText(gradientColors[0]);
-  // Home Quick Services must always remain a strict four-column grid. The
-  // bento style changes tile decoration only; it must never create a tile
-  // spanning two columns and leave unusable blank space on Home.
-  const bento = false;
   const adaptive = gridStyle === 'adaptive' && index < 4;
   const iconBg = isDark ? '#FFFFFF14' : s.bg;
   const content = (
@@ -140,7 +136,10 @@ function createStyles(colors) {
     gridCanvas: { marginHorizontal: 4, borderRadius: radius.xl, paddingVertical: 8, overflow: 'hidden' },
     gridCanvasMinimal: { paddingVertical: 0 },
     grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: GRID_PADDING, gap: COLUMN_GAP },
-    item: { minHeight: 92, borderRadius: radius.lg, paddingVertical: 10, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+    // Match the reference Home screenshot: tall, equal 4-column cards with
+    // generous vertical space for the icon and two-line labels. The grid
+    // remains responsive in width but keeps a stable card proportion.
+    item: { minHeight: 158, borderRadius: radius.lg, paddingVertical: 12, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
     bordered: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
     classic: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}66` },
     soft: { backgroundColor: isLight(colors) ? '#F7FAFC' : '#101010', borderWidth: 0 },
@@ -148,13 +147,13 @@ function createStyles(colors) {
     glass: { backgroundColor: isLight(colors) ? '#FFFFFFD9' : '#FFFFFF12', borderWidth: 1, borderColor: isLight(colors) ? '#FFFFFF' : '#FFFFFF30', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 3 },
     threeD: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}55`, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 0, shadowOffset: { width: 0, height: 4 }, elevation: 5, transform: [{ translateY: -1 }] },
     neon: { backgroundColor: isLight(colors) ? '#10151A' : '#080A0C', borderWidth: 1, borderColor: `${colors.primary}99`, shadowColor: colors.primary, shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 4 },
-    bento: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}55`, minHeight: 108, paddingHorizontal: 8 },
+    bento: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}55`, minHeight: 158, paddingHorizontal: 8 },
     adaptive: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}44` },
     itemAdaptive: { shadowColor: colors.primary, shadowOpacity: 0.18, shadowRadius: 7, shadowOffset: { width: 0, height: 2 }, elevation: 4 },
     classicBar: { position: 'absolute', top: 0, left: 0, right: 0, height: 4 },
     adaptiveBar: { position: 'absolute', top: 0, left: 0, right: 0, height: 3 },
-    gradientFill: { flex: 1, width: '100%', minHeight: 92, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 4 },
-    iconWrap: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+    gradientFill: { flex: 1, width: '100%', minHeight: 158, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, paddingHorizontal: 4 },
+    iconWrap: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
     iconWrapBright: { borderWidth: 1, borderColor: '#FFFFFF30' },
     iconText: { fontSize: 27 },
     name: { fontSize: 11, fontWeight: '700', textAlign: 'center', color: colors.text, lineHeight: 15, flexShrink: 1 },
