@@ -7,10 +7,6 @@ import { useTheme } from '../theme/ThemeContext';
 import { AD_TYPES } from '../constants/adEnums';
 import * as adControlsService from '../firebase/adControlsService';
 
-// Google AdMob banner renderer. Super Admin controls remain the single gate:
-// Global Ads -> Banner -> Google AdMob -> per-feature Banner.
-// The default IDs are Google's official test IDs until production IDs are
-// supplied in Expo config.
 const extra = Constants.expoConfig?.extra || {};
 const configuredBannerId = Platform.OS === 'ios'
   ? extra.admobIosBannerId
@@ -29,7 +25,11 @@ export default function AdMobBanner({ feature = 'home', style }) {
 
   if (!allowed) return null;
 
-  const unitId = __DEV__ ? TEST_BANNER_ID : (configuredBannerId || TEST_BANNER_ID);
+  // Development builds keep Google's safe test unit. Production builds must
+  // use the real AdMob banner unit supplied through Expo/EAS config; never
+  // silently ship Google's test ad unit in a release build.
+  const unitId = __DEV__ ? TEST_BANNER_ID : configuredBannerId;
+  if (!unitId) return null;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }, style]}>
