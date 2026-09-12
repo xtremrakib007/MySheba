@@ -9,7 +9,7 @@
 // EAS Build makes that available as a real file path in process.env at
 // build time; locally (or if the secret isn't set) it falls back to the
 // plain ./google-services.json path exactly as before.
-const appJson = require('./app.json');
+const appJson = require('./app.base.json');
 
 // Google Maps API key: same "gitignored locally, injected at build time"
 // pattern as GOOGLE_SERVICES_JSON above. Set it as a plain env var for
