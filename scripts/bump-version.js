@@ -1,5 +1,5 @@
 /**
- * Bumps app.json's Android versionCode (+1) and the version string's
+ * Bumps app.base.json's Android versionCode (+1) and the version string's
  * last segment (+1), e.g. "5.3.0.1" -> "5.3.0.2".
  * Also syncs package.json's "version" field so they don't drift.
  *
@@ -9,7 +9,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const appJsonPath = path.join(__dirname, '..', 'app.json');
+const appJsonPath = path.join(__dirname, '..', 'app.base.json');
 const pkgJsonPath = path.join(__dirname, '..', 'package.json');
 
 const appJson = JSON.parse(fs.readFileSync(appJsonPath, 'utf8'));
