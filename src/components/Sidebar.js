@@ -6,10 +6,13 @@ import { radius } from '../theme/theme';
 import { useTheme } from "../theme/ThemeContext";
 import HeaderDecor from './HeaderDecor';
 import VerifiedBadge from './VerifiedBadge';
-import appConfig from '../../app.json';
+import Constants from 'expo-constants';
 import { showAlert } from '../utils/appAlert';
 
-const APP_VERSION = (appConfig?.expo?.version || '1.0.0').split('.').slice(0, 3).join('.');
+const APP_VERSION = (Constants.expoConfig?.version || '1.0.0')
+  .split('.')
+  .slice(0, 3)
+  .join('.');
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DRAWER_WIDTH = Math.min(300, SCREEN_WIDTH * 0.8);
