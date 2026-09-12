@@ -2,8 +2,9 @@ import {
   collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot,
   orderBy, query, serverTimestamp,
 } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from './config';
+import { db, storage, functions } from './config';
 
 const GIFTS = collection(db, 'virtualGifts');
 
@@ -27,6 +28,20 @@ export async function updateVirtualGift(id, data) {
 
 export async function deleteVirtualGift(id) {
   await deleteDoc(doc(db, 'virtualGifts', id));
+}
+
+/** Securely sends a catalogue gift. The Cloud Function reads the server-side
+ * gift price and atomically deducts that amount from gamePoints/{uid}. */
+export async function sendVirtualGift({ giftId, recipientUid, chatType, chatId, idempotencyKey }) {
+  if (!giftId || !recipientUid || !chatType || !chatId) throw new Error('Missing gift recipient or chat.');
+  const key = idempotencyKey || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const fn = httpsCallable(functions, 'sendVirtualGift');
+  try {
+    const { data } = await fn({ giftId, recipientUid, chatType, chatId, idempotencyKey: key });
+    return data;
+  } catch (err) {
+    throw new Error(err.message || 'Could not send the virtual gift right now.');
+  }
 }
 
 export async function uploadVirtualGiftAsset(uri, uid, kind, mimeType) {
