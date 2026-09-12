@@ -139,24 +139,21 @@ function Root() {
   // run its "Ready" check + fade-out instead of the app snapping in.
   const [splashVisible, setSplashVisible] = useState(true);
 
-  // onFinished (below) fires from inside an Animated .start() callback, on
-  // the same tick React is still settling the PRIOR screen transition
-  // (auth/session resolving into a specific `screen` value - see
-  // AppContext.js's doLogin). For fast logins this timing is harmless, but
-  // slower logins (admin/superadmin: extra checkDeviceSession/MFA
-  // round-trips before `screen` settles - see functions/deviceSessionService.js)
-  // widen the window enough that unmounting AnimatedSplash and mounting
-  // the real screen tree can land in the same Fiber commit as that other
-  // still-in-flight state update, which is the likely cause of an
-  // intermittent "Text strings must be rendered within a <Text> component"
-  // crash observed specifically on superadmin login (chat history
-  // 2026-09-08) - not reproduced by static review of any single screen's
-  // JSX, consistent with a timing/commit-order issue rather than a fixed
-  // bad value. Deferring this one setState to its own macrotask (0ms
-  // setTimeout, not requestAnimationFrame - this needs to run AFTER
-  // React's current commit finishes, not just before the next paint)
-  // ensures splash-teardown and whatever `screen` transition is already
-  // pending never get batched into the same commit.
+  // Auth/session resolution can update several pieces of state in one React
+  // commit. Admin and superadmin logins are the slowest path because they
+  // also perform device-session/MFA checks. Mount the newly selected screen
+  // on a separate macrotask so AdminHome never mounts in the same commit as
+  // the login/session state transition. This specifically hardens the path
+  // that previously produced RN's "Text strings must be rendered within a
+  // <Text> component" error during admin login.
+  const [renderedScreen, setRenderedScreen] = useState(screen);
+
+  useEffect(() => {
+    if (screen === renderedScreen) return undefined;
+    const id = setTimeout(() => setRenderedScreen(screen), 0);
+    return () => clearTimeout(id);
+  }, [screen, renderedScreen]);
+
   const handleSplashFinished = () => {
     setTimeout(() => setSplashVisible(false), 0);
   };
@@ -186,117 +183,117 @@ function Root() {
     <SafeAreaView style={styles.app} edges={['top', 'bottom']}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <View style={styles.body}>
-        {screen === 'login' && <LoginScreen />}
-        {screen === 'register' && <RegisterScreen />}
-        {screen === 'forgotPassword' && <ForgotPasswordScreen />}
-        {screen === 'deviceVerify' && <DeviceVerifyScreen />}
-        {screen === 'googlePhone' && <GooglePhoneScreen />}
-        {screen === 'customerHome' && <CustomerHomeScreen />}
-        {screen === 'service' && <ServiceScreen />}
-        {screen === 'dealerHome' && <DealerHomeScreen />}
-        {screen === 'resellerHome' && <ResellerHomeScreen />}
-        {screen === 'adminHome' && <AdminHomeScreen />}
-        {screen === 'webview' && <WebViewScreen />}
-        {screen === 'buspicker' && <BusPickerScreen />}
-        {screen === 'support' && <SupportScreen />}
-        {screen === 'help' && <HelpScreen />}
-        {screen === 'adminSupport' && <AdminSupportScreen />}
-        {screen === 'history' && <HistoryScreen />}
-        {screen === 'topup' && <TopUpScreen />}
-        {screen === 'superAdminTopup' && <SuperAdminTopUpScreen />}
-        {screen === 'chat' && <ChatScreen />}
-        {screen === 'chatList' && <ChatListScreen />}
-        {screen === 'chatHub' && <ChatHubScreen />}
-        {screen === 'directChatList' && <DirectChatListScreen />}
-        {screen === 'lockedChats' && <LockedChatsScreen />}
-        {screen === 'addContact' && <AddContactScreen />}
-        {screen === 'qrScan' && <QRScanScreen />}
-        {screen === 'myQrCode' && <MyQRCodeScreen />}
-        {screen === 'friendsList' && <FriendsListScreen />}
-        {screen === 'settings' && <SettingsScreen />}
-        {screen === 'callSettings' && <CallSettingsScreen />}
-        {screen === 'ringtonePicker' && <RingtonePickerScreen />}
-        {screen === 'profile' && <ProfileScreen />}
-        {screen === 'myAccount' && <MyAccountScreen />}
-        {screen === 'reports' && <ReportsScreen />}
-        {screen === 'userManagement' && <UserManagementScreen />}
-        {screen === 'marketplaceModeration' && <MarketplaceModerationScreen />}
-        {screen === 'chatReports' && <ChatReportsScreen />}
-        {screen === 'investigateChat' && <InvestigateChatScreen />}
-        {screen === 'transferPoints' && <TransferPointsScreen />}
-        {screen === 'gamePoints' && <GamePointsScreen />}
-        {screen === 'gamePointsTransfer' && <GamePointsTransferScreen />}
-        {screen === 'gamePointsGift' && <GamePointsGiftScreen />}
-        {screen === 'groupList' && <GroupListScreen />}
-        {screen === 'newGroup' && <NewGroupScreen />}
-        {screen === 'createRoom' && <CreateRoomScreen />}
-        {screen === 'roomSettings' && <RoomSettingsScreen />}
-        {screen === 'groupSettings' && <GroupSettingsScreen />}
-        {screen === 'call' && <CallScreen />}
-        {screen === 'notifications' && <NotificationsScreen />}
-        {(screen === 'marketplaceHome' || screen === 'accommodationHome' || screen === 'roomSharingHome' || screen === 'servicesHome' || screen === 'communityHome') && <MarketplaceHubScreen screen={screen} />}
-        {screen === 'marketplaceCreateListing' && <CreateListingScreen />}
-        {screen === 'marketplaceMyListings' && <MyListingsScreen />}
-        {screen === 'marketplaceMyReviews' && <MyReviewsScreen />}
-        {screen === 'marketplaceListingDetail' && <ListingDetailScreen />}
-        {screen === 'accommodationCreateProperty' && <CreatePropertyScreen />}
-        {screen === 'accommodationMyProperties' && <MyPropertiesScreen />}
-        {screen === 'accommodationPropertyDetail' && <PropertyDetailScreen />}
-        {screen === 'roomSharingCreateRequest' && <CreateRoommateRequestScreen />}
-        {screen === 'roomSharingMyRequests' && <MyRoommateRequestsScreen />}
-        {screen === 'roomSharingRequestDetail' && <RoommateRequestDetailScreen />}
-        {screen === 'servicesCreateProvider' && <CreateServiceScreen />}
-        {screen === 'servicesMyServices' && <MyServicesScreen />}
-        {screen === 'servicesProviderDetail' && <ServiceProviderDetailScreen />}
-        {screen === 'communityCreatePost' && <CreateCommunityPostScreen />}
-        {screen === 'communityMyPosts' && <MyCommunityPostsScreen />}
-        {screen === 'communityPostDetail' && <CommunityPostDetailScreen />}
-        {screen === 'socialFeed' && <SocialFeedScreen />}
-        {screen === 'createSocialPost' && <CreateSocialPostScreen />}
-        {screen === 'socialPostDetail' && <SocialPostDetailScreen />}
-        {screen === 'marketplaceSearch' && <MarketplaceSearchScreen />}
-        {screen === 'verifyIdentity' && <VerifyIdentityScreen />}
-        {screen === 'verificationManagement' && <VerificationManagementScreen />}
-        {screen === 'adminAnalytics' && <AdminAnalyticsScreen />}
-        {screen === 'businessProfile' && <BusinessProfileScreen />}
-        {screen === 'contactProfile' && <ContactProfileScreen />}
-        {screen === 'adminBusinessManagement' && <AdminBusinessManagementScreen />}
-        {screen === 'myDocuments' && <MyDocumentsScreen />}
-        {screen === 'notepad' && <NotepadScreen />}
-        {screen === 'addNote' && <AddNoteScreen />}
-        {screen === 'noteDetail' && <NoteDetailScreen />}
-        {screen === 'moreFeatures' && <MoreFeaturesScreen />}
-        {screen === 'adminFeatures' && <AdminFeaturesScreen />}
-        {screen === 'tierPromotions' && <TierPromotionsScreen />}
-        {screen === 'apiProviderManagement' && <ApiProviderManagementScreen />}
-        {screen === 'dealerFeatures' && <DealerFeaturesScreen />}
-        {screen === 'resellerFeatures' && <ResellerFeaturesScreen />}
-        {screen === 'featureAccess' && <FeatureAccessScreen />}
-        {screen === 'adFeatureControls' && <AdFeatureControlsScreen />}
-        {screen === 'adAnalytics' && <AdAnalyticsScreen />}
-        {screen === 'bannerManagement' && <BannerManagementScreen />}
-        {screen === 'advertiserManagement' && <AdvertiserManagementScreen />}
-        {screen === 'advertiserDetail' && <AdvertiserDetailScreen />}
-        {screen === 'adPackagesManagement' && <AdPackagesManagementScreen />}
-        {screen === 'adPaymentsManagement' && <AdPaymentsManagementScreen />}
-        {screen === 'trustedDevices' && <TrustedDevicesScreen />}
-        {screen === 'documentType' && <DocumentTypeScreen />}
-        {screen === 'addDocument' && <AddDocumentScreen />}
-        {screen === 'documentDetails' && <DocumentDetailsScreen />}
-        {screen === 'documentViewer' && <DocumentViewerScreen />}
-        {screen === 'salaryDashboard' && <SalaryDashboardScreen />}
-        {screen === 'salarySettings' && <SalarySettingsScreen />}
-        {screen === 'salaryCalculator' && <SalaryCalculatorScreen />}
-        {screen === 'salaryWorkLog' && <WorkLogScreen />}
-        {screen === 'salaryReports' && <SalaryReportsScreen />}
-        {screen === 'salaryMonthlySummary' && <MonthlySummaryScreen />}
-        {screen === 'salaryHistory' && <SalaryHistoryScreen />}
-        {screen === 'createPayslip' && <CreatePayslipScreen />}
-        {screen === 'payslipHistory' && <PayslipHistoryScreen />}
-        {screen === 'payslipDetails' && <PayslipDetailsScreen />}
+        {renderedScreen === 'login' && <LoginScreen />}
+        {renderedScreen === 'register' && <RegisterScreen />}
+        {renderedScreen === 'forgotPassword' && <ForgotPasswordScreen />}
+        {renderedScreen === 'deviceVerify' && <DeviceVerifyScreen />}
+        {renderedScreen === 'googlePhone' && <GooglePhoneScreen />}
+        {renderedScreen === 'customerHome' && <CustomerHomeScreen />}
+        {renderedScreen === 'service' && <ServiceScreen />}
+        {renderedScreen === 'dealerHome' && <DealerHomeScreen />}
+        {renderedScreen === 'resellerHome' && <ResellerHomeScreen />}
+        {renderedScreen === 'adminHome' && <AdminHomeScreen />}
+        {renderedScreen === 'webview' && <WebViewScreen />}
+        {renderedScreen === 'buspicker' && <BusPickerScreen />}
+        {renderedScreen === 'support' && <SupportScreen />}
+        {renderedScreen === 'help' && <HelpScreen />}
+        {renderedScreen === 'adminSupport' && <AdminSupportScreen />}
+        {renderedScreen === 'history' && <HistoryScreen />}
+        {renderedScreen === 'topup' && <TopUpScreen />}
+        {renderedScreen === 'superAdminTopup' && <SuperAdminTopUpScreen />}
+        {renderedScreen === 'chat' && <ChatScreen />}
+        {renderedScreen === 'chatList' && <ChatListScreen />}
+        {renderedScreen === 'chatHub' && <ChatHubScreen />}
+        {renderedScreen === 'directChatList' && <DirectChatListScreen />}
+        {renderedScreen === 'lockedChats' && <LockedChatsScreen />}
+        {renderedScreen === 'addContact' && <AddContactScreen />}
+        {renderedScreen === 'qrScan' && <QRScanScreen />}
+        {renderedScreen === 'myQrCode' && <MyQRCodeScreen />}
+        {renderedScreen === 'friendsList' && <FriendsListScreen />}
+        {renderedScreen === 'settings' && <SettingsScreen />}
+        {renderedScreen === 'callSettings' && <CallSettingsScreen />}
+        {renderedScreen === 'ringtonePicker' && <RingtonePickerScreen />}
+        {renderedScreen === 'profile' && <ProfileScreen />}
+        {renderedScreen === 'myAccount' && <MyAccountScreen />}
+        {renderedScreen === 'reports' && <ReportsScreen />}
+        {renderedScreen === 'userManagement' && <UserManagementScreen />}
+        {renderedScreen === 'marketplaceModeration' && <MarketplaceModerationScreen />}
+        {renderedScreen === 'chatReports' && <ChatReportsScreen />}
+        {renderedScreen === 'investigateChat' && <InvestigateChatScreen />}
+        {renderedScreen === 'transferPoints' && <TransferPointsScreen />}
+        {renderedScreen === 'gamePoints' && <GamePointsScreen />}
+        {renderedScreen === 'gamePointsTransfer' && <GamePointsTransferScreen />}
+        {renderedScreen === 'gamePointsGift' && <GamePointsGiftScreen />}
+        {renderedScreen === 'groupList' && <GroupListScreen />}
+        {renderedScreen === 'newGroup' && <NewGroupScreen />}
+        {renderedScreen === 'createRoom' && <CreateRoomScreen />}
+        {renderedScreen === 'roomSettings' && <RoomSettingsScreen />}
+        {renderedScreen === 'groupSettings' && <GroupSettingsScreen />}
+        {renderedScreen === 'call' && <CallScreen />}
+        {renderedScreen === 'notifications' && <NotificationsScreen />}
+        {(renderedScreen === 'marketplaceHome' || renderedScreen === 'accommodationHome' || renderedScreen === 'roomSharingHome' || renderedScreen === 'servicesHome' || renderedScreen === 'communityHome') && <MarketplaceHubScreen screen={renderedScreen} />}
+        {renderedScreen === 'marketplaceCreateListing' && <CreateListingScreen />}
+        {renderedScreen === 'marketplaceMyListings' && <MyListingsScreen />}
+        {renderedScreen === 'marketplaceMyReviews' && <MyReviewsScreen />}
+        {renderedScreen === 'marketplaceListingDetail' && <ListingDetailScreen />}
+        {renderedScreen === 'accommodationCreateProperty' && <CreatePropertyScreen />}
+        {renderedScreen === 'accommodationMyProperties' && <MyPropertiesScreen />}
+        {renderedScreen === 'accommodationPropertyDetail' && <PropertyDetailScreen />}
+        {renderedScreen === 'roomSharingCreateRequest' && <CreateRoommateRequestScreen />}
+        {renderedScreen === 'roomSharingMyRequests' && <MyRoommateRequestsScreen />}
+        {renderedScreen === 'roomSharingRequestDetail' && <RoommateRequestDetailScreen />}
+        {renderedScreen === 'servicesCreateProvider' && <CreateServiceScreen />}
+        {renderedScreen === 'servicesMyServices' && <MyServicesScreen />}
+        {renderedScreen === 'servicesProviderDetail' && <ServiceProviderDetailScreen />}
+        {renderedScreen === 'communityCreatePost' && <CreateCommunityPostScreen />}
+        {renderedScreen === 'communityMyPosts' && <MyCommunityPostsScreen />}
+        {renderedScreen === 'communityPostDetail' && <CommunityPostDetailScreen />}
+        {renderedScreen === 'socialFeed' && <SocialFeedScreen />}
+        {renderedScreen === 'createSocialPost' && <CreateSocialPostScreen />}
+        {renderedScreen === 'socialPostDetail' && <SocialPostDetailScreen />}
+        {renderedScreen === 'marketplaceSearch' && <MarketplaceSearchScreen />}
+        {renderedScreen === 'verifyIdentity' && <VerifyIdentityScreen />}
+        {renderedScreen === 'verificationManagement' && <VerificationManagementScreen />}
+        {renderedScreen === 'adminAnalytics' && <AdminAnalyticsScreen />}
+        {renderedScreen === 'businessProfile' && <BusinessProfileScreen />}
+        {renderedScreen === 'contactProfile' && <ContactProfileScreen />}
+        {renderedScreen === 'adminBusinessManagement' && <AdminBusinessManagementScreen />}
+        {renderedScreen === 'myDocuments' && <MyDocumentsScreen />}
+        {renderedScreen === 'notepad' && <NotepadScreen />}
+        {renderedScreen === 'addNote' && <AddNoteScreen />}
+        {renderedScreen === 'noteDetail' && <NoteDetailScreen />}
+        {renderedScreen === 'moreFeatures' && <MoreFeaturesScreen />}
+        {renderedScreen === 'adminFeatures' && <AdminFeaturesScreen />}
+        {renderedScreen === 'tierPromotions' && <TierPromotionsScreen />}
+        {renderedScreen === 'apiProviderManagement' && <ApiProviderManagementScreen />}
+        {renderedScreen === 'dealerFeatures' && <DealerFeaturesScreen />}
+        {renderedScreen === 'resellerFeatures' && <ResellerFeaturesScreen />}
+        {renderedScreen === 'featureAccess' && <FeatureAccessScreen />}
+        {renderedScreen === 'adFeatureControls' && <AdFeatureControlsScreen />}
+        {renderedScreen === 'adAnalytics' && <AdAnalyticsScreen />}
+        {renderedScreen === 'bannerManagement' && <BannerManagementScreen />}
+        {renderedScreen === 'advertiserManagement' && <AdvertiserManagementScreen />}
+        {renderedScreen === 'advertiserDetail' && <AdvertiserDetailScreen />}
+        {renderedScreen === 'adPackagesManagement' && <AdPackagesManagementScreen />}
+        {renderedScreen === 'adPaymentsManagement' && <AdPaymentsManagementScreen />}
+        {renderedScreen === 'trustedDevices' && <TrustedDevicesScreen />}
+        {renderedScreen === 'documentType' && <DocumentTypeScreen />}
+        {renderedScreen === 'addDocument' && <AddDocumentScreen />}
+        {renderedScreen === 'documentDetails' && <DocumentDetailsScreen />}
+        {renderedScreen === 'documentViewer' && <DocumentViewerScreen />}
+        {renderedScreen === 'salaryDashboard' && <SalaryDashboardScreen />}
+        {renderedScreen === 'salarySettings' && <SalarySettingsScreen />}
+        {renderedScreen === 'salaryCalculator' && <SalaryCalculatorScreen />}
+        {renderedScreen === 'salaryWorkLog' && <WorkLogScreen />}
+        {renderedScreen === 'salaryReports' && <SalaryReportsScreen />}
+        {renderedScreen === 'salaryMonthlySummary' && <MonthlySummaryScreen />}
+        {renderedScreen === 'salaryHistory' && <SalaryHistoryScreen />}
+        {renderedScreen === 'createPayslip' && <CreatePayslipScreen />}
+        {renderedScreen === 'payslipHistory' && <PayslipHistoryScreen />}
+        {renderedScreen === 'payslipDetails' && <PayslipDetailsScreen />}
       </View>
 
-      {(screen === 'customerHome' || screen === 'dealerHome' || screen === 'resellerHome' || screen === 'adminHome' || screen === 'support' || screen === 'help' || screen === 'adminSupport' || screen === 'history' || screen === 'topup' || screen === 'superAdminTopup' || screen === 'gamePoints' || screen === 'chatHub' || screen === 'profile' || screen === 'settings' || screen === 'myAccount' || screen === 'moreFeatures' || screen === 'adminFeatures' || screen === 'dealerFeatures' || screen === 'resellerFeatures' || screen === 'notifications' || screen === 'marketplaceHome' || screen === 'accommodationHome' || screen === 'roomSharingHome' || screen === 'servicesHome' || screen === 'communityHome') && <BottomNav />}
+      {(renderedScreen === 'customerHome' || renderedScreen === 'dealerHome' || renderedScreen === 'resellerHome' || renderedScreen === 'adminHome' || renderedScreen === 'support' || renderedScreen === 'help' || renderedScreen === 'adminSupport' || renderedScreen === 'history' || renderedScreen === 'topup' || renderedScreen === 'superAdminTopup' || renderedScreen === 'gamePoints' || renderedScreen === 'chatHub' || renderedScreen === 'profile' || renderedScreen === 'settings' || renderedScreen === 'myAccount' || renderedScreen === 'moreFeatures' || renderedScreen === 'adminFeatures' || renderedScreen === 'dealerFeatures' || renderedScreen === 'resellerFeatures' || renderedScreen === 'notifications' || renderedScreen === 'marketplaceHome' || renderedScreen === 'accommodationHome' || renderedScreen === 'roomSharingHome' || renderedScreen === 'servicesHome' || renderedScreen === 'communityHome') && <BottomNav />}
 
       {/* Global overlays - mirror #ratePopup and #resultModal from the original */}
       <RatePopup />
