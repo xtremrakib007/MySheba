@@ -65,7 +65,10 @@ export function Tile({ s, onPress, disabled, index = 0 }) {
   const label = t(`service.${s.key}`, s.name);
   const gradientColors = [colors.primary, colors.secondary];
   const gradientText = contrastText(gradientColors[0]);
-  const bento = gridStyle === 'bento' && index % 6 === 0;
+  // Home Quick Services must always remain a strict four-column grid. The
+  // bento style changes tile decoration only; it must never create a tile
+  // spanning two columns and leave unusable blank space on Home.
+  const bento = false;
   const adaptive = gridStyle === 'adaptive' && index < 4;
   const iconBg = isDark ? '#FFFFFF14' : s.bg;
   const content = (
@@ -74,7 +77,7 @@ export function Tile({ s, onPress, disabled, index = 0 }) {
       <Text style={[styles.name, gridStyle === 'gradient' && { color: gradientText }, gridStyle === 'neon' && { color: '#FFFFFF' }]} numberOfLines={2}>{label}</Text>
     </>
   );
-  const common = [styles.item, { width: bento ? ITEM_WIDTH * 2 + COLUMN_GAP : ITEM_WIDTH }, disabled && styles.itemDisabled, adaptive && styles.itemAdaptive];
+  const common = [styles.item, { width: ITEM_WIDTH }, disabled && styles.itemDisabled, adaptive && styles.itemAdaptive];
   if (gridStyle === 'gradient') return <TouchableOpacity style={common} activeOpacity={0.82} disabled={disabled} onPress={onPress}><LinearGradient colors={gradientColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradientFill}>{content}</LinearGradient></TouchableOpacity>;
   return <TouchableOpacity style={[...common, gridStyle === 'bordered' && styles.bordered, gridStyle === 'classic' && styles.classic, gridStyle === 'soft' && styles.soft, gridStyle === 'minimal' && styles.minimal, gridStyle === 'glass' && styles.glass, gridStyle === 'threeD' && styles.threeD, gridStyle === 'neon' && styles.neon, gridStyle === 'bento' && styles.bento, gridStyle === 'adaptive' && styles.adaptive]} activeOpacity={0.82} disabled={disabled} onPress={onPress}>
     {gridStyle === 'classic' && <View style={[styles.classicBar, { backgroundColor: s.accent }]} />}
