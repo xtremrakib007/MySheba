@@ -1,21 +1,22 @@
 // Central design tokens for the entire MySheba UI.
 // Global contract: light = white surfaces/black foreground; dark = black surfaces/white foreground.
+// Contrast is intentionally strong so text, cards, controls and grid boundaries remain visible on small screens.
 export const lightColors = {
   primary: '#00A99D', primaryDark: '#00897B', secondary: '#1A73E8',
-  navy: '#000000', scrim: '#000000', success: '#4CAF50', warning: '#FBBC04', error: '#EA4335',
+  navy: '#000000', scrim: '#000000', success: '#2E7D32', warning: '#B26A00', error: '#C62828',
   bg: '#FFFFFF', card: '#FFFFFF', surface: '#FFFFFF', surfaceElevated: '#FFFFFF',
-  text: '#000000', textSecondary: '#000000', onPrimary: '#FFFFFF',
-  border: '#000000', divider: '#000000', placeholder: '#000000',
-  inputBg: '#FFFFFF', disabledBg: '#FFFFFF', disabledText: '#000000',
+  text: '#000000', textSecondary: '#374151', onPrimary: '#FFFFFF',
+  border: '#CBD5E1', divider: '#CBD5E1', placeholder: '#64748B',
+  inputBg: '#F8FAFC', disabledBg: '#F1F5F9', disabledText: '#64748B',
 };
 
 export const darkColors = {
   primary: '#26D0C4', primaryDark: '#00A99D', secondary: '#5B9DF9',
-  navy: '#FFFFFF', scrim: '#000000', success: '#66D07A', warning: '#FBBC04', error: '#F2665E',
+  navy: '#FFFFFF', scrim: '#000000', success: '#66D07A', warning: '#FFD166', error: '#FF6B6B',
   bg: '#000000', card: '#000000', surface: '#000000', surfaceElevated: '#000000',
-  text: '#FFFFFF', textSecondary: '#FFFFFF', onPrimary: '#000000',
-  border: '#FFFFFF', divider: '#FFFFFF', placeholder: '#FFFFFF',
-  inputBg: '#000000', disabledBg: '#000000', disabledText: '#FFFFFF',
+  text: '#FFFFFF', textSecondary: '#E5E7EB', onPrimary: '#000000',
+  border: '#FFFFFF', divider: '#FFFFFF', placeholder: '#D1D5DB',
+  inputBg: '#000000', disabledBg: '#000000', disabledText: '#D1D5DB',
 };
 
 export const colors = lightColors;
@@ -34,8 +35,8 @@ export const accentList = Object.keys(accentThemes);
 export const DEFAULT_ACCENT = 'teal';
 
 // Ten user-selectable visual styles. All styles share the same content/action
-// layer; only presentation changes. The rendering components also enforce
-// contrast, wrapping and minimum touch targets in both light and dark mode.
+// layer; only presentation changes. Rendering components enforce contrast,
+// wrapping and minimum touch targets in both light and dark mode.
 export const gridStyles = {
   bordered: { label: 'Bordered Cards', description: 'Crisp professional cards' },
   classic: { label: 'Classic', description: 'Familiar business tile layout' },
