@@ -5,35 +5,34 @@ import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import { useLanguage } from '../i18n/LanguageContext';
-import { SERVICE_GRID_ICONS } from './serviceGridIcons';
 
 const SERVICES = [
-  { key: 'recharge', bg: '#E8F5E9', accent: '#43A047', name: 'Recharge', kind: 'service' },
-  { key: 'mobilebanking', bg: '#E3F2FD', accent: '#1E88E5', name: 'Mobile Banking', kind: 'service' },
-  { key: 'internet', bg: '#FFF3E0', accent: '#FB8C00', name: 'Internet', kind: 'service' },
-  { key: 'remittance', bg: '#F3E5F5', accent: '#8E24AA', name: 'Remittance', kind: 'service' },
-  { key: 'bus', bg: '#FCE4EC', accent: '#D81B60', name: 'Bus', pointsKey: 'bus-redbus', pointsLabel: 'pts on payment', kind: 'buspicker' },
-  { key: 'train', bg: '#E0F7FA', accent: '#00ACC1', name: 'Train', pointsKey: 'train', pointsLabel: 'pts on payment', kind: 'webview' },
-  { key: 'flight', bg: '#E8EAF6', accent: '#3949AB', name: 'Flight', kind: 'service' },
-  { key: 'fomema', bg: '#E8F5E9', accent: '#43A047', name: 'FOMEMA', pointsKey: 'fomema', pointsLabel: 'pts on search', kind: 'webview' },
-  { key: 'visa', bg: '#F3E5F5', accent: '#8E24AA', name: 'Visa', pointsKey: 'visa', pointsLabel: 'pts on search', kind: 'webview' },
-  { key: 'mydigital', bg: '#E1F5FE', accent: '#0288D1', name: 'Malaysia Arrival Card', pointsKey: 'mydigital', pointsLabel: 'pts on submit', kind: 'webview' },
-  { key: 'passport', bg: '#FFF8E1', accent: '#F9A825', name: 'Passport', pointsKey: 'passport', pointsLabel: 'pts on submit', kind: 'webview' },
-  { key: 'marketplace', bg: '#FFF3E0', accent: '#F4511E', name: 'Marketplace', kind: 'marketplace' },
-  { key: 'myDocuments', bg: '#E1F5FE', accent: '#0288D1', name: 'My Documents', kind: 'documents' },
-  { key: 'salary', bg: '#FFF8E1', accent: '#F9A825', name: 'Salary & OT', kind: 'salary' },
+  { key: 'recharge', icon: '📱', bg: '#E8F5E9', accent: '#43A047', name: 'Recharge', kind: 'service' },
+  { key: 'mobilebanking', icon: '🏦', bg: '#E3F2FD', accent: '#1E88E5', name: 'Mobile Banking', kind: 'service' },
+  { key: 'internet', icon: '📡', bg: '#FFF3E0', accent: '#FB8C00', name: 'Internet', kind: 'service' },
+  { key: 'remittance', icon: '💸', bg: '#F3E5F5', accent: '#8E24AA', name: 'Remittance', kind: 'service' },
+  { key: 'bus', icon: '🚌', bg: '#FCE4EC', accent: '#D81B60', name: 'Bus', pointsKey: 'bus-redbus', pointsLabel: 'pts on payment', kind: 'buspicker' },
+  { key: 'train', icon: '🚂', bg: '#E0F7FA', accent: '#00ACC1', name: 'Train', pointsKey: 'train', pointsLabel: 'pts on payment', kind: 'webview' },
+  { key: 'flight', icon: '✈️', bg: '#E8EAF6', accent: '#3949AB', name: 'Flight', kind: 'service' },
+  { key: 'fomema', icon: '🏥', bg: '#E8F5E9', accent: '#43A047', name: 'FOMEMA', pointsKey: 'fomema', pointsLabel: 'pts on search', kind: 'webview' },
+  { key: 'visa', icon: '🛂', bg: '#F3E5F5', accent: '#8E24AA', name: 'Visa', pointsKey: 'visa', pointsLabel: 'pts on search', kind: 'webview' },
+  { key: 'mydigital', icon: '💻', bg: '#E1F5FE', accent: '#0288D1', name: 'Malaysia Arrival Card', pointsKey: 'mydigital', pointsLabel: 'pts on submit', kind: 'webview' },
+  { key: 'passport', icon: '📔', bg: '#FFF8E1', accent: '#F9A825', name: 'Passport', pointsKey: 'passport', pointsLabel: 'pts on submit', kind: 'webview' },
+  { key: 'marketplace', icon: '🛒', bg: '#FFF3E0', accent: '#F4511E', name: 'Marketplace', kind: 'marketplace' },
+  { key: 'myDocuments', icon: '📁', bg: '#E1F5FE', accent: '#0288D1', name: 'My Documents', kind: 'documents' },
+  { key: 'salary', icon: '💰', bg: '#FFF8E1', accent: '#F9A825', name: 'Salary & OT', kind: 'salary' },
 ];
 const MORE_FEATURES = [
-  { key: 'esim', bg: '#E0F2F1', accent: '#00897B', name: 'MY e-SIM', pointsKey: 'esim', pointsLabel: 'pts on payment', kind: 'webview' },
-  { key: 'social', bg: '#FCE4EC', accent: '#AD1457', name: 'Social Feed', kind: 'social' },
-  { key: 'support', bg: '#E0F7FA', accent: '#00838F', name: 'Support', kind: 'support' },
-  { key: 'history', bg: '#EDE7F6', accent: '#5E35B1', name: 'History', kind: 'history' },
-  { key: 'chat', bg: '#E8F5E9', accent: '#2E7D32', name: 'Chat', kind: 'chathub' },
-  { key: 'myAccount', bg: '#FFF8E1', accent: '#F9A825', name: 'My Account', kind: 'myaccount' },
-  { key: 'profile', bg: '#E1F5FE', accent: '#0288D1', name: 'Profile', kind: 'profile' },
-  { key: 'notepad', bg: '#FFFDE7', accent: '#F9A825', name: 'Notepad', kind: 'notepad' },
-  { key: 'gamePoints', bg: '#E8EAF6', accent: '#5E35B1', name: 'Game Points', kind: 'gamePoints' },
-  { key: 'gamePointsGift', bg: '#FCE4EC', accent: '#D81B60', name: 'Gifts', kind: 'gamePointsGift' },
+  { key: 'esim', icon: '📶', bg: '#E0F2F1', accent: '#00897B', name: 'MY e-SIM', pointsKey: 'esim', pointsLabel: 'pts on payment', kind: 'webview' },
+  { key: 'social', icon: '📣', bg: '#FCE4EC', accent: '#AD1457', name: 'Social Feed', kind: 'social' },
+  { key: 'support', icon: '🎧', bg: '#E0F7FA', accent: '#00838F', name: 'Support', kind: 'support' },
+  { key: 'history', icon: '🕒', bg: '#EDE7F6', accent: '#5E35B1', name: 'History', kind: 'history' },
+  { key: 'chat', icon: '💬', bg: '#E8F5E9', accent: '#2E7D32', name: 'Chat', kind: 'chathub' },
+  { key: 'myAccount', icon: '🧾', bg: '#FFF8E1', accent: '#F9A825', name: 'My Account', kind: 'myaccount' },
+  { key: 'profile', icon: '👤', bg: '#E1F5FE', accent: '#0288D1', name: 'Profile', kind: 'profile' },
+  { key: 'notepad', icon: '🗒️', bg: '#FFFDE7', accent: '#F9A825', name: 'Notepad', kind: 'notepad' },
+  { key: 'gamePoints', icon: '🎮', bg: '#E8EAF6', accent: '#5E35B1', name: 'Game Points', kind: 'gamePoints' },
+  { key: 'gamePointsGift', icon: '🎁', bg: '#FCE4EC', accent: '#D81B60', name: 'Gifts', kind: 'gamePointsGift' },
 ];
 const PRIMARY_COUNT = 11;
 const NUM_COLUMNS = 4;
@@ -44,7 +43,7 @@ const CONTAINER_WIDTH = Math.min(SCREEN_WIDTH, 480) - GRID_PADDING * 2;
 const ITEM_WIDTH = (CONTAINER_WIDTH - COLUMN_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
 const PRIMARY_SERVICES = SERVICES.slice(0, PRIMARY_COUNT);
 const MORE_SERVICES = [...SERVICES.slice(PRIMARY_COUNT), ...MORE_FEATURES];
-const MORE_FEATURES_TILE = { key: 'moreFeaturesTile', bg: '#EDE7F6', accent: '#5E35B1', name: 'More Features', kind: 'moreFeaturesLink' };
+const MORE_FEATURES_TILE = { key: 'moreFeaturesTile', icon: '✨', bg: '#EDE7F6', accent: '#5E35B1', name: 'More Features', kind: 'moreFeaturesLink' };
 
 function hexLuminance(hex) {
   const raw = String(hex || '').replace('#', '');
@@ -64,7 +63,7 @@ export function Tile({ s, onPress, disabled, index = 0 }) {
   const { t } = useLanguage();
   const styles = createStyles(colors);
   const label = t(`service.${s.key}`, s.name);
-  const icon = SERVICE_GRID_ICONS[s.key] || '•';
+  const icon = s.icon || '•';
   const gradientColors = [colors.primary, colors.secondary];
   const gradientText = contrastText(gradientColors[0]);
   const adaptive = gridStyle === 'adaptive' && index < 4;
