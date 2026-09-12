@@ -8,8 +8,8 @@ const ACCENT_STORAGE_KEY = 'mysheba.themeAccent';
 const GRID_STYLE_STORAGE_KEY = 'mysheba.gridStyle';
 const ICON_STYLE_STORAGE_KEY = 'mysheba.iconStyle';
 
-// Icon styles only change the presentation/iconography of service tiles.
-// They never change the service action or any provider/country branding.
+// Ten selectable icon presentations. They only change service iconography;
+// country flags, operator logos and mobile-banking/provider branding are never replaced.
 export const iconStyles = {
   classic: { label: 'Classic', description: 'Familiar service icons with a clean look.' },
   modern: { label: 'Modern', description: 'Simple contemporary icons matched to each service.' },
@@ -17,6 +17,10 @@ export const iconStyles = {
   outline: { label: 'Outline', description: 'Lightweight outline-style service symbols.' },
   playful: { label: 'Playful', description: 'Friendly expressive icons, still matched to the service.' },
   compact: { label: 'Compact', description: 'Small, simple symbols for a tighter visual style.' },
+  business: { label: 'Business', description: 'Professional service symbols for a corporate look.' },
+  colorful: { label: 'Colorful', description: 'Vivid service symbols with stronger visual character.' },
+  thin: { label: 'Thin Line', description: 'Light line-inspired symbols for a refined look.' },
+  bold: { label: 'Bold', description: 'Large, high-impact symbols for fast scanning.' },
 };
 export const iconStyleList = Object.keys(iconStyles);
 export const DEFAULT_ICON_STYLE = 'classic';
