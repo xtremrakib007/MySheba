@@ -30,15 +30,24 @@ export async function deleteVirtualGift(id) {
   await deleteDoc(doc(db, 'virtualGifts', id));
 }
 
-/** Securely sends a catalogue gift. The Cloud Function reads the server-side
- * gift price and atomically deducts that amount from gamePoints/{uid}. */
-export async function sendVirtualGift({ giftId, recipientUid, chatType, chatId, idempotencyKey }) {
+/**
+ * Sends a catalogue gift using the existing server-side Game Points gift
+ * callable. The gift's catalogue price is the amount charged, so the
+ * sender's Game Points are debited rather than walletBalance.
+ */
+export async function sendVirtualGift({ giftId, giftPrice, recipientUid, chatType, chatId, idempotencyKey }) {
   if (!giftId || !recipientUid || !chatType || !chatId) throw new Error('Missing gift recipient or chat.');
+  const price = Number(giftPrice);
+  if (!Number.isFinite(price) || price <= 0) throw new Error('Invalid gift price.');
   const key = idempotencyKey || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const fn = httpsCallable(functions, 'sendVirtualGift');
+  const fn = httpsCallable(functions, 'giftGamePoints');
   try {
-    const { data } = await fn({ giftId, recipientUid, chatType, chatId, idempotencyKey: key });
-    return data;
+    const { data } = await fn({
+      toUid: recipientUid,
+      amount: price,
+      idempotencyKey: `${key}:${giftId}:${chatType}:${chatId}`,
+    });
+    return { ...data, giftId, giftPrice: price, chatType, chatId };
   } catch (err) {
     throw new Error(err.message || 'Could not send the virtual gift right now.');
   }
