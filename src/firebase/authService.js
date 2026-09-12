@@ -67,16 +67,15 @@ export function isValidPin(pin) {
   return value.length >= 6 && value.length <= 20;
 }
 
-export async function registerCustomer({ name, phone, phoneE164, dialCode, email, pin, dealerCode, resellerCode, phoneIdToken }) {
+export async function registerCustomer({ name, phone, phoneE164, dialCode, email, pin, phoneIdToken }) {
   if (!name || !name.trim()) throw new Error('Please enter your full name.');
   if (!isValidPhone(phone)) throw new Error('Please enter a valid phone number.');
   if (!isValidEmail(email)) throw new Error('Please enter a valid email address.');
   if (!isValidPin(pin)) throw new Error('Password must be 6-20 characters.');
-  if (!dealerCode || !normalizePhone(dealerCode)) throw new Error('Please enter a dealer code.');
   if (!phoneIdToken) throw new Error('Please verify your phone number first.');
 
   const registerFn = httpsCallable(functions, 'registerWithDealerCode');
-  await registerFn({ name, phone, phoneE164, dialCode, email, pin, dealerCode, resellerCode, phoneIdToken });
+  await registerFn({ name, phone, phoneE164, dialCode, email, pin, phoneIdToken });
 
   const authEmail = phoneToEmail(phone, dialCode);
   const cred = await signInWithEmailAndPassword(auth, authEmail, pin);

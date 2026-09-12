@@ -2197,7 +2197,7 @@ export function AppProvider({ children }) {
     setAuthBusy(true);
     setAuthError('');
     try {
-      const p = await authService.registerCustomer({ name, phone, phoneE164, dialCode, email, pin, dealerCode, resellerCode, phoneIdToken });
+      const p = await authService.registerCustomer({ name, phone, phoneE164, dialCode, email, pin, phoneIdToken });
       setProfile(p);
       setScreen('customerHome');
       return true;
