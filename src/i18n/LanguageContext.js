@@ -7,8 +7,8 @@ import hi from './translations/hi';
 import ne from './translations/ne';
 import ur from './translations/ur';
 import ta from './translations/ta';
+import faqTranslations from './faqTranslations';
 
-// Persists the user's language choice across app restarts.
 const STORAGE_KEY = 'mysheba.language';
 
 export const TRANSLATIONS = { en, bn, ms, hi, ne, ur, ta };
@@ -48,6 +48,7 @@ const LanguageContext = createContext({
   t: (key) => key,
   languages: LANGUAGES,
   languageList: LANGUAGE_LIST,
+  faq: faqTranslations[DEFAULT_LANGUAGE],
   loaded: false,
 });
 
@@ -87,6 +88,7 @@ export function LanguageProvider({ children }) {
     t,
     languages: LANGUAGES,
     languageList: LANGUAGE_LIST,
+    faq: faqTranslations[language] || faqTranslations[DEFAULT_LANGUAGE],
     loaded,
   }), [language, setLanguage, t, loaded]);
 

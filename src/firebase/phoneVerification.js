@@ -86,14 +86,17 @@ export async function confirmPhoneOtp(confirmation, code) {
 
 function friendlyPhoneAuthError(err) {
   const code = String(err?.code || '').toLowerCase();
-  if (code.includes('invalid-phone')) return 'Please enter a valid international phone number.';
-  if (code.includes('missing-phone')) return 'Please enter your phone number.';
-  if (code.includes('too-many') || code.includes('quota')) return 'Too many SMS attempts. Please try again later.';
-  if (code.includes('invalid-verification-code')) return 'Incorrect code. Please try again.';
-  if (code.includes('code-expired') || code.includes('session-expired')) return 'That SMS code has expired. Please request a new code.';
-  if (code.includes('operation-not-allowed')) return 'Phone sign-in is not enabled in Firebase Authentication.';
-  if (code.includes('app-not-authorized')) return 'This MySheba app is not authorized for Firebase Phone Auth. Check the release SHA-1/SHA-256 and Firebase Android app configuration.';
-  if (code.includes('captcha') || code.includes('play-integrity')) return 'Firebase security verification failed. Please update Google Play services and try again.';
-  if (code.includes('network')) return 'Network error. Check your connection and try again.';
-  return err?.message || 'Could not verify your phone number. Please try again.';
+  // Include the actionable Firebase code in release builds so an SMS failure
+  // can be diagnosed from the on-screen error instead of appearing generic.
+  const detail = code ? ` [Firebase: ${code}]` : '';
+  if (code.includes('invalid-phone')) return 'Please enter a valid international phone number.' + detail;
+  if (code.includes('missing-phone')) return 'Please enter your phone number.' + detail;
+  if (code.includes('too-many') || code.includes('quota')) return 'Too many SMS attempts. Please try again later.' + detail;
+  if (code.includes('invalid-verification-code')) return 'Incorrect code. Please try again.' + detail;
+  if (code.includes('code-expired') || code.includes('session-expired')) return 'That SMS code has expired. Please request a new code.' + detail;
+  if (code.includes('operation-not-allowed')) return 'Phone sign-in is not enabled in Firebase Authentication.' + detail;
+  if (code.includes('app-not-authorized')) return 'This MySheba app is not authorized for Firebase Phone Auth. Check the release SHA-1/SHA-256 and Firebase Android app configuration.' + detail;
+  if (code.includes('captcha') || code.includes('play-integrity')) return 'Firebase security verification failed. Please update Google Play services and try again.' + detail;
+  if (code.includes('network')) return 'Network error. Check your connection and try again.' + detail;
+  return (err?.message || 'Could not verify your phone number. Please try again.') + detail;
 }
