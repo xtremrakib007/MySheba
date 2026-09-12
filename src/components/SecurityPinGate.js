@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Modal, View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
@@ -6,25 +6,44 @@ import { useTheme } from "../theme/ThemeContext";
 import AppModalHeader from './AppModalHeader';
 import * as securityPinService from '../firebase/securityPinService';
 
-// Rendered once at the App.js root, same as RatePopup/ResultModal. Reads
-// pinGateRequest (set by AppContext.requireSecurityPin - see the screens
-// that call it on entry: MyDocumentsScreen, TransferPointsScreen,
-// NotepadScreen) and shows either a first-time "set + confirm" flow
-// (profile.securityPinSet is false) or a single "enter your PIN" verify
-// step (it's true already). Actual hashing/verification happens
-// server-side in functions/securityPinService.js - this only ever sees
-// the plain digits long enough to hand them to that callable.
+// Rendered once at the App.js root. Reads pinGateRequest (set by
+// AppContext.requireSecurityPin) and also auto-starts setup for an existing
+// Google-authenticated profile that reached Home without a security PIN.
+// This closes the old gap where an existing Google UID skipped onboarding.
 export default function SecurityPinGate() {
-  const {
-    colors
-  } = useTheme();
-
+  const { colors } = useTheme();
   const styles = createStyles(colors);
-  const { pinGateRequest, profile, resolvePinGate, cancelPinGate } = useApp();
+  const {
+    pinGateRequest,
+    profile,
+    authUser,
+    requireSecurityPin,
+    resolvePinGate,
+    cancelPinGate,
+  } = useApp();
   const visible = !!pinGateRequest;
   const isSetup = !profile?.securityPinSet;
+  const autoPromptedRef = useRef(false);
 
-  const [step, setStep] = useState('enter'); // 'enter' | 'confirm' (setup only)
+  // Existing Google accounts created before PIN setup must not silently reach
+  // an unprotected Home screen. Ask for the same server-side PIN setup gate
+  // used by the rest of the app. The ref prevents a render loop while the
+  // profile document is being updated after a successful setup.
+  useEffect(() => {
+    if (!authUser || !profile || profile.authProvider !== 'google' || profile.securityPinSet) {
+      if (!profile?.securityPinSet) autoPromptedRef.current = false;
+      return undefined;
+    }
+    if (pinGateRequest || autoPromptedRef.current) return undefined;
+    autoPromptedRef.current = true;
+    requireSecurityPin('Account Security PIN').catch(() => {
+      // A cancelled gate may be requested again on the next explicit login.
+      autoPromptedRef.current = false;
+    });
+    return undefined;
+  }, [authUser, profile, pinGateRequest, requireSecurityPin]);
+
+  const [step, setStep] = useState('enter');
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [error, setError] = useState('');
@@ -43,8 +62,13 @@ export default function SecurityPinGate() {
   if (!visible) return null;
 
   const isValidPin = (p) => /^\d{4,8}$/.test(p);
-
-  const onCancel = () => { if (!busy) cancelPinGate(); };
+  const isMandatoryGoogleSetup = authUser && profile?.authProvider === 'google' && !profile?.securityPinSet;
+  const onCancel = () => {
+    // A Google account without a PIN must finish setup; allowing cancellation
+    // would recreate the original bug where Home opens without protection.
+    if (isMandatoryGoogleSetup || busy) return;
+    cancelPinGate();
+  };
 
   const onEnterNext = () => {
     setError('');
@@ -61,7 +85,7 @@ export default function SecurityPinGate() {
     if (confirmPin !== pin) { setError('PINs do not match.'); setConfirmPin(''); return; }
     setBusy(true);
     try {
-      await securityPinService.setupSecurityPin(pin);
+      await securityPinService.setupSecurityPin(pin.trim());
       resolvePinGate();
     } catch (err) {
       setError(err?.message || 'Could not set up your security PIN. Please try again.');
@@ -131,21 +155,15 @@ export default function SecurityPinGate() {
             {!!error && <Text style={styles.error}>{error}</Text>}
 
             <View style={styles.row}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={onCancel} disabled={busy}>
-                <Text style={styles.cancelText}>Cancel</Text>
+              <TouchableOpacity style={[styles.cancelBtn, isMandatoryGoogleSetup && styles.hiddenCancel]} onPress={onCancel} disabled={busy || isMandatoryGoogleSetup}>
+                {!isMandatoryGoogleSetup && <Text style={styles.cancelText}>Cancel</Text>}
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.okBtn, busy && styles.okBtnDisabled]}
                 onPress={isSetup && step === 'confirm' ? onConfirmSave : onEnterNext}
                 disabled={busy}
               >
-                {busy ? (
-                  <ActivityIndicator color="white" />
-                ) : (
-                  <Text style={styles.okText}>
-                    {isSetup ? (step === 'enter' ? 'Next' : 'Confirm & Save') : 'Unlock'}
-                  </Text>
-                )}
+                {busy ? <ActivityIndicator color="white" /> : <Text style={styles.okText}>{isSetup ? (step === 'enter' ? 'Next' : 'Confirm & Save') : 'Unlock'}</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -166,6 +184,7 @@ function createStyles(colors) {
     error: { color: colors.error, fontSize: 12, marginTop: 12 },
     row: { flexDirection: 'row', gap: 10, marginTop: 20 },
     cancelBtn: { flex: 1, paddingVertical: 10, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
+    hiddenCancel: { borderWidth: 0 },
     cancelText: { color: '#666', fontWeight: '600' },
     okBtn: { flex: 1, paddingVertical: 10, borderRadius: radius.md, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
     okBtnDisabled: { opacity: 0.7 },
