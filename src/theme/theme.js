@@ -3,7 +3,7 @@
 // Contrast is intentionally strong so text, cards, controls and grid boundaries remain visible on small screens.
 export const lightColors = {
   primary: '#00A99D', primaryDark: '#00897B', secondary: '#1A73E8',
-  navy: '#000000', scrim: '#000000', success: '#2E7D32', warning: '#B26A00', error: '#C62828',
+  navy: '#000000', scrim: '#000000', success: '#2E7D32', warning: '#8A5700', error: '#C62828',
   bg: '#FFFFFF', card: '#FFFFFF', surface: '#FFFFFF', surfaceElevated: '#FFFFFF',
   text: '#000000', textSecondary: '#374151', onPrimary: '#FFFFFF',
   border: '#CBD5E1', divider: '#CBD5E1', placeholder: '#64748B',
@@ -21,14 +21,16 @@ export const darkColors = {
 
 export const colors = lightColors;
 
+// Theme swatches stay vivid, while the light-mode primary values are chosen
+// to remain readable when used directly as text, labels or icons on white.
 export const accentThemes = {
   teal: { label: 'Teal', swatch: '#00A99D', light: { primary: '#00A99D', primaryDark: '#00897B', secondary: '#1A73E8' }, dark: { primary: '#26D0C4', primaryDark: '#00A99D', secondary: '#5B9DF9' } },
   blue: { label: 'Ocean Blue', swatch: '#1A73E8', light: { primary: '#1A73E8', primaryDark: '#0F56B3', secondary: '#00A99D' }, dark: { primary: '#5B9DF9', primaryDark: '#1A73E8', secondary: '#26D0C4' } },
-  purple: { label: 'Royal Purple', swatch: '#7C4DFF', light: { primary: '#7C4DFF', primaryDark: '#5E35B1', secondary: '#4facfe' }, dark: { primary: '#B39DFF', primaryDark: '#8E6CFF', secondary: '#5B9DF9' } },
-  rose: { label: 'Rose', swatch: '#F5576C', light: { primary: '#F5576C', primaryDark: '#C62839', secondary: '#f093fb' }, dark: { primary: '#FF8A9B', primaryDark: '#F5576C', secondary: '#F0A9FF' } },
-  amber: { label: 'Amber', swatch: '#FF9F43', light: { primary: '#FF9F43', primaryDark: '#E07C1E', secondary: '#FBBC04' }, dark: { primary: '#FFB86B', primaryDark: '#FF9F43', secondary: '#FBBC04' } },
-  emerald: { label: 'Emerald', swatch: '#0FB981', light: { primary: '#0FB981', primaryDark: '#0A8F63', secondary: '#20bf6b' }, dark: { primary: '#3EDDA6', primaryDark: '#0FB981', secondary: '#5CE0A0' } },
-  mix: { label: 'Vivid Mix', swatch: '#FF3EA5', gradientSwatch: ['#FF3EA5', '#7C4DFF', '#00C2FF'], light: { primary: '#FF3EA5', primaryDark: '#D6127D', secondary: '#00C2FF' }, dark: { primary: '#FF6FC4', primaryDark: '#FF3EA5', secondary: '#3DD9FF' } },
+  purple: { label: 'Royal Purple', swatch: '#7C4DFF', light: { primary: '#5E35B1', primaryDark: '#4527A0', secondary: '#1976D2' }, dark: { primary: '#B39DFF', primaryDark: '#8E6CFF', secondary: '#5B9DF9' } },
+  rose: { label: 'Rose', swatch: '#F5576C', light: { primary: '#C62839', primaryDark: '#9E1B2B', secondary: '#AD1457' }, dark: { primary: '#FF8A9B', primaryDark: '#F5576C', secondary: '#F0A9FF' } },
+  amber: { label: 'Amber', swatch: '#FF9F43', light: { primary: '#8A5700', primaryDark: '#6B4300', secondary: '#8A5700' }, dark: { primary: '#FFB86B', primaryDark: '#FF9F43', secondary: '#FBBC04' } },
+  emerald: { label: 'Emerald', swatch: '#0FB981', light: { primary: '#0A8F63', primaryDark: '#06734F', secondary: '#087F5B' }, dark: { primary: '#3EDDA6', primaryDark: '#0FB981', secondary: '#5CE0A0' } },
+  mix: { label: 'Vivid Mix', swatch: '#FF3EA5', gradientSwatch: ['#FF3EA5', '#7C4DFF', '#00C2FF'], light: { primary: '#C21870', primaryDark: '#9C155B', secondary: '#0077B6' }, dark: { primary: '#FF6FC4', primaryDark: '#FF3EA5', secondary: '#3DD9FF' } },
 };
 
 export const accentList = Object.keys(accentThemes);
