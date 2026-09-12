@@ -7,10 +7,9 @@ export const MOD_COMMANDS = [
   'mod', 'unmod', 'admin', 'removeadmin',
 ];
 
-// Role changes and room lock/unlock are admin-only. Moderators may use the
-// member moderation commands, but may not change room-wide access or roles.
+// Role changes remain admin-only. All other moderation commands, including
+// room lock/unlock, are available to either a room admin or moderator.
 export const ADMIN_ONLY_MOD_COMMANDS = [
-  'lock', 'unlock',
   'mod', 'unmod', 'admin', 'removeadmin',
 ];
 
@@ -31,8 +30,7 @@ export const MOD_ACTION_LABEL = {
 /**
  * Parses a moderation slash command. Targeted commands accept
  * "/cmd @Name" or "/cmd userId". Room-wide /lock and /unlock accept no
- * target; an optional extra argument is ignored by the caller only after
- * validating the command.
+ * target; an optional extra argument is reported so the caller can reject it.
  */
 export function parseModCommand(text) {
   const trimmed = (text || '').trim();
