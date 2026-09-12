@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
@@ -35,8 +35,6 @@ const MORE_FEATURES = [
   { key: 'gamePointsGift', icon: '🎁', bg: '#FCE4EC', accent: '#D81B60', name: 'Gifts', kind: 'gamePointsGift' },
 ];
 
-// Each icon style has a semantic icon for every service. Only iconography changes;
-// provider/country branding and the underlying service action remain untouched.
 const ICON_SETS = {
   classic: {},
   modern: { recharge:'⚡', mobilebanking:'💳', internet:'🌐', remittance:'🌍', bus:'🚌', train:'🚆', flight:'✈️', fomema:'🩺', visa:'🪪', mydigital:'🛬', passport:'📕', marketplace:'🛍️', myDocuments:'🗂️', salary:'💵', esim:'📲', social:'📢', support:'🎧', history:'⏱️', chat:'💬', myAccount:'👛', profile:'👤', notepad:'📝', gamePoints:'🎮', gamePointsGift:'🎁', moreFeaturesTile:'✨' },
@@ -46,15 +44,16 @@ const ICON_SETS = {
   compact: { recharge:'▣', mobilebanking:'▤', internet:'◉', remittance:'↗', bus:'▰', train:'▰', flight:'➤', fomema:'✚', visa:'▢', mydigital:'↘', passport:'▯', marketplace:'▱', myDocuments:'▧', salary:'$', esim:'▥', social:'↗', support:'◉', history:'◷', chat:'◌', myAccount:'▣', profile:'○', notepad:'▤', gamePoints:'◆', gamePointsGift:'◇', moreFeaturesTile:'✦' },
 };
 
-const PRIMARY_COUNT = 11;
+// Exactly 12 home tiles: 11 requested services + More Features.
+// Use a percentage width based on the actual grid container, not the device
+// window. The previous fixed window-based width could overflow when the home
+// screen had its own horizontal padding and cause the fourth tile to wrap.
 const NUM_COLUMNS = 4;
 const GRID_PADDING = 10;
-const COLUMN_GAP = 8;
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const CONTAINER_WIDTH = Math.min(SCREEN_WIDTH, 480) - GRID_PADDING * 2;
-const ITEM_WIDTH = (CONTAINER_WIDTH - COLUMN_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
-const PRIMARY_SERVICES = SERVICES.slice(0, PRIMARY_COUNT);
-const MORE_SERVICES = [...SERVICES.slice(PRIMARY_COUNT), ...MORE_FEATURES];
+const COLUMN_GAP = 6;
+const ITEM_PERCENT = `${100 / NUM_COLUMNS - 2}%`;
+const PRIMARY_SERVICES = SERVICES.slice(0, 11);
+const MORE_SERVICES = [...SERVICES.slice(11), ...MORE_FEATURES];
 const MORE_FEATURES_TILE = { key: 'moreFeaturesTile', icon: '✨', bg: '#EDE7F6', accent: '#5E35B1', name: 'More Features', kind: 'moreFeaturesLink' };
 
 function hexLuminance(hex) {
@@ -78,7 +77,7 @@ export function Tile({ s, onPress, disabled, index = 0 }) {
   const adaptive = gridStyle === 'adaptive' && index < 4; const iconBg = isDark ? '#FFFFFF14' : s.bg;
   const iconStyleView = [styles.iconWrap, { backgroundColor: iconBg, borderColor: s.accent }, gridStyle === 'bordered' && styles.iconBordered, gridStyle === 'classic' && styles.iconClassic, gridStyle === 'soft' && styles.iconSoft, gridStyle === 'minimal' && styles.iconMinimal, gridStyle === 'glass' && styles.iconGlass, gridStyle === 'threeD' && styles.iconThreeD, gridStyle === 'neon' && styles.iconNeon, gridStyle === 'gradient' && styles.iconGradient, gridStyle === 'bento' && styles.iconBento, gridStyle === 'adaptive' && styles.iconAdaptive];
   const content = <><View style={iconStyleView}><Text style={[styles.iconText, { color: s.accent }, gridStyle === 'neon' && styles.iconTextNeon, gridStyle === 'gradient' && { color: gradientText }]}>{icon}</Text></View><Text style={[styles.name, gridStyle === 'gradient' && { color: gradientText }, gridStyle === 'neon' && { color: '#FFFFFF' }]} numberOfLines={2}>{label}</Text></>;
-  const common = [styles.item, { width: ITEM_WIDTH }, disabled && styles.itemDisabled, adaptive && styles.itemAdaptive];
+  const common = [styles.item, { width: ITEM_PERCENT }, disabled && styles.itemDisabled, adaptive && styles.itemAdaptive];
   if (gridStyle === 'gradient') return <TouchableOpacity style={common} activeOpacity={0.82} disabled={disabled} onPress={onPress}><LinearGradient colors={gradientColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradientFill}>{content}</LinearGradient></TouchableOpacity>;
   return <TouchableOpacity style={[...common, gridStyle === 'bordered' && styles.bordered, gridStyle === 'classic' && styles.classic, gridStyle === 'soft' && styles.soft, gridStyle === 'minimal' && styles.minimal, gridStyle === 'glass' && styles.glass, gridStyle === 'threeD' && styles.threeD, gridStyle === 'neon' && styles.neon, gridStyle === 'bento' && styles.bento, gridStyle === 'adaptive' && styles.adaptive]} activeOpacity={0.82} disabled={disabled} onPress={onPress}>{gridStyle === 'classic' && <View style={[styles.classicBar, { backgroundColor: s.accent }]} />}{gridStyle === 'adaptive' && adaptive && <View style={[styles.adaptiveBar, { backgroundColor: colors.primary }]} />}{content}</TouchableOpacity>;
 }
@@ -99,7 +98,7 @@ export { GRID_PADDING, COLUMN_GAP };
 
 function createStyles(colors) {
   return StyleSheet.create({
-    sectionHead: { paddingHorizontal: 14, paddingTop: 2, paddingBottom: 8 }, sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.navy }, gridCanvas: { marginHorizontal: 4, borderRadius: radius.xl, paddingVertical: 8, overflow: 'hidden' }, gridCanvasMinimal: { paddingVertical: 0 }, grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: GRID_PADDING, gap: COLUMN_GAP }, item: { minHeight: 158, borderRadius: radius.lg, paddingVertical: 12, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+    sectionHead: { paddingHorizontal: 14, paddingTop: 2, paddingBottom: 8 }, sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.navy }, gridCanvas: { marginHorizontal: 4, borderRadius: radius.xl, paddingVertical: 8, overflow: 'hidden' }, gridCanvasMinimal: { paddingVertical: 0 }, grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: GRID_PADDING, columnGap: COLUMN_GAP, rowGap: 8, alignContent: 'flex-start' }, item: { minHeight: 158, borderRadius: radius.lg, paddingVertical: 12, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
     bordered: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 }, classic: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}66` }, soft: { backgroundColor: isLight(colors) ? '#F7FAFC' : '#101010', borderWidth: 0 }, minimal: { backgroundColor: 'transparent', borderWidth: 0 }, glass: { backgroundColor: isLight(colors) ? '#FFFFFFD9' : '#FFFFFF12', borderWidth: 1, borderColor: isLight(colors) ? '#FFFFFF' : '#FFFFFF30', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 3 }, threeD: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}55`, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 0, shadowOffset: { width: 0, height: 4 }, elevation: 5, transform: [{ translateY: -1 }] }, neon: { backgroundColor: isLight(colors) ? '#10151A' : '#080A0C', borderWidth: 1, borderColor: `${colors.primary}99`, shadowColor: colors.primary, shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 4 }, bento: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}55`, minHeight: 158, paddingHorizontal: 8 }, adaptive: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}44` }, itemAdaptive: { shadowColor: colors.primary, shadowOpacity: 0.18, shadowRadius: 7, shadowOffset: { width: 0, height: 2 }, elevation: 4 }, classicBar: { position: 'absolute', top: 0, left: 0, right: 0, height: 4 }, adaptiveBar: { position: 'absolute', top: 0, left: 0, right: 0, height: 3 }, gradientFill: { flex: 1, width: '100%', minHeight: 158, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, paddingHorizontal: 4 }, iconWrap: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 8, borderWidth: 1 }, iconBordered: { backgroundColor: colors.card, borderColor: colors.border }, iconClassic: { backgroundColor: `${colors.primary}12`, borderWidth: 1 }, iconSoft: { backgroundColor: isLight(colors) ? '#FFFFFF' : '#181818', borderWidth: 0 }, iconMinimal: { backgroundColor: 'transparent', borderWidth: 0 }, iconGlass: { backgroundColor: isLight(colors) ? '#FFFFFF99' : '#FFFFFF10', borderColor: isLight(colors) ? '#FFFFFF' : '#FFFFFF30' }, iconThreeD: { backgroundColor: colors.card, borderWidth: 1, shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 0, shadowOffset: { width: 0, height: 3 }, elevation: 3 }, iconNeon: { backgroundColor: '#FFFFFF0A', borderColor: `${colors.primary}AA`, shadowColor: colors.primary, shadowOpacity: 0.35, shadowRadius: 6, shadowOffset: { width: 0, height: 0 }, elevation: 3 }, iconGradient: { backgroundColor: '#FFFFFF18', borderColor: '#FFFFFF45' }, iconBento: { backgroundColor: `${colors.primary}10`, borderColor: `${colors.primary}55`, borderRadius: 16 }, iconAdaptive: { backgroundColor: `${colors.primary}12`, borderColor: `${colors.primary}66`, borderRadius: 14 }, iconText: { fontSize: 27, fontWeight: '700', lineHeight: 30, textAlign: 'center' }, iconTextNeon: { textShadowColor: '#FFFFFF', textShadowOpacity: 0.25, textShadowRadius: 5 }, name: { fontSize: 11, fontWeight: '700', textAlign: 'center', color: colors.text, lineHeight: 15, flexShrink: 1 }, itemDisabled: { opacity: 0.55 }
   });
 }
