@@ -41,6 +41,15 @@ import { toE164 as phoneToE164 } from '../data/phoneCountries';
 
 const APP_EMAIL_DOMAIN = 'mysheba.app';
 
+// When Google authentication creates a temporary Firebase UID but MySheba
+// discovers that the Google email already belongs to an existing
+// phone/password account, keep the credential only in memory while the user
+// signs in to that existing account. It is never written to AsyncStorage or
+// Firestore. Once the existing account is authenticated, the credential is
+// linked to that account and the temporary Google-only UID is discarded.
+let pendingGoogleLinkCredential = null;
+let pendingGoogleLinkEmail = '';
+
 export function normalizePhone(phone) {
   return String(phone || '').replace(/[^0-9]/g, '');
 }
@@ -91,6 +100,54 @@ export async function registerCustomer({ name, phone, phoneE164, dialCode, email
   return { uid: cred.user.uid, ...snap.data() };
 }
 
+async function linkPendingGoogleCredentialIfNeeded() {
+  if (!pendingGoogleLinkCredential) return;
+
+  const credential = pendingGoogleLinkCredential;
+  const email = pendingGoogleLinkEmail;
+  pendingGoogleLinkCredential = null;
+  pendingGoogleLinkEmail = '';
+
+  const user = auth.currentUser;
+  if (!user) {
+    pendingGoogleLinkCredential = credential;
+    pendingGoogleLinkEmail = email;
+    throw new Error('Your Google sign-in could not be completed. Please try Google sign-in again.');
+  }
+
+  try {
+    await linkWithCredential(user, credential);
+    await updateDoc(doc(db, 'users', user.uid), {
+      googleLinked: true,
+      googleEmail: email || user.email || '',
+    });
+    logActivity('linkGoogleAccount', { method: 'googleRecovery' });
+  } catch (err) {
+    // Put it back only when linking failed, so the user can retry without
+    // having to repeat the Google picker unnecessarily.
+    pendingGoogleLinkCredential = credential;
+    pendingGoogleLinkEmail = email;
+    if (err && err.code === 'auth/provider-already-linked') {
+      pendingGoogleLinkCredential = null;
+      pendingGoogleLinkEmail = '';
+      return;
+    }
+    if (err && err.code === 'auth/credential-already-in-use') {
+      throw new Error('This Google account is already linked to another account. Please contact MySheba support.');
+    }
+    throw new Error(friendlyAuthError(err));
+  }
+}
+
+export function hasPendingGoogleLink() {
+  return !!pendingGoogleLinkCredential;
+}
+
+export function clearPendingGoogleLink() {
+  pendingGoogleLinkCredential = null;
+  pendingGoogleLinkEmail = '';
+}
+
 export async function login(phone, pin, dialCode = '+60') {
   if (!isValidPhone(phone)) throw new Error('Please enter a valid phone number.');
   if (!pin) throw new Error('Please enter your password.');
@@ -123,6 +180,23 @@ export async function login(phone, pin, dialCode = '+60') {
     } catch (e) {}
   }
 
+  // If Google sign-in previously found this same email on this existing
+  // phone/password account, finish the provider linking now that the user
+  // has authenticated the existing account. This preserves the original
+  // UID, profile, wallet, points and transaction history.
+  let googleWasLinked = false;
+  try {
+    googleWasLinked = !!pendingGoogleLinkCredential;
+    await linkPendingGoogleCredentialIfNeeded();
+    if (pendingGoogleLinkCredential) {
+      await signOut(auth);
+      throw new Error('Google could not be linked to this account. Please try again from Settings.');
+    }
+  } catch (err) {
+    await signOut(auth);
+    throw err;
+  }
+
   const deviceId = await getDeviceId();
   const sessionFn = httpsCallable(functions, 'checkDeviceSession');
   let sessionResult;
@@ -151,7 +225,7 @@ export async function login(phone, pin, dialCode = '+60') {
 
   await setLocalSessionId(sessionResult.sessionId);
   logActivity('login', { method: 'phone' });
-  return { uid: cred.user.uid, ...profileData };
+  return { uid: cred.user.uid, ...profileData, ...(googleWasLinked ? { googleLinked: true } : {}) };
 }
 
 /**
@@ -170,17 +244,17 @@ export async function signInWithGoogle() {
   } catch (err) {
     throw new Error(friendlyAuthError(err));
   }
-  return finishGoogleSignIn({});
+  return finishGoogleSignIn({}, credential);
 }
 
 export async function completeGoogleSignup(phone) {
   if (!auth.currentUser) {
     throw new Error('Your Google sign-in has expired. Please start again.');
   }
-  return finishGoogleSignIn({ phone });
+  return finishGoogleSignIn({ phone }, null);
 }
 
-async function finishGoogleSignIn(ensureProfileArgs) {
+async function finishGoogleSignIn(ensureProfileArgs, googleCredential = null) {
   if (!auth.currentUser) {
     throw new Error('Your Google sign-in has expired. Please start again.');
   }
@@ -206,8 +280,36 @@ async function finishGoogleSignIn(ensureProfileArgs) {
         needsPhoneErr.needsPhone = true;
         throw needsPhoneErr;
       }
+
+      // The Google credential successfully authenticated, but the MySheba
+      // profile check found the email on an existing phone/password account.
+      // Do not create a second account. Preserve the just-authenticated
+      // Google credential in memory, remove only the empty temporary Google
+      // Firebase user, then let the user sign in to their existing account.
+      const duplicateEmail =
+        (err && (err.code === 'functions/already-exists' || err.code === 'already-exists')) ||
+        /already (registered|exists).*MySheba/i.test(String(err && err.message || ''));
+
+      if (duplicateEmail && googleCredential) {
+        pendingGoogleLinkCredential = googleCredential;
+        pendingGoogleLinkEmail = auth.currentUser.email || '';
+        const temporaryGoogleUser = auth.currentUser;
+        try {
+          await temporaryGoogleUser.delete();
+        } catch (deleteErr) {
+          pendingGoogleLinkCredential = null;
+          pendingGoogleLinkEmail = '';
+          await signOut(auth).catch(() => {});
+          throw new Error('This Google email already belongs to an existing MySheba account. Sign in with your phone number and password, then use Settings → Link Google Account.');
+        }
+        const linkErr = new Error('This Google email already belongs to your existing MySheba account. Sign in with your phone number and password; Google will then be linked automatically.');
+        linkErr.needsExistingAccountLogin = true;
+        linkErr.googleEmail = temporaryGoogleUser.email || '';
+        throw linkErr;
+      }
+
       await signOut(auth).catch(() => {});
-      throw new Error(err.message || 'Google sign-in failed.');
+      throw new Error(err && err.message || 'Google sign-in failed.');
     }
   }
 
@@ -261,7 +363,7 @@ export async function linkGoogleAccount() {
     }
     throw new Error(friendlyAuthError(err));
   }
-  await updateDoc(doc(db, 'users', user.uid), { googleLinked: true });
+  await updateDoc(doc(db, 'users', user.uid), { googleLinked: true, googleEmail: email || user.email || '' });
   logActivity('linkGoogleAccount');
 }
 
@@ -323,6 +425,7 @@ export async function confirmDeviceLogin(uid, emailIdToken) {
 }
 
 export async function logout() {
+  clearPendingGoogleLink();
   logActivity('logout');
   try {
     const deviceId = await getDeviceId();
