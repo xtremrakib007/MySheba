@@ -38,6 +38,74 @@ const { logAudit, logServerError } = require('./logService');
 function normalizePhone(phone) {
   return String(phone || '').replace(/[^0-9]/g, '');
 }
+
+// Always produce the same E.164 representation used by registration and
+// Firebase Phone Auth. A local Malaysian number such as 0123456789 becomes
+// +60123456789; an already-international number is preserved.
+function toE164(phone, dialCode = '+60') {
+  const raw = String(phone || '').trim();
+  if (raw.startsWith('+')) {
+    return `+${raw.slice(1).replace(/[^0-9]/g, '')}`;
+  }
+  const digits = normalizePhone(phone).replace(/^0+/, '');
+  const code = String(dialCode || '+60').replace(/[^0-9+]/g, '');
+  return `${code.startsWith('+') ? code : `+${code}`}${digits}`;
+}
+
+// Existing accounts may have been created by older versions of the app and
+// may store `phone` as local digits, country-code digits, or even an E.164
+// string. New registrations store both `phone` (local digits) and
+// `phoneE164`. Search all safe exact representations so password recovery
+// does not depend on the format used when the account was originally made.
+function unique(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function phoneLookupCandidates(phone, phoneE164, dialCode) {
+  const e164 = toE164(phoneE164 || phone, dialCode);
+  const e164Digits = normalizePhone(e164);
+  const localDigits = normalizePhone(phone);
+  const countryCode = normalizePhone(dialCode || '+60');
+  const withoutCountry = e164Digits.startsWith(countryCode)
+    ? e164Digits.slice(countryCode.length)
+    : '';
+
+  return {
+    e164Candidates: unique([e164, `+${e164Digits}`]),
+    phoneCandidates: unique([
+      localDigits,
+      e164Digits,
+      `+${e164Digits}`,
+      withoutCountry,
+    ]),
+  };
+}
+
+async function findUserByPhone(db, phone, phoneE164, dialCode) {
+  const { e164Candidates, phoneCandidates } = phoneLookupCandidates(phone, phoneE164, dialCode);
+
+  // Prefer the canonical field used by current registrations.
+  if (e164Candidates.length) {
+    const snap = await db.collection('users')
+      .where('phoneE164', 'in', e164Candidates)
+      .limit(1)
+      .get();
+    if (!snap.empty) return snap;
+  }
+
+  // Fall back to legacy `phone` representations. The `in` query is exact,
+  // so this does not perform a broad/unsafe substring search.
+  if (phoneCandidates.length) {
+    const snap = await db.collection('users')
+      .where('phone', 'in', phoneCandidates)
+      .limit(1)
+      .get();
+    if (!snap.empty) return snap;
+  }
+
+  return { empty: true, docs: [] };
+}
+
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
 }
@@ -50,7 +118,7 @@ exports.resetPassword = onCall(async (request) => {
   const { phone, phoneE164, dialCode, email, newPassword, phoneIdToken, emailIdToken } = request.data || {};
 
   const normalizedPhone = normalizePhone(phone);
-  const normalizedE164 = normalizePhone(phoneE164 || '');
+  const normalizedE164 = toE164(phoneE164 || phone, dialCode);
   if (!normalizedPhone) throw new HttpsError('invalid-argument', 'Please enter a valid phone number.');
   if (!isValidPassword(newPassword)) throw new HttpsError('invalid-argument', 'Password must be 6-20 characters.');
   if (!phoneIdToken && !emailIdToken) {
@@ -58,8 +126,7 @@ exports.resetPassword = onCall(async (request) => {
   }
 
   const db = admin.firestore();
-  let snap = normalizedE164 ? await db.collection('users').where('phoneE164', '==', `+${normalizedE164}`).limit(1).get() : { empty: true, docs: [] };
-  if (snap.empty) snap = await db.collection('users').where('phone', '==', normalizedPhone).limit(1).get();
+  const snap = await findUserByPhone(db, phone, normalizedE164, dialCode);
   if (snap.empty) {
     throw new HttpsError('not-found', 'No account found with that phone number.');
   }
@@ -77,7 +144,7 @@ exports.resetPassword = onCall(async (request) => {
   let tempAuthUid;
   if (phoneIdToken) {
     try {
-      tempAuthUid = await assertPhoneVerified(phoneIdToken, phoneE164 || normalizedPhone, phoneE164 ? undefined : dialCode);
+      tempAuthUid = await assertPhoneVerified(phoneIdToken, normalizedE164, undefined);
     } catch (err) {
       throw new HttpsError('failed-precondition', err.message || 'Please verify your phone number first.');
     }
