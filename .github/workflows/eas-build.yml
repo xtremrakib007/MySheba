@@ -1,0 +1,43 @@
+name: Build MySheba Android AAB
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Production Android AAB
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build production AAB
+        run: eas build --platform android --profile production --non-interactive --wait --message "Fix admin login render crash and Google Sign-In duplicate-account flow"
+
+      - name: Download AAB
+        run: eas build:download --platform android --non-interactive
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mysheba-production-aab
+          path: "*.aab"
+          if-no-files-found: error
