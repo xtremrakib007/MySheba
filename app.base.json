@@ -163,8 +163,9 @@
       },
       "googleWebClientId": "632456211568-v5f370netearu5lb8ld48lhr28erbp9p.apps.googleusercontent.com",
       "googleMapsApiKey": "GOOGLE_MAPS_API_KEY_PLACEHOLDER",
-      "admobAndroidBannerId": "",
-      "admobIosBannerId": ""
+      "admobAndroidBannerId": "ca-app-pub-5028998697615030/9556346804",
+      "admobIosBannerId": "",
+      "admobAndroidInterstitialId": "ca-app-pub-5028998697615030/4687163508"
     },
     "owner": "xtremrakib5"
   }
