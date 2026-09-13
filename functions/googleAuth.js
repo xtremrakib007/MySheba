@@ -18,9 +18,8 @@ function toE164(phone, dialCode = '+60') {
   if (!localDigits || !countryDigits) return '';
   return `+${countryDigits}${localDigits}`;
 }
-function isValidPhone(phone, dialCode = '+60') {
-  const e164 = toE164(phone, dialCode);
-  return /^\+[1-9]\d{7,14}$/.test(e164);
+function isValidE164(phone) {
+  return /^\+[1-9]\d{7,14}$/.test(String(phone || ''));
 }
 
 async function assertGoogleEmailProof(db, googleEmail, data) {
@@ -48,19 +47,21 @@ async function assertGoogleEmailProof(db, googleEmail, data) {
   if (!verified.email_verified || normalizeEmail(verified.email) !== googleEmail) throw new HttpsError('permission-denied', 'The email verification does not match your Google account.');
 }
 
-async function assertGooglePhoneProof(expectedPhoneE164, data) {
+// The SMS token is the authoritative proof of the phone number. Do not make
+// account creation depend on a second client-side phone field being present.
+// This also fixes the case where a formatted/local phone is lost between the
+// phone-verification screen and the callable request.
+async function assertGooglePhoneProof(data) {
   const phoneIdToken = String(data?.phoneIdToken || '').trim();
   if (!phoneIdToken) throw new HttpsError('failed-precondition', 'Please verify your phone number by SMS before continuing.');
   let verified;
   try { verified = await admin.auth().verifyIdToken(phoneIdToken); }
   catch { throw new HttpsError('failed-precondition', 'Your SMS verification has expired. Please verify your phone number again.'); }
   const tokenPhoneE164 = toE164(verified.phone_number || '', undefined);
-  if (!verified.phone_number || tokenPhoneE164 !== expectedPhoneE164) throw new HttpsError('permission-denied', 'The SMS verification does not match the phone number you entered.');
+  if (!isValidE164(tokenPhoneE164)) throw new HttpsError('failed-precondition', 'Your SMS verification did not contain a valid phone number. Please verify your phone number again.');
+  return tokenPhoneE164;
 }
 
-// Existing-account resolver: only a freshly authenticated, verified Google
-// identity can call this. The server maps that Google email to the existing
-// MySheba profile and mints a custom token for the original UID.
 exports.signInExistingGoogleAccount = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in with Google.');
   const token = request.auth.token || {};
@@ -90,24 +91,33 @@ exports.ensureGoogleProfile = onCall(async (request) => {
   if (!googleEmail || !token.email_verified) throw new HttpsError('failed-precondition', 'Your Google email must be verified before creating a MySheba account.');
   const data = request.data || {};
 
-  // Accept either the visible/local phone field or the already-normalized
-  // phoneE164 sent by the app. This prevents a valid number from being
-  // rejected merely because one client field was omitted or formatted.
-  const phoneInput = String(data.phone || data.phoneE164 || '').trim();
+  // Verify the SMS token first and use its phone as the canonical value.
+  // The client phone is optional for this step because the verified Firebase
+  // token already proves exactly which number completed SMS verification.
+  const verifiedPhoneE164 = await assertGooglePhoneProof(data);
+
+  // If the client supplied a phone, require it to agree with the verified
+  // SMS number. Otherwise fall back safely to the verified token value.
+  const phoneInput = String(data.phone || '').trim();
+  const phoneE164Input = String(data.phoneE164 || '').trim();
   const dialCode = data.phoneCountryCode || data.dialCode || '+60';
-  const expectedPhoneE164 = toE164(data.phoneE164 || phoneInput, dialCode);
-  if (!isValidPhone(phoneInput, dialCode) || !/^\+[1-9]\d{7,14}$/.test(expectedPhoneE164)) {
-    throw new HttpsError('invalid-argument', 'A valid phone number is required to finish creating your MySheba account.');
+  const suppliedPhoneE164 = toE164(phoneE164Input || phoneInput, dialCode);
+  if ((phoneInput || phoneE164Input) && !isValidE164(suppliedPhoneE164)) {
+    throw new HttpsError('invalid-argument', 'The phone number format is invalid. Please verify your phone number again.');
+  }
+  if (suppliedPhoneE164 && suppliedPhoneE164 !== verifiedPhoneE164) {
+    throw new HttpsError('permission-denied', 'The SMS verification does not match the phone number entered. Please verify that same number again.');
   }
 
-  const rawPhone = normalizePhone(data.phone || phoneInput);
   await assertGoogleEmailProof(db, googleEmail, data);
-  await assertGooglePhoneProof(expectedPhoneE164, data);
 
+  const expectedPhoneE164 = verifiedPhoneE164;
+  const rawPhone = normalizePhone(phoneInput || expectedPhoneE164);
   const phoneCandidates = Array.from(new Set([
     rawPhone,
     normalizePhone(expectedPhoneE164),
   ].filter(Boolean)));
+
   const phoneE164Snap = await db.collection('users').where('phoneE164', '==', expectedPhoneE164).limit(1).get();
   if (!phoneE164Snap.empty) throw new HttpsError('already-exists', 'This phone number is already registered to another MySheba account. Sign in to that account instead.');
   let phoneSnap = null;
