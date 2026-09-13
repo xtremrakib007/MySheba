@@ -2,9 +2,6 @@ name: Build MySheba Android AAB
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 jobs:
   build:
@@ -30,7 +27,7 @@ jobs:
         run: npm ci
 
       - name: Build production AAB
-        run: eas build --platform android --profile production --non-interactive --wait --message "Fix admin login render crash and Google Sign-In duplicate-account flow"
+        run: eas build --platform android --profile production --non-interactive --wait --message "Final MySheba production build"
 
       - name: Download AAB
         run: eas build:download --platform android --non-interactive
