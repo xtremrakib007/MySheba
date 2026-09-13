@@ -1,8 +1,4 @@
-// Contact Profile - a read-only view of the other person in a 1:1 direct
-// chat, opened by tapping their name in ChatScreen's header (see
-// AppContext's openContactProfile(uid) and ChatScreen's headerTitleRow).
-// Unlike ProfileScreen (always "me", fully editable) this always shows
-// someone else and never lets the viewer edit anything.
+// Contact Profile - a read-only view of another account.
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Image, StyleSheet, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,26 +8,19 @@ import { useTheme } from "../theme/ThemeContext";
 import HeaderDecor from '../components/HeaderDecor';
 import VerifiedBadge from '../components/VerifiedBadge';
 import BusinessBadge from '../components/BusinessBadge';
-import { showAlert } from '../utils/appAlert';
 import * as authService from '../firebase/authService';
 import * as businessProfileService from '../firebase/businessProfileService';
-import * as directChatService from '../firebase/directChatService';
 
 const ROLE_LABEL = { customer: 'Customer', dealer: 'Dealer', reseller: 'Reseller', admin: 'Admin', superadmin: 'Super Admin' };
 
 export default function ContactProfileScreen() {
-  const {
-    colors,
-    brandGradient
-  } = useTheme();
-
+  const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { goBackOrHome, authUser, profile, activeContactProfileUid, openDirectChat, openBusinessProfile } = useApp();
+  const { goBackOrHome, activeContactProfileUid, openBusinessProfile } = useApp();
 
   const targetUid = activeContactProfileUid;
-  const [target, setTarget] = useState(undefined); // undefined = loading, null = not found
+  const [target, setTarget] = useState(undefined);
   const [biz, setBiz] = useState(null);
-  const [startingChat, setStartingChat] = useState(false);
 
   useEffect(() => {
     if (!targetUid) return;
@@ -49,22 +38,6 @@ export default function ContactProfileScreen() {
 
   const roleLabel = target ? (ROLE_LABEL[target.role] || target.role) : '';
   const displayName = (biz && biz.businessName) || target?.name || 'User';
-
-  const messageContact = async () => {
-    if (!targetUid || !authUser) return;
-    setStartingChat(true);
-    try {
-      const chatId = await directChatService.ensureDirectChat(
-        { uid: authUser.uid, name: profile?.name || '' },
-        { uid: targetUid, name: target?.name || 'User' }
-      );
-      openDirectChat(chatId, target?.name || 'User', targetUid);
-    } catch (err) {
-      showAlert('MySheba', 'Could not start this conversation. Please try again.');
-    } finally {
-      setStartingChat(false);
-    }
-  };
 
   return (
     <View style={styles.screen}>
@@ -104,18 +77,14 @@ export default function ContactProfileScreen() {
             )}
           </View>
 
-          <View style={styles.actionRow}>
-            <TouchableOpacity style={styles.actionBtn} onPress={messageContact} disabled={startingChat}>
-              <Text style={styles.actionIcon}>💬</Text>
-              <Text style={styles.actionLabel}>{startingChat ? 'Opening...' : 'Message'}</Text>
-            </TouchableOpacity>
-            {!!biz && (
+          {!!biz && (
+            <View style={styles.actionRow}>
               <TouchableOpacity style={styles.actionBtn} onPress={() => openBusinessProfile(targetUid)}>
                 <Text style={styles.actionIcon}>🏪</Text>
                 <Text style={styles.actionLabel}>Business Profile</Text>
               </TouchableOpacity>
-            )}
-          </View>
+            </View>
+          )}
         </ScrollView>
       )}
     </View>
@@ -130,7 +99,7 @@ function createStyles(colors) {
     backText: { color: 'white', fontSize: 20 },
     headerTitle: { color: 'white', fontWeight: '600', fontSize: 16, marginLeft: 10 },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 30 },
-    emptyText: { fontSize: 13, color: '#999', textAlign: 'center', lineHeight: 19 },
+    emptyText: { fontSize: 13, color: colors.text, textAlign: 'center', lineHeight: 19 },
     body: { padding: 16, paddingBottom: 40 },
     profileCard: { backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: 24, alignItems: 'center', marginBottom: 16 },
     avatarImage: { width: 92, height: 92, borderRadius: 46 },
