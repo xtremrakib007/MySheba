@@ -17,10 +17,7 @@ function isValidPhone(phone) {
 async function assertGoogleEmailProof(db, googleEmail, data) {
   const emailIdToken = String(data?.emailIdToken || '').trim();
   const emailVerificationId = String(data?.emailOtpVerificationId || '').trim();
-  if (!emailIdToken && !emailVerificationId) {
-    throw new HttpsError('failed-precondition', 'Please verify your Google email by link or 6-digit OTP before continuing.');
-  }
-
+  if (!emailIdToken && !emailVerificationId) throw new HttpsError('failed-precondition', 'Please verify your Google email by link or 6-digit OTP before continuing.');
   if (emailVerificationId) {
     const proofRef = db.collection('emailVerificationProofs').doc(emailVerificationId);
     const result = await db.runTransaction(async tx => {
@@ -36,135 +33,78 @@ async function assertGoogleEmailProof(db, googleEmail, data) {
     if (result.status === 'email-mismatch') throw new HttpsError('permission-denied', 'The email verification does not match your Google account.');
     throw new HttpsError('failed-precondition', 'Your email verification has expired. Please verify your Google email again.');
   }
-
   let verified;
-  try {
-    verified = await admin.auth().verifyIdToken(emailIdToken);
-  } catch {
-    throw new HttpsError('failed-precondition', 'Your email verification has expired. Please verify your Google email again.');
-  }
-  if (!verified.email_verified || normalizeEmail(verified.email) !== googleEmail) {
-    throw new HttpsError('permission-denied', 'The email verification does not match your Google account.');
-  }
+  try { verified = await admin.auth().verifyIdToken(emailIdToken); }
+  catch { throw new HttpsError('failed-precondition', 'Your email verification has expired. Please verify your Google email again.'); }
+  if (!verified.email_verified || normalizeEmail(verified.email) !== googleEmail) throw new HttpsError('permission-denied', 'The email verification does not match your Google account.');
 }
 
 async function assertGooglePhoneProof(expectedPhone, data) {
   const phoneIdToken = String(data?.phoneIdToken || '').trim();
-  if (!phoneIdToken) {
-    throw new HttpsError('failed-precondition', 'Please verify your phone number by SMS before continuing.');
-  }
+  if (!phoneIdToken) throw new HttpsError('failed-precondition', 'Please verify your phone number by SMS before continuing.');
   let verified;
-  try {
-    verified = await admin.auth().verifyIdToken(phoneIdToken);
-  } catch {
-    throw new HttpsError('failed-precondition', 'Your SMS verification has expired. Please verify your phone number again.');
-  }
+  try { verified = await admin.auth().verifyIdToken(phoneIdToken); }
+  catch { throw new HttpsError('failed-precondition', 'Your SMS verification has expired. Please verify your phone number again.'); }
   const tokenPhone = normalizePhone(verified.phone_number);
-  if (!verified.phone_number || tokenPhone !== normalizePhone(expectedPhone)) {
-    throw new HttpsError('permission-denied', 'The SMS verification does not match the phone number you entered.');
-  }
+  if (!verified.phone_number || tokenPhone !== normalizePhone(expectedPhone)) throw new HttpsError('permission-denied', 'The SMS verification does not match the phone number you entered.');
 }
 
-// When a Google email already belongs to a phone/password MySheba account,
-// authenticate the existing UID instead of creating a second Firebase user.
-// The callable is only usable by the just-authenticated, verified Google
-// identity, and the server matches that verified email to the existing
-// Firestore account before minting the custom token.
+// Existing-account resolver: only a freshly authenticated, verified Google
+// identity can call this. The server maps that Google email to the existing
+// MySheba profile and mints a custom token for the original UID.
 exports.signInExistingGoogleAccount = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in with Google.');
-
   const token = request.auth.token || {};
   const provider = token.firebase?.sign_in_provider || '';
   const googleEmail = normalizeEmail(token.email);
-  if (provider !== 'google.com' || !googleEmail || !token.email_verified) {
-    throw new HttpsError('permission-denied', 'A verified Google account is required.');
-  }
-
+  if (provider !== 'google.com' || !googleEmail || !token.email_verified) throw new HttpsError('permission-denied', 'A verified Google account is required.');
   const db = getFirestore();
   const snap = await db.collection('users').where('email', '==', googleEmail).limit(1).get();
   if (snap.empty) return { found: false };
-
   const userDoc = snap.docs[0];
   const userData = userDoc.data() || {};
-  if (userData.suspended) {
-    throw new HttpsError('permission-denied', 'This MySheba account has been suspended. Please contact support.');
-  }
-
-  const customToken = await admin.auth().createCustomToken(userDoc.id, {
-    googleSignIn: true,
-  });
-
-  return {
-    found: true,
-    customToken,
-    uid: userDoc.id,
-    profile: { uid: userDoc.id, ...userData },
-  };
+  if (userData.suspended) throw new HttpsError('permission-denied', 'This MySheba account has been suspended. Please contact support.');
+  const customToken = await admin.auth().createCustomToken(userDoc.id, { googleSignIn: true });
+  return { found: true, customToken, uid: userDoc.id, profile: { uid: userDoc.id, ...userData } };
 });
 
 exports.ensureGoogleProfile = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
-
   const uid = request.auth.uid;
   const token = request.auth.token || {};
   const db = getFirestore();
   const ref = db.collection('users').doc(uid);
   const snap = await ref.get();
-
-  // Existing Google-linked accounts are never changed by onboarding.
   if (snap.exists) return { uid, ...snap.data(), isNew: false };
 
   const googleEmail = normalizeEmail(token.email);
-  if (!googleEmail || !token.email_verified) {
-    throw new HttpsError('failed-precondition', 'Your Google email must be verified before creating a MySheba account.');
-  }
-
+  if (!googleEmail || !token.email_verified) throw new HttpsError('failed-precondition', 'Your Google email must be verified before creating a MySheba account.');
   const data = request.data || {};
   const rawPhone = normalizePhone(data.phone);
-  if (!isValidPhone(rawPhone)) {
-    throw new HttpsError('invalid-argument', 'A valid phone number is required to finish creating your MySheba account.');
-  }
+  if (!isValidPhone(rawPhone)) throw new HttpsError('invalid-argument', 'A valid phone number is required to finish creating your MySheba account.');
   await assertGoogleEmailProof(db, googleEmail, data);
   await assertGooglePhoneProof(rawPhone, data);
 
   const phoneSnap = await db.collection('users').where('phone', '==', rawPhone).limit(1).get();
-  if (!phoneSnap.empty) {
-    throw new HttpsError('already-exists', 'This phone number is already registered to another MySheba account. Sign in to that account instead.');
-  }
-
+  if (!phoneSnap.empty) throw new HttpsError('already-exists', 'This phone number is already registered to another MySheba account. Sign in to that account instead.');
   const emailSnap = await db.collection('users').where('email', '==', googleEmail).limit(1).get();
-  if (!emailSnap.empty) {
-    throw new HttpsError('already-exists', 'This email is already registered to a MySheba account. Sign in to that account and use Settings → Link Google Account to enable Google sign-in.');
-  }
+  if (!emailSnap.empty) throw new HttpsError('already-exists', 'This email is already registered to a MySheba account. Sign in to that account and use Settings → Link Google Account to enable Google sign-in.');
 
   const userId = await assignUniqueUserId(db, uid);
-  const profile = {
-    uid,
-    userId,
-    name: token.name || '',
-    email: googleEmail,
-    phone: rawPhone,
-    phoneVerified: true,
-    role: 'customer',
-    dealerId: null,
-    walletBalance: 0,
-    notifPrefs: { pushEnabled: true, emailEnabled: true, rateAlerts: false },
-    authProvider: 'google',
-    createdAt: FieldValue.serverTimestamp(),
-  };
-
+  const profile = { uid, userId, name: token.name || '', email: googleEmail, phone: rawPhone, phoneVerified: true, role: 'customer', dealerId: null, walletBalance: 0, notifPrefs: { pushEnabled: true, emailEnabled: true, rateAlerts: false }, authProvider: 'google', createdAt: FieldValue.serverTimestamp() };
   try {
     await ref.set(profile);
-    await logAudit({
-      action: 'account_created',
-      targetUid: uid,
-      performedBy: 'system',
-      performedByRole: null,
-      details: { role: 'customer', method: 'google', phoneVerified: true },
-    });
+    await logAudit({ action: 'account_created', targetUid: uid, performedBy: 'system', performedByRole: null, details: { role: 'customer', method: 'google', phoneVerified: true } });
     return { uid, ...profile, isNew: true };
   } catch (err) {
     await logServerError('ensureGoogleProfile', err, { userId: uid });
     throw new HttpsError('internal', 'Could not create the account.');
   }
 });
+
+// index.js historically exported only ensureGoogleProfile from this module.
+// Preserve that line while also exposing the new resolver to the Functions
+// runtime without requiring a large index.js rewrite.
+if (module.parent && module.parent.exports) {
+  module.parent.exports.signInExistingGoogleAccount = exports.signInExistingGoogleAccount;
+}
