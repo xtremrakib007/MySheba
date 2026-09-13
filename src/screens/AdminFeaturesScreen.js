@@ -35,6 +35,14 @@ const DASHBOARD_TOOL_DEFS = [
   { key: 'announcements', icon: '📣', bg: '#E0F7FA', name: 'Announce', roles: ['admin', 'superadmin'] },
 ];
 
+const SERVICE_OPERATION_DEFS = [
+  { key: 'recharge', icon: '📱', bg: '#E8F5E9', name: 'Recharge' },
+  { key: 'remittance', icon: '🌏', bg: '#E3F2FD', name: 'Remittance' },
+  { key: 'mobilebanking', icon: '🏦', bg: '#EDE7F6', name: 'Mobile Banking' },
+  { key: 'internet', icon: '🌐', bg: '#E1F5FE', name: 'Internet Services' },
+  { key: 'flight', icon: '✈️', bg: '#FFF8E1', name: 'Flight' },
+];
+
 export default function AdminFeaturesScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
@@ -58,6 +66,12 @@ export default function AdminFeaturesScreen() {
   const openDashboardTile = (key) => {
     if (key === 'chats') { setScreen('chatList'); return; }
     if (key === 'userManagement' || key === 'verificationManagement' || key === 'reports') { setScreen(key); return; }
+    setAdminTab(key);
+    setAdminViewingSection(true);
+    setScreen('adminHome');
+  };
+
+  const openServiceOperation = (key) => {
     setAdminTab(key);
     setAdminViewingSection(true);
     setScreen('adminHome');
@@ -87,6 +101,7 @@ export default function AdminFeaturesScreen() {
 
         <FeatureGrid title="⚡ Quick Operations" items={dashboardTools} onPress={openDashboardTile} />
         <FeatureGrid title="💰 Financial Management" items={dashboardTools.filter((t) => ['all', 'pending', 'topups', 'rates', 'pricing', 'payments'].includes(t.key))} onPress={openDashboardTile} />
+        <FeatureGrid title="🧾 Service Operations" items={SERVICE_OPERATION_DEFS} onPress={openServiceOperation} />
         <FeatureGrid title="🛠️ Management Tools" items={tools} onPress={(key) => setScreen(key)} />
         {isSuperadmin && (
           <>
