@@ -16,45 +16,26 @@ const STATUS_STYLES: Record<string, string> = {
   completed: 'bg-[var(--color-success)]/10 text-[var(--color-success)]',
 };
 
-// Mirrors onCompleteTx's three-way split in AdminHomeScreen.js: Mobile
-// Banking needs a collection PIN, Remittance needs a receipt URL,
-// everything else completes with neither.
-function CompleteControl({ tx, busy, onComplete }: { tx: Transaction; busy: boolean; onComplete: (pin?: string, receiptUrl?: string) => void }) {
+// Staff completes Remittance by entering the completion PIN supplied by the
+// reseller/admin. The customer never enters this PIN and no receipt is
+// uploaded. Completing the order automatically creates the receipt metadata.
+function CompleteControl({ tx, busy, onComplete }: { tx: Transaction; busy: boolean; onComplete: (pin?: string) => void }) {
   const [pin, setPin] = useState('');
-  const [receiptUrl, setReceiptUrl] = useState('');
 
-  if (tx.service === 'Mobile Banking') {
+  if (tx.service === 'Mobile Banking' || tx.service === 'Remittance') {
+    const label = tx.service === 'Remittance' ? 'Remittance PIN' : '4-digit PIN';
     return (
       <div className="flex gap-2">
         <input
           value={pin}
           onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
-          placeholder="4-digit PIN"
-          className="w-28 rounded-lg border border-[var(--color-line)] px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]"
+          placeholder={label}
+          inputMode="numeric"
+          className="w-36 rounded-lg border border-[var(--color-line)] px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]"
         />
         <button
           disabled={busy || pin.length !== 4}
           onClick={() => onComplete(pin)}
-          className="rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
-        >
-          ✓ Complete
-        </button>
-      </div>
-    );
-  }
-
-  if (tx.service === 'Remittance') {
-    return (
-      <div className="flex gap-2">
-        <input
-          value={receiptUrl}
-          onChange={(e) => setReceiptUrl(e.target.value)}
-          placeholder="Receipt URL"
-          className="flex-1 rounded-lg border border-[var(--color-line)] px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]"
-        />
-        <button
-          disabled={busy || !receiptUrl.trim()}
-          onClick={() => onComplete(undefined, receiptUrl.trim())}
           className="rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
         >
           ✓ Complete
@@ -158,7 +139,7 @@ export default function TransactionsPage() {
                   👤 {tx.customerPhone || 'Unknown'} · {tx.createdAt ?? '—'}
                 </p>
                 <p className="mt-1 text-sm">📝 {tx.details}</p>
-                <p className="mt-2 font-semibold">MYR {tx.total.toFixed(2)}</p>
+                <p className="mt-2 font-semibold">MYR {Number(tx.total || 0).toFixed(2)}</p>
 
                 {!tx.dealerId && (
                   <div className="mt-3 flex items-center justify-between gap-2 rounded-lg bg-[var(--color-danger)]/5 px-3 py-2">
@@ -243,13 +224,18 @@ export default function TransactionsPage() {
                     <CompleteControl
                       tx={tx}
                       busy={busy}
-                      onComplete={(pin, receiptUrl) => run(tx.id, () => completeTransaction(tx.id, pin, receiptUrl))}
+                      onComplete={(pin) => run(tx.id, () => completeTransaction(tx.id, pin))}
                     />
                   </div>
                 )}
 
                 {tx.status === 'completed' && !!tx.pin && (
-                  <p className="mt-2 text-xs">🔐 Collection PIN: {tx.pin}</p>
+                  <div className="mt-3 rounded-xl bg-[var(--color-success)]/5 px-3 py-2 text-xs">
+                    <p>🔐 Completion PIN: {tx.pin}</p>
+                    {tx.service === 'Remittance' && tx.receiptNumber && (
+                      <p className="mt-1 font-semibold">🧾 Receipt: {tx.receiptNumber}</p>
+                    )}
+                  </div>
                 )}
                 {tx.status === 'completed' && tx.rejected && (
                   <p className="mt-2 text-xs text-[var(--color-danger)]">Rejected: {tx.rejectReason}</p>
