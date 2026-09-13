@@ -14,7 +14,7 @@ const ROLE_LABEL = { customer: 'Customer', dealer: 'Dealer', reseller: 'Reseller
 export default function AddContactScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { authUser, setScreen } = useApp();
+  const { authUser, goBack, setScreen } = useApp();
   const [term, setTerm] = useState('');
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -65,11 +65,15 @@ export default function AddContactScreen() {
     }
   };
 
+  const handleBack = () => {
+    if (!goBack()) setScreen('customerHome');
+  };
+
   return (
     <View style={styles.screen}>
       <LinearGradient colors={brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
         <HeaderDecor />
-        <TouchableOpacity style={styles.backBtn} onPress={() => setScreen('chatHub')}>
+        <TouchableOpacity style={styles.backBtn} onPress={handleBack}>
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Add Contact</Text>
