@@ -65,6 +65,43 @@ async function assertGooglePhoneProof(expectedPhone, data) {
   }
 }
 
+// When a Google email already belongs to a phone/password MySheba account,
+// authenticate the existing UID instead of creating a second Firebase user.
+// The callable is only usable by the just-authenticated, verified Google
+// identity, and the server matches that verified email to the existing
+// Firestore account before minting the custom token.
+exports.signInExistingGoogleAccount = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in with Google.');
+
+  const token = request.auth.token || {};
+  const provider = token.firebase?.sign_in_provider || '';
+  const googleEmail = normalizeEmail(token.email);
+  if (provider !== 'google.com' || !googleEmail || !token.email_verified) {
+    throw new HttpsError('permission-denied', 'A verified Google account is required.');
+  }
+
+  const db = getFirestore();
+  const snap = await db.collection('users').where('email', '==', googleEmail).limit(1).get();
+  if (snap.empty) return { found: false };
+
+  const userDoc = snap.docs[0];
+  const userData = userDoc.data() || {};
+  if (userData.suspended) {
+    throw new HttpsError('permission-denied', 'This MySheba account has been suspended. Please contact support.');
+  }
+
+  const customToken = await admin.auth().createCustomToken(userDoc.id, {
+    googleSignIn: true,
+  });
+
+  return {
+    found: true,
+    customToken,
+    uid: userDoc.id,
+    profile: { uid: userDoc.id, ...userData },
+  };
+});
+
 exports.ensureGoogleProfile = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
 
