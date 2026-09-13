@@ -45,7 +45,6 @@ import InvestigateChatScreen from './src/screens/InvestigateChatScreen';
 import TransferPointsScreen from './src/screens/TransferPointsScreen';
 import GamePointsScreen from './src/screens/GamePointsScreen';
 import GamePointsTransferScreen from './src/screens/GamePointsTransferScreen';
-import GamePointsGiftScreen from './src/screens/GamePointsGiftScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import MarketplaceHubScreen from './src/screens/MarketplaceHubScreen';
 import CreateListingScreen from './src/screens/CreateListingScreen';
@@ -73,7 +72,6 @@ import VerificationManagementScreen from './src/screens/VerificationManagementSc
 import AdminAnalyticsScreen from './src/screens/AdminAnalyticsScreen';
 import BusinessProfileScreen from './src/screens/BusinessProfileScreen';
 import ContactProfileScreen from './src/screens/ContactProfileScreen';
-import GroupSettingsScreen from './src/screens/GroupSettingsScreen';
 import AdminBusinessManagementScreen from './src/screens/AdminBusinessManagementScreen';
 import MyDocumentsScreen from './src/screens/MyDocumentsScreen';
 import NotepadScreen from './src/screens/NotepadScreen';
@@ -193,7 +191,6 @@ function Root() {
         {renderedScreen === 'transferPoints' && <TransferPointsScreen />}
         {renderedScreen === 'gamePoints' && <GamePointsScreen />}
         {renderedScreen === 'gamePointsTransfer' && <GamePointsTransferScreen />}
-        {renderedScreen === 'gamePointsGift' && <GamePointsGiftScreen />}
         {renderedScreen === 'notifications' && <NotificationsScreen />}
         {(renderedScreen === 'marketplaceHome' || renderedScreen === 'accommodationHome' || renderedScreen === 'roomSharingHome' || renderedScreen === 'servicesHome' || renderedScreen === 'communityHome') && <MarketplaceHubScreen screen={renderedScreen} />}
         {renderedScreen === 'marketplaceCreateListing' && <CreateListingScreen />}
