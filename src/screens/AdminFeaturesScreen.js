@@ -69,10 +69,10 @@ export default function AdminFeaturesScreen() {
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>📊 Live Operations</Text>
           <View style={styles.summaryGrid}>
-            <SummaryItem label="Pending" value={pendingCount} />
-            <SummaryItem label="New Inquiries" value={inquiryCount} />
-            <SummaryItem label="Pending Top-Ups" value={topupCount} />
-            <SummaryItem label="Access" value={isSuperadmin ? 'SUPER' : 'ADMIN'} />
+            <SummaryItem colors={colors} label="Pending" value={pendingCount} />
+            <SummaryItem colors={colors} label="New Inquiries" value={inquiryCount} />
+            <SummaryItem colors={colors} label="Pending Top-Ups" value={topupCount} />
+            <SummaryItem colors={colors} label="Access" value={isSuperadmin ? 'SUPER' : 'ADMIN'} />
           </View>
         </View>
 
@@ -89,20 +89,22 @@ export default function AdminFeaturesScreen() {
   );
 }
 
-function SummaryItem({ label, value }) {
-  return <View style={summaryStyles.summaryItem}><Text style={summaryStyles.summaryValue}>{value}</Text><Text style={summaryStyles.summaryLabel}>{label}</Text></View>;
+function SummaryItem({ colors, label, value }) {
+  return (
+    <View style={[summaryItemStyles.item, { backgroundColor: colors.bg }]}>
+      <Text style={[summaryItemStyles.value, { color: colors.text }]}>{value}</Text>
+      <Text style={[summaryItemStyles.label, { color: colors.muted }]}>{label}</Text>
+    </View>
+  );
 }
 
-const summaryStyles = StyleSheet.create({
-  summaryItem: { width: '48%', paddingVertical: 10, paddingHorizontal: 8, marginBottom: 8, borderRadius: 12 },
-  summaryValue: { fontWeight: '800', fontSize: 20 },
-  summaryLabel: { fontSize: 12, marginTop: 3 },
+const summaryItemStyles = StyleSheet.create({
+  item: { width: '48%', paddingVertical: 10, paddingHorizontal: 8, marginBottom: 8, borderRadius: 12 },
+  value: { fontWeight: '800', fontSize: 20 },
+  label: { fontSize: 12, marginTop: 3 },
 });
 
 function createStyles(colors) {
-  summaryStyles.summaryItem = { ...summaryStyles.summaryItem, backgroundColor: colors.bg };
-  summaryStyles.summaryValue = { ...summaryStyles.summaryValue, color: colors.text };
-  summaryStyles.summaryLabel = { ...summaryStyles.summaryLabel, color: colors.muted };
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg },
     header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, backgroundColor: colors.primary, overflow: 'hidden' },
