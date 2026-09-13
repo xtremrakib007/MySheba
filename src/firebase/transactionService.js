@@ -3,8 +3,8 @@
 // Mobile Banking specifically splits accept/reject and complete across the
 // two dealer-tier roles: the parent Dealer accepts/rejects, then only the
 // Sub Dealer can complete + collect the PIN (enforced in DealerHomeScreen.js
-// and firestore.rules' mobileBankingRoleOk()). Every other service keeps
-// the shared queue where either role can do both.
+// and firestore.rules' mobileBankingRoleOk()). Every other service keeps the
+// shared queue where either role can do both.
 //
 // A customer who registered under a reseller code (resellerId on their own
 // users/{uid} doc - see functions/customerRegistration.js) has an extra hop
@@ -34,19 +34,6 @@ import { logActivity } from './logService';
 
 const COLLECTION = 'transactions';
 
-// All four services below carry a real wallet charge (role-based points for
-// Recharge/Internet, MYR 1:1 for Mobile Banking/Remittance - see
-// rechargePointCostPerUnit/internetPointCostPerUnit in settingsService.js)
-// filed atomically with the order doc by a Cloud Function - see
-// chargeRecharge/chargeInternetPackage/chargeMobileBanking/chargeRemittance
-// in functions/walletService.js, and firestore.rules' serviceIsChargeable(),
-// which is what actually blocks a plain client create for all four. Every
-// one of them also recomputes its own MYR amount server-side from
-// rates/current rather than trusting the client's number (Next Update PRD
-// §9) and snapshots the exchange rate used onto the transaction doc (PRD
-// §5) - see recomputeChargeAmounts in functions/walletService.js. Matches
-// the exact `service` label strings DEALER_LABELS produces in
-// AppContext.js's buildTransactionPayload.
 const CHARGEABLE_SERVICE_FNS = {
   Recharge: 'chargeRecharge',
   Internet: 'chargeInternetPackage',
@@ -73,8 +60,6 @@ export async function createTransaction(payload, customer) {
     }
   }
 
-  // Fallback for any non-dealer-queue transaction type. The four services in
-  // the Phase 10 order flow all use the callable charge path above.
   const docRef = await addDoc(collection(db, COLLECTION), {
     service: payload.service,
     details: payload.details || '',
@@ -93,6 +78,7 @@ export async function createTransaction(payload, customer) {
     rejected: false,
     rejectReason: '',
     pin: '',
+    receiptNumber: '',
     raw: payload.raw || {},
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -101,8 +87,6 @@ export async function createTransaction(payload, customer) {
   return docRef.id;
 }
 
-/** Live list of all transactions, newest first - admin/superadmin only
- * (they aren't scoped to a single dealer). */
 export function subscribeTransactions(callback, onError) {
   const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'));
   return onSnapshot(
@@ -112,14 +96,6 @@ export function subscribeTransactions(callback, onError) {
   );
 }
 
-/**
- * Live broadcast queue for Dealers and Resellers. Every pending order is
- * visible to the whole staff pool; once claimed it remains visible as a
- * processing/completed record but only the claimer can complete it.
- *
- * The status filter is deliberately server-side so Firestore rules can allow
- * the same broadcast query without exposing unrelated customer data.
- */
 export function subscribeBroadcastTransactions(callback, onError) {
   const q = query(collection(db, COLLECTION), where('status', 'in', ['pending', 'processing', 'completed']));
   return onSnapshot(
@@ -133,12 +109,6 @@ export function subscribeBroadcastTransactions(callback, onError) {
   );
 }
 
-/**
- * Live list of just the signed-in customer's own transactions, newest first
- * - used by the customer History screen. No orderBy here on purpose (a
- * where + orderBy on different fields needs a composite Firestore index);
- * sorting happens client-side instead.
- */
 export function subscribeMyTransactions(uid, callback, onError) {
   const q = query(collection(db, COLLECTION), where('customerId', '==', uid));
   return onSnapshot(
@@ -161,9 +131,6 @@ export async function acceptTransaction(id) {
     if (order.status !== 'pending' || order.claimedBy) {
       throw new Error('This order was already accepted by another staff member.');
     }
-    // Rules verify request.auth.uid against claimedBy. Keeping the write
-    // client-side is safe because Firestore retries this transaction on a
-    // concurrent change and only the first pending snapshot can transition.
     const currentUser = getCurrentUserUid();
     if (!currentUser) throw new Error('You must be signed in to accept an order.');
     tx.update(txRef, {
@@ -176,18 +143,9 @@ export async function acceptTransaction(id) {
 }
 
 function getCurrentUserUid() {
-  // Firebase Auth state is already owned by the app. Importing auth here
-  // would create a second config dependency, so use the cached auth instance
-  // exposed by config when available.
   return auth?.currentUser?.uid || null;
 }
 
-/**
- * A reject is per-recipient in the broadcast model: it records that this
- * staff member declined the order but leaves the order pending for everyone
- * else. Refunds therefore happen only through an explicit terminal reject
- * path, not on an individual recipient's decline.
- */
 export async function rejectTransaction(id, reason, service) {
   const rejectFnName = REJECT_FNS[service];
   if (rejectFnName) {
@@ -203,27 +161,23 @@ export async function rejectTransaction(id, reason, service) {
   throw new Error('This order type does not support rejection.');
 }
 
+/** Staff completion PIN is the only completion input for Remittance.
+ * No customer PIN entry and no receipt upload are used. Completing a
+ * Remittance automatically creates receipt metadata for History. */
 export async function completeTransaction(id, pin, receiptUrl) {
+  const cleanPin = String(pin || '').replace(/\D/g, '').slice(0, 4);
   const patch = {
     status: 'completed',
-    pin: pin || '',
+    pin: cleanPin,
     updatedAt: serverTimestamp(),
   };
-  if (receiptUrl) patch.receiptUrl = receiptUrl;
+  if (cleanPin) {
+    patch.receiptNumber = `MS-RMT-${id.slice(0, 8).toUpperCase()}`;
+    patch.receiptGeneratedAt = serverTimestamp();
+  }
   await updateDoc(doc(db, COLLECTION, id), patch);
 }
 
-/** Appoints a dealer to an order that has no dealerId yet - moves it into
- * that dealer's own queue, since subscribeDealerTransactions only ever
- * matches an exact dealerId. Two callers, both plain client writes:
- *   - Admin, on any unassigned order (a customer who registered without a
- *     dealer code) - see AdminHomeScreen's "Appoint Dealer" button.
- *   - A reseller, on an order in their own resellerId pool - see
- *     ResellerHomeScreen's "Send to Dealer" button. firestore.rules
- *     restricts a reseller's update here to just dealerId/updatedAt on
- *     their own resellerId orders; it can't touch anything else. */
 export async function assignDealer(id, dealerId) {
-  // Legacy compatibility for already-routed historical orders. New Phase 10
-  // orders are broadcast and do not use this path.
   await updateDoc(doc(db, COLLECTION, id), { dealerId, updatedAt: serverTimestamp() });
 }
