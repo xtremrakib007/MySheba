@@ -1,10 +1,4 @@
-// Identity verification submission (Phase 3 of the Marketplace PRD,
-// section 12 "Safety & Trust System" - Optional identity verification).
-// Phone verification already happens for every self-registered account at
-// signup (OTP, see RegisterScreen.js), so this screen covers the
-// "optional" step: upload an ID document photo, admin reviews it, and
-// approval grants the ✓ Verified badge shown on your marketplace listings
-// (see VerifiedBadge.js / verificationService.js).
+// Customer identity verification screen.
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Image, ActivityIndicator, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { showAlert } from '../utils/appAlert';
 import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
-import { useTheme } from "../theme/ThemeContext";
+import { useTheme } from '../theme/ThemeContext';
 import { PrimaryButton } from '../components/ui';
 import HeaderDecor from '../components/HeaderDecor';
 import VerifiedBadge from '../components/VerifiedBadge';
@@ -20,20 +14,16 @@ import * as verificationService from '../firebase/verificationService';
 import { uploadVerificationDocument } from '../firebase/mediaUpload';
 
 const STATUS_COPY = {
-  pending: { icon: '⏳', title: 'Under Review', body: 'Your ID document has been submitted and is waiting for admin review. This usually takes a day or two.' },
-  approved: { icon: '✅', title: "You're Verified", body: 'Your identity has been confirmed. The Verified badge now shows on your marketplace listings.' },
-  rejected: { icon: '❌', title: 'Not Approved', body: 'Your submission was not approved. You can review the reason below and submit again.' },
+  pending: { icon: '⏳', title: 'Under Review', body: 'Your KYC document has been submitted and is waiting for admin review.' },
+  approved: { icon: '✅', title: 'KYC Verified', body: 'Your identity has been verified successfully.' },
+  rejected: { icon: '❌', title: 'Not Approved', body: 'Your KYC submission was not approved. You can review the reason and submit again.' },
 };
 
 export default function VerifyIdentityScreen() {
-  const {
-    colors,
-    brandGradient
-  } = useTheme();
-
+  const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
   const { goBackOrHome, authUser, profile } = useApp();
-  const [request, setRequest] = useState(undefined); // undefined = loading, null = none yet
+  const [request, setRequest] = useState(undefined);
   const [docUri, setDocUri] = useState(null);
   const [docMime, setDocMime] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -44,7 +34,7 @@ export default function VerifyIdentityScreen() {
   }, [authUser]);
 
   const pickDocument = async () => {
-const result = await ImagePicker.launchImageLibraryAsync({
+    const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.7,
     });
@@ -68,16 +58,15 @@ const result = await ImagePicker.launchImageLibraryAsync({
         documentUrl
       );
       setDocUri(null);
-      showAlert('MySheba', "Submitted! We'll review your document and let you know.");
+      showAlert('MySheba', "Submitted! We'll review your KYC document and let you know.");
     } catch (err) {
-      showAlert('MySheba', err.message || 'Could not submit your document. Please try again.');
+      showAlert('MySheba', err.message || 'Could not submit your KYC document. Please try again.');
     } finally {
       setSubmitting(false);
     }
   };
 
   const alreadyVerified = !!profile?.verified;
-  const showForm = !alreadyVerified && (!request || request.status === 'rejected');
 
   return (
     <View style={styles.screen}>
@@ -86,7 +75,7 @@ const result = await ImagePicker.launchImageLibraryAsync({
         <TouchableOpacity style={styles.backBtn} onPress={goBackOrHome}>
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Get Verified</Text>
+        <Text style={styles.headerTitle}>KYC Verification</Text>
       </LinearGradient>
 
       {request === undefined ? (
@@ -99,6 +88,12 @@ const result = await ImagePicker.launchImageLibraryAsync({
               <Text style={styles.statusTitle}>{STATUS_COPY.approved.title}</Text>
               <Text style={styles.statusBody}>{STATUS_COPY.approved.body}</Text>
               <VerifiedBadge verified size="md" />
+              {!!profile?.kycId && (
+                <View style={styles.kycIdBox}>
+                  <Text style={styles.kycIdLabel}>KYC ID</Text>
+                  <Text style={styles.kycId}>{profile.kycId}</Text>
+                </View>
+              )}
             </View>
           ) : request && request.status !== 'rejected' ? (
             <View style={styles.statusCard}>
@@ -118,8 +113,7 @@ const result = await ImagePicker.launchImageLibraryAsync({
               )}
 
               <Text style={styles.intro}>
-                Upload a clear photo of a government-issued ID (e.g. passport, national ID, driver's license).
-                An admin will review it and, once approved, your marketplace listings will show a ✓ Verified badge.
+                Upload a clear photo of a government-issued ID. Admin approval is required for Mobile Banking and Remittance.
               </Text>
 
               <TouchableOpacity style={styles.uploadBox} onPress={pickDocument} activeOpacity={0.8}>
@@ -162,8 +156,11 @@ function createStyles(colors) {
     statusCard: { alignItems: 'center', backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: 24, marginBottom: 16 },
     rejectedCard: { marginBottom: 20 },
     statusIcon: { fontSize: 40, marginBottom: 10 },
-    statusTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 6 },
+    statusTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 6 },
     statusBody: { fontSize: 13, color: colors.textSecondary, textAlign: 'center', lineHeight: 19, marginBottom: 10 },
+    kycIdBox: { marginTop: 14, width: '100%', paddingVertical: 12, paddingHorizontal: 16, borderRadius: radius.md, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
+    kycIdLabel: { fontSize: 11, color: colors.textSecondary, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
+    kycId: { fontSize: 16, color: colors.text, fontWeight: '800', letterSpacing: 0.5 },
     rejectReason: { fontSize: 12, color: colors.error, textAlign: 'center', marginTop: 4 },
   });
 }
