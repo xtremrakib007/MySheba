@@ -11,37 +11,18 @@ import ServiceGrid from '../components/ServiceGrid';
 import HeaderDecor from '../components/HeaderDecor';
 import SmartAd from '../components/SmartAd';
 import AdMobBanner from '../components/AdMobBanner';
-import SocialHomeScreen from './SocialHomeScreen';
-import { getHomepageModules } from '../firebase/homepageConfigService';
 
-// Next Update PRD §2 - Country/Region-Based Homepage. "Malaysia should
-// continue using the existing service-first homepage" - this file is that
-// existing homepage, completely unchanged below, except for the one branch
-// at the top: any account whose resolved country/region maps to the
-// 'social' layout (every country other than Malaysia, unless a superadmin
-// has changed it - see homepageConfigService.js) renders SocialHomeScreen
-// instead. An account with no `country` set yet (every pre-existing
-// account) resolves to Malaysia's config, so this branch is a no-op for
-// everyone until they visit Profile > Country/Region - existing behavior
-// for existing users is byte-for-byte the same as before this feature.
+// Finance-first customer home. Social/community screens remain available through
+// legacy/admin routes, but normal customers always land on the finance services.
 export default function CustomerHomeScreen() {
-  const {
-    colors,
-    brandGradient
-  } = useTheme();
-
+  const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
   const { t } = useLanguage();
-  const { logout, openSidebar, setScreen, hasUnreadNotifications, profile, homepageConfig } = useApp();
-
-  const modules = getHomepageModules(homepageConfig, profile?.country);
-  if (modules.layout === 'social') {
-    return <SocialHomeScreen />;
-  }
+  const { logout, openSidebar, setScreen, hasUnreadNotifications } = useApp();
 
   return (
     <View style={styles.screen}>
-      <LinearGradient colors={brandGradient } start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
+      <LinearGradient colors={brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
         <HeaderDecor />
         <View style={styles.logoArea}>
           <TouchableOpacity style={styles.menuBtn} onPress={openSidebar}>
@@ -52,7 +33,7 @@ export default function CustomerHomeScreen() {
           </View>
           <View>
             <Text style={styles.brand}>MySheba</Text>
-            <Text style={styles.tagline}>{t('login.welcomeBack')}</Text>
+            <Text style={styles.tagline}>Finance & Services</Text>
           </View>
         </View>
         <View style={styles.headerRight}>
@@ -82,7 +63,7 @@ export default function CustomerHomeScreen() {
 function createStyles(colors) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg },
-    header: { backgroundColor: colors.primary, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' , overflow: 'hidden' },
+    header: { backgroundColor: colors.primary, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', overflow: 'hidden' },
     logoArea: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     menuBtn: { padding: 4, marginRight: 2 },
     menuIcon: { color: 'white', fontSize: 20 },
