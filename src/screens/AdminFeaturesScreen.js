@@ -9,6 +9,7 @@ import { FEATURE_DEFS, canAccessFeature } from '../firebase/featureAccessService
 
 const FEATURE_ACCESS_TILE = { key: 'featureAccess', icon: '🔐', bg: '#EDE7F6', name: 'Feature Access' };
 const USER_MANAGEMENT_TILE = { key: 'userManagement', icon: '🧑‍💼', bg: '#E3F2FD', name: 'User Management' };
+const KYC_MANAGEMENT_TILE = { key: 'verificationManagement', icon: '🪪', bg: '#E8F5E9', name: 'KYC Verification' };
 const AD_CONTROLS_TILE = { key: 'adFeatureControls', icon: '📢', bg: '#FFF3E0', name: 'Feature Ad Controls' };
 const BANNER_MANAGEMENT_TILE = { key: 'bannerManagement', icon: '🖼️', bg: '#E8F5E9', name: 'Banner Management' };
 const ADVERTISER_MANAGEMENT_TILE = { key: 'advertiserManagement', icon: '🏢', bg: '#EDE7F6', name: 'Advertiser Management' };
@@ -39,6 +40,7 @@ export default function AdminFeaturesScreen() {
   const { profile, goBackOrHome, setScreen, dealerTxs, inquiries, topups, setAdminTab, setAdminViewingSection, featureAccess } = useApp();
   const isSuperadmin = profile?.role === 'superadmin';
   const canManageUsers = !!profile && canAccessFeature(featureAccess, 'userManagement', profile.role);
+  const canManageKyc = !!profile && ['admin', 'superadmin'].includes(profile.role);
   const tools = FEATURE_DEFS.filter((t) => t.key !== 'userManagement' && profile && canAccessFeature(featureAccess, t.key, profile.role));
   if (profile && profile.role === 'superadmin') tools.push(FEATURE_ACCESS_TILE);
   if (profile && profile.role === 'superadmin') tools.push(TIER_PROMOTIONS_TILE);
@@ -49,9 +51,11 @@ export default function AdminFeaturesScreen() {
   const dashboardBadges = { pending: pendingCount || undefined, inquiries: inquiryCount || undefined, topups: topupCount || undefined };
   const dashboardTools = DASHBOARD_TOOL_DEFS.filter((t) => profile && t.roles.includes(profile.role)).map((t) => ({ ...t, badge: dashboardBadges[t.key] }));
   if (canManageUsers) dashboardTools.unshift(USER_MANAGEMENT_TILE);
+  if (canManageKyc) dashboardTools.splice(1, 0, KYC_MANAGEMENT_TILE);
 
   const openDashboardTile = (key) => {
     if (key === 'chats') { setScreen('chatList'); return; }
+    if (key === 'userManagement' || key === 'verificationManagement') { setScreen(key); return; }
     setAdminTab(key);
     setAdminViewingSection(true);
     setScreen('adminHome');
