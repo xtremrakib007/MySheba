@@ -84,6 +84,7 @@ export default function AdminFeaturesScreen() {
         </View>
 
         <FeatureGrid title="⚡ Quick Operations" items={dashboardTools} onPress={openDashboardTile} />
+        <FeatureGrid title="💰 Financial Management" items={dashboardTools.filter((t) => ['all', 'pending', 'topups', 'rates', 'pricing', 'payments'].includes(t.key))} onPress={openDashboardTile} />
         <FeatureGrid title="🛠️ Management Tools" items={tools} onPress={(key) => setScreen(key)} />
         {isSuperadmin && (
           <>
