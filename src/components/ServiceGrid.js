@@ -5,6 +5,7 @@ import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import { useLanguage } from '../i18n/LanguageContext';
+import { showAlert } from '../utils/appAlert';
 
 const SERVICES = [
   { key: 'recharge', icon: '📱', bg: '#E8F5E9', accent: '#43A047', name: 'Recharge', kind: 'service' },
@@ -39,8 +40,9 @@ function gridCanvas(gridStyle, colors, isDark) {
 }
 
 export function Tile({ s, onPress, disabled, index = 0 }) {
-  const { colors, isDark, gridStyle, iconStyle } = useTheme();
-  const { t } = useLanguage(); const styles = createStyles(colors);
+  const { colors, isDark, gridStyle } = useTheme();
+  const styles = createStyles(colors);
+  const { t } = useLanguage();
   const label = t(`service.${s.key}`, s.name);
   const icon = s.icon || '•';
   const gradientColors = [colors.primary, colors.secondary]; const gradientText = contrastText(gradientColors[0]);
@@ -53,8 +55,19 @@ export function Tile({ s, onPress, disabled, index = 0 }) {
 }
 
 export function useServiceAction() {
-  const { startService, openWebView, openBusPicker, setScreen } = useApp();
+  const { startService, openWebView, openBusPicker, setScreen, profile } = useApp();
   return (s) => {
+    if ((s.key === 'remittance' || s.key === 'mobilebanking') && !profile?.verified) {
+      showAlert(
+        'KYC Verification Required',
+        `${s.name} requires KYC verification. Please complete Identity Verification before using this service.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Verify KYC', onPress: () => setScreen('verifyIdentity') },
+        ]
+      );
+      return;
+    }
     if (s.kind === 'webview') return openWebView(s.key);
     if (s.kind === 'buspicker') return openBusPicker();
     if (s.kind === 'moreFeaturesLink') return setScreen('moreFeatures');
