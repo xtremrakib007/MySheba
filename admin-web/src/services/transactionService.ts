@@ -39,6 +39,8 @@ export interface Transaction {
   rejected: boolean;
   rejectReason: string;
   pin: string;
+  receiptNumber: string;
+  receiptGeneratedAt: string | null;
   createdAt: string | null;
 }
 
@@ -58,6 +60,8 @@ function mapTx(d: QueryDocumentSnapshot<DocumentData>): Transaction {
     rejected: !!data.rejected,
     rejectReason: data.rejectReason ?? '',
     pin: data.pin ?? '',
+    receiptNumber: data.receiptNumber ?? '',
+    receiptGeneratedAt: data.receiptGeneratedAt?.toDate?.().toLocaleString() ?? null,
     createdAt: data.createdAt?.toDate?.().toLocaleString() ?? null,
   };
 }
@@ -102,12 +106,23 @@ export async function rejectTransaction(id: string, reason: string, service: str
   });
 }
 
-/** Mobile Banking needs a 4-digit collection PIN, Remittance needs a
- * receipt URL, everything else completes plain - mirrors onCompleteTx's
- * three-way split in AdminHomeScreen.js exactly. */
-export async function completeTransaction(id: string, pin?: string, receiptUrl?: string): Promise<void> {
-  const patch: Record<string, unknown> = { status: 'completed', pin: pin || '', updatedAt: serverTimestamp() };
-  if (receiptUrl) patch.receiptUrl = receiptUrl;
+/** Remittance and Mobile Banking are completed by the staff member who
+ * accepted the order. Remittance requires the staff-provided completion
+ * PIN; no customer PIN entry and no receipt upload are used. Completion
+ * automatically creates receipt metadata that the customer can see in
+ * History. */
+export async function completeTransaction(id: string, pin?: string): Promise<void> {
+  const cleanPin = String(pin || '').replace(/\D/g, '').slice(0, 4);
+  const receiptNumber = `MS-RMT-${id.slice(0, 8).toUpperCase()}`;
+  const patch: Record<string, unknown> = {
+    status: 'completed',
+    pin: cleanPin,
+    updatedAt: serverTimestamp(),
+  };
+  if (cleanPin) {
+    patch.receiptNumber = receiptNumber;
+    patch.receiptGeneratedAt = serverTimestamp();
+  }
   await updateDoc(doc(db, COLLECTION, id), patch);
 }
 
