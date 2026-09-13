@@ -8,6 +8,7 @@ import FeatureGrid from '../components/FeatureGrid';
 import { FEATURE_DEFS, canAccessFeature } from '../firebase/featureAccessService';
 
 const FEATURE_ACCESS_TILE = { key: 'featureAccess', icon: '🔐', bg: '#EDE7F6', name: 'Feature Access' };
+const USER_MANAGEMENT_TILE = { key: 'userManagement', icon: '🧑‍💼', bg: '#E3F2FD', name: 'User Management' };
 const AD_CONTROLS_TILE = { key: 'adFeatureControls', icon: '📢', bg: '#FFF3E0', name: 'Feature Ad Controls' };
 const BANNER_MANAGEMENT_TILE = { key: 'bannerManagement', icon: '🖼️', bg: '#E8F5E9', name: 'Banner Management' };
 const ADVERTISER_MANAGEMENT_TILE = { key: 'advertiserManagement', icon: '🏢', bg: '#EDE7F6', name: 'Advertiser Management' };
@@ -36,16 +37,18 @@ export default function AdminFeaturesScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
   const { profile, goBackOrHome, setScreen, dealerTxs, inquiries, topups, setAdminTab, setAdminViewingSection, featureAccess } = useApp();
-  const tools = FEATURE_DEFS.filter((t) => profile && canAccessFeature(featureAccess, t.key, profile.role));
+  const isSuperadmin = profile?.role === 'superadmin';
+  const canManageUsers = !!profile && canAccessFeature(featureAccess, 'userManagement', profile.role);
+  const tools = FEATURE_DEFS.filter((t) => t.key !== 'userManagement' && profile && canAccessFeature(featureAccess, t.key, profile.role));
   if (profile && profile.role === 'superadmin') tools.push(FEATURE_ACCESS_TILE);
   if (profile && profile.role === 'superadmin') tools.push(TIER_PROMOTIONS_TILE);
 
   const pendingCount = dealerTxs.filter((t) => t.status === 'pending').length;
   const inquiryCount = inquiries.filter((i) => (i.status || 'new') === 'new').length;
   const topupCount = topups.filter((t) => t.status === 'pending').length;
-  const isSuperadmin = profile?.role === 'superadmin';
   const dashboardBadges = { pending: pendingCount || undefined, inquiries: inquiryCount || undefined, topups: topupCount || undefined };
   const dashboardTools = DASHBOARD_TOOL_DEFS.filter((t) => profile && t.roles.includes(profile.role)).map((t) => ({ ...t, badge: dashboardBadges[t.key] }));
+  if (canManageUsers) dashboardTools.unshift(USER_MANAGEMENT_TILE);
 
   const openDashboardTile = (key) => {
     if (key === 'chats') { setScreen('chatList'); return; }
