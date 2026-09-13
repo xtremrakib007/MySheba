@@ -108,13 +108,20 @@ export default function GooglePhoneScreen() {
       setPhoneCode('');
       setPhoneIdToken(token);
 
+      // Phone Auth intentionally signs out after confirmation. Restore the
+      // original Google identity before calling ensureGoogleProfile so the
+      // server creates users/{googleUid}, not users/{phoneAuthUid}.
+      const googleToken = await getGoogleIdToken();
+      await signInWithCredential(auth, GoogleAuthProvider.credential(googleToken));
+
       // IMPORTANT: create the real users/{uid} profile now, but do not run
       // completeGooglePhone yet because it also performs device-session
       // routing. The PIN must be created before final Home navigation.
       const ensureProfileFn = httpsCallable(functions, 'ensureGoogleProfile');
+      const phoneE164 = phoneVerification.phoneToE164(phone, phoneCountry.dial);
       await ensureProfileFn({
         phone: phone.trim(),
-        phoneE164: phoneVerification.phoneToE164(phone, phoneCountry.dial),
+        phoneE164,
         phoneCountryCode: phoneCountry.dial,
         phoneIdToken: token,
         emailIdToken: emailProof.emailIdToken || undefined,
