@@ -1,79 +1,110 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import { radius } from '../theme/theme';
+import { DEFAULT_RATES, subscribeRates } from '../firebase/ratesService';
 
-const FINANCE_SERVICES = [
-  { key: 'send', icon: '↗', title: 'Send Money', action: 'remittance' },
-  { key: 'receive', icon: '↓', title: 'Receive Money', action: 'myAccount' },
-  { key: 'remittance', icon: '🌍', title: 'Remittance', action: 'remittance' },
-  { key: 'recharge', icon: '⚡', title: 'Recharge', action: 'recharge' },
-  { key: 'mobilebanking', icon: '💳', title: 'Mobile Banking', action: 'mobilebanking' },
-  { key: 'internet', icon: '🌐', title: 'Internet', action: 'internet' },
-  { key: 'history', icon: '↔', title: 'Transactions', action: 'history' },
-  { key: 'account', icon: '▣', title: 'My Account', action: 'myAccount' },
-  { key: 'support', icon: '?', title: 'Support', action: 'support' },
-];
-
-const TRAVEL_SERVICES = [
+const QUICK_SERVICES = [
+  { key: 'recharge', icon: '📱', title: 'Recharge', action: 'recharge' },
+  { key: 'mobilebanking', icon: '🏦', title: 'Mobile Banking', action: 'mobilebanking' },
+  { key: 'internet', icon: '📡', title: 'Internet', action: 'internet' },
+  { key: 'remittance', icon: '💸', title: 'Remittance', action: 'remittance' },
   { key: 'bus', icon: '🚌', title: 'Bus', action: 'bus' },
   { key: 'train', icon: '🚆', title: 'Train', action: 'train' },
   { key: 'flight', icon: '✈️', title: 'Flight', action: 'flight' },
+  { key: 'fomema', icon: '🏥', title: 'FOMEMA', action: 'fomema' },
   { key: 'visa', icon: '🛂', title: 'Visa', action: 'visa' },
-  { key: 'arrival', icon: '🛬', title: 'Arrival Card', action: 'mydigital' },
+  { key: 'arrival', icon: '🪪', title: 'Malaysia Arrival Card', action: 'mydigital' },
   { key: 'passport', icon: '📕', title: 'Passport', action: 'passport' },
+  { key: 'more', icon: '✨', title: 'More Features', action: 'moreFeatures' },
 ];
 
 export default function FinanceHomeScreen() {
   const { colors, brandGradient } = useTheme();
-  const { openSidebar, setScreen, startService, openWebView, openBusPicker, hasUnreadNotifications, logout, profile } = useApp();
+  const { openSidebar, setScreen, startService, openWebView, openBusPicker, hasUnreadNotifications, logout } = useApp();
+  const [rates, setRates] = useState(DEFAULT_RATES);
   const styles = createStyles(colors);
 
+  useEffect(() => {
+    const unsubscribe = subscribeRates((nextRates) => setRates(nextRates), () => setRates(DEFAULT_RATES));
+    return unsubscribe;
+  }, []);
+
   const go = (item) => {
-    if (item.action === 'history' || item.action === 'myAccount' || item.action === 'support') return setScreen(item.action);
+    if (item.action === 'moreFeatures') return setScreen('moreFeatures');
     if (item.action === 'bus') return openBusPicker();
-    if (item.action === 'train' || item.action === 'visa' || item.action === 'mydigital' || item.action === 'passport') return openWebView(item.action);
+    if (item.action === 'fomema' || item.action === 'train' || item.action === 'visa' || item.action === 'mydigital' || item.action === 'passport') {
+      return openWebView(item.action);
+    }
     return startService(item.action);
   };
 
   return (
     <View style={styles.screen}>
       <LinearGradient colors={brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
-        <TouchableOpacity onPress={openSidebar} style={styles.menu}><Text style={styles.headerIcon}>☰</Text></TouchableOpacity>
-        <View style={styles.headerTitle}><Text style={styles.brand}>MySheba</Text><Text style={styles.headerSub}>Finance & Payments</Text></View>
+        <TouchableOpacity onPress={openSidebar} style={styles.menu} accessibilityLabel="Open menu">
+          <Text style={styles.menuIcon}>☰</Text>
+        </TouchableOpacity>
+        <View style={styles.headerTitle}>
+          <Text style={styles.brand}>MySheba</Text>
+          <Text style={styles.headerSub}>Welcome Back!</Text>
+        </View>
         <View style={styles.headerActions}>
-          <TouchableOpacity onPress={() => setScreen('notifications')} style={styles.headerButton}><Text style={styles.headerIcon}>🔔</Text>{hasUnreadNotifications && <View style={styles.dot} />}</TouchableOpacity>
-          <TouchableOpacity onPress={logout} style={styles.logout}><Text style={styles.logoutText}>Logout</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => setScreen('notifications')} style={styles.headerButton} accessibilityLabel="Notifications">
+            <Text style={styles.bell}>🔔</Text>
+            {hasUnreadNotifications && <View style={styles.dot} />}
+          </TouchableOpacity>
+          <TouchableOpacity onPress={logout} style={styles.logout}>
+            <Text style={styles.logoutText}>Logout</Text>
+          </TouchableOpacity>
         </View>
       </LinearGradient>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.walletCard}>
-          <View><Text style={styles.walletLabel}>AVAILABLE BALANCE</Text><Text style={styles.balance}>••••••</Text><Text style={styles.balanceHint}>Your secure wallet balance</Text></View>
-          <Text style={styles.walletIcon}>▣</Text>
-          <View style={styles.walletActions}>
-            <TouchableOpacity style={styles.walletButton} onPress={() => setScreen('myAccount')}><Text style={styles.walletButtonText}>+ Add Money</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.walletButton} onPress={() => setScreen('myAccount')}><Text style={styles.walletButtonText}>Withdraw</Text></TouchableOpacity>
+        <View style={styles.rateCard}>
+          <View style={styles.balanceSummary}>
+            <Text style={styles.moneyIcon}>💰</Text>
+            <Text style={styles.balanceValue}>0</Text>
+          </View>
+          <View style={styles.rateDivider} />
+          <View style={styles.rateContent}>
+            <View style={styles.rateHeadingRow}>
+              <Text style={styles.rateHeadingIcon}>💸</Text>
+              <Text style={styles.rateHeading}>Remit Rates</Text>
+            </View>
+            <View style={styles.ratePills}>
+              <View style={styles.ratePill}><Text style={styles.flag}>🇧🇩</Text><Text style={styles.rateLabel}>ACC </Text><Text style={styles.rateValue}>{Number(rates.BD_ACC || 0).toFixed(2)}</Text></View>
+              <View style={styles.ratePill}><Text style={styles.flag}>🇧🇩</Text><Text style={styles.rateLabel}>CASH </Text><Text style={styles.rateValue}>{Number(rates.BD_CASH || 0).toFixed(2)}</Text></View>
+              <View style={styles.ratePill}><Text style={styles.flag}>🇳🇵</Text><Text style={styles.rateLabel}>NPR </Text><Text style={styles.rateValue}>{Number(rates.NP || 0).toFixed(2)}</Text></View>
+            </View>
           </View>
         </View>
 
-        {!profile?.verified && (
-          <TouchableOpacity style={styles.kycCard} activeOpacity={0.85} onPress={() => setScreen('verifyIdentity')}>
-            <View style={styles.kycIcon}><Text style={styles.kycIconText}>✓</Text></View>
-            <View style={{ flex: 1 }}><Text style={styles.kycTitle}>Verify your identity</Text><Text style={styles.kycText}>Complete KYC to prepare your account for secure financial services.</Text></View>
-            <Text style={styles.kycArrow}>›</Text>
-          </TouchableOpacity>
-        )}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionIcon}>🎯</Text>
+          <Text style={styles.sectionTitle}>Quick Services</Text>
+        </View>
 
-        <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Money & Payments</Text><Text style={styles.sectionCaption}>Secure financial services</Text></View>
-        <View style={styles.grid}>{FINANCE_SERVICES.map((item) => <TouchableOpacity key={item.key} style={styles.tile} activeOpacity={0.82} onPress={() => go(item)}><View style={styles.tileIcon}><Text style={styles.tileIconText}>{item.icon}</Text></View><Text style={styles.tileTitle} numberOfLines={2}>{item.title}</Text></TouchableOpacity>)}</View>
+        <View style={styles.grid}>
+          {QUICK_SERVICES.map((item) => (
+            <TouchableOpacity key={item.key} style={styles.tile} activeOpacity={0.82} onPress={() => go(item)}>
+              <View style={styles.tileIcon}>
+                <Text style={styles.tileIconText}>{item.icon}</Text>
+              </View>
+              <Text style={styles.tileTitle}>{item.title}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-        <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Travel Services</Text><Text style={styles.sectionCaption}>Travel from one place</Text></View>
-        <View style={styles.grid}>{TRAVEL_SERVICES.map((item) => <TouchableOpacity key={item.key} style={styles.tile} activeOpacity={0.82} onPress={() => go(item)}><View style={styles.tileIcon}><Text style={styles.tileIconText}>{item.icon}</Text></View><Text style={styles.tileTitle} numberOfLines={2}>{item.title}</Text></TouchableOpacity>)}</View>
-
-        <View style={styles.security}><Text style={styles.securityIcon}>🔒</Text><View style={{ flex: 1 }}><Text style={styles.securityTitle}>Your money, protected</Text><Text style={styles.securityText}>Use your PIN or biometric security for sensitive account and transaction actions.</Text></View></View>
+        <View style={styles.security}>
+          <Text style={styles.securityIcon}>🔒</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.securityTitle}>Your money, protected</Text>
+            <Text style={styles.securityText}>Use your PIN or biometric security for sensitive account and transaction actions.</Text>
+          </View>
+        </View>
       </ScrollView>
     </View>
   );
@@ -82,41 +113,42 @@ export default function FinanceHomeScreen() {
 function createStyles(colors) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg },
-    header: { minHeight: 70, paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center' },
-    menu: { padding: 5, marginRight: 10 },
-    headerIcon: { color: '#FFFFFF', fontSize: 19 },
+    header: { minHeight: 78, paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center' },
+    menu: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', marginRight: 7 },
+    menuIcon: { color: '#FFFFFF', fontSize: 30, lineHeight: 32 },
     headerTitle: { flex: 1 },
-    brand: { color: '#FFFFFF', fontSize: 19, fontWeight: '800' },
-    headerSub: { color: '#FFFFFF', fontSize: 10, opacity: 0.9, marginTop: 2 },
-    headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    headerButton: { padding: 5, position: 'relative' },
-    dot: { position: 'absolute', right: 2, top: 2, width: 7, height: 7, borderRadius: 4, backgroundColor: '#FF5252', borderWidth: 1, borderColor: colors.primary },
-    logout: { paddingVertical: 6, paddingHorizontal: 9, borderRadius: radius.md, backgroundColor: 'rgba(255,255,255,0.18)' },
-    logoutText: { color: '#FFFFFF', fontSize: 10, fontWeight: '700' },
-    content: { padding: 14, paddingBottom: 28 },
-    walletCard: { borderRadius: 18, padding: 18, marginBottom: 14, backgroundColor: colors.primary, overflow: 'hidden', minHeight: 150 },
-    walletLabel: { color: '#FFFFFF', fontSize: 10, fontWeight: '800', letterSpacing: 1 },
-    balance: { color: '#FFFFFF', fontSize: 30, fontWeight: '800', letterSpacing: 4, marginTop: 7 },
-    balanceHint: { color: '#FFFFFF', opacity: 0.82, fontSize: 11, marginTop: 2 },
-    walletIcon: { position: 'absolute', right: 20, top: 18, color: '#FFFFFF', opacity: 0.35, fontSize: 40 },
-    walletActions: { flexDirection: 'row', gap: 9, marginTop: 17 },
-    walletButton: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
-    walletButtonText: { color: colors.primary, fontWeight: '800', fontSize: 11 },
-    kycCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, marginBottom: 18 },
-    kycIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-    kycIconText: { color: '#FFFFFF', fontSize: 20, fontWeight: '900' },
-    kycTitle: { color: colors.text, fontSize: 12, fontWeight: '800' },
-    kycText: { color: colors.text, fontSize: 10, lineHeight: 14, marginTop: 2 },
-    kycArrow: { color: colors.primary, fontSize: 26, fontWeight: '800' },
-    sectionHeader: { marginBottom: 9, marginTop: 2 },
-    sectionTitle: { color: colors.text, fontSize: 16, fontWeight: '800' },
-    sectionCaption: { color: colors.text, fontSize: 10, marginTop: 2, opacity: 0.7 },
-    grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 20 },
-    tile: { width: '31.7%', minHeight: 108, borderRadius: 14, backgroundColor: colors.card || colors.bg, borderWidth: 1, borderColor: colors.border || '#D9E1E8', padding: 10, marginBottom: 10, alignItems: 'center', justifyContent: 'center' },
-    tileIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-    tileIconText: { color: '#FFFFFF', fontSize: 22, fontWeight: '800' },
-    tileTitle: { color: colors.text, fontSize: 11, fontWeight: '700', textAlign: 'center', lineHeight: 14 },
-    security: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 14, padding: 13, backgroundColor: colors.card || colors.bg, borderWidth: 1, borderColor: colors.border || '#D9E1E8' },
+    brand: { color: '#FFFFFF', fontSize: 22, fontWeight: '800' },
+    headerSub: { color: '#FFFFFF', fontSize: 12, opacity: 0.9, marginTop: 1 },
+    headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    headerButton: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+    bell: { fontSize: 22 },
+    dot: { position: 'absolute', right: 2, top: 3, width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF5252', borderWidth: 1, borderColor: colors.primary },
+    logout: { paddingVertical: 9, paddingHorizontal: 14, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.18)' },
+    logoutText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
+    content: { paddingHorizontal: 14, paddingTop: 14, paddingBottom: 28 },
+    rateCard: { minHeight: 88, borderRadius: 18, paddingHorizontal: 13, paddingVertical: 12, backgroundColor: colors.card || '#FFFFFF', borderWidth: 1, borderColor: '#D9DDE3', flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+    balanceSummary: { width: 91, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
+    moneyIcon: { fontSize: 25 },
+    balanceValue: { color: colors.primary, fontSize: 25, fontWeight: '800' },
+    rateDivider: { width: 1, height: 54, backgroundColor: '#E1E4E8', marginHorizontal: 7 },
+    rateContent: { flex: 1 },
+    rateHeadingRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 7 },
+    rateHeadingIcon: { fontSize: 15, marginRight: 4 },
+    rateHeading: { color: colors.text, opacity: 0.55, fontSize: 11, fontWeight: '600' },
+    ratePills: { flexDirection: 'row', gap: 5 },
+    ratePill: { flex: 1, minHeight: 29, paddingHorizontal: 5, borderRadius: 15, backgroundColor: '#EEF7F0', flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+    flag: { fontSize: 13, marginRight: 2 },
+    rateLabel: { color: colors.text, opacity: 0.65, fontSize: 10 },
+    rateValue: { color: '#3D7048', fontSize: 13, fontWeight: '800' },
+    sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, paddingHorizontal: 4 },
+    sectionIcon: { fontSize: 22, marginRight: 6 },
+    sectionTitle: { color: colors.text, fontSize: 20, fontWeight: '800' },
+    grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+    tile: { width: '23.7%', minHeight: 142, borderRadius: 17, backgroundColor: colors.card || '#FFFFFF', borderWidth: 2, borderColor: colors.primary, paddingHorizontal: 5, paddingVertical: 12, marginBottom: 12, alignItems: 'center', justifyContent: 'center' },
+    tileIcon: { width: 58, height: 58, alignItems: 'center', justifyContent: 'center', marginBottom: 9 },
+    tileIconText: { fontSize: 38 },
+    tileTitle: { color: colors.text, fontSize: 11, fontWeight: '700', textAlign: 'center', lineHeight: 15 },
+    security: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 14, padding: 13, backgroundColor: colors.card || colors.bg, borderWidth: 1, borderColor: colors.border || '#D9E1E8', marginTop: 4 },
     securityIcon: { fontSize: 20 },
     securityTitle: { color: colors.text, fontSize: 12, fontWeight: '800' },
     securityText: { color: colors.text, opacity: 0.7, fontSize: 10, lineHeight: 14, marginTop: 2 },
