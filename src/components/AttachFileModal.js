@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, View, Text, TouchableOpacity, Image, ActivityIndicator, StyleSheet } from 'react-native';
+import { Modal, View, Text, TouchableOpacity, Image, ActivityIndicator, StyleSheet, TextInput } from 'react-native';
 import { showAlert } from '../utils/appAlert';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -7,28 +7,21 @@ import { radius } from '../theme/theme';
 
 import { useTheme } from "../theme/ThemeContext";
 
-// Shared "attach a file before completing this" modal - used when a
-// dealer/admin marks a Remittance order complete (photo of the transfer
-// receipt) or an admin closes a Flight inquiry (photo/PDF of the issued
-// ticket). The caller supplies the actual upload function (which knows
-// the right Storage path) and what to do with the resulting URL.
-//
-// allowPdf: Flight tickets are commonly issued as PDF, so that flow opts
-// into the document picker as well as the image picker; Remittance stays
-// image-only (a bank receipt is always a photo/screenshot).
+// Shared attachment modal. Flight inquiries can still attach a ticket/photo.
+// Remittance completion is intentionally different: staff enter the
+// completion PIN supplied by the reseller/admin; no receipt upload is needed.
 export default function AttachFileModal({ visible, title, allowPdf, uploadFn, onDone, onCancel }) {
-  const {
-    colors
-  } = useTheme();
-
+  const { colors } = useTheme();
   const styles = createStyles(colors);
-  const [file, setFile] = useState(null); // { uri, mimeType, isPdf }
+  const isRemittance = String(title || '').toLowerCase().includes('transfer receipt');
+  const [file, setFile] = useState(null);
+  const [pin, setPin] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const reset = () => { setFile(null); setBusy(false); };
+  const reset = () => { setFile(null); setPin(''); setBusy(false); };
 
   const pickImage = async () => {
-const result = await ImagePicker.launchImageLibraryAsync({
+    const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.7,
     });
@@ -47,6 +40,23 @@ const result = await ImagePicker.launchImageLibraryAsync({
   };
 
   const confirm = async () => {
+    if (isRemittance) {
+      const cleanPin = pin.replace(/\D/g, '');
+      if (cleanPin.length !== 4) {
+        showAlert('MySheba', 'Enter the 4-digit remittance completion PIN provided by the reseller/admin.');
+        return;
+      }
+      setBusy(true);
+      try {
+        reset();
+        onDone(cleanPin);
+      } catch (e) {
+        setBusy(false);
+        showAlert('MySheba', e.message || 'Could not complete this order.');
+      }
+      return;
+    }
+
     if (!file) {
       showAlert('MySheba', 'Please attach a file first.');
       return;
@@ -68,9 +78,22 @@ const result = await ImagePicker.launchImageLibraryAsync({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={cancel}>
       <View style={styles.overlay}>
         <View style={styles.box}>
-          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.title}>{isRemittance ? 'Enter Remittance Completion PIN' : title}</Text>
 
-          {file ? (
+          {isRemittance ? (
+            <View>
+              <Text style={styles.helper}>Enter the PIN provided by the reseller/admin after the remittance has been processed.</Text>
+              <TextInput
+                value={pin}
+                onChangeText={(v) => setPin(v.replace(/\D/g, '').slice(0, 4))}
+                placeholder="4-digit PIN"
+                keyboardType="number-pad"
+                maxLength={4}
+                secureTextEntry={false}
+                style={styles.pinInput}
+              />
+            </View>
+          ) : file ? (
             file.isPdf ? (
               <View style={styles.pdfPreview}>
                 <Text style={styles.pdfPreviewText}>📄 PDF attached</Text>
@@ -91,7 +114,7 @@ const result = await ImagePicker.launchImageLibraryAsync({
             </View>
           )}
 
-          {!!file && (
+          {!isRemittance && !!file && (
             <TouchableOpacity onPress={() => setFile(null)} disabled={busy}>
               <Text style={styles.changeText}>Change file</Text>
             </TouchableOpacity>
@@ -101,8 +124,12 @@ const result = await ImagePicker.launchImageLibraryAsync({
             <TouchableOpacity style={styles.cancelBtn} onPress={cancel} disabled={busy}>
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.confirmBtn} onPress={confirm} disabled={busy || !file}>
-              {busy ? <ActivityIndicator size="small" color="white" /> : <Text style={styles.confirmText}>Upload & Complete</Text>}
+            <TouchableOpacity
+              style={styles.confirmBtn}
+              onPress={confirm}
+              disabled={busy || (isRemittance ? pin.length !== 4 : !file)}
+            >
+              {busy ? <ActivityIndicator size="small" color="white" /> : <Text style={styles.confirmText}>{isRemittance ? 'Complete Remittance' : 'Upload & Complete'}</Text>}
             </TouchableOpacity>
           </View>
         </View>
@@ -116,6 +143,8 @@ function createStyles(colors) {
     overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
     box: { backgroundColor: 'white', borderRadius: radius.lg, padding: 20, width: '85%', maxWidth: 340 },
     title: { fontWeight: '600', fontSize: 15, marginBottom: 14 },
+    helper: { color: colors.textSecondary || '#666', fontSize: 12, lineHeight: 18, marginBottom: 12 },
+    pinInput: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 12, fontSize: 20, fontWeight: '700', letterSpacing: 5, textAlign: 'center', color: colors.text, marginBottom: 8 },
     pickRow: { flexDirection: 'row', gap: 10, marginBottom: 6 },
     pickBtn: { flex: 1, paddingVertical: 24, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, alignItems: 'center', backgroundColor: '#F7F8FA' },
     pickBtnText: { fontSize: 13, fontWeight: '600', color: colors.text },
