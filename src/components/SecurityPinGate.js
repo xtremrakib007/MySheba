@@ -7,9 +7,8 @@ import AppModalHeader from './AppModalHeader';
 import * as securityPinService from '../firebase/securityPinService';
 
 // Rendered once at the App.js root. Reads pinGateRequest (set by
-// AppContext.requireSecurityPin) and also auto-starts setup for an existing
-// Google-authenticated profile that reached Home without a security PIN.
-// This closes the old gap where an existing Google UID skipped onboarding.
+// AppContext.requireSecurityPin) and also prompts a customer account to set
+// up a security PIN before continuing to use the app.
 export default function SecurityPinGate() {
   const { colors } = useTheme();
   const styles = createStyles(colors);
@@ -24,24 +23,22 @@ export default function SecurityPinGate() {
   const visible = !!pinGateRequest;
   const isSetup = !profile?.securityPinSet;
   const autoPromptedRef = useRef(false);
+  const isCustomerProfile = !!profile && (!profile.role || profile.role === 'customer');
 
-  // Existing Google accounts created before PIN setup must not silently reach
-  // an unprotected Home screen. Ask for the same server-side PIN setup gate
-  // used by the rest of the app. The ref prevents a render loop while the
-  // profile document is being updated after a successful setup.
+  // Customer accounts without a security PIN must complete setup before
+  // reaching normal app usage. Staff roles keep their existing navigation.
   useEffect(() => {
-    if (!authUser || !profile || profile.authProvider !== 'google' || profile.securityPinSet) {
+    if (!authUser || !isCustomerProfile || profile.securityPinSet) {
       if (!profile?.securityPinSet) autoPromptedRef.current = false;
       return undefined;
     }
     if (pinGateRequest || autoPromptedRef.current) return undefined;
     autoPromptedRef.current = true;
     requireSecurityPin('Account Security PIN').catch(() => {
-      // A cancelled gate may be requested again on the next explicit login.
       autoPromptedRef.current = false;
     });
     return undefined;
-  }, [authUser, profile, pinGateRequest, requireSecurityPin]);
+  }, [authUser, isCustomerProfile, profile, pinGateRequest, requireSecurityPin]);
 
   const [step, setStep] = useState('enter');
   const [pin, setPin] = useState('');
@@ -62,11 +59,11 @@ export default function SecurityPinGate() {
   if (!visible) return null;
 
   const isValidPin = (p) => /^\d{4,8}$/.test(p);
-  const isMandatoryGoogleSetup = authUser && profile?.authProvider === 'google' && !profile?.securityPinSet;
+  const isMandatoryCustomerSetup = authUser && isCustomerProfile && !profile?.securityPinSet;
   const onCancel = () => {
-    // A Google account without a PIN must finish setup; allowing cancellation
-    // would recreate the original bug where Home opens without protection.
-    if (isMandatoryGoogleSetup || busy) return;
+    // A customer account without a PIN must finish setup so the account does
+    // not continue without its required security protection.
+    if (isMandatoryCustomerSetup || busy) return;
     cancelPinGate();
   };
 
@@ -155,8 +152,8 @@ export default function SecurityPinGate() {
             {!!error && <Text style={styles.error}>{error}</Text>}
 
             <View style={styles.row}>
-              <TouchableOpacity style={[styles.cancelBtn, isMandatoryGoogleSetup && styles.hiddenCancel]} onPress={onCancel} disabled={busy || isMandatoryGoogleSetup}>
-                {!isMandatoryGoogleSetup && <Text style={styles.cancelText}>Cancel</Text>}
+              <TouchableOpacity style={[styles.cancelBtn, isMandatoryCustomerSetup && styles.hiddenCancel]} onPress={onCancel} disabled={busy || isMandatoryCustomerSetup}>
+                {!isMandatoryCustomerSetup && <Text style={styles.cancelText}>Cancel</Text>}
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.okBtn, busy && styles.okBtnDisabled]}
