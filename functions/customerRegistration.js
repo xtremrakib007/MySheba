@@ -40,36 +40,28 @@ exports.registerWithDealerCode = onCall(async (request) => {
   const normalizedEmail = normalizeEmail(email);
   const verifiedPhoneE164 = toE164(phoneE164 || phone, phoneE164 ? undefined : dialCode);
 
-  // Either SMS verification OR email link/OTP verification is sufficient.
+  // Finance signup requires both independent channels to be verified.
   let phoneAuthUid = null;
   let emailAuthUid = null;
   let emailOtpUsed = false;
-  let verifiedBy = null;
 
   if (phoneIdToken) {
-    try {
-      phoneAuthUid = await assertPhoneVerified(phoneIdToken, verifiedPhoneE164, undefined);
-      verifiedBy = 'sms';
-    } catch (_) { phoneAuthUid = null; }
+    try { phoneAuthUid = await assertPhoneVerified(phoneIdToken, verifiedPhoneE164, undefined); }
+    catch (_) { phoneAuthUid = null; }
   }
 
   if (emailIdToken) {
-    try {
-      emailAuthUid = await assertEmailVerified(emailIdToken, normalizedEmail);
-      verifiedBy = verifiedBy ? 'sms+email' : 'email_link';
-    } catch (_) { emailAuthUid = null; }
+    try { emailAuthUid = await assertEmailVerified(emailIdToken, normalizedEmail); }
+    catch (_) { emailAuthUid = null; }
   }
 
   if (!emailAuthUid && emailOtpVerificationId) {
-    try {
-      await assertEmailOtpVerified(emailOtpVerificationId, normalizedEmail);
-      emailOtpUsed = true;
-      verifiedBy = verifiedBy ? 'sms+email_otp' : 'email_otp';
-    } catch (_) {}
+    try { await assertEmailOtpVerified(emailOtpVerificationId, normalizedEmail); emailOtpUsed = true; }
+    catch (_) { emailOtpUsed = false; }
   }
 
-  if (!phoneAuthUid && !emailAuthUid && !emailOtpUsed) {
-    throw new HttpsError('failed-precondition', 'Please verify your phone number by SMS or verify your email address by link/OTP before registering.');
+  if (!phoneAuthUid || (!emailAuthUid && !emailOtpUsed)) {
+    throw new HttpsError('failed-precondition', 'Please verify both your phone number by SMS and your email address before registering.');
   }
 
   const db = admin.firestore();
@@ -137,9 +129,9 @@ exports.registerWithDealerCode = onCall(async (request) => {
 
     await logAudit({
       action: 'account_created', targetUid: userRecord.uid, performedBy: 'system', performedByRole: null,
-      details: { role: 'customer', method: 'phone_pin', verification: verifiedBy, emailVerification: emailOtpUsed ? 'otp' : (emailAuthUid ? 'firebase_link' : null) },
+      details: { role: 'customer', method: 'phone_pin', verification: 'sms+email_otp', emailVerification: emailOtpUsed ? 'otp' : 'firebase_link' },
     });
-    return { uid: userRecord.uid, role: 'customer', verification: verifiedBy };
+    return { uid: userRecord.uid, role: 'customer', verification: 'sms+email' };
   } finally {
     if (lockAcquired) await lockRef.delete().catch(() => {});
   }
