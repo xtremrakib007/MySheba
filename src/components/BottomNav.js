@@ -4,16 +4,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { useTheme } from "../theme/ThemeContext";
 
-// Mirrors #bottomNav - Home, Top-Up, History, Chat, and Support are all
-// wired up. Chat opens the general-purpose 1:1 inbox (any account); Support
-// opens the separate customer <-> Support team thread (see SupportScreen.js).
-// Each tab gets its own accent color (rather than one flat brand color) so
-// the bar reads as a bit more lively/colorful when a tab is active.
-// Order is Chat, Top-Up, Home, History, Support - Home sits in the center
-// and renders larger/raised (see styles.homeCircle) since it's the anchor
-// every other tab returns to.
+// Finance-focused bottom navigation. Customer Chat has been removed from the
+// customer experience; Support remains available for help with the account
+// and financial services.
 const TABS = [
-  { key: 'chat', icon: '💬', label: 'Chat', colors: ['#4facfe', '#00f2fe'] },
   { key: 'topup', icon: '💰', label: 'Top-Up', colors: ['#FBBC04', '#FF9F43'] },
   { key: 'home', icon: '🏠', label: 'Home', colors: ['#00A99D', '#00C9B7'] },
   { key: 'history', icon: '📋', label: 'History', colors: ['#667eea', '#764ba2'] },
@@ -21,18 +15,8 @@ const TABS = [
 ];
 
 // Top-Up and Support mean something different depending on who's tapping:
-//   - customer/dealer/dealer/admin ("users"): submit a request
-//     (TopUpScreen / SupportScreen, with its own "My Support Requests"
-//     tracker, plus an "Assigned to You" queue for staff who've been
-//     appointed a ticket - see SupportScreen.js). Admin used to jump
-//     straight to the full ticket queue below; now every ticket lands
-//     with superadmin first, who decides whether to appoint an admin or
-//     dealer to solve it - so admin's own Support tab matches everyone
-//     else's until superadmin hands them something.
-//   - superadmin: Top-Up opens their own self-buy/auto-approved screen
-//     (SuperAdminTopUpScreen). Support opens the full incoming ticket
-//     queue (AdminSupportScreen), where every new ticket lands first and
-//     can be assigned out to an admin or dealer.
+// customer/dealer/admin use their normal request/support screens; superadmin
+// uses the corresponding administration screens.
 function screenForRole(key, role) {
   const isSuperadmin = role === 'superadmin';
   const isAdminTier = role === 'admin' || isSuperadmin;
@@ -42,29 +26,14 @@ function screenForRole(key, role) {
 }
 
 export default function BottomNav() {
-  const {
-    colors
-  } = useTheme();
-
+  const { colors } = useTheme();
   const styles = createStyles(colors);
-  const { goHome, screen, setScreen, profile, chatUnreadCount, chatHubUnreadCount, openChatHub } = useApp();
+  const { goHome, screen, setScreen, profile, chatUnreadCount } = useApp();
   const role = profile && profile.role;
 
-  // "Chat" is the unified hub covering Direct/Groups/Rooms (any account,
-  // any role); "Support" is its own separate thread with the Support team.
-  const BADGE_SOURCE = { chat: chatHubUnreadCount, support: chatUnreadCount };
-
-  // Plain navigation - each tap pushes onto the real back-history stack
-  // (see AppContext's screenHistoryRef), so hardware back steps backward
-  // through actual visited screens one at a time (Chat -> Top-Up -> ...)
-  // until it reaches Home. Only Home itself resets the stack (goHome), so
-  // once you're on Home there's nothing left to step back INTO - back from
-  // there arms the exit warning instead (see onBackPress's HOME_SCREENS
-  // check in AppContext).
   const onPressTab = (key) => {
     if (key === 'home') { goHome(); return; }
     if (key === 'history') { setScreen('history'); return; }
-    if (key === 'chat') { openChatHub(); return; }
     const target = screenForRole(key, role);
     if (target) setScreen(target);
     else goHome();
@@ -76,10 +45,8 @@ export default function BottomNav() {
         const target = t.key === 'topup' || t.key === 'support' ? screenForRole(t.key, role) : t.key;
         const isActive = t.key === 'home'
           ? (screen === 'customerHome' || screen === 'dealerHome' || screen === 'resellerHome' || screen === 'adminHome')
-          : t.key === 'chat'
-            ? screen === 'chatHub'
-            : screen === target;
-        const badgeCount = BADGE_SOURCE[t.key] || 0;
+          : screen === target;
+        const badgeCount = t.key === 'support' ? (chatUnreadCount || 0) : 0;
         const activeColor = t.colors[0];
         const isHome = t.key === 'home';
         return (

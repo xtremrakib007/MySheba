@@ -8,7 +8,6 @@ import { radius } from '../theme/theme';
 import { useTheme } from "../theme/ThemeContext";
 import HeaderDecor from '../components/HeaderDecor';
 import * as contactsService from '../firebase/contactsService';
-import * as directChatService from '../firebase/directChatService';
 
 const ROLE_LABEL = { customer: 'Customer', dealer: 'Dealer', reseller: 'Reseller', admin: 'Admin', superadmin: 'Super Admin' };
 
@@ -17,30 +16,22 @@ function normalizeDigits(v) {
 }
 
 /**
- * Friends list, WhatsApp-style: two sources merged together -
+ * Friends list: two sources merged together -
  *  1. "From your contacts" - reads the phone's own address book, sends the
  *     phone numbers to matchContactsByPhone (Cloud Function) to find which
- *     of them are registered MySheba accounts, and displays each using the
- *     name YOU saved them under in your phone (not their MySheba profile
- *     name) - exactly like WhatsApp does.
+ *     of them are registered MySheba accounts.
  *  2. "Added friends" - anyone explicitly added via AddContactScreen's
- *     search, persisted in users/{uid}/friends (see contactsService.js).
- * A device-contact match that's also been explicitly added is only shown
- * once, under "From your contacts" (device name still wins for display).
+ *     search, persisted in users/{uid}/friends.
+ * Customer direct-chat actions are intentionally not exposed here.
  */
 export default function FriendsListScreen() {
-  const {
-    colors,
-    brandGradient
-  } = useTheme();
-
+  const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { authUser, profile, goBackOrHome, openDirectChat, setScreen, openRingtonePicker } = useApp();
-  const [permissionState, setPermissionState] = useState('unknown'); // unknown | granted | denied
-  const [deviceMatches, setDeviceMatches] = useState([]); // [{uid, name, phone, role, userId, deviceContactName}]
-  const [addedFriends, setAddedFriends] = useState([]); // from Firestore
+  const { authUser, goBackOrHome, setScreen, openRingtonePicker } = useApp();
+  const [permissionState, setPermissionState] = useState('unknown');
+  const [deviceMatches, setDeviceMatches] = useState([]);
+  const [addedFriends, setAddedFriends] = useState([]);
   const [loadingDevice, setLoadingDevice] = useState(false);
-  const [startingUid, setStartingUid] = useState(null);
 
   const loadDeviceContacts = useCallback(async () => {
     setLoadingDevice(true);
@@ -53,9 +44,6 @@ export default function FriendsListScreen() {
       setPermissionState('granted');
 
       const { data } = await Contacts.getContactsAsync({ fields: [Contacts.Fields.PhoneNumbers] });
-      // Map normalized phone digits -> the name saved for that number in
-      // the phone's contacts. A contact can have multiple numbers; each
-      // maps back to the same contact name.
       const nameByDigits = new Map();
       const allDigits = [];
       data.forEach((c) => {
@@ -92,30 +80,12 @@ export default function FriendsListScreen() {
     return contactsService.subscribeFriends(authUser.uid, setAddedFriends);
   }, [authUser]);
 
-  // De-dupe: a friend explicitly added who also turned up as a device
-  // contact match should only appear once (the device-contact entry, since
-  // it has the richer "saved as ___" name).
   const deviceUids = new Set(deviceMatches.map((m) => m.uid));
   const addedOnly = addedFriends.filter((f) => !deviceUids.has(f.uid));
 
-  const startChat = async (user, displayName) => {
-    setStartingUid(user.uid);
-    try {
-      const chatId = await directChatService.ensureDirectChat(
-        { uid: authUser.uid, name: profile?.name || '' },
-        { uid: user.uid, name: displayName || user.name || user.phone || 'User' }
-      );
-      openDirectChat(chatId, displayName || user.name || user.phone || 'User', user.uid);
-    } catch (err) {
-      showAlert('MySheba', 'Could not start this conversation. Please try again.');
-    } finally {
-      setStartingUid(null);
-    }
-  };
-
   const renderRow = (item, displayName, subtitle) => (
     <View key={item.uid} style={styles.userRow}>
-      <TouchableOpacity style={styles.userRowMain} onPress={() => startChat(item, displayName)} disabled={!!startingUid}>
+      <View style={styles.userRowMain}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{(displayName || '?').trim().charAt(0).toUpperCase()}</Text>
         </View>
@@ -123,8 +93,7 @@ export default function FriendsListScreen() {
           <Text style={styles.userName}>{displayName}</Text>
           <Text style={styles.userRole}>{subtitle}</Text>
         </View>
-        {startingUid === item.uid ? <ActivityIndicator size="small" color={colors.primary} /> : <Text style={styles.chatIcon}>💬</Text>}
-      </TouchableOpacity>
+      </View>
       <TouchableOpacity
         style={styles.ringtoneBtn}
         onPress={() => openRingtonePicker(item.uid, displayName)}
@@ -173,16 +142,14 @@ export default function FriendsListScreen() {
         data={sections}
         keyExtractor={(s) => s.kind}
         contentContainerStyle={styles.list}
-        ListEmptyComponent={
-          !loadingDevice ? (
-            <View style={styles.emptyWrap}>
-              <Text style={styles.empty}>No friends yet</Text>
-              <TouchableOpacity style={styles.emptyBtn} onPress={() => setScreen('addContact')}>
-                <Text style={styles.emptyBtnText}>Search and add a friend</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null
-        }
+        ListEmptyComponent={!loadingDevice ? (
+          <View style={styles.emptyWrap}>
+            <Text style={styles.empty}>No friends yet</Text>
+            <TouchableOpacity style={styles.emptyBtn} onPress={() => setScreen('addContact')}>
+              <Text style={styles.emptyBtnText}>Search and add a friend</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
         renderItem={({ item: section }) => (
           <View>
             <Text style={styles.sectionTitle}>{section.title}</Text>
@@ -215,13 +182,13 @@ function createStyles(colors) {
     permissionCard: {
       margin: 16, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md,
     },
-    permissionText: { fontSize: 12, color: '#666', marginBottom: 10, lineHeight: 17 },
+    permissionText: { fontSize: 12, color: colors.textSecondary, marginBottom: 10, lineHeight: 17 },
     permissionBtn: { backgroundColor: colors.primary, paddingVertical: 9, borderRadius: radius.pill, alignItems: 'center' },
     permissionBtnText: { color: 'white', fontWeight: '600', fontSize: 12 },
     list: { paddingHorizontal: 16, paddingBottom: 20, paddingTop: 8 },
-    sectionTitle: { fontSize: 12, fontWeight: '700', color: '#999', textTransform: 'uppercase', marginTop: 12, marginBottom: 8 },
+    sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', marginTop: 12, marginBottom: 8 },
     emptyWrap: { alignItems: 'center', paddingVertical: 40 },
-    empty: { textAlign: 'center', color: '#999', fontSize: 13, marginBottom: 12 },
+    empty: { textAlign: 'center', color: colors.textSecondary, fontSize: 13, marginBottom: 12 },
     emptyBtn: { backgroundColor: colors.primary, paddingHorizontal: 18, paddingVertical: 10, borderRadius: radius.pill },
     emptyBtnText: { color: 'white', fontWeight: '600', fontSize: 13 },
     userRow: {
@@ -236,8 +203,7 @@ function createStyles(colors) {
     avatarText: { color: 'white', fontWeight: '700' },
     userBody: { flex: 1 },
     userName: { fontSize: 14, fontWeight: '600', color: colors.text },
-    userRole: { fontSize: 11, color: '#999', marginTop: 2 },
-    chatIcon: { fontSize: 20 },
+    userRole: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
     ringtoneBtn: {
       alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14,
       borderLeftWidth: 1, borderLeftColor: colors.border,

@@ -8,7 +8,6 @@ import { useTheme } from "../theme/ThemeContext";
 import HeaderDecor from '../components/HeaderDecor';
 import * as roommateService from '../firebase/roommateService';
 import { REPORT_REASONS } from '../firebase/roommateService';
-import { ensureDirectChat } from '../firebase/directChatService';
 
 function formatDate(ts) {
   if (!ts || !ts.seconds) return '';
@@ -22,7 +21,7 @@ export default function RoommateRequestDetailScreen() {
   } = useTheme();
 
   const styles = createStyles(colors);
-  const { goBackOrHome, activeRoommateRequestId, authUser, profile, openDirectChat } = useApp();
+  const { goBackOrHome, activeRoommateRequestId, authUser } = useApp();
   const [request, setRequest] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -56,22 +55,6 @@ export default function RoommateRequestDetailScreen() {
   }
 
   const isOwner = authUser && request.posterId === authUser.uid;
-
-  const contactPoster = async () => {
-    if (!authUser || isOwner) return;
-    setBusy(true);
-    try {
-      const chatId = await ensureDirectChat(
-        { uid: authUser.uid, name: profile?.name },
-        { uid: request.posterId, name: request.posterName }
-      );
-      openDirectChat(chatId, request.posterName, request.posterId, `Hi, is your room sharing request still open?`);
-    } catch (err) {
-      showAlert('MySheba', 'Could not open chat right now.');
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const toggleClosed = async () => {
     setBusy(true);
@@ -190,7 +173,7 @@ export default function RoommateRequestDetailScreen() {
           </>
         )}
 
-        {isOwner ? (
+        {isOwner && (
           <View style={styles.ownerActions}>
             <TouchableOpacity style={[styles.actionBtn, styles.closedBtn]} onPress={toggleClosed} disabled={busy}>
               <Text style={styles.actionBtnText}>{request.status === 'closed' ? 'Mark as Open' : 'Mark as Filled'}</Text>
@@ -199,10 +182,6 @@ export default function RoommateRequestDetailScreen() {
               <Text style={styles.actionBtnText}>Delete Request</Text>
             </TouchableOpacity>
           </View>
-        ) : (
-          <TouchableOpacity style={styles.chatBtn} onPress={contactPoster} disabled={busy || request.status === 'closed'}>
-            <Text style={styles.chatBtnText}>💬 Chat</Text>
-          </TouchableOpacity>
         )}
       </ScrollView>
     </View>
@@ -232,8 +211,6 @@ function createStyles(colors) {
     metaTag: { fontSize: 11, fontWeight: '600', color: colors.textSecondary, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingVertical: 4, paddingHorizontal: 10, borderRadius: radius.pill },
     sectionLabel: { fontSize: 12, fontWeight: '700', color: colors.navy, marginTop: 16, marginBottom: 6 },
     bodyText: { fontSize: 13, color: colors.text, lineHeight: 19 },
-    chatBtn: { backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: 14, alignItems: 'center', marginTop: 24 },
-    chatBtnText: { color: 'white', fontWeight: '700', fontSize: 14 },
     ownerActions: { gap: 10, marginTop: 24 },
     actionBtn: { borderRadius: radius.md, paddingVertical: 13, alignItems: 'center' },
     closedBtn: { backgroundColor: colors.secondary },

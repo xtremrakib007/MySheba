@@ -1,20 +1,10 @@
-// Marketplace "Search" (PRD section 4 / sitemap: Search Products, Search
-// Rooms, Search Services, Search Users) - a single search bar that looks
-// across every module at once, rather than each module's home screen only
-// filtering its own feed (which is all that existed before this screen).
-//
+// Marketplace "Search" - search across finance-adjacent marketplace modules without customer-to-customer chat/user discovery.
 // Buy & Sell / Accommodation / Room Sharing / Local Services / Community
-// all subscribe to their existing "active feed" functions (already capped
-// client-side, same pattern every module's own home screen uses) and are
-// filtered in-memory by the search term - no new index needed. "Users" is
-// the one exception: it goes through the same searchUsers Cloud Function
-// AddContactScreen/NewGroupScreen already use (a plain client query can't
-// search across every account - see functions/userSearch.js), debounced
-// the same way those two screens debounce it.
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, TextInput, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
+// all subscribe to their existing active-feed functions and are filtered
+// in-memory by the search term.
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, TouchableOpacity, TextInput, FlatList, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { showAlert } from '../utils/appAlert';
 import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
 import { useTheme } from "../theme/ThemeContext";
@@ -25,8 +15,6 @@ import * as accommodationService from '../firebase/accommodationService';
 import * as roommateService from '../firebase/roommateService';
 import * as serviceProviderService from '../firebase/serviceProviderService';
 import * as communityService from '../firebase/communityService';
-import * as contactsService from '../firebase/contactsService';
-import * as directChatService from '../firebase/directChatService';
 
 const TYPE_TABS = [
   { key: null, label: 'All', icon: '🔎' },
@@ -35,7 +23,6 @@ const TYPE_TABS = [
   { key: 'roommate', label: 'Rooms', icon: '👥' },
   { key: 'service', label: 'Services', icon: '🧰' },
   { key: 'community', label: 'Community', icon: '📢' },
-  { key: 'user', label: 'Users', icon: '👤' },
 ];
 
 function matches(term, ...fields) {
@@ -44,25 +31,15 @@ function matches(term, ...fields) {
 }
 
 export default function MarketplaceSearchScreen() {
-  const {
-    colors,
-    brandGradient
-  } = useTheme();
-
+  const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
   const {
-    goBackOrHome, authUser, profile, openDirectChat,
+    goBackOrHome,
     openListingDetail, openPropertyDetail, openRoommateRequestDetail, openServiceProviderDetail, openCommunityPostDetail,
   } = useApp();
 
   const [term, setTerm] = useState('');
   const [type, setType] = useState(null);
-  // "Businesses only" - filters to results whose module denormalizes a
-  // Business Profile flag (sellerIsBusiness/ownerIsBusiness, see
-  // marketplaceService/accommodationService/serviceProviderService's
-  // create* functions, PRD section 15). Roommate requests, Community
-  // posts, and Users have no such concept, so this toggle drops those
-  // kinds from the results entirely rather than showing them unfiltered.
   const [businessOnly, setBusinessOnly] = useState(false);
 
   const [listings, setListings] = useState([]);
@@ -71,38 +48,11 @@ export default function MarketplaceSearchScreen() {
   const [providers, setProviders] = useState([]);
   const [posts, setPosts] = useState([]);
 
-  const [users, setUsers] = useState([]);
-  const [usersSearching, setUsersSearching] = useState(false);
-  const [startingChatUid, setStartingChatUid] = useState(null);
-  const userDebounceRef = useRef(null);
-
   useEffect(() => marketplaceService.subscribeActiveListings(setListings, () => {}), []);
   useEffect(() => accommodationService.subscribeActiveProperties(setProperties, () => {}), []);
   useEffect(() => roommateService.subscribeActiveRoommateRequests(setRoommates, () => {}), []);
   useEffect(() => serviceProviderService.subscribeActiveProviders(setProviders, () => {}), []);
   useEffect(() => communityService.subscribeActivePosts(setPosts, () => {}), []);
-
-  useEffect(() => {
-    if (userDebounceRef.current) clearTimeout(userDebounceRef.current);
-    const q = term.trim();
-    if (q.length < 2) {
-      setUsers([]);
-      setUsersSearching(false);
-      return undefined;
-    }
-    setUsersSearching(true);
-    userDebounceRef.current = setTimeout(async () => {
-      try {
-        const list = await contactsService.searchUsers(q);
-        setUsers(list);
-      } catch (err) {
-        setUsers([]);
-      } finally {
-        setUsersSearching(false);
-      }
-    }, 350);
-    return () => clearTimeout(userDebounceRef.current);
-  }, [term]);
 
   const results = useMemo(() => {
     const t = term.trim().toLowerCase();
@@ -128,12 +78,9 @@ export default function MarketplaceSearchScreen() {
       posts.filter((p) => p.status === 'active' && matches(t, p.title, p.description, p.location))
         .forEach((p) => out.push({ kind: 'community', id: p.id, title: p.title, subtitle: p.type, meta: p.location, icon: '📢', data: p }));
     }
-    if (!businessOnly && (!type || type === 'user')) {
-      users.forEach((u) => out.push({ kind: 'user', id: u.uid, title: u.name || u.phone || 'User', subtitle: u.phone || '', meta: '', icon: '👤', data: u }));
-    }
 
     return out;
-  }, [type, term, listings, properties, roommates, providers, posts, users, businessOnly]);
+  }, [type, term, listings, properties, roommates, providers, posts, businessOnly]);
 
   const openResult = (r) => {
     if (r.kind === 'listing') return openListingDetail(r.id);
@@ -141,27 +88,9 @@ export default function MarketplaceSearchScreen() {
     if (r.kind === 'roommate') return openRoommateRequestDetail(r.id);
     if (r.kind === 'service') return openServiceProviderDetail(r.id);
     if (r.kind === 'community') return openCommunityPostDetail(r.id);
-    if (r.kind === 'user') return startChat(r.data);
-  };
-
-  const startChat = async (user) => {
-    if (!authUser) return;
-    setStartingChatUid(user.uid);
-    try {
-      const chatId = await directChatService.ensureDirectChat(
-        { uid: authUser.uid, name: profile?.name || '' },
-        { uid: user.uid, name: user.name || user.phone || 'User' }
-      );
-      openDirectChat(chatId, user.name || user.phone || 'User', user.uid);
-    } catch (err) {
-      showAlert('MySheba', 'Could not start this conversation. Please try again.');
-    } finally {
-      setStartingChatUid(null);
-    }
   };
 
   const showEmpty = term.trim().length === 0 && !type && !businessOnly;
-  const busy = type === 'user' && usersSearching;
 
   return (
     <View style={styles.screen}>
@@ -176,7 +105,7 @@ export default function MarketplaceSearchScreen() {
       <View style={styles.searchRow}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Search products, rooms, services, people..."
+          placeholder="Search products, rooms, services, community..."
           placeholderTextColor="#9AA0A6"
           value={term}
           onChangeText={setTerm}
@@ -213,24 +142,21 @@ export default function MarketplaceSearchScreen() {
       {showEmpty ? (
         <View style={styles.center}>
           <Text style={{ fontSize: 36, marginBottom: 8 }}>🔎</Text>
-          <Text style={styles.emptyText}>Search across Buy & Sell, Accommodation, Room Sharing, Services, Community and Users.</Text>
+          <Text style={styles.emptyText}>Search across Buy & Sell, Accommodation, Room Sharing, Services and Community.</Text>
         </View>
-      ) : busy ? (
-        <View style={styles.center}><ActivityIndicator size="large" color={colors.primary} /></View>
       ) : (
         <FlatList
           data={results}
           keyExtractor={(item) => `${item.kind}-${item.id}`}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => (
-            <TouchableOpacity style={styles.resultCard} activeOpacity={0.8} onPress={() => openResult(item)} disabled={item.kind === 'user' && startingChatUid === item.id}>
+            <TouchableOpacity style={styles.resultCard} activeOpacity={0.8} onPress={() => openResult(item)}>
               <View style={styles.resultIcon}><Text style={{ fontSize: 18 }}>{item.icon}</Text></View>
               <View style={styles.resultBody}>
                 <Text style={styles.resultTitle} numberOfLines={1}>{item.title}</Text>
                 <Text style={styles.resultMeta} numberOfLines={1}>{[item.subtitle, item.meta].filter(Boolean).join(' · ')}</Text>
                 <BusinessBadge isBusiness={item.isBusiness} size="sm" />
               </View>
-              {item.kind === 'user' && startingChatUid === item.id && <ActivityIndicator size="small" color={colors.primary} />}
             </TouchableOpacity>
           )}
           ListEmptyComponent={
@@ -259,11 +185,7 @@ function createStyles(colors) {
     chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
     chipText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
     chipTextActive: { color: 'white' },
-    businessToggle: {
-      alignSelf: 'flex-start', marginHorizontal: 12, marginBottom: 8,
-      paddingVertical: 6, paddingHorizontal: 12, borderRadius: radius.pill,
-      backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
-    },
+    businessToggle: { alignSelf: 'flex-start', marginHorizontal: 12, marginBottom: 8, paddingVertical: 6, paddingHorizontal: 12, borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
     businessToggleActive: { backgroundColor: '#EDE7F6', borderColor: '#5E35B1' },
     businessToggleText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
     businessToggleTextActive: { color: '#5E35B1' },

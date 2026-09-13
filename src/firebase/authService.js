@@ -1,8 +1,6 @@
 // Production auth for MySheba.
 import {
   signInWithEmailAndPassword,
-  signInWithCredential,
-  signInWithCustomToken,
   linkWithCredential,
   GoogleAuthProvider,
   EmailAuthProvider,
@@ -23,7 +21,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { auth, db, functions } from './config';
-import { getGoogleIdToken, getGoogleIdTokenAndProfile, googleSignOut } from './googleAuth';
+import { getGoogleIdTokenAndProfile, googleSignOut } from './googleAuth';
 import { logActivity } from './logService';
 import { getDeviceId, getDeviceLabel, setLocalSessionId, clearLocalSessionId } from './deviceSessionService';
 import { toE164 as phoneToE164 } from '../data/phoneCountries';
@@ -179,121 +177,6 @@ export async function login(phone, pin, dialCode = '+60') {
   await setLocalSessionId(sessionResult.sessionId);
   logActivity('login', { method: 'phone' });
   return { uid: cred.user.uid, ...profileData, ...(googleWasLinked ? { googleLinked: true } : {}) };
-}
-
-// Google sign-in now handles the important legacy case where the Google email
-// belongs to an existing phone/password MySheba account. The server verifies
-// the Google identity, finds the existing UID, mints a custom token for that
-// UID, and the client then links the Google credential to that same account.
-export async function signInWithGoogle() {
-  const idToken = await getGoogleIdToken();
-  const credential = GoogleAuthProvider.credential(idToken);
-  try {
-    await signInWithCredential(auth, credential);
-  } catch (err) {
-    throw new Error(friendlyAuthError(err));
-  }
-
-  const resolveFn = httpsCallable(functions, 'signInExistingGoogleAccount');
-  try {
-    const { data: resolved } = await resolveFn({});
-    if (resolved && resolved.found && resolved.customToken) {
-      const temporaryGoogleUser = auth.currentUser;
-      const googleEmail = temporaryGoogleUser?.email || '';
-      try {
-        await temporaryGoogleUser?.delete();
-      } catch (deleteErr) {
-        await signOut(auth).catch(() => {});
-        throw new Error('Google sign-in could not be linked to your MySheba account. Please try again.');
-      }
-
-      await signInWithCustomToken(auth, resolved.customToken);
-      try {
-        await linkWithCredential(auth.currentUser, credential);
-      } catch (linkErr) {
-        if (linkErr && linkErr.code !== 'auth/provider-already-linked') {
-          await signOut(auth).catch(() => {});
-          throw new Error(friendlyAuthError(linkErr));
-        }
-      }
-      await updateDoc(doc(db, 'users', auth.currentUser.uid), {
-        googleLinked: true,
-        googleEmail: googleEmail || auth.currentUser.email || '',
-      });
-      logActivity('linkGoogleAccount', { method: 'googleExistingAccount' });
-      return finishGoogleSignIn({}, null);
-    }
-  } catch (err) {
-    if (err && err.code === 'functions/permission-denied') throw new Error(err.message || 'Google sign-in is not permitted.');
-    if (err && err.code === 'functions/unauthenticated') throw new Error('Google sign-in expired. Please try again.');
-    if (err && err.message && err.message.includes('Google sign-in could not be linked')) throw err;
-    // If the resolver itself is unavailable, do not block normal Google
-    // onboarding. The existing ensureGoogleProfile flow remains the fallback.
-  }
-
-  return finishGoogleSignIn({}, credential);
-}
-
-export async function completeGoogleSignup(phone) {
-  if (!auth.currentUser) throw new Error('Your Google sign-in has expired. Please start again.');
-  return finishGoogleSignIn({ phone }, null);
-}
-
-async function finishGoogleSignIn(ensureProfileArgs, googleCredential = null) {
-  if (!auth.currentUser) throw new Error('Your Google sign-in has expired. Please start again.');
-  let data;
-  const existingProfileSnap = await getDoc(doc(db, 'users', auth.currentUser.uid));
-  if (existingProfileSnap.exists()) {
-    data = existingProfileSnap.data();
-  } else {
-    const ensureProfileFn = httpsCallable(functions, 'ensureGoogleProfile');
-    try {
-      const result = await ensureProfileFn(ensureProfileArgs);
-      data = result.data;
-    } catch (err) {
-      if (err && err.message === 'PHONE_REQUIRED') {
-        const needsPhoneErr = new Error('A mobile number is required to finish creating your account.');
-        needsPhoneErr.needsPhone = true;
-        throw needsPhoneErr;
-      }
-      const duplicateEmail =
-        (err && (err.code === 'functions/already-exists' || err.code === 'already-exists')) ||
-        /already (registered|exists).*MySheba/i.test(String(err && err.message || ''));
-      if (duplicateEmail && googleCredential) {
-        pendingGoogleLinkCredential = googleCredential;
-        pendingGoogleLinkEmail = auth.currentUser.email || '';
-        const temporaryGoogleUser = auth.currentUser;
-        try { await temporaryGoogleUser.delete(); }
-        catch (deleteErr) {
-          pendingGoogleLinkCredential = null;
-          pendingGoogleLinkEmail = '';
-          await signOut(auth).catch(() => {});
-          throw new Error('This Google email already belongs to an existing MySheba account.');
-        }
-        throw new Error('This Google email already belongs to an existing MySheba account.');
-      }
-      await signOut(auth).catch(() => {});
-      throw new Error(err && err.message || 'Google sign-in failed.');
-    }
-  }
-
-  const deviceId = await getDeviceId();
-  const sessionFn = httpsCallable(functions, 'checkDeviceSession');
-  let sessionResult;
-  try {
-    const res = await sessionFn({ deviceId, deviceLabel: getDeviceLabel() });
-    sessionResult = res.data;
-  } catch (err) {
-    await signOut(auth);
-    throw new Error(friendlyAuthError(err));
-  }
-  if (sessionResult.requiresOtp) {
-    logActivity('loginPendingDeviceApproval', { method: 'google', reason: sessionResult.reason });
-    return { uid: auth.currentUser.uid, ...data, pendingDeviceApproval: { deviceId, email: sessionResult.email, phone: sessionResult.phone, reason: sessionResult.reason, availableMfaMethods: sessionResult.availableMfaMethods } };
-  }
-  await setLocalSessionId(sessionResult.sessionId);
-  logActivity('login', { method: 'google' });
-  return { uid: auth.currentUser.uid, ...data };
 }
 
 export async function linkGoogleAccount() {

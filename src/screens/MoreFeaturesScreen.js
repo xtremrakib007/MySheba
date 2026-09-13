@@ -18,6 +18,11 @@ export default function MoreFeaturesScreen() {
   const { goBackOrHome, webViewBusy } = useApp();
   const handlePress = useServiceAction();
 
+  // Game Points and Gifts are no longer customer-facing features.
+  const customerMoreServices = MORE_SERVICES.filter(
+    (s) => s.kind !== 'gamePoints' && s.kind !== 'gamePointsGift'
+  );
+
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
@@ -29,7 +34,7 @@ export default function MoreFeaturesScreen() {
 
       <ScrollView contentContainerStyle={{ paddingTop: 8, paddingBottom: 40 }}>
         <View style={styles.grid}>
-          {MORE_SERVICES.map((s) => (
+          {customerMoreServices.map((s) => (
             <Tile
               key={s.key}
               s={s}

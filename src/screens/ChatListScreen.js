@@ -32,7 +32,7 @@ export default function ChatListScreen() {
   } = useTheme();
 
   const styles = createStyles(colors);
-  const { goBackOrHome, openChat, setScreen, openChatHub } = useApp();
+  const { goBackOrHome, openChat, setScreen } = useApp();
   const [chats, setChats] = useState([]);
 
   useEffect(() => {
@@ -50,9 +50,6 @@ export default function ChatListScreen() {
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Chats</Text>
-        <TouchableOpacity style={styles.groupsBtn} onPress={() => openChatHub('groups')}>
-          <Text style={styles.groupsBtnText}>👥 Groups</Text>
-        </TouchableOpacity>
       </LinearGradient>
 
       <FlatList
@@ -102,8 +99,6 @@ function createStyles(colors) {
     backBtn: { padding: 4 },
     backText: { color: 'white', fontSize: 20 },
     headerTitle: { flex: 1, color: 'white', fontWeight: '600', fontSize: 16, marginLeft: 10 },
-    groupsBtn: { backgroundColor: 'rgba(255,255,255,0.2)', paddingVertical: 6, paddingHorizontal: 12, borderRadius: radius.pill },
-    groupsBtnText: { color: 'white', fontSize: 12, fontWeight: '700' },
     list: { paddingBottom: 20 },
     empty: { textAlign: 'center', color: '#999', paddingVertical: 40 },
     row: {

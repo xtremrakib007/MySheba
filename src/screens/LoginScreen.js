@@ -6,31 +6,22 @@ import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
 import { useTheme } from "../theme/ThemeContext";
 import { useLanguage } from '../i18n/LanguageContext';
-import { GoogleButton, OrDivider } from '../components/ui';
 import { secureAsyncStorage } from '../firebase/secureLocalStorage';
 import PhoneCountryPicker from '../components/PhoneCountryPicker';
 import { DEFAULT_PHONE_COUNTRY } from '../data/phoneCountries';
 import * as supportContactService from '../firebase/supportContactService';
 
 const SUPPORT_EMAIL = 'info.mysheba@gmail.com';
-
 const REMEMBER_KEY = 'mysheba_remembered_phone';
 const BRAND_TEAL = '#00A99D';
 const BRAND_BLUE = '#1A73E8';
 const BRAND_NAVY = '#0B2447';
 
-// No role picker anymore - phone + password is all it takes. Which dashboard you
-// land on (Customer / Dealer / Admin / Super Admin) is decided automatically
-// by the `role` field on your account in Firestore (see AppContext + login()
-// in authService.js), not by anything chosen here.
 export default function LoginScreen() {
-  const {
-    colors
-  } = useTheme();
-
+  const { colors } = useTheme();
   const styles = createStyles(colors);
   const { t } = useLanguage();
-  const { setScreen, doLogin, doGoogleLogin, authError, authBusy } = useApp();
+  const { setScreen, doLogin, authError, authBusy } = useApp();
   const [phone, setPhone] = useState('');
   const [phoneCountry, setPhoneCountry] = useState(DEFAULT_PHONE_COUNTRY);
   const [countryPicker, setCountryPicker] = useState(false);
@@ -38,11 +29,6 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
-  // "Remember Me" just persists the last phone number typed, so it's ready
-  // to go next time - stored via secureAsyncStorage (AES-encrypted at rest,
-  // see src/firebase/secureLocalStorage.js) since a phone number is
-  // personal data, not just a UI convenience value. Firebase auth session
-  // itself already persists the same way regardless (see firebase/config.js).
   useEffect(() => {
     secureAsyncStorage.getItem(REMEMBER_KEY)
       .then((saved) => { if (saved) setPhone(saved); })
@@ -54,15 +40,8 @@ export default function LoginScreen() {
     doLogin(phone, password, phoneCountry.dial);
   };
 
-  const onForgotPassword = () => {
-    setScreen('forgotPassword');
-  };
+  const onForgotPassword = () => setScreen('forgotPassword');
 
-  // Same three channels as the in-app Support screen (Call/WhatsApp/Email),
-  // just reachable before signing in - someone locked out of their account
-  // has no other way to ask for help. Numbers are the same admin-editable
-  // settings/support doc; a generic message is used instead of a
-  // personalized one since there's no profile yet at this point.
   const onNeedHelp = async () => {
     let contact;
     try {
@@ -74,7 +53,7 @@ export default function LoginScreen() {
       try {
         await Linking.openURL(url);
       } catch (err) {
-        showAlert('MySheba', `Couldn\u2019t open ${label}. Please make sure you have an app installed that can handle this.`);
+        showAlert('MySheba', `Couldn’t open ${label}. Please make sure you have an app installed that can handle this.`);
       }
     };
     const buttons = [];
@@ -95,29 +74,12 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.screen}>
-      {/* Decorative background - top-left swoosh + dot grid */}
-      <LinearGradient
-        colors={[BRAND_TEAL, BRAND_BLUE]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.topSwoosh}
-      />
-      <View style={styles.topDots}>
-        {Array.from({ length: 12 }).map((_, i) => <View key={i} style={styles.dot} />)}
-      </View>
-
-      {/* Decorative background - bottom wave layers + dot grid */}
+      <LinearGradient colors={[BRAND_TEAL, BRAND_BLUE]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.topSwoosh} />
+      <View style={styles.topDots}>{Array.from({ length: 12 }).map((_, i) => <View key={i} style={styles.dot} />)}</View>
       <View style={styles.bottomWaveLight} />
       <View style={styles.bottomWaveMid} />
-      <LinearGradient
-        colors={[BRAND_TEAL, BRAND_BLUE]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={styles.bottomWaveDark}
-      />
-      <View style={styles.bottomDots}>
-        {Array.from({ length: 12 }).map((_, i) => <View key={i} style={styles.dot} />)}
-      </View>
+      <LinearGradient colors={[BRAND_TEAL, BRAND_BLUE]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.bottomWaveDark} />
+      <View style={styles.bottomDots}>{Array.from({ length: 12 }).map((_, i) => <View key={i} style={styles.dot} />)}</View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
@@ -137,7 +99,7 @@ export default function LoginScreen() {
               <TouchableOpacity style={styles.countryChip} onPress={() => setCountryPicker(true)}>
                 <Text style={styles.flagEmoji}>{phoneCountry.flag}</Text>
                 <Text style={styles.countryCode}>{phoneCountry.dial}</Text>
-                <Text style={{fontSize:10, marginLeft:3}}>▾</Text>
+                <Text style={styles.countryChevron}>▾</Text>
               </TouchableOpacity>
               <View style={styles.fieldDivider} />
               <TextInput
@@ -184,43 +146,24 @@ export default function LoginScreen() {
             {!!authError && <Text style={styles.errorText}>{authError}</Text>}
 
             <TouchableOpacity activeOpacity={0.85} onPress={onSignIn} disabled={authBusy}>
-              <LinearGradient
-                colors={[BRAND_TEAL, BRAND_BLUE]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={[styles.loginBtn, authBusy && styles.btnDisabled]}
-              >
-                {authBusy ? (
-                  <ActivityIndicator color="white" />
-                ) : (
-                  <>
-                    <Text style={styles.loginBtnText}>{t('login.login')}</Text>
-                    <View style={styles.arrowCircle}>
-                      <Text style={styles.arrowText}>→</Text>
-                    </View>
-                  </>
-                )}
+              <LinearGradient colors={[BRAND_TEAL, BRAND_BLUE]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.loginBtn, authBusy && styles.btnDisabled]}>
+                {authBusy ? <ActivityIndicator color="white" /> : <>
+                  <Text style={styles.loginBtnText}>{t('login.login')}</Text>
+                  <View style={styles.arrowCircle}><Text style={styles.arrowText}>→</Text></View>
+                </>}
               </LinearGradient>
             </TouchableOpacity>
 
-            <OrDivider />
-            <GoogleButton onPress={doGoogleLogin} disabled={authBusy} />
-
             <TouchableOpacity style={styles.signupRow} onPress={() => setScreen('register')}>
-              <Text style={styles.signupText}>
-                {t('login.noAccount')}<Text style={styles.signupLink}>{t('login.signUp')}</Text>
-              </Text>
+              <Text style={styles.signupText}>{t('login.noAccount')}<Text style={styles.signupLink}>{t('login.signUp')}</Text></Text>
             </TouchableOpacity>
-
             <TouchableOpacity style={styles.helpRow} onPress={onNeedHelp}>
-              <Text style={styles.signupText}>
-                {t('login.needHelp')}<Text style={styles.signupLink}>{t('login.contactUs')}</Text>
-              </Text>
+              <Text style={styles.signupText}>{t('login.needHelp')}<Text style={styles.signupLink}>{t('login.contactUs')}</Text></Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-      <PhoneCountryPicker visible={countryPicker} value={phoneCountry} onSelect={(c)=>{setPhoneCountry(c);setCountryPicker(false);}} onClose={()=>setCountryPicker(false)} />
+      <PhoneCountryPicker visible={countryPicker} value={phoneCountry} onSelect={(c) => { setPhoneCountry(c); setCountryPicker(false); }} onClose={() => setCountryPicker(false)} />
     </View>
   );
 }
@@ -229,64 +172,13 @@ function createStyles(colors) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: '#F3F7FB' },
     scrollContent: { flexGrow: 1, paddingBottom: 30 },
-
-    // Decorative shapes - purely cosmetic, sit behind all content
-    topSwoosh: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      width: 220,
-      height: 170,
-      borderBottomRightRadius: 180,
-    },
-    topDots: {
-      position: 'absolute',
-      top: 145,
-      left: 28,
-      width: 60,
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
-    },
-    bottomWaveLight: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      height: 140,
-      backgroundColor: '#CDEDE6',
-      opacity: 0.6,
-      borderTopLeftRadius: 140,
-    },
-    bottomWaveMid: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      height: 95,
-      backgroundColor: '#9FD9DE',
-      opacity: 0.7,
-      borderTopRightRadius: 160,
-    },
-    bottomWaveDark: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      height: 55,
-      borderTopLeftRadius: 90,
-    },
-    bottomDots: {
-      position: 'absolute',
-      bottom: 16,
-      right: 24,
-      width: 60,
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
-    },
+    topSwoosh: { position: 'absolute', top: 0, left: 0, width: 220, height: 170, borderBottomRightRadius: 180 },
+    topDots: { position: 'absolute', top: 145, left: 28, width: 60, flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    bottomWaveLight: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 140, backgroundColor: '#CDEDE6', opacity: 0.6, borderTopLeftRadius: 140 },
+    bottomWaveMid: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 95, backgroundColor: '#9FD9DE', opacity: 0.7, borderTopRightRadius: 160 },
+    bottomWaveDark: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 55, borderTopLeftRadius: 90 },
+    bottomDots: { position: 'absolute', bottom: 16, right: 24, width: 60, flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,105,92,0.35)' },
-
     hero: { alignItems: 'center', paddingTop: 46, paddingHorizontal: 24, paddingBottom: 20 },
     logo: { width: 130, height: 130, marginBottom: 4 },
     brandRow: { flexDirection: 'row', marginBottom: 14 },
@@ -294,73 +186,32 @@ function createStyles(colors) {
     brandTeal: { fontSize: 28, fontWeight: '700', color: BRAND_TEAL },
     welcome: { fontSize: 22, fontWeight: '700', color: BRAND_NAVY, marginBottom: 8 },
     subtitle: { fontSize: 13, color: '#6B7785', textAlign: 'center', lineHeight: 19 },
-
-    card: {
-      backgroundColor: 'white',
-      marginHorizontal: 18,
-      borderRadius: radius.xl,
-      padding: 22,
-      shadowColor: '#000',
-      shadowOpacity: 0.06,
-      shadowRadius: 16,
-      shadowOffset: { width: 0, height: 6 },
-      elevation: 3,
-    },
+    card: { backgroundColor: 'white', marginHorizontal: 18, borderRadius: radius.xl, padding: 22, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 3 },
     label: { fontWeight: '600', fontSize: 13, color: BRAND_NAVY, marginBottom: 8 },
     labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
     forgotLink: { color: BRAND_TEAL, fontSize: 12, fontWeight: '600' },
-
-    phoneRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: radius.md,
-      backgroundColor: 'white',
-      marginBottom: 18,
-      paddingHorizontal: 12,
-    },
+    phoneRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: 'white', marginBottom: 18, paddingHorizontal: 12 },
     countryChip: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 6 },
     flagEmoji: { fontSize: 16 },
     countryCode: { fontSize: 14, fontWeight: '600', color: BRAND_NAVY },
+    countryChevron: { fontSize: 10, marginLeft: 2, color: BRAND_NAVY },
     fieldDivider: { width: 1, height: 22, backgroundColor: colors.border, marginHorizontal: 10 },
     phoneInput: { flex: 1, paddingVertical: 12, fontSize: 14, color: BRAND_NAVY },
-
-    pinRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: radius.md,
-      backgroundColor: 'white',
-      marginBottom: 14,
-      paddingHorizontal: 14,
-    },
+    pinRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: 'white', marginBottom: 14, paddingHorizontal: 14 },
     lockIcon: { fontSize: 14, marginRight: 8 },
     pinInput: { flex: 1, paddingVertical: 12, fontSize: 14, color: BRAND_NAVY },
     eyeIcon: { fontSize: 16, marginLeft: 8 },
-
     rememberRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 8 },
     checkbox: { width: 20, height: 20, borderRadius: 5, borderWidth: 1.5, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
     checkboxChecked: { backgroundColor: BRAND_TEAL, borderColor: BRAND_TEAL },
     checkboxTick: { color: 'white', fontSize: 12, fontWeight: '700' },
     rememberText: { fontSize: 13, color: BRAND_NAVY },
-
     errorText: { color: colors.error, fontSize: 12, marginBottom: 12, textAlign: 'center' },
-
-    loginBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: 15,
-      borderRadius: radius.md,
-      gap: 10,
-    },
+    loginBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 15, borderRadius: radius.md, gap: 10 },
     btnDisabled: { opacity: 0.7 },
     loginBtnText: { color: 'white', fontWeight: '700', fontSize: 16 },
     arrowCircle: { width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center' },
     arrowText: { color: 'white', fontSize: 14, fontWeight: '700' },
-
     signupRow: { marginTop: 18, alignItems: 'center' },
     helpRow: { marginTop: 10, alignItems: 'center' },
     signupText: { fontSize: 13, color: '#6B7785' },

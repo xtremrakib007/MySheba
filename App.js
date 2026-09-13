@@ -14,7 +14,6 @@ import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
 import DeviceVerifyScreen from './src/screens/DeviceVerifyScreen';
-import GooglePhoneScreen from './src/screens/GooglePhoneScreen';
 import CustomerHomeScreen from './src/screens/CustomerHomeScreen';
 import ServiceScreen from './src/screens/ServiceScreen';
 import DealerHomeScreen from './src/screens/DealerHomeScreen';
@@ -30,13 +29,8 @@ import TopUpScreen from './src/screens/TopUpScreen';
 import SuperAdminTopUpScreen from './src/screens/SuperAdminTopUpScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import ChatListScreen from './src/screens/ChatListScreen';
-import ChatHubScreen from './src/screens/ChatHubScreen';
-import DirectChatListScreen from './src/screens/DirectChatListScreen';
-import LockedChatsScreen from './src/screens/LockedChatsScreen';
-import AddContactScreen from './src/screens/AddContactScreen';
 import QRScanScreen from './src/screens/QRScanScreen';
 import MyQRCodeScreen from './src/screens/MyQRCodeScreen';
-import FriendsListScreen from './src/screens/FriendsListScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import CallSettingsScreen from './src/screens/CallSettingsScreen';
 import RingtonePickerScreen from './src/screens/RingtonePickerScreen';
@@ -48,14 +42,6 @@ import MarketplaceModerationScreen from './src/screens/MarketplaceModerationScre
 import ChatReportsScreen from './src/screens/ChatReportsScreen';
 import InvestigateChatScreen from './src/screens/InvestigateChatScreen';
 import TransferPointsScreen from './src/screens/TransferPointsScreen';
-import GamePointsScreen from './src/screens/GamePointsScreen';
-import GamePointsTransferScreen from './src/screens/GamePointsTransferScreen';
-import GamePointsGiftScreen from './src/screens/GamePointsGiftScreen';
-import GroupListScreen from './src/screens/GroupListScreen';
-import NewGroupScreen from './src/screens/NewGroupScreen';
-import CreateRoomScreen from './src/screens/CreateRoomScreen';
-import RoomSettingsScreen from './src/screens/RoomSettingsScreen';
-import CallScreen from './src/screens/CallScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import MarketplaceHubScreen from './src/screens/MarketplaceHubScreen';
 import CreateListingScreen from './src/screens/CreateListingScreen';
@@ -83,7 +69,6 @@ import VerificationManagementScreen from './src/screens/VerificationManagementSc
 import AdminAnalyticsScreen from './src/screens/AdminAnalyticsScreen';
 import BusinessProfileScreen from './src/screens/BusinessProfileScreen';
 import ContactProfileScreen from './src/screens/ContactProfileScreen';
-import GroupSettingsScreen from './src/screens/GroupSettingsScreen';
 import AdminBusinessManagementScreen from './src/screens/AdminBusinessManagementScreen';
 import MyDocumentsScreen from './src/screens/MyDocumentsScreen';
 import NotepadScreen from './src/screens/NotepadScreen';
@@ -135,17 +120,7 @@ function Root() {
   const { screen, authLoading, handleDeepLink } = useApp();
   const { colors, isDark } = useTheme();
   const styles = createStyles(colors);
-  // Splash stays mounted a moment after authLoading flips false so it can
-  // run its "Ready" check + fade-out instead of the app snapping in.
   const [splashVisible, setSplashVisible] = useState(true);
-
-  // Auth/session resolution can update several pieces of state in one React
-  // commit. Admin and superadmin logins are the slowest path because they
-  // also perform device-session/MFA checks. Mount the newly selected screen
-  // on a separate macrotask so AdminHome never mounts in the same commit as
-  // the login/session state transition. This specifically hardens the path
-  // that previously produced RN's "Text strings must be rendered within a
-  // <Text> component" error during admin login.
   const [renderedScreen, setRenderedScreen] = useState(screen);
 
   useEffect(() => {
@@ -158,12 +133,6 @@ function Root() {
     setTimeout(() => setSplashVisible(false), 0);
   };
 
-  // Handles mysheba://listing/<id> - tapped from the "Open in App" button
-  // on the mysheba.top preview page, or any other mysheba:// link. Covers
-  // both cases: the link launching the app cold (getInitialURL) and the
-  // link arriving while the app is already running (the 'url' event).
-  // handleDeepLink itself (see AppContext.js) decides whether to navigate
-  // immediately or queue until auth/profile are ready.
   useEffect(() => {
     Linking.getInitialURL().then((url) => { if (url) handleDeepLink(url); }).catch(() => {});
     const sub = Linking.addEventListener('url', ({ url }) => handleDeepLink(url));
@@ -187,7 +156,6 @@ function Root() {
         {renderedScreen === 'register' && <RegisterScreen />}
         {renderedScreen === 'forgotPassword' && <ForgotPasswordScreen />}
         {renderedScreen === 'deviceVerify' && <DeviceVerifyScreen />}
-        {renderedScreen === 'googlePhone' && <GooglePhoneScreen />}
         {renderedScreen === 'customerHome' && <CustomerHomeScreen />}
         {renderedScreen === 'service' && <ServiceScreen />}
         {renderedScreen === 'dealerHome' && <DealerHomeScreen />}
@@ -201,15 +169,11 @@ function Root() {
         {renderedScreen === 'history' && <HistoryScreen />}
         {renderedScreen === 'topup' && <TopUpScreen />}
         {renderedScreen === 'superAdminTopup' && <SuperAdminTopUpScreen />}
+        {/* ChatScreen remains only for Support/admin messaging; the customer Chat hub is removed. */}
         {renderedScreen === 'chat' && <ChatScreen />}
         {renderedScreen === 'chatList' && <ChatListScreen />}
-        {renderedScreen === 'chatHub' && <ChatHubScreen />}
-        {renderedScreen === 'directChatList' && <DirectChatListScreen />}
-        {renderedScreen === 'lockedChats' && <LockedChatsScreen />}
-        {renderedScreen === 'addContact' && <AddContactScreen />}
         {renderedScreen === 'qrScan' && <QRScanScreen />}
         {renderedScreen === 'myQrCode' && <MyQRCodeScreen />}
-        {renderedScreen === 'friendsList' && <FriendsListScreen />}
         {renderedScreen === 'settings' && <SettingsScreen />}
         {renderedScreen === 'callSettings' && <CallSettingsScreen />}
         {renderedScreen === 'ringtonePicker' && <RingtonePickerScreen />}
@@ -221,15 +185,6 @@ function Root() {
         {renderedScreen === 'chatReports' && <ChatReportsScreen />}
         {renderedScreen === 'investigateChat' && <InvestigateChatScreen />}
         {renderedScreen === 'transferPoints' && <TransferPointsScreen />}
-        {renderedScreen === 'gamePoints' && <GamePointsScreen />}
-        {renderedScreen === 'gamePointsTransfer' && <GamePointsTransferScreen />}
-        {renderedScreen === 'gamePointsGift' && <GamePointsGiftScreen />}
-        {renderedScreen === 'groupList' && <GroupListScreen />}
-        {renderedScreen === 'newGroup' && <NewGroupScreen />}
-        {renderedScreen === 'createRoom' && <CreateRoomScreen />}
-        {renderedScreen === 'roomSettings' && <RoomSettingsScreen />}
-        {renderedScreen === 'groupSettings' && <GroupSettingsScreen />}
-        {renderedScreen === 'call' && <CallScreen />}
         {renderedScreen === 'notifications' && <NotificationsScreen />}
         {(renderedScreen === 'marketplaceHome' || renderedScreen === 'accommodationHome' || renderedScreen === 'roomSharingHome' || renderedScreen === 'servicesHome' || renderedScreen === 'communityHome') && <MarketplaceHubScreen screen={renderedScreen} />}
         {renderedScreen === 'marketplaceCreateListing' && <CreateListingScreen />}
@@ -293,9 +248,8 @@ function Root() {
         {renderedScreen === 'payslipDetails' && <PayslipDetailsScreen />}
       </View>
 
-      {(renderedScreen === 'customerHome' || renderedScreen === 'dealerHome' || renderedScreen === 'resellerHome' || renderedScreen === 'adminHome' || renderedScreen === 'support' || renderedScreen === 'help' || renderedScreen === 'adminSupport' || renderedScreen === 'history' || renderedScreen === 'topup' || renderedScreen === 'superAdminTopup' || renderedScreen === 'gamePoints' || renderedScreen === 'chatHub' || renderedScreen === 'profile' || renderedScreen === 'settings' || renderedScreen === 'myAccount' || renderedScreen === 'moreFeatures' || renderedScreen === 'adminFeatures' || renderedScreen === 'dealerFeatures' || renderedScreen === 'resellerFeatures' || renderedScreen === 'notifications' || renderedScreen === 'marketplaceHome' || renderedScreen === 'accommodationHome' || renderedScreen === 'roomSharingHome' || renderedScreen === 'servicesHome' || renderedScreen === 'communityHome') && <BottomNav />}
+      {(renderedScreen === 'customerHome' || renderedScreen === 'dealerHome' || renderedScreen === 'resellerHome' || renderedScreen === 'adminHome' || renderedScreen === 'support' || renderedScreen === 'help' || renderedScreen === 'adminSupport' || renderedScreen === 'history' || renderedScreen === 'topup' || renderedScreen === 'superAdminTopup' || renderedScreen === 'profile' || renderedScreen === 'settings' || renderedScreen === 'myAccount' || renderedScreen === 'moreFeatures' || renderedScreen === 'adminFeatures' || renderedScreen === 'dealerFeatures' || renderedScreen === 'resellerFeatures' || renderedScreen === 'notifications' || renderedScreen === 'marketplaceHome' || renderedScreen === 'accommodationHome' || renderedScreen === 'roomSharingHome' || renderedScreen === 'servicesHome' || renderedScreen === 'communityHome') && <BottomNav />}
 
-      {/* Global overlays - mirror #ratePopup and #resultModal from the original */}
       <RatePopup />
       <ResultModal />
       <Sidebar />

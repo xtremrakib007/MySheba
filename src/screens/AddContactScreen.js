@@ -1,34 +1,23 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
-import { showAlert } from '../utils/appAlert';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
 import { useTheme } from "../theme/ThemeContext";
 import HeaderDecor from '../components/HeaderDecor';
 import * as contactsService from '../firebase/contactsService';
-import * as directChatService from '../firebase/directChatService';
 
 const ROLE_LABEL = { customer: 'Customer', dealer: 'Dealer', reseller: 'Reseller', admin: 'Admin', superadmin: 'Super Admin' };
 
-// Find anyone in the system - any role, not just people already assigned to
-// you - by name or phone number, then start (or jump back into) a direct
-// chat with them, or add them to your Friends list (see
-// FriendsListScreen.js) without necessarily starting a chat yet. Search
-// runs through the searchUsers Cloud Function since firestore.rules
-// doesn't allow a plain client read across every account.
+// Find accounts by name or phone number, then add/remove them from Friends.
+// Customer direct-chat actions are intentionally not exposed here.
 export default function AddContactScreen() {
-  const {
-    colors,
-    brandGradient
-  } = useTheme();
-
+  const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { authUser, profile, setScreen, openDirectChat } = useApp();
+  const { authUser, goBack, setScreen } = useApp();
   const [term, setTerm] = useState('');
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
-  const [startingUid, setStartingUid] = useState(null);
   const [friendUids, setFriendUids] = useState(new Set());
   const [addingUid, setAddingUid] = useState(null);
   const debounceRef = useRef(null);
@@ -61,21 +50,6 @@ export default function AddContactScreen() {
     return () => clearTimeout(debounceRef.current);
   }, [term]);
 
-  const startChat = async (user) => {
-    setStartingUid(user.uid);
-    try {
-      const chatId = await directChatService.ensureDirectChat(
-        { uid: authUser.uid, name: profile?.name || '' },
-        { uid: user.uid, name: user.name || user.phone || 'User' }
-      );
-      openDirectChat(chatId, user.name || user.phone || 'User', user.uid);
-    } catch (err) {
-      showAlert('MySheba', 'Could not start this conversation. Please try again.');
-    } finally {
-      setStartingUid(null);
-    }
-  };
-
   const toggleFriend = async (user) => {
     setAddingUid(user.uid);
     try {
@@ -84,20 +58,22 @@ export default function AddContactScreen() {
       } else {
         await contactsService.addFriend(authUser.uid, user);
       }
-      // subscribeFriends' live listener updates friendUids automatically -
-      // no local state patch needed here.
     } catch (err) {
-      showAlert('MySheba', 'Could not update your Friends list. Please try again.');
+      console.log('[friends] error:', err?.code || err?.message || err);
     } finally {
       setAddingUid(null);
     }
   };
 
+  const handleBack = () => {
+    if (!goBack()) setScreen('customerHome');
+  };
+
   return (
     <View style={styles.screen}>
-      <LinearGradient colors={brandGradient } start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
+      <LinearGradient colors={brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
         <HeaderDecor />
-        <TouchableOpacity style={styles.backBtn} onPress={() => setScreen('chatHub')}>
+        <TouchableOpacity style={styles.backBtn} onPress={handleBack}>
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Add Contact</Text>
@@ -127,28 +103,20 @@ export default function AddContactScreen() {
         <Text style={styles.qrPromptText}>Scan a QR code to add a contact instantly</Text>
       </TouchableOpacity>
 
-      {searching && (
-        <ActivityIndicator style={styles.loading} size="small" color={colors.primary} />
-      )}
+      {searching && <ActivityIndicator style={styles.loading} size="small" color={colors.primary} />}
 
       <FlatList
         data={results}
         keyExtractor={(item) => item.uid}
         contentContainerStyle={styles.list}
-        ListEmptyComponent={
-          !searching ? (
-            <Text style={styles.empty}>
-              {term.trim().length < 2 ? 'Type a name, phone number, or user ID to search.' : 'No matching accounts found.'}
-            </Text>
-          ) : null
-        }
+        ListEmptyComponent={!searching ? (
+          <Text style={styles.empty}>
+            {term.trim().length < 2 ? 'Type a name, phone number, or user ID to search.' : 'No matching accounts found.'}
+          </Text>
+        ) : null}
         renderItem={({ item }) => (
           <View style={styles.userRow}>
-            <TouchableOpacity
-              style={styles.userRowMain}
-              onPress={() => startChat(item)}
-              disabled={!!startingUid}
-            >
+            <View style={styles.userRowMain}>
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>{(item.name || item.phone || '?').trim().charAt(0).toUpperCase()}</Text>
               </View>
@@ -160,12 +128,7 @@ export default function AddContactScreen() {
                   {item.userId ? ` · ID ${item.userId}` : ''}
                 </Text>
               </View>
-              {startingUid === item.uid ? (
-                <ActivityIndicator size="small" color={colors.primary} />
-              ) : (
-                <Text style={styles.chatIcon}>💬</Text>
-              )}
-            </TouchableOpacity>
+            </View>
             <TouchableOpacity
               style={styles.friendBtn}
               onPress={() => toggleFriend(item)}
@@ -187,7 +150,7 @@ export default function AddContactScreen() {
 function createStyles(colors) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg },
-    header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, backgroundColor: colors.primary , overflow: 'hidden' },
+    header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, backgroundColor: colors.primary, overflow: 'hidden' },
     backBtn: { padding: 4 },
     backText: { color: 'white', fontSize: 20 },
     headerTitle: { color: 'white', fontWeight: '600', fontSize: 16, marginLeft: 10, flex: 1 },
@@ -208,7 +171,7 @@ function createStyles(colors) {
     },
     loading: { marginTop: 8 },
     list: { paddingHorizontal: 16, paddingBottom: 20, paddingTop: 8 },
-    empty: { textAlign: 'center', color: '#999', paddingVertical: 30, fontSize: 13 },
+    empty: { textAlign: 'center', color: colors.textSecondary, paddingVertical: 30, fontSize: 13 },
     userRow: {
       flexDirection: 'row', alignItems: 'center',
       backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md,
@@ -221,7 +184,6 @@ function createStyles(colors) {
     avatarText: { color: 'white', fontWeight: '700' },
     userBody: { flex: 1 },
     userName: { fontSize: 14, fontWeight: '600', color: colors.text },
-    userRole: { fontSize: 11, color: '#999', marginTop: 2 },
-    chatIcon: { fontSize: 20 },
+    userRole: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
   });
 }
