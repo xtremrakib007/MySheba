@@ -83,12 +83,6 @@ export default function MyAccountScreen() {
             <Text style={styles.chevron}>›</Text>
           </TouchableOpacity>
           <View style={styles.divider} />
-          <TouchableOpacity style={styles.linkRow} onPress={() => setScreen('gamePoints')}>
-            <Text style={styles.linkIcon}>🎮</Text>
-            <Text style={styles.linkLabel}>Game Points</Text>
-            <Text style={styles.chevron}>›</Text>
-          </TouchableOpacity>
-          <View style={styles.divider} />
           <TouchableOpacity style={styles.linkRow} onPress={() => setScreen('reports')}>
             <Text style={styles.linkIcon}>📊</Text>
             <Text style={styles.linkLabel}>Reports</Text>
