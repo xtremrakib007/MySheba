@@ -8,30 +8,19 @@ import { radius } from '../theme/theme';
 import { useTheme } from "../theme/ThemeContext";
 import HeaderDecor from '../components/HeaderDecor';
 import * as contactsService from '../firebase/contactsService';
-import * as directChatService from '../firebase/directChatService';
 
 const ROLE_LABEL = { customer: 'Customer', dealer: 'Dealer', reseller: 'Reseller', admin: 'Admin', superadmin: 'Super Admin' };
 
-// WhatsApp-style "scan to add contact": opens the camera, reads a MySheba
-// QR code (produced by MyQRCodeScreen.js, which encodes just the owner's
-// uid), then looks that uid up fresh via getUserByUid before showing an
-// Add Contact / Start Chat card - never trusts fields embedded in the code
-// itself. `locked` stops onBarcodeScanned from firing repeatedly for the
-// same code while a lookup is in flight or a result card is showing.
+// Scan a MySheba QR contact code and offer to add the person as a contact.
 export default function QRScanScreen() {
-  const {
-    colors,
-    brandGradient
-  } = useTheme();
-
+  const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { authUser, profile, setScreen, openDirectChat } = useApp();
+  const { authUser, setScreen } = useApp();
   const [permission, requestPermission] = useCameraPermissions();
   const [locked, setLocked] = useState(false);
   const [loading, setLoading] = useState(false);
   const [matchedUser, setMatchedUser] = useState(null);
   const [adding, setAdding] = useState(false);
-  const [starting, setStarting] = useState(false);
 
   const handleScanned = useCallback(async ({ data }) => {
     if (locked) return;
@@ -62,7 +51,7 @@ export default function QRScanScreen() {
   };
 
   const addContact = async () => {
-    if (!matchedUser) return;
+    if (!matchedUser || !authUser) return;
     setAdding(true);
     try {
       await contactsService.addFriend(authUser.uid, matchedUser);
@@ -72,22 +61,6 @@ export default function QRScanScreen() {
       showAlert('MySheba', 'Could not add this contact. Please try again.');
     } finally {
       setAdding(false);
-    }
-  };
-
-  const startChat = async () => {
-    if (!matchedUser) return;
-    setStarting(true);
-    try {
-      const chatId = await directChatService.ensureDirectChat(
-        { uid: authUser.uid, name: profile?.name || '' },
-        { uid: matchedUser.uid, name: matchedUser.name || matchedUser.phone || 'User' }
-      );
-      openDirectChat(chatId, matchedUser.name || matchedUser.phone || 'User', matchedUser.uid);
-    } catch (err) {
-      showAlert('MySheba', 'Could not start this conversation. Please try again.');
-    } finally {
-      setStarting(false);
     }
   };
 
@@ -148,9 +121,6 @@ export default function QRScanScreen() {
                   <TouchableOpacity style={styles.primaryBtn} onPress={addContact} disabled={adding}>
                     {adding ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.primaryBtnText}>Add Contact</Text>}
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.secondaryBtn} onPress={startChat} disabled={starting}>
-                    {starting ? <ActivityIndicator size="small" color={colors.primary} /> : <Text style={styles.secondaryBtnText}>Start Chat</Text>}
-                  </TouchableOpacity>
                 </View>
 
                 <TouchableOpacity style={styles.scanAgainBtn} onPress={scanAgain}>
@@ -187,11 +157,9 @@ function createStyles(colors) {
     avatarText: { color: 'white', fontWeight: '700', fontSize: 22 },
     resultName: { fontSize: 16, fontWeight: '700', color: colors.text },
     resultMeta: { fontSize: 12, color: colors.textSecondary, marginTop: 2, textAlign: 'center' },
-    resultActions: { flexDirection: 'row', gap: 10, marginTop: 18, width: '100%' },
-    primaryBtn: { flex: 1, backgroundColor: colors.primary, paddingVertical: 12, borderRadius: radius.pill, alignItems: 'center' },
+    resultActions: { marginTop: 18, width: '100%' },
+    primaryBtn: { backgroundColor: colors.primary, paddingVertical: 12, borderRadius: radius.pill, alignItems: 'center' },
     primaryBtnText: { color: '#fff', fontWeight: '600', fontSize: 13 },
-    secondaryBtn: { flex: 1, borderWidth: 1, borderColor: colors.primary, paddingVertical: 12, borderRadius: radius.pill, alignItems: 'center' },
-    secondaryBtnText: { color: colors.primary, fontWeight: '600', fontSize: 13 },
     scanAgainBtn: { marginTop: 14 },
     scanAgainText: { color: '#999', fontSize: 12 },
   });
