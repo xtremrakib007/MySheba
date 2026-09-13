@@ -28,12 +28,13 @@ const TRAVEL_SERVICES = [
 
 export default function FinanceHomeScreen() {
   const { colors, brandGradient } = useTheme();
-  const { openSidebar, setScreen, startService, profile, hasUnreadNotifications, logout } = useApp();
+  const { openSidebar, setScreen, startService, openWebView, openBusPicker, hasUnreadNotifications, logout } = useApp();
   const styles = createStyles(colors);
 
   const go = (item) => {
     if (item.action === 'history' || item.action === 'myAccount' || item.action === 'support') return setScreen(item.action);
-    if (item.action === 'bus') return startService('bus');
+    if (item.action === 'bus') return openBusPicker();
+    if (item.action === 'train' || item.action === 'visa' || item.action === 'mydigital' || item.action === 'passport') return openWebView(item.action);
     return startService(item.action);
   };
 
@@ -118,7 +119,7 @@ function createStyles(colors) {
     walletButtonText: { color: colors.primary, fontWeight: '800', fontSize: 11 },
     sectionHeader: { marginBottom: 9, marginTop: 2 },
     sectionTitle: { color: colors.text, fontSize: 16, fontWeight: '800' },
-    sectionCaption: { color: colors.mutedText || colors.text, fontSize: 10, marginTop: 2, opacity: 0.7 },
+    sectionCaption: { color: colors.text, fontSize: 10, marginTop: 2, opacity: 0.7 },
     grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 20 },
     tile: { width: '31.7%', minHeight: 108, borderRadius: 14, backgroundColor: colors.card || colors.bg, borderWidth: 1, borderColor: colors.border || '#D9E1E8', padding: 10, marginBottom: 10, alignItems: 'center', justifyContent: 'center' },
     tileIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
