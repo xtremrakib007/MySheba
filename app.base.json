@@ -107,7 +107,6 @@
           "cameraPermission": "Allow MySheba to access your camera to scan a contact's QR code and for video calls."
         }
       ],
-      "@react-native-google-signin/google-signin",
       "@react-native-firebase/app",
       [
         "react-native-google-mobile-ads",
@@ -139,7 +138,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Allow MySheba to access your location to show nearby listings, properties, and service providers on the map."
+          "locationWhenInUsePermission": "Allow MySheba to access your location to show nearby listings, properties, and service providers."
         }
       ],
       [
