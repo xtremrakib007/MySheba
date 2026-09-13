@@ -14,7 +14,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, TextInput, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { showAlert } from '../utils/appAlert';
 import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
 import { useTheme } from "../theme/ThemeContext";
@@ -26,7 +25,6 @@ import * as roommateService from '../firebase/roommateService';
 import * as serviceProviderService from '../firebase/serviceProviderService';
 import * as communityService from '../firebase/communityService';
 import * as contactsService from '../firebase/contactsService';
-import * as directChatService from '../firebase/directChatService';
 
 const TYPE_TABS = [
   { key: null, label: 'All', icon: '🔎' },
@@ -51,18 +49,12 @@ export default function MarketplaceSearchScreen() {
 
   const styles = createStyles(colors);
   const {
-    goBackOrHome, authUser, profile, openDirectChat,
+    goBackOrHome,
     openListingDetail, openPropertyDetail, openRoommateRequestDetail, openServiceProviderDetail, openCommunityPostDetail,
   } = useApp();
 
   const [term, setTerm] = useState('');
   const [type, setType] = useState(null);
-  // "Businesses only" - filters to results whose module denormalizes a
-  // Business Profile flag (sellerIsBusiness/ownerIsBusiness, see
-  // marketplaceService/accommodationService/serviceProviderService's
-  // create* functions, PRD section 15). Roommate requests, Community
-  // posts, and Users have no such concept, so this toggle drops those
-  // kinds from the results entirely rather than showing them unfiltered.
   const [businessOnly, setBusinessOnly] = useState(false);
 
   const [listings, setListings] = useState([]);
@@ -73,7 +65,6 @@ export default function MarketplaceSearchScreen() {
 
   const [users, setUsers] = useState([]);
   const [usersSearching, setUsersSearching] = useState(false);
-  const [startingChatUid, setStartingChatUid] = useState(null);
   const userDebounceRef = useRef(null);
 
   useEffect(() => marketplaceService.subscribeActiveListings(setListings, () => {}), []);
@@ -141,23 +132,7 @@ export default function MarketplaceSearchScreen() {
     if (r.kind === 'roommate') return openRoommateRequestDetail(r.id);
     if (r.kind === 'service') return openServiceProviderDetail(r.id);
     if (r.kind === 'community') return openCommunityPostDetail(r.id);
-    if (r.kind === 'user') return startChat(r.data);
-  };
-
-  const startChat = async (user) => {
-    if (!authUser) return;
-    setStartingChatUid(user.uid);
-    try {
-      const chatId = await directChatService.ensureDirectChat(
-        { uid: authUser.uid, name: profile?.name || '' },
-        { uid: user.uid, name: user.name || user.phone || 'User' }
-      );
-      openDirectChat(chatId, user.name || user.phone || 'User', user.uid);
-    } catch (err) {
-      showAlert('MySheba', 'Could not start this conversation. Please try again.');
-    } finally {
-      setStartingChatUid(null);
-    }
+    if (r.kind === 'user') return openListingDetail(r.id);
   };
 
   const showEmpty = term.trim().length === 0 && !type && !businessOnly;
@@ -223,14 +198,13 @@ export default function MarketplaceSearchScreen() {
           keyExtractor={(item) => `${item.kind}-${item.id}`}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => (
-            <TouchableOpacity style={styles.resultCard} activeOpacity={0.8} onPress={() => openResult(item)} disabled={item.kind === 'user' && startingChatUid === item.id}>
+            <TouchableOpacity style={styles.resultCard} activeOpacity={0.8} onPress={() => openResult(item)}>
               <View style={styles.resultIcon}><Text style={{ fontSize: 18 }}>{item.icon}</Text></View>
               <View style={styles.resultBody}>
                 <Text style={styles.resultTitle} numberOfLines={1}>{item.title}</Text>
                 <Text style={styles.resultMeta} numberOfLines={1}>{[item.subtitle, item.meta].filter(Boolean).join(' · ')}</Text>
                 <BusinessBadge isBusiness={item.isBusiness} size="sm" />
               </View>
-              {item.kind === 'user' && startingChatUid === item.id && <ActivityIndicator size="small" color={colors.primary} />}
             </TouchableOpacity>
           )}
           ListEmptyComponent={
@@ -259,11 +233,7 @@ function createStyles(colors) {
     chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
     chipText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
     chipTextActive: { color: 'white' },
-    businessToggle: {
-      alignSelf: 'flex-start', marginHorizontal: 12, marginBottom: 8,
-      paddingVertical: 6, paddingHorizontal: 12, borderRadius: radius.pill,
-      backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
-    },
+    businessToggle: { alignSelf: 'flex-start', marginHorizontal: 12, marginBottom: 8, paddingVertical: 6, paddingHorizontal: 12, borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
     businessToggleActive: { backgroundColor: '#EDE7F6', borderColor: '#5E35B1' },
     businessToggleText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
     businessToggleTextActive: { color: '#5E35B1' },
