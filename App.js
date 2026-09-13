@@ -14,7 +14,6 @@ import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
 import DeviceVerifyScreen from './src/screens/DeviceVerifyScreen';
-import GooglePhoneScreen from './src/screens/GooglePhoneScreen';
 import CustomerHomeScreen from './src/screens/CustomerHomeScreen';
 import ServiceScreen from './src/screens/ServiceScreen';
 import DealerHomeScreen from './src/screens/DealerHomeScreen';
@@ -159,7 +158,6 @@ function Root() {
         {renderedScreen === 'register' && <RegisterScreen />}
         {renderedScreen === 'forgotPassword' && <ForgotPasswordScreen />}
         {renderedScreen === 'deviceVerify' && <DeviceVerifyScreen />}
-        {renderedScreen === 'googlePhone' && <GooglePhoneScreen />}
         {renderedScreen === 'customerHome' && <CustomerHomeScreen />}
         {renderedScreen === 'service' && <ServiceScreen />}
         {renderedScreen === 'dealerHome' && <DealerHomeScreen />}
