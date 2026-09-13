@@ -10,8 +10,17 @@ function normalizePhone(phone) {
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
 }
-function isValidPhone(phone) {
-  return normalizePhone(phone).length >= 8;
+function toE164(phone, dialCode = '+60') {
+  const raw = String(phone || '').trim();
+  if (raw.startsWith('+')) return `+${normalizePhone(raw)}`;
+  const localDigits = normalizePhone(raw).replace(/^0+/, '');
+  const countryDigits = normalizePhone(dialCode || '+60');
+  if (!localDigits || !countryDigits) return '';
+  return `+${countryDigits}${localDigits}`;
+}
+function isValidPhone(phone, dialCode = '+60') {
+  const e164 = toE164(phone, dialCode);
+  return /^\+[1-9]\d{7,14}$/.test(e164);
 }
 
 async function assertGoogleEmailProof(db, googleEmail, data) {
@@ -39,14 +48,14 @@ async function assertGoogleEmailProof(db, googleEmail, data) {
   if (!verified.email_verified || normalizeEmail(verified.email) !== googleEmail) throw new HttpsError('permission-denied', 'The email verification does not match your Google account.');
 }
 
-async function assertGooglePhoneProof(expectedPhone, data) {
+async function assertGooglePhoneProof(expectedPhoneE164, data) {
   const phoneIdToken = String(data?.phoneIdToken || '').trim();
   if (!phoneIdToken) throw new HttpsError('failed-precondition', 'Please verify your phone number by SMS before continuing.');
   let verified;
   try { verified = await admin.auth().verifyIdToken(phoneIdToken); }
   catch { throw new HttpsError('failed-precondition', 'Your SMS verification has expired. Please verify your phone number again.'); }
-  const tokenPhone = normalizePhone(verified.phone_number);
-  if (!verified.phone_number || tokenPhone !== normalizePhone(expectedPhone)) throw new HttpsError('permission-denied', 'The SMS verification does not match the phone number you entered.');
+  const tokenPhoneE164 = toE164(verified.phone_number || '', undefined);
+  if (!verified.phone_number || tokenPhoneE164 !== expectedPhoneE164) throw new HttpsError('permission-denied', 'The SMS verification does not match the phone number you entered.');
 }
 
 // Existing-account resolver: only a freshly authenticated, verified Google
@@ -80,18 +89,54 @@ exports.ensureGoogleProfile = onCall(async (request) => {
   const googleEmail = normalizeEmail(token.email);
   if (!googleEmail || !token.email_verified) throw new HttpsError('failed-precondition', 'Your Google email must be verified before creating a MySheba account.');
   const data = request.data || {};
-  const rawPhone = normalizePhone(data.phone);
-  if (!isValidPhone(rawPhone)) throw new HttpsError('invalid-argument', 'A valid phone number is required to finish creating your MySheba account.');
-  await assertGoogleEmailProof(db, googleEmail, data);
-  await assertGooglePhoneProof(rawPhone, data);
 
-  const phoneSnap = await db.collection('users').where('phone', '==', rawPhone).limit(1).get();
-  if (!phoneSnap.empty) throw new HttpsError('already-exists', 'This phone number is already registered to another MySheba account. Sign in to that account instead.');
+  // Accept either the visible/local phone field or the already-normalized
+  // phoneE164 sent by the app. This prevents a valid number from being
+  // rejected merely because one client field was omitted or formatted.
+  const phoneInput = String(data.phone || data.phoneE164 || '').trim();
+  const dialCode = data.phoneCountryCode || data.dialCode || '+60';
+  const expectedPhoneE164 = toE164(data.phoneE164 || phoneInput, dialCode);
+  if (!isValidPhone(phoneInput, dialCode) || !/^\+[1-9]\d{7,14}$/.test(expectedPhoneE164)) {
+    throw new HttpsError('invalid-argument', 'A valid phone number is required to finish creating your MySheba account.');
+  }
+
+  const rawPhone = normalizePhone(data.phone || phoneInput);
+  await assertGoogleEmailProof(db, googleEmail, data);
+  await assertGooglePhoneProof(expectedPhoneE164, data);
+
+  const phoneCandidates = Array.from(new Set([
+    rawPhone,
+    normalizePhone(expectedPhoneE164),
+  ].filter(Boolean)));
+  const phoneE164Snap = await db.collection('users').where('phoneE164', '==', expectedPhoneE164).limit(1).get();
+  if (!phoneE164Snap.empty) throw new HttpsError('already-exists', 'This phone number is already registered to another MySheba account. Sign in to that account instead.');
+  let phoneSnap = null;
+  for (const candidate of phoneCandidates) {
+    phoneSnap = await db.collection('users').where('phone', '==', candidate).limit(1).get();
+    if (!phoneSnap.empty) break;
+  }
+  if (phoneSnap && !phoneSnap.empty) throw new HttpsError('already-exists', 'This phone number is already registered to another MySheba account. Sign in to that account instead.');
+
   const emailSnap = await db.collection('users').where('email', '==', googleEmail).limit(1).get();
   if (!emailSnap.empty) throw new HttpsError('already-exists', 'This email is already registered to a MySheba account. Sign in to that account and use Settings → Link Google Account to enable Google sign-in.');
 
   const userId = await assignUniqueUserId(db, uid);
-  const profile = { uid, userId, name: token.name || '', email: googleEmail, phone: rawPhone, phoneVerified: true, role: 'customer', dealerId: null, walletBalance: 0, notifPrefs: { pushEnabled: true, emailEnabled: true, rateAlerts: false }, authProvider: 'google', createdAt: FieldValue.serverTimestamp() };
+  const profile = {
+    uid,
+    userId,
+    name: token.name || '',
+    email: googleEmail,
+    phone: rawPhone,
+    phoneE164: expectedPhoneE164,
+    phoneCountryCode: dialCode,
+    phoneVerified: true,
+    role: 'customer',
+    dealerId: null,
+    walletBalance: 0,
+    notifPrefs: { pushEnabled: true, emailEnabled: true, rateAlerts: false },
+    authProvider: 'google',
+    createdAt: FieldValue.serverTimestamp(),
+  };
   try {
     await ref.set(profile);
     await logAudit({ action: 'account_created', targetUid: uid, performedBy: 'system', performedByRole: null, details: { role: 'customer', method: 'google', phoneVerified: true } });
@@ -101,10 +146,3 @@ exports.ensureGoogleProfile = onCall(async (request) => {
     throw new HttpsError('internal', 'Could not create the account.');
   }
 });
-
-// index.js historically exported only ensureGoogleProfile from this module.
-// Preserve that line while also exposing the new resolver to the Functions
-// runtime without requiring a large index.js rewrite.
-if (module.parent && module.parent.exports) {
-  module.parent.exports.signInExistingGoogleAccount = exports.signInExistingGoogleAccount;
-}
