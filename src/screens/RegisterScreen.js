@@ -8,6 +8,7 @@ import { DEFAULT_PHONE_COUNTRY } from '../data/phoneCountries';
 import { phoneToE164, sendPhoneOtp, confirmPhoneOtp } from '../firebase/phoneVerification';
 import { sendEmailOtp, verifyEmailOtp } from '../firebase/emailVerification';
 import * as authService from '../firebase/authService';
+import { showAlert } from '../utils/appAlert';
 
 const BRAND_TEAL = '#00A99D';
 const BRAND_NAVY = '#0B2447';
@@ -115,6 +116,16 @@ export default function RegisterScreen() {
         emailOtpVerificationId: emailVerificationId,
       });
       setScreen('customerHome');
+      setTimeout(() => {
+        showAlert(
+          'KYC Verification Required',
+          'Your MySheba account has been created successfully. KYC verification is required before you can use Remittance or Mobile Banking. Please complete Identity Verification now.',
+          [
+            { text: 'Later', style: 'cancel' },
+            { text: 'Verify KYC', onPress: () => setScreen('verifyIdentity') },
+          ]
+        );
+      }, 350);
     } catch (err) {
       showError(err?.message);
     } finally {
