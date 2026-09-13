@@ -8,7 +8,6 @@ import { useTheme } from "../theme/ThemeContext";
 import HeaderDecor from '../components/HeaderDecor';
 import * as accommodationService from '../firebase/accommodationService';
 import { REPORT_REASONS } from '../firebase/accommodationService';
-import { ensureDirectChat } from '../firebase/directChatService';
 import * as businessProfileService from '../firebase/businessProfileService';
 import BusinessBadge from '../components/BusinessBadge';
 import MapPreview from '../components/MapPreview';
@@ -20,11 +19,6 @@ function formatDate(ts) {
   return new Date(ts.seconds * 1000).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-// availableDate is stored as 'YYYY-MM-DD' (see CreatePropertyScreen's
-// DateField) for anything listed after the accommodation search-filters
-// update - but older listings may still hold the free-text string the
-// field used to accept (e.g. "1 Sep 2026" or "ASAP"), so anything that
-// isn't that exact shape is shown as-is rather than reformatted.
 function formatAvailableDate(value) {
   if (!value) return '';
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
@@ -32,13 +26,9 @@ function formatAvailableDate(value) {
 }
 
 export default function PropertyDetailScreen() {
-  const {
-    colors,
-    brandGradient
-  } = useTheme();
-
+  const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { goBackOrHome, activePropertyId, authUser, profile, openDirectChat, openBusinessProfile } = useApp();
+  const { goBackOrHome, activePropertyId, authUser, openBusinessProfile } = useApp();
   const [property, setProperty] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
@@ -66,11 +56,7 @@ export default function PropertyDetailScreen() {
   }, [authUser, activePropertyId]);
 
   if (loading) {
-    return (
-      <View style={[styles.screen, styles.center]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
+    return <View style={[styles.screen, styles.center]}><ActivityIndicator size="large" color={colors.primary} /></View>;
   }
 
   if (!property) {
@@ -100,22 +86,6 @@ export default function PropertyDetailScreen() {
       }
     } catch (err) {
       showAlert('MySheba', 'Could not update saved items right now.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const chatOwner = async () => {
-    if (!authUser || isOwner) return;
-    setBusy(true);
-    try {
-      const chatId = await ensureDirectChat(
-        { uid: authUser.uid, name: profile?.name },
-        { uid: property.ownerId, name: property.ownerName }
-      );
-      openDirectChat(chatId, property.ownerName, property.ownerId, `Hi, is "${property.title}" still available?`);
-    } catch (err) {
-      showAlert('MySheba', 'Could not open chat right now.');
     } finally {
       setBusy(false);
     }
@@ -163,61 +133,43 @@ export default function PropertyDetailScreen() {
 
   const openReport = () => {
     if (!authUser) return;
-    showAlert(
-      'Report this property',
-      'Why are you reporting it?',
-      [
-        ...REPORT_REASONS.map((reason) => ({
-          text: reason,
-          onPress: async () => {
-            try {
-              await accommodationService.reportProperty(property.id, property.title, authUser.uid, reason);
-              showAlert('MySheba', 'Thanks - our team will review this listing.');
-            } catch (err) {
-              showAlert('MySheba', 'Could not submit your report right now.');
-            }
-          },
-        })),
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
+    showAlert('Report this property', 'Why are you reporting it?', [
+      ...REPORT_REASONS.map((reason) => ({
+        text: reason,
+        onPress: async () => {
+          try {
+            await accommodationService.reportProperty(property.id, property.title, authUser.uid, reason);
+            showAlert('MySheba', 'Thanks - our team will review this listing.');
+          } catch (err) {
+            showAlert('MySheba', 'Could not submit your report right now.');
+          }
+        },
+      })),
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   };
 
   return (
     <View style={styles.screen}>
       <LinearGradient colors={brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
         <HeaderDecor />
-        <TouchableOpacity style={styles.backBtn} onPress={goBackOrHome}>
-          <Text style={styles.backText}>←</Text>
-        </TouchableOpacity>
+        <TouchableOpacity style={styles.backBtn} onPress={goBackOrHome}><Text style={styles.backText}>←</Text></TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>Property</Text>
-        <TouchableOpacity style={styles.reportIconBtn} onPress={shareProperty}>
-          <Text style={styles.reportIcon}>↗️</Text>
-        </TouchableOpacity>
-        {!isOwner && (
-          <TouchableOpacity style={styles.reportIconBtn} onPress={openReport}>
-            <Text style={styles.reportIcon}>🚩</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity style={styles.reportIconBtn} onPress={shareProperty}><Text style={styles.reportIcon}>↗️</Text></TouchableOpacity>
+        {!isOwner && <TouchableOpacity style={styles.reportIconBtn} onPress={openReport}><Text style={styles.reportIcon}>🚩</Text></TouchableOpacity>}
       </LinearGradient>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 30 }}>
         <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={{ width: SCREEN_WIDTH, height: SCREEN_WIDTH }}>
           {images.map((uri, i) => (
             <View key={i} style={{ width: SCREEN_WIDTH, height: SCREEN_WIDTH }}>
-              {uri ? (
-                <Image source={{ uri }} style={styles.photo} resizeMode="cover" />
-              ) : (
-                <View style={[styles.photo, styles.photoPlaceholder]}><Text style={{ fontSize: 44 }}>🏠</Text></View>
-              )}
+              {uri ? <Image source={{ uri }} style={styles.photo} resizeMode="cover" /> : <View style={[styles.photo, styles.photoPlaceholder]}><Text style={{ fontSize: 44 }}>🏠</Text></View>}
             </View>
           ))}
         </ScrollView>
 
         <View style={styles.body}>
-          {property.status === 'rented' && (
-            <View style={styles.rentedBanner}><Text style={styles.rentedBannerText}>This property has been marked as RENTED</Text></View>
-          )}
+          {property.status === 'rented' && <View style={styles.rentedBanner}><Text style={styles.rentedBannerText}>This property has been marked as RENTED</Text></View>}
           <Text style={styles.title}>{property.title}</Text>
           <Text style={styles.price}>MYR {Number(property.monthlyRent || 0).toFixed(2)}/month{property.deposit ? `  ·  Deposit MYR ${Number(property.deposit).toFixed(2)}` : ''}</Text>
 
@@ -233,11 +185,7 @@ export default function PropertyDetailScreen() {
           {!!(property.facilities && property.facilities.length) && (
             <>
               <Text style={styles.sectionLabel}>Facilities</Text>
-              <View style={styles.facilityWrap}>
-                {property.facilities.map((f) => (
-                  <View key={f} style={styles.facilityTag}><Text style={styles.facilityTagText}>{f}</Text></View>
-                ))}
-              </View>
+              <View style={styles.facilityWrap}>{property.facilities.map((f) => <View key={f} style={styles.facilityTag}><Text style={styles.facilityTagText}>{f}</Text></View>)}</View>
             </>
           )}
 
@@ -249,14 +197,8 @@ export default function PropertyDetailScreen() {
           )}
 
           <Text style={styles.sectionLabel}>Owner</Text>
-          <TouchableOpacity
-            style={styles.ownerRow}
-            activeOpacity={ownerBiz?.isBusinessProfile ? 0.7 : 1}
-            onPress={() => ownerBiz?.isBusinessProfile && openBusinessProfile(property.ownerId)}
-          >
-            <View style={styles.ownerAvatar}>
-              <Text style={styles.ownerInitial}>{(property.ownerName || '?').trim().charAt(0).toUpperCase()}</Text>
-            </View>
+          <TouchableOpacity style={styles.ownerRow} activeOpacity={ownerBiz?.isBusinessProfile ? 0.7 : 1} onPress={() => ownerBiz?.isBusinessProfile && openBusinessProfile(property.ownerId)}>
+            <View style={styles.ownerAvatar}><Text style={styles.ownerInitial}>{(property.ownerName || '?').trim().charAt(0).toUpperCase()}</Text></View>
             <View style={{ flex: 1 }}>
               <Text style={styles.ownerName}>{property.ownerName || 'Owner'}</Text>
               <BusinessBadge isBusiness={ownerBiz?.isBusinessProfile} size="sm" />
@@ -266,18 +208,11 @@ export default function PropertyDetailScreen() {
 
           {isOwner ? (
             <View style={styles.ownerActions}>
-              <TouchableOpacity style={[styles.actionBtn, styles.rentedBtn]} onPress={toggleRented} disabled={busy}>
-                <Text style={styles.actionBtnText}>{property.status === 'rented' ? 'Mark as Available' : 'Mark as Rented'}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.actionBtn, styles.deleteBtn]} onPress={confirmDelete} disabled={busy}>
-                <Text style={styles.actionBtnText}>Delete Listing</Text>
-              </TouchableOpacity>
+              <TouchableOpacity style={[styles.actionBtn, styles.rentedBtn]} onPress={toggleRented} disabled={busy}><Text style={styles.actionBtnText}>{property.status === 'rented' ? 'Mark as Available' : 'Mark as Rented'}</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.actionBtn, styles.deleteBtn]} onPress={confirmDelete} disabled={busy}><Text style={styles.actionBtnText}>Delete Listing</Text></TouchableOpacity>
             </View>
           ) : (
             <View style={styles.buyerActions}>
-              <TouchableOpacity style={styles.chatBtn} onPress={chatOwner} disabled={busy || property.status === 'rented'}>
-                <Text style={styles.chatBtnText}>💬 Contact Owner</Text>
-              </TouchableOpacity>
               <TouchableOpacity style={styles.saveBtn} onPress={toggleSave} disabled={busy}>
                 <Text style={styles.saveBtnText}>{saved ? '★ Saved' : '☆ Save'}</Text>
               </TouchableOpacity>
@@ -319,10 +254,8 @@ function createStyles(colors) {
     ownerInitial: { color: 'white', fontWeight: '700' },
     ownerName: { fontSize: 13, fontWeight: '600', color: colors.text },
     chevron: { fontSize: 18, color: '#CCC' },
-    buyerActions: { flexDirection: 'row', gap: 10, marginTop: 22 },
-    chatBtn: { flex: 1, backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: 13, alignItems: 'center' },
-    chatBtnText: { color: 'white', fontWeight: '700', fontSize: 13 },
-    saveBtn: { paddingHorizontal: 18, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
+    buyerActions: { marginTop: 22, alignItems: 'stretch' },
+    saveBtn: { paddingHorizontal: 18, paddingVertical: 13, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
     saveBtnText: { color: colors.navy, fontWeight: '700', fontSize: 13 },
     ownerActions: { gap: 10, marginTop: 22 },
     actionBtn: { borderRadius: radius.md, paddingVertical: 13, alignItems: 'center' },
