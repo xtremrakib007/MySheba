@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { useApp } from '../context/AppContext';
-import { sendPhoneOtp, confirmPhoneOtp } from '../firebase/phoneVerification';
-import { setupSecurityPin } from '../firebase/securityPinService';
+import { sendPhoneOtp, confirmPhoneOtp, phoneToE164 } from '../firebase/phoneVerification';
+import { resetPassword } from '../firebase/authService';
 
 export default function ForgotPasswordScreen() {
   const { setScreen } = useApp();
@@ -10,6 +10,7 @@ export default function ForgotPasswordScreen() {
   const [code, setCode] = useState('');
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
+  const [phoneIdToken, setPhoneIdToken] = useState('');
   const [confirmation, setConfirmation] = useState(null);
   const [step, setStep] = useState('phone');
   const [busy, setBusy] = useState(false);
@@ -25,8 +26,11 @@ export default function ForgotPasswordScreen() {
       const result = await sendPhoneOtp(phone, '+60');
       setConfirmation(result);
       setStep('otp');
-    } catch (e) { setError(e.message || 'Could not send SMS OTP.'); }
-    finally { setBusy(false); }
+    } catch (e) {
+      setError(e.message || 'Could not send SMS OTP.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const verify = async () => {
@@ -35,29 +39,45 @@ export default function ForgotPasswordScreen() {
     if (!/^\d{6}$/.test(code)) return setError('Enter the 6-digit OTP.');
     setBusy(true);
     try {
-      await confirmPhoneOtp(confirmation, code);
+      const result = await confirmPhoneOtp(confirmation, code);
+      setPhoneIdToken(result.idToken);
       setStep('pin');
-    } catch (e) { setError(e.message || 'Invalid or expired OTP.'); }
-    finally { setBusy(false); }
+    } catch (e) {
+      setError(e.message || 'Invalid or expired OTP.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const savePin = async () => {
     setError('');
     if (!/^\d{6}$/.test(pin)) return setError('PIN must be exactly 6 digits.');
     if (pin !== confirmPin) return setError('PINs do not match.');
+    if (!phoneIdToken) return setError('Please verify your phone number first.');
     setBusy(true);
     try {
-      await setupSecurityPin(pin);
-      Alert.alert('PIN updated', 'Your PIN has been updated. Please sign in again.', [
+      await resetPassword({
+        phone,
+        phoneE164: phoneToE164(phone, '+60'),
+        dialCode: '+60',
+        email: '',
+        newPassword: pin,
+        phoneIdToken,
+        emailIdToken: '',
+      });
+      Alert.alert('PIN updated', 'Your login PIN has been updated. Please sign in again.', [
         { text: 'OK', onPress: () => setScreen('login') },
       ]);
-    } catch (e) { setError(e.message || 'Could not update your PIN.'); }
-    finally { setBusy(false); }
+    } catch (e) {
+      setError(e.message || 'Could not update your login PIN.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return <View style={styles.container}>
     <Text style={styles.title}>Reset PIN</Text>
-    <Text style={styles.subtitle}>Verify your Malaysian phone number by SMS, then create a new 6-digit PIN.</Text>
+    <Text style={styles.subtitle}>Verify your Malaysian phone number by SMS, then create a new 6-digit login PIN.</Text>
 
     {step === 'phone' && <>
       <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="Phone number" keyboardType="phone-pad" autoCapitalize="none" />
