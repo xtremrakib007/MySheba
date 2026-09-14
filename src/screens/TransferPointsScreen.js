@@ -1,104 +1,78 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, Modal, ActivityIndicator } from 'react-native';
 import { showAlert } from '../utils/appAlert';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
-import { useTheme } from "../theme/ThemeContext";
+import { useTheme } from '../theme/ThemeContext';
 import HeaderDecor from '../components/HeaderDecor';
-import { subscribeManageableUsers } from '../firebase/userManagementService';
-import { transferPoints, subscribeMyTransfers } from '../firebase/pointTransferService';
-
-const ROLE_LABEL = { customer: 'Customer', dealer: 'Dealer', reseller: 'Reseller', admin: 'Admin', superadmin: 'Super Admin' };
+import { findWalletRecipient, walletTransfer } from '../firebase/walletTransferService';
 
 function fmt(n) {
   return `MYR ${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export default function TransferPointsScreen() {
-  const {
-    colors,
-    brandGradient
-  } = useTheme();
-
+  const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { goBackOrHome, profile, authUser, pricing, requireSecurityPin } = useApp();
-  const myRole = profile?.role;
-  const myBalance = typeof profile?.walletBalance === 'number' ? profile.walletBalance : 0;
-  const isDealerTier = myRole === 'dealer' || myRole === 'dealer';
-  const dealerEarningPercent = Number(pricing?.dealerEarningPercent) || 0;
-  // Same pool every role already sees on the User Management screen:
-  // dealer/dealer -> their customer pool, admin -> dealers,
-  // superadmin -> admins + dealers. That's exactly who firestore.rules
-  // trusts this tier to write to, so it's the right recipient list here too.
-  const dealerScope = myRole === 'dealer' ? authUser?.uid : profile?.dealerId;
+  const { goBackOrHome, profile, requireSecurityPin } = useApp();
+  const balance = Number(profile?.walletBalance || profile?.balance || 0);
 
-  const [users, setUsers] = useState([]);
-  const [history, setHistory] = useState([]);
-  const [target, setTarget] = useState(null); // user object being sent to
+  const [unlocked, setUnlocked] = useState(false);
+  const [recipientQuery, setRecipientQuery] = useState('');
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
+  const [recipient, setRecipient] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [unlocked, setUnlocked] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const [confirmVisible, setConfirmVisible] = useState(false);
 
-  // Gate the whole screen behind the security PIN on entry (see
-  // requireSecurityPin() in AppContext.js), same as NotepadScreen /
-  // MyDocumentsScreen - cancelling backs out to Home instead of showing
-  // balances, recipients, or transfer history. Runs once per mount, not
-  // per re-render, so re-opening Transfer Points later asks again.
   useEffect(() => {
     let cancelled = false;
-    requireSecurityPin('opening Transfer Points')
+    requireSecurityPin('wallet transfer')
       .then(() => { if (!cancelled) setUnlocked(true); })
       .catch(() => { if (!cancelled) goBackOrHome(); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    const isAdminTier = myRole === 'admin' || myRole === 'superadmin';
-    if (!unlocked || (!isAdminTier && !dealerScope)) return undefined;
-    const unsub = subscribeManageableUsers(myRole, dealerScope, setUsers, () => {});
-    return unsub;
-  }, [myRole, dealerScope, unlocked]);
+  const review = async () => {
+    const query = recipientQuery.trim();
+    const value = Number(amount);
+    if (!query) return showAlert('Wallet Transfer', 'Enter the recipient phone number or Customer ID.');
+    if (!Number.isFinite(value) || value < 0.01) return showAlert('Wallet Transfer', 'Enter a valid MYR amount.');
+    if (value > balance) return showAlert('Wallet Transfer', 'Insufficient wallet balance.');
 
-  useEffect(() => {
-    if (!authUser?.uid || !unlocked) return undefined;
-    const unsub = subscribeMyTransfers(authUser.uid, setHistory, () => {});
-    return unsub;
-  }, [authUser?.uid, unlocked]);
-
-  const recipients = useMemo(() => users.filter((u) => u.id !== profile?.uid), [users, profile]);
-
-  // Dealer/dealer sending to one of their own customers earns a bonus
-  // on top - see pointTransferService.transferPoints(). Preview it here so
-  // it's not a surprise after sending.
-  const earningPreview = isDealerTier && target?.role === 'customer'
-    ? Math.round((Number(amount) || 0) * (dealerEarningPercent / 100) * 100) / 100
-    : 0;
-
-  const openTransfer = (u) => {
-    setTarget(u);
-    setAmount('');
-    setNote('');
+    setReviewing(true);
+    try {
+      const found = await findWalletRecipient(query);
+      setRecipient(found);
+      setConfirmVisible(true);
+    } catch (err) {
+      showAlert('Wallet Transfer', err.message || 'Could not find that MySheba account.');
+    } finally {
+      setReviewing(false);
+    }
   };
 
-  // No separate PIN prompt here - the whole screen is already gated on
-  // entry above, matching Notepad's single-gate-on-entry model rather
-  // than re-asking for every send.
-  const onSend = async () => {
-    if (!target) return;
+  const confirmTransfer = async () => {
+    if (!recipient || busy) return;
+    const value = Number(amount);
+    if (!Number.isFinite(value) || value < 0.01 || value > balance) {
+      return showAlert('Wallet Transfer', 'Please check the transfer amount.');
+    }
+
     setBusy(true);
     try {
-      await transferPoints({
-        to: { uid: target.id, name: target.name || target.phone || '', role: target.role },
-        amount,
-        note,
-      });
-      showAlert('MySheba', `${fmt(amount)} sent to ${target.name || target.phone || 'user'}.`);
-      setTarget(null);
+      const result = await walletTransfer({ recipient: recipient.uid, amount: value, note });
+      setConfirmVisible(false);
+      setRecipient(null);
+      setRecipientQuery('');
+      setAmount('');
+      setNote('');
+      showAlert('Transfer Successful', `${fmt(result.amount)} sent to ${result.recipient?.name || 'the recipient'}.`);
     } catch (err) {
-      showAlert('MySheba', err.message || 'Could not complete this transfer.');
+      showAlert('Wallet Transfer', err.message || 'Could not complete the transfer.');
     } finally {
       setBusy(false);
     }
@@ -106,100 +80,96 @@ export default function TransferPointsScreen() {
 
   return (
     <View style={styles.screen}>
-      <LinearGradient colors={brandGradient } start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
+      <LinearGradient colors={brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
         <HeaderDecor />
         <TouchableOpacity style={styles.backBtn} onPress={goBackOrHome}>
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Transfer Points</Text>
+        <Text style={styles.headerTitle}>Wallet Transfer</Text>
       </LinearGradient>
 
       {!unlocked ? (
         <ActivityIndicator style={{ marginTop: 40 }} color={colors.primary} />
       ) : (
-      <>
-      <View style={styles.balanceCard}>
-        <Text style={styles.balanceLabel}>Your balance</Text>
-        <Text style={styles.balanceValue}>{fmt(myBalance)}</Text>
-      </View>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <View style={styles.balanceCard}>
+            <Text style={styles.balanceLabel}>Available Wallet Balance</Text>
+            <Text style={styles.balanceValue}>{fmt(balance)}</Text>
+            <Text style={styles.currency}>MYR wallet</Text>
+          </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 30 }}>
-        <Text style={styles.sectionTitle}>Send to</Text>
-        {recipients.map((u) => (
-          <TouchableOpacity key={u.id} style={styles.userCard} onPress={() => openTransfer(u)}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.userName}>{u.name || u.phone || '—'}</Text>
-              <Text style={styles.userMeta}>
-                {ROLE_LABEL[u.role] || u.role} · {fmt(u.walletBalance)}
-              </Text>
-            </View>
-            <Text style={styles.sendChevron}>Send ›</Text>
-          </TouchableOpacity>
-        ))}
-        {recipients.length === 0 && <Text style={styles.emptyText}>No one in your pool yet.</Text>}
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Send Money</Text>
+            <Text style={styles.helper}>Transfer Malaysian Ringgit directly to another verified MySheba customer.</Text>
 
-        {history.length > 0 && (
-          <>
-            <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Recent Transfers</Text>
-            {history.slice(0, 20).map((h) => {
-              const sent = h.fromUid === authUser?.uid;
-              return (
-                <View key={h.id} style={styles.historyRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.historyText}>
-                      {sent ? `To ${h.toName || 'user'}` : `From ${h.fromName || 'user'}`}
-                    </Text>
-                    {!!h.note && <Text style={styles.historyNote}>{h.note}</Text>}
-                    {sent && !!h.dealerEarning && (
-                      <Text style={styles.earningText}>+ {fmt(h.dealerEarning)} earning ({h.dealerEarningPercent}%)</Text>
-                    )}
-                  </View>
-                  <Text style={[styles.historyAmount, sent ? styles.historyOut : styles.historyIn]}>
-                    {sent ? '-' : '+'}{fmt(h.amount)}
-                  </Text>
-                </View>
-              );
-            })}
-          </>
-        )}
-      </ScrollView>
-
-      <Modal visible={!!target} transparent animationType="fade" onRequestClose={() => setTarget(null)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Send to {target?.name || target?.phone || 'User'}</Text>
-            <Text style={styles.modalLabel}>Their balance: {fmt(target?.walletBalance)}</Text>
+            <Text style={styles.label}>Recipient</Text>
             <TextInput
               style={styles.input}
-              placeholder="Amount (MYR)"
-              value={amount}
-              onChangeText={setAmount}
-              keyboardType="decimal-pad"
-              autoFocus
+              placeholder="Phone number or Customer ID"
+              placeholderTextColor="#9CA3AF"
+              value={recipientQuery}
+              onChangeText={(v) => { setRecipientQuery(v); setRecipient(null); }}
+              autoCapitalize="none"
             />
+
+            <Text style={styles.label}>Amount</Text>
+            <View style={styles.amountRow}>
+              <Text style={styles.myrPrefix}>MYR</Text>
+              <TextInput
+                style={styles.amountInput}
+                placeholder="0.00"
+                placeholderTextColor="#9CA3AF"
+                value={amount}
+                onChangeText={setAmount}
+                keyboardType="decimal-pad"
+              />
+            </View>
+
+            <Text style={styles.label}>Note (optional)</Text>
             <TextInput
-              style={styles.input}
-              placeholder="Note (optional)"
+              style={[styles.input, styles.noteInput]}
+              placeholder="What is this transfer for?"
+              placeholderTextColor="#9CA3AF"
               value={note}
               onChangeText={setNote}
+              maxLength={120}
             />
-            <Text style={styles.modalLabel}>Your balance after: {fmt(myBalance - (Number(amount) || 0) + earningPreview)}</Text>
-            {earningPreview > 0 && (
-              <Text style={styles.earningText}>You'll earn {fmt(earningPreview)} ({dealerEarningPercent}%) on this transfer</Text>
-            )}
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalCancel} onPress={() => setTarget(null)} disabled={busy}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalConfirm} onPress={onSend} disabled={busy}>
-                <Text style={styles.modalConfirmText}>{busy ? 'Sending…' : 'Send'}</Text>
-              </TouchableOpacity>
+
+            <View style={styles.limitRow}>
+              <Text style={styles.limitText}>Minimum MYR 0.01</Text>
+              <Text style={styles.limitText}>Maximum MYR 10,000</Text>
+            </View>
+
+            <TouchableOpacity style={styles.reviewButton} onPress={review} disabled={reviewing}>
+              <Text style={styles.reviewButtonText}>{reviewing ? 'Checking…' : 'Review Transfer'}</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.securityCard}>
+            <Text style={styles.securityTitle}>🔒 Secure MYR transfer</Text>
+            <Text style={styles.securityText}>Your balance is changed only by the secure server transaction after the transfer is confirmed.</Text>
+          </View>
+        </ScrollView>
+      )}
+
+      <Modal visible={confirmVisible} transparent animationType="fade" onRequestClose={() => !busy && setConfirmVisible(false)}>
+        <View style={styles.backdrop}>
+          <View style={styles.confirmCard}>
+            <Text style={styles.confirmTitle}>Confirm Transfer</Text>
+            <Text style={styles.confirmAmount}>{fmt(amount)}</Text>
+            <View style={styles.summaryRow}><Text style={styles.summaryLabel}>To</Text><Text style={styles.summaryValue}>{recipient?.name || 'MySheba Customer'}</Text></View>
+            {!!recipient?.customerId && <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Customer ID</Text><Text style={styles.summaryValue}>{recipient.customerId}</Text></View>}
+            {!!recipient?.phoneMasked && <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Phone</Text><Text style={styles.summaryValue}>{recipient.phoneMasked}</Text></View>}
+            {!!note.trim() && <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Note</Text><Text style={styles.summaryValue}>{note.trim()}</Text></View>}
+            <View style={styles.divider} />
+            <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Balance after</Text><Text style={styles.summaryValue}>{fmt(balance - Number(amount || 0))}</Text></View>
+            <View style={styles.actions}>
+              <TouchableOpacity style={styles.cancelButton} onPress={() => setConfirmVisible(false)} disabled={busy}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.confirmButton} onPress={confirmTransfer} disabled={busy}><Text style={styles.confirmText}>{busy ? 'Sending…' : 'Confirm & Send'}</Text></TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
-      </>
-      )}
     </View>
   );
 }
@@ -207,35 +177,43 @@ export default function TransferPointsScreen() {
 function createStyles(colors) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg },
-    header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, backgroundColor: colors.primary , overflow: 'hidden' },
+    header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, overflow: 'hidden' },
     backBtn: { padding: 4 },
-    backText: { color: 'white', fontSize: 20 },
-    headerTitle: { color: 'white', fontWeight: '600', fontSize: 16, marginLeft: 10 },
-    balanceCard: { margin: 16, marginBottom: 0, backgroundColor: colors.primary, borderRadius: radius.lg, padding: 16 },
-    balanceLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 12 },
-    balanceValue: { color: 'white', fontSize: 22, fontWeight: '700', marginTop: 4 },
-    sectionTitle: { fontSize: 12, fontWeight: '700', color: '#999', marginBottom: 8, marginTop: 4, textTransform: 'uppercase' },
-    userCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: 12, marginBottom: 10, gap: 10 },
-    userName: { fontSize: 14, fontWeight: '600', color: colors.text },
-    userMeta: { fontSize: 12, color: '#999', marginTop: 2 },
-    sendChevron: { fontSize: 12, fontWeight: '700', color: colors.primary },
-    emptyText: { textAlign: 'center', color: '#999', marginTop: 30 },
-    historyRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
-    historyText: { fontSize: 13, fontWeight: '600', color: colors.text },
-    historyNote: { fontSize: 11, color: '#999', marginTop: 2 },
-    historyAmount: { fontSize: 13, fontWeight: '700' },
-    historyOut: { color: colors.error },
-    historyIn: { color: colors.success },
-    modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 20 },
-    modalCard: { backgroundColor: colors.card, borderRadius: radius.lg, padding: 20 },
-    modalTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 8 },
-    modalLabel: { fontSize: 12, color: '#999', marginBottom: 8 },
-    earningText: { fontSize: 12, color: colors.success, fontWeight: '600', marginBottom: 8 },
-    input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 10, fontSize: 13 },
-    modalActions: { flexDirection: 'row', gap: 10, marginTop: 8 },
-    modalCancel: { flex: 1, alignItems: 'center', paddingVertical: 10 },
-    modalCancelText: { color: '#999', fontWeight: '600' },
-    modalConfirm: { flex: 1, backgroundColor: colors.primary, borderRadius: radius.md, alignItems: 'center', paddingVertical: 10 },
-    modalConfirmText: { color: 'white', fontWeight: '700' },
+    backText: { color: '#FFFFFF', fontSize: 22 },
+    headerTitle: { color: '#FFFFFF', fontWeight: '800', fontSize: 18, marginLeft: 8 },
+    content: { padding: 16, paddingBottom: 40 },
+    balanceCard: { backgroundColor: colors.primary, borderRadius: radius.lg, padding: 20, marginBottom: 16 },
+    balanceLabel: { color: 'rgba(255,255,255,0.82)', fontSize: 13 },
+    balanceValue: { color: '#FFFFFF', fontSize: 30, fontWeight: '800', marginTop: 5 },
+    currency: { color: 'rgba(255,255,255,0.75)', fontSize: 12, marginTop: 4 },
+    card: { backgroundColor: colors.card, borderRadius: radius.lg, padding: 18, borderWidth: 1, borderColor: colors.border },
+    sectionTitle: { color: colors.text, fontSize: 20, fontWeight: '800' },
+    helper: { color: colors.muted || '#6B7280', fontSize: 12, lineHeight: 18, marginTop: 5, marginBottom: 16 },
+    label: { color: colors.text, fontSize: 12, fontWeight: '700', marginBottom: 7, marginTop: 8 },
+    input: { height: 52, borderWidth: 1, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 14, color: colors.text, fontSize: 14, backgroundColor: '#FFFFFF' },
+    amountRow: { height: 58, flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: colors.primary, borderRadius: 14, backgroundColor: '#FFFFFF', paddingHorizontal: 14 },
+    myrPrefix: { color: colors.primary, fontWeight: '800', fontSize: 15, marginRight: 10 },
+    amountInput: { flex: 1, color: colors.text, fontSize: 20, fontWeight: '700', paddingVertical: 0 },
+    noteInput: { height: 70, paddingTop: 14, textAlignVertical: 'top' },
+    limitRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
+    limitText: { color: colors.muted || '#6B7280', fontSize: 10 },
+    reviewButton: { marginTop: 18, height: 52, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+    reviewButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
+    securityCard: { marginTop: 14, padding: 15, borderRadius: 14, backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#BBF7D0' },
+    securityTitle: { fontSize: 13, fontWeight: '800', color: '#166534' },
+    securityText: { fontSize: 11, lineHeight: 17, color: '#166534', marginTop: 4 },
+    backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.48)', justifyContent: 'center', padding: 20 },
+    confirmCard: { backgroundColor: colors.card, borderRadius: radius.lg, padding: 20 },
+    confirmTitle: { color: colors.text, fontSize: 19, fontWeight: '800', textAlign: 'center' },
+    confirmAmount: { color: colors.primary, fontSize: 28, fontWeight: '900', textAlign: 'center', marginVertical: 14 },
+    summaryRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 15, paddingVertical: 7 },
+    summaryLabel: { color: colors.muted || '#6B7280', fontSize: 12 },
+    summaryValue: { color: colors.text, fontSize: 12, fontWeight: '700', flex: 1, textAlign: 'right' },
+    divider: { height: 1, backgroundColor: colors.border, marginVertical: 7 },
+    actions: { flexDirection: 'row', gap: 10, marginTop: 16 },
+    cancelButton: { flex: 1, height: 48, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 13 },
+    cancelText: { color: colors.muted || '#6B7280', fontWeight: '700' },
+    confirmButton: { flex: 1, height: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, borderRadius: 13 },
+    confirmText: { color: '#FFFFFF', fontWeight: '800' },
   });
 }
