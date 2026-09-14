@@ -4,7 +4,8 @@ import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import { useLanguage } from '../i18n/LanguageContext';
 
-const SERVICES = [
+// Customer home: exactly the approved 4 x 3 finance grid.
+const CUSTOMER_SERVICES = [
   { key: 'recharge', icon: '📱', name: 'Recharge', kind: 'service' },
   { key: 'mobilebanking', icon: '🏦', name: 'Mobile Banking', kind: 'service' },
   { key: 'internet', icon: '📡', name: 'Internet Banking', kind: 'service' },
@@ -18,6 +19,43 @@ const SERVICES = [
   { key: 'passport', icon: '📔', name: 'Passport', kind: 'webview' },
   { key: 'moreFeaturesTile', icon: '✨', name: 'More Features', kind: 'moreFeaturesLink' },
 ];
+
+// Staff homes are management dashboards, not copies of the customer home.
+// The existing role-specific Features screens contain the deeper tools.
+const STAFF_SERVICES = {
+  dealer: [
+    { key: 'dealerFeatures', icon: '🛠️', name: 'Dealer Features', kind: 'dealerFeatures' },
+    { key: 'topup', icon: '💰', name: 'Top-Up', kind: 'topup' },
+    { key: 'history', icon: '📋', name: 'Transactions', kind: 'history' },
+    { key: 'support', icon: '🎧', name: 'Support', kind: 'support' },
+    { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount' },
+    { key: 'profile', icon: '🪪', name: 'Profile', kind: 'profile' },
+  ],
+  reseller: [
+    { key: 'resellerFeatures', icon: '🛠️', name: 'Reseller Features', kind: 'resellerFeatures' },
+    { key: 'topup', icon: '💰', name: 'Top-Up', kind: 'topup' },
+    { key: 'history', icon: '📋', name: 'Transactions', kind: 'history' },
+    { key: 'support', icon: '🎧', name: 'Support', kind: 'support' },
+    { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount' },
+    { key: 'profile', icon: '🪪', name: 'Profile', kind: 'profile' },
+  ],
+  admin: [
+    { key: 'adminFeatures', icon: '🛠️', name: 'Admin Features', kind: 'adminFeatures' },
+    { key: 'topup', icon: '💰', name: 'Top-Ups', kind: 'adminTopup' },
+    { key: 'history', icon: '📋', name: 'Transactions', kind: 'history' },
+    { key: 'support', icon: '🎧', name: 'Support', kind: 'support' },
+    { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount' },
+    { key: 'profile', icon: '🪪', name: 'Profile', kind: 'profile' },
+  ],
+  superadmin: [
+    { key: 'adminFeatures', icon: '⚙️', name: 'Superadmin Features', kind: 'adminFeatures' },
+    { key: 'topup', icon: '💰', name: 'Top-Ups', kind: 'adminTopup' },
+    { key: 'history', icon: '📋', name: 'Transactions', kind: 'history' },
+    { key: 'support', icon: '🎧', name: 'Support', kind: 'support' },
+    { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount' },
+    { key: 'profile', icon: '🪪', name: 'Profile', kind: 'profile' },
+  ],
+};
 
 function asSafeText(value, fallback = '') {
   return typeof value === 'string' || typeof value === 'number' ? String(value) : fallback;
@@ -50,7 +88,15 @@ export function Tile({ s, onPress, disabled }) {
 }
 
 export function useServiceAction() {
-  const { startService, openWebView, openBusPicker, openSalary, openMyDocuments, setScreen } = useApp();
+  const {
+    startService,
+    openWebView,
+    openBusPicker,
+    openSalary,
+    openMyDocuments,
+    setScreen,
+    profile,
+  } = useApp();
 
   return (s) => {
     if (!s) return;
@@ -63,25 +109,38 @@ export function useServiceAction() {
     if (s.kind === 'history') return setScreen('history');
     if (s.kind === 'myaccount') return setScreen('myAccount');
     if (s.kind === 'profile') return setScreen('profile');
+    if (s.kind === 'topup') return setScreen('topup');
+    if (s.kind === 'adminTopup') return setScreen('superAdminTopup');
+    if (s.kind === 'dealerFeatures') return setScreen('dealerFeatures');
+    if (s.kind === 'resellerFeatures') return setScreen('resellerFeatures');
+    if (s.kind === 'adminFeatures') return setScreen('adminFeatures');
     return startService(s.key);
   };
 }
 
-export const PRIMARY_SERVICES = SERVICES;
+export const PRIMARY_SERVICES = CUSTOMER_SERVICES;
 
 export default function ServiceGrid() {
   const { colors } = useTheme();
-  const { webViewBusy } = useApp();
+  const { webViewBusy, profile } = useApp();
   const handlePress = useServiceAction();
+  const role = profile?.role || 'customer';
+  const isStaff = ['dealer', 'reseller', 'admin', 'superadmin'].includes(role);
+  const services = isStaff ? (STAFF_SERVICES[role] || STAFF_SERVICES.admin) : CUSTOMER_SERVICES;
 
   return (
     <View>
       <View style={styles.sectionHead}>
-        <Text style={[styles.sectionTitle, { color: colors.text || '#222' }]}>Finance Services</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text || '#222' }]}>
+          {isStaff ? 'Management Dashboard' : 'Finance Services'}
+        </Text>
+        <Text style={[styles.sectionSubtitle, { color: colors.muted || '#6B7280' }]}>
+          {isStaff ? 'Manage transactions, accounts and operations' : 'Banking • Remittance • Payments • Travel'}
+        </Text>
       </View>
       <View style={styles.gridCanvas}>
         <View style={styles.grid}>
-          {SERVICES.map((service) => (
+          {services.map((service) => (
             <Tile
               key={service.key}
               s={service}
@@ -98,9 +157,10 @@ export default function ServiceGrid() {
 const styles = StyleSheet.create({
   sectionHead: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8 },
   sectionTitle: { fontSize: 17, fontWeight: '800' },
+  sectionSubtitle: { fontSize: 11, marginTop: 2 },
   gridCanvas: { marginHorizontal: 10, padding: 10, borderRadius: 18, backgroundColor: '#F5F7FA' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-  item: { width: '23.5%', minHeight: 94, marginBottom: 8, paddingHorizontal: 4, paddingVertical: 9, borderWidth: 1, borderRadius: 15, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  item: { width: '31.5%', minHeight: 94, marginBottom: 8, paddingHorizontal: 4, paddingVertical: 9, borderWidth: 1, borderRadius: 15, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
   itemDisabled: { opacity: 0.45 },
   iconWrap: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
   iconText: { fontSize: 25 },
