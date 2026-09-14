@@ -51,13 +51,14 @@ async function resolveRecipient(db, query, senderUid) {
     throw new HttpsError('invalid-argument', 'Enter a valid phone number or Customer ID.');
   }
 
-  // Prefer an exact Customer ID match when one is supplied.
-  let snap = await db.collection('users').where('userId', '==', q).limit(2).get();
-  if (snap.empty) snap = await db.collection('users').where('customerId', '==', q).limit(2).get();
+  // A confirmed recipient UID can be passed back from the preview step.
+  let snap = await db.collection('users').doc(q).get();
+  if (!snap.exists) snap = null;
 
-  // Phone values in existing accounts have historically appeared both with
-  // and without the country-code prefix, so check both common forms.
-  if (snap.empty) {
+  if (!snap) snap = await db.collection('users').where('userId', '==', q).limit(2).get();
+  if (!snap || snap.empty) snap = await db.collection('users').where('customerId', '==', q).limit(2).get();
+
+  if (!snap || snap.empty) {
     const phone = normalizePhone(q);
     if (phone) {
       snap = await db.collection('users').where('phone', '==', phone).limit(2).get();
@@ -67,7 +68,7 @@ async function resolveRecipient(db, query, senderUid) {
     }
   }
 
-  if (snap.empty) throw new HttpsError('not-found', 'No MySheba account was found for that recipient.');
+  if (!snap || snap.empty) throw new HttpsError('not-found', 'No MySheba account was found for that recipient.');
   if (snap.size > 1) throw new HttpsError('failed-precondition', 'More than one account matches. Use the Customer ID.');
 
   const doc = snap.docs[0];
