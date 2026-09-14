@@ -77,20 +77,6 @@
       }
     }
   },
-  "expo": {
-    "doctor": {
-      "reactNativeDirectoryCheck": {
-        "exclude": [
-          "@notifee/react-native",
-          "crypto-js",
-          "expo-av",
-          "firebase",
-          "geofire-common"
-        ],
-        "listUnknownPackages": false
-      }
-    }
-  },
   "overrides": {
     "@react-native-firebase/auth": {
       "@react-native-async-storage/async-storage": "$@react-native-async-storage/async-storage"
