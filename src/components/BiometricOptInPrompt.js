@@ -5,15 +5,14 @@ import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 
 // Shown once per fresh sign-in after the authentication/onboarding flow has
-// reached a real home screen. Pre-auth screens intentionally hide the modal
-// so new Google users can finish email, SMS and PIN setup first.
+// reached a real home screen. Pre-auth screens intentionally hide the modal.
 export default function BiometricOptInPrompt() {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const { screen, showBiometricPrompt, dismissBiometricPrompt } = useApp();
   const [busy, setBusy] = useState(false);
 
-  const preAuthScreens = ['login', 'register', 'deviceVerify', 'googlePhone', 'forgotPassword'];
+  const preAuthScreens = ['login', 'register', 'deviceVerify', 'forgotPassword'];
   if (!showBiometricPrompt || preAuthScreens.includes(screen)) return null;
 
   const onEnable = async () => {
