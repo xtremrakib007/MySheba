@@ -38,20 +38,11 @@ export default function DeviceVerifyScreen() {
       let result;
       const role = profile?.role;
       if (role === 'admin' || role === 'superadmin' || role === 'dealer' || role === 'reseller') {
-        result = await authService.retryDeviceSession(
-          pendingDeviceVerification?.uid,
-          credential?.phoneIdToken,
-          credential?.emailIdToken,
-          credential?.emailOtp
-        );
+        result = await authService.retryDeviceSession(pendingDeviceVerification?.uid, credential?.phoneIdToken, credential?.emailIdToken, credential?.emailOtp);
       } else {
         const deviceId = await deviceSessionService.getDeviceId();
         const confirmFn = httpsCallable(functions, 'confirmDeviceSwitch');
-        const { data } = await confirmFn({
-          deviceId,
-          emailIdToken: credential?.emailIdToken || undefined,
-          emailOtp: credential?.emailOtp || undefined,
-        });
+        const { data } = await confirmFn({ deviceId, emailIdToken: credential?.emailIdToken || undefined, emailOtp: credential?.emailOtp || undefined });
         if (!data?.sessionId) throw new Error('Device verification did not return a valid session.');
         await deviceSessionService.setLocalSessionId(data.sessionId);
         const refreshed = await authService.fetchProfile(pendingDeviceVerification?.uid);
@@ -59,15 +50,19 @@ export default function DeviceVerifyScreen() {
       }
       if (result?.pendingDeviceApproval) throw new Error('Verification is still pending. Please enter the latest code.');
       setScreen(homeForRole(result?.role || profile?.role));
-    } catch (e) {
-      setLocalError(e.message || 'Could not complete device verification. Please try again.');
-    } finally { setBusy(false); }
+    } catch (e) { setLocalError(e.message || 'Could not complete device verification. Please try again.'); }
+    finally { setBusy(false); }
   };
 
   const sendEmail = async () => {
     setLocalError(''); setBusy(true);
     try {
-      await authService.retryDeviceSession(pendingDeviceVerification?.uid, null, null, null, true);
+      const deviceId = await deviceSessionService.getDeviceId();
+      if (profile?.role === 'admin' || profile?.role === 'superadmin' || profile?.role === 'dealer' || profile?.role === 'reseller') {
+        await authService.retryDeviceSession(pendingDeviceVerification?.uid, null, null, null, true);
+      } else {
+        await httpsCallable(functions, 'sendDeviceVerification')({ deviceId });
+      }
       setSent(true); setCode('');
     } catch (e) { setLocalError(e.message || 'Could not send the verification email. Please try again.'); }
     finally { setBusy(false); }
