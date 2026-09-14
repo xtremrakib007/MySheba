@@ -85,13 +85,22 @@ async function getStaffActor() {
 
 export async function acceptTransaction(id: string): Promise<void> {
   const actor = await getStaffActor();
-  await updateDoc(doc(db, COLLECTION, id), {
+  const patch: Record<string, unknown> = {
     status: 'processing',
     claimedBy: actor.uid,
     claimedByName: actor.name,
     claimedByRole: actor.role || null,
     updatedAt: serverTimestamp(),
-  });
+  };
+  // Admin/superadmin acceptance is the approval event. A dealer/reseller
+  // remains the operator if they later complete the order.
+  if (actor.role === 'admin' || actor.role === 'superadmin') {
+    patch.approvedBy = actor.uid;
+    patch.approvedByName = actor.name;
+    patch.approvedByRole = actor.role;
+    patch.approvedAt = serverTimestamp();
+  }
+  await updateDoc(doc(db, COLLECTION, id), patch);
 }
 
 const REJECT_FNS: Record<string, string> = {
@@ -122,15 +131,20 @@ export async function completeTransaction(id: string, pin?: string, receiptUrl?:
   const patch: Record<string, unknown> = {
     status: 'completed',
     pin: pin || '',
-    approvedBy: actor.uid,
-    approvedByName: actor.name,
-    approvedByRole: actor.role || null,
     completedBy: actor.uid,
     completedByName: actor.name,
     completedByRole: actor.role || null,
     completedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
+  // Preserve the approver for dealer/reseller-completed orders. If an
+  // admin/superadmin completes directly, that actor is the approver too.
+  if (actor.role === 'admin' || actor.role === 'superadmin') {
+    patch.approvedBy = actor.uid;
+    patch.approvedByName = actor.name;
+    patch.approvedByRole = actor.role;
+    patch.approvedAt = serverTimestamp();
+  }
   if (receiptUrl) patch.receiptUrl = receiptUrl;
   await updateDoc(doc(db, COLLECTION, id), patch);
 }
