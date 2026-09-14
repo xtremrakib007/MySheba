@@ -135,17 +135,7 @@ function Root() {
   const { screen, authLoading, handleDeepLink } = useApp();
   const { colors, isDark } = useTheme();
   const styles = createStyles(colors);
-  // Splash stays mounted a moment after authLoading flips false so it can
-  // run its "Ready" check + fade-out instead of the app snapping in.
   const [splashVisible, setSplashVisible] = useState(true);
-
-  // Auth/session resolution can update several pieces of state in one React
-  // commit. Admin and superadmin logins are the slowest path because they
-  // also perform device-session/MFA checks. Mount the newly selected screen
-  // on a separate macrotask so AdminHome never mounts in the same commit as
-  // the login/session state transition. This specifically hardens the path
-  // that previously produced RN's "Text strings must be rendered within a
-  // <Text> component" error during admin login.
   const [renderedScreen, setRenderedScreen] = useState(screen);
 
   useEffect(() => {
@@ -158,12 +148,6 @@ function Root() {
     setTimeout(() => setSplashVisible(false), 0);
   };
 
-  // Handles mysheba://listing/<id> - tapped from the "Open in App" button
-  // on the mysheba.top preview page, or any other mysheba:// link. Covers
-  // both cases: the link launching the app cold (getInitialURL) and the
-  // link arriving while the app is already running (the 'url' event).
-  // handleDeepLink itself (see AppContext.js) decides whether to navigate
-  // immediately or queue until auth/profile are ready.
   useEffect(() => {
     Linking.getInitialURL().then((url) => { if (url) handleDeepLink(url); }).catch(() => {});
     const sub = Linking.addEventListener('url', ({ url }) => handleDeepLink(url));
@@ -293,9 +277,8 @@ function Root() {
         {renderedScreen === 'payslipDetails' && <PayslipDetailsScreen />}
       </View>
 
-      {(renderedScreen === 'customerHome' || renderedScreen === 'dealerHome' || renderedScreen === 'resellerHome' || renderedScreen === 'adminHome' || renderedScreen === 'support' || renderedScreen === 'help' || renderedScreen === 'adminSupport' || renderedScreen === 'history' || renderedScreen === 'topup' || renderedScreen === 'superAdminTopup' || renderedScreen === 'gamePoints' || renderedScreen === 'chatHub' || renderedScreen === 'profile' || renderedScreen === 'settings' || renderedScreen === 'myAccount' || renderedScreen === 'moreFeatures' || renderedScreen === 'adminFeatures' || renderedScreen === 'dealerFeatures' || renderedScreen === 'resellerFeatures' || renderedScreen === 'notifications' || renderedScreen === 'marketplaceHome' || renderedScreen === 'accommodationHome' || renderedScreen === 'roomSharingHome' || renderedScreen === 'servicesHome' || renderedScreen === 'communityHome') && <BottomNav />}
+      {(renderedScreen === 'customerHome' || renderedScreen === 'dealerHome' || renderedScreen === 'resellerHome' || renderedScreen === 'support' || renderedScreen === 'help' || renderedScreen === 'adminSupport' || renderedScreen === 'history' || renderedScreen === 'topup' || renderedScreen === 'superAdminTopup' || renderedScreen === 'gamePoints' || renderedScreen === 'chatHub' || renderedScreen === 'profile' || renderedScreen === 'settings' || renderedScreen === 'myAccount' || renderedScreen === 'moreFeatures' || renderedScreen === 'adminFeatures' || renderedScreen === 'dealerFeatures' || renderedScreen === 'resellerFeatures' || renderedScreen === 'notifications' || renderedScreen === 'marketplaceHome' || renderedScreen === 'accommodationHome' || renderedScreen === 'roomSharingHome' || renderedScreen === 'servicesHome' || renderedScreen === 'communityHome') && <BottomNav />}
 
-      {/* Global overlays - mirror #ratePopup and #resultModal from the original */}
       <RatePopup />
       <ResultModal />
       <Sidebar />
@@ -334,7 +317,7 @@ export default function App() {
 
 function createStyles(colors) {
   return StyleSheet.create({
-    app: { flex: 1, backgroundColor: colors.bg },
+    app: { flex: 1, backgroundColor: colors.background },
     body: { flex: 1 },
   });
 }
