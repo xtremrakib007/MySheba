@@ -7,7 +7,6 @@ import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import { useLanguage } from '../i18n/LanguageContext';
 import HeaderDecor from '../components/HeaderDecor';
-import { GoogleButton, OrDivider } from '../components/ui';
 import * as emailVerification from '../firebase/emailVerification';
 import * as phoneVerification from '../firebase/phoneVerification';
 import { functions } from '../firebase/config';
@@ -20,7 +19,7 @@ export default function RegisterScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
   const { t } = useLanguage();
-  const { setScreen, doLogin, doGoogleLogin, authError, authBusy } = useApp();
+  const { setScreen, doLogin, authError, authBusy } = useApp();
   const [step, setStep] = useState('details');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -205,12 +204,10 @@ export default function RegisterScreen() {
           <Field label={t('register.password')} value={password} setValue={setPassword} placeholder={t('register.passwordPlaceholder')} secureTextEntry maxLength={20} styles={styles} />
           <Field label={t('register.confirmPassword')} value={confirmPassword} setValue={setConfirmPassword} placeholder={t('register.confirmPasswordPlaceholder')} secureTextEntry maxLength={20} styles={styles} />
           <Text style={styles.verifyTitle}>Choose verification method</Text>
-          <Text style={styles.verifyHint}>Verify your account by email or SMS. Either method can complete registration.</Text>
+          <Text style={styles.verifyHint}>SMS is the primary verification method. Email verification is available as a fallback.</Text>
           {!!(localError || authError) && <Text style={styles.errorText}>{localError || authError}</Text>}
-          <TouchableOpacity style={[styles.btn, busy && styles.btnDisabled]} onPress={startEmailVerification} disabled={busy}>{busy ? <ActivityIndicator color={styles.onPrimaryColor} /> : <Text style={styles.btnText}>Verify by Email</Text>}</TouchableOpacity>
-          <TouchableOpacity style={[styles.secondaryBtn, busy && styles.btnDisabled]} onPress={startPhoneVerification} disabled={busy}><Text style={styles.secondaryBtnText}>Verify by SMS</Text></TouchableOpacity>
-          <OrDivider />
-          <GoogleButton label={t('register.signUpWithGoogle')} onPress={doGoogleLogin} disabled={busy} />
+          <TouchableOpacity style={[styles.btn, busy && styles.btnDisabled]} onPress={startPhoneVerification} disabled={busy}>{busy ? <ActivityIndicator color={styles.onPrimaryColor} /> : <Text style={styles.btnText}>Verify by SMS</Text>}</TouchableOpacity>
+          <TouchableOpacity style={[styles.secondaryBtn, busy && styles.btnDisabled]} onPress={startEmailVerification} disabled={busy}><Text style={styles.secondaryBtnText}>Verify by Email</Text></TouchableOpacity>
         </> : step === 'phone' ? <>
           <Text style={styles.stepTitle}>{t('register.verifyPhone')}</Text>
           <Text style={styles.otpHint}>{t('register.otpHintSms', { phone: `${phoneCountry.dial} ${phone.replace(/[^0-9]/g, '').replace(/^0+/, '')}` })}</Text>
