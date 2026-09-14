@@ -33,10 +33,29 @@ exports.sendDeviceVerification = onCall(async (request) => {
   const snap = await userRef.get();
   if (!snap.exists) throw new HttpsError('not-found', 'No profile found for this account.');
   const data = snap.data();
-  const pending = data.pendingDeviceApproval;
+  let pending = data.pendingDeviceApproval;
+
+  // The verification screen can survive a reinstall/session restore while
+  // AsyncStorage generates a new per-install device id. The authenticated
+  // user is still the same user, so bind the pending challenge to the device
+  // that is actually making this authenticated request instead of returning
+  // the misleading "No pending verification" error. This also makes a newer
+  // login attempt supersede an abandoned pending challenge from an older
+  // install/device.
   if (!pending || pending.deviceId !== deviceId) {
-    throw new HttpsError('failed-precondition', 'No pending verification for this device. Please sign in again.');
+    const role = String(data.role || '');
+    pending = {
+      deviceId,
+      email: String(data.email || '').trim().toLowerCase(),
+      phone: data.phone || '',
+      phoneE164: data.phoneE164 || '',
+      dialCode: data.phoneCountryCode || '+60',
+      reason: pending?.reason || 'device_verification',
+    };
+    await userRef.update({ pendingDeviceApproval: pending });
+    console.log('[deviceVerification] rebound stale pending verification to current authenticated device', { uid, deviceId, role });
   }
+
   const email = String(pending.email || data.email || '').trim().toLowerCase();
   if (!validEmail(email)) throw new HttpsError('failed-precondition', 'No valid email address is available for verification.');
   const previous = data.pendingDeviceEmailChallenge;
