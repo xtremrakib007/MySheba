@@ -3,8 +3,8 @@
 // Mobile Banking specifically splits accept/reject and complete across the
 // two dealer-tier roles: the parent Dealer accepts/rejects, then only the
 // Sub Dealer can complete + collect the PIN (enforced in DealerHomeScreen.js
-// and firestore.rules' mobileBankingRoleOk()). Every other service keeps
-// the shared queue where either role can do both.
+// and firestore.rules' mobileBankingRoleOk()). Every other service keeps the
+// shared queue where either role can do both.
 //
 // A customer who registered under a reseller code (resellerId on their own
 // users/{uid} doc - see functions/customerRegistration.js) has an extra hop
@@ -20,6 +20,7 @@ import {
   collection,
   addDoc,
   doc,
+  getDoc,
   updateDoc,
   runTransaction,
   onSnapshot,
@@ -154,6 +155,11 @@ export function subscribeMyTransactions(uid, callback, onError) {
 
 export async function acceptTransaction(id) {
   const txRef = doc(db, COLLECTION, id);
+  const currentUser = getCurrentUserUid();
+  if (!currentUser) throw new Error('You must be signed in to accept an order.');
+  const profileSnap = await getDoc(doc(db, 'users', currentUser));
+  const staffRole = profileSnap.exists() ? (profileSnap.data().role || '') : '';
+
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(txRef);
     if (!snap.exists()) throw new Error('That order no longer exists.');
@@ -164,12 +170,10 @@ export async function acceptTransaction(id) {
     // Rules verify request.auth.uid against claimedBy. Keeping the write
     // client-side is safe because Firestore retries this transaction on a
     // concurrent change and only the first pending snapshot can transition.
-    const currentUser = getCurrentUserUid();
-    if (!currentUser) throw new Error('You must be signed in to accept an order.');
     tx.update(txRef, {
       status: 'processing',
       claimedBy: currentUser,
-      claimedByRole: null,
+      claimedByRole: staffRole || null,
       updatedAt: serverTimestamp(),
     });
   });
