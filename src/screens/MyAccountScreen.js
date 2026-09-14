@@ -15,10 +15,7 @@ function formatMemberSince(ts) {
 }
 
 function Row({ label, value, verified }) {
-  const {
-    colors
-  } = useTheme();
-
+  const { colors } = useTheme();
   const styles = createStyles(colors);
   return (
     <View style={styles.row}>
@@ -32,11 +29,7 @@ function Row({ label, value, verified }) {
 }
 
 export default function MyAccountScreen() {
-  const {
-    colors,
-    brandGradient
-  } = useTheme();
-
+  const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
   const { goBackOrHome, setScreen, profile, authUser, openBusinessProfile } = useApp();
 
@@ -45,7 +38,7 @@ export default function MyAccountScreen() {
 
   return (
     <View style={styles.screen}>
-      <LinearGradient colors={brandGradient } start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
+      <LinearGradient colors={brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
         <HeaderDecor />
         <TouchableOpacity style={styles.backBtn} onPress={goBackOrHome}>
           <Text style={styles.backText}>←</Text>
@@ -83,12 +76,6 @@ export default function MyAccountScreen() {
             <Text style={styles.chevron}>›</Text>
           </TouchableOpacity>
           <View style={styles.divider} />
-          <TouchableOpacity style={styles.linkRow} onPress={() => setScreen('gamePoints')}>
-            <Text style={styles.linkIcon}>🎮</Text>
-            <Text style={styles.linkLabel}>Game Points</Text>
-            <Text style={styles.chevron}>›</Text>
-          </TouchableOpacity>
-          <View style={styles.divider} />
           <TouchableOpacity style={styles.linkRow} onPress={() => setScreen('reports')}>
             <Text style={styles.linkIcon}>📊</Text>
             <Text style={styles.linkLabel}>Reports</Text>
@@ -115,7 +102,7 @@ export default function MyAccountScreen() {
 function createStyles(colors) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg },
-    header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, backgroundColor: colors.primary , overflow: 'hidden' },
+    header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, backgroundColor: colors.primary, overflow: 'hidden' },
     backBtn: { padding: 4 },
     backText: { color: 'white', fontSize: 20 },
     headerTitle: { color: 'white', fontWeight: '600', fontSize: 16, marginLeft: 10 },
