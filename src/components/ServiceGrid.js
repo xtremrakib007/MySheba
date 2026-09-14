@@ -22,32 +22,29 @@ const SERVICES = [
   { key: 'myDocuments', icon: '📁', bg: '#E1F5FE', accent: '#0288D1', name: 'My Documents', kind: 'documents' },
   { key: 'salary', icon: '💰', bg: '#FFF8E1', accent: '#F9A825', name: 'Salary & OT', kind: 'salary' },
 ];
+
+// Legacy social/chat/game/gift features are intentionally excluded from the
+// customer-facing More Features list. This app is being presented as a
+// finance and essential-services app, not a social or gaming hub.
 const MORE_FEATURES = [
   { key: 'esim', icon: '📶', bg: '#E0F2F1', accent: '#00897B', name: 'MY e-SIM', pointsKey: 'esim', pointsLabel: 'pts on payment', kind: 'webview' },
-  { key: 'social', icon: '📣', bg: '#FCE4EC', accent: '#AD1457', name: 'Social Feed', kind: 'social' },
   { key: 'support', icon: '🎧', bg: '#E0F7FA', accent: '#00838F', name: 'Support', kind: 'support' },
   { key: 'history', icon: '🕒', bg: '#EDE7F6', accent: '#5E35B1', name: 'History', kind: 'history' },
-  { key: 'chat', icon: '💬', bg: '#E8F5E9', accent: '#2E7D32', name: 'Chat', kind: 'chathub' },
   { key: 'myAccount', icon: '🧾', bg: '#FFF8E1', accent: '#F9A825', name: 'My Account', kind: 'myaccount' },
   { key: 'profile', icon: '👤', bg: '#E1F5FE', accent: '#0288D1', name: 'Profile', kind: 'profile' },
   { key: 'notepad', icon: '🗒️', bg: '#FFFDE7', accent: '#F9A825', name: 'Notepad', kind: 'notepad' },
-  { key: 'gamePoints', icon: '🎮', bg: '#E8EAF6', accent: '#5E35B1', name: 'Game Points', kind: 'gamePoints' },
-  { key: 'gamePointsGift', icon: '🎁', bg: '#FCE4EC', accent: '#D81B60', name: 'Gifts', kind: 'gamePointsGift' },
 ];
 
 const ICON_SETS = {
   classic: {},
-  modern: { recharge:'⚡', mobilebanking:'💳', internet:'🌐', remittance:'🌍', bus:'🚌', train:'🚆', flight:'✈️', fomema:'🩺', visa:'🪪', mydigital:'🛬', passport:'📕', marketplace:'🛍️', myDocuments:'🗂️', salary:'💵', esim:'📲', social:'📢', support:'🎧', history:'⏱️', chat:'💬', myAccount:'👛', profile:'👤', notepad:'📝', gamePoints:'🎮', gamePointsGift:'🎁', moreFeaturesTile:'✨' },
-  filled: { recharge:'🔋', mobilebanking:'💳', internet:'📶', remittance:'💰', bus:'🚍', train:'🚆', flight:'🛫', fomema:'🩺', visa:'🪪', mydigital:'🛬', passport:'📘', marketplace:'🛒', myDocuments:'📚', salary:'💵', esim:'📲', social:'📣', support:'🎧', history:'🕘', chat:'🗨️', myAccount:'💼', profile:'👤', notepad:'📒', gamePoints:'🎮', gamePointsGift:'🎁', moreFeaturesTile:'⭐' },
-  outline: { recharge:'▱', mobilebanking:'▢', internet:'◎', remittance:'◇', bus:'▭', train:'▤', flight:'△', fomema:'♡', visa:'□', mydigital:'⌁', passport:'▯', marketplace:'⌑', myDocuments:'▧', salary:'＄', esim:'⌁', social:'♢', support:'◉', history:'◷', chat:'◌', myAccount:'▣', profile:'○', notepad:'▤', gamePoints:'♢', gamePointsGift:'◇', moreFeaturesTile:'✧' },
-  playful: { recharge:'🔋', mobilebanking:'💳', internet:'🚀', remittance:'💸', bus:'🚌', train:'🚂', flight:'🛩️', fomema:'🩺', visa:'🛂', mydigital:'🛬', passport:'📗', marketplace:'🛍️', myDocuments:'📂', salary:'🤑', esim:'📱', social:'📢', support:'🎧', history:'⏰', chat:'💬', myAccount:'🧾', profile:'🙂', notepad:'📝', gamePoints:'🕹️', gamePointsGift:'🎀', moreFeaturesTile:'🌟' },
-  compact: { recharge:'▣', mobilebanking:'▤', internet:'◉', remittance:'↗', bus:'▰', train:'▰', flight:'➤', fomema:'✚', visa:'▢', mydigital:'↘', passport:'▯', marketplace:'▱', myDocuments:'▧', salary:'$', esim:'▥', social:'↗', support:'◉', history:'◷', chat:'◌', myAccount:'▣', profile:'○', notepad:'▤', gamePoints:'◆', gamePointsGift:'◇', moreFeaturesTile:'✦' },
+  modern: { recharge:'⚡', mobilebanking:'💳', internet:'🌐', remittance:'🌍', bus:'🚌', train:'🚆', flight:'✈️', fomema:'🩺', visa:'🪪', mydigital:'🛬', passport:'📕', marketplace:'🛍️', myDocuments:'🗂️', salary:'💵', esim:'📲', support:'🎧', history:'⏱️', myAccount:'👛', profile:'👤', notepad:'📝', moreFeaturesTile:'✨' },
+  filled: { recharge:'🔋', mobilebanking:'💳', internet:'📶', remittance:'💰', bus:'🚍', train:'🚆', flight:'🛫', fomema:'🩺', visa:'🪪', mydigital:'🛬', passport:'📘', marketplace:'🛒', myDocuments:'📚', salary:'💵', esim:'📲', support:'🎧', history:'🕘', myAccount:'💼', profile:'👤', notepad:'📒', moreFeaturesTile:'⭐' },
+  outline: { recharge:'▱', mobilebanking:'▢', internet:'◎', remittance:'◇', bus:'▭', train:'▤', flight:'△', fomema:'♡', visa:'□', mydigital:'⌁', passport:'▯', marketplace:'⌑', myDocuments:'▧', salary:'＄', esim:'⌁', support:'◉', history:'◷', myAccount:'▣', profile:'○', notepad:'▤', moreFeaturesTile:'✧' },
+  playful: { recharge:'🔋', mobilebanking:'💳', internet:'🚀', remittance:'💸', bus:'🚌', train:'🚂', flight:'🛩️', fomema:'🩺', visa:'🛂', mydigital:'🛬', passport:'📗', marketplace:'🛍️', myDocuments:'📂', salary:'🤑', esim:'📱', support:'🎧', history:'⏰', myAccount:'🧾', profile:'🙂', notepad:'📝', moreFeaturesTile:'🌟' },
+  compact: { recharge:'▣', mobilebanking:'▤', internet:'◉', remittance:'↗', bus:'▰', train:'▰', flight:'➤', fomema:'✚', visa:'▢', mydigital:'↘', passport:'▯', marketplace:'▱', myDocuments:'▧', salary:'$', esim:'▥', support:'◉', history:'◷', myAccount:'▣', profile:'○', notepad:'▤', moreFeaturesTile:'✦' },
 };
 
 // Exactly 12 home tiles: 11 requested services + More Features.
-// Use a percentage width based on the actual grid container, not the device
-// window. The previous fixed window-based width could overflow when the home
-// screen had its own horizontal padding and cause the fourth tile to wrap.
 const NUM_COLUMNS = 4;
 const GRID_PADDING = 10;
 const COLUMN_GAP = 6;
@@ -85,7 +82,7 @@ export function Tile({ s, onPress, disabled, index = 0 }) {
 export function useServiceAction() {
   const { startService, openWebView, openBusPicker, openMarketplace, openSalary, openMyDocuments, openNotepad, openAccommodation, openRoomSharing, openCommunity, openServiceProvidersHome, openChatHub, openSocialFeed, setScreen } = useApp();
   return (s) => {
-    if (s.kind === 'webview') return openWebView(s.key); if (s.kind === 'buspicker') return openBusPicker(); if (s.kind === 'marketplace') return openMarketplace(); if (s.kind === 'salary') return openSalary(); if (s.kind === 'documents') return openMyDocuments(); if (s.kind === 'notepad') return openNotepad(); if (s.kind === 'accommodation') return openAccommodation(); if (s.kind === 'roomsharing') return openRoomSharing(); if (s.kind === 'community') return openCommunity(); if (s.kind === 'social') return openSocialFeed(); if (s.kind === 'localservices') return openServiceProvidersHome(); if (s.kind === 'chathub') return openChatHub(); if (s.kind === 'moreFeaturesLink') return setScreen('moreFeatures'); if (s.kind === 'support') return setScreen('support'); if (s.kind === 'history') return setScreen('history'); if (s.kind === 'myaccount') return setScreen('myAccount'); if (s.kind === 'profile') return setScreen('profile'); if (s.kind === 'gamePoints') return setScreen('gamePoints'); if (s.kind === 'gamePointsGift') return setScreen('gamePointsGift'); return startService(s.key);
+    if (s.kind === 'webview') return openWebView(s.key); if (s.kind === 'buspicker') return openBusPicker(); if (s.kind === 'marketplace') return openMarketplace(); if (s.kind === 'salary') return openSalary(); if (s.kind === 'documents') return openMyDocuments(); if (s.kind === 'notepad') return openNotepad(); if (s.kind === 'accommodation') return openAccommodation(); if (s.kind === 'roomsharing') return openRoomSharing(); if (s.kind === 'community') return openCommunity(); if (s.kind === 'social') return openSocialFeed(); if (s.kind === 'localservices') return openServiceProvidersHome(); if (s.kind === 'chathub') return openChatHub(); if (s.kind === 'moreFeaturesLink') return setScreen('moreFeatures'); if (s.kind === 'support') return setScreen('support'); if (s.kind === 'history') return setScreen('history'); if (s.kind === 'myaccount') return setScreen('myAccount'); if (s.kind === 'profile') return setScreen('profile'); return startService(s.key);
   };
 }
 export { MORE_SERVICES };
