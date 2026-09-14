@@ -6,6 +6,7 @@ import { useTheme } from '../theme/ThemeContext';
 import BannerSlider from '../components/BannerSlider';
 import ServiceGrid from '../components/ServiceGrid';
 import HeaderDecor from '../components/HeaderDecor';
+import InfoBar from '../components/InfoBar';
 
 export default function CustomerHomeScreen() {
   const { colors, brandGradient } = useTheme();
@@ -22,7 +23,7 @@ export default function CustomerHomeScreen() {
         <View style={styles.logoArea}>
           <TouchableOpacity style={styles.menuBtn} onPress={openSidebar}><Text style={styles.menuIcon}>☰</Text></TouchableOpacity>
           <View style={styles.logoBox}><Image source={require('../../assets/icon.png')} style={styles.logoImage} resizeMode="cover" /></View>
-          <View><Text style={styles.brand}>MySheba Finance</Text><Text style={styles.tagline}>{name}</Text></View>
+          <View><Text style={styles.brand}>MySheba</Text><Text style={styles.tagline}>{name}</Text></View>
         </View>
         <View style={styles.headerRight}>
           <TouchableOpacity style={styles.bellBtn} onPress={() => setScreen('notifications')}>
@@ -48,6 +49,7 @@ export default function CustomerHomeScreen() {
           <View style={styles.kycCopy}><Text style={styles.kycTitle}>Identity verified</Text><Text style={styles.kycText}>Your account is ready for finance services.</Text></View>
         </View>}
 
+        <InfoBar />
         <BannerSlider />
         <ServiceGrid />
 
