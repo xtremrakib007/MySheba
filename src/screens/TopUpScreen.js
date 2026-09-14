@@ -24,15 +24,10 @@ function formatAmount(n) {
 }
 
 // Customer/Dealer > Top-Up: send money via bank transfer or bank deposit,
-// upload the receipt, and submit for Admin review. 1 RM sent = 1 point
-// credited once Admin approves the request (see AdminHomeScreen > Top-Ups
-// tab and topupService.approveTopup).
+// upload the receipt, and submit a request for Admin review. Approved funds
+// are credited directly to the user's MYR wallet balance.
 export default function TopUpScreen() {
-  const {
-    colors,
-    brandGradient
-  } = useTheme();
-
+  const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
   const { goHome, goBackOrHome, authUser, profile, paymentSettings } = useApp();
   const [amount, setAmount] = useState('');
@@ -47,13 +42,11 @@ export default function TopUpScreen() {
   const isBankMethod = method === 'transfer' || method === 'deposit';
 
   const pickReceipt = async () => {
-const result = await ImagePicker.launchImageLibraryAsync({
+    const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.7,
     });
-    if (!result.canceled && result.assets && result.assets[0]) {
-      setReceiptUri(result.assets[0].uri);
-    }
+    if (!result.canceled && result.assets && result.assets[0]) setReceiptUri(result.assets[0].uri);
   };
 
   const onSubmit = async () => {
@@ -82,7 +75,7 @@ const result = await ImagePicker.launchImageLibraryAsync({
       );
       showAlert(
         'Request Submitted',
-        'Your top-up request has been sent to Admin for review. Points will be credited once approved. You can check the status under History > Top-Ups.',
+        'Your top-up request has been sent to Admin for review. The approved amount will be added to your MYR wallet balance. You can check the status under History > Top-Ups.',
         [{ text: 'OK', onPress: goHome }]
       );
     } catch (err) {
@@ -94,31 +87,27 @@ const result = await ImagePicker.launchImageLibraryAsync({
 
   return (
     <View style={styles.screen}>
-      <LinearGradient colors={brandGradient } start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
+      <LinearGradient colors={brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
         <HeaderDecor />
         <TouchableOpacity style={styles.backBtn} onPress={goBackOrHome}>
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Top-Up Points</Text>
+        <Text style={styles.headerTitle}>Top-Up</Text>
       </LinearGradient>
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.balanceCard}>
           <Text style={styles.balanceLabel}>Current Balance</Text>
           <Text style={styles.balanceValue}>MYR {formatAmount(walletBalance)}</Text>
-          <Text style={styles.balanceHint}>1 RM = 1 point</Text>
         </View>
 
-        <FormLabel>Amount Sent (RM)</FormLabel>
+        <FormLabel>Amount (RM)</FormLabel>
         <FormInput
           placeholder="e.g. 100"
           keyboardType="decimal-pad"
           value={amount}
           onChangeText={setAmount}
         />
-        {amountNum > 0 && (
-          <Text style={styles.pointsPreview}>= {formatAmount(amountNum)} points on approval</Text>
-        )}
 
         <FormLabel style={{ marginTop: 6 }}>Payment Method</FormLabel>
         <View style={styles.methodRow}>
@@ -162,18 +151,10 @@ const result = await ImagePicker.launchImageLibraryAsync({
             )}
 
             <FormLabel>Bank Name</FormLabel>
-            <FormInput
-              placeholder="e.g. Maybank"
-              value={bankName}
-              onChangeText={setBankName}
-            />
+            <FormInput placeholder="e.g. Maybank" value={bankName} onChangeText={setBankName} />
 
             <FormLabel>Reference / Slip No. (optional)</FormLabel>
-            <FormInput
-              placeholder="Transaction reference number"
-              value={refNo}
-              onChangeText={setRefNo}
-            />
+            <FormInput placeholder="Transaction reference number" value={refNo} onChangeText={setRefNo} />
           </>
         )}
 
@@ -197,13 +178,8 @@ const result = await ImagePicker.launchImageLibraryAsync({
             <Text style={styles.payDetailsHint}>
               Pay this Biller ID/Reference from your bank's JomPay screen, then enter the transaction number below.
             </Text>
-
             <FormLabel style={{ marginTop: 10 }}>Your Transaction / Ref No.</FormLabel>
-            <FormInput
-              placeholder="From your bank's JomPay receipt"
-              value={refNo}
-              onChangeText={setRefNo}
-            />
+            <FormInput placeholder="From your bank's JomPay receipt" value={refNo} onChangeText={setRefNo} />
           </View>
         )}
 
@@ -215,13 +191,8 @@ const result = await ImagePicker.launchImageLibraryAsync({
             ) : (
               <Text style={styles.payDetailsHint}>QR code not set up yet - please choose another payment method.</Text>
             )}
-
             <FormLabel style={{ marginTop: 10 }}>Reference / Transaction No. (optional)</FormLabel>
-            <FormInput
-              placeholder="Transaction reference number"
-              value={refNo}
-              onChangeText={setRefNo}
-            />
+            <FormInput placeholder="Transaction reference number" value={refNo} onChangeText={setRefNo} />
           </View>
         )}
 
@@ -260,7 +231,7 @@ const result = await ImagePicker.launchImageLibraryAsync({
 function createStyles(colors) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg },
-    header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, backgroundColor: colors.primary , overflow: 'hidden' },
+    header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, backgroundColor: colors.primary, overflow: 'hidden' },
     backBtn: { padding: 4 },
     backText: { color: 'white', fontSize: 20 },
     headerTitle: { color: 'white', fontWeight: '600', fontSize: 16, marginLeft: 10 },
@@ -268,8 +239,6 @@ function createStyles(colors) {
     balanceCard: { backgroundColor: 'white', borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: 16, marginBottom: 18, alignItems: 'center' },
     balanceLabel: { fontSize: 11, color: '#999' },
     balanceValue: { fontSize: 24, fontWeight: '700', color: colors.primary, marginTop: 2 },
-    balanceHint: { fontSize: 11, color: '#999', marginTop: 4 },
-    pointsPreview: { fontSize: 12, color: colors.success, fontWeight: '600', marginTop: -4, marginBottom: 10 },
     methodRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 10 },
     methodOption: { flexBasis: '47%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: 'white' },
     methodOptionActive: { borderColor: colors.primary, backgroundColor: '#F0F7FF' },
