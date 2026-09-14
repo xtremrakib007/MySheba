@@ -117,6 +117,7 @@ export async function acceptTransaction(id) {
   const staffProfile = profileSnap.exists() ? profileSnap.data() : {};
   const staffRole = staffProfile.role || '';
   const staffName = staffProfile.fullName || staffProfile.name || staffProfile.displayName || staffProfile.phone || currentUser;
+  const isApprover = staffRole === 'admin' || staffRole === 'superadmin';
 
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(txRef);
@@ -125,13 +126,22 @@ export async function acceptTransaction(id) {
     if (order.status !== 'pending' || order.claimedBy) {
       throw new Error('This order was already accepted by another staff member.');
     }
-    tx.update(txRef, {
+    const patch = {
       status: 'processing',
       claimedBy: currentUser,
       claimedByRole: staffRole || null,
       claimedByName: staffName,
       updatedAt: serverTimestamp(),
-    });
+    };
+    // An admin/superadmin accepting an order is the approval event. Dealers
+    // and resellers remain the Operator when they later complete it.
+    if (isApprover) {
+      patch.approvedBy = currentUser;
+      patch.approvedByName = staffName;
+      patch.approvedByRole = staffRole;
+      patch.approvedAt = serverTimestamp();
+    }
+    tx.update(txRef, patch);
   });
 }
 
@@ -165,15 +175,21 @@ export async function completeTransaction(id, pin, receiptUrl) {
   const patch = {
     status: 'completed',
     pin: pin || '',
-    approvedBy: currentUser,
-    approvedByName: staffName,
-    approvedByRole: staffRole || null,
     completedBy: currentUser,
     completedByName: staffName,
     completedByRole: staffRole || null,
     completedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
+  // If an admin/superadmin completes directly, that user is also the
+  // approver. Otherwise preserve the existing admin/superadmin approval
+  // recorded when the order was accepted.
+  if (staffRole === 'admin' || staffRole === 'superadmin') {
+    patch.approvedBy = currentUser;
+    patch.approvedByName = staffName;
+    patch.approvedByRole = staffRole;
+    patch.approvedAt = serverTimestamp();
+  }
   if (receiptUrl) patch.receiptUrl = receiptUrl;
   await updateDoc(doc(db, COLLECTION, id), patch);
 }
