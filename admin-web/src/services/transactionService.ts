@@ -9,6 +9,7 @@
 import {
   collection,
   doc,
+  getDoc,
   onSnapshot,
   orderBy,
   query,
@@ -19,7 +20,7 @@ import {
   type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { db, functions } from '../firebase/config';
+import { db, functions, auth } from '../firebase/config';
 
 const COLLECTION = 'transactions';
 
@@ -62,8 +63,6 @@ function mapTx(d: QueryDocumentSnapshot<DocumentData>): Transaction {
   };
 }
 
-/** Live list of every transaction, newest first - admin/superadmin only
- * (firestore.rules' isAdmin() grants blanket read here). */
 export function subscribeTransactions(
   onUpdate: (txs: Transaction[]) => void,
   onError: (err: Error) => void
@@ -72,8 +71,27 @@ export function subscribeTransactions(
   return onSnapshot(q, (snap) => onUpdate(snap.docs.map(mapTx)), (err) => onError(err as Error));
 }
 
+async function getStaffActor() {
+  const uid = auth?.currentUser?.uid || '';
+  if (!uid) throw new Error('You must be signed in to perform this action.');
+  const profileSnap = await getDoc(doc(db, 'users', uid));
+  const profile = profileSnap.exists() ? profileSnap.data() : {};
+  return {
+    uid,
+    name: profile.fullName || profile.name || profile.displayName || profile.phone || uid,
+    role: profile.role || '',
+  };
+}
+
 export async function acceptTransaction(id: string): Promise<void> {
-  await updateDoc(doc(db, COLLECTION, id), { status: 'processing', updatedAt: serverTimestamp() });
+  const actor = await getStaffActor();
+  await updateDoc(doc(db, COLLECTION, id), {
+    status: 'processing',
+    claimedBy: actor.uid,
+    claimedByName: actor.name,
+    claimedByRole: actor.role || null,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 const REJECT_FNS: Record<string, string> = {
@@ -81,9 +99,6 @@ const REJECT_FNS: Record<string, string> = {
   Internet: 'rejectInternetPackageTransaction',
 };
 
-/** Recharge/Internet route through a Cloud Function so the customer's
- * points get refunded atomically with the reject - a plain client write
- * can't touch `rejected` for these two (frozen in firestore.rules). */
 export async function rejectTransaction(id: string, reason: string, service: string): Promise<void> {
   const fnName = REJECT_FNS[service];
   if (fnName) {
@@ -102,11 +117,20 @@ export async function rejectTransaction(id: string, reason: string, service: str
   });
 }
 
-/** Mobile Banking needs a 4-digit collection PIN, Remittance needs a
- * receipt URL, everything else completes plain - mirrors onCompleteTx's
- * three-way split in AdminHomeScreen.js exactly. */
 export async function completeTransaction(id: string, pin?: string, receiptUrl?: string): Promise<void> {
-  const patch: Record<string, unknown> = { status: 'completed', pin: pin || '', updatedAt: serverTimestamp() };
+  const actor = await getStaffActor();
+  const patch: Record<string, unknown> = {
+    status: 'completed',
+    pin: pin || '',
+    approvedBy: actor.uid,
+    approvedByName: actor.name,
+    approvedByRole: actor.role || null,
+    completedBy: actor.uid,
+    completedByName: actor.name,
+    completedByRole: actor.role || null,
+    completedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
   if (receiptUrl) patch.receiptUrl = receiptUrl;
   await updateDoc(doc(db, COLLECTION, id), patch);
 }
@@ -121,7 +145,6 @@ export interface DealerOption {
   phone: string;
 }
 
-/** Dealer/subdealer picker for "Appoint Dealer" on an unassigned order. */
 export function subscribeDealerOptions(
   onUpdate: (dealers: DealerOption[]) => void,
   onError: (err: Error) => void
