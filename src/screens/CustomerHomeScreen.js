@@ -2,46 +2,23 @@ import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
-import { radius } from '../theme/theme';
-import { useTheme } from "../theme/ThemeContext";
+import { useTheme } from '../theme/ThemeContext';
 import { useLanguage } from '../i18n/LanguageContext';
-import InfoBar from '../components/InfoBar';
 import BannerSlider from '../components/BannerSlider';
 import ServiceGrid from '../components/ServiceGrid';
 import HeaderDecor from '../components/HeaderDecor';
-import SmartAd from '../components/SmartAd';
-import AdMobBanner from '../components/AdMobBanner';
-import SocialHomeScreen from './SocialHomeScreen';
-import { getHomepageModules } from '../firebase/homepageConfigService';
 
-// Next Update PRD §2 - Country/Region-Based Homepage. "Malaysia should
-// continue using the existing service-first homepage" - this file is that
-// existing homepage, completely unchanged below, except for the one branch
-// at the top: any account whose resolved country/region maps to the
-// 'social' layout (every country other than Malaysia, unless a superadmin
-// has changed it - see homepageConfigService.js) renders SocialHomeScreen
-// instead. An account with no `country` set yet (every pre-existing
-// account) resolves to Malaysia's config, so this branch is a no-op for
-// everyone until they visit Profile > Country/Region - existing behavior
-// for existing users is byte-for-byte the same as before this feature.
 export default function CustomerHomeScreen() {
-  const {
-    colors,
-    brandGradient
-  } = useTheme();
-
-  const styles = createStyles(colors);
+  const { colors, brandGradient } = useTheme();
   const { t } = useLanguage();
-  const { logout, openSidebar, setScreen, hasUnreadNotifications, profile, homepageConfig } = useApp();
-
-  const modules = getHomepageModules(homepageConfig, profile?.country);
-  if (modules.layout === 'social') {
-    return <SocialHomeScreen />;
-  }
+  const { logout, openSidebar, setScreen, hasUnreadNotifications, profile } = useApp();
+  const styles = createStyles(colors);
+  const balance = profile?.balance ?? profile?.walletBalance ?? profile?.wallet?.balance ?? 0;
+  const name = profile?.displayName || profile?.name || 'Welcome back';
 
   return (
     <View style={styles.screen}>
-      <LinearGradient colors={brandGradient } start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
+      <LinearGradient colors={brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
         <HeaderDecor />
         <View style={styles.logoArea}>
           <TouchableOpacity style={styles.menuBtn} onPress={openSidebar}>
@@ -51,8 +28,8 @@ export default function CustomerHomeScreen() {
             <Image source={require('../../assets/icon.png')} style={styles.logoImage} resizeMode="cover" />
           </View>
           <View>
-            <Text style={styles.brand}>MySheba</Text>
-            <Text style={styles.tagline}>{t('login.welcomeBack')}</Text>
+            <Text style={styles.brand}>MySheba Finance</Text>
+            <Text style={styles.tagline}>{name}</Text>
           </View>
         </View>
         <View style={styles.headerRight}>
@@ -60,20 +37,41 @@ export default function CustomerHomeScreen() {
             <Text style={styles.bell}>🔔</Text>
             {hasUnreadNotifications && <View style={styles.bellDot} />}
           </TouchableOpacity>
-          <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
-            <Text style={styles.logoutText}>{t('settings.logout')}</Text>
-          </TouchableOpacity>
         </View>
       </LinearGradient>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
-        <InfoBar />
-        <AdMobBanner feature="home" />
-        <SmartAd placement="HOME_TOP" feature="home" height={140} />
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.walletCard}>
+          <View>
+            <Text style={styles.walletCaption}>Available Balance</Text>
+            <Text style={styles.walletBalance}>RM {Number(balance || 0).toFixed(2)}</Text>
+          </View>
+          <TouchableOpacity style={styles.topUpButton} onPress={() => setScreen('topup')}>
+            <Text style={styles.topUpText}>+ Top Up</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.kycCard}>
+          <View style={styles.kycIcon}><Text>✓</Text></View>
+          <View style={styles.kycCopy}>
+            <Text style={styles.kycTitle}>Complete your KYC</Text>
+            <Text style={styles.kycText}>Verify your identity to unlock all finance services.</Text>
+          </View>
+          <TouchableOpacity onPress={() => setScreen('profile')}>
+            <Text style={styles.kycAction}>Verify</Text>
+          </TouchableOpacity>
+        </View>
+
         <BannerSlider />
-        <SmartAd placement="HOME_MIDDLE" feature="home" height={140} />
         <ServiceGrid />
-        <SmartAd placement="HOME_BOTTOM" feature="home" height={140} />
+
+        <TouchableOpacity style={styles.quickHistory} onPress={() => setScreen('history')}>
+          <View>
+            <Text style={styles.quickTitle}>Recent transactions</Text>
+            <Text style={styles.quickText}>View your complete payment history</Text>
+          </View>
+          <Text style={styles.quickArrow}>›</Text>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -82,19 +80,33 @@ export default function CustomerHomeScreen() {
 function createStyles(colors) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg },
-    header: { backgroundColor: colors.primary, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' , overflow: 'hidden' },
-    logoArea: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    menuBtn: { padding: 4, marginRight: 2 },
-    menuIcon: { color: 'white', fontSize: 20 },
-    logoBox: { width: 34, height: 34, backgroundColor: 'white', borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', marginRight: 10, overflow: 'hidden' },
+    header: { paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', overflow: 'hidden' },
+    logoArea: { flexDirection: 'row', alignItems: 'center' },
+    menuBtn: { padding: 4, marginRight: 10 },
+    menuIcon: { color: 'white', fontSize: 21 },
+    logoBox: { width: 38, height: 38, backgroundColor: 'white', borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 10, overflow: 'hidden' },
     logoImage: { width: '100%', height: '100%' },
-    brand: { color: 'white', fontWeight: '600' },
-    tagline: { color: 'white', fontSize: 10, opacity: 0.8 },
-    headerRight: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-    bellBtn: { padding: 4, marginRight: 2 },
-    bell: { color: 'white', fontSize: 16 },
-    bellDot: { position: 'absolute', top: 2, right: 2, width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF5252', borderWidth: 1, borderColor: colors.primary },
-    logoutBtn: { backgroundColor: 'rgba(255,255,255,0.2)', paddingVertical: 4, paddingHorizontal: 10, borderRadius: radius.md },
-    logoutText: { color: 'white', fontSize: 11 },
+    brand: { color: 'white', fontWeight: '800', fontSize: 16 },
+    tagline: { color: 'white', fontSize: 11, opacity: 0.85, marginTop: 2 },
+    headerRight: { flexDirection: 'row', alignItems: 'center' },
+    bellBtn: { padding: 6 },
+    bell: { fontSize: 19 },
+    bellDot: { position: 'absolute', top: 3, right: 3, width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF5252', borderWidth: 1, borderColor: colors.primary },
+    content: { padding: 14, paddingBottom: 28 },
+    walletCard: { borderRadius: 20, padding: 20, marginBottom: 12, backgroundColor: colors.primary, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', elevation: 4 },
+    walletCaption: { color: 'white', opacity: 0.8, fontSize: 12, marginBottom: 5 },
+    walletBalance: { color: 'white', fontSize: 28, fontWeight: '800' },
+    topUpButton: { backgroundColor: 'white', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 12 },
+    topUpText: { color: colors.primary, fontWeight: '800', fontSize: 12 },
+    kycCard: { backgroundColor: colors.card, borderRadius: 16, padding: 13, marginBottom: 12, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.border },
+    kycIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E8F5E9', marginRight: 10 },
+    kycCopy: { flex: 1 },
+    kycTitle: { color: colors.text, fontWeight: '800', fontSize: 13 },
+    kycText: { color: colors.muted || '#6B7280', fontSize: 10, marginTop: 2 },
+    kycAction: { color: colors.primary, fontWeight: '800', fontSize: 12, paddingLeft: 8 },
+    quickHistory: { backgroundColor: colors.card, borderRadius: 16, padding: 15, marginTop: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: colors.border },
+    quickTitle: { color: colors.text, fontWeight: '800', fontSize: 13 },
+    quickText: { color: colors.muted || '#6B7280', fontSize: 10, marginTop: 3 },
+    quickArrow: { color: colors.primary, fontSize: 28, lineHeight: 28 },
   });
 }
