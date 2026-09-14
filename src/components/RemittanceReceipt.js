@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as Print from 'expo-print';
 import { countries } from '../data/countries';
 import { useTheme } from '../theme/ThemeContext';
@@ -9,276 +9,48 @@ const COMPANY_ADDRESS = 'Address: To be set';
 const POWERED_BY = 'Powered by OTR';
 const LOGO_URL = 'https://mysheba.top/assets/images/logo.png';
 
-function esc(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+function esc(value) { return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&#039;'); }
+function val(v) { return v == null || v === '' ? '-' : String(v); }
+function money(v, currency = 'MYR') { const n = Number(v); return `${Number.isFinite(n) ? n.toFixed(2) : '0.00'} [${currency}]`; }
+function countryName(code) { return countries.find((x) => x.code === code)?.name || code || ''; }
+function formatDate(value) { if (!value) return '-'; try { const d = value?.toDate ? value.toDate() : new Date(value); return Number.isNaN(d.getTime()) ? val(value) : d.toLocaleString(); } catch (_) { return val(value); } }
+
+export function buildReceiptHtml(tx = {}, profile = {}, operator = '') {
+  const raw = tx.raw || tx.serviceData || {};
+  const country = countryName(raw.country || tx.country);
+  const receiveCurrency = raw.currency || raw.receiveCurrency || raw.curr || tx.receiveCurrency || '';
+  const sendAmt = raw.sendAmt ?? tx.amount ?? 0;
+  const fee = raw.transferFee ?? tx.transferFee ?? tx.fee ?? 0;
+  const total = raw.total ?? tx.total ?? (Number(sendAmt) + Number(fee));
+  const rate = raw.receivingRate ?? tx.receivingRate ?? tx.exchangeRate ?? '';
+  const receiveAmt = raw.receiveAmount ?? tx.receiveAmount ?? (Number(sendAmt) * Number(rate || 0));
+  const method = raw.method === 'deposit' ? 'BANK DEPOSIT' : raw.method === 'cash' ? 'CASH PICKUP' : raw.method === 'ewallet' ? 'EWALLET' : val(raw.method || tx.method);
+  const receiverName = `${raw.receiverFirstName || ''} ${raw.receiverLastName || ''}`.trim();
+  const senderName = raw.senderName || tx.senderName || profile.name || '';
+  const receiptNo = tx.id || tx.txId || tx.reference || raw.reference || '';
+  const created = formatDate(tx.createdAt || tx.updatedAt || raw.createdAt);
+  const operatorName = operator || tx.operatorName || tx.operator || '';
+  const senderPassport = raw.senderPassportNo || tx.senderPassportNo || '';
+  const senderRows = [
+    ['Senders Name', senderName], ['Cust ID', profile.customerId || profile.custId || tx.customerId || ''], ['PASSPORT', senderPassport], ['Place of Issue', raw.senderPassportIssuePlace || raw.passportPlaceOfIssue || raw.nationality || ''], ['Expire Date', raw.senderPassportExpiry || ''], ['Issue Date', raw.senderPassportIssueDate || ''], ['Skilled labor', raw.skill || raw.skilledLabor || ''], ['Address', raw.senderAddress || ''], ['Mobile No.', raw.senderPhone || tx.senderPhone || profile.phone || ''], ['Date of Birth', raw.senderDob || raw.dateOfBirth || ''], ['Name of Employer', raw.employerName || raw.employer || ''], ['Gender', raw.gender || ''], ['Occupation', raw.occupation || ''], ['Source of funds', raw.sourceOfFunds || raw.sourceFunds || ''], ['Nationality', raw.nationality || ''], ['Purpose', raw.purpose || ''], ['Relation', raw.receiverRelationship || ''],
+  ];
+  const receiverRows = [
+    ['Payout Country', `${country}${country && method ? ' - ' : ''}${method}`], ['Mobile No', raw.receiverPhone || tx.receiverPhone || ''], ["Receiver's Name", receiverName || tx.receiverName || ''], ['Address', raw.receiverAddress || raw.receiverCountry || country], ['Bank Name', raw.receiverBankName || ''], ['Branch', raw.receiverBranch || ''], ['Place of Issue', raw.receiverPlaceOfIssue || country], ['Bank Account No', raw.receiverAccountNumber || ''], ['Pickup Network', raw.receiverPickupNetwork || ''], ['Pickup City', raw.receiverPickupCity || ''], ['Receiver ID', raw.receiverIdType ? `${raw.receiverIdType} - ${raw.receiverIdNumber || ''}` : ''], ['Wallet Provider', raw.receiverWalletProvider || ''], ['Wallet Number', raw.receiverWalletNumber || ''], ['Routing Number', raw.receiverRoutingNumber || ''],
+  ].filter(([, v]) => v !== '');
+  const htmlRows = (rows) => rows.map(([label, value]) => `<tr><td class="label">${esc(label)}</td><td>${esc(val(value))}</td></tr>`).join('');
+  return `<!doctype html><html><head><meta charset="utf-8"/><style>@page{size:A4;margin:10mm}body{font-family:Arial,sans-serif;color:#111;font-size:10px;margin:0}.receipt{border:1px solid #111;padding:8px}.header{display:flex;align-items:center;border-bottom:1px solid #111;padding-bottom:7px}.logo{width:125px;max-height:48px;object-fit:contain}.company{flex:1;text-align:center}.company b{font-size:15px}.copy{text-align:right;font-size:11px}.copy b{color:#b22222;text-decoration:underline}.grid{display:grid;grid-template-columns:1fr 250px;gap:10px}.box{border:1px solid #111;margin-top:7px}.box h3{font-size:11px;margin:0;padding:5px;border-bottom:1px solid #111}.box table{width:100%;border-collapse:collapse}.box td{padding:3px 4px;vertical-align:top}.label{font-weight:bold;width:19%}.side .cell{border-bottom:1px solid #555;padding:6px}.side .big{font-size:18px;font-weight:bold}.side b{font-size:11px}.terms{border:1px solid #111;margin-top:8px;padding:6px;font-size:8px}.sign{display:flex;justify-content:space-between;padding:10px 4px 3px;font-size:12px;font-weight:bold}.powered{text-align:right;font-size:8px;margin-top:5px}</style></head><body><div class="receipt"><div class="header"><img class="logo" src="${esc(LOGO_URL)}"/><div class="company"><b>MySheba</b><br/><b>${esc(COMPANY_NAME)}</b><br/>${esc(COMPANY_ADDRESS)}</div><div class="copy"><b>Customer Copy</b><br/>To Send Form</div></div><div class="grid"><div><div class="box"><h3>SENDER INFORMATION</h3><table>${htmlRows(senderRows)}</table></div><div class="box"><h3>RECEIVER INFORMATION</h3><table>${htmlRows(receiverRows)}</table></div></div><div class="side box"><div class="cell">GST Registration ID: ${esc(val(tx.gstRegistrationId || raw.gstRegistrationId || ''))}</div><div class="cell"><b>PINNO</b><br/><span class="big">${esc(val(tx.pinNo || tx.reference || receiptNo))}</span></div><div class="cell"><b>Approved By:${esc(val(tx.approvedBy || operatorName))}</b><br/>${esc(created)}</div><div class="cell"><b>Collected Amount</b><br/>${esc(money(total,'MYR'))}</div><div class="cell"><b>Service Charge</b><br/>${esc(money(fee,'MYR'))}</div><div class="cell"><b>GST:</b><br/>${esc(money(tx.gst || raw.gst || 0,'MYR'))}</div><div class="cell"><b>Transfer Amount</b><br/>${esc(money(sendAmt,'MYR'))}</div><div class="cell">1 MYR = ${esc(val(rate))} [${esc(receiveCurrency)}]</div><div class="cell"><b>Receive Amount</b><br/><span class="big">${esc(money(receiveAmt,receiveCurrency || ''))}</span></div><div class="cell">Serial: ${esc(val(tx.serial || tx.serialNo || receiptNo))}</div><div class="cell">${esc(val(raw.receiverBankName || raw.receiverPickupNetwork || raw.receiverWalletProvider || method))}</div></div></div><div class="terms">THE TERMS AND CONDITIONS GOVERNING THE MONEY TRANSFER SERVICE ARE DISPLAYED AT ${esc(COMPANY_NAME)}. BY SIGNING THIS FORM YOU ARE AGREEING TO THOSE TERMS AND CONDITIONS.</div><div class="sign"><span>Customer's Signature __________________________</span><span>Operator :(${esc(val(operatorName))}) __________________________</span></div><div class="powered">${esc(POWERED_BY)}</div></div></body></html>`;
 }
 
-function value(value, fallback = '—') {
-  return value === undefined || value === null || value === '' ? fallback : String(value);
+export default function RemittanceReceipt({ transaction = {}, profile = {}, operator = '', onClose }) {
+  const { colors } = useTheme(); const [printing, setPrinting] = useState(false);
+  const html = useMemo(() => buildReceiptHtml(transaction, profile, operator), [transaction, profile, operator]);
+  const printReceipt = async () => { setPrinting(true); try { await Print.printAsync({ html }); } finally { setPrinting(false); } };
+  const raw = transaction.raw || {};
+  const receiverName = `${raw.receiverFirstName || ''} ${raw.receiverLastName || ''}`.trim();
+  const rowsSender = [['Senders Name', raw.senderName || transaction.senderName || profile.name], ['Cust ID', profile.customerId || transaction.customerId], ['PASSPORT', raw.senderPassportNo], ['Expire Date', raw.senderPassportExpiry], ['Issue Date', raw.senderPassportIssueDate], ['Address', raw.senderAddress], ['Mobile No.', raw.senderPhone || profile.phone], ['Date of Birth', raw.senderDob], ['Name of Employer', raw.employerName], ['Gender', raw.gender], ['Occupation', raw.occupation], ['Source of funds', raw.sourceOfFunds], ['Nationality', raw.nationality], ['Purpose', raw.purpose], ['Relation', raw.receiverRelationship]];
+  const rowsReceiver = [['Payout Country', countryName(raw.country || transaction.country)], ['Receiver Name', receiverName], ['Mobile No', raw.receiverPhone], ['Bank Name', raw.receiverBankName], ['Branch', raw.receiverBranch], ['Bank Account No', raw.receiverAccountNumber], ['Routing Number', raw.receiverRoutingNumber], ['Pickup Network', raw.receiverPickupNetwork], ['Pickup City', raw.receiverPickupCity], ['Wallet Provider', raw.receiverWalletProvider], ['Wallet Number', raw.receiverWalletNumber]];
+  return <View style={[styles.container,{backgroundColor:colors.background}]}><ScrollView contentContainerStyle={styles.content}><View style={styles.preview}><Text style={styles.brand}>MySheba</Text><Text style={styles.company}>{COMPANY_NAME}</Text><Text style={styles.address}>{COMPANY_ADDRESS}</Text><Text style={styles.copy}>Customer Copy</Text><Section title="SENDER INFORMATION" rows={rowsSender}/><Section title="RECEIVER INFORMATION" rows={rowsReceiver}/><View style={styles.sidePreview}><Row label="GST Registration ID" value={transaction.gstRegistrationId || raw.gstRegistrationId}/><Row label="PINNO" value={transaction.pinNo || transaction.reference || transaction.id}/><Row label="Approved By" value={transaction.approvedBy || operator}/><Row label="Collected Amount" value={money(transaction.total ?? transaction.amount ?? 0,'MYR')}/><Row label="Service Charge" value={money(raw.transferFee ?? transaction.fee ?? 0,'MYR')}/><Row label="GST" value={money(transaction.gst || raw.gst || 0,'MYR')}/><Row label="Transfer Amount" value={money(raw.sendAmt ?? transaction.amount ?? 0,'MYR')}/><Row label="Exchange Rate" value={raw.receivingRate || transaction.exchangeRate}/><Row label="Receive Amount" value={money(raw.receiveAmount || transaction.receiveAmount || ((raw.sendAmt || transaction.amount || 0)*(raw.receivingRate || transaction.exchangeRate || 0)),raw.currency || transaction.receiveCurrency || '')}/><Row label="Serial" value={transaction.serial || transaction.id}/><Row label="Payout" value={raw.receiverBankName || raw.receiverPickupNetwork || raw.receiverWalletProvider || raw.method}/></View><Text style={styles.terms}>THE TERMS AND CONDITIONS GOVERNING THE MONEY TRANSFER SERVICE ARE DISPLAYED AT {COMPANY_NAME}. BY SIGNING THIS FORM YOU ARE AGREEING TO THOSE TERMS AND CONDITIONS.</Text><View style={styles.sign}><Text>Customer's Signature __________________</Text><Text>Operator :({operator || '-'}) __________________</Text></View><Text style={styles.powered}>{POWERED_BY}</Text></View><TouchableOpacity style={styles.button} onPress={printReceipt} disabled={printing}>{printing?<ActivityIndicator color="#fff"/>:<Text style={styles.buttonText}>Print / Save Receipt PDF</Text>}</TouchableOpacity>{onClose&&<TouchableOpacity onPress={onClose}><Text style={styles.close}>Close</Text></TouchableOpacity>}</ScrollView></View>;
 }
-
-function money(number, currency = 'MYR') {
-  const n = Number(number || 0);
-  return `${n.toFixed(2)} [${currency}]`;
-}
-
-function dateText(createdAt) {
-  if (!createdAt) return '—';
-  try {
-    return new Date(createdAt).toLocaleString(undefined, {
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit',
-    });
-  } catch (_) {
-    return '—';
-  }
-}
-
-function Field({ label, fieldValue, large = false }) {
-  const { colors } = useTheme();
-  return (
-    <View style={styles.field}>
-      <Text style={[styles.fieldLabel, { color: colors.text }]}>{label}</Text>
-      <Text style={[styles.fieldValue, large && styles.largeValue]}>{value(fieldValue)}</Text>
-    </View>
-  );
-}
-
-function Section({ title, children }) {
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {children}
-    </View>
-  );
-}
-
-function SideBox({ label, fieldValue, emphasis = false }) {
-  return (
-    <View style={styles.sideBox}>
-      <Text style={styles.sideLabel}>{label}</Text>
-      <Text style={[styles.sideValue, emphasis && styles.sideEmphasis]}>{value(fieldValue)}</Text>
-    </View>
-  );
-}
-
-export function buildRemittanceReceiptHtml(serviceData = {}, meta = {}) {
-  const country = countries.find((c) => c.code === serviceData.country);
-  const destination = country?.name || value(serviceData.country);
-  const curr = country?.curr || serviceData.currency || '';
-  const sendAmt = Number(serviceData.sendAmt || 0);
-  const fee = Number(serviceData.transferFee || 0);
-  const total = sendAmt + fee;
-  const rate = Number(serviceData.receivingRate || 0);
-  const receive = sendAmt * rate;
-  const receiverName = `${serviceData.receiverFirstName || ''} ${serviceData.receiverLastName || ''}`.trim();
-  const method = ({ deposit: 'BANK DEPOSIT', cash: 'CASH PICKUP', ewallet: 'E-WALLET' })[serviceData.method] || value(serviceData.method);
-  const payment = ({ ewallet: 'eWallet', fpx: 'FPX', debit: 'Debit Card', cash: 'Pay in Cash' })[serviceData.paymentMethod] || value(serviceData.paymentMethod);
-  const gst = serviceData.gstAmount ?? serviceData.gst ?? '';
-  const approvedBy = serviceData.approvedBy || meta.approvedBy || '';
-  const operator = serviceData.operator || meta.operator || '';
-  const serial = serviceData.serial || meta.serial || meta.txId || '';
-
-  const row = (label, val, cls = '') => `<div class="row ${cls}"><span class="label">${esc(label)}</span><span class="val">${esc(value(val))}</span></div>`;
-
-  return `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <style>
-    *{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:18px;background:#fff;color:#111;font-size:10px}
-    .paper{border:1.5px solid #111;padding:9px;max-width:760px;margin:auto}.header{display:flex;align-items:flex-start;gap:12px;border-bottom:1px solid #111;padding-bottom:6px}
-    .logo{width:92px;height:44px;object-fit:contain}.brand{flex:1}.brand h1{font-size:15px;margin:1px 0 2px}.brand p{margin:0;font-size:9px}.copy{width:125px}.copy b{font-size:13px;text-decoration:underline}.copy span{display:block;font-size:12px;margin-top:4px}
-    .columns{display:grid;grid-template-columns:1fr 190px;gap:10px;margin-top:8px}.section{border:1px solid #111;margin-bottom:9px}.section-title{font-weight:700;padding:5px;background:#f7f7f7;border-bottom:1px solid #111;font-size:11px}.section-body{padding:5px}.grid3{display:grid;grid-template-columns:1fr 1fr 1fr}.cell{padding:3px 4px;min-height:27px}.cell .label{font-weight:700;display:inline-block;margin-right:5px}.cell .val{display:inline}.side{border:1px solid #111}.side .row{border-bottom:1px solid #555;padding:6px 6px}.side .row:last-child{border-bottom:0}.side .label{font-weight:700;display:block;margin-bottom:2px}.side .val{font-size:11px}.side .big .val{font-size:16px;font-weight:700}.terms{border:1px solid #111;padding:6px;font-size:8px;line-height:1.35}.sign{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;border:1px solid #111;border-top:0;padding:9px 6px 4px;font-weight:700;font-size:11px}.line{border-top:1px dotted #111;margin-top:17px}.powered{text-align:right;font-size:8px;margin-top:5px;color:#555}
-    @media print{body{padding:0}.paper{border:1px solid #111}}
-  </style></head><body><div class="paper">
-    <div class="header"><img class="logo" src="${LOGO_URL}"/><div class="brand"><h1>MySheba — ${esc(COMPANY_NAME)}</h1><p>${esc(COMPANY_ADDRESS)}</p></div><div class="copy"><b>Customer Copy</b><span>To Send Form</span></div></div>
-    <div class="columns"><div>
-      <div class="section"><div class="section-title">SENDER INFORMATION</div><div class="section-body"><div class="grid3">
-        <div class="cell">${row('Senders Name', serviceData.senderName)}</div><div class="cell">${row('Cust ID', serviceData.customerId || meta.customerId)}</div><div class="cell">${row('PASSPORT', serviceData.senderPassportNo)}</div>
-        <div class="cell">${row('Place of Issue', serviceData.senderPassportPlaceOfIssue || serviceData.passportPlaceOfIssue)}</div><div class="cell">${row('Expire Date', serviceData.senderPassportExpiry)}</div><div class="cell">${row('Issue Date', serviceData.senderPassportIssueDate)}</div>
-        <div class="cell">${row('Address', serviceData.senderAddress)}</div><div class="cell">${row('Mobile No.', serviceData.senderPhone)}</div><div class="cell">${row('Date of Birth', serviceData.senderDateOfBirth)}</div>
-        <div class="cell">${row('Name of Employer', serviceData.senderEmployer || serviceData.senderCompany)}</div><div class="cell">${row('Gender', serviceData.senderGender)}</div><div class="cell">${row('Occupation', serviceData.senderOccupation)}</div>
-        <div class="cell">${row('Source of funds', serviceData.senderSourceOfFunds)}</div><div class="cell">${row('Nationality', serviceData.senderNationality)}</div><div class="cell">${row('Purpose', serviceData.senderPurpose)}</div>
-        <div class="cell">${row('Relation', serviceData.receiverRelationship)}</div><div class="cell">${row('Passport Photo', serviceData.passportUrl ? 'Attached' : '')}</div><div class="cell">${row('Status', meta.status || 'PROCESSING')}</div>
-      </div></div></div>
-      <div class="section"><div class="section-title">RECEIVER INFORMATION</div><div class="section-body"><div class="grid3">
-        <div class="cell">${row('Payout Country', `${destination} - ${method}`)}</div><div class="cell">${row('Mobile No', serviceData.receiverPhone)}</div><div class="cell">${row("Receiver's Name", receiverName)}</div>
-        <div class="cell">${row('Address', serviceData.receiverAddress)}</div><div class="cell">${row('Bank Name', serviceData.receiverBankName || serviceData.receiverWalletProvider)}</div><div class="cell">${row('Branch', serviceData.receiverBranch)}</div>
-        <div class="cell">${row('Bank Account No', serviceData.receiverAccountNumber || serviceData.receiverWalletNumber)}</div><div class="cell">${row('Routing No.', serviceData.receiverRoutingNumber)}</div><div class="cell">${row('Place of Issue', serviceData.receiverPlaceOfIssue)}</div>
-        <div class="cell">${row('ID Type', serviceData.receiverIdType)}</div><div class="cell">${row('ID Number', serviceData.receiverIdNumber)}</div><div class="cell">${row('Pickup City', serviceData.receiverPickupCity)}</div>
-      </div></div></div>
-    </div><div class="side">
-      ${row('GST Registration ID', serviceData.gstRegistrationId || meta.gstRegistrationId)}
-      ${row('PINNO / REF', meta.txId)}
-      ${row('Approved By', approvedBy)}
-      ${row('Date / Time', dateText(meta.createdAt))}
-      ${row('Collected Amount', money(total, 'MYR'))}
-      ${row('Service Charge', money(fee, 'MYR'))}
-      ${row('GST', gst === '' ? '' : money(gst, 'MYR'))}
-      ${row('Transfer Amount', money(sendAmt, 'MYR'), 'big')}
-      ${row(`1 MYR =`, `${rate || '—'} [${curr || '—'}]`)}
-      ${row('Receive Amount', money(receive, curr || 'BDT'), 'big')}
-      ${row('Serial', serial)}
-      ${row('Payout / Payment', `${method} / ${payment}`)}
-    </div></div>
-    <div class="terms">THE TERMS AND CONDITIONS GOVERNING THE MONEY TRANSFER SERVICE ARE DISPLAYED AT MySheba / SatuLink Solutions Sdn Bhd. BY SIGNING THIS FORM YOU ARE AGREEING TO THOSE TERMS AND CONDITIONS.</div>
-    <div class="sign"><div>Customer's Signature<div class="line"></div></div><div>Operator: ${esc(value(operator))}<div class="line"></div></div><div>Customer Copy<div class="line"></div></div></div>
-    <div class="powered">${esc(POWERED_BY)}</div>
-  </div></body></html>`;
-}
-
-export default function RemittanceReceipt({ serviceData = {}, txId = '', createdAt = null, status = 'PROCESSING', onClose }) {
-  const { colors } = useTheme();
-  const [printing, setPrinting] = useState(false);
-  const country = countries.find((c) => c.code === serviceData.country);
-  const destination = country?.name || value(serviceData.country);
-  const curr = country?.curr || serviceData.currency || '—';
-  const sendAmt = Number(serviceData.sendAmt || 0);
-  const fee = Number(serviceData.transferFee || 0);
-  const total = sendAmt + fee;
-  const rate = Number(serviceData.receivingRate || 0);
-  const receive = sendAmt * rate;
-  const receiverName = `${serviceData.receiverFirstName || ''} ${serviceData.receiverLastName || ''}`.trim();
-  const methodLabel = ({ deposit: 'Bank Deposit', cash: 'Cash Pickup', ewallet: 'E-Wallet' })[serviceData.method] || value(serviceData.method);
-  const paymentLabel = ({ ewallet: 'eWallet', fpx: 'FPX', debit: 'Debit Card', cash: 'Pay in Cash' })[serviceData.paymentMethod] || value(serviceData.paymentMethod);
-  const date = useMemo(() => dateText(createdAt), [createdAt]);
-
-  const printReceipt = async () => {
-    setPrinting(true);
-    try {
-      const html = buildRemittanceReceiptHtml(serviceData, { txId, createdAt, status });
-      await Print.printAsync({ html });
-    } finally {
-      setPrinting(false);
-    }
-  };
-
-  return (
-    <View style={styles.wrap}>
-      <ScrollView style={styles.paper} contentContainerStyle={styles.paperContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Image source={{ uri: LOGO_URL }} style={styles.logo} resizeMode="contain" />
-          <View style={styles.brand}>
-            <Text style={styles.company}>{COMPANY_NAME}</Text>
-            <Text style={styles.address}>{COMPANY_ADDRESS}</Text>
-          </View>
-          <View style={styles.copy}><Text style={styles.copyTitle}>Customer Copy</Text><Text style={styles.copySub}>To Send Form</Text></View>
-        </View>
-
-        <View style={styles.columns}>
-          <View style={styles.main}>
-            <Section title="SENDER INFORMATION">
-              <View style={styles.grid}>
-                <Field label="Senders Name" fieldValue={serviceData.senderName} />
-                <Field label="Cust ID" fieldValue={serviceData.customerId} />
-                <Field label="PASSPORT" fieldValue={serviceData.senderPassportNo} />
-                <Field label="Place of Issue" fieldValue={serviceData.senderPassportPlaceOfIssue || serviceData.passportPlaceOfIssue} />
-                <Field label="Expire Date" fieldValue={serviceData.senderPassportExpiry} />
-                <Field label="Issue Date" fieldValue={serviceData.senderPassportIssueDate} />
-                <Field label="Address" fieldValue={serviceData.senderAddress} />
-                <Field label="Mobile No." fieldValue={serviceData.senderPhone} />
-                <Field label="Date of Birth" fieldValue={serviceData.senderDateOfBirth} />
-                <Field label="Name of Employer" fieldValue={serviceData.senderEmployer || serviceData.senderCompany} />
-                <Field label="Gender" fieldValue={serviceData.senderGender} />
-                <Field label="Occupation" fieldValue={serviceData.senderOccupation} />
-                <Field label="Source of funds" fieldValue={serviceData.senderSourceOfFunds} />
-                <Field label="Nationality" fieldValue={serviceData.senderNationality} />
-                <Field label="Purpose" fieldValue={serviceData.senderPurpose} />
-                <Field label="Relation" fieldValue={serviceData.receiverRelationship} />
-              </View>
-            </Section>
-
-            <Section title="RECEIVER INFORMATION">
-              <View style={styles.grid}>
-                <Field label="Payout Country" fieldValue={`${destination} - ${methodLabel}`} />
-                <Field label="Mobile No" fieldValue={serviceData.receiverPhone} />
-                <Field label="Receiver's Name" fieldValue={receiverName} />
-                <Field label="Address" fieldValue={serviceData.receiverAddress} />
-                <Field label="Bank Name" fieldValue={serviceData.receiverBankName || serviceData.receiverWalletProvider} />
-                <Field label="Branch" fieldValue={serviceData.receiverBranch} />
-                <Field label="Bank Account No" fieldValue={serviceData.receiverAccountNumber || serviceData.receiverWalletNumber} />
-                <Field label="Routing No." fieldValue={serviceData.receiverRoutingNumber} />
-                <Field label="Place of Issue" fieldValue={serviceData.receiverPlaceOfIssue} />
-                <Field label="ID Type" fieldValue={serviceData.receiverIdType} />
-                <Field label="ID Number" fieldValue={serviceData.receiverIdNumber} />
-                <Field label="Pickup City" fieldValue={serviceData.receiverPickupCity} />
-              </View>
-            </Section>
-          </View>
-
-          <View style={styles.side}>
-            <SideBox label="GST Registration ID" fieldValue={serviceData.gstRegistrationId} />
-            <SideBox label="PINNO / REF" fieldValue={txId} emphasis />
-            <SideBox label="Approved By" fieldValue={serviceData.approvedBy} />
-            <SideBox label="Date / Time" fieldValue={date} />
-            <SideBox label="Collected Amount" fieldValue={money(total, 'MYR')} />
-            <SideBox label="Service Charge" fieldValue={money(fee, 'MYR')} />
-            <SideBox label="GST" fieldValue={serviceData.gstAmount != null ? money(serviceData.gstAmount, 'MYR') : ''} />
-            <SideBox label="Transfer Amount" fieldValue={money(sendAmt, 'MYR')} emphasis />
-            <SideBox label="1 MYR =" fieldValue={`${rate || '—'} [${curr}]`} />
-            <SideBox label="Receive Amount" fieldValue={money(receive, curr)} emphasis />
-            <SideBox label="Serial" fieldValue={txId} />
-            <SideBox label="Payout / Payment" fieldValue={`${methodLabel} / ${paymentLabel}`} />
-          </View>
-        </View>
-
-        <View style={styles.terms}><Text style={styles.termsText}>THE TERMS AND CONDITIONS GOVERNING THE MONEY TRANSFER SERVICE ARE DISPLAYED AT MySheba / SatuLink Solutions Sdn Bhd. BY SIGNING THIS FORM YOU ARE AGREEING TO THOSE TERMS AND CONDITIONS.</Text></View>
-        <View style={styles.signatures}>
-          <View style={styles.sign}><Text style={styles.signTitle}>Customer's Signature</Text><View style={styles.line} /></View>
-          <View style={styles.sign}><Text style={styles.signTitle}>Operator: {value(serviceData.operator)}</Text><View style={styles.line} /></View>
-          <View style={styles.sign}><Text style={styles.signTitle}>Status: {value(status).toUpperCase()}</Text><View style={styles.line} /></View>
-        </View>
-        <Text style={styles.powered}>{POWERED_BY}</Text>
-      </ScrollView>
-
-      <View style={styles.actions}>
-        <TouchableOpacity style={[styles.button, { borderColor: colors.primary }]} onPress={printReceipt} disabled={printing}>
-          {printing ? <ActivityIndicator color={colors.primary} /> : <Text style={[styles.buttonText, { color: colors.primary }]}>Print / Save PDF</Text>}
-        </TouchableOpacity>
-        {!!onClose && <TouchableOpacity style={[styles.button, { backgroundColor: colors.primary }]} onPress={onClose}><Text style={styles.closeText}>Close</Text></TouchableOpacity>}
-      </View>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: '#eee' },
-  paper: { flex: 1, backgroundColor: '#fff', margin: 10, borderWidth: 1.2, borderColor: '#111' },
-  paperContent: { padding: 8, paddingBottom: 14 },
-  header: { flexDirection: 'row', alignItems: 'flex-start', borderBottomWidth: 1, borderBottomColor: '#111', paddingBottom: 6, gap: 8 },
-  logo: { width: 78, height: 42 },
-  brand: { flex: 1, paddingTop: 1 },
-  company: { fontSize: 14, fontWeight: '800' },
-  address: { fontSize: 8, marginTop: 3 },
-  copy: { width: 95 },
-  copyTitle: { fontSize: 11, fontWeight: '800', textDecorationLine: 'underline' },
-  copySub: { fontSize: 10, marginTop: 3 },
-  columns: { flexDirection: 'row', gap: 7, marginTop: 7 },
-  main: { flex: 1 },
-  side: { width: 116, borderWidth: 1, borderColor: '#111' },
-  section: { borderWidth: 1, borderColor: '#111', marginBottom: 7 },
-  sectionTitle: { fontSize: 10, fontWeight: '800', padding: 4, borderBottomWidth: 1, borderBottomColor: '#111', backgroundColor: '#f5f5f5' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', padding: 3 },
-  field: { width: '33.333%', minHeight: 32, paddingHorizontal: 3, paddingVertical: 2 },
-  fieldLabel: { fontSize: 7.5, fontWeight: '800' },
-  fieldValue: { fontSize: 8, marginTop: 2 },
-  largeValue: { fontSize: 10, fontWeight: '800' },
-  sideBox: { borderBottomWidth: 1, borderBottomColor: '#555', padding: 5 },
-  sideLabel: { fontSize: 7.5, fontWeight: '800' },
-  sideValue: { fontSize: 9, marginTop: 2 },
-  sideEmphasis: { fontSize: 11, fontWeight: '800' },
-  terms: { borderWidth: 1, borderColor: '#111', padding: 5 },
-  termsText: { fontSize: 6.5, lineHeight: 9 },
-  signatures: { flexDirection: 'row', borderLeftWidth: 1, borderRightWidth: 1, borderBottomWidth: 1, borderColor: '#111', padding: 6, gap: 12 },
-  sign: { flex: 1 },
-  signTitle: { fontSize: 9, fontWeight: '800' },
-  line: { borderTopWidth: 1, borderStyle: 'dotted', borderTopColor: '#111', marginTop: 18 },
-  powered: { textAlign: 'right', fontSize: 7, color: '#555', marginTop: 4 },
-  actions: { flexDirection: 'row', gap: 8, padding: 10, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#ddd' },
-  button: { flex: 1, minHeight: 44, borderWidth: 1.5, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
-  buttonText: { fontSize: 13, fontWeight: '800' },
-  closeText: { color: '#fff', fontSize: 13, fontWeight: '800' },
-});
+function Section({title,rows}){return <View style={styles.section}><Text style={styles.sectionTitle}>{title}</Text>{rows.map(([l,v],i)=><Row key={`${l}-${i}`} label={l} value={v}/>)}</View>}
+function Row({label,value}){return <View style={styles.row}><Text style={styles.rowLabel}>{label}</Text><Text style={styles.rowValue}>{val(value)}</Text></View>}
+const styles=StyleSheet.create({container:{flex:1},content:{padding:12},preview:{backgroundColor:'#fff',borderWidth:1,borderColor:'#111',padding:8},brand:{fontSize:22,fontWeight:'800',textAlign:'center'},company:{fontSize:13,fontWeight:'800',textAlign:'center'},address:{fontSize:10,textAlign:'center'},copy:{fontSize:12,fontWeight:'800',color:'#b22222',textAlign:'right',marginVertical:5},section:{borderWidth:1,borderColor:'#111',marginTop:7},sectionTitle:{fontSize:11,fontWeight:'800',padding:5,borderBottomWidth:1,borderColor:'#111'},row:{flexDirection:'row',paddingVertical:3,paddingHorizontal:4},rowLabel:{width:'35%',fontWeight:'700',fontSize:10},rowValue:{flex:1,fontSize:10},sidePreview:{borderWidth:1,borderColor:'#111',marginTop:7},terms:{borderWidth:1,borderColor:'#111',marginTop:8,padding:6,fontSize:8},sign:{flexDirection:'row',justifyContent:'space-between',marginTop:12},powered:{fontSize:9,textAlign:'right',marginTop:5},button:{marginTop:12,padding:14,borderRadius:8,backgroundColor:'#111',alignItems:'center'},buttonText:{color:'#fff',fontWeight:'800'},close:{textAlign:'center',padding:14,fontWeight:'700'}});
