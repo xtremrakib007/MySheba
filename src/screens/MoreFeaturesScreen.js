@@ -1,41 +1,38 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
-import { useTheme } from "../theme/ThemeContext";
-import { MORE_SERVICES, useServiceAction, Tile, GRID_PADDING, COLUMN_GAP } from '../components/ServiceGrid';
+import { useTheme } from '../theme/ThemeContext';
+import { useServiceAction, Tile } from '../components/ServiceGrid';
 
-// This screen's grid reuses ServiceGrid's own Tile component (and its
-// GRID_PADDING/COLUMN_GAP) instead of a separate copy, so every role sees
-// the exact same tile look - bordered *and* classic - as the home screen,
-// with no risk of the two drifting apart again.
+const FINANCE_FEATURES = [
+  { key: 'myDocuments', icon: '📄', name: 'My Documents', kind: 'documents' },
+  { key: 'salary', icon: '💼', name: 'Salary', kind: 'salary' },
+  { key: 'history', icon: '📋', name: 'Transactions', kind: 'history' },
+  { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount' },
+  { key: 'profile', icon: '🪪', name: 'Profile & KYC', kind: 'profile' },
+  { key: 'support', icon: '🎧', name: 'Finance Support', kind: 'support' },
+];
+
 export default function MoreFeaturesScreen() {
-  const {
-    colors
-  } = useTheme();
-
+  const { colors } = useTheme();
   const styles = createStyles(colors);
-  const { goBackOrHome, webViewBusy } = useApp();
+  const { goBackOrHome } = useApp();
   const handlePress = useServiceAction();
 
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>More</Text>
-        <TouchableOpacity style={styles.closeBtn} onPress={goBackOrHome} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <Text style={styles.headerTitle}>More Finance Features</Text>
+        <TouchableOpacity style={styles.closeBtn} onPress={goBackOrHome}>
           <Text style={styles.closeText}>✕</Text>
         </TouchableOpacity>
       </View>
-
-      <ScrollView contentContainerStyle={{ paddingTop: 8, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.subtitle}>Manage your documents, account and financial activity.</Text>
         <View style={styles.grid}>
-          {MORE_SERVICES.map((s) => (
-            <Tile
-              key={s.key}
-              s={s}
-              disabled={s.kind === 'webview' && webViewBusy}
-              onPress={() => handlePress(s)}
-            />
+          {FINANCE_FEATURES.map((item) => (
+            <Tile key={item.key} s={item} onPress={() => handlePress(item)} />
           ))}
         </View>
       </ScrollView>
@@ -45,25 +42,13 @@ export default function MoreFeaturesScreen() {
 
 function createStyles(colors) {
   return StyleSheet.create({
-    screen: { flex: 1, backgroundColor: colors.card },
-    header: {
-      flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-      paddingTop: 22, paddingBottom: 22, paddingHorizontal: 20,
-      backgroundColor: colors.card,
-    },
-    headerTitle: { color: colors.navy, fontWeight: '800', fontSize: 26 },
-    closeBtn: {
-      position: 'absolute', right: 20, top: 18,
-      width: 32, height: 32, borderRadius: radius.pill,
-      backgroundColor: colors.scrim, alignItems: 'center', justifyContent: 'center',
-    },
+    screen: { flex: 1, backgroundColor: colors.bg },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingTop: 20, paddingBottom: 16, paddingHorizontal: 20, backgroundColor: colors.card },
+    headerTitle: { color: colors.text, fontWeight: '800', fontSize: 20 },
+    closeBtn: { position: 'absolute', right: 16, top: 16, width: 34, height: 34, borderRadius: 17, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
     closeText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
-    // Uses ServiceGrid's own GRID_PADDING/COLUMN_GAP (not local values) so
-    // the tiles it renders via the shared Tile component line up exactly
-    // with the sizing Tile computes internally.
-    grid: {
-      flexDirection: 'row', flexWrap: 'wrap',
-      paddingHorizontal: GRID_PADDING, gap: COLUMN_GAP,
-    },
+    content: { padding: 14, paddingBottom: 40 },
+    subtitle: { color: colors.muted || '#6B7280', fontSize: 12, marginBottom: 10 },
+    grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   });
 }
