@@ -1,17 +1,17 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useApp } from '../context/AppContext';
-import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import { useServiceAction, Tile } from '../components/ServiceGrid';
 
 const FINANCE_FEATURES = [
+  { key: 'walletTransfer', icon: '💸', name: 'Wallet Transfer', kind: 'walletTransfer' },
   { key: 'myDocuments', icon: '📄', name: 'My Documents', kind: 'documents' },
   { key: 'salary', icon: '💼', name: 'Salary', kind: 'salary' },
   { key: 'history', icon: '📋', name: 'Transactions', kind: 'history' },
   { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount' },
   { key: 'profile', icon: '🪪', name: 'Profile & KYC', kind: 'profile' },
-  { key: 'support', icon: '🎧', name: 'Finance Support', kind: 'support' },
+  { key: 'support', icon: '🎧', name: 'Support', kind: 'support' },
 ];
 
 export default function MoreFeaturesScreen() {
@@ -23,13 +23,13 @@ export default function MoreFeaturesScreen() {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>More Finance Features</Text>
+        <Text style={styles.headerTitle}>More Features</Text>
         <TouchableOpacity style={styles.closeBtn} onPress={goBackOrHome}>
           <Text style={styles.closeText}>✕</Text>
         </TouchableOpacity>
       </View>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.subtitle}>Manage your documents, account and financial activity.</Text>
+        <Text style={styles.subtitle}>Manage your wallet, documents, account and financial activity.</Text>
         <View style={styles.grid}>
           {FINANCE_FEATURES.map((item) => (
             <Tile key={item.key} s={item} onPress={() => handlePress(item)} />
