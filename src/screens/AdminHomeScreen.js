@@ -846,6 +846,7 @@ export default function AdminHomeScreen() {
                 to Admin/Superadmin Features for everything else. */}
             <BannerSlider />
             <ServiceGrid />
+          </>
         )}
 
         {viewingSection && (
