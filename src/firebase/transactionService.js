@@ -1,20 +1,5 @@
 // Dealer-queue transactions use a broadcast, first-accept-wins workflow.
-//
-// Mobile Banking specifically splits accept/reject and complete across the
-// two dealer-tier roles: the parent Dealer accepts/rejects, then only the
-// Sub Dealer can complete + collect the PIN (enforced in DealerHomeScreen.js
-// and firestore.rules' mobileBankingRoleOk()). Every other service keeps the
-// shared queue where either role can do both.
-// A customer who registered under a reseller code (resellerId on their own
-// users/{uid} doc - see functions/customerRegistration.js) has an extra hop
-// in front of that: customer submits -> resellerId is denormalized onto the
-// order same as dealerId, but dealerId itself starts unset -> the reseller
-// forwards it to a specific dealer (assignDealer below - same action admin
-// uses for "Appoint Dealer" on an unassigned order, just restricted at the
-// rules layer to that reseller's own resellerId pool) -> from there it's a
-// normal order in that dealer's queue (accept -> processing -> completed).
-// A customer with no resellerId skips straight to the existing dealerId
-// behavior, unchanged.
+// Approval is a separate admin/superadmin step: approve -> operator accepts -> operator completes.
 import {
   collection,
   addDoc,
@@ -68,6 +53,7 @@ export async function createTransaction(payload, customer) {
     cost: payload.cost || 0,
     profit: payload.profit || 0,
     status: 'pending',
+    approved: false,
     customerId: customer && customer.uid ? customer.uid : null,
     customerPhone: (customer && customer.phone) || payload.customerPhone || '',
     resellerId: null,
@@ -109,6 +95,35 @@ export function subscribeMyTransactions(uid, callback, onError) {
   }, onError);
 }
 
+export async function approveTransaction(id) {
+  const currentUser = getCurrentUserUid();
+  if (!currentUser) throw new Error('You must be signed in to approve an order.');
+  const profileSnap = await getDoc(doc(db, 'users', currentUser));
+  const profile = profileSnap.exists() ? profileSnap.data() : {};
+  const role = profile.role || '';
+  if (role !== 'admin' && role !== 'superadmin') {
+    throw new Error('Only an admin or superadmin can approve an order.');
+  }
+  const name = profile.fullName || profile.name || profile.displayName || profile.phone || currentUser;
+
+  await runTransaction(db, async (tx) => {
+    const ref = doc(db, COLLECTION, id);
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error('That order no longer exists.');
+    const order = snap.data();
+    if (order.status !== 'pending') throw new Error('Only pending orders can be approved.');
+    if (order.approved === true) throw new Error('This order is already approved.');
+    tx.update(ref, {
+      approved: true,
+      approvedBy: currentUser,
+      approvedByName: name,
+      approvedByRole: role,
+      approvedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
+
 export async function acceptTransaction(id) {
   const txRef = doc(db, COLLECTION, id);
   const currentUser = getCurrentUserUid();
@@ -116,32 +131,28 @@ export async function acceptTransaction(id) {
   const profileSnap = await getDoc(doc(db, 'users', currentUser));
   const staffProfile = profileSnap.exists() ? profileSnap.data() : {};
   const staffRole = staffProfile.role || '';
+  if (staffRole !== 'dealer' && staffRole !== 'reseller') {
+    throw new Error('Only a dealer or reseller can accept an approved order.');
+  }
   const staffName = staffProfile.fullName || staffProfile.name || staffProfile.displayName || staffProfile.phone || currentUser;
-  const isApprover = staffRole === 'admin' || staffRole === 'superadmin';
 
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(txRef);
     if (!snap.exists()) throw new Error('That order no longer exists.');
     const order = snap.data();
     if (order.status !== 'pending' || order.claimedBy) {
-      throw new Error('This order was already accepted by another staff member.');
+      throw new Error('This order was already accepted by another operator.');
     }
-    const patch = {
+    if (order.approved !== true || !order.approvedBy) {
+      throw new Error('This order must be approved by an admin or superadmin first.');
+    }
+    tx.update(txRef, {
       status: 'processing',
       claimedBy: currentUser,
-      claimedByRole: staffRole || null,
+      claimedByRole: staffRole,
       claimedByName: staffName,
       updatedAt: serverTimestamp(),
-    };
-    // An admin/superadmin accepting an order is the approval event. Dealers
-    // and resellers remain the Operator when they later complete it.
-    if (isApprover) {
-      patch.approvedBy = currentUser;
-      patch.approvedByName = staffName;
-      patch.approvedByRole = staffRole;
-      patch.approvedAt = serverTimestamp();
-    }
-    tx.update(txRef, patch);
+    });
   });
 }
 
@@ -171,27 +182,24 @@ export async function completeTransaction(id, pin, receiptUrl) {
   const staffProfile = profileSnap.exists() ? profileSnap.data() : {};
   const staffName = staffProfile.fullName || staffProfile.name || staffProfile.displayName || staffProfile.phone || currentUser;
   const staffRole = staffProfile.role || '';
+  if (staffRole !== 'dealer' && staffRole !== 'reseller') {
+    throw new Error('Only the dealer/reseller Operator can complete an order.');
+  }
+  if (!pin || !/^\d{4}$/.test(String(pin))) {
+    throw new Error('A 4-digit collection PIN is required.');
+  }
+  if (!receiptUrl) throw new Error('The transfer receipt is required before completion.');
 
-  const patch = {
+  await updateDoc(doc(db, COLLECTION, id), {
     status: 'completed',
-    pin: pin || '',
+    pin: String(pin),
     completedBy: currentUser,
     completedByName: staffName,
-    completedByRole: staffRole || null,
+    completedByRole: staffRole,
     completedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  };
-  // If an admin/superadmin completes directly, that user is also the
-  // approver. Otherwise preserve the existing admin/superadmin approval
-  // recorded when the order was accepted.
-  if (staffRole === 'admin' || staffRole === 'superadmin') {
-    patch.approvedBy = currentUser;
-    patch.approvedByName = staffName;
-    patch.approvedByRole = staffRole;
-    patch.approvedAt = serverTimestamp();
-  }
-  if (receiptUrl) patch.receiptUrl = receiptUrl;
-  await updateDoc(doc(db, COLLECTION, id), patch);
+    receiptUrl,
+  });
 }
 
 export async function assignDealer(id, dealerId) {
