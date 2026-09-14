@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Linking, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { httpsCallable } from 'firebase/functions';
 import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
@@ -9,11 +10,12 @@ import * as emailVerification from '../firebase/emailVerification';
 import * as phoneVerification from '../firebase/phoneVerification';
 import * as authService from '../firebase/authService';
 import * as deviceSessionService from '../firebase/deviceSessionService';
+import { functions } from '../firebase/config';
 
 export default function DeviceVerifyScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { profile, pendingDeviceVerification, setScreen, authError, authBusy, cancelDeviceVerification } = useApp();
+  const { profile, pendingDeviceVerification, setScreen, authError, cancelDeviceVerification } = useApp();
   const email = pendingDeviceVerification?.email || profile?.email || '';
   const phone = pendingDeviceVerification?.phone || profile?.phone || '';
   const [method, setMethod] = useState('email');
@@ -31,22 +33,35 @@ export default function DeviceVerifyScreen() {
   };
 
   const finish = async (credential) => {
-    setLocalError('');
-    setBusy(true);
+    setLocalError(''); setBusy(true);
     try {
-      const result = await authService.retryDeviceSession(
-        pendingDeviceVerification?.uid,
-        credential?.phoneIdToken,
-        credential?.emailIdToken,
-        credential?.emailOtp
-      );
+      let result;
+      const role = profile?.role;
+      if (role === 'admin' || role === 'superadmin' || role === 'dealer' || role === 'reseller') {
+        result = await authService.retryDeviceSession(
+          pendingDeviceVerification?.uid,
+          credential?.phoneIdToken,
+          credential?.emailIdToken,
+          credential?.emailOtp
+        );
+      } else {
+        const deviceId = await deviceSessionService.getDeviceId();
+        const confirmFn = httpsCallable(functions, 'confirmDeviceSwitch');
+        const { data } = await confirmFn({
+          deviceId,
+          emailIdToken: credential?.emailIdToken || undefined,
+          emailOtp: credential?.emailOtp || undefined,
+        });
+        if (!data?.sessionId) throw new Error('Device verification did not return a valid session.');
+        await deviceSessionService.setLocalSessionId(data.sessionId);
+        const refreshed = await authService.fetchProfile(pendingDeviceVerification?.uid);
+        result = { uid: pendingDeviceVerification?.uid, ...(refreshed || {}) };
+      }
       if (result?.pendingDeviceApproval) throw new Error('Verification is still pending. Please enter the latest code.');
       setScreen(homeForRole(result?.role || profile?.role));
     } catch (e) {
       setLocalError(e.message || 'Could not complete device verification. Please try again.');
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   };
 
   const sendEmail = async () => {
@@ -54,9 +69,8 @@ export default function DeviceVerifyScreen() {
     try {
       await authService.retryDeviceSession(pendingDeviceVerification?.uid, null, null, null, true);
       setSent(true); setCode('');
-    } catch (e) {
-      setLocalError(e.message || 'Could not send the verification email. Please try again.');
-    } finally { setBusy(false); }
+    } catch (e) { setLocalError(e.message || 'Could not send the verification email. Please try again.'); }
+    finally { setBusy(false); }
   };
 
   const sendSms = async () => {
