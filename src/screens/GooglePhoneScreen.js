@@ -24,7 +24,7 @@ export default function GooglePhoneScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
   const { completeGooglePhone, cancelGooglePhone, authError, authBusy } = useApp();
-  const [step, setStep] = useState('email');
+  const [step, setStep] = useState('phone');
   const [emailCode, setEmailCode] = useState('');
   const [emailSent, setEmailSent] = useState(false);
   const [email, setEmail] = useState(auth.currentUser?.email || '');
@@ -91,9 +91,14 @@ export default function GooglePhoneScreen() {
     if (String(phone).replace(/[^0-9]/g, '').length < 8) { setLocalError('Please enter a valid phone number.'); return; }
     setLocalError(''); setBusy(true);
     try {
+      const phoneE164 = phoneVerification.phoneToE164(phone, phoneCountry.dial);
+      console.log('[GooglePhone] SMS phone:', phoneE164);
       const confirmation = await phoneVerification.sendPhoneOtp(phone, phoneCountry.dial);
       setPhoneConfirmation(confirmation); setPhoneCode(''); setStep('phoneOtp');
-    } catch (e) { setLocalError(e.message || 'Could not send the SMS verification code. Please try again.'); }
+    } catch (e) {
+      console.log('[GooglePhone] SMS ERROR:', e?.code, e?.message, e);
+      setLocalError(`${e?.code || 'ERROR'}: ${e?.message || 'Could not send the SMS verification code. Please try again.'}`);
+    }
     finally { setBusy(false); }
   };
 

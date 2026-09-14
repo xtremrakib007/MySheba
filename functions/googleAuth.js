@@ -53,7 +53,9 @@ async function assertGoogleEmailProof(db, googleEmail, data) {
 // phone-verification screen and the callable request.
 async function assertGooglePhoneProof(data) {
   const phoneIdToken = String(data?.phoneIdToken || '').trim();
-  if (!phoneIdToken) throw new HttpsError('failed-precondition', 'Please verify your phone number by SMS before continuing.');
+  if (!phoneIdToken) {
+    throw new HttpsError('failed-precondition', 'PHONE_REQUIRED');
+  }
   let verified;
   try { verified = await admin.auth().verifyIdToken(phoneIdToken); }
   catch { throw new HttpsError('failed-precondition', 'Your SMS verification has expired. Please verify your phone number again.'); }
@@ -109,7 +111,6 @@ exports.ensureGoogleProfile = onCall(async (request) => {
     throw new HttpsError('permission-denied', 'The SMS verification does not match the phone number entered. Please verify that same number again.');
   }
 
-  await assertGoogleEmailProof(db, googleEmail, data);
 
   const expectedPhoneE164 = verifiedPhoneE164;
   const rawPhone = normalizePhone(phoneInput || expectedPhoneE164);

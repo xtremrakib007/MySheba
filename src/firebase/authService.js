@@ -251,7 +251,12 @@ async function finishGoogleSignIn(ensureProfileArgs, googleCredential = null) {
       const result = await ensureProfileFn(ensureProfileArgs);
       data = result.data;
     } catch (err) {
-      if (err && err.message === 'PHONE_REQUIRED') {
+      const errorText = String(err?.message || '');
+
+      if (
+        errorText === 'PHONE_REQUIRED' ||
+        errorText.includes('PHONE_REQUIRED')
+      ) {
         const needsPhoneErr = new Error('A mobile number is required to finish creating your account.');
         needsPhoneErr.needsPhone = true;
         throw needsPhoneErr;

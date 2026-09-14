@@ -845,12 +845,7 @@ export default function AdminHomeScreen() {
                 Quick Services grid every role sees, plus one tile linking
                 to Admin/Superadmin Features for everything else. */}
             <BannerSlider />
-            <ServiceGrid
-              extraTiles={[
-                { key: 'adminFeaturesTile', icon: '🛠️', bg: '#EDE7F6', accent: '#5E35B1', name: profile && profile.role === 'superadmin' ? 'Superadmin Features' : 'Admin Features', onPress: () => setScreen('adminFeatures') },
-              ]}
-            />
-          </>
+            <ServiceGrid />
         )}
 
         {viewingSection && (
