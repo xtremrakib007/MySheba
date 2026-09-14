@@ -132,7 +132,7 @@ export default function ServiceGrid() {
     <View>
       <View style={styles.sectionHead}>
         <Text style={[styles.sectionTitle, { color: colors.text || '#222' }]}>
-          {isStaff ? 'Management Dashboard' : 'Finance Services'}
+          {isStaff ? 'Management Dashboard' : 'Services'}
         </Text>
         <Text style={[styles.sectionSubtitle, { color: colors.muted || '#6B7280' }]}>
           {isStaff ? 'Manage transactions, accounts and operations' : 'Banking • Remittance • Payments • Travel'}
