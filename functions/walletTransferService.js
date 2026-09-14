@@ -98,6 +98,33 @@ exports.findWalletRecipient = onCall(async (request) => {
   };
 });
 
+exports.listWalletTransfers = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const db = admin.firestore();
+  const snap = await db.collection('walletTransfers')
+    .where('participants', 'array-contains', uid)
+    .orderBy('createdAt', 'desc')
+    .limit(30)
+    .get();
+
+  return snap.docs.map((doc) => {
+    const d = doc.data() || {};
+    return {
+      id: doc.id,
+      type: d.type || 'wallet_transfer',
+      currency: d.currency || 'MYR',
+      fromUid: d.fromUid || '',
+      fromName: d.fromName || '',
+      toUid: d.toUid || '',
+      toName: d.toName || '',
+      amount: Number(d.amount || 0),
+      note: d.note || '',
+      status: d.status || 'completed',
+      createdAt: d.createdAt?.toMillis ? d.createdAt.toMillis() : null,
+    };
+  });
+});
+
 exports.walletTransfer = onCall(async (request) => {
   const senderUid = requireAuth(request);
   const db = admin.firestore();
