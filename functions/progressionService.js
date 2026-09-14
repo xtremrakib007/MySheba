@@ -16,10 +16,6 @@
 // freezing users/{uid}.tier*/level* from client writes entirely (see
 // firestore.rules) - only the Admin SDK (which bypasses rules) can touch
 // them, and only these triggers do.
-//
-// Thresholds/step/promotions all live in settings/progression and are
-// superadmin-editable (Superadmin > Tier Promotions) without a redeploy -
-// same override pattern as settings/pricing in src/firebase/settingsService.js.
 
 const admin = require('firebase-admin');
 
@@ -27,9 +23,6 @@ function progressionDocRef() {
   return admin.firestore().collection('settings').doc('progression');
 }
 
-// Ordered low -> high. A user's tier is whichever entry's minPoints is the
-// highest one their tierPoints count meets/exceeds. minPoints is a count
-// of qualifying completed orders, not a monetary amount.
 const DEFAULT_TIERS = [
   { key: 'bronze', label: 'Bronze', minPoints: 0 },
   { key: 'bronzePlus', label: 'Bronze+', minPoints: 10 },
@@ -41,17 +34,9 @@ const DEFAULT_TIERS = [
   { key: 'platinumPlus', label: 'Platinum+', minPoints: 250 },
 ];
 
-// Level is numeric: floor(levelPoints / levelStep). levelPoints is a count
-// of qualifying chat messages + game entry-fee spends combined - no
-// separate weighting between the two kinds of activity.
 const DEFAULT_LEVEL_STEP = 20;
 
 function defaultPromotion() {
-  // discountPercent applies to the four qualifying paid services' point
-  // cost (see functions/walletService.js's chargeProductPurchase).
-  // title/description/active are display-only (e.g. a "Your Tier" card
-  // on Profile) and don't affect the charge math themselves - active
-  // does gate discountPercent though (see getTierDiscountPercent below).
   return { discountPercent: 0, title: '', description: '', active: true };
 }
 
@@ -66,9 +51,6 @@ const DEFAULT_PROGRESSION = {
   promotions: DEFAULT_PROMOTIONS,
 };
 
-/** Reads settings/progression, merged over the defaults above - same
- * "doc may not exist yet, defaults fill the gap" shape as
- * settingsService.js's ensurePricing/subscribePricing. */
 async function getProgressionSettings() {
   const snap = await progressionDocRef().get();
   if (!snap.exists) return DEFAULT_PROGRESSION;
@@ -79,23 +61,12 @@ async function getProgressionSettings() {
   return { tiers, levelStep, promotions };
 }
 
-/** Highest tier whose minPoints the given raw tierPoints count meets or
- * exceeds. Assumes tiers is sorted low -> high (both DEFAULT_TIERS and
- * anything a superadmin saves via the Tier Promotions screen are). */
 function tierForPoints(tiers, points) {
   let current = tiers[0];
-  for (const t of tiers) {
-    if (points >= t.minPoints) current = t;
-  }
+  for (const t of tiers) if (points >= t.minPoints) current = t;
   return current;
 }
 
-/** +1 to users/{uid}.tierPoints for one qualifying completed order, and
- * recomputes .tier/.tierLabel to match - all inside one transaction so a
- * burst of near-simultaneous completions (e.g. an admin batch-completing
- * several orders) can't race and drop an increment. Silently no-ops if
- * uid is missing or the user doc doesn't exist (e.g. a guest inquiry with
- * no linked account) - there's nowhere to record progress. */
 async function incrementTierPoints(uid) {
   if (!uid) return;
   const db = admin.firestore();
@@ -110,9 +81,6 @@ async function incrementTierPoints(uid) {
   });
 }
 
-/** Same shape as incrementTierPoints but for .levelPoints/.level (numeric,
- * floor(levelPoints / levelStep)) - called from the chat-message and
- * game-entry-fee triggers. */
 async function incrementLevelPoints(uid) {
   if (!uid) return;
   const db = admin.firestore();
@@ -127,13 +95,6 @@ async function incrementLevelPoints(uid) {
   });
 }
 
-/** Pure lookup: discount percent (0-100) for a tier key, given an already-
- * fetched settings/progression object (from getProgressionSettings). No
- * Firestore read of its own - this is what lets a caller that's already
- * inside its own db.runTransaction() (e.g. walletService.js's
- * chargeProductPurchase, which fetches settings once before the
- * transaction starts, same pattern as its `pricing` fetch) apply the
- * discount without a second read from inside that transaction. */
 function discountPercentFromSettings(settings, tierKey) {
   if (!tierKey) return 0;
   const promo = settings.promotions[tierKey];
@@ -142,15 +103,20 @@ function discountPercentFromSettings(settings, tierKey) {
   return Number.isFinite(pct) && pct > 0 ? Math.min(pct, 100) : 0;
 }
 
-/** Active discount percent (0-100) for a tier key, from settings/
- * progression.promotions - 0 if unset or the promotion is toggled
- * inactive. Fetches settings itself; for a caller already inside a
- * Firestore transaction, use discountPercentFromSettings with a
- * pre-fetched settings object instead (see its comment above). */
 async function getTierDiscountPercent(tierKey) {
   if (!tierKey) return 0;
   const settings = await getProgressionSettings();
   return discountPercentFromSettings(settings, tierKey);
+}
+
+// index.js already imports this module directly. Registering the new
+// transaction callables on that parent export lets Firebase Functions expose
+// them without duplicating or restructuring the large existing index module.
+const transactionService = require('./transactionService');
+if (module.parent && module.parent.exports) {
+  module.parent.exports.approveTransaction = transactionService.approveTransaction;
+  module.parent.exports.acceptTransaction = transactionService.acceptTransaction;
+  module.parent.exports.completeTransaction = transactionService.completeTransaction;
 }
 
 module.exports = {
