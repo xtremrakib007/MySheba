@@ -4,44 +4,64 @@ import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
 import { useTheme } from "../theme/ThemeContext";
 import AppModalHeader from './AppModalHeader';
+import RemittanceReceipt from './RemittanceReceipt';
 
-// Shown right after a real Firestore write - no fake "simulate dealer/admin"
-// steps. For real orders (kind 'dealer') this renders as a receipt with a
-// "Processing" status badge, since the order now sits in a dealer's queue
-// awaiting action. The actual status progression (accept -> processing ->
-// completed) happens on the Dealer/Admin dashboards via transactionService
-// and is reflected live wherever the customer later checks their order
-// (History screen, subscribeMyTransactions) - this receipt is just the
-// point-of-submit confirmation, not a second source of truth for status.
+// Real remittance orders use the full paper-style MySheba receipt. Other
+// services keep the existing compact confirmation because their transaction
+// data does not use the remittance form fields.
 export default function ResultModal() {
-  const {
-    colors
-  } = useTheme();
-
+  const { colors } = useTheme();
   const styles = createStyles(colors);
-  const { resultModal, closeResult, goHome, submitService, submitting } = useApp();
+  const {
+    resultModal,
+    closeResult,
+    goHome,
+    submitService,
+    submitting,
+    serviceData,
+  } = useApp();
   const { visible, kind, txId, service, details, amount, total, createdAt } = resultModal;
 
   if (!visible) return null;
 
   const finishAndHome = () => { closeResult(); goHome(); };
-
-  // Resubmits the exact same order: currentService/serviceData in
-  // AppContext are only cleared by startService() (picking a new service
-  // from Home), never on submit - so they're still exactly what was just
-  // sent here. submitService() re-runs createTransaction with that same
-  // data and calls openResult() again, which refreshes this modal in
-  // place with a new Ref/Date rather than closing and reopening it.
-  // Travel inquiries don't have a "processing order" concept the same
-  // way (see the isTravel branch below), so this is dealer-kind only.
   const sendAgain = () => { submitService(); };
-
   const isTravel = kind === 'travel';
+  const isRemittance = !isTravel && service === 'Remittance';
+
+  if (isRemittance) {
+    return (
+      <Modal visible={visible} animationType="slide" onRequestClose={closeResult}>
+        <View style={styles.receiptScreen}>
+          <View style={styles.receiptHeader}>
+            <Text style={styles.receiptHeaderTitle}>Remittance Receipt</Text>
+            <TouchableOpacity onPress={closeResult} style={styles.headerClose}>
+              <Text style={styles.headerCloseText}>×</Text>
+            </TouchableOpacity>
+          </View>
+          <RemittanceReceipt
+            serviceData={serviceData || {}}
+            txId={txId}
+            createdAt={createdAt}
+            status="PROCESSING"
+            onClose={finishAndHome}
+          />
+          <TouchableOpacity
+            style={[styles.sendAgainButton, submitting && styles.btnDisabled]}
+            onPress={sendAgain}
+            disabled={submitting}
+          >
+            <Text style={styles.sendAgainText}>{submitting ? 'Sending…' : 'Send Again'}</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+    );
+  }
+
   const title = isTravel ? 'Inquiry Sent!' : 'Receipt';
   const body = isTravel
     ? `${service} inquiry sent to admin. We'll contact you shortly to confirm price and availability.`
     : `Your order has been received and is now processing. You'll be notified once it's ready.`;
-
   const dateStr = createdAt
     ? new Date(createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
     : '';
@@ -122,6 +142,13 @@ export default function ResultModal() {
 
 function createStyles(colors) {
   return StyleSheet.create({
+    receiptScreen: { flex: 1, backgroundColor: '#eee' },
+    receiptHeader: { minHeight: 54, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#ddd', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14 },
+    receiptHeaderTitle: { fontSize: 18, fontWeight: '800', color: '#111' },
+    headerClose: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#f1f1f1', alignItems: 'center', justifyContent: 'center' },
+    headerCloseText: { fontSize: 27, lineHeight: 29, color: '#333' },
+    sendAgainButton: { marginHorizontal: 10, marginBottom: 8, minHeight: 42, borderWidth: 1.5, borderColor: colors.primary, borderRadius: 9, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+    sendAgainText: { color: colors.primary, fontWeight: '800', fontSize: 13 },
     overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
     box: { backgroundColor: 'white', borderRadius: radius.xl, width: '90%', maxWidth: 380, overflow: 'hidden' },
     content: { padding: 24, alignItems: 'center' },
