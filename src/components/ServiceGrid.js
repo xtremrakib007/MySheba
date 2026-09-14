@@ -89,7 +89,7 @@ export { MORE_SERVICES };
 
 export default function ServiceGrid({ extraTiles = [] }) {
   const { colors, isDark, gridStyle } = useTheme(); const styles = createStyles(colors); const { webViewBusy } = useApp(); const handlePress = useServiceAction();
-  return <View><View style={styles.sectionHead}><Text style={styles.sectionTitle}>🎯 Quick Services</Text></View><View style={[styles.gridCanvas, { backgroundColor: gridCanvas(gridStyle, colors, isDark) }, gridStyle === 'minimal' && styles.gridCanvasMinimal]}><View style={styles.grid}>{PRIMARY_SERVICES.map((s, index) => <Tile key={s.key} s={s} index={index} disabled={s.kind === 'webview' && webViewBusy} onPress={() => handlePress(s)} />)}<Tile s={MORE_FEATURES_TILE} index={PRIMARY_SERVICES.length} onPress={() => handlePress(MORE_FEATURES_TILE)} />{extraTiles.map((t, index) => <Tile key={t.key} s={t} index={PRIMARY_SERVICES.length + index + 1} onPress={t.onPress} />)}</View></View></View>;
+  return <View><View style={styles.sectionHead}><Text style={styles.sectionTitle}>Services</Text></View><View style={[styles.gridCanvas, { backgroundColor: gridCanvas(gridStyle, colors, isDark) }, gridStyle === 'minimal' && styles.gridCanvasMinimal]}><View style={styles.grid}>{PRIMARY_SERVICES.map((s, index) => <Tile key={s.key} s={s} index={index} disabled={s.kind === 'webview' && webViewBusy} onPress={() => handlePress(s)} />)}<Tile s={MORE_FEATURES_TILE} index={PRIMARY_SERVICES.length} onPress={() => handlePress(MORE_FEATURES_TILE)} />{extraTiles.map((t, index) => <Tile key={t.key} s={t} index={PRIMARY_SERVICES.length + index + 1} onPress={t.onPress} />)}</View></View></View>;
 }
 export { GRID_PADDING, COLUMN_GAP };
 
