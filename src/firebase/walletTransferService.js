@@ -1,0 +1,26 @@
+import { httpsCallable } from 'firebase/functions';
+import { functions } from './config';
+
+export async function findWalletRecipient(recipient) {
+  const fn = httpsCallable(functions, 'findWalletRecipient');
+  try {
+    const { data } = await fn({ recipient: String(recipient || '').trim() });
+    return data;
+  } catch (err) {
+    throw new Error(err?.message || 'Could not find that MySheba account.');
+  }
+}
+
+export async function walletTransfer({ recipient, amount, note }) {
+  const fn = httpsCallable(functions, 'walletTransfer');
+  try {
+    const { data } = await fn({
+      recipient: String(recipient || '').trim(),
+      amount: Number(amount),
+      note: String(note || '').trim(),
+    });
+    return data;
+  } catch (err) {
+    throw new Error(err?.message || 'Could not complete the wallet transfer.');
+  }
+}
