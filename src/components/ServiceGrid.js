@@ -95,7 +95,6 @@ export function useServiceAction() {
     openSalary,
     openMyDocuments,
     setScreen,
-    profile,
   } = useApp();
 
   return (s) => {
@@ -105,6 +104,7 @@ export function useServiceAction() {
     if (s.kind === 'salary') return openSalary();
     if (s.kind === 'documents') return openMyDocuments();
     if (s.kind === 'moreFeaturesLink') return setScreen('moreFeatures');
+    if (s.kind === 'walletTransfer') return setScreen('transferPoints');
     if (s.kind === 'support') return setScreen('support');
     if (s.kind === 'history') return setScreen('history');
     if (s.kind === 'myaccount') return setScreen('myAccount');
