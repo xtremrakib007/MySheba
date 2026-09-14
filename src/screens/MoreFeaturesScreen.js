@@ -4,8 +4,17 @@ import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import { useServiceAction, Tile } from '../components/ServiceGrid';
 
-const FINANCE_FEATURES = [
+const CUSTOMER_FEATURES = [
   { key: 'walletTransfer', icon: '💸', name: 'Wallet Transfer', kind: 'walletTransfer' },
+  { key: 'myDocuments', icon: '📄', name: 'My Documents', kind: 'documents' },
+  { key: 'salary', icon: '💼', name: 'Salary', kind: 'salary' },
+  { key: 'history', icon: '📋', name: 'Transactions', kind: 'history' },
+  { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount' },
+  { key: 'profile', icon: '🪪', name: 'Profile & KYC', kind: 'profile' },
+  { key: 'support', icon: '🎧', name: 'Support', kind: 'support' },
+];
+
+const STAFF_FEATURES = [
   { key: 'myDocuments', icon: '📄', name: 'My Documents', kind: 'documents' },
   { key: 'salary', icon: '💼', name: 'Salary', kind: 'salary' },
   { key: 'history', icon: '📋', name: 'Transactions', kind: 'history' },
@@ -17,8 +26,10 @@ const FINANCE_FEATURES = [
 export default function MoreFeaturesScreen() {
   const { colors } = useTheme();
   const styles = createStyles(colors);
-  const { goBackOrHome } = useApp();
+  const { goBackOrHome, profile } = useApp();
   const handlePress = useServiceAction();
+  const isCustomer = !profile?.role || profile.role === 'customer';
+  const features = isCustomer ? CUSTOMER_FEATURES : STAFF_FEATURES;
 
   return (
     <View style={styles.screen}>
@@ -29,9 +40,9 @@ export default function MoreFeaturesScreen() {
         </TouchableOpacity>
       </View>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.subtitle}>Manage your wallet, documents, account and financial activity.</Text>
+        <Text style={styles.subtitle}>{isCustomer ? 'Manage your wallet, documents, account and financial activity.' : 'Manage your account and operational features.'}</Text>
         <View style={styles.grid}>
-          {FINANCE_FEATURES.map((item) => (
+          {features.map((item) => (
             <Tile key={item.key} s={item} onPress={() => handlePress(item)} />
           ))}
         </View>
