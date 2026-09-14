@@ -7,6 +7,7 @@ import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import HeaderDecor from '../components/HeaderDecor';
 import { findWalletRecipient, walletTransfer } from '../firebase/walletTransferService';
+import LegacyTransferPointsScreen from './LegacyTransferPointsScreen';
 
 function fmt(n) {
   return `MYR ${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -17,6 +18,7 @@ export default function TransferPointsScreen() {
   const styles = createStyles(colors);
   const { goBackOrHome, profile, requireSecurityPin } = useApp();
   const balance = Number(profile?.walletBalance || profile?.balance || 0);
+  const isCustomer = !profile?.role || profile.role === 'customer';
 
   const [unlocked, setUnlocked] = useState(false);
   const [recipientQuery, setRecipientQuery] = useState('');
@@ -28,13 +30,14 @@ export default function TransferPointsScreen() {
   const [confirmVisible, setConfirmVisible] = useState(false);
 
   useEffect(() => {
+    if (!isCustomer) return undefined;
     let cancelled = false;
     requireSecurityPin('wallet transfer')
       .then(() => { if (!cancelled) setUnlocked(true); })
       .catch(() => { if (!cancelled) goBackOrHome(); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isCustomer]);
 
   const review = async () => {
     const query = recipientQuery.trim();
@@ -77,6 +80,8 @@ export default function TransferPointsScreen() {
       setBusy(false);
     }
   };
+
+  if (!isCustomer) return <LegacyTransferPointsScreen />;
 
   return (
     <View style={styles.screen}>
