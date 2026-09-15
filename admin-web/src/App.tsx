@@ -30,6 +30,7 @@ import PaymentSettingsPage from './pages/PaymentSettingsPage';
 import PointTopUpPage from './pages/PointTopUpPage';
 import DeviceSessionsPage from './pages/DeviceSessionsPage';
 import SecurityCenterPage from './pages/SecurityCenterPage';
+import GrowthCenterPage from './pages/GrowthCenterPage';
 import SuperadminRoute from './routes/SuperadminRoute';
 
 export default function App() {
@@ -42,6 +43,7 @@ export default function App() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/transactions" element={<TransactionsPage />} />
             <Route path="/financial" element={<FinancialControlPage />} />
+            <Route path="/growth" element={<GrowthCenterPage />} />
             <Route path="/inquiries" element={<InquiriesPage />} />
             <Route path="/announcements" element={<AnnouncementsPage />} />
             <Route path="/transfer-points" element={<TransferPointsPage />} />
