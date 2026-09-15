@@ -20,6 +20,9 @@ export async function submitVerificationRequest(uid, { name, phone }, documentUr
   const back = kycData.backDocumentUrl || '';
   const selfie = kycData.selfieUrl || '';
 
+  // Keep only the information required by the current four-step KYC flow:
+  // identity, document, residential address and live-face verification.
+  // Do not persist legacy occupation/employer/source-of-funds fields.
   await setDoc(doc(db, REQUESTS, uid), {
     uid,
     name: name || '',
@@ -30,15 +33,8 @@ export async function submitVerificationRequest(uid, { name, phone }, documentUr
     nationality: kycData.nationality || '',
     dateOfBirth: kycData.dateOfBirth || '',
     gender: kycData.gender || '',
-    occupation: kycData.occupation || '',
-    skilledLabour: kycData.skilledLabour || '',
-    companyName: kycData.companyName || '',
-    employerName: kycData.employerName || '',
     address: kycData.address || '',
-    passportPlaceOfIssue: kycData.passportPlaceOfIssue || '',
-    passportIssueDate: kycData.passportIssueDate || '',
     passportExpiryDate: kycData.passportExpiryDate || '',
-    sourceOfFunds: kycData.sourceOfFunds || '',
     frontDocumentUrl: front,
     backDocumentUrl: back,
     selfieUrl: selfie,
@@ -48,8 +44,6 @@ export async function submitVerificationRequest(uid, { name, phone }, documentUr
     status: 'pending',
     note: '',
     rejectionReason: '',
-    // This is set only after verifyNativeKycFace has passed. It means the
-    // native biometric challenge and duplicate-face check completed.
     liveFaceVerified: kycData.liveFaceVerified === true,
     liveFaceMethod: kycData.liveFaceMethod || 'native_face_recognition',
     biometricModel: kycData.biometricModel || 'mobilefacenet-512',
