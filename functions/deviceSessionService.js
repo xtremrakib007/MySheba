@@ -43,7 +43,7 @@ const sessionId = () => crypto.randomBytes(24).toString('hex');
 const userRef = (db, uid) => db.collection('users').doc(uid);
 const isStaffRole = (role) => ['admin', 'superadmin', 'dealer', 'reseller'].includes(role);
 
-async function resolveUidForPhoneVerification(request, db) {
+async function resolveUidForVerification(request, db) {
   if (request.auth?.uid) {
     const requestedUid = String(request.data?.uid || '').trim();
     if (requestedUid && requestedUid !== request.auth.uid) {
@@ -54,20 +54,27 @@ async function resolveUidForPhoneVerification(request, db) {
 
   const requestedUid = String(request.data?.uid || '').trim();
   const phoneIdToken = String(request.data?.phoneIdToken || '').trim();
-  if (!requestedUid || !phoneIdToken) {
-    throw new HttpsError('unauthenticated', 'You must be signed in or provide a valid SMS verification token.');
+  const emailIdToken = String(request.data?.emailIdToken || '').trim();
+  if (!requestedUid || (!phoneIdToken && !emailIdToken)) {
+    throw new HttpsError('unauthenticated', 'You must be signed in or provide a valid verification token.');
   }
 
   const snap = await userRef(db, requestedUid).get();
   if (!snap.exists) throw new HttpsError('not-found', 'No profile found for this account.');
   const profile = snap.data();
-  const phone = normalizePhone(profile.phone);
-  if (!phone) throw new HttpsError('failed-precondition', 'This account has no phone number for SMS verification.');
 
   try {
-    await assertPhoneVerified(phoneIdToken, phone);
+    if (phoneIdToken) {
+      const phone = normalizePhone(profile.phone);
+      if (!phone) throw new Error('This account has no phone number for SMS verification.');
+      await assertPhoneVerified(phoneIdToken, phone);
+    } else {
+      const email = normalizeEmail(profile.email);
+      if (!validEmail(email)) throw new Error('This account has no valid email for verification.');
+      await assertEmailVerified(emailIdToken, email);
+    }
   } catch (error) {
-    throw new HttpsError('failed-precondition', error.message || 'Please verify your phone first.');
+    throw new HttpsError('failed-precondition', error.message || 'The verification token is invalid.');
   }
   return requestedUid;
 }
@@ -180,7 +187,8 @@ function verifyStaffEmailOtp(challenge, code, deviceId, email) {
 exports.checkDeviceSession = onCall(async (request) => {
   const db = getFirestore();
   const data = request.data || {};
-  const uid = data.phoneIdToken ? await resolveUidForPhoneVerification(request, db) : requireAuth(request);
+  const hasVerificationToken = Boolean(data.phoneIdToken || data.emailIdToken);
+  const uid = hasVerificationToken ? await resolveUidForVerification(request, db) : requireAuth(request);
   const deviceId = requireDeviceId(request);
   const label = deviceLabel(request);
   const ip = getClientIp(request);
@@ -210,8 +218,7 @@ exports.checkDeviceSession = onCall(async (request) => {
           verifyStaffEmailOtp(profile.pendingAdminEmailChallenge, data.emailOtp, deviceId, email);
           verifiedNewStaffDevice = true; verificationMethod = 'email_otp';
         } else {
-          // Do NOT send anything automatically during password login. The user
-          // must explicitly press the Email verification button first.
+          // Password login only creates the pending state. No email or SMS is sent here.
           if (data.resendEmailChallenge) {
             await sendStaffEmailChallenge({ db, uid, email, deviceId, displayName: profile.name || profile.displayName });
           }
@@ -274,7 +281,8 @@ exports.checkDeviceSession = onCall(async (request) => {
 exports.confirmDeviceSwitch = onCall(async (request) => {
   const db = getFirestore();
   const data = request.data || {};
-  const uid = data.phoneIdToken ? await resolveUidForPhoneVerification(request, db) : requireAuth(request);
+  const hasVerificationToken = Boolean(data.phoneIdToken || data.emailIdToken);
+  const uid = hasVerificationToken ? await resolveUidForVerification(request, db) : requireAuth(request);
   const deviceId = requireDeviceId(request);
   const ip = getClientIp(request);
   const { emailIdToken, emailOtp, phoneIdToken } = data;
