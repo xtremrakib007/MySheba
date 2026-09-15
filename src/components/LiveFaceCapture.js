@@ -1,14 +1,23 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { NitroFace, PerformanceMode } from '@nitro-mlkit/face-detection';
+import { NitroRecognizer } from '@nitro-mlkit/face-recognition';
+
+const FACE_MODEL_URL = 'https://raw.githubusercontent.com/hugocornellier/face_detection_tflite/main/assets/models/mobilefacenet.tflite';
+const PROBE_ID = '__mysheba_kyc_probe__';
 
 /**
- * Native KYC selfie capture.
+ * Native KYC face capture.
  *
- * Important: this component deliberately does not claim biometric liveness or
- * face matching. It only guarantees that the selfie came from the live front
- * camera, not the gallery. A production biometric match/liveness engine must
- * be added before this result is used for automatic KYC approval.
+ * The photo is captured only by the live front camera. Before it is accepted,
+ * the captured frame is checked for exactly one face and a MobileFaceNet
+ * embedding is generated on-device. The embedding is returned to the KYC flow
+ * so the server can enforce 1:N duplicate-face rules.
+ *
+ * This is face recognition, not a claim of biometric liveness. A production
+ * KYC liveness/anti-spoof model is a separate control and must not be inferred
+ * from the fact that a camera photo was captured.
  */
 export default function LiveFaceCapture({ onCaptured, onCancel }) {
   const cameraRef = useRef(null);
@@ -16,23 +25,18 @@ export default function LiveFaceCapture({ onCaptured, onCancel }) {
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [step, setStep] = useState(0);
+  const [status, setStatus] = useState('Position your face inside the frame.');
 
   useEffect(() => {
     if (permission && !permission.granted && permission.canAskAgain) requestPermission();
   }, [permission?.granted, permission?.canAskAgain, requestPermission]);
 
-  useEffect(() => {
-    if (!ready) return undefined;
-    setStep(1);
-    const timer = setTimeout(() => setStep(2), 1800);
-    return () => clearTimeout(timer);
-  }, [ready]);
-
   const capture = async () => {
     if (busy || !cameraRef.current) return;
     setBusy(true);
     setError('');
+    setStatus('Checking face…');
+
     try {
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.85,
@@ -40,9 +44,56 @@ export default function LiveFaceCapture({ onCaptured, onCancel }) {
         shutterSound: false,
       });
       if (!photo?.uri) throw new Error('The camera did not return a selfie. Please try again.');
-      onCaptured?.(photo.uri, 'image/jpeg', { method: 'native_camera_capture' });
+
+      const faces = await NitroFace.detect(photo.uri, {
+        performanceMode: PerformanceMode.FAST,
+        landmarks: false,
+        classifications: true,
+        minFaceSize: 0.12,
+        tracking: false,
+      });
+
+      if (!Array.isArray(faces) || faces.length !== 1) {
+        throw new Error(
+          faces?.length === 0
+            ? 'No face was detected. Center your face and try again.'
+            : 'More than one face was detected. Only one person may be in the KYC camera.'
+        );
+      }
+
+      setStatus('Generating secure face template…');
+
+      if (!NitroRecognizer.isModelReady()) {
+        const loaded = await NitroRecognizer.downloadModel(FACE_MODEL_URL);
+        if (!loaded || !NitroRecognizer.isModelReady()) {
+          throw new Error('The face-recognition model could not be loaded. Please try again with an internet connection.');
+        }
+      }
+
+      NitroRecognizer.removePerson(PROBE_ID);
+      const registered = await NitroRecognizer.registerPerson(PROBE_ID, 'KYC probe', photo.uri);
+      if (!registered) throw new Error('A usable face template could not be generated. Please retake the photo.');
+
+      const registry = NitroRecognizer.getRegistry();
+      const probe = registry.find((item) => item.id === PROBE_ID);
+      const embedding = Array.isArray(probe?.embedding) ? probe.embedding : null;
+      NitroRecognizer.removePerson(PROBE_ID);
+
+      if (!embedding || embedding.length < 64) {
+        throw new Error('Face recognition did not return a valid template. Please try again.');
+      }
+
+      setStatus('Face recognized.');
+      onCaptured?.(photo.uri, 'image/jpeg', {
+        method: 'native_face_recognition',
+        faceRecognitionVerified: true,
+        faceEmbedding: embedding,
+        faceEmbeddingModel: 'MobileFaceNet',
+        faceCount: 1,
+      });
     } catch (err) {
-      setError(err?.message || 'Could not capture the selfie. Please try again.');
+      setError(err?.message || 'Could not verify your face. Please try again.');
+      setStatus('Position your face inside the frame.');
       setBusy(false);
     }
   };
@@ -55,8 +106,10 @@ export default function LiveFaceCapture({ onCaptured, onCancel }) {
     return <View style={styles.center}>
       <Text style={styles.icon}>📷</Text>
       <Text style={styles.title}>Camera access is required</Text>
-      <Text style={styles.text}>MySheba needs the front camera to capture your live KYC selfie. Gallery and file uploads are not used for this step.</Text>
-      {permission.canAskAgain ? <TouchableOpacity style={styles.primary} onPress={requestPermission}><Text style={styles.primaryText}>Allow Camera</Text></TouchableOpacity> : <Text style={styles.error}>Camera permission is disabled. Enable Camera for MySheba in Android Settings, then try again.</Text>}
+      <Text style={styles.text}>MySheba uses the live front camera for KYC face recognition. Gallery and file uploads are not accepted for the selfie.</Text>
+      {permission.canAskAgain
+        ? <TouchableOpacity style={styles.primary} onPress={requestPermission}><Text style={styles.primaryText}>Allow Camera</Text></TouchableOpacity>
+        : <Text style={styles.error}>Camera permission is disabled. Enable Camera for MySheba in Android Settings, then try again.</Text>}
       <TouchableOpacity style={styles.cancel} onPress={onCancel}><Text>Cancel</Text></TouchableOpacity>
     </View>;
   }
@@ -71,21 +124,26 @@ export default function LiveFaceCapture({ onCaptured, onCancel }) {
     >
       <View style={styles.overlay}>
         <View style={styles.topBar}>
-          <Text style={styles.badge}>NATIVE CAMERA KYC</Text>
+          <Text style={styles.badge}>FACE RECOGNITION KYC</Text>
           <TouchableOpacity onPress={onCancel} style={styles.close}><Text style={styles.closeText}>✕</Text></TouchableOpacity>
         </View>
         <View style={styles.guideArea}>
           <View style={styles.faceGuide}><View style={styles.faceInner} /></View>
-          <Text style={styles.instruction}>{step === 1 ? 'Center your face inside the frame' : 'Look directly at the camera'}</Text>
-          <Text style={styles.subInstruction}>Remove sunglasses and keep your face clearly visible.</Text>
+          <Text style={styles.instruction}>{status}</Text>
+          <Text style={styles.subInstruction}>Only one face. Look directly at the camera and remove sunglasses.</Text>
         </View>
         <View style={styles.bottom}>
-          <Text style={styles.security}>🔒 Live front-camera capture only</Text>
+          <Text style={styles.security}>🔒 Live camera + on-device face recognition</Text>
           {error ? <Text style={styles.error}>{error}</Text> : null}
-          <TouchableOpacity style={[styles.capture, (!ready || busy) && styles.captureDisabled]} onPress={capture} disabled={!ready || busy} activeOpacity={0.85}>
+          <TouchableOpacity
+            style={[styles.capture, (!ready || busy) && styles.captureDisabled]}
+            onPress={capture}
+            disabled={!ready || busy}
+            activeOpacity={0.85}
+          >
             {busy ? <ActivityIndicator color="#fff" /> : <View style={styles.captureInner} />}
           </TouchableOpacity>
-          <Text style={styles.hint}>Tap the button to capture your selfie</Text>
+          <Text style={styles.hint}>Your face template is used to prevent duplicate KYC identities.</Text>
         </View>
       </View>
     </CameraView>
@@ -110,7 +168,7 @@ const styles = StyleSheet.create({
   capture: { width: 76, height: 76, borderRadius: 38, borderWidth: 5, borderColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   captureDisabled: { opacity: 0.55 },
   captureInner: { width: 58, height: 58, borderRadius: 29, backgroundColor: '#fff' },
-  hint: { color: '#fff', fontSize: 11, marginTop: 10, textShadowColor: '#000', textShadowRadius: 4 },
+  hint: { color: '#fff', fontSize: 11, marginTop: 10, textAlign: 'center', textShadowColor: '#000', textShadowRadius: 4 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: '#fff' },
   icon: { fontSize: 42 },
   title: { color: '#111827', fontSize: 19, fontWeight: '800', textAlign: 'center', marginTop: 14 },
