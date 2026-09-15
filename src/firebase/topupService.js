@@ -36,27 +36,20 @@ export const METHODS = {
   duitnow: 'DuitNow QR',
 };
 
+function createRequestId(prefix = 'selftopup') {
+  return `ms_${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 14)}`;
+}
+
 /** Uploads a picked receipt image (local file uri) to Storage, returns its download URL. */
 export async function uploadReceipt(localUri, uid) {
   const response = await fetch(localUri);
   const blob = await response.blob();
   const fileName = `${Date.now()}.jpg`;
   const storageRef = ref(storage, `topup-receipts/${uid}/${fileName}`);
-  // Explicit contentType: fetch(localUri).blob() on Expo/React Native often
-  // comes back with an empty/generic mime type for local file:// uris, which
-  // Storage would then save as application/octet-stream - failing the
-  // storage.rules check that requires contentType to match image/.* and
-  // making the upload (and the whole Top-Up submission) silently fail.
   await uploadBytes(storageRef, blob, { contentType: blob.type || 'image/jpeg' });
   return getDownloadURL(storageRef);
 }
 
-/**
- * payload: { amount, method: 'transfer'|'deposit', bankName, refNo, receiptUrl }
- * user: { uid, phone, name, role }
- * 1 RM submitted = 1 point credited on approval. Just files the request -
- * no balance change happens here, so this stays a plain client write.
- */
 export async function createTopupRequest(payload, user) {
   const docRef = await addDoc(collection(db, COLLECTION), {
     userId: user && user.uid ? user.uid : null,
@@ -64,12 +57,12 @@ export async function createTopupRequest(payload, user) {
     userName: (user && user.name) || '',
     userRole: (user && user.role) || 'customer',
     amount: payload.amount || 0,
-    points: payload.amount || 0, // 1 RM = 1 point
+    points: payload.amount || 0,
     method: payload.method || 'transfer',
     bankName: payload.bankName || '',
     refNo: payload.refNo || '',
     receiptUrl: payload.receiptUrl || '',
-    status: 'pending', // pending -> approved | rejected
+    status: 'pending',
     rejectReason: '',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -78,31 +71,20 @@ export async function createTopupRequest(payload, user) {
   return docRef.id;
 }
 
-/** Live list of all top-up requests, newest first - used by the Admin panel. */
 export function subscribeTopups(callback, onError) {
   const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'));
-  return onSnapshot(
-    q,
-    (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
-    onError
-  );
+  return onSnapshot(q, (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), onError);
 }
 
-/** Live list of just the signed-in user's own top-up requests, newest first. */
 export function subscribeMyTopups(uid, callback, onError) {
   const q = query(collection(db, COLLECTION), where('userId', '==', uid));
-  return onSnapshot(
-    q,
-    (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-      callback(list);
-    },
-    onError
-  );
+  return onSnapshot(q, (snap) => {
+    const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    callback(list);
+  }, onError);
 }
 
-/** Approves a request and credits the points 1:1 onto the requester's walletBalance. */
 export async function approveTopup(topup) {
   const fn = httpsCallable(functions, 'approveTopup');
   try {
@@ -125,23 +107,16 @@ export async function rejectTopup(id, reason) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Self top-ups: admin/superadmin buying points for their own account.
-// Kept in a completely separate 'selfTopups' collection rather than mixing
-// into 'topups', so a staff member's own purchase never shows up in the
-// customer/dealer approval queue and no admin ever has to review their own
-// (or a peer's) top-up. Auto-approved on create - staff are trusted, so
-// there's no pending/approve/reject step here, just an instant credit and a
-// record of it for the requester's own history.
 const SELF_COLLECTION = 'selfTopups';
 
 /**
- * payload: { amount, method: 'transfer'|'deposit', bankName, refNo, receiptUrl }
- * Credits walletBalance immediately (1 RM = 1 point) via the createSelfTopup
- * Cloud Function, which also writes the selfTopups record server-side.
+ * Credits the authenticated staff account through the guarded createSelfTopup
+ * Cloud Function. A unique requestId makes retries idempotent and prevents
+ * the same client request from being credited twice.
  */
-export async function createSelfTopup(payload) {
+export async function createSelfTopup(payload, requestId = createRequestId()) {
   const fn = httpsCallable(functions, 'createSelfTopup');
+  const effectiveRequestId = requestId || createRequestId();
   try {
     const { data } = await fn({
       amount: payload.amount,
@@ -149,25 +124,25 @@ export async function createSelfTopup(payload) {
       bankName: payload.bankName,
       refNo: payload.refNo,
       receiptUrl: payload.receiptUrl,
+      requestId: effectiveRequestId,
     });
-    logActivity('self_topup_requested', { amount: payload.amount || 0, method: payload.method || 'transfer' });
-    return data.id;
+    logActivity('self_topup_requested', {
+      amount: payload.amount || 0,
+      method: payload.method || 'transfer',
+      requestId: effectiveRequestId,
+    });
+    return data?.id;
   } catch (e) {
     logError('topupService.createSelfTopup', e);
     throw e;
   }
 }
 
-/** Live list of just the signed-in staff member's own self-topups, newest first - their personal record, not a queue. */
 export function subscribeMySelfTopups(uid, callback, onError) {
   const q = query(collection(db, SELF_COLLECTION), where('userId', '==', uid));
-  return onSnapshot(
-    q,
-    (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-      callback(list);
-    },
-    onError
-  );
+  return onSnapshot(q, (snap) => {
+    const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    callback(list);
+  }, onError);
 }
