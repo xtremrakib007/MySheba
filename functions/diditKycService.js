@@ -50,7 +50,7 @@ function verifyDiditSignature(body, signature, simpleSignature, timestamp, secre
   return false;
 }
 
-function decisionFeatureApproved(decision, key, arrayKey) {
+function decisionFeatureApproved(decision, arrayKey) {
   const list = Array.isArray(decision?.[arrayKey]) ? decision[arrayKey] : [];
   if (list.length === 0) return null;
   return list.every((item) => String(item?.status || '').toLowerCase() === 'approved');
@@ -59,6 +59,11 @@ function decisionFeatureApproved(decision, key, arrayKey) {
 function decisionHasLiveVerification(decision) {
   const checks = Array.isArray(decision?.liveness_checks) ? decision.liveness_checks : [];
   return checks.length > 0 && checks.every((item) => String(item?.status || '').toLowerCase() === 'approved');
+}
+
+function getDiditReferenceImage(decision) {
+  const checks = Array.isArray(decision?.liveness_checks) ? decision.liveness_checks : [];
+  return checks.find((item) => item?.reference_image)?.reference_image || '';
 }
 
 exports.createDiditKycSession = onCall(async (request) => {
@@ -78,11 +83,10 @@ exports.createDiditKycSession = onCall(async (request) => {
   if (user.nationalityCode) expected.nationality = user.nationalityCode;
   if (user.countryCode) expected.id_country = user.countryCode;
 
-  const callback = 'mysheba://kyc/complete';
   const payload = {
     workflow_id: cfg.workflowId,
     vendor_data: uid,
-    callback,
+    callback: 'mysheba://kyc/complete',
     callback_method: 'both',
     language: 'en',
     metadata: { app: 'MySheba', uid },
@@ -149,8 +153,8 @@ exports.diditKycWebhook = onRequest(async (req, res) => {
 
   const decision = body.decision || {};
   const livenessApproved = decisionHasLiveVerification(decision);
-  const faceMatchApproved = decisionFeatureApproved(decision, 'face_matches', 'face_matches');
-  const idApproved = decisionFeatureApproved(decision, 'id_verifications', 'id_verifications');
+  const faceMatchApproved = decisionFeatureApproved(decision, 'face_matches');
+  const idApproved = decisionFeatureApproved(decision, 'id_verifications');
   if (body.status === 'Approved') {
     if (!livenessApproved || (faceMatchApproved === false) || (idApproved === false)) {
       patch.status = 'rejected';
@@ -161,6 +165,7 @@ exports.diditKycWebhook = onRequest(async (req, res) => {
       patch.diditVerified = true;
       patch.liveFaceVerified = true;
       patch.liveFaceMethod = 'didit_hosted_liveness';
+      patch.diditReferenceImageUrl = getDiditReferenceImage(decision);
       patch.diditDecision = decision;
       patch.approvedAt = admin.firestore.FieldValue.serverTimestamp();
       await db.collection('users').doc(uid).set({ verified: true, verificationStatus: 'approved', verificationProvider: 'didit', verificationUpdatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
