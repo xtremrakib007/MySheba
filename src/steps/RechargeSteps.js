@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { countries, rechargeOperators, amountToPoints } from '../data/countries';
 import { getOperatorBrand } from '../data/operatorBrand';
 import { FormLabel, FormInput, SummaryCard } from '../components/ui';
+import CountrySelectCard from '../components/CountrySelectCard';
 import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 
@@ -21,7 +22,13 @@ export default function RechargeStep({ step }) {
         <FormLabel>Select Country</FormLabel>
         <View style={styles.grid3}>
           {countries.map((c) => (
-            <RechargeSelectCard key={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr }); nextStep(); }} styles={styles} />
+            <CountrySelectCard
+              key={c.code}
+              flag={c.flag}
+              name={c.name}
+              selected={serviceData.country === c.code}
+              onPress={() => { updateServiceData({ country: c.code, currency: c.curr }); nextStep(); }}
+            />
           ))}
         </View>
       </View>
@@ -74,10 +81,6 @@ export default function RechargeStep({ step }) {
   return null;
 }
 
-function RechargeSelectCard({ flag, name, selected, onPress, styles }) {
-  return <TouchableOpacity style={[styles.selectCard, selected && styles.selectCardSelected]} onPress={onPress} activeOpacity={0.8}><View style={styles.countryFlagWrap}><Text style={styles.countryFlag}>{flag}</Text></View><Text style={[styles.selectName, selected && styles.selectNameSelected]} numberOfLines={2}>{String(name || '')}</Text></TouchableOpacity>;
-}
-
 function RechargeOperatorCard({ name, logo, color, initials, selected, onPress, styles, primaryColor }) {
   return <TouchableOpacity style={[styles.selectCard, styles.operatorCard, selected && styles.selectCardSelected]} onPress={onPress} activeOpacity={0.8}>{logo ? <Image source={logo} style={styles.operatorLogo} resizeMode="contain" /> : <View style={[styles.operatorBadge, { backgroundColor: color || primaryColor }]}><Text style={styles.operatorBadgeText}>{initials}</Text></View>}<Text style={[styles.selectName, styles.operatorName, selected && styles.selectNameSelected]} numberOfLines={2}>{String(name || '')}</Text></TouchableOpacity>;
 }
@@ -100,11 +103,9 @@ function createStyles(colors, isDark) {
   return StyleSheet.create({
     grid3: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
     selectCard: { width: '30%', height: 96, backgroundColor: tileBg, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingVertical: 10, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', marginBottom: 10, shadowColor: '#000', shadowOpacity: isDark ? 0 : 0.08, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
-    selectCardSelected: { borderColor: colors.primary, backgroundColor: isDark ? colors.primary : '#F0F7FF', borderWidth: 2 },
-    countryFlagWrap: { width: 50, height: 50, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 6, backgroundColor: isDark ? '#111111' : '#F3F7FB' },
-    countryFlag: { fontSize: 32 },
+    selectCardSelected: { borderColor: colors.primary, backgroundColor: isDark ? '#061B1A' : '#FFFFFF', borderWidth: 2 },
     selectName: { fontSize: 11, fontWeight: '700', marginTop: 2, textAlign: 'center', color: tileText },
-    selectNameSelected: { color: '#FFFFFF' },
+    selectNameSelected: { color: isDark ? '#FFFFFF' : '#111111' },
     operatorCard: { paddingVertical: 14, paddingHorizontal: 8 }, operatorLogo: { width: 44, height: 44 }, operatorBadge: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }, operatorBadgeText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' }, operatorName: { marginTop: 8 }, phoneInput: { backgroundColor: tileBg, color: tileText, borderColor: colors.border }, amountBtn: { flexBasis: '31%', paddingVertical: 10, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: tileBg, alignItems: 'center', marginBottom: 8 }, amountBtnSelected: { backgroundColor: colors.primary, borderColor: colors.primary }, amountBtnText: { fontWeight: '500', fontSize: 13, color: tileText }, amountBtnTextSelected: { color: '#FFFFFF' },
   });
 }
