@@ -61,7 +61,7 @@ const RECHARGE_RATE_FIELDS = [
 export default function AdminFeaturesScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { profile, goBackOrHome, setScreen, dealerTxs, inquiries, topups, setAdminTab, setAdminViewingSection, featureAccess, rates } = useApp();
+  const { profile, goBackOrHome, setScreen, openSidebar, dealerTxs, inquiries, topups, setAdminTab, setAdminViewingSection, featureAccess, rates } = useApp();
   const [section, setSection] = useState(null);
   const [rateView, setRateView] = useState(false);
   const [editRateKey, setEditRateKey] = useState(null);
@@ -101,7 +101,8 @@ export default function AdminFeaturesScreen() {
     return <View style={styles.screen}>
       <LinearGradient colors={brandGradient} start={{x:0,y:0}} end={{x:1,y:0}} style={styles.header}>
         <HeaderDecor /><TouchableOpacity style={styles.backBtn} onPress={() => setRateView(false)}><Text style={styles.backText}>←</Text></TouchableOpacity>
-        <Text style={styles.headerTitle}>{isSuperadmin ? 'Superadmin Rate Management' : 'Admin Rate Management'}</Text>
+        <View style={styles.headerTitleWrap}><Text style={styles.headerTitle}>{isSuperadmin ? 'Superadmin Rate Management' : 'Admin Rate Management'}</Text></View>
+        <TouchableOpacity style={styles.menuBtn} onPress={openSidebar} accessibilityLabel="Open menu"><Text style={styles.menuText}>☰</Text></TouchableOpacity>
       </LinearGradient>
       <ScrollView contentContainerStyle={styles.rateContent}>
         <View style={styles.infoCard}><Text style={styles.infoTitle}>Service-specific rates</Text><Text style={styles.infoText}>Mobile Banking, Remittance, and Recharge/Internet use separate rate tables.</Text></View>
@@ -119,7 +120,8 @@ export default function AdminFeaturesScreen() {
     return <View style={styles.screen}>
       <LinearGradient colors={brandGradient} start={{x:0,y:0}} end={{x:1,y:0}} style={styles.header}>
         <HeaderDecor /><TouchableOpacity style={styles.backBtn} onPress={() => setSection(null)}><Text style={styles.backText}>←</Text></TouchableOpacity>
-        <Text style={styles.headerTitle}>{category?.name || 'Management'}</Text>
+        <View style={styles.headerTitleWrap}><Text style={styles.headerTitle}>{category?.name || 'Management'}</Text></View>
+        <TouchableOpacity style={styles.menuBtn} onPress={openSidebar} accessibilityLabel="Open menu"><Text style={styles.menuText}>☰</Text></TouchableOpacity>
       </LinearGradient>
       <ScrollView contentContainerStyle={styles.gridPage}><FeatureGrid items={itemsForSection()} onPress={openItem} /></ScrollView>
     </View>;
@@ -128,10 +130,11 @@ export default function AdminFeaturesScreen() {
   return <View style={styles.screen}>
     <LinearGradient colors={brandGradient} start={{x:0,y:0}} end={{x:1,y:0}} style={styles.header}>
       <HeaderDecor /><TouchableOpacity style={styles.backBtn} onPress={goBackOrHome}><Text style={styles.backText}>←</Text></TouchableOpacity>
-      <View><Text style={styles.headerTitle}>{isSuperadmin ? 'Superadmin Control Center' : 'Admin Control Center'}</Text><Text style={styles.headerSub}>Finance management</Text></View>
+      <View style={styles.headerTitleWrap}><Text style={styles.headerTitle}>{isSuperadmin ? 'Superadmin Control Center' : 'Admin Control Center'}</Text><Text style={styles.headerSub}>Finance management</Text></View>
+      <TouchableOpacity style={styles.menuBtn} onPress={openSidebar} accessibilityLabel="Open menu"><Text style={styles.menuText}>☰</Text></TouchableOpacity>
     </LinearGradient>
     <ScrollView contentContainerStyle={styles.homeContent}>
-      <View style={styles.welcomeCard}><Text style={styles.welcomeTitle}>{isSuperadmin ? 'Superadmin' : 'Admin'} Home</Text><Text style={styles.welcomeText}>Select a section. All detailed tools are on separate pages.</Text></View>
+      <View style={styles.welcomeCard}><Text style={styles.welcomeTitle}>{isSuperadmin ? 'Superadmin' : 'Admin'} Home</Text><Text style={styles.welcomeText}>Select a section. Use ☰ for the full management menu.</Text></View>
       <FeatureGrid items={CATEGORIES.filter((x) => x.key !== 'system' || isSuperadmin)} onPress={setSection} />
     </ScrollView>
   </View>;
@@ -139,7 +142,8 @@ export default function AdminFeaturesScreen() {
 
 function createStyles(colors) { return StyleSheet.create({
   screen:{flex:1,backgroundColor:colors.bg}, header:{flexDirection:'row',alignItems:'center',gap:10,padding:12,backgroundColor:colors.primary,overflow:'hidden'},
-  backBtn:{padding:4},backText:{color:'white',fontSize:22},headerTitle:{color:'white',fontWeight:'800',fontSize:16},headerSub:{color:'rgba(255,255,255,0.8)',fontSize:11,marginTop:2},
+  backBtn:{padding:4},backText:{color:'white',fontSize:22},headerTitleWrap:{flex:1,minWidth:0},headerTitle:{color:'white',fontWeight:'800',fontSize:16},headerSub:{color:'rgba(255,255,255,0.8)',fontSize:11,marginTop:2},
+  menuBtn:{width:42,height:42,borderRadius:21,backgroundColor:'rgba(255,255,255,0.18)',alignItems:'center',justifyContent:'center',borderWidth:1,borderColor:'rgba(255,255,255,0.28)'},menuText:{color:'white',fontSize:23,fontWeight:'800',lineHeight:25},
   homeContent:{padding:14,paddingBottom:30},gridPage:{paddingTop:10,paddingBottom:30},welcomeCard:{backgroundColor:colors.card,borderRadius:16,padding:16,marginBottom:12,borderWidth:1,borderColor:colors.border},
   welcomeTitle:{color:colors.text,fontWeight:'800',fontSize:20,marginBottom:4},welcomeText:{color:colors.textSecondary,fontSize:12,lineHeight:18},rateContent:{padding:14,paddingBottom:30},
   infoCard:{backgroundColor:colors.card,borderRadius:14,padding:14,marginBottom:10,borderWidth:1,borderColor:colors.border},infoTitle:{color:colors.text,fontWeight:'800',fontSize:16,marginBottom:6},infoText:{color:colors.textSecondary,fontSize:12,lineHeight:18},
