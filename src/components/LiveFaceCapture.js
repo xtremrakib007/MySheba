@@ -1,93 +1,89 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Linking } from 'react-native';
+import { WebView } from 'react-native-webview';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { auth, db, functions } from '../firebase/config';
 
-const CHALLENGES = [
-  'Look straight at the camera',
-  'Slowly turn your head to the left',
-  'Slowly turn your head to the right',
-];
+const DIDIT_RETURN_PREFIX = 'mysheba://kyc/complete';
+const VERIFIED_SENTINEL = 'didit://verified/';
 
 export default function LiveFaceCapture({ onCaptured, onCancel }) {
-  const [permission, requestPermission] = useCameraPermissions();
-  const cameraRef = useRef(null);
-  const [step, setStep] = useState(0);
-  const [countdown, setCountdown] = useState(3);
-  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [starting, setStarting] = useState(true);
+  const [url, setUrl] = useState('');
+  const [error, setError] = useState('');
+  const [status, setStatus] = useState('Not Started');
+  const completedRef = useRef(false);
 
   useEffect(() => {
-    if (!permission) return;
-    if (!permission.granted) requestPermission();
-  }, [permission, requestPermission]);
-
-  useEffect(() => {
-    if (!permission?.granted) return undefined;
-    if (countdown <= 0) return undefined;
-    const timer = setTimeout(() => setCountdown((value) => value - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [permission?.granted, countdown]);
-
-  const capture = async () => {
-    if (busy || !cameraRef.current || countdown > 0) return;
-    setBusy(true);
-    try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.85, skipProcessing: false });
-      if (!photo?.uri) throw new Error('Camera did not return a face image.');
-      if (step < CHALLENGES.length - 1) {
-        setStep((value) => value + 1);
-        setCountdown(3);
-      } else {
-        await onCaptured(photo.uri, 'image/jpeg');
+    let unsubscribe = () => {};
+    let mounted = true;
+    const start = async () => {
+      try {
+        if (!auth.currentUser?.uid) throw new Error('Please sign in again before starting KYC.');
+        const createSession = httpsCallable(functions, 'createDiditKycSession');
+        const result = await createSession({});
+        const session = result.data || {};
+        if (!session.url || !session.sessionId) throw new Error('Didit did not return a verification session.');
+        if (!mounted) return;
+        setUrl(session.url);
+        setStatus(session.status || 'Not Started');
+        unsubscribe = onSnapshot(doc(db, 'verificationRequests', auth.currentUser.uid), (snap) => {
+          if (!snap.exists()) return;
+          const data = snap.data();
+          const diditStatus = data.diditStatus || 'Not Started';
+          setStatus(diditStatus);
+          if (!completedRef.current && data.diditSessionId === session.sessionId && data.diditVerified === true) {
+            completedRef.current = true;
+            onCaptured(`${VERIFIED_SENTINEL}${session.sessionId}`, 'application/x-mysheba-didit');
+          } else if (!completedRef.current && data.diditSessionId === session.sessionId && (data.status === 'rejected' || diditStatus === 'Declined')) {
+            setError(data.note || 'Didit declined the identity verification. Please try again.');
+          }
+        }, () => {});
+      } catch (err) {
+        if (mounted) setError(err.message || 'Could not start live identity verification.');
+      } finally {
+        if (mounted) { setStarting(false); setLoading(false); }
       }
-    } finally {
-      setBusy(false);
-    }
+    };
+    start();
+    return () => { mounted = false; unsubscribe(); };
+  }, [onCaptured]);
+
+  const handleNavigation = (request) => {
+    const nextUrl = request.url || '';
+    if (nextUrl.startsWith(DIDIT_RETURN_PREFIX)) return false;
+    return true;
   };
 
-  if (!permission) return <View style={styles.center}><ActivityIndicator size="large" /></View>;
-  if (!permission.granted) {
-    return <View style={styles.center}>
-      <Text style={styles.title}>Camera access is required</Text>
-      <Text style={styles.text}>KYC selfie verification does not accept gallery, file-manager or imported photos.</Text>
-      <TouchableOpacity style={styles.primary} onPress={requestPermission}><Text style={styles.primaryText}>Allow Camera</Text></TouchableOpacity>
-      <TouchableOpacity style={styles.cancel} onPress={onCancel}><Text>Cancel</Text></TouchableOpacity>
-    </View>;
-  }
+  if (starting || loading) return <View style={styles.center}><ActivityIndicator size="large" /><Text style={styles.title}>Starting secure live verification…</Text><Text style={styles.text}>MySheba is opening Didit. The verification is performed by Didit, not by a gallery photo.</Text><TouchableOpacity style={styles.cancel} onPress={onCancel}><Text>Cancel</Text></TouchableOpacity></View>;
+
+  if (error) return <View style={styles.center}><Text style={styles.badge}>LIVE LIVENESS REQUIRED</Text><Text style={styles.title}>Verification not completed</Text><Text style={styles.text}>{error}</Text><TouchableOpacity style={styles.primary} onPress={() => { setError(''); setLoading(true); setStarting(true); setUrl(''); completedRef.current = false; }}><Text style={styles.primaryText}>Try Again</Text></TouchableOpacity><TouchableOpacity style={styles.cancel} onPress={onCancel}><Text>Cancel</Text></TouchableOpacity></View>;
+
+  if (!url) return <View style={styles.center}><Text style={styles.title}>Live verification unavailable</Text><Text style={styles.text}>Didit is not configured on the MySheba server yet.</Text><TouchableOpacity style={styles.cancel} onPress={onCancel}><Text>Close</Text></TouchableOpacity></View>;
 
   return <View style={styles.container}>
-    <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="front" />
-    <View style={styles.overlay}>
-      <View style={styles.top}>
-        <Text style={styles.badge}>LIVE CAMERA ONLY</Text>
-        <Text style={styles.title}>{CHALLENGES[step]}</Text>
-        <Text style={styles.text}>Keep only your face in the frame. No gallery or file upload is available.</Text>
-      </View>
-      <View style={styles.faceGuide} />
-      <View style={styles.bottom}>
-        <Text style={styles.step}>Step {step + 1} of {CHALLENGES.length}</Text>
-        {countdown > 0 ? <Text style={styles.countdown}>{countdown}</Text> : <TouchableOpacity style={styles.capture} onPress={capture} disabled={busy}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.captureText}>{step === CHALLENGES.length - 1 ? 'Capture Live Face' : 'Done — Next'}</Text>}</TouchableOpacity>}
-        <TouchableOpacity style={styles.cancel} onPress={onCancel}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
-      </View>
-    </View>
+    <View style={styles.header}><Text style={styles.badge}>DIDIT LIVE KYC</Text><Text style={styles.headerStatus}>{status}</Text><TouchableOpacity onPress={onCancel} style={styles.close}><Text style={styles.closeText}>✕</Text></TouchableOpacity></View>
+    <WebView source={{ uri: url }} style={styles.webview} originWhitelist={['*']} javaScriptEnabled domStorageEnabled mediaPlaybackRequiresUserAction={false} allowsInlineMediaPlayback onShouldStartLoadWithRequest={handleNavigation} onLoadStart={() => setLoading(false)} onError={() => setError('The secure Didit verification page could not be loaded. Check your internet connection and try again.')} />
+    <View style={styles.footer}><Text style={styles.footerText}>Your camera/liveness check is performed inside Didit. Gallery, file-manager and imported selfie images are not used.</Text></View>
   </View>;
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
-  overlay: { flex: 1, justifyContent: 'space-between', padding: 22, backgroundColor: 'rgba(0,0,0,0.18)' },
-  top: { alignItems: 'center', marginTop: 18 },
-  badge: { color: '#fff', backgroundColor: '#087F73', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, fontWeight: '800', fontSize: 12 },
-  title: { color: '#fff', fontSize: 20, fontWeight: '800', textAlign: 'center', marginTop: 12 },
-  text: { color: '#fff', textAlign: 'center', marginTop: 8, fontSize: 13, lineHeight: 18 },
-  faceGuide: { alignSelf: 'center', width: 230, height: 300, borderWidth: 3, borderColor: '#fff', borderRadius: 120, opacity: 0.9 },
-  bottom: { alignItems: 'center', paddingBottom: 8 },
-  step: { color: '#fff', fontWeight: '700', marginBottom: 8 },
-  countdown: { color: '#fff', fontSize: 46, fontWeight: '900', marginBottom: 8 },
-  capture: { minWidth: 190, minHeight: 52, borderRadius: 26, backgroundColor: '#087F73', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
-  captureText: { color: '#fff', fontWeight: '900', fontSize: 15 },
-  primary: { backgroundColor: '#087F73', paddingHorizontal: 22, paddingVertical: 13, borderRadius: 24, marginTop: 18 },
+  container: { flex: 1, backgroundColor: '#fff' },
+  webview: { flex: 1 },
+  header: { minHeight: 58, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', backgroundColor: '#087F73' },
+  badge: { color: '#fff', fontWeight: '900', fontSize: 12 },
+  headerStatus: { color: '#D9FFFA', fontSize: 11, marginLeft: 10, flex: 1 },
+  close: { padding: 8 },
+  closeText: { color: '#fff', fontSize: 18, fontWeight: '900' },
+  footer: { padding: 10, backgroundColor: '#F3F4F6' },
+  footerText: { color: '#4B5563', textAlign: 'center', fontSize: 11, lineHeight: 16 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: '#fff' },
+  title: { color: '#111827', fontSize: 19, fontWeight: '800', textAlign: 'center', marginTop: 14 },
+  text: { color: '#4B5563', textAlign: 'center', marginTop: 8, fontSize: 13, lineHeight: 19 },
+  primary: { backgroundColor: '#087F73', paddingHorizontal: 24, paddingVertical: 13, borderRadius: 24, marginTop: 20 },
   primaryText: { color: '#fff', fontWeight: '800' },
-  cancel: { padding: 12, marginTop: 6 },
-  cancelText: { color: '#fff', fontWeight: '700' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  cancel: { padding: 14, marginTop: 6 },
 });
