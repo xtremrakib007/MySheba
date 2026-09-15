@@ -1,72 +1,24 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { useTheme } from "../theme/ThemeContext";
 import HeaderDecor from '../components/HeaderDecor';
 import FeatureGrid from '../components/FeatureGrid';
+import PromptModal from '../components/PromptModal';
+import * as ratesService from '../firebase/ratesService';
 import { FEATURE_DEFS, canAccessFeature } from '../firebase/featureAccessService';
 
-// Admin/superadmin-only management tools. Previously an inline "Admin
-// Tools" grid on AdminHomeScreen itself - moved to its own page (same
-// pattern as MoreFeaturesScreen for customers) so the Home page's Quick
-// Services grid can stay identical across every role, with each role's
-// extra tools reached through a single "Admin Features" tile instead.
-// The tool list itself now lives in featureAccessService.js (FEATURE_DEFS)
-// so it's shared with DealerFeaturesScreen/ResellerFeaturesScreen and can
-// be overridden per-role by a superadmin from the "Feature Access" tile
-// below - see canAccessFeature.
 const FEATURE_ACCESS_TILE = { key: 'featureAccess', icon: '🔐', bg: '#EDE7F6', name: 'Feature Access' };
-
-// PHASE 2 - Advertisement -> Feature Ad Controls (AdFeatureControlsScreen).
-// Super Admin-only, same "pushed onto its own section, not one of the
-// role-toggleable FEATURE_DEFS tools" treatment as Feature Access above -
-// a superadmin should always be able to reach the ad controls regardless
-// of what Feature Access itself is configured to allow.
 const AD_CONTROLS_TILE = { key: 'adFeatureControls', icon: '📢', bg: '#FFF3E0', name: 'Feature Ad Controls' };
-
-// PHASE 3 - Advertisement -> Banner Management (BannerManagementScreen).
-// Super Admin-only, same treatment as AD_CONTROLS_TILE above - this is
-// the CRUD screen for individual banner Advertisement docs (create,
-// preview, schedule, activate/pause/archive), separate from the Global/
-// per-feature ON-OFF switches AD_CONTROLS_TILE opens.
 const BANNER_MANAGEMENT_TILE = { key: 'bannerManagement', icon: '🖼️', bg: '#E8F5E9', name: 'Banner Management' };
-
-// PHASE 9 - Advertisement -> Advertiser Management (AdvertiserManagementScreen).
-// Same tile shape as BANNER_MANAGEMENT_TILE above - the roster screen for
-// ad_advertisers docs (create/edit/activate/deactivate), each opening into
-// AdvertiserDetailScreen's Campaigns/Analytics/Payment History tabs.
 const ADVERTISER_MANAGEMENT_TILE = { key: 'advertiserManagement', icon: '🏢', bg: '#EDE7F6', name: 'Advertiser Management' };
-
-// PHASE 8 - Advertisement -> Ad Analytics (AdAnalyticsScreen). Same
-// superadmin-only treatment as AD_CONTROLS_TILE/BANNER_MANAGEMENT_TILE
-// above - the dashboard + Campaign/Feature/Placement/Advertiser
-// Performance reports (src/firebase/adAnalyticsService.js).
 const AD_ANALYTICS_TILE = { key: 'adAnalytics', icon: '📊', bg: '#E1F5FE', name: 'Ad Analytics' };
-
-// PHASE 10 - Advertisement -> Ad Packages (AdPackagesManagementScreen) /
-// Ad Payments (AdPaymentsManagementScreen). Same "own tile, own roster
-// screen, no id needed to open it" shape as ADVERTISER_MANAGEMENT_TILE
-// above.
 const AD_PACKAGES_TILE = { key: 'adPackagesManagement', icon: '📦', bg: '#FBE9E7', name: 'Ad Packages' };
 const AD_PAYMENTS_TILE = { key: 'adPaymentsManagement', icon: '💳', bg: '#E0F7FA', name: 'Ad Payments' };
 const API_PROVIDER_TILE = { key: 'apiProviderManagement', icon: '🔌', bg: '#E8F5E9', name: 'API Management' };
-
-// Tier/Level loyalty system - editing each tier's promotion (fee discount
-// %, title, description, active toggle - see progressionService.js and
-// TierPromotionsScreen.js). Same superadmin-only treatment as
-// FEATURE_ACCESS_TILE above, for the same reason: a plain admin should
-// never be able to grant a bigger fee discount to themselves or a
-// favored customer with a direct write.
 const TIER_PROMOTIONS_TILE = { key: 'tierPromotions', icon: '🏆', bg: '#FFF8E1', name: 'Tier Promotions' };
 
-// The old inline "📊 Dashboard" grid that used to sit on AdminHomeScreen
-// itself (All Tx, Pending, Inquiries, Top-Ups, Chats, Rates, Pricing,
-// Payments, Categories, Support, Banners, Announce) now lives here too,
-// so every admin/superadmin management surface is reached through this
-// one Features page. Tapping a tile jumps back to AdminHomeScreen with
-// the right section already open - see openDashboardTile below - except
-// "Chats" and "All Tx", which go straight to their own screens/tab.
 const DASHBOARD_TOOL_DEFS = [
   { key: 'all', icon: '📋', bg: '#E3F2FD', name: 'All Tx', roles: ['admin', 'superadmin'] },
   { key: 'pending', icon: '⏳', bg: '#FFF8E1', name: 'Pending', roles: ['admin', 'superadmin'] },
@@ -82,25 +34,48 @@ const DASHBOARD_TOOL_DEFS = [
   { key: 'announcements', icon: '📣', bg: '#E0F7FA', name: 'Announce', roles: ['admin', 'superadmin'] },
 ];
 
-export default function AdminFeaturesScreen() {
-  const {
-    colors,
-    brandGradient
-  } = useTheme();
+const MOBILE_RATE_FIELDS = [
+  { key: 'mobileBanking', label: '📱 Mobile Banking — 1 MYR = BDT' },
+];
 
+const REMITTANCE_RATE_FIELDS = [
+  { key: 'remittanceFee', label: '💸 Remittance Transfer Fee — MYR' },
+  { key: 'remittanceBD_ACC', label: '🇧🇩 Remittance BDT — Bank Account' },
+  { key: 'remittanceBD_CASH', label: '🇧🇩 Remittance BDT — Cash Pickup' },
+  { key: 'remittanceNP', label: '🇳🇵 Remittance NPR' },
+  { key: 'remittancePK', label: '🇵🇰 Remittance PKR' },
+  { key: 'remittancePH', label: '🇵🇭 Remittance PHP' },
+  { key: 'remittanceLK', label: '🇱🇰 Remittance LKR' },
+  { key: 'remittanceIN', label: '🇮🇳 Remittance INR' },
+  { key: 'remittanceID', label: '🇮🇩 Remittance IDR' },
+  { key: 'remittanceMM', label: '🇲🇲 Remittance MMK' },
+];
+
+const RECHARGE_RATE_FIELDS = [
+  { key: 'rechargeBD', label: '🇧🇩 Recharge/Internet — BDT' },
+  { key: 'rechargeIN', label: '🇮🇳 Recharge/Internet — INR' },
+  { key: 'rechargeNP', label: '🇳🇵 Recharge/Internet — NPR' },
+  { key: 'rechargeID', label: '🇮🇩 Recharge/Internet — IDR' },
+  { key: 'rechargePK', label: '🇵🇰 Recharge/Internet — PKR' },
+  { key: 'rechargeMM', label: '🇲🇲 Recharge/Internet — MMK' },
+  { key: 'rechargePH', label: '🇵🇭 Recharge/Internet — PHP' },
+  { key: 'rechargeKH', label: '🇰🇭 Recharge/Internet — KHR' },
+];
+
+export default function AdminFeaturesScreen() {
+  const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
   const {
     profile, goBackOrHome, setScreen,
     dealerTxs, inquiries, topups,
     setAdminTab, setAdminViewingSection,
-    featureAccess,
+    featureAccess, rates,
   } = useApp();
+  const [rateView, setRateView] = useState(false);
+  const [editRateKey, setEditRateKey] = useState(null);
+
   const tools = FEATURE_DEFS.filter((t) => profile && canAccessFeature(featureAccess, t.key, profile.role));
-  // Feature Access (the checkbox screen that controls the list above) is
-  // itself superadmin-only, and not one of the toggleable features - a
-  // superadmin should never be able to lock themself out of it.
-  if (profile && profile.role === 'superadmin') tools.push(FEATURE_ACCESS_TILE);
-  if (profile && profile.role === 'superadmin') tools.push(TIER_PROMOTIONS_TILE);
+  if (profile && profile.role === 'superadmin') tools.push(FEATURE_ACCESS_TILE, TIER_PROMOTIONS_TILE);
 
   const dashboardBadges = {
     pending: dealerTxs.filter((t) => t.status === 'pending').length || undefined,
@@ -116,10 +91,96 @@ export default function AdminFeaturesScreen() {
       setScreen('chatList');
       return;
     }
+    if (key === 'rates') {
+      setRateView(true);
+      return;
+    }
     setAdminTab(key);
     setAdminViewingSection(true);
     setScreen('adminHome');
   };
+
+  const saveRate = async (value) => {
+    const key = editRateKey;
+    setEditRateKey(null);
+    const num = Number(value);
+    if (!key || !Number.isFinite(num) || num <= 0) return;
+    try {
+      await ratesService.updateRate(key, num);
+    } catch (e) {
+      // Keep the screen usable if a role attempts a rate outside its scope.
+      // The service and Firestore rules both enforce the same permission.
+    }
+  };
+
+  const renderRateRows = (fields) => fields.map((field) => (
+    <View key={field.key} style={styles.rateRow}>
+      <Text style={styles.rateLabel}>{field.label}</Text>
+      <Text style={styles.rateValue}>{rates[field.key] ?? '—'}</Text>
+      <TouchableOpacity style={styles.editBtn} onPress={() => setEditRateKey(field.key)}>
+        <Text style={styles.editBtnText}>Edit</Text>
+      </TouchableOpacity>
+    </View>
+  ));
+
+  if (rateView) {
+    const isSuperadmin = profile?.role === 'superadmin';
+    return (
+      <View style={styles.screen}>
+        <LinearGradient colors={brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
+          <HeaderDecor />
+          <TouchableOpacity style={styles.backBtn} onPress={() => setRateView(false)}>
+            <Text style={styles.backText}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>💱 {isSuperadmin ? 'Superadmin Rate Management' : 'Admin Rate Management'}</Text>
+        </LinearGradient>
+
+        <ScrollView contentContainerStyle={styles.rateContent}>
+          <View style={styles.infoCard}>
+            <Text style={styles.infoTitle}>Service-specific rates</Text>
+            <Text style={styles.infoText}>
+              Mobile Banking, Remittance, and Recharge/Internet use separate rate tables. Recharge/Internet rates are never shown to customers.
+            </Text>
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>📱 Mobile Banking</Text>
+            {renderRateRows(MOBILE_RATE_FIELDS)}
+            <Text style={styles.hintText}>Admin and Superadmin can change this rate independently from Remittance.</Text>
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>💸 Remittance</Text>
+            {renderRateRows(REMITTANCE_RATE_FIELDS)}
+            <Text style={styles.hintText}>Admin and Superadmin can change each Remittance destination/method rate independently.</Text>
+          </View>
+
+          {isSuperadmin && (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>🔄 Recharge / Internet</Text>
+              {renderRateRows(RECHARGE_RATE_FIELDS)}
+              <Text style={styles.hintText}>Superadmin only. These rates are used internally for wallet settlement and are not displayed in Recharge or Internet customer screens.</Text>
+            </View>
+          )}
+
+          {!isSuperadmin && (
+            <View style={styles.lockedCard}>
+              <Text style={styles.lockedTitle}>🔒 Recharge / Internet rates</Text>
+              <Text style={styles.hintText}>Superadmin controls these rates. They are hidden from customers.</Text>
+            </View>
+          )}
+        </ScrollView>
+
+        <PromptModal
+          visible={!!editRateKey}
+          title="New rate value:"
+          placeholder="e.g. 30.50"
+          onSubmit={saveRate}
+          onCancel={() => setEditRateKey(null)}
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.screen}>
@@ -149,5 +210,19 @@ function createStyles(colors) {
     backBtn: { padding: 4 },
     backText: { color: 'white', fontSize: 20 },
     headerTitle: { color: 'white', fontWeight: '600', fontSize: 16, marginLeft: 10 },
+    rateContent: { padding: 14, paddingBottom: 30 },
+    infoCard: { backgroundColor: colors.card, borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: colors.border },
+    infoTitle: { color: colors.text, fontWeight: '800', fontSize: 16, marginBottom: 6 },
+    infoText: { color: colors.textSecondary, fontSize: 12, lineHeight: 18 },
+    card: { backgroundColor: colors.card, borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: colors.border },
+    cardTitle: { color: colors.text, fontWeight: '800', fontSize: 15, marginBottom: 4 },
+    rateRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
+    rateLabel: { flex: 1, color: colors.text, fontSize: 12, fontWeight: '600' },
+    rateValue: { color: colors.primary, fontWeight: '800', marginHorizontal: 8 },
+    editBtn: { backgroundColor: colors.primary, paddingVertical: 7, paddingHorizontal: 13, borderRadius: 8 },
+    editBtnText: { color: 'white', fontSize: 11, fontWeight: '700' },
+    hintText: { color: colors.textSecondary, fontSize: 11, lineHeight: 16, marginTop: 8 },
+    lockedCard: { backgroundColor: colors.card, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: colors.border },
+    lockedTitle: { color: colors.text, fontWeight: '800', fontSize: 14 },
   });
 }
