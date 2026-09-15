@@ -105,9 +105,6 @@ service cloud.firestore {
 
     match /transactions/{id} {
       allow create: if signedIn() && !serviceIsChargeable(request.resource.data);
-      // Operators receive only the intentionally broadcast pending queue and
-      // records they personally claimed. Completed history remains admin-only
-      // unless it belongs to the customer who created it.
       allow read: if signedIn() && (
         resource.data.customerId == request.auth.uid
         || isAdmin()
@@ -115,7 +112,6 @@ service cloud.firestore {
         || ((isDealerTier() || isReseller()) && resource.data.claimedBy == request.auth.uid)
       );
       allow update: if signedIn() && (
-        // Admin/superadmin can assign a pending transaction to a dealer.
         (isAdmin() && resource.data.status == 'pending' && request.resource.data.get('customerId', null) == resource.data.get('customerId', null) && request.resource.data.get('service', null) == resource.data.get('service', null) && request.resource.data.get('pointsCharged', null) == resource.data.get('pointsCharged', null) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dealerId', 'updatedAt']))
         ||
         (isAdmin() && resource.data.status == 'pending' && resource.data.get('approved', false) != true && request.resource.data.get('approved', false) == true && request.resource.data.get('approvedBy', null) == request.auth.uid && request.resource.data.get('approvedByRole', null) in ['admin', 'superadmin'] && request.resource.data.get('approvedAt', null) != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approved', 'approvedBy', 'approvedByName', 'approvedByRole', 'approvedAt', 'updatedAt']))
@@ -135,7 +131,7 @@ service cloud.firestore {
       allow read: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin());
       allow update, delete: if false;
     }
-    match /selfTopups/{id} { allow read: if signedIn() && uid == request.auth.uid; allow create, update, delete: if false; }
+    match /selfTopups/{id} { allow read: if signedIn() && request.auth.uid == id; allow create, update, delete: if false; }
     match /gamePoints/{uid} { allow read: if signedIn() && uid == request.auth.uid; allow write: if false; }
     match /gamePointsLedger/{id} { allow read: if signedIn(); allow write: if false; }
     match /businessProfiles/{uid} { allow read: if signedIn() && (uid == request.auth.uid || isAdmin()); allow write: if false; }
