@@ -1,5 +1,5 @@
 // Server-side single-device sessions and trusted-device verification.
-// Policy: staff known device = password only; staff new device = exactly one OTP/link challenge.
+// Policy: staff known device = password only; staff new device = user-requested OTP/link challenge.
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const crypto = require('crypto');
 const admin = require('firebase-admin');
@@ -42,6 +42,35 @@ const otpHash = (value) => crypto.createHash('sha256').update(String(value).trim
 const sessionId = () => crypto.randomBytes(24).toString('hex');
 const userRef = (db, uid) => db.collection('users').doc(uid);
 const isStaffRole = (role) => ['admin', 'superadmin', 'dealer', 'reseller'].includes(role);
+
+async function resolveUidForPhoneVerification(request, db) {
+  if (request.auth?.uid) {
+    const requestedUid = String(request.data?.uid || '').trim();
+    if (requestedUid && requestedUid !== request.auth.uid) {
+      throw new HttpsError('permission-denied', 'The verification account does not match the signed-in account.');
+    }
+    return request.auth.uid;
+  }
+
+  const requestedUid = String(request.data?.uid || '').trim();
+  const phoneIdToken = String(request.data?.phoneIdToken || '').trim();
+  if (!requestedUid || !phoneIdToken) {
+    throw new HttpsError('unauthenticated', 'You must be signed in or provide a valid SMS verification token.');
+  }
+
+  const snap = await userRef(db, requestedUid).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'No profile found for this account.');
+  const profile = snap.data();
+  const phone = normalizePhone(profile.phone);
+  if (!phone) throw new HttpsError('failed-precondition', 'This account has no phone number for SMS verification.');
+
+  try {
+    await assertPhoneVerified(phoneIdToken, phone);
+  } catch (error) {
+    throw new HttpsError('failed-precondition', error.message || 'Please verify your phone first.');
+  }
+  return requestedUid;
+}
 
 function trustedMap(current, id, ip, label) {
   const now = Timestamp.now();
@@ -149,11 +178,12 @@ function verifyStaffEmailOtp(challenge, code, deviceId, email) {
 }
 
 exports.checkDeviceSession = onCall(async (request) => {
-  const uid = requireAuth(request);
+  const db = getFirestore();
+  const data = request.data || {};
+  const uid = data.phoneIdToken ? await resolveUidForPhoneVerification(request, db) : requireAuth(request);
   const deviceId = requireDeviceId(request);
   const label = deviceLabel(request);
   const ip = getClientIp(request);
-  const db = getFirestore();
   const ref = userRef(db, uid);
   try {
     const snap = await ref.get();
@@ -168,7 +198,6 @@ exports.checkDeviceSession = onCall(async (request) => {
       const phone = normalizePhone(profile.phone);
       if (!email && !phone) throw new HttpsError('failed-precondition', 'This staff account has no verification contact.');
       const trusted = Boolean(profile.trustedDevices?.[deviceId]);
-      const data = request.data || {};
 
       if (!trusted) {
         if (data.phoneIdToken) {
@@ -181,11 +210,13 @@ exports.checkDeviceSession = onCall(async (request) => {
           verifyStaffEmailOtp(profile.pendingAdminEmailChallenge, data.emailOtp, deviceId, email);
           verifiedNewStaffDevice = true; verificationMethod = 'email_otp';
         } else {
-          if (email && (data.resendEmailChallenge || !profile.pendingAdminEmailChallenge)) {
+          // Do NOT send anything automatically during password login. The user
+          // must explicitly press the Email verification button first.
+          if (data.resendEmailChallenge) {
             await sendStaffEmailChallenge({ db, uid, email, deviceId, displayName: profile.name || profile.displayName });
           }
           await logAudit({ action: 'staff_mfa_challenge', targetUid: uid, performedBy: uid, performedByRole: profile.role, details: { deviceId, ip } });
-          return { requiresOtp: true, reason: 'new_device', email, phone, availableMfaMethods: [phone && 'sms', email && 'email'].filter(Boolean), emailChallengeSent: Boolean(email) };
+          return { requiresOtp: true, reason: 'new_device', email, phone, availableMfaMethods: [phone && 'sms', email && 'email'].filter(Boolean), emailChallengeSent: Boolean(data.resendEmailChallenge && email) };
         }
       }
 
@@ -204,9 +235,6 @@ exports.checkDeviceSession = onCall(async (request) => {
       const current = currentSnap.data();
       if (current.suspended) throw new HttpsError('permission-denied', 'This account has been suspended.');
 
-      // A staff OTP has already authenticated this exact new device. Activate it
-      // immediately, even when another device is currently active. This prevents
-      // the old double-OTP device-switch path.
       if (verifiedNewStaffDevice) {
         const id = sessionId();
         tx.update(ref, { activeSessionId: id, activeDeviceId: deviceId, pendingDeviceApproval: null, lastLoginAt: FieldValue.serverTimestamp() });
@@ -244,36 +272,43 @@ exports.checkDeviceSession = onCall(async (request) => {
 });
 
 exports.confirmDeviceSwitch = onCall(async (request) => {
-  const uid = requireAuth(request);
+  const db = getFirestore();
+  const data = request.data || {};
+  const uid = data.phoneIdToken ? await resolveUidForPhoneVerification(request, db) : requireAuth(request);
   const deviceId = requireDeviceId(request);
   const ip = getClientIp(request);
-  const { emailIdToken, emailOtp } = request.data || {};
-  const db = getFirestore();
+  const { emailIdToken, emailOtp, phoneIdToken } = data;
   const ref = userRef(db, uid);
   try {
     const snap = await ref.get();
     if (!snap.exists) throw new HttpsError('not-found', 'No profile found for this account.');
-    const data = snap.data();
-    const pending = data.pendingDeviceApproval;
+    const profile = snap.data();
+    const pending = profile.pendingDeviceApproval;
     if (!pending || pending.deviceId !== deviceId) throw new HttpsError('failed-precondition', 'No pending verification for this device. Please sign in again.');
-    if (emailOtp) verifyStaffEmailOtp(data.pendingAdminEmailChallenge, emailOtp, deviceId, pending.email);
-    else {
+
+    if (phoneIdToken) {
+      try { await assertPhoneVerified(phoneIdToken, normalizePhone(profile.phone)); }
+      catch (error) { throw new HttpsError('failed-precondition', error.message || 'Please verify your phone first.'); }
+    } else if (emailOtp) {
+      verifyStaffEmailOtp(profile.pendingAdminEmailChallenge, emailOtp, deviceId, pending.email);
+    } else {
       try { await assertEmailVerified(emailIdToken, pending.email); }
       catch (error) { throw new HttpsError('failed-precondition', error.message || 'Please verify the link sent to your email first.'); }
     }
+
     const id = sessionId();
     await ref.update({
       activeSessionId: id,
       activeDeviceId: deviceId,
       pendingDeviceApproval: null,
       pendingAdminEmailChallenge: FieldValue.delete(),
-      trustedDevices: trustedMap(data.trustedDevices, deviceId, ip, null),
+      trustedDevices: trustedMap(profile.trustedDevices, deviceId, ip, null),
       lastLoginAt: FieldValue.serverTimestamp(),
     });
     try { await admin.auth().revokeRefreshTokens(uid); } catch (error) { await logServerError('confirmDeviceSwitch.revokeRefreshTokens', error, { userId: uid }); }
-    await logAudit({ action: 'device_switch_confirmed', targetUid: uid, performedBy: uid, performedByRole: data.role, details: { deviceId, ip } });
-    await checkIpAnomaly(db, uid, ip, { action: 'device_switch', role: data.role });
-    try { await sendNewDeviceAlert({ email: normalizeEmail(data.email) || null, pushToken: data.pushToken || null, deviceId, ip }); } catch (error) {}
+    await logAudit({ action: 'device_switch_confirmed', targetUid: uid, performedBy: uid, performedByRole: profile.role, details: { deviceId, ip, method: phoneIdToken ? 'sms' : 'email' } });
+    await checkIpAnomaly(db, uid, ip, { action: 'device_switch', role: profile.role });
+    try { await sendNewDeviceAlert({ email: normalizeEmail(profile.email) || null, pushToken: profile.pushToken || null, deviceId, ip }); } catch (error) {}
     return { sessionId: id };
   } catch (error) {
     if (error instanceof HttpsError) throw error;
