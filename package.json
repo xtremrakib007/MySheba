@@ -37,6 +37,7 @@
     "expo-secure-store": "~14.2.4",
     "expo-crypto": "~14.1.5",
     "crypto-js": "^4.2.0",
+    "@rdnf-magiba/expo-face-recognition": "0.1.17",
     "react": "19.0.0",
     "react-native": "0.79.6",
     "react-native-webview": "13.13.5",
