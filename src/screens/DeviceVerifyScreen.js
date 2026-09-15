@@ -12,12 +12,15 @@ import * as authService from '../firebase/authService';
 import * as deviceSessionService from '../firebase/deviceSessionService';
 import { functions } from '../firebase/config';
 
+const STAFF_ROLES = ['admin', 'superadmin', 'dealer', 'reseller'];
+
 export default function DeviceVerifyScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
   const { profile, pendingDeviceVerification, setScreen, authError, cancelDeviceVerification } = useApp();
   const email = pendingDeviceVerification?.email || profile?.email || '';
   const phone = pendingDeviceVerification?.phone || profile?.phone || '';
+  const uid = pendingDeviceVerification?.uid || profile?.uid || profile?.userId || '';
   const [method, setMethod] = useState('email');
   const [code, setCode] = useState('');
   const [localError, setLocalError] = useState('');
@@ -35,31 +38,37 @@ export default function DeviceVerifyScreen() {
   const finish = async (credential) => {
     setLocalError(''); setBusy(true);
     try {
-      let result;
+      const deviceId = await deviceSessionService.getDeviceId();
+      const deviceLabel = deviceSessionService.getDeviceLabel();
       const role = profile?.role;
-      if (role === 'admin' || role === 'superadmin' || role === 'dealer' || role === 'reseller') {
-        result = await authService.retryDeviceSession(pendingDeviceVerification?.uid, credential?.phoneIdToken, credential?.emailIdToken, credential?.emailOtp);
-      } else {
-        const deviceId = await deviceSessionService.getDeviceId();
-        const confirmFn = httpsCallable(functions, 'confirmDeviceSwitch');
-        const { data } = await confirmFn({ deviceId, emailIdToken: credential?.emailIdToken || undefined, emailOtp: credential?.emailOtp || undefined });
-        if (!data?.sessionId) throw new Error('Device verification did not return a valid session.');
-        await deviceSessionService.setLocalSessionId(data.sessionId);
-        const refreshed = await authService.fetchProfile(pendingDeviceVerification?.uid);
-        result = { uid: pendingDeviceVerification?.uid, ...(refreshed || {}) };
+      const staff = STAFF_ROLES.includes(role);
+      const payload = {
+        uid,
+        deviceId,
+        deviceLabel,
+        phoneIdToken: credential?.phoneIdToken || undefined,
+        emailIdToken: credential?.emailIdToken || undefined,
+        emailOtp: credential?.emailOtp || undefined,
+      };
+      const fn = httpsCallable(functions, staff ? 'checkDeviceSession' : 'confirmDeviceSwitch');
+      const { data } = await fn(payload);
+      if (data?.requiresOtp || (!staff && !data?.sessionId)) {
+        throw new Error('Verification is still pending. Please enter the latest code.');
       }
-      if (result?.pendingDeviceApproval) throw new Error('Verification is still pending. Please enter the latest code.');
-      setScreen(homeForRole(result?.role || profile?.role));
-    } catch (e) { setLocalError(e.message || 'Could not complete device verification. Please try again.'); }
-    finally { setBusy(false); }
+      await deviceSessionService.setLocalSessionId(data.sessionId);
+      const refreshed = await authService.fetchProfile(uid);
+      setScreen(homeForRole(refreshed?.role || role));
+    } catch (e) {
+      setLocalError(e.message || 'Could not complete device verification. Please try again.');
+    } finally { setBusy(false); }
   };
 
   const sendEmail = async () => {
     setLocalError(''); setBusy(true);
     try {
       const deviceId = await deviceSessionService.getDeviceId();
-      if (profile?.role === 'admin' || profile?.role === 'superadmin' || profile?.role === 'dealer' || profile?.role === 'reseller') {
-        await authService.retryDeviceSession(pendingDeviceVerification?.uid, null, null, null, true);
+      if (STAFF_ROLES.includes(profile?.role)) {
+        await authService.retryDeviceSession(uid, null, null, null, true);
       } else {
         await httpsCallable(functions, 'sendDeviceVerification')({ deviceId });
       }
