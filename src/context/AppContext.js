@@ -934,6 +934,14 @@ export function AppProvider({ children }) {
       if (!user) {
         setProfile(null);
         setAppLocked(false);
+        setPendingDeviceVerification(null);
+        setPendingGooglePhone(false);
+        setSidebarVisible(false);
+        screenHistoryRef.current = [];
+        isPoppingRef.current = false;
+        prevScreenRef.current = 'login';
+        exitArmedRef.current = false;
+        setScreen('login');
         if (!initialRouteDone) { initialRouteDone = true; setAuthLoading(false); }
         return;
       }
@@ -1023,6 +1031,22 @@ export function AppProvider({ children }) {
       if (profileUnsub) profileUnsub();
     };
   }, []);
+
+  // Hard auth boundary: a signed-out device may never remain on or return
+  // to any protected screen. This also closes the small render/navigation
+  // race that can otherwise leave the previous Home screen visible for a
+  // moment after Firebase sign-out. There is no guest/anonymous session.
+  useEffect(() => {
+    if (authLoading) return;
+    if (!authUser || !profile) {
+      if (!PRE_AUTH_SCREENS.includes(screen)) {
+        screenHistoryRef.current = [];
+        isPoppingRef.current = false;
+        prevScreenRef.current = 'login';
+        setScreen('login');
+      }
+    }
+  }, [authLoading, authUser, profile, screen]);
 
   // ---- push notifications: once signed in, ask for permission and save
   // this device's Expo push token onto the profile doc so Cloud Functions
@@ -2117,8 +2141,15 @@ export function AppProvider({ children }) {
       await authService.logout();
     } finally {
       setPendingGooglePhone(false);
+      setAuthUser(null);
+      setPendingDeviceVerification(null);
+      setPendingGooglePhone(false);
+      setSidebarVisible(false);
       setProfile(null);
       screenHistoryRef.current = [];
+      isPoppingRef.current = false;
+      prevScreenRef.current = 'login';
+      exitArmedRef.current = false;
       setScreen('login');
     }
   }, []);

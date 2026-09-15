@@ -122,7 +122,7 @@ export default function Sidebar() {
               </View>
             </View>
             <View style={styles.nameRow}>
-              <Text style={styles.name} numberOfLines={1}>{profile ? profile.name : 'Guest'}</Text>
+              <Text style={styles.name} numberOfLines={1}>{profile?.name || 'MySheba'}</Text>
               <VerifiedBadge verified={profile?.verified} size="sm" light />
             </View>
             {!!profile?.phone && <Text style={styles.phone}>{profile.phone}</Text>}
