@@ -1,38 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  BarChart3,
-  BadgeCheck,
-  Banknote,
-  BellRing,
-  Building2,
-  CreditCard,
-  FileText,
-  Globe2,
-  Headphones,
-  LayoutGrid,
-  LockKeyhole,
-  Plane,
-  Receipt,
-  Settings2,
-  ShieldCheck,
-  Smartphone,
-  Ticket,
-  TrainFront,
-  UserRoundCog,
-  Users,
+  AlertTriangle, BarChart3, BadgeCheck, Banknote, BellRing, Building2, CheckCircle2,
+  CreditCard, FileText, Globe2, Headphones, LayoutGrid, Plane, Search, Settings2,
+  ShieldCheck, Smartphone, Ticket, TrainFront, UserRoundCog, Users, XCircle,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchOpsOverview, type OpsOverview } from '../services/reportsService';
 
-type Feature = {
-  key: string;
-  label: string;
-  path: string;
-  icon: typeof Users;
-  tone: string;
-  superadminOnly?: boolean;
-};
+type Feature = { key: string; label: string; path: string; icon: typeof Users; tone: string; superadminOnly?: boolean };
 
 const FEATURES: Feature[] = [
   { key: 'financial', label: 'Financial\nManagement', path: '/transactions', icon: Banknote, tone: 'teal' },
@@ -54,101 +30,71 @@ const FEATURES: Feature[] = [
 ];
 
 const toneClasses: Record<string, string> = {
-  teal: 'from-teal-50 to-cyan-100 text-teal-600',
-  blue: 'from-blue-50 to-blue-100 text-blue-600',
-  indigo: 'from-indigo-50 to-indigo-100 text-indigo-600',
-  green: 'from-emerald-50 to-green-100 text-emerald-600',
-  cyan: 'from-cyan-50 to-sky-100 text-cyan-600',
-  violet: 'from-violet-50 to-purple-100 text-violet-600',
-  sky: 'from-sky-50 to-blue-100 text-sky-600',
-  gold: 'from-amber-50 to-yellow-100 text-amber-600',
-  azure: 'from-blue-50 to-cyan-100 text-blue-600',
-  orange: 'from-orange-50 to-amber-100 text-orange-600',
-  slate: 'from-slate-50 to-blue-100 text-slate-600',
-  deepblue: 'from-blue-100 to-indigo-100 text-blue-700',
-  lightblue: 'from-sky-50 to-blue-100 text-sky-600',
-  navy: 'from-slate-100 to-indigo-100 text-indigo-800',
+  teal: 'from-teal-50 to-cyan-100 text-teal-600', blue: 'from-blue-50 to-blue-100 text-blue-600',
+  indigo: 'from-indigo-50 to-indigo-100 text-indigo-600', green: 'from-emerald-50 to-green-100 text-emerald-600',
+  cyan: 'from-cyan-50 to-sky-100 text-cyan-600', violet: 'from-violet-50 to-purple-100 text-violet-600',
+  sky: 'from-sky-50 to-blue-100 text-sky-600', gold: 'from-amber-50 to-yellow-100 text-amber-600',
+  azure: 'from-blue-50 to-cyan-100 text-blue-600', orange: 'from-orange-50 to-amber-100 text-orange-600',
+  slate: 'from-slate-50 to-blue-100 text-slate-600', deepblue: 'from-blue-100 to-indigo-100 text-blue-700',
+  lightblue: 'from-sky-50 to-blue-100 text-sky-600', navy: 'from-slate-100 to-indigo-100 text-indigo-800',
   purple: 'from-purple-50 to-fuchsia-100 text-purple-600',
 };
 
-const STAT_CARDS: { key: keyof OpsOverview; label: string; path: string }[] = [
-  { key: 'totalUsers', label: 'Users', path: '/users' },
-  { key: 'verifiedUsers', label: 'Verified', path: '/users' },
-  { key: 'pendingVerifications', label: 'Pending KYC', path: '/verification' },
+const STAT_CARDS: { key: keyof OpsOverview; label: string; path: string; icon: typeof Users }[] = [
+  { key: 'totalUsers', label: 'Total Users', path: '/users', icon: Users },
+  { key: 'verifiedUsers', label: 'Verified Users', path: '/users', icon: CheckCircle2 },
+  { key: 'pendingVerifications', label: 'Pending KYC', path: '/verification', icon: BadgeCheck },
+  { key: 'openTickets', label: 'Open Tickets', path: '/support', icon: Headphones },
 ];
 
 export default function DashboardPage() {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const [overview, setOverview] = useState<OpsOverview | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [query, setQuery] = useState('');
 
-  useEffect(() => {
-    fetchOpsOverview().then(setOverview).catch(() => setOverview(null));
-  }, []);
+  const refreshOverview = async () => {
+    try { setOverview(await fetchOpsOverview()); setLastUpdated(new Date()); } catch { setOverview(null); }
+  };
+
+  useEffect(() => { void refreshOverview(); }, []);
 
   const isSuperadmin = profile?.role === 'superadmin';
-  const visibleFeatures = FEATURES.filter(
-    (feature) => !feature.superadminOnly || isSuperadmin
-  );
+  const visibleFeatures = FEATURES.filter((feature) => !feature.superadminOnly || isSuperadmin);
+  const filteredFeatures = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return visibleFeatures;
+    return visibleFeatures.filter((feature) => feature.label.replaceAll('\\n', ' ').toLowerCase().includes(normalized));
+  }, [query, isSuperadmin]);
+
+  const attentionItems = [
+    { label: 'Pending KYC verifications', value: overview?.pendingVerifications, path: '/verification', danger: false },
+    { label: 'Open support tickets', value: overview?.openTickets, path: '/support', danger: false },
+    { label: 'Marketplace reports', value: overview?.pendingMarketplaceReports, path: '/marketplace-moderation', danger: true },
+    { label: 'Chat reports', value: overview?.pendingChatReports, path: '/chat-reports', danger: true },
+  ].filter((item) => item.value !== null && (item.value ?? 0) > 0);
 
   return (
-    <div className="mx-auto max-w-[1500px] pb-8">
-      <div className="mb-5 overflow-hidden rounded-[22px] bg-gradient-to-r from-teal-500 via-cyan-500 to-blue-600 px-5 py-5 text-white shadow-lg shadow-blue-100 md:px-7">
+    <div className="mx-auto max-w-[1500px] pb-10">
+      <div className="mb-5 overflow-hidden rounded-[22px] bg-gradient-to-r from-teal-500 via-cyan-500 to-blue-600 px-5 py-5 text-white shadow-lg shadow-blue-100 md:px-7 md:py-6">
         <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-white/20 p-3 backdrop-blur-sm">
-              <Settings2 size={29} strokeWidth={2.2} />
-            </div>
-            <div>
-              <h1 className="text-xl font-extrabold tracking-tight text-white md:text-2xl">MySheba</h1>
-              <p className="text-sm font-medium text-white/85 md:text-base">Admin Control Center</p>
-            </div>
-          </div>
-          <div className="hidden text-right sm:block">
-            <p className="text-xs text-white/70">Signed in as</p>
-            <p className="max-w-[240px] truncate text-sm font-semibold">{profile?.name || profile?.email}</p>
-          </div>
+          <div className="flex items-center gap-3"><div className="rounded-2xl bg-white/20 p-3 backdrop-blur-sm"><Settings2 size={29} strokeWidth={2.2} /></div><div><h1 className="text-xl font-extrabold tracking-tight text-white md:text-2xl">MySheba</h1><p className="text-sm font-medium text-white/85 md:text-base">{isSuperadmin ? 'Superadmin Control Center' : 'Admin Control Center'}</p></div></div>
+          <div className="hidden items-center gap-3 sm:flex"><button onClick={() => navigate('/announcements')} className="rounded-full bg-white/15 p-2.5 transition hover:bg-white/25" title="Announcements"><BellRing size={19} /></button><div className="text-right"><p className="text-xs text-white/70">Signed in as</p><p className="max-w-[220px] truncate text-sm font-semibold">{profile?.name || profile?.email}</p></div></div>
         </div>
       </div>
 
-      <div className="mb-6 grid grid-cols-3 gap-2 rounded-[20px] border border-slate-200 bg-white p-3 shadow-sm md:gap-4 md:p-4">
-        {STAT_CARDS.map(({ key, label, path }) => (
-          <button key={key} onClick={() => navigate(path)} className="rounded-2xl bg-slate-50 px-2 py-2 text-center transition hover:bg-blue-50">
-            <p className="text-lg font-extrabold text-slate-800 md:text-2xl">{overview?.[key] ?? '—'}</p>
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 md:text-xs">{label}</p>
-          </button>
-        ))}
+      <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4 md:gap-3">
+        {STAT_CARDS.map(({ key, label, path, icon: Icon }) => <button key={key} onClick={() => navigate(path)} className="group flex items-center gap-2.5 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md md:px-4"><div className="rounded-xl bg-blue-50 p-2 text-blue-600"><Icon size={18} /></div><div className="min-w-0"><p className="truncate text-[10px] font-bold uppercase tracking-wide text-slate-500 md:text-[11px]">{label}</p><p className="text-xl font-extrabold text-slate-900 md:text-2xl">{overview?.[key] ?? '—'}</p></div></button>)}
       </div>
 
-      <div className="mb-5 flex items-center gap-3 px-1">
-        <div className="rounded-xl bg-blue-100 p-2 text-blue-600"><Settings2 size={23} /></div>
-        <div>
-          <h2 className="text-xl font-extrabold text-slate-900 md:text-2xl">Admin Control Center</h2>
-          <p className="text-xs text-slate-500 md:text-sm">Manage your MySheba platform from one place</p>
-        </div>
-      </div>
+      {attentionItems.length > 0 && <div className="mb-6 rounded-[20px] border border-amber-200 bg-gradient-to-r from-amber-50 to-white p-4 shadow-sm md:p-5"><div className="mb-3 flex items-center justify-between gap-2"><div className="flex items-center gap-2"><AlertTriangle size={19} className="text-amber-600" /><h2 className="text-base font-extrabold text-slate-900">Requires Your Attention</h2></div><span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold uppercase text-amber-700">Action Center</span></div><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{attentionItems.map((item) => <button key={item.label} onClick={() => navigate(item.path)} className="flex items-center justify-between rounded-xl border border-white bg-white/80 px-3 py-2.5 text-left shadow-sm transition hover:border-amber-300 hover:bg-white"><span className="flex min-w-0 items-center gap-2 text-xs font-semibold text-slate-700"><span className={item.danger ? 'text-red-500' : 'text-amber-500'}>{item.danger ? <XCircle size={15} /> : <AlertTriangle size={15} />}</span><span className="truncate">{item.label}</span></span><span className="ml-2 text-sm font-extrabold text-slate-900">{item.value}</span></button>)}</div></div>}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:gap-4">
-        {visibleFeatures.map(({ key, label, path, icon: Icon, tone }) => (
-          <button
-            key={key}
-            onClick={() => navigate(path)}
-            className="group flex min-h-[145px] flex-col items-center justify-center rounded-[22px] border-2 border-blue-500/90 bg-white px-2 py-4 text-center shadow-sm transition duration-200 hover:-translate-y-1 hover:border-blue-600 hover:shadow-lg active:scale-[0.98] md:min-h-[174px] md:rounded-[24px]"
-          >
-            <div className={`mb-3 rounded-2xl bg-gradient-to-br p-3.5 shadow-sm transition group-hover:scale-105 md:p-4 ${toneClasses[tone]}`}>
-              <Icon size={37} strokeWidth={1.8} className="md:h-11 md:w-11" />
-            </div>
-            <span className="whitespace-pre-line text-[15px] font-bold leading-5 text-slate-900 md:text-[17px] md:leading-6">{label}</span>
-          </button>
-        ))}
-      </div>
+      <div className="mb-5 flex flex-col gap-3 px-1 sm:flex-row sm:items-end sm:justify-between"><div className="flex items-center gap-3"><div className="rounded-xl bg-blue-100 p-2 text-blue-600"><Settings2 size={23} /></div><div><h2 className="text-xl font-extrabold text-slate-900 md:text-2xl">{isSuperadmin ? 'Superadmin Control Center' : 'Admin Control Center'}</h2><p className="text-xs text-slate-500 md:text-sm">Manage your MySheba platform from one place</p></div></div><div className="relative w-full sm:w-64"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search features..." className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100" /></div></div>
 
-      <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <button onClick={() => navigate('/announcements')} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 text-left text-xs font-semibold text-slate-600 shadow-sm hover:bg-slate-50"><BellRing size={16} /> Announcements</button>
-        <button onClick={() => navigate('/config/pricing')} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 text-left text-xs font-semibold text-slate-600 shadow-sm hover:bg-slate-50"><Receipt size={16} /> Pricing</button>
-        <button onClick={() => navigate('/business-profiles')} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 text-left text-xs font-semibold text-slate-600 shadow-sm hover:bg-slate-50"><Users size={16} /> Business Profiles</button>
-        {isSuperadmin && <button onClick={() => navigate('/devices')} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 text-left text-xs font-semibold text-slate-600 shadow-sm hover:bg-slate-50"><LockKeyhole size={16} /> Device Sessions</button>}
-      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:gap-4">{filteredFeatures.map(({ key, label, path, icon: Icon, tone }) => <button key={key} onClick={() => navigate(path)} className="group flex min-h-[145px] flex-col items-center justify-center rounded-[22px] border-2 border-blue-500/90 bg-white px-2 py-4 text-center shadow-sm transition duration-200 hover:-translate-y-1 hover:border-blue-600 hover:shadow-lg active:scale-[0.98] md:min-h-[174px] md:rounded-[24px]"><div className={`mb-3 rounded-2xl bg-gradient-to-br p-3.5 shadow-sm transition group-hover:scale-105 md:p-4 ${toneClasses[tone]}`}><Icon size={37} strokeWidth={1.8} className="md:h-11 md:w-11" /></div><span className="whitespace-pre-line text-[15px] font-bold leading-5 text-slate-900 md:text-[17px] md:leading-6">{label}</span></button>)}</div>
+      {filteredFeatures.length === 0 && <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">No matching features found.</div>}
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400"><div className="flex items-center gap-1.5">{lastUpdated ? <><CheckCircle2 size={14} className="text-emerald-500" /> Live overview updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</> : 'Loading platform overview...'}</div><button onClick={() => void refreshOverview()} className="font-semibold text-blue-600 hover:text-blue-700">Refresh data</button></div>
     </div>
   );
 }
