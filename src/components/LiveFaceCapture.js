@@ -1,12 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { auth, db, functions } from '../firebase/config';
 
 const DIDIT_RETURN_PREFIX = 'mysheba://kyc/complete';
-const VERIFIED_SENTINEL = 'didit://verified/';
 
 export default function LiveFaceCapture({ onCaptured, onCancel }) {
   const [loading, setLoading] = useState(true);
@@ -34,9 +33,9 @@ export default function LiveFaceCapture({ onCaptured, onCancel }) {
           const data = snap.data();
           const diditStatus = data.diditStatus || 'Not Started';
           setStatus(diditStatus);
-          if (!completedRef.current && data.diditSessionId === session.sessionId && data.diditVerified === true) {
+          if (!completedRef.current && data.diditSessionId === session.sessionId && data.diditVerified === true && data.diditReferenceImageUrl) {
             completedRef.current = true;
-            onCaptured(`${VERIFIED_SENTINEL}${session.sessionId}`, 'application/x-mysheba-didit');
+            onCaptured(data.diditReferenceImageUrl, 'image/jpeg');
           } else if (!completedRef.current && data.diditSessionId === session.sessionId && (data.status === 'rejected' || diditStatus === 'Declined')) {
             setError(data.note || 'Didit declined the identity verification. Please try again.');
           }
