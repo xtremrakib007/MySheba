@@ -17,95 +17,37 @@ export default function RechargeStep({ step }) {
   const styles = createStyles(colors, isDark);
 
   if (step === 0) {
-    return (
-      <View>
-        <FormLabel>Select Country</FormLabel>
-        <View style={styles.grid3}>
-          {countries.map((c) => (
-            <CountrySelectCard
-              key={c.code}
-              flag={c.flag}
-              name={c.name}
-              selected={serviceData.country === c.code}
-              onPress={() => { updateServiceData({ country: c.code, currency: c.curr }); nextStep(); }}
-            />
-          ))}
-        </View>
-      </View>
-    );
+    return (<View><FormLabel>Select Country</FormLabel><View style={styles.grid3}>{countries.map((c) => (<CountrySelectCard key={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr }); nextStep(); }} />))}</View></View>);
   }
-
   if (step === 1) {
     const list = rechargeOperators[serviceData.country] || ['Operator 1', 'Operator 2'];
-    return (
-      <View>
-        <FormLabel>Select Operator</FormLabel>
-        <View style={styles.grid3}>
-          {list.map((o) => {
-            const brand = getOperatorBrand(o);
-            return <RechargeOperatorCard key={o} name={o} logo={brand.logo} color={brand.color} initials={brand.initials} selected={serviceData.operator === o} onPress={() => { updateServiceData({ operator: o }); nextStep(); }} styles={styles} primaryColor={colors.primary} />;
-          })}
-        </View>
-      </View>
-    );
+    return (<View><FormLabel>Select Operator</FormLabel><View style={styles.grid3}>{list.map((o) => { const brand = getOperatorBrand(o); return <RechargeOperatorCard key={o} name={o} logo={brand.logo} color={brand.color} initials={brand.initials} selected={serviceData.operator === o} onPress={() => { updateServiceData({ operator: o }); nextStep(); }} styles={styles} primaryColor={colors.primary} />; })}</View></View>);
   }
-
   if (step === 2) {
-    return (
-      <View>
-        <FormLabel>Enter Mobile Number</FormLabel>
-        <FormInput placeholder="Enter number" placeholderTextColor={isDark ? '#9AA6BA' : '#777777'} keyboardType="phone-pad" value={serviceData.phone || ''} onChangeText={(v) => updateServiceData({ phone: v })} style={styles.phoneInput} />
-      </View>
-    );
+    return (<View><FormLabel>Enter Mobile Number</FormLabel><FormInput placeholder="Enter number" placeholderTextColor={isDark ? '#9AA6BA' : '#777777'} keyboardType="phone-pad" value={serviceData.phone || ''} onChangeText={(v) => updateServiceData({ phone: v })} style={styles.phoneInput} /></View>);
   }
-
   if (step === 3) {
     const cur = serviceData.currency || 'MYR';
     const isForeign = serviceData.country && serviceData.country !== 'MY';
     const walletDeductionMyr = isForeign ? amountToPoints(serviceData.amount || 0, serviceData.country, rates) : (serviceData.amount || 0);
     const amounts = cur === 'MYR' ? [10, 20, 30, 50, 100] : cur === 'BDT' ? [50, 100, 200, 500, 1000] : [50, 100, 200, 500];
-    return (
-      <View>
-        <FormLabel>Select Amount ({cur})</FormLabel>
-        <View style={styles.grid3}>
-          {amounts.map((a) => <RechargeAmountButton key={a} label={`${cur} ${a}`} selected={serviceData.amount === a} onPress={() => updateServiceData({ amount: a })} styles={styles} />)}
-        </View>
-        <FormInput placeholder="Custom amount" keyboardType="numeric" style={styles.phoneInput} value={serviceData.amount != null ? String(serviceData.amount) : ''} onChangeText={(v) => updateServiceData({ amount: parseFloat(v) || 0 })} />
-        {isForeign && serviceData.amount > 0 && (
-          <SummaryCard rows={[{ label: 'Amount', value: `${cur} ${Number(serviceData.amount).toFixed(2)}` }]} totalLabel="Wallet deduction" totalValue={`${walletDeductionMyr.toFixed(2)} MYR`} />
-        )}
-      </View>
-    );
+    return (<View><FormLabel>Select Amount ({cur})</FormLabel><View style={styles.grid3}>{amounts.map((a) => <RechargeAmountButton key={a} label={`${cur} ${a}`} selected={serviceData.amount === a} onPress={() => updateServiceData({ amount: a })} styles={styles} />)}</View><FormInput placeholder="Custom amount" keyboardType="numeric" style={styles.phoneInput} value={serviceData.amount != null ? String(serviceData.amount) : ''} onChangeText={(v) => updateServiceData({ amount: parseFloat(v) || 0 })} />{isForeign && serviceData.amount > 0 && <SummaryCard rows={[{ label: 'Amount', value: `${cur} ${Number(serviceData.amount).toFixed(2)}` }]} totalLabel="Wallet deduction" totalValue={`${walletDeductionMyr.toFixed(2)} MYR`} />}</View>);
   }
-
   return null;
 }
 
-function RechargeOperatorCard({ name, logo, color, initials, selected, onPress, styles, primaryColor }) {
-  return <TouchableOpacity style={[styles.selectCard, styles.operatorCard, selected && styles.selectCardSelected]} onPress={onPress} activeOpacity={0.8}>{logo ? <Image source={logo} style={styles.operatorLogo} resizeMode="contain" /> : <View style={[styles.operatorBadge, { backgroundColor: color || primaryColor }]}><Text style={styles.operatorBadgeText}>{initials}</Text></View>}<Text style={[styles.selectName, styles.operatorName, selected && styles.selectNameSelected]} numberOfLines={2}>{String(name || '')}</Text></TouchableOpacity>;
-}
-
-function RechargeAmountButton({ label, selected, onPress, styles }) {
-  return <TouchableOpacity style={[styles.amountBtn, selected && styles.amountBtnSelected]} onPress={onPress} activeOpacity={0.8}><Text style={[styles.amountBtnText, selected && styles.amountBtnTextSelected]}>{label}</Text></TouchableOpacity>;
-}
-
-export function validateStep(step, serviceData) {
-  if (step === 0 && !serviceData.country) return 'Please select a country.';
-  if (step === 1 && !serviceData.operator) return 'Please select an operator.';
-  if (step === 2 && !(serviceData.phone || '').trim()) return 'Please enter a mobile number.';
-  if (step === 3 && !(serviceData.amount > 0)) return 'Please select or enter an amount.';
-  return null;
-}
-
+function RechargeOperatorCard({ name, logo, color, initials, selected, onPress, styles, primaryColor }) { return <TouchableOpacity style={[styles.selectCard, styles.operatorCard, selected && styles.selectCardSelected]} onPress={onPress} activeOpacity={0.8}>{logo ? <Image source={logo} style={styles.operatorLogo} resizeMode="contain" /> : <View style={[styles.operatorBadge, { backgroundColor: color || primaryColor }]}><Text style={styles.operatorBadgeText}>{initials}</Text></View>}<Text style={[styles.selectName, styles.operatorName, selected && styles.selectNameSelected]} numberOfLines={2}>{String(name || '')}</Text></TouchableOpacity>; }
+function RechargeAmountButton({ label, selected, onPress, styles }) { return <TouchableOpacity style={[styles.amountBtn, selected && styles.amountBtnSelected]} onPress={onPress} activeOpacity={0.8}><Text style={[styles.amountBtnText, selected && styles.amountBtnTextSelected]}>{label}</Text></TouchableOpacity>; }
+export function validateStep(step, serviceData) { if (step === 0 && !serviceData.country) return 'Please select a country.'; if (step === 1 && !serviceData.operator) return 'Please select an operator.'; if (step === 2 && !(serviceData.phone || '').trim()) return 'Please enter a mobile number.'; if (step === 3 && !(serviceData.amount > 0)) return 'Please select or enter an amount.'; return null; }
 function createStyles(colors, isDark) {
-  const tileBg = isDark ? '#000000' : '#FFFFFF';
-  const tileText = isDark ? '#FFFFFF' : '#000000';
+  const tileBg = colors.surface;
+  const tileText = colors.text;
   return StyleSheet.create({
     grid3: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
     selectCard: { width: '30%', height: 96, backgroundColor: tileBg, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingVertical: 10, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', marginBottom: 10, shadowColor: '#000', shadowOpacity: isDark ? 0 : 0.08, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
-    selectCardSelected: { borderColor: colors.primary, backgroundColor: isDark ? '#061B1A' : '#FFFFFF', borderWidth: 2 },
+    selectCardSelected: { borderColor: colors.primary, backgroundColor: isDark ? colors.surfaceElevated : colors.card, borderWidth: 2 },
     selectName: { fontSize: 11, fontWeight: '700', marginTop: 2, textAlign: 'center', color: tileText },
-    selectNameSelected: { color: isDark ? '#FFFFFF' : '#111111' },
-    operatorCard: { paddingVertical: 14, paddingHorizontal: 8 }, operatorLogo: { width: 44, height: 44 }, operatorBadge: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }, operatorBadgeText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' }, operatorName: { marginTop: 8 }, phoneInput: { backgroundColor: tileBg, color: tileText, borderColor: colors.border }, amountBtn: { flexBasis: '31%', paddingVertical: 10, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: tileBg, alignItems: 'center', marginBottom: 8 }, amountBtnSelected: { backgroundColor: colors.primary, borderColor: colors.primary }, amountBtnText: { fontWeight: '500', fontSize: 13, color: tileText }, amountBtnTextSelected: { color: '#FFFFFF' },
+    selectNameSelected: { color: colors.text },
+    operatorCard: { paddingVertical: 14, paddingHorizontal: 8 }, operatorLogo: { width: 44, height: 44 }, operatorBadge: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }, operatorBadgeText: { color: colors.onPrimary, fontSize: 13, fontWeight: '700' }, operatorName: { marginTop: 8 }, phoneInput: { backgroundColor: tileBg, color: tileText, borderColor: colors.border }, amountBtn: { flexBasis: '31%', paddingVertical: 10, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: tileBg, alignItems: 'center', marginBottom: 8 }, amountBtnSelected: { backgroundColor: colors.primary, borderColor: colors.primary }, amountBtnText: { fontWeight: '500', fontSize: 13, color: tileText }, amountBtnTextSelected: { color: colors.onPrimary },
   });
 }
