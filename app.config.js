@@ -11,11 +11,6 @@ module.exports = () => {
   const expo = appJson.expo;
   return {
     ...expo,
-    plugins: [
-      ...(expo.plugins || []),
-      '@nitro-mlkit/face-recognition',
-      '@nitro-mlkit/face-detection',
-    ],
     android: {
       ...expo.android,
       googleServicesFile: process.env.GOOGLE_SERVICES_JSON || expo.android.googleServicesFile,
