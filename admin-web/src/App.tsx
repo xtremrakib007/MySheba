@@ -15,6 +15,7 @@ import ReportsPage from './pages/ReportsPage';
 import RatesPricingPage from './pages/RatesPricingPage';
 import PricingPage from './pages/PricingPage';
 import TransactionsPage from './pages/TransactionsPage';
+import FinancialControlPage from './pages/FinancialControlPage';
 import InquiriesPage from './pages/InquiriesPage';
 import AnnouncementsPage from './pages/AnnouncementsPage';
 import TransferPointsPage from './pages/TransferPointsPage';
@@ -40,6 +41,7 @@ export default function App() {
           <Route element={<ProtectedRoute />}>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/transactions" element={<TransactionsPage />} />
+            <Route path="/financial" element={<FinancialControlPage />} />
             <Route path="/inquiries" element={<InquiriesPage />} />
             <Route path="/announcements" element={<AnnouncementsPage />} />
             <Route path="/transfer-points" element={<TransferPointsPage />} />
