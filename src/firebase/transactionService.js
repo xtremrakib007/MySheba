@@ -8,12 +8,21 @@ const COLLECTION = 'transactions';
 const CHARGEABLE_SERVICE_FNS = { Recharge: 'chargeRecharge', Internet: 'chargeInternetPackage', 'Mobile Banking': 'chargeMobileBanking', Remittance: 'chargeRemittance' };
 const REJECT_FNS = { Recharge: 'rejectRechargeTransaction', Internet: 'rejectInternetPackageTransaction', 'Mobile Banking': 'rejectMobileBankingTransaction', Remittance: 'rejectRemittanceTransaction' };
 
+function createRequestId() {
+  return `ms_${Date.now()}_${Math.random().toString(36).slice(2, 18)}`;
+}
+
 export async function createTransaction(payload, customer) {
   const chargeFnName = CHARGEABLE_SERVICE_FNS[payload.service];
   if (chargeFnName) {
+    // Keep the same requestId on the payload object so a retry/double-submit
+    // of the same order can be recognized server-side instead of charging
+    // the wallet twice.
+    const requestId = payload.requestId || createRequestId();
+    payload.requestId = requestId;
     const fn = httpsCallable(functions, chargeFnName);
     try {
-      const { data } = await fn({ payload, customer });
+      const { data } = await fn({ payload, customer, requestId });
       logActivity('transaction_submitted', { service: payload.service, amount: payload.amount || 0, cost: data.cost });
       return data.id;
     } catch (err) { throw new Error(err.message || 'Could not submit this order right now.'); }
@@ -67,7 +76,6 @@ export function subscribeBroadcastTransactions(callback, onError) {
 
       if (role !== 'dealer' && role !== 'reseller') return;
 
-      // Only broadcast pending services this role can actually process.
       const pendingQuery = role === 'dealer'
         ? query(collection(db, COLLECTION), where('status', '==', 'pending'), where('service', '==', 'Mobile Banking'))
         : query(collection(db, COLLECTION), where('status', '==', 'pending'), where('service', 'in', ['Recharge', 'Internet', 'Remittance']));
