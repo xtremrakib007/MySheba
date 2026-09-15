@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'rea
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { NitroFace, PerformanceMode } from '@nitro-mlkit/face-detection';
 import { NitroRecognizer } from '@nitro-mlkit/face-recognition';
+import { setLastFaceRecognition } from '../firebase/faceRecognitionState';
 
 const FACE_MODEL_URL = 'https://raw.githubusercontent.com/hugocornellier/face_detection_tflite/main/assets/models/mobilefacenet.tflite';
 const PROBE_ID = '__mysheba_kyc_probe__';
@@ -84,6 +85,7 @@ export default function LiveFaceCapture({ onCaptured, onCancel }) {
       }
 
       setStatus('Face recognized.');
+      setLastFaceRecognition({ embedding, model: 'MobileFaceNet' });
       onCaptured?.(photo.uri, 'image/jpeg', {
         method: 'native_face_recognition',
         faceRecognitionVerified: true,
