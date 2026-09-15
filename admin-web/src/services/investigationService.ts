@@ -15,13 +15,12 @@ function timestampValue(v: unknown): number|null {
   if (typeof v === 'string') { const n=Date.parse(v); return Number.isNaN(n) ? null : n; }
   return null;
 }
-function dateValue(v: unknown): string|null {
-  const ms=timestampValue(v);
-  return ms===null ? null : new Date(ms).toLocaleString();
-}
+function dateValue(v: unknown): string|null { const ms=timestampValue(v); return ms===null ? null : new Date(ms).toLocaleString(); }
 function userFromDoc(d:{id:string;data:()=>DocumentData}):AdminUserRow {
   const x=d.data();
-  return { uid:d.id, name:x.name??x.displayName??'(no name)', email:x.email??null, phone:x.phone??x.phoneNumber??null, role:x.role??'user', disabled:Boolean(x.disabled), dealerCode:x.dealerCode, resellerCode:x.resellerCode, features:{mobileBanking:true,recharge:true,remittance:true,travel:true,marketplace:true,ticketReseller:false,...(x.features??{})} };
+  const rawVerification=x.verificationStatus ?? (x.verified===true ? 'approved' : undefined);
+  const verificationStatus = rawVerification === 'pending' || rawVerification === 'approved' || rawVerification === 'rejected' ? rawVerification : 'unknown';
+  return { uid:d.id, name:x.name??x.displayName??'(no name)', email:x.email??null, phone:x.phone??x.phoneNumber??null, role:x.role??'user', disabled:Boolean(x.disabled), verificationStatus, dealerCode:x.dealerCode, resellerCode:x.resellerCode, features:{mobileBanking:true,recharge:true,remittance:true,travel:true,marketplace:true,ticketReseller:false,...(x.features??{})} };
 }
 export async function searchInvestigationUsers(term:string):Promise<AdminUserRow[]> {
   const snap=await getDocs(query(collection(db,'users'),orderBy('name'),limit(500)));
@@ -35,21 +34,10 @@ export async function getInvestigationTickets(uid:string):Promise<InvestigationT
   try { const snap=await getDocs(query(collection(db,'supportTickets'),where('userId','==',uid),limit(100))); return snap.docs.map(d=>{const x=d.data();return{id:d.id,subject:x.subject??'(no subject)',message:x.message??'',status:x.status??'open',userId:x.userId??null,createdAt:dateValue(x.createdAt),timestampMs:timestampValue(x.createdAt)}}).sort((a,b)=>(b.timestampMs??0)-(a.timestampMs??0)); }
   catch(err){console.warn('Investigation ticket query failed',err);return[];}
 }
-function mapKyc(d:{id:string;data:()=>DocumentData}):InvestigationKyc {
-  const x=d.data();
-  return {id:d.id,status:String(x.status??'pending'),documentType:x.documentType??null,submittedAt:dateValue(x.submittedAt),timestampMs:timestampValue(x.submittedAt),rejectionReason:x.rejectionReason??null};
-}
+function mapKyc(d:{id:string;data:()=>DocumentData}):InvestigationKyc { const x=d.data(); return {id:d.id,status:String(x.status??'pending'),documentType:x.documentType??null,submittedAt:dateValue(x.submittedAt),timestampMs:timestampValue(x.submittedAt),rejectionReason:x.rejectionReason??null}; }
 export async function getInvestigationKyc(uid:string):Promise<InvestigationKyc[]> {
-  try {
-    // Current KYC records are commonly stored as verificationRequests/{uid}; support both that schema and uid-field records.
-    const direct=await getDoc(doc(db,'verificationRequests',uid));
-    if(direct.exists()) return [mapKyc(direct)];
-    const snap=await getDocs(query(collection(db,'verificationRequests'),where('uid','==',uid),orderBy('submittedAt','desc'),limit(20)));
-    return snap.docs.map(mapKyc);
-  } catch(err) {
-    console.warn('Investigation KYC query failed',err);
-    return [];
-  }
+  try { const direct=await getDoc(doc(db,'verificationRequests',uid)); if(direct.exists()) return [mapKyc(direct)]; const snap=await getDocs(query(collection(db,'verificationRequests'),where('uid','==',uid),orderBy('submittedAt','desc'),limit(20))); return snap.docs.map(mapKyc); }
+  catch(err){console.warn('Investigation KYC query failed',err);return[];}
 }
 function matchesUid(data:Record<string,unknown>,uid:string):boolean { return Object.values(data).some(v=>typeof v==='string'&&v===uid); }
 export async function getInvestigationLogs(uid:string):Promise<InvestigationLog[]> {
