@@ -1,7 +1,7 @@
 // Dealer/reseller queue: approve -> accept as Operator -> complete.
-import { collection, addDoc, doc, onSnapshot, query, where, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, doc, onSnapshot, query, where, orderBy, serverTimestamp, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { db, functions } from './config';
+import { db, functions, auth } from './config';
 import { logActivity } from './logService';
 
 const COLLECTION = 'transactions';
@@ -33,13 +33,67 @@ export function subscribeTransactions(callback, onError) {
   const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'));
   return onSnapshot(q, (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), onError);
 }
+
+// Customer/dealer/reseller mobile queue. A dealer/reseller must never receive
+// the completed history or another operator's processing records. Pending
+// orders are intentionally broadcast to eligible operators; once claimed,
+// the processing listener is restricted to the current operator's UID.
 export function subscribeBroadcastTransactions(callback, onError) {
-  const q = query(collection(db, COLLECTION), where('status', 'in', ['pending', 'processing', 'completed']));
-  return onSnapshot(q, (snap) => {
-    const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)); callback(list);
-  }, onError);
+  let stopped = false;
+  let unsubPending = () => {};
+  let unsubClaimed = () => {};
+  let pending = [];
+  let claimed = [];
+
+  const emit = () => {
+    const byId = new Map();
+    [...pending, ...claimed].forEach((tx) => byId.set(tx.id, tx));
+    const list = Array.from(byId.values());
+    list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    callback(list);
+  };
+
+  (async () => {
+    try {
+      const uid = auth.currentUser?.uid;
+      if (!uid) return;
+      const profileSnap = await getDoc(doc(db, 'users', uid));
+      if (stopped) return;
+      const role = profileSnap.exists() ? profileSnap.data()?.role : null;
+
+      // Admin/superadmin need the full operational stream. The Firestore rule
+      // permits this only for admin roles.
+      if (role === 'admin' || role === 'superadmin') {
+        const q = query(collection(db, COLLECTION), where('status', 'in', ['pending', 'processing', 'completed']));
+        unsubPending = onSnapshot(q, (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))), onError);
+        return;
+      }
+
+      if (role !== 'dealer' && role !== 'reseller') return;
+
+      const pendingQuery = query(collection(db, COLLECTION), where('status', '==', 'pending'));
+      const claimedQuery = query(collection(db, COLLECTION), where('claimedBy', '==', uid));
+
+      unsubPending = onSnapshot(pendingQuery, (snap) => {
+        pending = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        emit();
+      }, onError);
+      unsubClaimed = onSnapshot(claimedQuery, (snap) => {
+        claimed = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        emit();
+      }, onError);
+    } catch (err) {
+      if (!stopped) onError?.(err);
+    }
+  })();
+
+  return () => {
+    stopped = true;
+    unsubPending();
+    unsubClaimed();
+  };
 }
+
 export function subscribeMyTransactions(uid, callback, onError) {
   const q = query(collection(db, COLLECTION), where('customerId', '==', uid));
   return onSnapshot(q, (snap) => {
