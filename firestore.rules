@@ -16,9 +16,6 @@ service cloud.firestore {
     function canHandleTransaction(s) { return isAdmin() || (isDealerTier() && s == 'Mobile Banking') || (isReseller() && s in ['Recharge', 'Internet', 'Remittance']); }
     function serviceIsChargeable(data) { return data['service'] in ['Recharge', 'Internet', 'Mobile Banking', 'Remittance']; }
 
-    // Service-specific exchange-rate controls.
-    // Admin may change only Mobile Banking + Remittance rates.
-    // Superadmin may change every rate, including Recharge/Internet rates.
     match /rates/current {
       allow read: if signedIn();
       allow create: if isSuperadmin();
@@ -32,6 +29,24 @@ service cloud.firestore {
           'updatedAt'
         ])
       );
+      allow delete: if false;
+    }
+
+    // Customer KYC submissions. Customers can only create/update their own
+    // request while it is pending. Review fields and users.verified are
+    // controlled by the Admin SDK Cloud Functions.
+    match /verificationRequests/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.documentUrl is string;
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.documentUrl is string;
       allow delete: if false;
     }
 
@@ -95,45 +110,11 @@ service cloud.firestore {
       allow create: if signedIn() && !serviceIsChargeable(request.resource.data);
       allow read: if signedIn() && (resource.data.customerId == request.auth.uid || isAdmin() || isDealerTier() || isReseller());
       allow update: if signedIn() && (
-        (
-          isAdmin()
-          && resource.data.status == 'pending'
-          && resource.data.get('approved', false) != true
-          && request.resource.data.get('approved', false) == true
-          && request.resource.data.get('approvedBy', null) == request.auth.uid
-          && request.resource.data.get('approvedByRole', null) in ['admin', 'superadmin']
-          && request.resource.data.get('approvedAt', null) != null
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approved', 'approvedBy', 'approvedByName', 'approvedByRole', 'approvedAt', 'updatedAt'])
-        )
+        (isAdmin() && resource.data.status == 'pending' && resource.data.get('approved', false) != true && request.resource.data.get('approved', false) == true && request.resource.data.get('approvedBy', null) == request.auth.uid && request.resource.data.get('approvedByRole', null) in ['admin', 'superadmin'] && request.resource.data.get('approvedAt', null) != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approved', 'approvedBy', 'approvedByName', 'approvedByRole', 'approvedAt', 'updatedAt']))
         ||
-        (
-          canHandleTransaction(resource.data.get('service', null))
-          && resource.data.status == 'pending'
-          && resource.data.get('approved', false) == true
-          && resource.data.claimedBy == null
-          && request.resource.data.status == 'processing'
-          && request.resource.data.claimedBy == request.auth.uid
-          && request.resource.data.get('claimedByRole', null) == myRole()
-          && request.resource.data.get('claimedByName', null) != null
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'claimedBy', 'claimedByRole', 'claimedByName', 'updatedAt'])
-        )
+        (canHandleTransaction(resource.data.get('service', null)) && resource.data.status == 'pending' && resource.data.get('approved', false) == true && resource.data.claimedBy == null && request.resource.data.status == 'processing' && request.resource.data.claimedBy == request.auth.uid && request.resource.data.get('claimedByRole', null) == myRole() && request.resource.data.get('claimedByName', null) != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'claimedBy', 'claimedByRole', 'claimedByName', 'updatedAt']))
         ||
-        (
-          canHandleTransaction(resource.data.get('service', null))
-          && resource.data.status == 'processing'
-          && resource.data.claimedBy == request.auth.uid
-          && resource.data.get('approved', false) == true
-          && resource.data.get('approvedBy', null) != null
-          && request.resource.data.status == 'completed'
-          && request.resource.data.claimedBy == request.auth.uid
-          && request.resource.data.get('pin', '') != ''
-          && request.resource.data.get('receiptUrl', '') != ''
-          && request.resource.data.get('completedBy', null) == request.auth.uid
-          && request.resource.data.get('completedByRole', null) == myRole()
-          && request.resource.data.get('completedByName', null) != null
-          && request.resource.data.get('completedAt', null) != null
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'pin', 'receiptUrl', 'completedBy', 'completedByName', 'completedByRole', 'completedAt', 'updatedAt'])
-        )
+        (canHandleTransaction(resource.data.get('service', null)) && resource.data.status == 'processing' && resource.data.claimedBy == request.auth.uid && resource.data.get('approved', false) == true && resource.data.get('approvedBy', null) != null && request.resource.data.status == 'completed' && request.resource.data.claimedBy == request.auth.uid && request.resource.data.get('pin', '') != '' && request.resource.data.get('receiptUrl', '') != '' && request.resource.data.get('completedBy', null) == request.auth.uid && request.resource.data.get('completedByRole', null) == myRole() && request.resource.data.get('completedByName', null) != null && request.resource.data.get('completedAt', null) != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'pin', 'receiptUrl', 'completedBy', 'completedByName', 'completedByRole', 'completedAt', 'updatedAt']))
       )
       && request.resource.data.get('customerId', null) == resource.data.get('customerId', null)
       && request.resource.data.get('pointsCharged', null) == resource.data.get('pointsCharged', null)
