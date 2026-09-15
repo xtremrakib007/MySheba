@@ -31,6 +31,7 @@ import PointTopUpPage from './pages/PointTopUpPage';
 import DeviceSessionsPage from './pages/DeviceSessionsPage';
 import SecurityCenterPage from './pages/SecurityCenterPage';
 import GrowthCenterPage from './pages/GrowthCenterPage';
+import AuditCompliancePage from './pages/AuditCompliancePage';
 import SuperadminRoute from './routes/SuperadminRoute';
 
 export default function App() {
@@ -69,6 +70,7 @@ export default function App() {
             <Route element={<SuperadminRoute />}>
               <Route path="/topup" element={<PointTopUpPage />} />
               <Route path="/devices" element={<DeviceSessionsPage />} />
+              <Route path="/audit" element={<AuditCompliancePage />} />
               <Route path="/chat-reports/investigate/:chatId" element={<InvestigateChatPage />} />
               <Route path="/tool-access" element={<ToolAccessPage />} />
             </Route>
