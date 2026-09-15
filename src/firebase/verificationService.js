@@ -1,6 +1,6 @@
 // Customer identity verification service.
 // Phone verification happens at registration; this service handles the separate KYC review request.
-import { doc, setDoc, onSnapshot, collection, query, where, orderBy, serverTimestamp, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot, collection, query, where, orderBy, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './config';
 
@@ -14,6 +14,24 @@ export async function submitVerificationRequest(uid, { name, phone }, documentUr
   const existingSnap = await getDoc(requestRef);
   const existing = existingSnap.exists() ? existingSnap.data() : {};
   const providerApproved = existing.diditProvider === 'didit' && existing.diditVerified === true;
+
+  if (providerApproved) {
+    const saveDiditKycDetails = httpsCallable(functions, 'createDiditKycSession');
+    await saveDiditKycDetails({
+      action: 'saveDetails',
+      name: name || '',
+      phone: phone || '',
+      frontDocumentUrl: front,
+      backDocumentUrl: back,
+      selfieUrl: selfie,
+      kycData,
+    });
+    return;
+  }
+
+  // This path remains for the existing manual/admin KYC flow when no Didit
+  // provider approval exists yet.
+  const { setDoc, serverTimestamp } = await import('firebase/firestore');
   await setDoc(requestRef, {
     uid,
     name: name || '',
@@ -39,18 +57,11 @@ export async function submitVerificationRequest(uid, { name, phone }, documentUr
     frontImageUrl: front,
     backImageUrl: back,
     selfieImageUrl: selfie,
-    status: providerApproved ? 'approved' : 'pending',
-    note: providerApproved ? (existing.note || '') : '',
+    status: 'pending',
+    note: '',
     rejectionReason: '',
-    liveFaceVerified: providerApproved || kycData.liveFaceVerified === true,
-    liveFaceMethod: providerApproved ? 'didit_hosted_liveness' : (kycData.liveFaceMethod || ''),
-    diditProvider: existing.diditProvider || '',
-    diditSessionId: existing.diditSessionId || '',
-    diditWorkflowId: existing.diditWorkflowId || '',
-    diditStatus: existing.diditStatus || '',
-    diditVerified: providerApproved,
-    diditReferenceImageUrl: existing.diditReferenceImageUrl || '',
-    diditDecision: existing.diditDecision || null,
+    liveFaceVerified: kycData.liveFaceVerified === true,
+    liveFaceMethod: kycData.liveFaceMethod || '',
     submittedAt: serverTimestamp(),
   }, { merge: true });
 }
