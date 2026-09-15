@@ -1,8 +1,10 @@
 // MySheba SMS OTP implementation using Firebase Phone Authentication.
 import rnfbAuth from '@react-native-firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const PHONE_AUTH_TIMEOUT_MS = 30000;
 const SMS_RESEND_COOLDOWN_MS = 60000;
+const SMS_COOLDOWN_KEY = 'mysheba:smsOtpLastRequest:v1';
 let lastSmsRequestByPhone = new Map();
 
 function digitsOnly(value) {
@@ -29,6 +31,48 @@ export function phoneToE164(phone, dialCode = '+60') {
   return toE164(phone, dialCode);
 }
 
+async function getLastRequest(e164) {
+  const memoryValue = lastSmsRequestByPhone.get(e164) || 0;
+  try {
+    const raw = await AsyncStorage.getItem(SMS_COOLDOWN_KEY);
+    const saved = raw ? JSON.parse(raw) : {};
+    const storedValue = Number(saved?.[e164] || 0);
+    return Math.max(memoryValue, Number.isFinite(storedValue) ? storedValue : 0);
+  } catch (_) {
+    return memoryValue;
+  }
+}
+
+async function rememberLastRequest(e164, timestamp) {
+  lastSmsRequestByPhone.set(e164, timestamp);
+  try {
+    const raw = await AsyncStorage.getItem(SMS_COOLDOWN_KEY);
+    const saved = raw ? JSON.parse(raw) : {};
+    saved[e164] = timestamp;
+    // Keep this small and discard entries older than one day.
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    Object.keys(saved).forEach((key) => {
+      if (Number(saved[key]) < cutoff) delete saved[key];
+    });
+    await AsyncStorage.setItem(SMS_COOLDOWN_KEY, JSON.stringify(saved));
+  } catch (_) {
+    // The in-memory guard still protects the current app process if storage fails.
+  }
+}
+
+async function clearLastRequest(e164, expectedTimestamp) {
+  if ((lastSmsRequestByPhone.get(e164) || 0) !== expectedTimestamp) return;
+  lastSmsRequestByPhone.delete(e164);
+  try {
+    const raw = await AsyncStorage.getItem(SMS_COOLDOWN_KEY);
+    const saved = raw ? JSON.parse(raw) : {};
+    if (Number(saved?.[e164] || 0) === expectedTimestamp) {
+      delete saved[e164];
+      await AsyncStorage.setItem(SMS_COOLDOWN_KEY, JSON.stringify(saved));
+    }
+  } catch (_) {}
+}
+
 function withTimeout(promise, ms, message) {
   let timer;
   const timeout = new Promise((_, reject) => {
@@ -44,13 +88,16 @@ function withTimeout(promise, ms, message) {
 export async function sendPhoneOtp(phone, dialCode = '+60') {
   const e164 = toE164(phone, dialCode);
   const now = Date.now();
-  const last = lastSmsRequestByPhone.get(e164) || 0;
+  const last = await getLastRequest(e164);
   const remaining = SMS_RESEND_COOLDOWN_MS - (now - last);
   if (remaining > 0) {
     throw new Error(`Please wait ${Math.ceil(remaining / 1000)} seconds before requesting another SMS code.`);
   }
-  lastSmsRequestByPhone.set(e164, now);
+
+  await rememberLastRequest(e164, now);
   try {
+    // Phone Auth is a temporary proof-of-possession session. MySheba's real
+    // phone+password session is handled separately by authService.
     await rnfbAuth().signOut().catch(() => {});
     return await withTimeout(
       rnfbAuth().signInWithPhoneNumber(e164),
@@ -59,7 +106,7 @@ export async function sendPhoneOtp(phone, dialCode = '+60') {
     );
   } catch (err) {
     // A failed request should not trap the user behind our local cooldown.
-    lastSmsRequestByPhone.delete(e164);
+    await clearLastRequest(e164, now);
     throw new Error(friendlyPhoneAuthError(err));
   }
 }
