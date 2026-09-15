@@ -34,10 +34,8 @@ export function subscribeTransactions(callback, onError) {
   return onSnapshot(q, (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), onError);
 }
 
-// Customer/dealer/reseller mobile queue. A dealer/reseller must never receive
-// the completed history or another operator's processing records. Pending
-// orders are intentionally broadcast to eligible operators; once claimed,
-// the processing listener is restricted to the current operator's UID.
+// Customer/dealer/reseller mobile queue. Queries deliberately mirror the
+// Firestore read rules so rules are not being used as client-side filters.
 export function subscribeBroadcastTransactions(callback, onError) {
   let stopped = false;
   let unsubPending = () => {};
@@ -61,8 +59,6 @@ export function subscribeBroadcastTransactions(callback, onError) {
       if (stopped) return;
       const role = profileSnap.exists() ? profileSnap.data()?.role : null;
 
-      // Admin/superadmin need the full operational stream. The Firestore rule
-      // permits this only for admin roles.
       if (role === 'admin' || role === 'superadmin') {
         const q = query(collection(db, COLLECTION), where('status', 'in', ['pending', 'processing', 'completed']));
         unsubPending = onSnapshot(q, (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))), onError);
@@ -71,7 +67,10 @@ export function subscribeBroadcastTransactions(callback, onError) {
 
       if (role !== 'dealer' && role !== 'reseller') return;
 
-      const pendingQuery = query(collection(db, COLLECTION), where('status', '==', 'pending'));
+      // Only broadcast pending services this role can actually process.
+      const pendingQuery = role === 'dealer'
+        ? query(collection(db, COLLECTION), where('status', '==', 'pending'), where('service', '==', 'Mobile Banking'))
+        : query(collection(db, COLLECTION), where('status', '==', 'pending'), where('service', 'in', ['Recharge', 'Internet', 'Remittance']));
       const claimedQuery = query(collection(db, COLLECTION), where('claimedBy', '==', uid));
 
       unsubPending = onSnapshot(pendingQuery, (snap) => {
