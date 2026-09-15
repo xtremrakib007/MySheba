@@ -14,7 +14,6 @@ import {
   LockKeyhole,
   Plane,
   Receipt,
-  Send,
   Settings2,
   ShieldCheck,
   Smartphone,
@@ -87,8 +86,9 @@ export default function DashboardPage() {
     fetchOpsOverview().then(setOverview).catch(() => setOverview(null));
   }, []);
 
+  const isSuperadmin = profile?.role === 'superadmin';
   const visibleFeatures = FEATURES.filter(
-    (feature) => !feature.superadminOnly || profile?.role === 'superadmin'
+    (feature) => !feature.superadminOnly || isSuperadmin
   );
 
   return (
@@ -147,7 +147,7 @@ export default function DashboardPage() {
         <button onClick={() => navigate('/announcements')} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 text-left text-xs font-semibold text-slate-600 shadow-sm hover:bg-slate-50"><BellRing size={16} /> Announcements</button>
         <button onClick={() => navigate('/config/pricing')} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 text-left text-xs font-semibold text-slate-600 shadow-sm hover:bg-slate-50"><Receipt size={16} /> Pricing</button>
         <button onClick={() => navigate('/business-profiles')} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 text-left text-xs font-semibold text-slate-600 shadow-sm hover:bg-slate-50"><Users size={16} /> Business Profiles</button>
-        <button onClick={() => navigate('/devices')} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 text-left text-xs font-semibold text-slate-600 shadow-sm hover:bg-slate-50"><LockKeyhole size={16} /> Device Sessions</button>
+        {isSuperadmin && <button onClick={() => navigate('/devices')} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 text-left text-xs font-semibold text-slate-600 shadow-sm hover:bg-slate-50"><LockKeyhole size={16} /> Device Sessions</button>}
       </div>
     </div>
   );
