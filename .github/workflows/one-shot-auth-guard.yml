@@ -1,0 +1,66 @@
+name: One-shot logout auth guard
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch logout/session guard
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          app = Path('src/context/AppContext.js')
+          s = app.read_text()
+
+          old = """      if (!user) {\n        setProfile(null);\n        setAppLocked(false);\n        if (!initialRouteDone) { initialRouteDone = true; setAuthLoading(false); }\n        return;\n      }"""
+          new = """      if (!user) {\n        setProfile(null);\n        setAppLocked(false);\n        setPendingDeviceVerification(null);\n        setPendingGooglePhone(false);\n        setSidebarVisible(false);\n        screenHistoryRef.current = [];\n        isPoppingRef.current = false;\n        prevScreenRef.current = 'login';\n        exitArmedRef.current = false;\n        setScreen('login');\n        if (!initialRouteDone) { initialRouteDone = true; setAuthLoading(false); }\n        return;\n      }"""
+          if old in s and new not in s:
+              s = s.replace(old, new, 1)
+
+          marker = """  // ---- push notifications: once signed in, ask for permission and save\n"""
+          guard = """  // Hard auth boundary: a signed-out device may never remain on or return\n  // to any protected screen. This also closes the small render/navigation\n  // race that can otherwise leave the previous Home screen visible for a\n  // moment after Firebase sign-out. There is no guest/anonymous session.\n  useEffect(() => {\n    if (authLoading) return;\n    if (!authUser || !profile) {\n      if (!PRE_AUTH_SCREENS.includes(screen)) {\n        screenHistoryRef.current = [];\n        isPoppingRef.current = false;\n        prevScreenRef.current = 'login';\n        setScreen('login');\n      }\n    }\n  }, [authLoading, authUser, profile, screen]);\n\n"""
+          if guard not in s:
+              if marker not in s:
+                  raise SystemExit('push notification marker not found')
+              s = s.replace(marker, guard + marker, 1)
+
+          old_logout = """      setProfile(null);\n      screenHistoryRef.current = [];\n      setScreen('login');\n    }\n  }, []);"""
+          new_logout = """      setAuthUser(null);\n      setPendingDeviceVerification(null);\n      setPendingGooglePhone(false);\n      setSidebarVisible(false);\n      setProfile(null);\n      screenHistoryRef.current = [];\n      isPoppingRef.current = false;\n      prevScreenRef.current = 'login';\n      exitArmedRef.current = false;\n      setScreen('login');\n    }\n  }, []);"""
+          if old_logout in s and new_logout not in s:
+              s = s.replace(old_logout, new_logout, 1)
+
+          app.write_text(s)
+
+          sidebar = Path('src/components/Sidebar.js')
+          ss = sidebar.read_text()
+          ss2 = ss.replace("{profile ? profile.name : 'Guest'}", "{profile?.name || 'MySheba'}")
+          if ss2 != ss:
+              sidebar.write_text(ss2)
+
+          if s == app.read_text() and ss2 == sidebar.read_text():
+              pass
+          PY
+
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/context/AppContext.js src/components/Sidebar.js
+          if git diff --cached --quiet; then
+            echo "Already patched"
+            exit 0
+          fi
+          git commit -m "Fix logout auth boundary and remove guest session"
+          git push
