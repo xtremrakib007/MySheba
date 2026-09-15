@@ -1,55 +1,61 @@
-# Firebase Phone (SMS) verification setup
+# Firebase Phone SMS OTP setup for MySheba
 
-Registration now verifies the phone number with a real SMS code via
-Firebase Phone Auth, using `@react-native-firebase/auth` (not the `firebase`
-JS SDK — that one needs a web reCAPTCHA/WebView to work in React Native;
-RNFirebase talks to native Firebase Auth directly and can usually verify
-silently on Android via Play Integrity).
+MySheba uses native `@react-native-firebase/auth` Phone Authentication for SMS OTP. The SMS request is user-triggered; opening the verification screen does **not** send an OTP automatically.
 
-## 1. Enable Phone sign-in
-Firebase console -> Authentication -> Sign-in method -> enable **Phone**.
+## Production Firebase configuration
 
-## 2. Play Integrity (Android, recommended)
-Firebase console -> Authentication -> Sign-in method -> Phone -> the
-"Play Integrity" section should show your app's SHA-256 automatically
-picked up once you've built with EAS at least once. This is what lets
-verification happen silently most of the time instead of falling back to
-a visible reCAPTCHA screen. No extra permissions were needed for this —
-Phone Auth reuses the same google-services.json already set up for push
-(see CALL_NOTIFICATION_SETUP.md).
+In Firebase Console:
 
-## 3. Install the new native dep
-```
+1. **Authentication -> Sign-in method -> Phone**: enable Phone.
+2. **Authentication -> Settings -> SMS region policy**: allow **Malaysia (MY)**. If MySheba will serve only selected countries, allow only those countries.
+3. Make sure the Firebase project has a **Cloud Billing / Blaze** billing account. Production verification SMS requires billing.
+4. **Project settings -> Your apps -> Android (`com.satulink.mysheba`)**: add the Android **SHA-1 and SHA-256** fingerprints for every build variant that will use Phone Auth, especially the EAS production/release build.
+5. Build a fresh native Android binary after changing native Firebase configuration. An Expo OTA update cannot add missing native Firebase Auth configuration.
+
+Firebase's Android Phone Auth documentation states that SHA-256 is used for Play Integrity and SHA-1 is required for the reCAPTCHA fallback. Firebase also recommends an SMS region policy to reduce SMS abuse. citeturn0search1
+
+## MySheba OTP behavior
+
+- Existing/trusted device: phone + password -> dashboard; no OTP.
+- New device: phone + password -> Verify This Device -> user presses **Send SMS Code** -> 6-digit code -> device becomes trusted.
+- No SMS is sent merely by opening the verification screen.
+- The app enforces a **60-second resend cooldown per phone number** and persists that cooldown across app restarts, reducing accidental repeated Firebase requests.
+- Firebase still applies its own anti-abuse throttling. The app cannot bypass Firebase's per-phone limit.
+
+## Firebase limits
+
+On the standard Firebase Authentication SMS service, verification SMS is a pay-as-you-go feature with limits including 3,000 sent SMS/day, 900/minute project-wide, 50/minute per IP and 500/hour per IP. Firebase also applies an additional per-phone-number limit that is not published; exceeding it can temporarily throttle verification. Firebase recommends fictional test numbers for development because they do not consume real SMS quota. citeturn0search0turn0search1
+
+If Firebase returns error 39 / temporary rate limiting, **do not keep pressing Send SMS Code**. Wait for the Firebase limit to clear and then make one new request. For development, configure Firebase fictional phone numbers and fixed test codes instead of repeatedly using a real Malaysian number. citeturn0search1
+
+## Test numbers
+
+Firebase Console -> Authentication -> Sign-in method -> Phone -> **Phone numbers for testing**.
+
+Add a fictional number and a fixed 6-digit code. Firebase supports up to 10 test numbers. Test numbers do not send real SMS and are intended to avoid throttling during development. citeturn0search1
+
+## Native build requirement
+
+`@react-native-firebase/auth` is a native dependency. After installing/updating dependencies, use a fresh EAS development/preview/production build rather than relying on Expo Go:
+
+```bash
 npm install
-npx expo prebuild --clean
-```
-`@react-native-firebase/auth` is a native module (like `messaging` already
-was) — this needs a new custom dev/EAS build, same as the call-push setup:
-```
 eas build --profile development --platform android
 ```
 
-## 4. Test numbers (optional, for development)
-Firebase console -> Authentication -> Sign-in method -> Phone -> "Phone
-numbers for testing" lets you add a fake +60 number + fixed code, so you
-can go through the whole registration flow in a simulator/emulator without
-burning real SMS.
+For the production APK/AAB, use the project's normal production EAS profile.
 
-## What changed
-- `src/firebase/phoneVerification.js` (new) — client-side send/confirm
-  using `@react-native-firebase/auth`'s `signInWithPhoneNumber`. This is a
-  separate Firebase Auth identity from the app's real sign-in (still
-  phone+PIN via the JS SDK, see `authService.js`) — used only to prove SMS
-  ownership during registration, then discarded.
-- `functions/phoneVerification.js` (new) — server-side `assertPhoneVerified`,
-  checks the ID token from the client step is real, recent, and for the
-  right phone number, mirroring `otpService.js`'s `assertRecentlyVerified`
-  for email.
-- `functions/customerRegistration.js` — `registerWithDealerCode` now
-  requires `phoneIdToken` and re-verifies it server-side before creating
-  the account; deletes the throwaway phone-auth identity afterward.
-- `src/firebase/authService.js` / `src/context/AppContext.js` —
-  `registerCustomer`/`doRegister` now require and forward `phoneIdToken`.
-- `src/screens/RegisterScreen.js` — registration is now 3 steps: details ->
-  verify phone (SMS) -> verify email (unchanged) -> create account.
-- `package.json` — added `@react-native-firebase/auth`.
+## Source implementation
+
+`src/firebase/phoneVerification.js`:
+
+- normalizes phone numbers to E.164 (Malaysia defaults to `+60`);
+- sends SMS only from the explicit `sendPhoneOtp()` call;
+- persists a 60-second per-phone resend guard using AsyncStorage;
+- times out stuck Firebase requests after 30 seconds;
+- confirms the 6-digit OTP;
+- obtains the temporary Firebase phone ID token;
+- signs out the temporary phone-auth identity after confirmation;
+- maps Firebase rate-limit, quota, SHA/app-verification, invalid-code and network errors to readable MySheba messages.
+
+The server-side device-session callable verifies the temporary phone ID token against the user's stored MySheba phone number before trusting the new device.
