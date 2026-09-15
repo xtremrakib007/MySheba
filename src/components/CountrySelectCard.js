@@ -3,12 +3,10 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 
-// Bright, logo-forward country selector used by Recharge and Internet.
-// Keep the country name dark even when selected so it never disappears on the
-// selected tile; flags remain full-color emoji and are intentionally larger.
+// Country selector: flags stay large, full-color and bright in both themes.
 export default function CountrySelectCard({ flag, name, selected, onPress }) {
-  const { colors, isDark } = useTheme();
-  const styles = createStyles(colors, isDark);
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <TouchableOpacity
       style={[styles.card, selected && styles.cardSelected]}
@@ -23,12 +21,12 @@ export default function CountrySelectCard({ flag, name, selected, onPress }) {
   );
 }
 
-function createStyles(colors, isDark) {
+function createStyles(colors) {
   return StyleSheet.create({
     card: {
       width: '30%',
       height: 104,
-      backgroundColor: isDark ? '#000000' : '#FFFFFF',
+      backgroundColor: colors.card,
       borderWidth: 1,
       borderColor: colors.border,
       borderRadius: radius.md,
@@ -38,7 +36,7 @@ function createStyles(colors, isDark) {
       justifyContent: 'center',
       marginBottom: 10,
       shadowColor: '#000000',
-      shadowOpacity: isDark ? 0 : 0.08,
+      shadowOpacity: 0.08,
       shadowRadius: 3,
       shadowOffset: { width: 0, height: 1 },
       elevation: 2,
@@ -46,8 +44,8 @@ function createStyles(colors, isDark) {
     cardSelected: {
       borderColor: colors.primary,
       borderWidth: 2,
-      backgroundColor: isDark ? '#061B1A' : '#FFFFFF',
     },
+    // Deliberately white in both themes so emoji flags remain bright and vivid.
     flagWrap: {
       width: 58,
       height: 58,
@@ -55,12 +53,15 @@ function createStyles(colors, isDark) {
       alignItems: 'center',
       justifyContent: 'center',
       marginBottom: 5,
-      backgroundColor: isDark ? '#111111' : '#F3F7FB',
+      backgroundColor: '#FFFFFF',
+      borderWidth: 1,
+      borderColor: '#E2E8F0',
     },
     flag: {
       fontSize: 40,
       lineHeight: 46,
       textAlign: 'center',
+      opacity: 1,
     },
     name: {
       fontSize: 12,
@@ -68,7 +69,7 @@ function createStyles(colors, isDark) {
       fontWeight: '700',
       marginTop: 1,
       textAlign: 'center',
-      color: isDark ? '#FFFFFF' : '#111111',
+      color: colors.text,
     },
   });
 }
