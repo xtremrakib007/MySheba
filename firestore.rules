@@ -16,6 +16,25 @@ service cloud.firestore {
     function canHandleTransaction(s) { return isAdmin() || (isDealerTier() && s == 'Mobile Banking') || (isReseller() && s in ['Recharge', 'Internet', 'Remittance']); }
     function serviceIsChargeable(data) { return data['service'] in ['Recharge', 'Internet', 'Mobile Banking', 'Remittance']; }
 
+    // Service-specific exchange-rate controls.
+    // Admin may change only Mobile Banking + Remittance rates.
+    // Superadmin may change every rate, including Recharge/Internet rates.
+    match /rates/current {
+      allow read: if signedIn();
+      allow create: if isSuperadmin();
+      allow update: if isSuperadmin() || (
+        myRole() == 'admin'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'mobileBanking', 'remittanceFee',
+          'remittanceBD_ACC', 'remittanceBD_CASH', 'remittanceNP', 'remittancePK',
+          'remittancePH', 'remittanceLK', 'remittanceIN', 'remittanceID', 'remittanceMM',
+          'BD_ACC', 'BD_CASH', 'NP', 'PK', 'PH', 'LK', 'IN', 'ID', 'MM',
+          'updatedAt'
+        ])
+      );
+      allow delete: if false;
+    }
+
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin() || (isDealerTier() && resource.data.dealerId == myDealerScope()) || (isReseller() && resource.data.get('resellerId', null) == request.auth.uid));
       allow create: if signedIn() && request.auth.uid == uid && request.resource.data.role == 'customer';
@@ -75,10 +94,6 @@ service cloud.firestore {
     match /transactions/{id} {
       allow create: if signedIn() && !serviceIsChargeable(request.resource.data);
       allow read: if signedIn() && (resource.data.customerId == request.auth.uid || isAdmin() || isDealerTier() || isReseller());
-
-      // Approval is an independent admin/superadmin action. The client may
-      // only add approval fields while the order is still pending; it cannot
-      // claim, complete, change money fields, or forge the approver identity.
       allow update: if signedIn() && (
         (
           isAdmin()
