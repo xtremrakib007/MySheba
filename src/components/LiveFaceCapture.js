@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { httpsCallable } from 'firebase/functions';
-import { auth, functions } from '../firebase/config';
+import { auth } from '../firebase/config';
+import { verifyNativeKycFace } from '../firebase/verificationService';
 import { ExpoFaceRecognitionView } from '@rdnf-magiba/expo-face-recognition';
 
 /**
@@ -80,12 +80,10 @@ export default function LiveFaceCapture({ onCaptured, onCancel }) {
     setBusy(true);
     setError('');
     try {
-      const uid = auth.currentUser?.uid;
-      if (!uid) throw new Error('Your sign-in session expired. Please sign in again.');
-      const verify = httpsCallable(functions, 'createDiditKycSession');
-      const result = await verify({ embedding, livenessPassed: true, uid });
-      if (!result.data?.ok) {
-        if (result.data?.duplicate) throw new Error('This face is already registered to another verified account.');
+      if (!auth.currentUser?.uid) throw new Error('Your sign-in session expired. Please sign in again.');
+      const result = await verifyNativeKycFace(embedding, true);
+      if (!result?.ok) {
+        if (result?.duplicate) throw new Error('This face is already registered to another verified account.');
         throw new Error('Face verification could not be completed. Please try again.');
       }
       setPhase('capture');
