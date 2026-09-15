@@ -1,0 +1,55 @@
+name: Finalize logout session reset
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Finalize logout patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/context/AppContext.js')
+          s = p.read_text()
+
+          # Undo the earlier overly-broad replacement in cancelGooglePhone.
+          bad = """  const cancelGooglePhone = useCallback(async () => {\n    try {\n      await authService.logout();\n    } finally {\n      setPendingGooglePhone(false);\n      setAuthUser(null);\n      setPendingDeviceVerification(null);\n      setPendingGooglePhone(false);\n      setSidebarVisible(false);\n      setProfile(null);\n      screenHistoryRef.current = [];\n      isPoppingRef.current = false;\n      prevScreenRef.current = 'login';\n      exitArmedRef.current = false;\n      setScreen('login');\n    }\n  }, []);"""
+          good = """  const cancelGooglePhone = useCallback(async () => {\n    try {\n      await authService.logout();\n    } finally {\n      setPendingGooglePhone(false);\n      setProfile(null);\n      screenHistoryRef.current = [];\n      setScreen('login');\n    }\n  }, []);"""
+          if bad in s:
+              s = s.replace(bad, good, 1)
+
+          start = s.find("  const logout = useCallback(async () => {")
+          if start < 0:
+              raise SystemExit('logout function not found')
+          end = s.find("\n\n  const startService =", start)
+          if end < 0:
+              raise SystemExit('logout function end not found')
+          block = s[start:end]
+          required = ["setAuthUser(null);", "setPendingDeviceVerification(null);", "setSidebarVisible(false);"]
+          if not all(x in block for x in required):
+              new_block = """  const logout = useCallback(async () => {\n    try {\n      await authService.logout();\n    } finally {\n      // Biometric opt-in resets on every logout - the person's own rule:\n      // clicking logout clears it, so the next sign-in (same account or a\n      // different one on this device) shows BiometricOptInPrompt again\n      // rather than silently staying enabled/disabled from before.\n      await clearBiometricEnabledPref();\n      setBiometricEnabledState(null);\n      biometricPromptedRef.current = false;\n      setShowBiometricPrompt(false);\n      setAuthUser(null);\n      setPendingDeviceVerification(null);\n      setPendingGooglePhone(false);\n      setSidebarVisible(false);\n      setProfile(null);\n      screenHistoryRef.current = [];\n      isPoppingRef.current = false;\n      prevScreenRef.current = 'login';\n      exitArmedRef.current = false;\n      setScreen('login');\n    }\n  }, []);"""
+              s = s[:start] + new_block + s[end:]
+          p.write_text(s)
+          PY
+
+      - name: Commit and remove workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/context/AppContext.js
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "Harden explicit logout session reset"
+            git push
+          fi
