@@ -1,15 +1,16 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { useApp } from '../context/AppContext';
-import { countries, rechargeOperators, getRechargeRate, amountToPoints } from '../data/countries';
+import { countries, rechargeOperators, amountToPoints } from '../data/countries';
 import { getOperatorBrand } from '../data/operatorBrand';
 import { FormLabel, FormInput, SummaryCard } from '../components/ui';
 import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 
 // Recharge flow: country -> operator -> mobile number -> amount.
-// The recharge tiles and input are explicitly theme-aware so their
-// foreground/background never become unreadable when switching modes.
+// Recharge/Internet conversion rates remain configurable by Superadmin for
+// settlement, but are intentionally hidden from customers. Customers only
+// see the selected local-currency amount and the resulting wallet deduction.
 export default function RechargeStep({ step }) {
   const { serviceData, updateServiceData, nextStep, rates } = useApp();
   const { colors, isDark } = useTheme();
@@ -81,17 +82,11 @@ export default function RechargeStep({ step }) {
   if (step === 3) {
     const cur = serviceData.currency || 'MYR';
     const isForeign = serviceData.country && serviceData.country !== 'MY';
-    const rate = isForeign ? getRechargeRate(serviceData.country, rates) : null;
     const points = isForeign ? amountToPoints(serviceData.amount || 0, serviceData.country, rates) : (serviceData.amount || 0);
     const amounts = cur === 'MYR' ? [10, 20, 30, 50, 100] : cur === 'BDT' ? [50, 100, 200, 500, 1000] : [50, 100, 200, 500];
     return (
       <View>
         <FormLabel>Select Amount ({cur})</FormLabel>
-        {isForeign && (
-          <View style={styles.rateBox}>
-            <Text style={styles.rateBoxText}>💱 Rate: 1 MYR = {cur} {rate}</Text>
-          </View>
-        )}
         <View style={styles.grid3}>
           {amounts.map((a) => (
             <RechargeAmountButton
@@ -113,8 +108,8 @@ export default function RechargeStep({ step }) {
         {isForeign && serviceData.amount > 0 && (
           <SummaryCard
             rows={[{ label: 'Amount', value: `${cur} ${Number(serviceData.amount).toFixed(2)}` }]}
-            totalLabel="Points to be deducted"
-            totalValue={`${points.toFixed(2)} pts`}
+            totalLabel="Wallet deduction"
+            totalValue={`${points.toFixed(2)} MYR`}
           />
         )}
       </View>
@@ -192,7 +187,5 @@ function createStyles(colors, isDark) {
     amountBtnSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
     amountBtnText: { fontWeight: '500', fontSize: 13, color: tileText },
     amountBtnTextSelected: { color: '#FFFFFF' },
-    rateBox: { backgroundColor: isDark ? '#102033' : '#E3F2FD', padding: 10, borderRadius: radius.md, marginBottom: 14 },
-    rateBoxText: { fontSize: 13, fontWeight: '600', color: isDark ? '#FFFFFF' : '#1565C0' },
   });
 }
