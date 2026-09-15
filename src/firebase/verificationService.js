@@ -1,6 +1,6 @@
 // Customer identity verification service.
 // Phone verification happens at registration; this service handles the separate KYC review request.
-import { doc, setDoc, onSnapshot, collection, query, where, orderBy, serverTimestamp, getDoc } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, collection, query, where, orderBy, serverTimestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './config';
 
@@ -10,18 +10,8 @@ export async function submitVerificationRequest(uid, { name, phone }, documentUr
   const front = kycData.frontDocumentUrl || documentUrl || '';
   const back = kycData.backDocumentUrl || '';
   const selfie = kycData.selfieUrl || '';
-  const requestRef = doc(db, REQUESTS, uid);
-  const existingSnap = await getDoc(requestRef);
-  const existing = existingSnap.exists() ? existingSnap.data() : {};
-  const providerApproved = existing.diditProvider === 'didit' && existing.diditVerified === true;
 
-  if (providerApproved) {
-    const saveDiditKycDetails = httpsCallable(functions, 'createDiditKycSession');
-    await saveDiditKycDetails({ action: 'saveDetails', name: name || '', phone: phone || '', frontDocumentUrl: front, backDocumentUrl: back, selfieUrl: selfie, kycData });
-    return;
-  }
-
-  await setDoc(requestRef, {
+  await setDoc(doc(db, REQUESTS, uid), {
     uid,
     name: name || '',
     phone: phone || '',
@@ -49,8 +39,10 @@ export async function submitVerificationRequest(uid, { name, phone }, documentUr
     status: 'pending',
     note: '',
     rejectionReason: '',
+    // This flag means the user completed the in-app camera capture step.
+    // It must not be interpreted as a biometric match by itself.
     liveFaceVerified: kycData.liveFaceVerified === true,
-    liveFaceMethod: kycData.liveFaceMethod || '',
+    liveFaceMethod: kycData.liveFaceMethod || 'native_camera_capture',
     submittedAt: serverTimestamp(),
   }, { merge: true });
 }
