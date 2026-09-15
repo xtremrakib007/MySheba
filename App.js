@@ -132,7 +132,7 @@ import ErrorBoundary from './src/components/ErrorBoundary';
 import AnimatedSplash from './src/components/AnimatedSplash';
 
 function Root() {
-  const { screen, authLoading, handleDeepLink } = useApp();
+  const { screen, authLoading, handleDeepLink, profile, adminViewingSection } = useApp();
   const { colors, isDark } = useTheme();
   const styles = createStyles(colors);
   // Splash stays mounted a moment after authLoading flips false so it can
@@ -192,7 +192,7 @@ function Root() {
         {renderedScreen === 'service' && <ServiceScreen />}
         {renderedScreen === 'dealerHome' && <DealerHomeScreen />}
         {renderedScreen === 'resellerHome' && <ResellerHomeScreen />}
-        {renderedScreen === 'adminHome' && <AdminHomeScreen />}
+        {renderedScreen === 'adminHome' && ((profile?.role === 'admin' || profile?.role === 'superadmin') && !adminViewingSection ? <AdminFeaturesScreen /> : <AdminHomeScreen />)}
         {renderedScreen === 'webview' && <WebViewScreen />}
         {renderedScreen === 'buspicker' && <BusPickerScreen />}
         {renderedScreen === 'support' && <SupportScreen />}
