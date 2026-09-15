@@ -6,6 +6,7 @@ import { filterBySearch } from './userManagementService';
 export interface InvestigationTransaction { id:string; service:string; amount:number; total:number; status:string; approved:boolean; rejected:boolean; customerId:string|null; createdAt:string|null; }
 export interface InvestigationTicket { id:string; subject:string; message:string; status:string; userId:string|null; createdAt:string|null; }
 export interface InvestigationLog { id:string; type:'activity'|'audit'; summary:string; createdAt:string|null; raw:Record<string,unknown>; }
+export interface InvestigationKyc { id:string; status:'pending'|'approved'|'rejected'|string; documentType:string|null; submittedAt:string|null; rejectionReason:string|null; }
 
 function dateValue(v: unknown): string|null {
   if (v && typeof (v as {toDate?:()=>Date}).toDate === 'function') return (v as {toDate:()=>Date}).toDate().toLocaleString();
@@ -26,6 +27,15 @@ export async function getInvestigationTransactions(uid:string):Promise<Investiga
 export async function getInvestigationTickets(uid:string):Promise<InvestigationTicket[]> {
   try { const snap=await getDocs(query(collection(db,'supportTickets'),where('userId','==',uid),limit(100))); return snap.docs.map(d=>{const x=d.data();return{id:d.id,subject:x.subject??'(no subject)',message:x.message??'',status:x.status??'open',userId:x.userId??null,createdAt:dateValue(x.createdAt)}}).sort((a,b)=>(b.createdAt??'').localeCompare(a.createdAt??'')); }
   catch(err){console.warn('Investigation ticket query failed',err);return[];}
+}
+export async function getInvestigationKyc(uid:string):Promise<InvestigationKyc[]> {
+  try {
+    const snap=await getDocs(query(collection(db,'verificationRequests'),where('uid','==',uid),orderBy('submittedAt','desc'),limit(20)));
+    return snap.docs.map(d=>{const x=d.data();return{id:d.id,status:String(x.status??'pending'),documentType:x.documentType??null,submittedAt:dateValue(x.submittedAt),rejectionReason:x.rejectionReason??null};});
+  } catch(err) {
+    console.warn('Investigation KYC query failed',err);
+    return [];
+  }
 }
 function matchesUid(data:Record<string,unknown>,uid:string):boolean { return Object.values(data).some(v=>typeof v==='string'&&v===uid); }
 export async function getInvestigationLogs(uid:string):Promise<InvestigationLog[]> {
