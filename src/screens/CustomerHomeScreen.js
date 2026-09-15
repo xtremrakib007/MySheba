@@ -41,7 +41,7 @@ export default function CustomerHomeScreen() {
         {!kycVerified && <View style={styles.kycCard}>
           <View style={styles.kycIcon}><Text>!</Text></View>
           <View style={styles.kycCopy}><Text style={styles.kycTitle}>Complete your KYC</Text><Text style={styles.kycText}>Verify your identity to unlock all finance services.</Text></View>
-          <TouchableOpacity onPress={() => setScreen('profile')}><Text style={styles.kycAction}>Verify</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => setScreen('verifyIdentity')}><Text style={styles.kycAction}>Verify</Text></TouchableOpacity>
         </View>}
 
         {kycVerified && <View style={styles.verifiedCard}>
