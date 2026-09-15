@@ -33,6 +33,7 @@ import DeviceSessionsPage from './pages/DeviceSessionsPage';
 import SecurityCenterPage from './pages/SecurityCenterPage';
 import GrowthCenterPage from './pages/GrowthCenterPage';
 import AuditCompliancePage from './pages/AuditCompliancePage';
+import SystemHealthPage from './pages/SystemHealthPage';
 import SuperadminRoute from './routes/SuperadminRoute';
 
 export default function App() {
@@ -75,6 +76,7 @@ export default function App() {
               <Route path="/chat-reports/investigate/:chatId" element={<InvestigateChatPage />} />
               <Route path="/tool-access" element={<ToolAccessPage />} />
               <Route path="/role-permissions" element={<RolePermissionsPage />} />
+              <Route path="/system-health" element={<SystemHealthPage />} />
             </Route>
           </Route>
         </Routes>
