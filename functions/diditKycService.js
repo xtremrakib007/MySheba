@@ -72,6 +72,41 @@ exports.createDiditKycSession = onCall(async (request) => {
   let cfg;
   try { cfg = requiredConfig(); } catch (err) { throw new HttpsError('failed-precondition', err.message); }
 
+  if (request.data?.action === 'saveDetails') {
+    const requestRef = getDb().collection('verificationRequests').doc(uid);
+    const current = await requestRef.get();
+    const existing = current.exists ? current.data() : {};
+    if (existing.diditProvider !== 'didit' || existing.diditVerified !== true) throw new HttpsError('failed-precondition', 'Didit live verification must be approved before KYC details can be saved.');
+    const k = request.data.kycData || {};
+    await requestRef.set({
+      name: request.data.name || existing.name || '',
+      phone: request.data.phone || existing.phone || '',
+      documentUrl: request.data.frontDocumentUrl || existing.documentUrl || '',
+      frontDocumentUrl: request.data.frontDocumentUrl || existing.frontDocumentUrl || '',
+      backDocumentUrl: request.data.backDocumentUrl || existing.backDocumentUrl || '',
+      selfieUrl: request.data.selfieUrl || existing.selfieUrl || existing.diditReferenceImageUrl || '',
+      frontImageUrl: request.data.frontDocumentUrl || existing.frontImageUrl || '',
+      backImageUrl: request.data.backDocumentUrl || existing.backImageUrl || '',
+      selfieImageUrl: request.data.selfieUrl || existing.selfieImageUrl || existing.diditReferenceImageUrl || '',
+      documentType: k.documentType || existing.documentType || '',
+      documentNumber: k.documentNumber || existing.documentNumber || '',
+      nationality: k.nationality || existing.nationality || '',
+      dateOfBirth: k.dateOfBirth || existing.dateOfBirth || '',
+      gender: k.gender || existing.gender || '',
+      occupation: k.occupation || existing.occupation || '',
+      skilledLabour: k.skilledLabour || existing.skilledLabour || '',
+      companyName: k.companyName || existing.companyName || '',
+      employerName: k.employerName || existing.employerName || '',
+      address: k.address || existing.address || '',
+      passportPlaceOfIssue: k.passportPlaceOfIssue || existing.passportPlaceOfIssue || '',
+      passportIssueDate: k.passportIssueDate || existing.passportIssueDate || '',
+      passportExpiryDate: k.passportExpiryDate || existing.passportExpiryDate || '',
+      sourceOfFunds: k.sourceOfFunds || existing.sourceOfFunds || '',
+      submittedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return { saved: true, status: 'approved' };
+  }
+
   const userSnap = await getDb().collection('users').doc(uid).get();
   const user = userSnap.exists ? userSnap.data() : {};
   const name = String(user.name || user.displayName || '').trim();
