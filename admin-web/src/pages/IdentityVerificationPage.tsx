@@ -34,8 +34,10 @@ export default function IdentityVerificationPage() {
     finally { setBusyId(null); }
   }
   async function handleReject(req: VerificationRequest) {
+    const reason = rejectionReason.trim();
+    if (!reason) { setError('Enter a reason before rejecting a KYC request.'); return; }
     setBusyId(req.id);
-    try { await reviewKycVerification(req, 'rejected', rejectionReason.trim() || undefined); setRequests((prev) => prev.filter((r) => r.id !== req.id)); setRejectingId(null); setRejectionReason(''); }
+    try { await reviewKycVerification(req, 'rejected', reason); setRequests((prev) => prev.filter((r) => r.id !== req.id)); setRejectingId(null); setRejectionReason(''); setError(null); }
     catch (err) { console.error(err); setError('Rejection failed.'); }
     finally { setBusyId(null); }
   }
