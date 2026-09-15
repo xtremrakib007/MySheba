@@ -13,7 +13,11 @@ export default function LiveFaceCapture({ onCaptured, onCancel }) {
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
   const [status, setStatus] = useState('Not Started');
+  const [retryKey, setRetryKey] = useState(0);
   const completedRef = useRef(false);
+  const onCapturedRef = useRef(onCaptured);
+
+  useEffect(() => { onCapturedRef.current = onCaptured; }, [onCaptured]);
 
   useEffect(() => {
     let unsubscribe = () => {};
@@ -35,7 +39,7 @@ export default function LiveFaceCapture({ onCaptured, onCancel }) {
           setStatus(diditStatus);
           if (!completedRef.current && data.diditSessionId === session.sessionId && data.diditVerified === true && data.diditReferenceImageUrl) {
             completedRef.current = true;
-            onCaptured(data.diditReferenceImageUrl, 'image/jpeg');
+            onCapturedRef.current(data.diditReferenceImageUrl, 'image/jpeg');
           } else if (!completedRef.current && data.diditSessionId === session.sessionId && (data.status === 'rejected' || diditStatus === 'Declined')) {
             setError(data.note || 'Didit declined the identity verification. Please try again.');
           }
@@ -48,7 +52,7 @@ export default function LiveFaceCapture({ onCaptured, onCancel }) {
     };
     start();
     return () => { mounted = false; unsubscribe(); };
-  }, [onCaptured]);
+  }, [retryKey]);
 
   const handleNavigation = (request) => {
     const nextUrl = request.url || '';
@@ -58,7 +62,7 @@ export default function LiveFaceCapture({ onCaptured, onCancel }) {
 
   if (starting || loading) return <View style={styles.center}><ActivityIndicator size="large" /><Text style={styles.title}>Starting secure live verification…</Text><Text style={styles.text}>MySheba is opening Didit. The verification is performed by Didit, not by a gallery photo.</Text><TouchableOpacity style={styles.cancel} onPress={onCancel}><Text>Cancel</Text></TouchableOpacity></View>;
 
-  if (error) return <View style={styles.center}><Text style={styles.badge}>LIVE LIVENESS REQUIRED</Text><Text style={styles.title}>Verification not completed</Text><Text style={styles.text}>{error}</Text><TouchableOpacity style={styles.primary} onPress={() => { setError(''); setLoading(true); setStarting(true); setUrl(''); completedRef.current = false; }}><Text style={styles.primaryText}>Try Again</Text></TouchableOpacity><TouchableOpacity style={styles.cancel} onPress={onCancel}><Text>Cancel</Text></TouchableOpacity></View>;
+  if (error) return <View style={styles.center}><Text style={styles.badge}>LIVE LIVENESS REQUIRED</Text><Text style={styles.title}>Verification not completed</Text><Text style={styles.text}>{error}</Text><TouchableOpacity style={styles.primary} onPress={() => { completedRef.current = false; setError(''); setLoading(true); setStarting(true); setUrl(''); setRetryKey((value) => value + 1); }}><Text style={styles.primaryText}>Try Again</Text></TouchableOpacity><TouchableOpacity style={styles.cancel} onPress={onCancel}><Text>Cancel</Text></TouchableOpacity></View>;
 
   if (!url) return <View style={styles.center}><Text style={styles.title}>Live verification unavailable</Text><Text style={styles.text}>Didit is not configured on the MySheba server yet.</Text><TouchableOpacity style={styles.cancel} onPress={onCancel}><Text>Close</Text></TouchableOpacity></View>;
 
