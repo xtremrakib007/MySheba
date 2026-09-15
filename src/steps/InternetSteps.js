@@ -4,7 +4,8 @@ import { useApp } from '../context/AppContext';
 import { countries, rechargeOperators, amountToPoints } from '../data/countries';
 import { getMergedPackages } from '../utils/internetPackages';
 import { getOperatorBrand } from '../data/operatorBrand';
-import { FormLabel, Grid3, SelectCard, OperatorCard, FormInput, PackageCard, SummaryCard } from '../components/ui';
+import { FormLabel, Grid3, OperatorCard, FormInput, PackageCard, SummaryCard } from '../components/ui';
+import CountrySelectCard from '../components/CountrySelectCard';
 
 // Internet flow: country -> operator -> phone -> package.
 // Customer-facing wallet values are always displayed as MYR. The legacy
@@ -13,7 +14,7 @@ export default function InternetStep({ step }) {
   const { serviceData, updateServiceData, nextStep, internetPricing, rates } = useApp();
 
   if (step === 0) {
-    return <View><FormLabel>Select Country</FormLabel><Grid3>{countries.map((c) => <SelectCard key={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr, operator: null, package: null, amount: null }); nextStep(); }} />)}</Grid3></View>;
+    return <View><FormLabel>Select Country</FormLabel><Grid3>{countries.map((c) => <CountrySelectCard key={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr, operator: null, package: null, amount: null }); nextStep(); }} />)}</Grid3></View>;
   }
 
   if (step === 1) {
