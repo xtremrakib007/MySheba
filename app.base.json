@@ -65,7 +65,7 @@
     },
     "ios": {
       "infoPlist": {
-        "NSCameraUsageDescription": "Allow MySheba to access your camera for video calls.",
+        "NSCameraUsageDescription": "Allow MySheba to access your camera for KYC identity verification and video calls.",
         "NSMicrophoneUsageDescription": "Allow MySheba to access your microphone for voice and video calls.",
         "NSLocationWhenInUseUsageDescription": "Allow MySheba to access your location to show nearby listings, properties, and service providers on the map."
       },
@@ -104,7 +104,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow MySheba to access your camera to scan a contact's QR code and for video calls."
+          "cameraPermission": "Allow MySheba to access your camera for KYC identity verification, QR scanning, and video calls."
         }
       ],
       "@react-native-google-signin/google-signin",
