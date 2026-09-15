@@ -1,92 +1,122 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
-import { WebView } from 'react-native-webview';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
-import { auth, db, functions } from '../firebase/config';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 
-const DIDIT_RETURN_PREFIX = 'mysheba://kyc/complete';
-
+/**
+ * Native KYC selfie capture.
+ *
+ * Important: this component deliberately does not claim biometric liveness or
+ * face matching. It only guarantees that the selfie came from the live front
+ * camera, not the gallery. A production biometric match/liveness engine must
+ * be added before this result is used for automatic KYC approval.
+ */
 export default function LiveFaceCapture({ onCaptured, onCancel }) {
-  const [loading, setLoading] = useState(true);
-  const [starting, setStarting] = useState(true);
-  const [url, setUrl] = useState('');
+  const cameraRef = useRef(null);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [ready, setReady] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [status, setStatus] = useState('Not Started');
-  const [retryKey, setRetryKey] = useState(0);
-  const completedRef = useRef(false);
-  const onCapturedRef = useRef(onCaptured);
-
-  useEffect(() => { onCapturedRef.current = onCaptured; }, [onCaptured]);
+  const [step, setStep] = useState(0);
 
   useEffect(() => {
-    let unsubscribe = () => {};
-    let mounted = true;
-    const start = async () => {
-      try {
-        if (!auth.currentUser?.uid) throw new Error('Please sign in again before starting KYC.');
-        const createSession = httpsCallable(functions, 'createDiditKycSession');
-        const result = await createSession({});
-        const session = result.data || {};
-        if (!session.url || !session.sessionId) throw new Error('Didit did not return a verification session.');
-        if (!mounted) return;
-        setUrl(session.url);
-        setStatus(session.status || 'Not Started');
-        unsubscribe = onSnapshot(doc(db, 'verificationRequests', auth.currentUser.uid), (snap) => {
-          if (!snap.exists()) return;
-          const data = snap.data();
-          const diditStatus = data.diditStatus || 'Not Started';
-          setStatus(diditStatus);
-          if (!completedRef.current && data.diditSessionId === session.sessionId && data.diditVerified === true && data.diditReferenceImageUrl) {
-            completedRef.current = true;
-            onCapturedRef.current(data.diditReferenceImageUrl, 'image/jpeg');
-          } else if (!completedRef.current && data.diditSessionId === session.sessionId && (data.status === 'rejected' || diditStatus === 'Declined')) {
-            setError(data.note || 'Didit declined the identity verification. Please try again.');
-          }
-        }, () => {});
-      } catch (err) {
-        if (mounted) setError(err.message || 'Could not start live identity verification.');
-      } finally {
-        if (mounted) { setStarting(false); setLoading(false); }
-      }
-    };
-    start();
-    return () => { mounted = false; unsubscribe(); };
-  }, [retryKey]);
+    if (permission && !permission.granted && permission.canAskAgain) requestPermission();
+  }, [permission?.granted, permission?.canAskAgain, requestPermission]);
 
-  const handleNavigation = (request) => {
-    const nextUrl = request.url || '';
-    if (nextUrl.startsWith(DIDIT_RETURN_PREFIX)) return false;
-    return true;
+  useEffect(() => {
+    if (!ready) return undefined;
+    setStep(1);
+    const timer = setTimeout(() => setStep(2), 1800);
+    return () => clearTimeout(timer);
+  }, [ready]);
+
+  const capture = async () => {
+    if (busy || !cameraRef.current) return;
+    setBusy(true);
+    setError('');
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.85,
+        skipProcessing: false,
+        shutterSound: false,
+      });
+      if (!photo?.uri) throw new Error('The camera did not return a selfie. Please try again.');
+      onCaptured?.(photo.uri, 'image/jpeg', { method: 'native_camera_capture' });
+    } catch (err) {
+      setError(err?.message || 'Could not capture the selfie. Please try again.');
+      setBusy(false);
+    }
   };
 
-  if (starting || loading) return <View style={styles.center}><ActivityIndicator size="large" /><Text style={styles.title}>Starting secure live verification…</Text><Text style={styles.text}>MySheba is opening Didit. The verification is performed by Didit, not by a gallery photo.</Text><TouchableOpacity style={styles.cancel} onPress={onCancel}><Text>Cancel</Text></TouchableOpacity></View>;
+  if (!permission) {
+    return <View style={styles.center}><ActivityIndicator size="large" /><Text style={styles.title}>Preparing camera…</Text></View>;
+  }
 
-  if (error) return <View style={styles.center}><Text style={styles.badge}>LIVE LIVENESS REQUIRED</Text><Text style={styles.title}>Verification not completed</Text><Text style={styles.text}>{error}</Text><TouchableOpacity style={styles.primary} onPress={() => { completedRef.current = false; setError(''); setLoading(true); setStarting(true); setUrl(''); setRetryKey((value) => value + 1); }}><Text style={styles.primaryText}>Try Again</Text></TouchableOpacity><TouchableOpacity style={styles.cancel} onPress={onCancel}><Text>Cancel</Text></TouchableOpacity></View>;
-
-  if (!url) return <View style={styles.center}><Text style={styles.title}>Live verification unavailable</Text><Text style={styles.text}>Didit is not configured on the MySheba server yet.</Text><TouchableOpacity style={styles.cancel} onPress={onCancel}><Text>Close</Text></TouchableOpacity></View>;
+  if (!permission.granted) {
+    return <View style={styles.center}>
+      <Text style={styles.icon}>📷</Text>
+      <Text style={styles.title}>Camera access is required</Text>
+      <Text style={styles.text}>MySheba needs the front camera to capture your live KYC selfie. Gallery and file uploads are not used for this step.</Text>
+      {permission.canAskAgain ? <TouchableOpacity style={styles.primary} onPress={requestPermission}><Text style={styles.primaryText}>Allow Camera</Text></TouchableOpacity> : <Text style={styles.error}>Camera permission is disabled. Enable Camera for MySheba in Android Settings, then try again.</Text>}
+      <TouchableOpacity style={styles.cancel} onPress={onCancel}><Text>Cancel</Text></TouchableOpacity>
+    </View>;
+  }
 
   return <View style={styles.container}>
-    <View style={styles.header}><Text style={styles.badge}>DIDIT LIVE KYC</Text><Text style={styles.headerStatus}>{status}</Text><TouchableOpacity onPress={onCancel} style={styles.close}><Text style={styles.closeText}>✕</Text></TouchableOpacity></View>
-    <WebView source={{ uri: url }} style={styles.webview} originWhitelist={['*']} javaScriptEnabled domStorageEnabled mediaPlaybackRequiresUserAction={false} allowsInlineMediaPlayback onShouldStartLoadWithRequest={handleNavigation} onLoadStart={() => setLoading(false)} onError={() => setError('The secure Didit verification page could not be loaded. Check your internet connection and try again.')} />
-    <View style={styles.footer}><Text style={styles.footerText}>Your camera/liveness check is performed inside Didit. Gallery, file-manager and imported selfie images are not used.</Text></View>
+    <CameraView
+      ref={cameraRef}
+      style={styles.camera}
+      facing="front"
+      mode="picture"
+      onCameraReady={() => { setReady(true); setError(''); }}
+    >
+      <View style={styles.overlay}>
+        <View style={styles.topBar}>
+          <Text style={styles.badge}>NATIVE CAMERA KYC</Text>
+          <TouchableOpacity onPress={onCancel} style={styles.close}><Text style={styles.closeText}>✕</Text></TouchableOpacity>
+        </View>
+        <View style={styles.guideArea}>
+          <View style={styles.faceGuide}><View style={styles.faceInner} /></View>
+          <Text style={styles.instruction}>{step === 1 ? 'Center your face inside the frame' : 'Look directly at the camera'}</Text>
+          <Text style={styles.subInstruction}>Remove sunglasses and keep your face clearly visible.</Text>
+        </View>
+        <View style={styles.bottom}>
+          <Text style={styles.security}>🔒 Live front-camera capture only</Text>
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          <TouchableOpacity style={[styles.capture, (!ready || busy) && styles.captureDisabled]} onPress={capture} disabled={!ready || busy} activeOpacity={0.85}>
+            {busy ? <ActivityIndicator color="#fff" /> : <View style={styles.captureInner} />}
+          </TouchableOpacity>
+          <Text style={styles.hint}>Tap the button to capture your selfie</Text>
+        </View>
+      </View>
+    </CameraView>
   </View>;
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  webview: { flex: 1 },
-  header: { minHeight: 58, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', backgroundColor: '#087F73' },
-  badge: { color: '#fff', fontWeight: '900', fontSize: 12 },
-  headerStatus: { color: '#D9FFFA', fontSize: 11, marginLeft: 10, flex: 1 },
+  container: { flex: 1, backgroundColor: '#000' },
+  camera: { flex: 1 },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.18)' },
+  topBar: { minHeight: 60, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  badge: { color: '#fff', fontWeight: '900', fontSize: 12, letterSpacing: 0.5 },
   close: { padding: 8 },
-  closeText: { color: '#fff', fontSize: 18, fontWeight: '900' },
-  footer: { padding: 10, backgroundColor: '#F3F4F6' },
-  footerText: { color: '#4B5563', textAlign: 'center', fontSize: 11, lineHeight: 16 },
+  closeText: { color: '#fff', fontSize: 20, fontWeight: '900' },
+  guideArea: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
+  faceGuide: { width: 245, height: 310, borderRadius: 125, borderWidth: 3, borderColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  faceInner: { width: 220, height: 285, borderRadius: 112, borderWidth: 1, borderColor: 'rgba(255,255,255,0.55)' },
+  instruction: { color: '#fff', fontSize: 18, fontWeight: '800', textAlign: 'center', marginTop: 22, textShadowColor: '#000', textShadowRadius: 5 },
+  subInstruction: { color: '#fff', fontSize: 12, textAlign: 'center', marginTop: 7, textShadowColor: '#000', textShadowRadius: 4 },
+  bottom: { alignItems: 'center', paddingHorizontal: 20, paddingBottom: 28 },
+  security: { color: '#fff', fontSize: 12, fontWeight: '700', marginBottom: 14, textShadowColor: '#000', textShadowRadius: 4 },
+  capture: { width: 76, height: 76, borderRadius: 38, borderWidth: 5, borderColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  captureDisabled: { opacity: 0.55 },
+  captureInner: { width: 58, height: 58, borderRadius: 29, backgroundColor: '#fff' },
+  hint: { color: '#fff', fontSize: 11, marginTop: 10, textShadowColor: '#000', textShadowRadius: 4 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: '#fff' },
+  icon: { fontSize: 42 },
   title: { color: '#111827', fontSize: 19, fontWeight: '800', textAlign: 'center', marginTop: 14 },
   text: { color: '#4B5563', textAlign: 'center', marginTop: 8, fontSize: 13, lineHeight: 19 },
   primary: { backgroundColor: '#087F73', paddingHorizontal: 24, paddingVertical: 13, borderRadius: 24, marginTop: 20 },
   primaryText: { color: '#fff', fontWeight: '800' },
+  error: { color: '#B91C1C', textAlign: 'center', marginTop: 12, fontSize: 12, lineHeight: 18 },
   cancel: { padding: 14, marginTop: 6 },
 });
