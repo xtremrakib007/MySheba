@@ -1,14 +1,16 @@
 // Compatibility entry point for the old deployed callable name.
-// IMPORTANT: this file makes no Didit/network request. It now performs the
-// native on-device embedding duplicate check so older deployed function names
-// remain callable while the app migrates to the native KYC implementation.
+// The callable now supports the native face-check operation and the secure
+// server-side KYC submission operation. No third-party KYC provider is used.
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 
 const PENDING = 'pendingBiometricTemplates';
 const VERIFIED = 'biometricTemplates';
+const REQUESTS = 'verificationRequests';
 const DIMENSIONS = 512;
 const DUPLICATE_THRESHOLD = 0.82;
+const DOCUMENT_TYPES = ['Passport', 'MyKad / National ID', 'Work Permit / ID', "Driver's License"];
+const GENDERS = ['Male', 'Female', 'Other'];
 
 function requireAuth(request) {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
@@ -32,14 +34,80 @@ function cosine(a, b) {
   return score;
 }
 
+function validStorageUrl(url, uid, required = true) {
+  if (!url) return !required;
+  if (typeof url !== 'string' || !url.startsWith('https://')) return false;
+  const encodedPrefix = encodeURIComponent(`verification-documents/${uid}/`);
+  return url.includes(encodedPrefix) || url.includes(`/verification-documents/${uid}/`);
+}
+
+function validateSubmission(data, uid, phone) {
+  if (!data || data.uid !== uid) throw new HttpsError('invalid-argument', 'Invalid KYC submission.');
+  if (!DOCUMENT_TYPES.includes(data.documentType)) throw new HttpsError('invalid-argument', 'Invalid document type.');
+  if (!GENDERS.includes(data.gender)) throw new HttpsError('invalid-argument', 'Invalid gender.');
+  if (typeof data.name !== 'string' || data.name.trim().length < 2 || data.name.length > 120) throw new HttpsError('invalid-argument', 'Enter your full legal name.');
+  if (typeof phone !== 'string' || phone.trim().length < 5 || phone.length > 40) throw new HttpsError('failed-precondition', 'A verified phone number is required for KYC.');
+  if (typeof data.documentNumber !== 'string' || data.documentNumber.trim().length < 3 || data.documentNumber.length > 80) throw new HttpsError('invalid-argument', 'Invalid document number.');
+  if (typeof data.nationality !== 'string' || data.nationality.trim().length < 2 || data.nationality.length > 80) throw new HttpsError('invalid-argument', 'Invalid nationality.');
+  if (typeof data.dateOfBirth !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(data.dateOfBirth)) throw new HttpsError('invalid-argument', 'Invalid date of birth.');
+  if (typeof data.address !== 'string' || data.address.trim().length < 5 || data.address.length > 500) throw new HttpsError('invalid-argument', 'Invalid residential address.');
+  if (data.documentType === 'Passport' && (typeof data.passportExpiryDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(data.passportExpiryDate))) throw new HttpsError('invalid-argument', 'Passport expiry date is required.');
+  if (data.documentType !== 'Passport' && data.passportExpiryDate) throw new HttpsError('invalid-argument', 'Passport expiry date is only valid for passports.');
+  if (!validStorageUrl(data.frontDocumentUrl, uid) || !validStorageUrl(data.documentUrl, uid)) throw new HttpsError('invalid-argument', 'Invalid identity document upload.');
+  if (data.documentType !== 'Passport' && !validStorageUrl(data.backDocumentUrl, uid)) throw new HttpsError('invalid-argument', 'The back of the identity document is required.');
+  if (!validStorageUrl(data.selfieUrl, uid)) throw new HttpsError('invalid-argument', 'The verified face image is required.');
+  if (data.liveFaceVerified !== true) throw new HttpsError('failed-precondition', 'Complete live face verification first.');
+}
+
 exports.createDiditKycSession = onCall(async (request) => {
   const uid = requireAuth(request);
+  const db = admin.firestore();
+
+  // Secure KYC submission. The client can upload evidence, but it cannot
+  // directly create or overwrite a verification request anymore.
+  if (request.data?.mode === 'submit') {
+    const data = request.data?.kycData || {};
+    const userSnap = await db.collection('users').doc(uid).get();
+    if (!userSnap.exists) throw new HttpsError('not-found', 'Your user profile was not found.');
+    const user = userSnap.data() || {};
+    if (user.verified === true || user.verificationStatus === 'approved') throw new HttpsError('failed-precondition', 'Your KYC is already approved.');
+    const existing = await db.collection(REQUESTS).doc(uid).get();
+    if (existing.exists && existing.data()?.status === 'pending') throw new HttpsError('failed-precondition', 'Your KYC is already under review.');
+
+    const phone = String(user.phone || user.mobileNumber || user.mobile || '').trim();
+    const submission = {
+      ...data,
+      uid,
+      phone,
+      name: String(data.name || '').trim(),
+      documentNumber: String(data.documentNumber || '').trim(),
+      nationality: String(data.nationality || '').trim(),
+      address: String(data.address || '').trim(),
+      documentUrl: data.frontDocumentUrl || data.documentUrl || '',
+      status: 'pending',
+      note: '',
+      rejectionReason: '',
+      submittedAt: admin.firestore.FieldValue.serverTimestamp(),
+      reviewedBy: null,
+      reviewedAt: null,
+    };
+    validateSubmission(submission, uid, phone);
+
+    const pendingFace = await db.collection(PENDING).doc(uid).get();
+    if (!pendingFace.exists || pendingFace.data()?.status !== 'pending' || pendingFace.data()?.livenessPassed !== true) {
+      throw new HttpsError('failed-precondition', 'Complete the live face verification before submitting KYC.');
+    }
+
+    await db.collection(REQUESTS).doc(uid).set(submission, { merge: false });
+    await db.collection('users').doc(uid).update({ verificationStatus: 'pending', verified: false });
+    return { ok: true, status: 'pending' };
+  }
+
   const embedding = normalizeEmbedding(request.data?.embedding);
   if (request.data?.livenessPassed !== true) {
     throw new HttpsError('failed-precondition', 'Complete the live face movement check first.');
   }
 
-  const db = admin.firestore();
   const snap = await db.collection(VERIFIED).get();
   let best = null;
   snap.forEach((doc) => {
