@@ -10,7 +10,7 @@ const CUSTOMER_FEATURES = [
   { key: 'salary', icon: '💼', name: 'Salary', kind: 'salary' },
   { key: 'history', icon: '📋', name: 'Transactions', kind: 'history' },
   { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount' },
-  { key: 'profile', icon: '🪪', name: 'Profile & KYC', kind: 'profile' },
+  { key: 'kyc', icon: '🪪', name: 'Profile & KYC', kind: 'kyc' },
   { key: 'support', icon: '🎧', name: 'Support', kind: 'support' },
 ];
 
@@ -42,9 +42,7 @@ export default function MoreFeaturesScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.subtitle}>{isCustomer ? 'Manage your wallet, documents, account and financial activity.' : 'Manage your account and operational features.'}</Text>
         <View style={styles.grid}>
-          {features.map((item) => (
-            <Tile key={item.key} s={item} onPress={() => handlePress(item)} />
-          ))}
+          {features.map((item) => <Tile key={item.key} s={item} onPress={() => handlePress(item)} />)}
         </View>
       </ScrollView>
     </View>
