@@ -17,7 +17,7 @@ function getRequestId(request) {
   return requestId;
 }
 
-async function sanitizeRequest(request) {
+async function sanitizeRequest(request, requestId) {
   const uid = requireAuth(request);
   const db = admin.firestore();
   const snap = await db.collection('users').doc(uid).get();
@@ -35,10 +35,21 @@ async function sanitizeRequest(request) {
     role: profile.role || '',
   };
 
+  const incomingData = request.data || {};
+  const incomingPayload = incomingData.payload || {};
+  const payload = {
+    ...incomingPayload,
+    // Persist the idempotency key inside transactions.raw so a response lost
+    // after the wallet transaction commits can be recovered safely.
+    raw: { ...(incomingPayload.raw || {}), requestId },
+  };
+
   return {
     ...request,
     data: {
-      ...(request.data || {}),
+      ...incomingData,
+      payload,
+      requestId,
       customer,
     },
   };
@@ -90,13 +101,14 @@ function wrap(name) {
       if (!recovered.empty) {
         const txDoc = recovered.docs[0];
         const txData = txDoc.data() || {};
+        const cost = Number(txData.pointsCharged || txData.cost || 0);
         await guardRef.update({
           status: 'completed',
           transactionId: txDoc.id,
-          cost: Number(txData.pointsCharged || txData.cost || 0),
+          cost,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
-        return { id: txDoc.id, cost: Number(txData.pointsCharged || txData.cost || 0), replay: true };
+        return { id: txDoc.id, cost, replay: true };
       }
 
       throw new HttpsError('aborted', 'This order is already being processed. Please wait and check your transaction history.');
@@ -109,7 +121,7 @@ function wrap(name) {
     }
 
     try {
-      const safeRequest = await sanitizeRequest(request);
+      const safeRequest = await sanitizeRequest(request, requestId);
       const result = await fn.run(safeRequest);
       await guardRef.update({
         status: 'completed',
@@ -119,9 +131,8 @@ function wrap(name) {
       });
       return result;
     } catch (err) {
-      // No wallet mutation should be repeated after a failed callable. If
-      // the callable failed before creating an order, releasing the guard
-      // allows a legitimate retry with the same requestId.
+      // If the callable failed before committing its wallet transaction,
+      // release the guard so a retry with the same requestId can proceed.
       await guardRef.delete().catch(() => {});
       throw err;
     }
