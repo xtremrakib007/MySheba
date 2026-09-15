@@ -1,6 +1,6 @@
 // Customer identity verification service.
 // Phone verification happens at registration; this service handles the separate KYC review request.
-import { doc, onSnapshot, collection, query, where, orderBy, getDoc } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, collection, query, where, orderBy, serverTimestamp, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './config';
 
@@ -17,21 +17,10 @@ export async function submitVerificationRequest(uid, { name, phone }, documentUr
 
   if (providerApproved) {
     const saveDiditKycDetails = httpsCallable(functions, 'createDiditKycSession');
-    await saveDiditKycDetails({
-      action: 'saveDetails',
-      name: name || '',
-      phone: phone || '',
-      frontDocumentUrl: front,
-      backDocumentUrl: back,
-      selfieUrl: selfie,
-      kycData,
-    });
+    await saveDiditKycDetails({ action: 'saveDetails', name: name || '', phone: phone || '', frontDocumentUrl: front, backDocumentUrl: back, selfieUrl: selfie, kycData });
     return;
   }
 
-  // This path remains for the existing manual/admin KYC flow when no Didit
-  // provider approval exists yet.
-  const { setDoc, serverTimestamp } = await import('firebase/firestore');
   await setDoc(requestRef, {
     uid,
     name: name || '',
