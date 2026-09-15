@@ -2,15 +2,15 @@ const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https')
 const admin = require('firebase-admin');
 const crypto = require('crypto');
 
-const db = admin.firestore();
 const DIDIT_API = 'https://verification.didit.me/v3';
+let db;
+function getDb() { return db || (db = admin.firestore()); }
 
 function requiredConfig() {
   const apiKey = process.env.DIDIT_API_KEY;
   const workflowId = process.env.DIDIT_WORKFLOW_ID;
-  const webhookSecret = process.env.DIDIT_WEBHOOK_SECRET;
   if (!apiKey || !workflowId) throw new Error('Didit KYC is not configured. Set DIDIT_API_KEY and DIDIT_WORKFLOW_ID.');
-  return { apiKey, workflowId, webhookSecret };
+  return { apiKey, workflowId };
 }
 
 function safeEqualHex(a, b) {
@@ -72,7 +72,7 @@ exports.createDiditKycSession = onCall(async (request) => {
   let cfg;
   try { cfg = requiredConfig(); } catch (err) { throw new HttpsError('failed-precondition', err.message); }
 
-  const userSnap = await db.collection('users').doc(uid).get();
+  const userSnap = await getDb().collection('users').doc(uid).get();
   const user = userSnap.exists ? userSnap.data() : {};
   const name = String(user.name || user.displayName || '').trim();
   const parts = name.split(/\s+/).filter(Boolean);
@@ -106,7 +106,7 @@ exports.createDiditKycSession = onCall(async (request) => {
     throw new HttpsError('failed-precondition', data.detail || data.message || 'Could not start live KYC verification.');
   }
 
-  await db.collection('verificationRequests').doc(uid).set({
+  await getDb().collection('verificationRequests').doc(uid).set({
     uid,
     status: 'pending',
     diditProvider: 'didit',
@@ -132,7 +132,7 @@ exports.diditKycWebhook = onRequest(async (req, res) => {
   if (!verifyDiditSignature(body, signature, simpleSignature, timestamp, secret)) return res.status(401).json({ error: 'Invalid signature' });
 
   const eventId = body.event_id || `${body.session_id || 'unknown'}:${body.timestamp || Date.now()}:${body.webhook_type || ''}`;
-  const eventRef = db.collection('diditWebhookEvents').doc(String(eventId));
+  const eventRef = getDb().collection('diditWebhookEvents').doc(String(eventId));
   const existing = await eventRef.get();
   if (existing.exists) return res.status(200).json({ received: true, duplicate: true });
   await eventRef.set({ receivedAt: admin.firestore.FieldValue.serverTimestamp(), sessionId: body.session_id || '', status: body.status || '', webhookType: body.webhook_type || '' });
@@ -140,7 +140,7 @@ exports.diditKycWebhook = onRequest(async (req, res) => {
   const uid = body.vendor_data || body.metadata?.uid;
   if (!uid) return res.status(200).json({ received: true, ignored: 'missing vendor_data' });
 
-  const requestRef = db.collection('verificationRequests').doc(uid);
+  const requestRef = getDb().collection('verificationRequests').doc(uid);
   const current = await requestRef.get();
   const patch = {
     diditProvider: 'didit',
@@ -168,7 +168,7 @@ exports.diditKycWebhook = onRequest(async (req, res) => {
       patch.diditReferenceImageUrl = getDiditReferenceImage(decision);
       patch.diditDecision = decision;
       patch.approvedAt = admin.firestore.FieldValue.serverTimestamp();
-      await db.collection('users').doc(uid).set({ verified: true, verificationStatus: 'approved', verificationProvider: 'didit', verificationUpdatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      await getDb().collection('users').doc(uid).set({ verified: true, verificationStatus: 'approved', verificationProvider: 'didit', verificationUpdatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
     }
   } else if (body.status === 'Declined') {
     patch.status = 'rejected';
