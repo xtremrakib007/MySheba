@@ -2,6 +2,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logAudit, logServerError } = require('./logService');
+const { finalizeKycFaceTemplate } = require('./faceVerificationService');
 
 function requireAuth(request) {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
@@ -30,7 +31,8 @@ exports.approveVerification = onCall(async (request) => {
       if (reqSnap.data().status !== 'pending') throw new HttpsError('failed-precondition', 'That request has already been reviewed.');
       const userSnap = await tx.get(userRef);
       if (!userSnap.exists) throw new HttpsError('not-found', 'That user account no longer exists.');
-      tx.update(reqRef, { status: 'approved', note: '', rejectionReason: '', reviewedBy: callerUid, reviewedAt: admin.firestore.FieldValue.serverTimestamp() });
+      await finalizeKycFaceTemplate(tx, db, targetUid);
+      tx.update(reqRef, { status: 'approved', note: '', rejectionReason: '', reviewedBy: callerUid, reviewedAt: admin.firestore.FieldValue.serverTimestamp(), biometricVerified: true });
       tx.update(userRef, { verified: true, verificationStatus: 'approved' });
     });
   } catch (err) {
@@ -56,6 +58,7 @@ exports.rejectVerification = onCall(async (request) => {
       if (!reqSnap.exists) throw new HttpsError('not-found', 'That verification request does not exist.');
       if (reqSnap.data().status !== 'pending') throw new HttpsError('failed-precondition', 'That request has already been reviewed.');
       tx.update(reqRef, { status: 'rejected', note: cleanReason, rejectionReason: cleanReason, reviewedBy: callerUid, reviewedAt: admin.firestore.FieldValue.serverTimestamp() });
+      tx.delete(db.collection('pendingBiometricTemplates').doc(targetUid));
     });
   } catch (err) {
     if (err instanceof HttpsError) throw err;
