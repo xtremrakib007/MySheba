@@ -6,6 +6,15 @@ import { db, functions } from './config';
 
 const REQUESTS = 'verificationRequests';
 
+export async function verifyNativeKycFace(embedding, livenessPassed = true) {
+  // The deployed callable keeps its historical name for backwards compatibility,
+  // but it no longer calls any third-party KYC provider. It performs the native
+  // 512-d embedding duplicate check on the server.
+  const fn = httpsCallable(functions, 'createDiditKycSession');
+  const result = await fn({ embedding, livenessPassed });
+  return result.data || {};
+}
+
 export async function submitVerificationRequest(uid, { name, phone }, documentUrl, kycData = {}) {
   const front = kycData.frontDocumentUrl || documentUrl || '';
   const back = kycData.backDocumentUrl || '';
@@ -39,10 +48,11 @@ export async function submitVerificationRequest(uid, { name, phone }, documentUr
     status: 'pending',
     note: '',
     rejectionReason: '',
-    // This flag means the user completed the in-app camera capture step.
-    // It must not be interpreted as a biometric match by itself.
+    // This is set only after verifyNativeKycFace has passed. It means the
+    // native biometric challenge and duplicate-face check completed.
     liveFaceVerified: kycData.liveFaceVerified === true,
-    liveFaceMethod: kycData.liveFaceMethod || 'native_camera_capture',
+    liveFaceMethod: kycData.liveFaceMethod || 'native_face_recognition',
+    biometricModel: kycData.biometricModel || 'mobilefacenet-512',
     submittedAt: serverTimestamp(),
   }, { merge: true });
 }
