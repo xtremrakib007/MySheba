@@ -1,15 +1,6 @@
-// Game Points: the play-money balance functions-gamebot uses for the
-// in-app room games (dice, lowcard, highcard, cricket, 29 - "no real
-// money", see roomChatService.js's GameBot comments). gamebot owns
-// gamePoints/{uid} (`{ balance, updatedAt }`) and gamePointsLedger/{id}
-// (functions-gamebot/pointsLedger.js, deployed separately) - this file
-// only ever reads gamePoints/{uid} directly and recharges it through the
-// chargeGamePoints Cloud Function (functions/walletService.js), which is
-// the only path that can debit walletBalance and credit gamePoints
-// together. Mirrors topupService.js's "server is the only writer" shape,
-// just auto-approved/instant instead of an admin-review queue - this is
-// the user moving their own points from one bucket to another, not filing
-// a claim someone else has to approve.
+// Game Points: play-money balance used by the in-app room games.
+// All wallet-changing Game Points operations go through callable Functions;
+// requestId makes retries/double taps safe.
 import { doc, collection, query, where, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './config';
@@ -19,14 +10,12 @@ const COLLECTION = 'gamePoints';
 const TRANSFERS_COLLECTION = 'gamePointsTransfers';
 const GIFTS_COLLECTION = 'gamePointsGifts';
 
-// Mirrors functions-gamebot/pointsLedger.js's STARTING_POINTS - shown as
-// the starting balance before a user's gamePoints/{uid} doc exists yet
-// (gamebot lazily creates it on first game, same seed value).
 export const STARTING_POINTS = 100;
 
-/** Live game points balance for the signed-in user. Falls back to
- * STARTING_POINTS if gamebot hasn't created the doc yet (brand-new player
- * who hasn't joined a room game or recharged before). */
+function createRequestId(prefix) {
+  return `ms_${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 14)}`;
+}
+
 export function subscribeMyGamePoints(uid, callback, onError) {
   return onSnapshot(
     doc(db, COLLECTION, uid),
@@ -35,13 +24,12 @@ export function subscribeMyGamePoints(uid, callback, onError) {
   );
 }
 
-/** Recharges `amount` game points, debiting the equivalent wallet points
- * (role-based rate, see gamePointsCostPerUnit in settingsService.js) via
- * the chargeGamePoints Cloud Function. Returns { cost, amount, gamePoints }. */
-export async function rechargeGamePoints(amount) {
+/** Reuses the same requestId only when deliberately retrying one attempt. */
+export async function rechargeGamePoints(amount, requestId) {
   const fn = httpsCallable(functions, 'chargeGamePoints');
+  const id = requestId || createRequestId('gp_recharge');
   try {
-    const { data } = await fn({ amount });
+    const { data } = await fn({ amount, requestId: id });
     logActivity('gamepoints_recharged', { amount, cost: data.cost });
     return data;
   } catch (e) {
@@ -50,14 +38,11 @@ export async function rechargeGamePoints(amount) {
   }
 }
 
-/** Withdraws `amount` Game Points back into walletBalance (minus the
- * GameBot payout fee, see gamePointsFeePercent in settingsService.js) via
- * the withdrawGamePoints Cloud Function. Returns
- * { amount, fee, credited, gamePoints, walletBalance }. */
-export async function withdrawGamePoints(amount) {
+export async function withdrawGamePoints(amount, requestId) {
   const fn = httpsCallable(functions, 'withdrawGamePoints');
+  const id = requestId || createRequestId('gp_withdraw');
   try {
-    const { data } = await fn({ amount });
+    const { data } = await fn({ amount, requestId: id });
     logActivity('gamepoints_withdrawn', { amount, fee: data.fee, credited: data.credited });
     return data;
   } catch (e) {
@@ -66,17 +51,15 @@ export async function withdrawGamePoints(amount) {
   }
 }
 
-/** Sends `amount` Game Points from the signed-in user to `toUid` via the
- * transferGamePoints Cloud Function. `to` mirrors pointTransferService's
- * shape - only `to.uid` reaches the server. Returns { transferId, gamePoints }. */
-export async function transferGamePoints({ to, amount, note }) {
+export async function transferGamePoints({ to, amount, note, requestId }) {
   if (!to?.uid) throw new Error('Missing recipient.');
   const amt = Number(amount);
   if (!Number.isFinite(amt) || amt <= 0) throw new Error('Enter a valid amount.');
 
   const fn = httpsCallable(functions, 'transferGamePoints');
+  const id = requestId || createRequestId('gp_transfer');
   try {
-    const { data } = await fn({ toUid: to.uid, amount: amt, note: note || '' });
+    const { data } = await fn({ toUid: to.uid, amount: amt, note: note || '', requestId: id });
     logActivity('gamepoints_transferred', { toUid: to.uid, amount: amt });
     return data;
   } catch (err) {
@@ -85,20 +68,12 @@ export async function transferGamePoints({ to, amount, note }) {
   }
 }
 
-/** Sends `amount` Game Points from the signed-in user to `toUid` as a gift
- * (Next Update PRD §4 - 80/20 split: receiver gets 80%, the remaining 20%
- * is retained by the system) via the giftGamePoints Cloud Function. Unlike
- * transferGamePoints, the receiver never gets the full amount - that's the
- * product rule, not a bug. Generates a fresh idempotency key per call so a
- * double-tap or retry can't gift twice; pass the same `idempotencyKey` back
- * in yourself only if you're deliberately retrying one specific attempt.
- * Returns { giftId, status, senderDebited, receiverCredited, systemFee }. */
 export async function giftGamePoints({ toUid, amount, idempotencyKey }) {
   if (!toUid) throw new Error('Missing recipient.');
   const amt = Number(amount);
   if (!Number.isFinite(amt) || amt <= 0) throw new Error('Enter a valid amount.');
 
-  const key = idempotencyKey || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const key = idempotencyKey || createRequestId('gp_gift');
   const fn = httpsCallable(functions, 'giftGamePoints');
   try {
     const { data } = await fn({ toUid, amount: amt, idempotencyKey: key });
@@ -110,7 +85,6 @@ export async function giftGamePoints({ toUid, amount, idempotencyKey }) {
   }
 }
 
-/** Live history of gifts this user sent or received, newest first. */
 export function subscribeMyGamePointsGifts(uid, onUpdate, onError) {
   const sentQ = query(collection(db, GIFTS_COLLECTION), where('senderUid', '==', uid));
   const receivedQ = query(collection(db, GIFTS_COLLECTION), where('receiverUid', '==', uid));
@@ -126,7 +100,6 @@ export function subscribeMyGamePointsGifts(uid, onUpdate, onError) {
   return () => { unsubSent(); unsubReceived(); };
 }
 
-/** Live history of Game Points transfers this user sent or received, newest first. */
 export function subscribeMyGamePointsTransfers(uid, onUpdate, onError) {
   const q = query(collection(db, TRANSFERS_COLLECTION), where('participants', 'array-contains', uid));
   return onSnapshot(
