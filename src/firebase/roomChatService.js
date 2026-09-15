@@ -1,3 +1,7 @@
-// Room Chat has been removed from MySheba.
-// Support Chat is implemented exclusively in chatService.js.
-export const OBSOLETE_ROOM_CHAT_SERVICE = true;
+// Legacy compatibility stub. Room Chat was removed from MySheba.
+const removed = () => () => {};
+export const subscribeMyRooms = removed;
+export const getRoomMeta = async () => null;
+export const subscribeRoomMeta = removed;
+export const subscribeRoomMessages = removed;
+export const markRoomRead = async () => {};
