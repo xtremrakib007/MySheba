@@ -2141,15 +2141,8 @@ export function AppProvider({ children }) {
       await authService.logout();
     } finally {
       setPendingGooglePhone(false);
-      setAuthUser(null);
-      setPendingDeviceVerification(null);
-      setPendingGooglePhone(false);
-      setSidebarVisible(false);
       setProfile(null);
       screenHistoryRef.current = [];
-      isPoppingRef.current = false;
-      prevScreenRef.current = 'login';
-      exitArmedRef.current = false;
       setScreen('login');
     }
   }, []);
@@ -2252,8 +2245,15 @@ export function AppProvider({ children }) {
       setBiometricEnabledState(null);
       biometricPromptedRef.current = false;
       setShowBiometricPrompt(false);
+      setAuthUser(null);
+      setPendingDeviceVerification(null);
+      setPendingGooglePhone(false);
+      setSidebarVisible(false);
       setProfile(null);
       screenHistoryRef.current = [];
+      isPoppingRef.current = false;
+      prevScreenRef.current = 'login';
+      exitArmedRef.current = false;
       setScreen('login');
     }
   }, []);
