@@ -28,6 +28,7 @@ import ModuleSubscriptionsPage from './pages/ModuleSubscriptionsPage';
 import PaymentSettingsPage from './pages/PaymentSettingsPage';
 import PointTopUpPage from './pages/PointTopUpPage';
 import DeviceSessionsPage from './pages/DeviceSessionsPage';
+import SecurityCenterPage from './pages/SecurityCenterPage';
 import SuperadminRoute from './routes/SuperadminRoute';
 
 export default function App() {
@@ -44,6 +45,7 @@ export default function App() {
             <Route path="/transfer-points" element={<TransferPointsPage />} />
             <Route path="/business-profiles" element={<BusinessProfilesPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
+            <Route path="/security" element={<SecurityCenterPage />} />
             <Route path="/users" element={<UserManagementPage />} />
             <Route path="/feature-access" element={<FeatureAccessPage />} />
             <Route path="/verification" element={<IdentityVerificationPage />} />
