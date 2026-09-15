@@ -7,3 +7,4 @@ node scripts/bump-version.js
 # This keeps the dependency pinned in the build environment while the repository
 # remains compatible with the existing Expo SDK 53 dependency set.
 npm pkg set 'dependencies.@nitro-mlkit/face-recognition'=0.1.0-beta.2
+npm pkg set 'dependencies.@nitro-mlkit/face-detection'=0.1.0-beta.4
