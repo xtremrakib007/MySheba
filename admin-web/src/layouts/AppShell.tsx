@@ -46,43 +46,42 @@ export default function AppShell() {
   };
 
   const sidebar = (
-    <aside className="flex h-full w-72 shrink-0 flex-col bg-[var(--color-navy)] py-5 shadow-2xl lg:shadow-none">
-      <div className="mb-5 flex items-center gap-2.5 px-4">
+    <aside className={`flex h-full shrink-0 flex-col bg-[var(--color-navy)] py-5 shadow-2xl transition-[width] duration-200 lg:shadow-none ${collapsed ? 'w-[68px]' : 'w-72'}`}>
+      <div className={`mb-5 flex items-center gap-2.5 ${collapsed ? 'justify-center px-2' : 'px-4'}`}>
         <img src={logo} alt="MySheba" className="h-10 w-10 shrink-0 rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.35)]" />
-        <div className="min-w-0 flex-1 overflow-hidden"><p className="truncate font-[var(--font-display)] text-sm font-bold text-white">MySheba</p><p className="truncate text-[11px] text-white/50">Admin Control Center</p></div>
+        {!collapsed && <div className="min-w-0 flex-1 overflow-hidden"><p className="truncate font-[var(--font-display)] text-sm font-bold text-white">MySheba</p><p className="truncate text-[11px] text-white/50">Admin Control Center</p></div>}
         <button onClick={() => setMobileOpen(false)} className="rounded-lg p-1.5 text-white/60 hover:bg-white/10 hover:text-white lg:hidden" aria-label="Close navigation"><X size={18} /></button>
       </div>
 
-      <nav className="flex-1 space-y-2 overflow-y-auto overflow-x-hidden px-3">
+      <nav className={`flex-1 space-y-2 overflow-y-auto overflow-x-hidden ${collapsed ? 'px-2' : 'px-3'}`}>
         {visibleGroups.map((group) => {
           const accent = ACCENT[group.accent];
           const active = isGroupActive(group);
           const open = openGroups[group.label] ?? true;
           return <div key={group.label} className="rounded-xl">
-            <button onClick={() => toggleGroup(group.label)} className={`mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition ${active ? 'text-white' : 'text-white/55 hover:bg-white/5 hover:text-white/80'}`} aria-expanded={open}>
+            <button onClick={() => toggleGroup(group.label)} title={collapsed ? group.label : undefined} className={`mb-1 flex w-full items-center rounded-lg py-2 transition ${collapsed ? 'justify-center px-1' : 'gap-2 px-2 text-left'} ${active ? 'text-white' : 'text-white/55 hover:bg-white/5 hover:text-white/80'}`} aria-expanded={open}>
               <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${accent.dot} ${active ? 'opacity-100' : 'opacity-50'}`} />
-              <span className="flex-1 truncate text-[10px] font-bold uppercase tracking-[0.14em]">{group.label}</span>
-              <ChevronDown size={14} className={`shrink-0 transition-transform ${open ? '' : '-rotate-90'}`} />
+              {!collapsed && <><span className="flex-1 truncate text-[10px] font-bold uppercase tracking-[0.14em]">{group.label}</span><ChevronDown size={14} className={`shrink-0 transition-transform ${open ? '' : '-rotate-90'}`} /></>}
             </button>
             {open && <div className="space-y-0.5 pb-1">
               {group.items.map((item) => {
                 const Icon = item.icon;
-                return item.enabled ? <NavLink key={item.path} to={item.path} end={item.path === '/'} className={({ isActive }) => `group flex items-center gap-2.5 rounded-lg border border-transparent px-3 py-2 text-sm font-medium transition ${isActive ? `${accent.activeBg} text-white shadow-sm` : 'text-white/65 hover:border-white/5 hover:bg-white/5 hover:text-white'}`}>
-                  {({ isActive }) => <><Icon size={16} strokeWidth={2} className={`shrink-0 ${isActive ? 'text-white' : accent.icon}`} /><span className="truncate">{item.label}</span>{isActive && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-white/80" />}</>}
-                </NavLink> : <div key={item.path} title="Coming in a later phase" className="flex cursor-not-allowed items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-white/25"><Icon size={16} strokeWidth={2} className="shrink-0" /><span className="truncate">{item.label}</span><span className="ml-auto text-[9px] text-white/20">soon</span></div>;
+                return item.enabled ? <NavLink key={item.path} to={item.path} end={item.path === '/'} title={collapsed ? item.label : undefined} className={({ isActive }) => `group flex items-center rounded-lg border border-transparent py-2 text-sm font-medium transition ${collapsed ? 'justify-center px-1' : 'gap-2.5 px-3'} ${isActive ? `${accent.activeBg} text-white shadow-sm` : 'text-white/65 hover:border-white/5 hover:bg-white/5 hover:text-white'}`}>
+                  {({ isActive }) => <><Icon size={16} strokeWidth={2} className={`shrink-0 ${isActive ? 'text-white' : accent.icon}`} />{!collapsed && <><span className="truncate">{item.label}</span>{isActive && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-white/80" />}</>}</>}
+                </NavLink> : <div key={item.path} title={collapsed ? `${item.label} — Coming in a later phase` : 'Coming in a later phase'} className={`flex cursor-not-allowed items-center rounded-lg py-2 text-sm font-medium text-white/25 ${collapsed ? 'justify-center px-1' : 'gap-2.5 px-3'}`}><Icon size={16} strokeWidth={2} className="shrink-0" />{!collapsed && <><span className="truncate">{item.label}</span><span className="ml-auto text-[9px] text-white/20">soon</span></>}</div>;
               })}
             </div>}
           </div>;
         })}
       </nav>
 
-      <div className="mt-3 border-t border-white/10 px-3 pt-3">
-        <div className="rounded-xl bg-white/5 px-3 py-2.5">
+      <div className={`mt-3 border-t border-white/10 pt-3 ${collapsed ? 'px-2' : 'px-3'}`}>
+        {!collapsed && <div className="rounded-xl bg-white/5 px-3 py-2.5">
           <p className="truncate text-sm font-medium text-white">{profile?.name || profile?.email}</p>
           <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-white/40">{profile?.role}</p>
-        </div>
-        <button onClick={() => signOut()} className="mt-2 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium text-white/65 transition hover:bg-white/5 hover:text-white"><LogOut size={16} strokeWidth={2} />Sign out</button>
-        <button onClick={() => setCollapsed((c) => !c)} className="mt-1 hidden w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium text-white/45 transition hover:bg-white/5 hover:text-white lg:flex">{collapsed ? <><PanelLeftOpen size={16} />Expand sidebar</> : <><PanelLeftClose size={16} />Compact mode</>}</button>
+        </div>}
+        <button onClick={() => signOut()} title={collapsed ? 'Sign out' : undefined} className={`mt-2 flex w-full items-center rounded-lg py-2 text-sm font-medium text-white/65 transition hover:bg-white/5 hover:text-white ${collapsed ? 'justify-center px-1' : 'gap-2.5 px-3 text-left'}`}><LogOut size={16} strokeWidth={2} />{!collapsed && 'Sign out'}</button>
+        <button onClick={() => setCollapsed((c) => !c)} title={collapsed ? 'Expand sidebar' : undefined} className={`mt-1 hidden w-full items-center rounded-lg py-2 text-sm font-medium text-white/45 transition hover:bg-white/5 hover:text-white lg:flex ${collapsed ? 'justify-center px-1' : 'gap-2.5 px-3 text-left'}`}>{collapsed ? <PanelLeftOpen size={16} /> : <><PanelLeftClose size={16} />Compact mode</>}</button>
       </div>
     </aside>
   );
