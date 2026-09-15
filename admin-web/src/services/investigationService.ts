@@ -7,44 +7,16 @@ export interface InvestigationTransaction { id:string; service:string; amount:nu
 export interface InvestigationTicket { id:string; subject:string; message:string; status:string; userId:string|null; createdAt:string|null; timestampMs:number|null; }
 export interface InvestigationLog { id:string; type:'activity'|'audit'; summary:string; createdAt:string|null; timestampMs:number|null; raw:Record<string,unknown>; }
 export interface InvestigationKyc { id:string; status:'pending'|'approved'|'rejected'|string; documentType:string|null; submittedAt:string|null; timestampMs:number|null; rejectionReason:string|null; }
+export interface InvestigationSummary { totalValue:number; completedValue:number; pendingValue:number; rejectedValue:number; openTickets:number; kycStatus:InvestigationKyc['status']|'none'; rejectedTransactions:number; highValueTransactions:number; }
 
-function timestampValue(v: unknown): number|null {
-  if (v && typeof (v as {toDate?:()=>Date}).toDate === 'function') return (v as {toDate:()=>Date}).toDate().getTime();
-  if (v instanceof Date) return v.getTime();
-  if (typeof v === 'number') return v < 10000000000 ? v * 1000 : v;
-  if (typeof v === 'string') { const n=Date.parse(v); return Number.isNaN(n) ? null : n; }
-  return null;
-}
-function dateValue(v: unknown): string|null { const ms=timestampValue(v); return ms===null ? null : new Date(ms).toLocaleString(); }
-function userFromDoc(d:{id:string;data:()=>DocumentData}):AdminUserRow {
-  const x=d.data();
-  const rawVerification=x.verificationStatus ?? (x.verified===true ? 'approved' : undefined);
-  const verificationStatus = rawVerification === 'pending' || rawVerification === 'approved' || rawVerification === 'rejected' ? rawVerification : 'unknown';
-  return { uid:d.id, name:x.name??x.displayName??'(no name)', email:x.email??null, phone:x.phone??x.phoneNumber??null, role:x.role??'user', disabled:Boolean(x.disabled), verificationStatus, dealerCode:x.dealerCode, resellerCode:x.resellerCode, features:{mobileBanking:true,recharge:true,remittance:true,travel:true,marketplace:true,ticketReseller:false,...(x.features??{})} };
-}
-export async function searchInvestigationUsers(term:string):Promise<AdminUserRow[]> {
-  const snap=await getDocs(query(collection(db,'users'),orderBy('name'),limit(500)));
-  return filterBySearch(snap.docs.map(userFromDoc),term).slice(0,50);
-}
-export async function getInvestigationTransactions(uid:string):Promise<InvestigationTransaction[]> {
-  try { const snap=await getDocs(query(collection(db,'transactions'),where('customerId','==',uid),orderBy('createdAt','desc'),limit(100))); return snap.docs.map(d=>{const x=d.data();return{id:d.id,service:x.service??'',amount:Number(x.amount??0),total:Number(x.total??0),status:x.status??'pending',approved:x.approved===true,rejected:x.rejected===true,customerId:x.customerId??null,createdAt:dateValue(x.createdAt),timestampMs:timestampValue(x.createdAt)}}); }
-  catch(err){console.warn('Investigation transaction query failed',err);return[];}
-}
-export async function getInvestigationTickets(uid:string):Promise<InvestigationTicket[]> {
-  try { const snap=await getDocs(query(collection(db,'supportTickets'),where('userId','==',uid),limit(100))); return snap.docs.map(d=>{const x=d.data();return{id:d.id,subject:x.subject??'(no subject)',message:x.message??'',status:x.status??'open',userId:x.userId??null,createdAt:dateValue(x.createdAt),timestampMs:timestampValue(x.createdAt)}}).sort((a,b)=>(b.timestampMs??0)-(a.timestampMs??0)); }
-  catch(err){console.warn('Investigation ticket query failed',err);return[];}
-}
-function mapKyc(d:{id:string;data:()=>DocumentData}):InvestigationKyc { const x=d.data(); return {id:d.id,status:String(x.status??'pending'),documentType:x.documentType??null,submittedAt:dateValue(x.submittedAt),timestampMs:timestampValue(x.submittedAt),rejectionReason:x.rejectionReason??null}; }
-export async function getInvestigationKyc(uid:string):Promise<InvestigationKyc[]> {
-  try { const direct=await getDoc(doc(db,'verificationRequests',uid)); if(direct.exists()) return [mapKyc(direct)]; const snap=await getDocs(query(collection(db,'verificationRequests'),where('uid','==',uid),orderBy('submittedAt','desc'),limit(20))); return snap.docs.map(mapKyc); }
-  catch(err){console.warn('Investigation KYC query failed',err);return[];}
-}
-function matchesUid(data:Record<string,unknown>,uid:string):boolean { return Object.values(data).some(v=>typeof v==='string'&&v===uid); }
-export async function getInvestigationLogs(uid:string):Promise<InvestigationLog[]> {
-  const result:InvestigationLog[]=[];
-  for(const [name,type] of [['userAuditLog','audit'],['activityLog','activity']] as const){
-    try { const snap=await getDocs(query(collection(db,name),orderBy('createdAt','desc'),limit(100))); snap.docs.forEach(d=>{const x=d.data();if(matchesUid(x,uid)){const preferred=x.action??x.event??x.type??x.message??x.description??'Account event';result.push({id:d.id,type,summary:String(preferred),createdAt:dateValue(x.createdAt),timestampMs:timestampValue(x.createdAt),raw:x});}}); }
-    catch(err){console.warn(`Investigation ${name} query failed`,err);}
-  }
-  return result.sort((a,b)=>(b.timestampMs??0)-(a.timestampMs??0)).slice(0,100);
-}
+function timestampValue(v: unknown): number|null { if(v&&typeof(v as {toDate?:()=>Date}).toDate==='function')return(v as {toDate:()=>Date}).toDate().getTime(); if(v instanceof Date)return v.getTime(); if(typeof v==='number')return v<10000000000?v*1000:v; if(typeof v==='string'){const n=Date.parse(v);return Number.isNaN(n)?null:n;} return null; }
+function dateValue(v: unknown): string|null { const ms=timestampValue(v); return ms===null?null:new Date(ms).toLocaleString(); }
+function userFromDoc(d:{id:string;data:()=>DocumentData}):AdminUserRow { const x=d.data(); const raw=x.verificationStatus??(x.verified===true?'approved':undefined); const verificationStatus=raw==='pending'||raw==='approved'||raw==='rejected'?raw:'unknown'; return{uid:d.id,name:x.name??x.displayName??'(no name)',email:x.email??null,phone:x.phone??x.phoneNumber??null,role:x.role??'user',disabled:Boolean(x.disabled),verificationStatus,dealerCode:x.dealerCode,resellerCode:x.resellerCode,features:{mobileBanking:true,recharge:true,remittance:true,travel:true,marketplace:true,ticketReseller:false,...(x.features??{})}}; }
+export async function searchInvestigationUsers(term:string):Promise<AdminUserRow[]> { const snap=await getDocs(query(collection(db,'users'),orderBy('name'),limit(500))); return filterBySearch(snap.docs.map(userFromDoc),term).slice(0,50); }
+export async function getInvestigationTransactions(uid:string):Promise<InvestigationTransaction[]> { try{const snap=await getDocs(query(collection(db,'transactions'),where('customerId','==',uid),orderBy('createdAt','desc'),limit(100)));return snap.docs.map(d=>{const x=d.data();return{id:d.id,service:x.service??'',amount:Number(x.amount??0),total:Number(x.total??0),status:x.status??'pending',approved:x.approved===true,rejected:x.rejected===true,customerId:x.customerId??null,createdAt:dateValue(x.createdAt),timestampMs:timestampValue(x.createdAt)}});}catch(err){console.warn('Investigation transaction query failed',err);return[];} }
+export async function getInvestigationTickets(uid:string):Promise<InvestigationTicket[]> { try{const snap=await getDocs(query(collection(db,'supportTickets'),where('userId','==',uid),limit(100)));return snap.docs.map(d=>{const x=d.data();return{id:d.id,subject:x.subject??'(no subject)',message:x.message??'',status:x.status??'open',userId:x.userId??null,createdAt:dateValue(x.createdAt),timestampMs:timestampValue(x.createdAt)}}).sort((a,b)=>(b.timestampMs??0)-(a.timestampMs??0));}catch(err){console.warn('Investigation ticket query failed',err);return[];} }
+function mapKyc(d:{id:string;data:()=>DocumentData}):InvestigationKyc { const x=d.data();return{id:d.id,status:String(x.status??'pending'),documentType:x.documentType??null,submittedAt:dateValue(x.submittedAt),timestampMs:timestampValue(x.submittedAt),rejectionReason:x.rejectionReason??null}; }
+export async function getInvestigationKyc(uid:string):Promise<InvestigationKyc[]> { try{const direct=await getDoc(doc(db,'verificationRequests',uid));if(direct.exists())return[mapKyc(direct)];const snap=await getDocs(query(collection(db,'verificationRequests'),where('uid','==',uid),orderBy('submittedAt','desc'),limit(20)));return snap.docs.map(mapKyc);}catch(err){console.warn('Investigation KYC query failed',err);return[];} }
+function matchesUid(data:Record<string,unknown>,uid:string):boolean{return Object.values(data).some(v=>typeof v==='string'&&v===uid);}
+export async function getInvestigationLogs(uid:string):Promise<InvestigationLog[]> { const result:InvestigationLog[]=[];for(const[name,type]of[['userAuditLog','audit'],['activityLog','activity']]as const){try{const snap=await getDocs(query(collection(db,name),orderBy('createdAt','desc'),limit(100)));snap.docs.forEach(d=>{const x=d.data();if(matchesUid(x,uid)){const preferred=x.action??x.event??x.type??x.message??x.description??'Account event';result.push({id:d.id,type,summary:String(preferred),createdAt:dateValue(x.createdAt),timestampMs:timestampValue(x.createdAt),raw:x});}});}catch(err){console.warn(`Investigation ${name} query failed`,err);}}return result.sort((a,b)=>(b.timestampMs??0)-(a.timestampMs??0)).slice(0,100); }
+export function buildInvestigationSummary(tx:InvestigationTransaction[],tickets:InvestigationTicket[],kyc:InvestigationKyc[]):InvestigationSummary { const completedValue=tx.filter(x=>x.status==='completed'&&!x.rejected).reduce((s,x)=>s+x.total,0);const pendingValue=tx.filter(x=>!x.rejected&&x.status!=='completed').reduce((s,x)=>s+x.total,0);const rejectedValue=tx.filter(x=>x.rejected||x.status==='rejected').reduce((s,x)=>s+x.total,0);return{totalValue:tx.reduce((s,x)=>s+x.total,0),completedValue,pendingValue,rejectedValue,openTickets:tickets.filter(x=>x.status!=='resolved').length,kycStatus:kyc[0]?.status??'none',rejectedTransactions:tx.filter(x=>x.rejected||x.status==='rejected').length,highValueTransactions:tx.filter(x=>x.total>=10000).length}; }
