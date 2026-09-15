@@ -41,6 +41,18 @@ function validStorageUrl(url, uid, required = true) {
   return url.includes(encodedPrefix) || url.includes(`/verification-documents/${uid}/`);
 }
 
+function parseDate(value, label) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new HttpsError('invalid-argument', `Invalid ${label}.`);
+  }
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    throw new HttpsError('invalid-argument', `Invalid ${label}.`);
+  }
+  return date;
+}
+
 function validateSubmission(data, uid, phone) {
   if (!data || data.uid !== uid) throw new HttpsError('invalid-argument', 'Invalid KYC submission.');
   if (!DOCUMENT_TYPES.includes(data.documentType)) throw new HttpsError('invalid-argument', 'Invalid document type.');
@@ -49,10 +61,18 @@ function validateSubmission(data, uid, phone) {
   if (typeof phone !== 'string' || phone.trim().length < 5 || phone.length > 40) throw new HttpsError('failed-precondition', 'A verified phone number is required for KYC.');
   if (typeof data.documentNumber !== 'string' || data.documentNumber.trim().length < 3 || data.documentNumber.length > 80) throw new HttpsError('invalid-argument', 'Invalid document number.');
   if (typeof data.nationality !== 'string' || data.nationality.trim().length < 2 || data.nationality.length > 80) throw new HttpsError('invalid-argument', 'Invalid nationality.');
-  if (typeof data.dateOfBirth !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(data.dateOfBirth)) throw new HttpsError('invalid-argument', 'Invalid date of birth.');
+  const dob = parseDate(data.dateOfBirth, 'date of birth');
+  const today = new Date();
+  if (dob > today) throw new HttpsError('invalid-argument', 'Date of birth cannot be in the future.');
+  const age = today.getUTCFullYear() - dob.getUTCFullYear() - (today.getUTCMonth() < dob.getUTCMonth() || (today.getUTCMonth() === dob.getUTCMonth() && today.getUTCDate() < dob.getUTCDate()) ? 1 : 0);
+  if (age < 18 || age > 120) throw new HttpsError('invalid-argument', 'KYC applicants must be between 18 and 120 years old.');
   if (typeof data.address !== 'string' || data.address.trim().length < 5 || data.address.length > 500) throw new HttpsError('invalid-argument', 'Invalid residential address.');
-  if (data.documentType === 'Passport' && (typeof data.passportExpiryDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(data.passportExpiryDate))) throw new HttpsError('invalid-argument', 'Passport expiry date is required.');
-  if (data.documentType !== 'Passport' && data.passportExpiryDate) throw new HttpsError('invalid-argument', 'Passport expiry date is only valid for passports.');
+  if (data.documentType === 'Passport') {
+    const expiry = parseDate(data.passportExpiryDate, 'passport expiry date');
+    if (expiry < today) throw new HttpsError('invalid-argument', 'Passport expiry date cannot be in the past.');
+  } else if (data.passportExpiryDate) {
+    throw new HttpsError('invalid-argument', 'Passport expiry date is only valid for passports.');
+  }
   if (!validStorageUrl(data.frontDocumentUrl, uid) || !validStorageUrl(data.documentUrl, uid)) throw new HttpsError('invalid-argument', 'Invalid identity document upload.');
   if (data.documentType !== 'Passport' && !validStorageUrl(data.backDocumentUrl, uid)) throw new HttpsError('invalid-argument', 'The back of the identity document is required.');
   if (!validStorageUrl(data.selfieUrl, uid)) throw new HttpsError('invalid-argument', 'The verified face image is required.');
@@ -76,14 +96,23 @@ exports.createDiditKycSession = onCall(async (request) => {
 
     const phone = String(user.phone || user.mobileNumber || user.mobile || '').trim();
     const submission = {
-      ...data,
       uid,
       phone,
       name: String(data.name || '').trim(),
+      documentType: data.documentType,
       documentNumber: String(data.documentNumber || '').trim(),
       nationality: String(data.nationality || '').trim(),
+      dateOfBirth: data.dateOfBirth,
+      gender: data.gender,
       address: String(data.address || '').trim(),
+      passportExpiryDate: data.documentType === 'Passport' ? data.passportExpiryDate : undefined,
+      frontDocumentUrl: data.frontDocumentUrl || data.documentUrl || '',
       documentUrl: data.frontDocumentUrl || data.documentUrl || '',
+      backDocumentUrl: data.backDocumentUrl || '',
+      selfieUrl: data.selfieUrl || '',
+      liveFaceVerified: data.liveFaceVerified === true,
+      faceVerificationMethod: data.faceVerificationMethod || 'native',
+      faceVerificationModel: data.faceVerificationModel || 'mobilefacenet-512',
       status: 'pending',
       note: '',
       rejectionReason: '',
