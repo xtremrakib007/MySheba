@@ -4,13 +4,12 @@ import {
   AlertTriangle, BarChart3, BadgeCheck, Banknote, BellRing, Building2, CheckCircle2,
   CreditCard, FileText, Globe2, Headphones, LayoutGrid, Plane, Search, Settings2,
   ShieldCheck, Smartphone, Ticket, TrainFront, UserRoundCog, Users, XCircle,
-  Activity, ClipboardSearch, Megaphone, WalletCards,
+  Activity, ClipboardSearch, Megaphone, WalletCards, RefreshCw,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchOpsOverview, type OpsOverview } from '../services/reportsService';
 
 type Feature = { key: string; label: string; path: string; icon: typeof Users; tone: string; superadminOnly?: boolean };
-
 type Shortcut = { label: string; description: string; path: string; icon: typeof Activity; superadminOnly?: boolean };
 
 const FEATURES: Feature[] = [
@@ -59,6 +58,8 @@ const STAT_CARDS: { key: keyof OpsOverview; label: string; path: string; icon: t
   { key: 'openTickets', label: 'Open Tickets', path: '/support', icon: Headphones },
 ];
 
+const REFRESH_INTERVAL_MS = 30_000;
+
 export default function DashboardPage() {
   const { profile } = useAuth();
   const navigate = useNavigate();
@@ -68,13 +69,34 @@ export default function DashboardPage() {
   const [refreshing, setRefreshing] = useState(false);
 
   const refreshOverview = async () => {
+    if (refreshing) return;
     setRefreshing(true);
     try { setOverview(await fetchOpsOverview()); setLastUpdated(new Date()); }
     catch { setOverview(null); }
     finally { setRefreshing(false); }
   };
 
-  useEffect(() => { void refreshOverview(); }, []);
+  useEffect(() => {
+    void refreshOverview();
+    let intervalId: number | undefined;
+    const startPolling = () => {
+      if (document.visibilityState !== 'visible' || intervalId !== undefined) return;
+      intervalId = window.setInterval(() => void refreshOverview(), REFRESH_INTERVAL_MS);
+    };
+    const stopPolling = () => {
+      if (intervalId !== undefined) window.clearInterval(intervalId);
+      intervalId = undefined;
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void refreshOverview();
+        startPolling();
+      } else stopPolling();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    startPolling();
+    return () => { stopPolling(); document.removeEventListener('visibilitychange', handleVisibility); };
+  }, []);
 
   const isSuperadmin = profile?.role === 'superadmin';
   const visibleFeatures = FEATURES.filter((feature) => !feature.superadminOnly || isSuperadmin);
@@ -114,7 +136,7 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:gap-4">{filteredFeatures.map(({ key, label, path, icon: Icon, tone }) => <button key={key} onClick={() => navigate(path)} className="group flex min-h-[145px] flex-col items-center justify-center rounded-[22px] border-2 border-blue-500/90 bg-white px-2 py-4 text-center shadow-sm transition duration-200 hover:-translate-y-1 hover:border-blue-600 hover:shadow-lg active:scale-[0.98] md:min-h-[174px] md:rounded-[24px]"><div className={`mb-3 rounded-2xl bg-gradient-to-br p-3.5 shadow-sm transition group-hover:scale-105 md:p-4 ${toneClasses[tone]}`}><Icon size={37} strokeWidth={1.8} className="md:h-11 md:w-11" /></div><span className="whitespace-pre-line text-[15px] font-bold leading-5 text-slate-900 md:text-[17px] md:leading-6">{label}</span></button>)}</div>
       {filteredFeatures.length === 0 && <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">No matching features found.</div>}
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400"><div className="flex items-center gap-1.5">{lastUpdated ? <><CheckCircle2 size={14} className="text-emerald-500" /> Live overview updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</> : 'Loading platform overview...'}</div><button disabled={refreshing} onClick={() => void refreshOverview()} className="font-semibold text-blue-600 hover:text-blue-700 disabled:cursor-wait disabled:opacity-50">{refreshing ? 'Refreshing...' : 'Refresh data'}</button></div>
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400"><div className="flex items-center gap-1.5">{lastUpdated ? <><span className="flex items-center gap-1.5"><span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" /></span><CheckCircle2 size={14} className="text-emerald-500" /> Live overview updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span> : 'Loading platform overview...'}</div><button disabled={refreshing} onClick={() => void refreshOverview()} className="flex items-center gap-1.5 font-semibold text-blue-600 hover:text-blue-700 disabled:cursor-wait disabled:opacity-50"><RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />{refreshing ? 'Refreshing...' : 'Refresh data'}</button></div>
     </div>
   );
 }
