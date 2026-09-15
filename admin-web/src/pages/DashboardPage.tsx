@@ -4,11 +4,14 @@ import {
   AlertTriangle, BarChart3, BadgeCheck, Banknote, BellRing, Building2, CheckCircle2,
   CreditCard, FileText, Globe2, Headphones, LayoutGrid, Plane, Search, Settings2,
   ShieldCheck, Smartphone, Ticket, TrainFront, UserRoundCog, Users, XCircle,
+  Activity, ClipboardSearch, Megaphone, WalletCards,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchOpsOverview, type OpsOverview } from '../services/reportsService';
 
 type Feature = { key: string; label: string; path: string; icon: typeof Users; tone: string; superadminOnly?: boolean };
+
+type Shortcut = { label: string; description: string; path: string; icon: typeof Activity; superadminOnly?: boolean };
 
 const FEATURES: Feature[] = [
   { key: 'financial', label: 'Financial\nManagement', path: '/transactions', icon: Banknote, tone: 'teal' },
@@ -27,6 +30,15 @@ const FEATURES: Feature[] = [
   { key: 'arrival', label: 'Malaysia\nArrival Card', path: '/inquiries', icon: Smartphone, tone: 'lightblue' },
   { key: 'passport', label: 'Passport', path: '/inquiries', icon: ShieldCheck, tone: 'navy' },
   { key: 'more', label: 'More Features', path: '/feature-access', icon: LayoutGrid, tone: 'purple' },
+];
+
+const SHORTCUTS: Shortcut[] = [
+  { label: 'Executive Overview', description: 'Platform-wide KPIs and priorities', path: '/executive', icon: Activity },
+  { label: 'Alert Center', description: 'Review active operational alerts', path: '/alerts', icon: AlertTriangle },
+  { label: 'Investigation Center', description: 'Trace a user across platform records', path: '/investigation', icon: ClipboardSearch },
+  { label: 'Communications', description: 'Broadcast and monitor notifications', path: '/communications', icon: Megaphone },
+  { label: 'Wallet Settlement', description: 'Review point-transfer operations', path: '/wallet-settlement', icon: WalletCards },
+  { label: 'System Governance', description: 'Superadmin controls and oversight', path: '/governance', icon: ShieldCheck, superadminOnly: true },
 ];
 
 const toneClasses: Record<string, string> = {
@@ -53,15 +65,20 @@ export default function DashboardPage() {
   const [overview, setOverview] = useState<OpsOverview | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [query, setQuery] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
   const refreshOverview = async () => {
-    try { setOverview(await fetchOpsOverview()); setLastUpdated(new Date()); } catch { setOverview(null); }
+    setRefreshing(true);
+    try { setOverview(await fetchOpsOverview()); setLastUpdated(new Date()); }
+    catch { setOverview(null); }
+    finally { setRefreshing(false); }
   };
 
   useEffect(() => { void refreshOverview(); }, []);
 
   const isSuperadmin = profile?.role === 'superadmin';
   const visibleFeatures = FEATURES.filter((feature) => !feature.superadminOnly || isSuperadmin);
+  const visibleShortcuts = SHORTCUTS.filter((shortcut) => !shortcut.superadminOnly || isSuperadmin);
   const filteredFeatures = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return visibleFeatures;
@@ -74,6 +91,7 @@ export default function DashboardPage() {
     { label: 'Marketplace reports', value: overview?.pendingMarketplaceReports, path: '/marketplace-moderation', danger: true },
     { label: 'Chat reports', value: overview?.pendingChatReports, path: '/chat-reports', danger: true },
   ].filter((item) => item.value !== null && (item.value ?? 0) > 0);
+  const attentionCount = attentionItems.reduce((total, item) => total + (item.value ?? 0), 0);
 
   return (
     <div className="mx-auto max-w-[1500px] pb-10">
@@ -88,13 +106,15 @@ export default function DashboardPage() {
         {STAT_CARDS.map(({ key, label, path, icon: Icon }) => <button key={key} onClick={() => navigate(path)} className="group flex items-center gap-2.5 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md md:px-4"><div className="rounded-xl bg-blue-50 p-2 text-blue-600"><Icon size={18} /></div><div className="min-w-0"><p className="truncate text-[10px] font-bold uppercase tracking-wide text-slate-500 md:text-[11px]">{label}</p><p className="text-xl font-extrabold text-slate-900 md:text-2xl">{overview?.[key] ?? '—'}</p></div></button>)}
       </div>
 
-      {attentionItems.length > 0 && <div className="mb-6 rounded-[20px] border border-amber-200 bg-gradient-to-r from-amber-50 to-white p-4 shadow-sm md:p-5"><div className="mb-3 flex items-center justify-between gap-2"><div className="flex items-center gap-2"><AlertTriangle size={19} className="text-amber-600" /><h2 className="text-base font-extrabold text-slate-900">Requires Your Attention</h2></div><span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold uppercase text-amber-700">Action Center</span></div><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{attentionItems.map((item) => <button key={item.label} onClick={() => navigate(item.path)} className="flex items-center justify-between rounded-xl border border-white bg-white/80 px-3 py-2.5 text-left shadow-sm transition hover:border-amber-300 hover:bg-white"><span className="flex min-w-0 items-center gap-2 text-xs font-semibold text-slate-700"><span className={item.danger ? 'text-red-500' : 'text-amber-500'}>{item.danger ? <XCircle size={15} /> : <AlertTriangle size={15} />}</span><span className="truncate">{item.label}</span></span><span className="ml-2 text-sm font-extrabold text-slate-900">{item.value}</span></button>)}</div></div>}
+      {attentionItems.length > 0 && <div className="mb-6 rounded-[20px] border border-amber-200 bg-gradient-to-r from-amber-50 to-white p-4 shadow-sm md:p-5"><div className="mb-3 flex items-center justify-between gap-2"><div className="flex items-center gap-2"><AlertTriangle size={19} className="text-amber-600" /><div><h2 className="text-base font-extrabold text-slate-900">Requires Your Attention</h2><p className="text-[11px] text-slate-500">{attentionCount} active item{attentionCount === 1 ? '' : 's'} across operational queues</p></div></div><span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold uppercase text-amber-700">Action Center</span></div><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{attentionItems.map((item) => <button key={item.label} onClick={() => navigate(item.path)} className="flex items-center justify-between rounded-xl border border-white bg-white/80 px-3 py-2.5 text-left shadow-sm transition hover:border-amber-300 hover:bg-white"><span className="flex min-w-0 items-center gap-2 text-xs font-semibold text-slate-700"><span className={item.danger ? 'text-red-500' : 'text-amber-500'}>{item.danger ? <XCircle size={15} /> : <AlertTriangle size={15} />}</span><span className="truncate">{item.label}</span></span><span className="ml-2 text-sm font-extrabold text-slate-900">{item.value}</span></button>)}</div></div>}
+
+      <div className="mb-6 rounded-[20px] border border-slate-200 bg-white p-4 shadow-sm md:p-5"><div className="mb-3 flex items-center justify-between gap-3"><div><h2 className="text-base font-extrabold text-slate-900 md:text-lg">Command Shortcuts</h2><p className="text-xs text-slate-500">Jump directly into the operational areas you use most.</p></div><span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">{isSuperadmin ? 'Superadmin' : 'Admin'}</span></div><div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">{visibleShortcuts.map(({ label, description, path, icon: Icon }) => <button key={label} onClick={() => navigate(path)} className="group rounded-2xl border border-slate-200 bg-slate-50/70 p-3 text-left transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-white hover:shadow-md"><div className="mb-2 flex items-center justify-between"><span className="rounded-xl bg-white p-2 text-blue-600 shadow-sm group-hover:bg-blue-50"><Icon size={18} /></span><span className="text-slate-300 transition group-hover:text-blue-400">→</span></div><p className="text-xs font-extrabold text-slate-800">{label}</p><p className="mt-0.5 line-clamp-2 text-[10px] leading-4 text-slate-500">{description}</p></button>)}</div></div>
 
       <div className="mb-5 flex flex-col gap-3 px-1 sm:flex-row sm:items-end sm:justify-between"><div className="flex items-center gap-3"><div className="rounded-xl bg-blue-100 p-2 text-blue-600"><Settings2 size={23} /></div><div><h2 className="text-xl font-extrabold text-slate-900 md:text-2xl">{isSuperadmin ? 'Superadmin Control Center' : 'Admin Control Center'}</h2><p className="text-xs text-slate-500 md:text-sm">Manage your MySheba platform from one place</p></div></div><div className="relative w-full sm:w-64"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search features..." className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100" /></div></div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:gap-4">{filteredFeatures.map(({ key, label, path, icon: Icon, tone }) => <button key={key} onClick={() => navigate(path)} className="group flex min-h-[145px] flex-col items-center justify-center rounded-[22px] border-2 border-blue-500/90 bg-white px-2 py-4 text-center shadow-sm transition duration-200 hover:-translate-y-1 hover:border-blue-600 hover:shadow-lg active:scale-[0.98] md:min-h-[174px] md:rounded-[24px]"><div className={`mb-3 rounded-2xl bg-gradient-to-br p-3.5 shadow-sm transition group-hover:scale-105 md:p-4 ${toneClasses[tone]}`}><Icon size={37} strokeWidth={1.8} className="md:h-11 md:w-11" /></div><span className="whitespace-pre-line text-[15px] font-bold leading-5 text-slate-900 md:text-[17px] md:leading-6">{label}</span></button>)}</div>
       {filteredFeatures.length === 0 && <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">No matching features found.</div>}
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400"><div className="flex items-center gap-1.5">{lastUpdated ? <><CheckCircle2 size={14} className="text-emerald-500" /> Live overview updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</> : 'Loading platform overview...'}</div><button onClick={() => void refreshOverview()} className="font-semibold text-blue-600 hover:text-blue-700">Refresh data</button></div>
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400"><div className="flex items-center gap-1.5">{lastUpdated ? <><CheckCircle2 size={14} className="text-emerald-500" /> Live overview updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</> : 'Loading platform overview...'}</div><button disabled={refreshing} onClick={() => void refreshOverview()} className="font-semibold text-blue-600 hover:text-blue-700 disabled:cursor-wait disabled:opacity-50">{refreshing ? 'Refreshing...' : 'Refresh data'}</button></div>
     </div>
   );
 }
