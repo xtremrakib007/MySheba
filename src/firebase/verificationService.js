@@ -1,18 +1,20 @@
 // Customer identity verification service.
-// Phone verification already happens at registration; this service handles
-// the separate KYC review request and keeps approval/rejection server-side.
+// Phone verification happens at registration; this service handles the separate KYC review request.
 import { doc, setDoc, onSnapshot, collection, query, where, orderBy, serverTimestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './config';
 
 const REQUESTS = 'verificationRequests';
 
-/**
- * Submit/resubmit the user's complete KYC package. The request document is
- * keyed by uid so there is only one current submission per customer.
- */
 export async function submitVerificationRequest(uid, { name, phone }, documentUrl, kycData = {}) {
-  const safeKyc = {
+  const front = kycData.frontDocumentUrl || documentUrl || '';
+  const back = kycData.backDocumentUrl || '';
+  const selfie = kycData.selfieUrl || '';
+  await setDoc(doc(db, REQUESTS, uid), {
+    uid,
+    name: name || '',
+    phone: phone || '',
+    documentUrl: front,
     documentType: kycData.documentType || '',
     documentNumber: kycData.documentNumber || '',
     nationality: kycData.nationality || '',
@@ -27,19 +29,17 @@ export async function submitVerificationRequest(uid, { name, phone }, documentUr
     passportIssueDate: kycData.passportIssueDate || '',
     passportExpiryDate: kycData.passportExpiryDate || '',
     sourceOfFunds: kycData.sourceOfFunds || '',
-    frontDocumentUrl: kycData.frontDocumentUrl || '',
-    backDocumentUrl: kycData.backDocumentUrl || '',
-    selfieUrl: kycData.selfieUrl || '',
-  };
-
-  await setDoc(doc(db, REQUESTS, uid), {
-    uid,
-    name: name || '',
-    phone: phone || '',
-    documentUrl: documentUrl || safeKyc.frontDocumentUrl || '',
-    ...safeKyc,
+    // Keep both names because the Admin Web verification queue already
+    // consumes these explicit image fields.
+    frontDocumentUrl: front,
+    backDocumentUrl: back,
+    selfieUrl: selfie,
+    frontImageUrl: front,
+    backImageUrl: back,
+    selfieImageUrl: selfie,
     status: 'pending',
     note: '',
+    rejectionReason: '',
     submittedAt: serverTimestamp(),
   });
 }
