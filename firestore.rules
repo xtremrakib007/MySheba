@@ -48,15 +48,11 @@ service cloud.firestore {
       match /trustedDevices/{deviceId} { allow read, create, update, delete: if signedIn() && (request.auth.uid == uid || isAdmin()); }
     }
 
-    // One support thread per customer. Customers may access only their own
-    // thread; staff may access the support queue. Messages inherit the same
-    // customer/staff boundary. Assignment changes are staff-only.
     match /chats/{chatId} {
       allow read: if isChatParticipant(chatId) || isStaff();
       allow create: if isChatParticipant(chatId) && request.resource.data.customerId == chatId;
       allow update: if isChatParticipant(chatId) || isStaff();
       allow delete: if false;
-
       match /messages/{messageId} {
         allow read: if isChatParticipant(chatId) || isStaff();
         allow create: if (isChatParticipant(chatId) && request.resource.data.senderId == request.auth.uid) || (isStaff() && request.resource.data.senderId == request.auth.uid);
@@ -77,7 +73,16 @@ service cloud.firestore {
 
     match /transactions/{id} {
       allow create: if signedIn() && !serviceIsChargeable(request.resource.data);
-      allow read: if signedIn() && (resource.data.customerId == request.auth.uid || isAdmin() || isDealerTier() || isReseller());
+      // Read access is query-compatible with transactionService:
+      // customers see their own history; admins see operational statuses;
+      // operators see only eligible pending work plus transactions they claimed.
+      allow read: if signedIn() && (
+        resource.data.customerId == request.auth.uid ||
+        isAdmin() ||
+        (isDealerTier() && resource.data.status == 'pending' && resource.data.service == 'Mobile Banking') ||
+        (isReseller() && resource.data.status == 'pending' && resource.data.service in ['Recharge', 'Internet', 'Remittance']) ||
+        (isStaff() && resource.data.claimedBy == request.auth.uid)
+      );
       allow update: if signedIn() && ((isAdmin() && resource.data.status == 'pending' && resource.data.get('approved', false) != true && request.resource.data.get('approved', false) == true && request.resource.data.get('approvedBy', null) == request.auth.uid && request.resource.data.get('approvedByRole', null) in ['admin', 'superadmin'] && request.resource.data.get('approvedAt', null) != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approved', 'approvedBy', 'approvedByName', 'approvedByRole', 'approvedAt', 'updatedAt'])) || (canHandleTransaction(resource.data.get('service', null)) && resource.data.status == 'pending' && resource.data.get('approved', false) == true && resource.data.claimedBy == null && request.resource.data.status == 'processing' && request.resource.data.claimedBy == request.auth.uid && request.resource.data.get('claimedByRole', null) == myRole() && request.resource.data.get('claimedByName', null) != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'claimedBy', 'claimedByRole', 'claimedByName', 'updatedAt'])) || (canHandleTransaction(resource.data.get('service', null)) && resource.data.status == 'processing' && resource.data.claimedBy == request.auth.uid && resource.data.get('approved', false) == true && resource.data.get('approvedBy', null) != null && request.resource.data.status == 'completed' && request.resource.data.claimedBy == request.auth.uid && request.resource.data.get('pin', '') != '' && request.resource.data.get('receiptUrl', '') != '' && request.resource.data.get('completedBy', null) == request.auth.uid && request.resource.data.get('completedByRole', null) == myRole() && request.resource.data.get('completedByName', null) != null && request.resource.data.get('completedAt', null) != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'pin', 'receiptUrl', 'completedBy', 'completedByName', 'completedByRole', 'completedAt', 'updatedAt'])) ) && request.resource.data.get('customerId', null) == resource.data.get('customerId', null) && request.resource.data.get('pointsCharged', null) == resource.data.get('pointsCharged', null) && request.resource.data.get('service', null) == resource.data.get('service', null);
       allow delete: if false;
     }
