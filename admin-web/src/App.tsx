@@ -22,6 +22,7 @@ import TransferPointsPage from './pages/TransferPointsPage';
 import BusinessProfilesPage from './pages/BusinessProfilesPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import ToolAccessPage from './pages/ToolAccessPage';
+import RolePermissionsPage from './pages/RolePermissionsPage';
 import SalarySettingsPage from './pages/SalarySettingsPage';
 import BannersPage from './pages/BannersPage';
 import CategoriesPage from './pages/CategoriesPage';
@@ -73,6 +74,7 @@ export default function App() {
               <Route path="/audit" element={<AuditCompliancePage />} />
               <Route path="/chat-reports/investigate/:chatId" element={<InvestigateChatPage />} />
               <Route path="/tool-access" element={<ToolAccessPage />} />
+              <Route path="/role-permissions" element={<RolePermissionsPage />} />
             </Route>
           </Route>
         </Routes>
