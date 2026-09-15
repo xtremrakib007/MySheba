@@ -1,5 +1,5 @@
 // Central design tokens for the entire MySheba UI.
-// Global contract: light = white surfaces/black foreground; dark = black surfaces/white foreground.
+// Global contract: light = white surfaces/black foreground; dark = deep charcoal surfaces/white foreground.
 // Contrast is intentionally strong so text, cards, controls and grid boundaries remain visible on small screens.
 export const lightColors = {
   primary: '#00A99D', primaryDark: '#00897B', secondary: '#1A73E8',
@@ -13,10 +13,13 @@ export const lightColors = {
 export const darkColors = {
   primary: '#26D0C4', primaryDark: '#00A99D', secondary: '#5B9DF9',
   navy: '#FFFFFF', scrim: '#000000', success: '#66D07A', warning: '#FFD166', error: '#FF6B6B',
-  bg: '#000000', card: '#000000', surface: '#000000', surfaceElevated: '#000000',
-  text: '#FFFFFF', textSecondary: '#E5E7EB', onPrimary: '#000000',
-  border: '#FFFFFF', divider: '#FFFFFF', placeholder: '#D1D5DB',
-  inputBg: '#000000', disabledBg: '#000000', disabledText: '#D1D5DB',
+  // Do not use pure black for every surface: many components use elevation,
+  // borders and cards to communicate hierarchy. Distinct dark surfaces keep
+  // those components visible while preserving a true dark-mode appearance.
+  bg: '#070B12', card: '#0F1724', surface: '#111B2A', surfaceElevated: '#172235',
+  text: '#FFFFFF', textSecondary: '#D7DEE8', onPrimary: '#061312',
+  border: '#334155', divider: '#263548', placeholder: '#AAB6C5',
+  inputBg: '#111B2A', disabledBg: '#1B2636', disabledText: '#9AA7B8',
 };
 
 export const colors = lightColors;
