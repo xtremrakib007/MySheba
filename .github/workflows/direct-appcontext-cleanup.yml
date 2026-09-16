@@ -1,4 +1,4 @@
-name: Direct AppContext cleanup v3
+name: Direct AppContext cleanup v4
 on:
   push:
     branches: [main]
@@ -64,8 +64,9 @@ jobs:
             a=value.find('    // group chat'); z=value.find('    // private vault unlock',a)
             if z>=0: value=value[:a]+value[z:]
           s=s[:vs]+value+s[ve:]
-          # Remove any final legacy-symbol lines left in comments/context value.
           s=''.join(line for line in s.splitlines(True) if not any(x in line for x in retired))
+          # The investigation callback is deleted with the direct-chat block; remove its orphan terminator.
+          s='\n'.join(line for line in s.splitlines() if line.strip() != ', []);')+'\n'
           required=['activeChatId','activeChatName','chatUnreadCount','activeChatReturnTo','openChat','activeRingtoneContactUid','activeRingtoneContactName','activeCall','incomingCall','startCall','answerIncomingCall','rejectIncomingCall','callService']
           missing=[x for x in required if x not in s]
           if missing: raise SystemExit('Required refs missing: '+', '.join(missing))
