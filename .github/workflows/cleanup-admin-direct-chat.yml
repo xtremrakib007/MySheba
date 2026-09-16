@@ -4,14 +4,15 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: write
+
 jobs:
   cleanup:
+    if: github.event.head_commit.message != 'Remove temporary Admin cleanup workflow'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Remove retired Admin Direct Chat code
         shell: python
@@ -24,29 +25,69 @@ jobs:
 
           s = s.replace("import * as directChatService from '../firebase/directChatService';\n", '')
           s = s.replace(', openDirectChat, marketplaceCategories', ', marketplaceCategories')
-          s = s.replace('  const [messagingInquiryId, setMessagingInquiryId] = useState(null);\n', '')
+          s = re.sub(r'^  const \[messagingInquiryId, setMessagingInquiryId\] = useState\(null\);\n', '', s, flags=re.M)
 
-          # Remove the retired in-app inquiry messaging handler, preserving Call/WhatsApp.
-          s = re.sub(r'\n  /\*\*.*?AdminHomeScreen.*?messageInquiry.*?\*/\n  const messageInquiry = async \(inq\) => \{.*?\n  \};\n', '\n', s, count=1, flags=re.S)
-          s = re.sub(r'\n  const messageInquiry = async \(inq\) => \{.*?\n  \};\n', '\n', s, count=1, flags=re.S)
+          # Remove messageInquiry by matching its actual function body, regardless of comments.
+          while True:
+              m = re.search(r'^  const messageInquiry = async \(inq\) => \{', s, flags=re.M)
+              if not m: break
+              ob = s.find('{', m.start()); depth = 0; quote = None; esc = False
+              for i in range(ob, len(s)):
+                  c = s[i]
+                  if quote:
+                      if esc: esc = False
+                      elif c == '\\': esc = True
+                      elif c == quote: quote = None
+                      continue
+                  if c in "'\"`": quote = c; continue
+                  if c == '{': depth += 1
+                  elif c == '}':
+                      depth -= 1
+                      if depth == 0:
+                          s = s[:m.start()] + s[i+1:]
+                          break
+              else:
+                  raise SystemExit('Unbalanced messageInquiry function')
 
-          # Remove the inquiry Message button only; Call and WhatsApp remain.
-          s = re.sub(r'\s*<TouchableOpacity(?=[\s\S]*?onPress=\{\(\) => messageInquiry\(inq\)\})([\s\S]*?</TouchableOpacity>)', '', s, count=1)
-          s = re.sub(r'\s*disabled=\{messagingInquiryId === inq\.id\}', '', s)
+          # Remove the complete TouchableOpacity whose subtree invokes messageInquiry(inq).
+          marker = 'onPress={() => messageInquiry(inq)}'
+          pos = s.find(marker)
+          if pos >= 0:
+              start = s.rfind('<TouchableOpacity', 0, pos)
+              if start < 0: raise SystemExit('Cannot locate Message TouchableOpacity')
+              depth = 0; i = start; tag_re = re.compile(r'</?TouchableOpacity\\b[^>]*>')
+              # Find matching JSX TouchableOpacity, accounting for nesting.
+              while True:
+                  mt = tag_re.search(s, i)
+                  if not mt: raise SystemExit('Unbalanced TouchableOpacity around messageInquiry')
+                  tag = mt.group(0)
+                  if tag.startswith('</'):
+                      depth -= 1
+                      end = mt.end()
+                      if depth == 0:
+                          s = s[:start] + s[end:]
+                          break
+                  elif not tag.rstrip().endswith('/>'):
+                      depth += 1
+                  i = mt.end()
+          else:
+              print('Message button already absent')
 
+          s = re.sub(r'\n\s*disabled=\{messagingInquiryId === inq\.id\}', '', s)
           p.write_text(s, encoding='utf-8')
 
-          if any(x in s for x in ('directChatService', 'openDirectChat', 'ensureDirectChat', 'messageInquiry', 'messagingInquiryId')):
-              raise SystemExit('Retired Admin Direct Chat reference still remains')
+          forbidden = ('directChatService', 'openDirectChat', 'ensureDirectChat', 'messageInquiry', 'messagingInquiryId')
+          if any(x in s for x in forbidden):
+              raise SystemExit('Retired Admin Direct Chat reference remains: ' + ', '.join(x for x in forbidden if x in s))
 
       - name: Commit cleanup and remove this temporary workflow
         shell: bash
         run: |
+          set -e
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/screens/AdminHomeScreen.js
-          git commit -m 'Remove retired Admin Direct Chat actions' || true
-          rm -f .github/workflows/cleanup-admin-direct-chat.yml
-          git add -A
-          git commit -m 'Remove temporary Admin cleanup workflow' || true
+          git commit -m 'refactor: remove retired Admin Direct Chat actions' || true
+          git rm -f .github/workflows/cleanup-admin-direct-chat.yml
+          git commit -m 'Remove temporary Admin cleanup workflow'
           git push
