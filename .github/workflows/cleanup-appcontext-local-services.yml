@@ -1,0 +1,91 @@
+name: Cleanup AppContext Local Services
+on:
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Remove obsolete Local Services navigation state
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('src/context/AppContext.js')
+          s = p.read_text()
+
+          s = s.replace('import * as categoryService from "../firebase/categoryService";\n', '')
+
+          old = '''  // ---- Buy & Sell / Local Services category lists - admin-editable from
+  // Admin > Categories (see categoryService.js). Every screen with a
+  // category picker or filter chips reads these live instead of the
+  // hardcoded arrays that used to live in marketplaceService.js /
+  // serviceProviderService.js. ----
+  const [marketplaceCategories, setMarketplaceCategories] = useState(
+    categoryService.DEFAULT_CATEGORIES.marketplace,
+  );
+  const [serviceCategories, setServiceCategories] = useState(
+    categoryService.DEFAULT_CATEGORIES.services,
+  );
+
+'''
+          if old not in s:
+            raise SystemExit('Expected obsolete category state block not found')
+          s = s.replace(old, '')
+
+          old = '''  useEffect(() => {
+    if (!authUser) return undefined;
+    const unsub = categoryService.subscribeCategories(
+      "marketplace",
+      setMarketplaceCategories,
+      logListenerError("marketplaceCategories"),
+    );
+    return unsub;
+  }, [authUser]);
+
+  useEffect(() => {
+    if (!authUser) return undefined;
+    const unsub = categoryService.subscribeCategories(
+      "services",
+      setServiceCategories,
+      logListenerError("serviceCategories"),
+    );
+    return unsub;
+  }, [authUser]);
+
+'''
+          if old not in s:
+            raise SystemExit('Expected obsolete category subscriptions not found')
+          s = s.replace(old, '')
+
+          old = '''  // ---- Business Profile (PRD section 15 Monetization Plan - "Business
+  // profile") ---- Screens call businessProfileService.js directly, so all
+  // that lives here is which uid's business page to show - same "just the
+  // navigation state" pattern as activeListingId/activePropertyId/
+  // activeProviderId above. Opened either from a listing/property/
+  // service's seller/owner/provider row (view someone else's), or from My
+  // Account (view/edit your own).
+'''
+          new = '''  // ---- Business Profile ---- Screens call businessProfileService.js
+  // directly; context only tracks which uid's business page to show.
+  // Opened from My Account or another active business-profile entry point.
+'''
+          if old not in s:
+            raise SystemExit('Expected obsolete Business Profile navigation comment not found')
+          s = s.replace(old, new)
+
+          p.write_text(s)
+      - name: Verify no retired Local Services navigation symbols remain
+        run: |
+          ! grep -nE 'activeProviderId|setActiveProviderId|openServiceProvidersHome|openServiceProviderDetail|servicesCreateProvider|servicesMyServices|serviceProviderService|ServiceProvidersHome|CreateServiceScreen|MyServicesScreen' src/context/AppContext.js App.js
+      - name: Commit cleanup
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/context/AppContext.js
+          git commit -m 'fix: remove obsolete Local Services navigation state from AppContext'
+          git push
