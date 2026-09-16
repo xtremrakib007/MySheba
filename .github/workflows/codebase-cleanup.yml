@@ -1,0 +1,107 @@
+name: Codebase cleanup
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  cleanup:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Remove obsolete chat dependencies
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          ROOTS = [Path('src'), Path('functions'), Path('functions-gamebot')]
+          exts = {'.js','.jsx','.ts','.tsx','.md'}
+
+          def remove_function(text, name):
+              patterns = [
+                  rf'(?m)^\s*(?:export\s+)?(?:async\s+)?function\s+{re.escape(name)}\s*\([^)]*\)\s*\{{',
+                  rf'(?m)^\s*(?:const|let)\s+{re.escape(name)}\s*=\s*(?:async\s*)?\([^;]*?\)\s*=>\s*\{{',
+                  rf'(?m)^\s*(?:const|let)\s+{re.escape(name)}\s*=\s*useCallback\s*\(',
+              ]
+              for pat in patterns:
+                  m = re.search(pat, text)
+                  if not m: continue
+                  start = m.start()
+                  brace = text.find('{', m.start(), min(len(text), m.end()+5000))
+                  if brace < 0: continue
+                  depth=0; i=brace; quote=None; esc=False
+                  while i < len(text):
+                      c=text[i]
+                      if quote:
+                          if esc: esc=False
+                          elif c=='\\': esc=True
+                          elif c==quote: quote=None
+                      else:
+                          if c in "'\"`": quote=c
+                          elif c=='{': depth+=1
+                          elif c=='}':
+                              depth-=1
+                              if depth==0:
+                                  j=i+1
+                                  while j<len(text) and text[j].isspace(): j+=1
+                                  if text[j:j+1]==';': j+=1
+                                  return text[:start]+text[j:]
+                      i+=1
+              return text
+
+          for root in ROOTS:
+              if not root.exists(): continue
+              for p in root.rglob('*'):
+                  if not p.is_file() or p.suffix not in exts: continue
+                  s=p.read_text(encoding='utf-8')
+                  original=s
+                  # Remove obsolete service imports.
+                  s=re.sub(r'^\s*import \* as (directChatService|groupChatService|roomChatService) from [^;]+;\s*\n', '', s, flags=re.M)
+                  s=re.sub(r'^\s*import \{\s*ensureDirectChat\s*\} from [^;]+;\s*\n', '', s, flags=re.M)
+                  # Remove obsolete AppContext functions and listeners.
+                  if p.name == 'AppContext.js':
+                      for n in ['openDirectChat','openGroupChat','openRoomChat','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall','leaveGroupCall','cancelGroupCall']:
+                          s=remove_function(s,n)
+                      s=re.sub(r'\n\s*// ---- direct chat[\s\S]*?(?=\n\s*// ----|\n\s*const \[activeListingId)', '\n', s, count=1)
+                      s=re.sub(r'\n\s*// group/direct/room chat section[\s\S]*?(?=\n\s*const |\n\s*useEffect)', '\n', s, count=1)
+                  # Remove direct-chat-only handler functions in detail screens.
+                  if p.name in {'ListingDetailScreen.js','PropertyDetailScreen.js','RoommateRequestDetailScreen.js','ServiceProviderDetailScreen.js'}:
+                      for n in ['chatSeller','chatOwner','contactPoster','messageProvider']:
+                          s=remove_function(s,n)
+                  # Remove direct-chat order messaging helpers in staff homes/admin.
+                  if p.name in {'DealerHomeScreen.js','ResellerHomeScreen.js','AdminHomeScreen.js'}:
+                      for n in ['messageCustomer','messageCustomerAboutOrder','contactCustomer']:
+                          s=remove_function(s,n)
+                  if s != original:
+                      p.write_text(s, encoding='utf-8')
+
+          # Remove obsolete direct/group/room chat service files once no source import remains.
+          for rel in ['src/firebase/directChatService.js','src/firebase/groupChatService.js','src/firebase/roomChatService.js']:
+              p=Path(rel)
+              if p.exists(): p.unlink()
+          PY
+      - name: Verify no obsolete service imports remain
+        run: |
+          if grep -RIn --exclude-dir=.git --exclude='*.md' -E "directChatService|groupChatService|roomChatService|ensureDirectChat" src; then
+            echo 'Legacy chat references remain; stopping before commit.'
+            exit 1
+          fi
+      - name: Commit cleanup
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'No changes.'
+            exit 0
+          fi
+          git commit -m 'Clean obsolete direct group and room chat code'
+          git push
+      - name: Remove this one-shot workflow
+        if: success()
+        run: |
+          git rm .github/workflows/codebase-cleanup.yml || true
+          git commit -m 'Remove one-shot cleanup workflow' || true
+          git push || true
