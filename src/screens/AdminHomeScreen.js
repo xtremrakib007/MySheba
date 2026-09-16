@@ -95,7 +95,6 @@ const PRICING_FIELDS = [
   { key: 'dealerEarningPercent', label: '🤝 Dealer Earning on Customer Transfer (%)' },
   { key: 'rechargeCostPercent', label: '📉 Mobile Recharge Cost (%)' },
   { key: 'rechargeProfitPercent', label: '📈 Mobile Recharge Profit (%)' },
-  { key: 'gamePointsFeePercent', label: '🎮 GameBot Winner Payout Fee (%)' },
 ];
 
 // Point cost for each "point deduct" webview feature - locked/warned on in
@@ -103,16 +102,11 @@ const PRICING_FIELDS = [
 // paymentWebviewService.js. Editing one of these updates the live price
 // for every key that shares it (e.g. FOMEMA + Visa both read
 // webviewAccessCost) - see AppContext.pointCosts.
-// Next Update PRD §4 - Game Point Gifting (80/20 rule, giftGamePoints in
 // functions/walletService.js). Min/max reuse the same points-cost editor
 // as POINT_COST_FIELDS below (same PromptModal, same unit); the
 // enable/disable switch is its own row since it's a boolean, not a
 // numeric price - see the direct-toggle row in the Pricing tab below
 // rather than a PromptModal entry.
-const GIFT_LIMIT_FIELDS = [
-  { key: 'gamePointsGiftMinAmount', label: '🎁 Gift Minimum (pts)' },
-  { key: 'gamePointsGiftMaxAmount', label: '🎁 Gift Maximum (pts)' },
-];
 
 const POINT_COST_FIELDS = [
   { key: 'webviewAccessCost', label: '🏥 FOMEMA / Visa Status Check (pts)' },
@@ -162,7 +156,6 @@ const BOOST_DURATION_FIELDS = [
 const RECHARGE_PRICING_FIELDS = [
   { key: 'rechargePointCostPerUnit', label: '📶 Mobile Recharge (× face value)' },
   { key: 'internetPointCostPerUnit', label: '🌐 Internet Package (× face value)' },
-  { key: 'gamePointsCostPerUnit', label: '🎮 Game Points (× face value)' },
 ];
 
 // Role-Based Pricing (superadmin only) - lets a superadmin give any of
@@ -181,7 +174,7 @@ const ROLE_PRICE_FIELDS = [...POINT_COST_FIELDS, ...BOOST_COST_FIELDS, ...MODULE
 // property to every field object) so POINT_COST_FIELDS/BOOST_COST_FIELDS/
 // MODULE_SUBSCRIPTION_COST_FIELDS - each also rendered elsewhere with
 // their own already-correct hardcoded "pts" - don't need touching.
-const ROLE_PRICE_UNIT_OVERRIDES = { rechargePointCostPerUnit: '×', internetPointCostPerUnit: '×', gamePointsCostPerUnit: '×' };
+const ROLE_PRICE_UNIT_OVERRIDES = { rechargePointCostPerUnit: '×', internetPointCostPerUnit: '×' };
 function rolePriceUnitFor(key) {
   return ROLE_PRICE_UNIT_OVERRIDES[key] || 'pts';
 }
@@ -575,12 +568,8 @@ export default function AdminHomeScreen() {
 
   // Boolean, not numeric - unlike every other pricing field above, so it
   // toggles directly on tap instead of going through PromptModal. Treats
-  // an absent field as ON, matching giftGamePoints's own default (see
-  // DEFAULT_PRICING.gamePointsGiftEnabled in functions/walletService.js).
   const toggleGiftEnabled = async () => {
-    const next = !(pricing.gamePointsGiftEnabled !== false);
     try {
-      await settingsService.updatePricing('gamePointsGiftEnabled', next);
     } catch (e) {
       showAlert('MySheba', e.message || 'Could not update this setting.');
     }
@@ -876,7 +865,6 @@ export default function AdminHomeScreen() {
               <Text style={styles.hintText}>
                 Dealer earning is credited automatically whenever a dealer/dealer sends points to one of their own customers.
                 Recharge cost/profit is shown on recharge orders for reporting - it doesn't change what the customer pays.
-                GameBot Winner Payout Fee is taken off the pot before GameBot pays out a room game winner (dice/lowcard/highcard/cricket/29) -
                 it's never credited anywhere, just kept out of the payout. Draw refunds (29) are unaffected - players get their full entry fee back.
               </Text>
             </View>
@@ -962,12 +950,9 @@ export default function AdminHomeScreen() {
             </View>
 
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>🎉 Game Point Gifting</Text>
               <View style={styles.rateRow}>
                 <Text style={{ flex: 1 }}>Gifting Enabled</Text>
-                <Text style={styles.rateValue}>{pricing.gamePointsGiftEnabled !== false ? 'ON' : 'OFF'}</Text>
                 <TouchableOpacity style={styles.editBtn} onPress={toggleGiftEnabled}>
-                  <Text style={styles.editBtnText}>{pricing.gamePointsGiftEnabled !== false ? 'Turn Off' : 'Turn On'}</Text>
                 </TouchableOpacity>
               </View>
               {GIFT_LIMIT_FIELDS.map((r) => (
