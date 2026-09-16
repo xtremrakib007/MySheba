@@ -81,6 +81,12 @@ export async function registerCustomer({ name, phone, phoneE164, dialCode, email
   return { uid: cred.user.uid, ...snap.data() };
 }
 
+async function markGoogleLinkedOnServer() {
+  const markFn = httpsCallable(functions, 'markGoogleLinked');
+  const { data } = await markFn({});
+  return data;
+}
+
 async function linkPendingGoogleCredentialIfNeeded() {
   if (!pendingGoogleLinkCredential) return;
   const credential = pendingGoogleLinkCredential;
@@ -95,7 +101,7 @@ async function linkPendingGoogleCredentialIfNeeded() {
   }
   try {
     await linkWithCredential(user, credential);
-    await updateDoc(doc(db, 'users', user.uid), { googleLinked: true, googleEmail: email || user.email || '' });
+    await markGoogleLinkedOnServer();
     logActivity('linkGoogleAccount', { method: 'googleRecovery' });
   } catch (err) {
     pendingGoogleLinkCredential = credential;
@@ -216,10 +222,7 @@ export async function signInWithGoogle() {
           throw new Error(friendlyAuthError(linkErr));
         }
       }
-      await updateDoc(doc(db, 'users', auth.currentUser.uid), {
-        googleLinked: true,
-        googleEmail: googleEmail || auth.currentUser.email || '',
-      });
+      await markGoogleLinkedOnServer();
       logActivity('linkGoogleAccount', { method: 'googleExistingAccount' });
       return finishGoogleSignIn({}, null);
     }
@@ -313,7 +316,7 @@ export async function linkGoogleAccount() {
     if (err && err.code === 'auth/provider-already-linked') throw new Error('A Google account is already linked to this account.');
     throw new Error(friendlyAuthError(err));
   }
-  await updateDoc(doc(db, 'users', user.uid), { googleLinked: true, googleEmail: email || user.email || '' });
+  await markGoogleLinkedOnServer();
   logActivity('linkGoogleAccount');
 }
 
