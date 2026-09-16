@@ -23,7 +23,5 @@ export const SERVICE_GRID_ICONS = {
   myAccount: '▤',
   profile: '●',
   notepad: '▤',
-  gamePoints: '◆',
-  gamePointsGift: '◇',
   moreFeaturesTile: '⋯',
 };
