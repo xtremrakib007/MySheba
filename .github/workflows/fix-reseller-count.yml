@@ -1,4 +1,4 @@
-name: Finalize AppContext cleanup v6
+name: Finalize AppContext cleanup v7
 on:
   push:
     branches: [main]
@@ -19,6 +19,7 @@ jobs:
           git show c875464673f0e87ef84f66c7e198a394e80d266f:src/context/AppContext.js > /tmp/AppContext.js
           python3 - <<'PY'
           from pathlib import Path
+          import re
           p=Path('/tmp/AppContext.js'); s=p.read_text(encoding='utf-8')
           retired=['directChatService','groupChatService','roomChatService','chatLockService','openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','subscribeIncomingGroupCalls','incomingGroupCall','activeDirectChat','activeGroupId','activeRoomId','myGroups','myRooms','chatHubTab','investigateChat','lockChatThread','unlockChatThread','joinDiscoverableRoom']
           s='\n'.join(line for line in s.splitlines() if not (line.lstrip().startswith('import ') and any(x in line for x in retired)))+'\n'
@@ -65,7 +66,7 @@ jobs:
             if z>=0: value=value[:a]+value[z:]
           s=s[:vs]+value+s[ve:]
           s=''.join(line for line in s.splitlines(True) if not any(x in line for x in retired))
-          s=s.replace(', []);','')
+          s=re.sub(r'^\s*,\s*\[\]\);\s*$', '', s, flags=re.M)
           required=['activeChatId','activeChatName','chatUnreadCount','activeChatReturnTo','openChat','activeRingtoneContactUid','activeRingtoneContactName','activeCall','incomingCall','startCall','answerIncomingCall','rejectIncomingCall','callService']
           missing=[x for x in required if x not in s]
           if missing: raise SystemExit('Required refs missing: '+', '.join(missing))
