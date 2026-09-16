@@ -6,133 +6,47 @@ import { logActivity } from './logService';
 
 const COLLECTION = 'transactions';
 const CHARGEABLE_SERVICE_FNS = { Recharge: 'chargeRecharge', Internet: 'chargeInternetPackage', 'Mobile Banking': 'chargeMobileBanking', Remittance: 'chargeRemittance' };
-const REJECT_FNS = { Recharge: 'rejectRechargeTransaction', Internet: 'rejectInternetPackageTransaction', 'Mobile Banking': 'rejectMobileBankingTransaction', Remittance: 'rejectRemittanceTransaction' };
 
-function createRequestId() {
-  return `ms_${Date.now()}_${Math.random().toString(36).slice(2, 18)}`;
-}
+function createRequestId() { return `ms_${Date.now()}_${Math.random().toString(36).slice(2, 18)}`; }
 
 export async function createTransaction(payload, customer) {
   const chargeFnName = CHARGEABLE_SERVICE_FNS[payload.service];
   if (chargeFnName) {
-    // Keep the same requestId on the payload object so a retry/double-submit
-    // of the same order can be recognized server-side instead of charging
-    // the wallet twice.
-    const requestId = payload.requestId || createRequestId();
-    payload.requestId = requestId;
+    const requestId = payload.requestId || createRequestId(); payload.requestId = requestId;
     const fn = httpsCallable(functions, chargeFnName);
-    try {
-      const { data } = await fn({ payload, customer, requestId });
-      logActivity('transaction_submitted', { service: payload.service, amount: payload.amount || 0, cost: data.cost });
-      return data.id;
-    } catch (err) { throw new Error(err.message || 'Could not submit this order right now.'); }
+    try { const { data } = await fn({ payload, customer, requestId }); logActivity('transaction_submitted', { service: payload.service, amount: payload.amount || 0, cost: data.cost }); return data.id; }
+    catch (err) { throw new Error(err.message || 'Could not submit this order right now.'); }
   }
-  const docRef = await addDoc(collection(db, COLLECTION), {
-    service: payload.service, details: payload.details || '', amount: payload.amount || 0, total: payload.total || 0,
-    cost: payload.cost || 0, profit: payload.profit || 0, status: 'pending', approved: false,
-    customerId: customer?.uid || null, customerPhone: customer?.phone || payload.customerPhone || '',
-    resellerId: null, dealerId: null, claimedBy: null, claimedByRole: null, rejectedBy: {}, rejected: false,
-    rejectReason: '', pin: '', raw: payload.raw || {}, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
-  });
-  logActivity('transaction_submitted', { service: payload.service, amount: payload.amount || 0 });
-  return docRef.id;
+  const docRef = await addDoc(collection(db, COLLECTION), { service: payload.service, details: payload.details || '', amount: payload.amount || 0, total: payload.total || 0, cost: payload.cost || 0, profit: payload.profit || 0, status: 'pending', approved: false, customerId: customer?.uid || null, customerPhone: customer?.phone || payload.customerPhone || '', resellerId: null, dealerId: null, claimedBy: null, claimedByRole: null, rejectedBy: {}, rejected: false, rejectReason: '', pin: '', raw: payload.raw || {}, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+  logActivity('transaction_submitted', { service: payload.service, amount: payload.amount || 0 }); return docRef.id;
 }
 
-export function subscribeTransactions(callback, onError) {
-  const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'));
-  return onSnapshot(q, (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), onError);
-}
+export function subscribeTransactions(callback, onError) { const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc')); return onSnapshot(q, (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), onError); }
 
-// Customer/dealer/reseller mobile queue. Queries deliberately mirror the
-// Firestore read rules so rules are not being used as client-side filters.
 export function subscribeBroadcastTransactions(callback, onError) {
-  let stopped = false;
-  let unsubPending = () => {};
-  let unsubClaimed = () => {};
-  let pending = [];
-  let claimed = [];
-
-  const emit = () => {
-    const byId = new Map();
-    [...pending, ...claimed].forEach((tx) => byId.set(tx.id, tx));
-    const list = Array.from(byId.values());
-    list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-    callback(list);
-  };
-
-  (async () => {
-    try {
-      const uid = auth.currentUser?.uid;
-      if (!uid) return;
-      const profileSnap = await getDoc(doc(db, 'users', uid));
-      if (stopped) return;
-      const role = profileSnap.exists() ? profileSnap.data()?.role : null;
-
-      if (role === 'admin' || role === 'superadmin') {
-        const q = query(collection(db, COLLECTION), where('status', 'in', ['pending', 'processing', 'completed']));
-        unsubPending = onSnapshot(q, (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))), onError);
-        return;
-      }
-
-      if (role !== 'dealer' && role !== 'reseller') return;
-
-      const pendingQuery = role === 'dealer'
-        ? query(collection(db, COLLECTION), where('status', '==', 'pending'), where('service', '==', 'Mobile Banking'))
-        : query(collection(db, COLLECTION), where('status', '==', 'pending'), where('service', 'in', ['Recharge', 'Internet', 'Remittance']));
-      const claimedQuery = query(collection(db, COLLECTION), where('claimedBy', '==', uid));
-
-      unsubPending = onSnapshot(pendingQuery, (snap) => {
-        pending = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        emit();
-      }, onError);
-      unsubClaimed = onSnapshot(claimedQuery, (snap) => {
-        claimed = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        emit();
-      }, onError);
-    } catch (err) {
-      if (!stopped) onError?.(err);
-    }
-  })();
-
-  return () => {
-    stopped = true;
-    unsubPending();
-    unsubClaimed();
-  };
+  let stopped = false, unsubPending = () => {}, unsubClaimed = () => {}, pending = [], claimed = [];
+  const emit = () => { const byId = new Map(); [...pending, ...claimed].forEach((tx) => byId.set(tx.id, tx)); const list = Array.from(byId.values()); list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)); callback(list); };
+  (async () => { try { const uid = auth.currentUser?.uid; if (!uid) return; const profileSnap = await getDoc(doc(db, 'users', uid)); if (stopped) return; const role = profileSnap.exists() ? profileSnap.data()?.role : null;
+    if (role === 'admin' || role === 'superadmin') { const q = query(collection(db, COLLECTION), where('status', 'in', ['pending', 'processing', 'completed', 'rejected'])); unsubPending = onSnapshot(q, (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))), onError); return; }
+    if (role !== 'dealer' && role !== 'reseller') return;
+    const pendingQuery = role === 'dealer' ? query(collection(db, COLLECTION), where('status', '==', 'pending'), where('service', '==', 'Mobile Banking')) : query(collection(db, COLLECTION), where('status', '==', 'pending'), where('service', 'in', ['Recharge', 'Internet', 'Remittance']));
+    const claimedQuery = query(collection(db, COLLECTION), where('claimedBy', '==', uid));
+    unsubPending = onSnapshot(pendingQuery, (snap) => { pending = snap.docs.map((d) => ({ id: d.id, ...d.data() })); emit(); }, onError);
+    unsubClaimed = onSnapshot(claimedQuery, (snap) => { claimed = snap.docs.map((d) => ({ id: d.id, ...d.data() })); emit(); }, onError);
+  } catch (err) { if (!stopped) onError?.(err); } })();
+  return () => { stopped = true; unsubPending(); unsubClaimed(); };
 }
 
-export function subscribeMyTransactions(uid, callback, onError) {
-  const q = query(collection(db, COLLECTION), where('customerId', '==', uid));
-  return onSnapshot(q, (snap) => {
-    const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)); callback(list);
-  }, onError);
-}
+export function subscribeMyTransactions(uid, callback, onError) { const q = query(collection(db, COLLECTION), where('customerId', '==', uid)); return onSnapshot(q, (snap) => { const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })); list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)); callback(list); }, onError); }
 
-export async function approveTransaction(id) {
-  try { await httpsCallable(functions, 'approveTransaction')({ transactionId: id }); }
-  catch (err) { throw new Error(err.message || 'Could not approve this order.'); }
-}
-export async function acceptTransaction(id) {
-  try { await httpsCallable(functions, 'acceptTransaction')({ transactionId: id }); }
-  catch (err) { throw new Error(err.message || 'Could not accept this order.'); }
-}
+export async function approveTransaction(id) { try { await httpsCallable(functions, 'approveTransaction')({ transactionId: id }); } catch (err) { throw new Error(err.message || 'Could not approve this order.'); } }
+export async function acceptTransaction(id) { try { await httpsCallable(functions, 'acceptTransaction')({ transactionId: id }); } catch (err) { throw new Error(err.message || 'Could not accept this order.'); } }
 
 export async function rejectTransaction(id, reason, service) {
-  const rejectFnName = REJECT_FNS[service];
-  if (rejectFnName) {
-    try { return (await httpsCallable(functions, rejectFnName)({ transactionId: id, reason: reason || '' })).data; }
-    catch (err) { throw new Error(err.message || 'Could not reject this order right now.'); }
-  }
-  throw new Error('This order type does not support rejection.');
+  if (!['Recharge', 'Internet', 'Mobile Banking', 'Remittance'].includes(service)) throw new Error('This order type does not support rejection.');
+  try { return (await httpsCallable(functions, 'rejectTransaction')({ transactionId: id, reason: reason || '' })).data; }
+  catch (err) { throw new Error(err.message || 'Could not reject this order right now.'); }
 }
 
-export async function completeTransaction(id, pin, receiptUrl) {
-  try { await httpsCallable(functions, 'completeTransaction')({ transactionId: id, pin: pin || '', receiptUrl: receiptUrl || '' }); }
-  catch (err) { throw new Error(err.message || 'Could not complete this order.'); }
-}
-
-export async function assignDealer(id, dealerId) {
-  const { updateDoc } = await import('firebase/firestore');
-  await updateDoc(doc(db, COLLECTION, id), { dealerId, updatedAt: serverTimestamp() });
-}
+export async function completeTransaction(id, pin, receiptUrl) { try { await httpsCallable(functions, 'completeTransaction')({ transactionId: id, pin: pin || '', receiptUrl: receiptUrl || '' }); } catch (err) { throw new Error(err.message || 'Could not complete this order.'); } }
+export async function assignDealer(id, dealerId) { const { updateDoc } = await import('firebase/firestore'); await updateDoc(doc(db, COLLECTION, id), { dealerId, updatedAt: serverTimestamp() }); }
