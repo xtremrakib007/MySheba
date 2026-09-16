@@ -2,11 +2,23 @@ const admin = require('firebase-admin');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 
 const ALLOWED_SERVICES = ['Recharge', 'Internet', 'Mobile Banking', 'Remittance'];
+const SERVICE_ALIASES = {
+  recharge: 'Recharge',
+  internet: 'Internet',
+  mobilebanking: 'Mobile Banking',
+  'mobile banking': 'Mobile Banking',
+  remittance: 'Remittance'
+};
 const STAFF_ROLES = ['dealer', 'reseller', 'admin', 'superadmin'];
 
 function requireAuth(request) {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   return request.auth.uid;
+}
+
+function normalizeService(value) {
+  const raw = String(value || '').trim();
+  return SERVICE_ALIASES[raw.toLowerCase()] || raw;
 }
 
 async function getActor(uid) {
@@ -19,7 +31,10 @@ async function getActor(uid) {
 
 function canReject(actor, tx) {
   if (actor.role === 'admin' || actor.role === 'superadmin') return true;
-  if (actor.role === 'dealer') return tx.service === 'Mobile Banking' && tx.dealerId === actor.uid;
+  if (actor.role === 'dealer') {
+    return tx.service === 'Mobile Banking' &&
+      (tx.dealerId === actor.uid || tx.assignedTo === actor.uid || tx.claimedBy === actor.uid);
+  }
   if (actor.role === 'reseller') {
     return ['Recharge', 'Internet', 'Remittance'].includes(tx.service) &&
       (tx.resellerId === actor.uid || tx.dealerId === actor.uid || tx.assignedTo === actor.uid || tx.claimedBy === actor.uid);
@@ -43,16 +58,23 @@ exports.rejectTransaction = onCall(async request => {
     const snap = await t.get(ref);
     if (!snap.exists) throw new HttpsError('not-found', 'Transaction not found.');
     const tx = snap.data() || {};
-    if (!ALLOWED_SERVICES.includes(tx.service)) throw new HttpsError('failed-precondition', 'This transaction type cannot be rejected here.');
-    if (!canReject(actor, { ...tx, dealerId: tx.dealerId, resellerId: tx.resellerId })) {
+    const service = normalizeService(tx.service || tx.chargedServiceKind);
+
+    if (!ALLOWED_SERVICES.includes(service)) {
+      throw new HttpsError('failed-precondition', 'This transaction type cannot be rejected here.');
+    }
+
+    // Keep retries safe: once rejected, a repeated request is a successful no-op.
+    if (tx.rejected === true || tx.status === 'rejected') {
+      result = { id, rejected: true, alreadyRejected: true };
+      return;
+    }
+
+    if (!canReject(actor, { ...tx, service })) {
       throw new HttpsError('permission-denied', 'You are not authorized to reject this transaction.');
     }
     if (!['pending', 'approved', 'processing'].includes(tx.status)) {
       throw new HttpsError('failed-precondition', 'Only active transactions can be rejected.');
-    }
-    if (tx.rejected === true) {
-      result = { id, rejected: true, alreadyRejected: true };
-      return;
     }
 
     t.update(ref, {
