@@ -33,8 +33,6 @@ import UserManagementScreen from './src/screens/UserManagementScreen';
 import TransferPointsScreen from './src/screens/TransferPointsScreen';
 import CallScreen from './src/screens/CallScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
-import CreateServiceScreen from './src/screens/CreateServiceScreen';
-import MyServicesScreen from './src/screens/MyServicesScreen';
 import VerifyIdentityScreen from './src/screens/VerifyIdentityScreen';
 import VerificationManagementScreen from './src/screens/VerificationManagementScreen';
 import AdminAnalyticsScreen from './src/screens/AdminAnalyticsScreen';
@@ -138,8 +136,6 @@ function Root() {
       {renderedScreen === 'transferPoints' && <TransferPointsScreen />}
       {renderedScreen === 'call' && <CallScreen />}
       {renderedScreen === 'notifications' && <NotificationsScreen />}
-      {renderedScreen === 'servicesCreateProvider' && <CreateServiceScreen />}
-      {renderedScreen === 'servicesMyServices' && <MyServicesScreen />}
       {renderedScreen === 'verifyIdentity' && <VerifyIdentityScreen />}
       {renderedScreen === 'verificationManagement' && <VerificationManagementScreen />}
       {renderedScreen === 'adminAnalytics' && <AdminAnalyticsScreen />}
