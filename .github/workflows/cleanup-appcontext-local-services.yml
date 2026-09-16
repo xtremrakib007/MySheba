@@ -3,7 +3,6 @@ on:
   push:
     paths:
       - '.github/workflows/cleanup-appcontext-local-services.yml'
-      - '.github/workflows/cleanup-appcontext-local-services.trigger'
   workflow_dispatch:
 
 jobs:
@@ -15,13 +14,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
-      - name: Remove obsolete Local Services navigation state
+      - name: Remove retired Local Services context wiring
         shell: python
         run: |
           from pathlib import Path
+          import re
           p = Path('src/context/AppContext.js')
           s = p.read_text()
-          s = s.replace('import * as categoryService from "../firebase/categoryService";\n', '')
+
           old = '''  // ---- Buy & Sell / Local Services category lists - admin-editable from
   // Admin > Categories (see categoryService.js). Every screen with a
   // category picker or filter chips reads these live instead of the
@@ -36,8 +36,15 @@ jobs:
 
 '''
           if old not in s:
-            raise SystemExit('Expected obsolete category state block not found')
-          s = s.replace(old, '')
+            raise SystemExit('Expected category state block not found')
+          s = s.replace(old, '''  // ---- Admin-managed marketplace category list ----
+  // Kept because the Admin Categories screen still owns marketplace category data.
+  const [marketplaceCategories, setMarketplaceCategories] = useState(
+    categoryService.DEFAULT_CATEGORIES.marketplace,
+  );
+
+''', 1)
+
           old = '''  useEffect(() => {
     if (!authUser) return undefined;
     const unsub = categoryService.subscribeCategories(
@@ -60,8 +67,19 @@ jobs:
 
 '''
           if old not in s:
-            raise SystemExit('Expected obsolete category subscriptions not found')
-          s = s.replace(old, '')
+            raise SystemExit('Expected category subscription block not found')
+          s = s.replace(old, '''  useEffect(() => {
+    if (!authUser) return undefined;
+    const unsub = categoryService.subscribeCategories(
+      "marketplace",
+      setMarketplaceCategories,
+      logListenerError("marketplaceCategories"),
+    );
+    return unsub;
+  }, [authUser]);
+
+''', 1)
+
           old = '''  // ---- Business Profile (PRD section 15 Monetization Plan - "Business
   // profile") ---- Screens call businessProfileService.js directly, so all
   // that lives here is which uid's business page to show - same "just the
@@ -75,17 +93,23 @@ jobs:
   // Opened from My Account or another active business-profile entry point.
 '''
           if old not in s:
-            raise SystemExit('Expected obsolete Business Profile navigation comment not found')
-          s = s.replace(old, new)
+            raise SystemExit('Expected stale Business Profile comment not found')
+          s = s.replace(old, new, 1)
+
+          s = re.sub(r'\n    // local services\n    activeProviderId,\n    openServiceProvidersHome,\n    openServiceProviderDetail,\n', '\n', s, count=1)
+          s = s.replace('    serviceCategories,\n', '')
+
           p.write_text(s)
-      - name: Verify no retired Local Services navigation symbols remain
+      - name: Verify
         run: |
-          ! grep -nE 'activeProviderId|setActiveProviderId|openServiceProvidersHome|openServiceProviderDetail|servicesCreateProvider|servicesMyServices|serviceProviderService|ServiceProvidersHome|CreateServiceScreen|MyServicesScreen' src/context/AppContext.js App.js
+          node --check src/context/AppContext.js
+          ! grep -nE 'activeProviderId|setActiveProviderId|openServiceProvidersHome|openServiceProviderDetail|servicesCreateProvider|servicesMyServices|serviceProviderService|ServiceProvidersHome|CreateServiceScreen|MyServicesScreen|serviceCategories|setServiceCategories' src/context/AppContext.js App.js
       - name: Commit cleanup and remove workflow
+        shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/context/AppContext.js
-          git rm -f .github/workflows/cleanup-appcontext-local-services.yml .github/workflows/cleanup-appcontext-local-services.trigger 2>/dev/null || true
-          git commit -m 'fix: remove obsolete Local Services navigation state from AppContext'
+          git rm -f .github/workflows/cleanup-appcontext-local-services.yml
+          git commit -m 'refactor: remove retired local services context'
           git push
