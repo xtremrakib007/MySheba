@@ -1,114 +1,27 @@
 // User & role management for MySheba Admin Web.
 import {
-  collection,
-  doc,
-  getDocs,
-  limit as fbLimit,
-  orderBy,
-  query,
-  startAfter,
-  updateDoc,
-  where,
-  type DocumentData,
-  type QueryDocumentSnapshot,
+  collection, getDocs, limit as fbLimit, orderBy, query, startAfter, where,
+  type DocumentData, type QueryDocumentSnapshot,
 } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '../firebase/config';
 import type { AdminRole } from '../contexts/AuthContext';
 
 export type UserRole = 'user' | 'dealer' | 'reseller' | AdminRole;
 export const ALL_ROLES: UserRole[] = ['user', 'dealer', 'reseller', 'admin', 'superadmin'];
 export const ROLE_RANK: Record<UserRole, number> = { user: 0, dealer: 1, reseller: 2, admin: 3, superadmin: 4 };
-
-export function assignableRoles(actingRole: AdminRole): UserRole[] {
-  return ALL_ROLES.filter((r) => actingRole === 'superadmin' ? r !== 'superadmin' : ROLE_RANK[r] < ROLE_RANK.admin);
-}
-
-export function canEditTarget(actingRole: AdminRole, targetRole: UserRole): boolean {
-  return ROLE_RANK[targetRole] < ROLE_RANK[actingRole];
-}
-
+export function assignableRoles(actingRole: AdminRole): UserRole[] { return ALL_ROLES.filter((r) => actingRole === 'superadmin' ? r !== 'superadmin' : ROLE_RANK[r] < ROLE_RANK.admin); }
+export function canEditTarget(actingRole: AdminRole, targetRole: UserRole): boolean { return ROLE_RANK[targetRole] < ROLE_RANK[actingRole]; }
 export type VerificationStatus = 'pending' | 'approved' | 'rejected' | 'unknown';
-
-export interface FeatureAccess {
-  mobileBanking: boolean;
-  recharge: boolean;
-  remittance: boolean;
-  travel: boolean;
-  ticketReseller: boolean;
-}
-
-export const FEATURE_LABELS: Record<keyof FeatureAccess, string> = {
-  mobileBanking: 'Mobile Banking', recharge: 'Recharge / Top-Up', remittance: 'Remittance',
-};
-
-const DEFAULT_FEATURES: FeatureAccess = {
-};
-
-export interface AdminUserRow {
-  uid: string;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  role: UserRole;
-  disabled: boolean;
-  verificationStatus: VerificationStatus;
-  dealerCode?: string;
-  resellerCode?: string;
-  features: FeatureAccess;
-}
-
-function mapDoc(d: QueryDocumentSnapshot<DocumentData>): AdminUserRow {
-  const data = d.data();
-  const rawVerification = data.verificationStatus ?? (data.verified === true ? 'approved' : undefined);
-  return {
-    uid: d.id,
-    name: data.name ?? data.displayName ?? '(no name)',
-    email: data.email ?? null,
-    phone: data.phone ?? data.phoneNumber ?? null,
-    role: (data.role as UserRole) ?? 'user',
-    disabled: Boolean(data.disabled),
-    verificationStatus: ['pending', 'approved', 'rejected'].includes(rawVerification) ? rawVerification : 'unknown',
-    dealerCode: data.dealerCode,
-    resellerCode: data.resellerCode,
-    features: { ...DEFAULT_FEATURES, ...(data.features ?? {}) },
-  };
-}
-
+export interface FeatureAccess { mobileBanking: boolean; recharge: boolean; remittance: boolean; travel: boolean; ticketReseller: boolean; }
+export const FEATURE_LABELS: Record<keyof FeatureAccess, string> = { mobileBanking: 'Mobile Banking', recharge: 'Recharge / Top-Up', remittance: 'Remittance', travel: 'Travel', ticketReseller: 'Ticket Reseller' };
+const DEFAULT_FEATURES: FeatureAccess = { mobileBanking: false, recharge: false, remittance: false, travel: false, ticketReseller: false };
+export interface AdminUserRow { uid: string; name: string; email: string | null; phone: string | null; role: UserRole; disabled: boolean; verificationStatus: VerificationStatus; dealerCode?: string; resellerCode?: string; features: FeatureAccess; }
+function mapDoc(d: QueryDocumentSnapshot<DocumentData>): AdminUserRow { const data = d.data(); const rawVerification = data.verificationStatus ?? (data.verified === true ? 'approved' : undefined); return { uid: d.id, name: data.name ?? data.displayName ?? '(no name)', email: data.email ?? null, phone: data.phone ?? data.phoneNumber ?? null, role: (data.role as UserRole) ?? 'user', disabled: Boolean(data.disabled), verificationStatus: ['pending','approved','rejected'].includes(rawVerification) ? rawVerification : 'unknown', dealerCode: data.dealerCode, resellerCode: data.resellerCode, features: { ...DEFAULT_FEATURES, ...(data.features ?? {}) } }; }
 const PAGE_SIZE = 25;
-
-export async function fetchUsersPage(opts: {
-  roleFilter?: UserRole | 'all';
-  cursor?: QueryDocumentSnapshot<DocumentData> | null;
-}): Promise<{ rows: AdminUserRow[]; nextCursor: QueryDocumentSnapshot<DocumentData> | null }> {
-  const { roleFilter = 'all', cursor = null } = opts;
-  const usersRef = collection(db, 'users');
-  const constraints = [];
-  if (roleFilter !== 'all') constraints.push(where('role', '==', roleFilter));
-  constraints.push(orderBy('name'));
-  if (cursor) constraints.push(startAfter(cursor));
-  constraints.push(fbLimit(PAGE_SIZE));
-  const snap = await getDocs(query(usersRef, ...constraints));
-  const rows = snap.docs.map(mapDoc);
-  return { rows, nextCursor: snap.docs.length === PAGE_SIZE ? snap.docs[snap.docs.length - 1] : null };
-}
-
-export function filterBySearch(rows: AdminUserRow[], search: string): AdminUserRow[] {
-  const q = search.trim().toLowerCase();
-  if (!q) return rows;
-  return rows.filter((r) =>
-    r.name.toLowerCase().includes(q) || r.email?.toLowerCase().includes(q) || r.phone?.toLowerCase().includes(q) ||
-    r.uid.toLowerCase().includes(q) || r.dealerCode?.toLowerCase().includes(q) || r.resellerCode?.toLowerCase().includes(q)
-  );
-}
-
-export async function updateUserRole(uid: string, role: UserRole): Promise<void> {
-  await updateDoc(doc(db, 'users', uid), { role });
-}
-
-export async function updateUserDisabled(uid: string, disabled: boolean): Promise<void> {
-  await updateDoc(doc(db, 'users', uid), { disabled });
-}
-
-export async function updateUserFeatures(uid: string, features: FeatureAccess): Promise<void> {
-  await updateDoc(doc(db, 'users', uid), { features });
-}
+export async function fetchUsersPage(opts: { roleFilter?: UserRole | 'all'; cursor?: QueryDocumentSnapshot<DocumentData> | null }): Promise<{ rows: AdminUserRow[]; nextCursor: QueryDocumentSnapshot<DocumentData> | null }> { const { roleFilter = 'all', cursor = null } = opts; const usersRef = collection(db, 'users'); const constraints = []; if (roleFilter !== 'all') constraints.push(where('role', '==', roleFilter)); constraints.push(orderBy('name')); if (cursor) constraints.push(startAfter(cursor)); constraints.push(fbLimit(PAGE_SIZE)); const snap = await getDocs(query(usersRef, ...constraints)); return { rows: snap.docs.map(mapDoc), nextCursor: snap.docs.length === PAGE_SIZE ? snap.docs[snap.docs.length - 1] : null }; }
+export function filterBySearch(rows: AdminUserRow[], search: string): AdminUserRow[] { const q = search.trim().toLowerCase(); if (!q) return rows; return rows.filter((r) => r.name.toLowerCase().includes(q) || r.email?.toLowerCase().includes(q) || r.phone?.toLowerCase().includes(q) || r.uid.toLowerCase().includes(q) || r.dealerCode?.toLowerCase().includes(q) || r.resellerCode?.toLowerCase().includes(q)); }
+async function callManageUser<T = unknown>(payload: Record<string, unknown>): Promise<T> { const fn = httpsCallable<Record<string, unknown>, T>(functions, 'manageUser'); const { data } = await fn(payload); return data; }
+export async function updateUserRole(uid: string, role: UserRole): Promise<void> { await callManageUser({ action: 'setRole', targetUid: uid, newRole: role }); }
+export async function updateUserDisabled(uid: string, disabled: boolean): Promise<void> { await callManageUser({ action: 'suspend', targetUid: uid, suspended: disabled }); }
+export async function updateUserFeatures(uid: string, features: FeatureAccess): Promise<void> { await callManageUser({ action: 'setFeatures', targetUid: uid, features }); }
