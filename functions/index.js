@@ -1,8 +1,9 @@
 // MySheba push notifications - the SERVER half.
-const { onDocumentCreated, onDocumentUpdated, onDocumentWritten, onDocumentDeleted } = require('firebase-functions/v2/firestore');
+const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const admin = require('firebase-admin');
 const progressionService = require('./progressionService');
 const TIER_QUALIFYING_SERVICES = ['Recharge', 'Internet', 'Mobile Banking', 'Remittance'];
+
 exports.generateAgoraToken = require('./agoraToken').generateAgoraToken;
 exports.manageUser = require('./userManagement').manageUser;
 exports.searchUsers = require('./userSearch').searchUsers;
@@ -65,45 +66,249 @@ exports.saveApiProvider = require('./apiProviderService').saveApiProvider;
 exports.deleteApiProvider = require('./apiProviderService').deleteApiProvider;
 exports.getServiceApiSettings = require('./apiProviderService').getServiceApiSettings;
 exports.saveServiceApiSettings = require('./apiProviderService').saveServiceApiSettings;
+
 admin.initializeApp();
 const db = admin.firestore();
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const STAFF_ROLES = ['dealer', 'reseller', 'admin', 'superadmin'];
 const ADMIN_ROLES = ['admin', 'superadmin'];
-function chunk(arr, size) { const out=[]; for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size)); return out; }
-async function sendExpoPush(messages) { const valid=messages.filter(m=>m&&m.to); for(const batch of chunk(valid,100)){try{const res=await fetch(EXPO_PUSH_URL,{method:'POST',headers:{'content-type':'application/json',accept:'application/json'},body:JSON.stringify(batch.map(m=>({sound:'default',...m})))});if(!res.ok)console.error('Expo push HTTP error',res.status,await res.text());}catch(e){console.error('Expo push send failed',e);}} }
-async function sendCallDataMessage(uid,data){if(!uid)return;const snap=await db.collection('users').doc(uid).get();if(!snap.exists)return;const d=snap.data();if(!d.fcmToken||(d.notifPrefs&&d.notifPrefs.pushEnabled===false)||(d.callSettings&&d.callSettings.notificationsEnabled===false))return;try{await admin.messaging().send({token:d.fcmToken,data,android:{priority:'high'}});}catch(e){console.error('Call data message send failed',e);}}
-async function getUserPushTarget(uid){if(!uid)return null;const snap=await db.collection('users').doc(uid).get();if(!snap.exists)return null;const d=snap.data();if(!d.pushToken||(d.notifPrefs&&d.notifPrefs.pushEnabled===false))return null;return d.pushToken;}
-async function notifyUser(uid,title,body,data,extra){const token=await getUserPushTarget(uid);if(token)await sendExpoPush([{to:token,title,body,data:data||{},...(extra||{})}]);}
-async function notifyRoles(roles,title,body,data){const snap=await db.collection('users').where('role','in',roles).get();const messages=[];snap.forEach(doc=>{const u=doc.data();if(u.pushToken&&!(u.notifPrefs&&u.notifPrefs.pushEnabled===false))messages.push({to:u.pushToken,title,body,data:data||{}});});await sendExpoPush(messages);}
-exports.onTransactionCreated=onDocumentCreated('transactions/{id}',async event=>{const tx=event.data.data();const body=`${tx.service} - MYR ${Number(tx.total||0).toFixed(2)}`;if(tx.resellerId)await notifyUser(tx.resellerId,'🆕 New order',body,{type:'transaction',id:event.params.id});else await notifyRoles(['dealer'],'🆕 New order',body,{type:'transaction',id:event.params.id});});
-exports.onTransactionUpdated=onDocumentUpdated('transactions/{id}',async event=>{const b=event.data.before.data(),a=event.data.after.data();if(!b.dealerId&&a.dealerId)await notifyUser(a.dealerId,'🆕 New order',`${a.service} - MYR ${Number(a.total||0).toFixed(2)}`,{type:'transaction',id:event.params.id});if(b.status!=='completed'&&a.status==='completed'&&TIER_QUALIFYING_SERVICES.includes(a.service))await progressionService.incrementTierPoints(a.customerId);if(b.status===a.status&&b.rejected===a.rejected)return;let title='Order update',body=`${a.service} is now ${a.status}.`;if(a.rejected){title='❌ Order rejected';body=`${a.service}: ${a.rejectReason||'Rejected by dealer.'}`;}else if(a.status==='processing'){title='🔄 Order accepted';body=`${a.service} is being processed.`;}else if(a.status==='completed'){title='✅ Order completed';body=a.pin?`${a.service} is ready. Collection PIN: ${a.pin}`:`${a.service} has been completed.`;}await notifyUser(a.customerId,title,body,{type:'transaction',id:event.params.id});});
-exports.onGamePointsLedgerCreated=onDocumentCreated('gamePointsLedger/{id}',async event=>{const e=event.data.data();if(e.reason==='entry_fee')await progressionService.incrementLevelPoints(e.uid);});
-exports.onTopupCreated=onDocumentCreated('topups/{id}',async event=>{const t=event.data.data();await notifyRoles(ADMIN_ROLES,'💰 New top-up request',`${t.userName||'A user'} requested MYR ${Number(t.amount||0).toFixed(2)}`,{type:'topup',id:event.params.id});});
-exports.onTopupUpdated=onDocumentUpdated('topups/{id}',async event=>{const b=event.data.before.data(),a=event.data.after.data();if(b.status===a.status)return;if(a.status==='approved')await notifyUser(a.userId,'✅ Top-up approved',`MYR ${Number(a.amount||0).toFixed(2)} (${Number(a.points||0).toFixed(2)} pts) has been credited to your wallet.`,{type:'topup',id:event.params.id});else if(a.status==='rejected')await notifyUser(a.userId,'❌ Top-up rejected',a.rejectReason||'Your top-up request was rejected.',{type:'topup',id:event.params.id});});
-exports.onSupportTicketCreated=onDocumentCreated('supportTickets/{id}',async event=>{const t=event.data.data();await notifyRoles(ADMIN_ROLES,'🎧 New support request',`${t.userName||'A user'}: ${t.subject||'Support request'}`,{type:'supportTicket',id:event.params.id});});
-exports.onSupportTicketUpdated=onDocumentUpdated('supportTickets/{id}',async event=>{const b=event.data.before.data(),a=event.data.after.data();if(b.status===a.status)return;if(a.status==='in_progress')await notifyUser(a.userId,'🔄 Support request update',`We're looking into \"${a.subject||'your request'}\".`,{type:'supportTicket',id:event.params.id});else if(a.status==='resolved')await notifyUser(a.userId,'✅ Support request resolved',a.adminNote||`Your request \"${a.subject||''}\" has been resolved.`,{type:'supportTicket',id:event.params.id});});
-exports.onInquiryCreated=onDocumentCreated('inquiries/{id}',async event=>{const i=event.data.data();await notifyRoles(ADMIN_ROLES,'✈️ New travel inquiry',`${i.type}: ${i.from} → ${i.to} (${i.date})`,{type:'inquiry',id:event.params.id});});
-exports.onInquiryUpdated=onDocumentUpdated('inquiries/{id}',async event=>{const b=event.data.before.data(),a=event.data.after.data();if(b.status!=='closed'&&a.status==='closed'&&a.type==='flight'&&a.ticketUrl)await progressionService.incrementTierPoints(a.customerId);if(b.status===a.status)return;if(a.status==='contacted')await notifyUser(a.customerId,'📞 We called about your inquiry',`An agent has reached out about your ${a.type} inquiry.`,{type:'inquiry',id:event.params.id});else if(a.status==='closed')await notifyUser(a.customerId,'✅ Inquiry closed',`Your ${a.type} inquiry has been closed.`,{type:'inquiry',id:event.params.id});});
-exports.onChatMessageCreated=onDocumentCreated('chats/{chatId}/messages/{messageId}',async event=>{const m=event.data.data(),chatId=event.params.chatId,preview=m.text&&m.text.length>80?`${m.text.slice(0,77)}...`:m.text;await progressionService.incrementLevelPoints(m.senderId);if(m.senderRole==='customer')await notifyRoles(STAFF_ROLES,`💬 ${m.senderName||'Customer'}`,preview||'New message',{type:'chat',chatId});else await notifyUser(chatId,`💬 ${m.senderName||'MySheba Support'}`,preview||'New message',{type:'chat',chatId});});
-exports.onDirectChatMessageCreated=onDocumentCreated('directChats/{chatId}/messages/{messageId}',async event=>{const m=event.data.data(),chatId=event.params.chatId,s=await db.collection('directChats').doc(chatId).get();if(!s.exists)return;const p=s.data().participants||[],r=p.find(uid=>uid!==m.senderId);if(r)await notifyUser(r,`💬 ${m.senderName||'New message'}`,m.text||'New message',{type:'directChat',chatId});});
-exports.onDirectChatReportCreated=onDocumentCreated('directChatReports/{reportId}',async event=>{const r=event.data.data();if(r.chatId)await db.collection('directChats').doc(r.chatId).set({underInvestigation:true},{merge:true});await notifyRoles(ADMIN_ROLES,'🚩 New conversation report',r.reason?`Reported: ${r.reason}`:'A direct chat conversation was reported.',{type:'directChatReport',id:event.params.reportId});});
-exports.onDirectChatReportUpdated=onDocumentUpdated('directChatReports/{reportId}',async event=>{const b=event.data.before.data(),a=event.data.after.data();if(b.status===a.status||!a.chatId)return;if(a.status==='open'){await db.collection('directChats').doc(a.chatId).set({underInvestigation:true},{merge:true});return;}if(a.status==='resolved'){const o=await db.collection('directChatReports').where('chatId','==',a.chatId).where('status','==','open').limit(1).get();if(o.empty)await db.collection('directChats').doc(a.chatId).set({underInvestigation:false},{merge:true});}});
-exports.onGroupChatMessageCreated=onDocumentCreated('groupChats/{groupId}/messages/{messageId}',async event=>{const m=event.data.data(),groupId=event.params.groupId,s=await db.collection('groupChats').doc(groupId).get();if(!s.exists)return;const g=s.data(),recipients=(g.memberUids||[]).filter(uid=>uid!==m.senderId),tokens=[];for(const uid of recipients){const t=await getUserPushTarget(uid);if(t)tokens.push(t);}await sendExpoPush(tokens.map(to=>({to,title:`💬 ${g.name||'Group Chat'}`,body:`${m.senderName||'Someone'}: ${m.text||'New message'}`,data:{type:'groupChat',groupId}})));});
-exports.onRoomChatDeleted=onDocumentDeleted('roomChats/{roomId}',async event=>{await admin.firestore().recursiveDelete(db.collection('roomChats').doc(event.params.roomId).collection('messages'));});
-exports.onGroupChatDeleted=onDocumentDeleted('groupChats/{groupId}',async event=>{await admin.firestore().recursiveDelete(db.collection('groupChats').doc(event.params.groupId).collection('messages'));});
-exports.onCallCreated=onDocumentCreated('calls/{callId}',async event=>{const c=event.data.data();if(c.status!=='ringing')return;const kind=c.type==='video'?'📹 Video call':'📞 Voice call',callType=c.type==='video'?'video':'audio';async function ringOne(uid,name,callerUid,groupId){const s=await db.collection('users').doc(uid).get(),d=s.exists?s.data():{};if(d.callSettings&&d.callSettings.notificationsEnabled===false)return;await Promise.all([notifyUser(uid,kind,`${name||'Someone'} is calling you`,{type:'call',callId:event.params.callId},{priority:'high',channelId:'calls'}),sendCallDataMessage(uid,{type:'call',callId:event.params.callId,callerName:name||'Someone',callType,...(callerUid?{callerUid}:{}),...(groupId?{groupId}:{})})]);}if(c.isGroup)await Promise.all((c.ringingUids||[]).map(uid=>ringOne(uid,c.callerName,null,c.groupId)));else await ringOne(c.calleeUid,c.callerName,c.callerUid,null);});
-exports.onCallUpdated=onDocumentUpdated('calls/{callId}',async event=>{const b=event.data.before.data(),a=event.data.after.data();if(!a.isGroup||a.status==='ended')return;if((a.ringingUids||[]).length||(a.activeUids||[]).length)return;if(!(b.ringingUids||[]).length&&!(b.activeUids||[]).length)return;await event.data.after.ref.update({status:'ended',updatedAt:admin.firestore.FieldValue.serverTimestamp()});});
-const MARKETPLACE_REPORT_HIDE_THRESHOLD=5;
-exports.onMarketplaceReportCreated=onDocumentCreated('marketplaceReports/{reportId}',async event=>{const r=event.data.data();if(!r.listingId)return;const ref=db.collection('marketplaceListings').doc(r.listingId),s=await ref.get();if(!s.exists)return;const d=s.data(),count=(d.reportCount||0)+1,patch={reportCount:admin.firestore.FieldValue.increment(1)};if(count>=MARKETPLACE_REPORT_HIDE_THRESHOLD&&d.status!=='hidden')patch.status='hidden';await ref.update(patch);await notifyRoles(ADMIN_ROLES,'🚩 New marketplace report',`${r.reason||'Reported'}: \"${d.title||'A listing'}\"`,{type:'marketplaceReport',listingId:r.listingId});});
-const ACCOMMODATION_REPORT_HIDE_THRESHOLD=5;
-exports.onAccommodationReportCreated=onDocumentCreated('propertyReports/{reportId}',async event=>{const r=event.data.data();if(!r.propertyId)return;const ref=db.collection('properties').doc(r.propertyId),s=await ref.get();if(!s.exists)return;const d=s.data(),count=(d.reportCount||0)+1,patch={reportCount:admin.firestore.FieldValue.increment(1)};if(count>=ACCOMMODATION_REPORT_HIDE_THRESHOLD&&d.status!=='hidden')patch.status='hidden';await ref.update(patch);await notifyRoles(ADMIN_ROLES,'🚩 New property report',`${r.reason||'Reported'}: \"${d.title||'A property'}\"`,{type:'propertyReport',propertyId:r.propertyId});});
-const ROOMMATE_REPORT_HIDE_THRESHOLD=5;
-exports.onRoommateReportCreated=onDocumentCreated('roommateReports/{reportId}',async event=>{const r=event.data.data();if(!r.requestId)return;const ref=db.collection('roommateRequests').doc(r.requestId),s=await ref.get();if(!s.exists)return;const d=s.data(),count=(d.reportCount||0)+1,patch={reportCount:admin.firestore.FieldValue.increment(1)};if(count>=ROOMMATE_REPORT_HIDE_THRESHOLD&&d.status!=='hidden')patch.status='hidden';await ref.update(patch);await notifyRoles(ADMIN_ROLES,'🚩 New roommate request report',`${r.reason||'Reported'}: request by \"${d.posterName||'a user'}\"`,{type:'roommateReport',requestId:r.requestId});});
-const SERVICE_PROVIDER_REPORT_HIDE_THRESHOLD=5;
-exports.onServiceProviderReportCreated=onDocumentCreated('serviceProviderReports/{reportId}',async event=>{const r=event.data.data();if(!r.providerId)return;const ref=db.collection('serviceProviders').doc(r.providerId),s=await ref.get();if(!s.exists)return;const d=s.data(),count=(d.reportCount||0)+1,patch={reportCount:admin.firestore.FieldValue.increment(1)};if(count>=SERVICE_PROVIDER_REPORT_HIDE_THRESHOLD&&d.status!=='hidden')patch.status='hidden';await ref.update(patch);await notifyRoles(ADMIN_ROLES,'🚩 New service listing report',`${r.reason||'Reported'}: \"${d.name||'A service'}\"`,{type:'serviceProviderReport',providerId:r.providerId});});
-const COMMUNITY_REPORT_HIDE_THRESHOLD=5;
-exports.onCommunityReportCreated=onDocumentCreated('communityReports/{reportId}',async event=>{const r=event.data.data();if(!r.postId)return;const ref=db.collection('communityPosts').doc(r.postId),s=await ref.get();if(!s.exists)return;const d=s.data(),count=(d.reportCount||0)+1,patch={reportCount:admin.firestore.FieldValue.increment(1)},emergency=d.type==='emergency';if(count>=COMMUNITY_REPORT_HIDE_THRESHOLD&&!emergency&&d.status!=='hidden')patch.status='hidden';await ref.update(patch);await notifyRoles(ADMIN_ROLES,emergency?'🚨 Emergency post report':'🚩 New community post report',`${r.reason||'Reported'}: \"${d.title||'A post'}\"`,{type:'communityReport',postId:r.postId});});
-const SOCIAL_REPORT_HIDE_THRESHOLD=5;
-exports.onSocialReportCreated=onDocumentCreated('socialReports/{reportId}',async event=>{const r=event.data.data();if(!r.postId)return;const ref=db.collection('socialPosts').doc(r.postId),s=await ref.get();if(!s.exists)return;const d=s.data(),count=(d.reportCount||0)+1,patch={reportCount:admin.firestore.FieldValue.increment(1)};if(count>=SOCIAL_REPORT_HIDE_THRESHOLD&&d.status!=='hidden')patch.status='hidden';await ref.update(patch);await notifyRoles(ADMIN_ROLES,'🚩 New social post report',`${r.reason||'Reported'}: a social post`,{type:'socialReport',postId:r.postId});});
-exports.onBusinessProfileWritten=onDocumentWritten('businessProfiles/{uid}',async event=>{const before=event.data.before.exists?event.data.before.data():null,a=event.data.after.exists?event.data.after.data():null;if(!a)return;const was=!!(before&&before.isBusinessProfile);if(!a.isBusinessProfile||was)return;await notifyUser(event.params.uid,'🏢 You’ve been upgraded to a Business Profile!','Add your business name, logo, and description from your Profile to start standing out across the Marketplace.',{type:'businessProfile'});});
+
+function chunk(arr, size) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+async function sendExpoPush(messages) {
+  const valid = messages.filter(m => m && m.to);
+  for (const batch of chunk(valid, 100)) {
+    try {
+      const res = await fetch(EXPO_PUSH_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify(batch.map(m => ({ sound: 'default', ...m }))),
+      });
+      if (!res.ok) console.error('Expo push HTTP error', res.status, await res.text());
+    } catch (e) {
+      console.error('Expo push send failed', e);
+    }
+  }
+}
+
+async function sendCallDataMessage(uid, data) {
+  if (!uid) return;
+  const snap = await db.collection('users').doc(uid).get();
+  if (!snap.exists) return;
+  const d = snap.data();
+  if (!d.fcmToken || (d.notifPrefs && d.notifPrefs.pushEnabled === false) || (d.callSettings && d.callSettings.notificationsEnabled === false)) return;
+  try {
+    await admin.messaging().send({ token: d.fcmToken, data, android: { priority: 'high' } });
+  } catch (e) {
+    console.error('Call data message send failed', e);
+  }
+}
+
+async function getUserPushTarget(uid) {
+  if (!uid) return null;
+  const snap = await db.collection('users').doc(uid).get();
+  if (!snap.exists) return null;
+  const d = snap.data();
+  if (!d.pushToken || (d.notifPrefs && d.notifPrefs.pushEnabled === false)) return null;
+  return d.pushToken;
+}
+
+async function notifyUser(uid, title, body, data, extra) {
+  const token = await getUserPushTarget(uid);
+  if (token) await sendExpoPush([{ to: token, title, body, data: data || {}, ...(extra || {}) }]);
+}
+
+async function notifyRoles(roles, title, body, data) {
+  const snap = await db.collection('users').where('role', 'in', roles).get();
+  const messages = [];
+  snap.forEach(doc => {
+    const u = doc.data();
+    if (u.pushToken && !(u.notifPrefs && u.notifPrefs.pushEnabled === false)) {
+      messages.push({ to: u.pushToken, title, body, data: data || {} });
+    }
+  });
+  await sendExpoPush(messages);
+}
+
+exports.onTransactionCreated = onDocumentCreated('transactions/{id}', async event => {
+  const tx = event.data.data();
+  const body = `${tx.service} - MYR ${Number(tx.total || 0).toFixed(2)}`;
+  if (tx.resellerId) await notifyUser(tx.resellerId, '🆕 New order', body, { type: 'transaction', id: event.params.id });
+  else await notifyRoles(['dealer'], '🆕 New order', body, { type: 'transaction', id: event.params.id });
+});
+
+exports.onTransactionUpdated = onDocumentUpdated('transactions/{id}', async event => {
+  const b = event.data.before.data(), a = event.data.after.data();
+  if (!b.dealerId && a.dealerId) await notifyUser(a.dealerId, '🆕 New order', `${a.service} - MYR ${Number(a.total || 0).toFixed(2)}`, { type: 'transaction', id: event.params.id });
+  if (b.status !== 'completed' && a.status === 'completed' && TIER_QUALIFYING_SERVICES.includes(a.service)) await progressionService.incrementTierPoints(a.customerId);
+  if (b.status === a.status && b.rejected === a.rejected) return;
+  let title = 'Order update', body = `${a.service} is now ${a.status}.`;
+  if (a.rejected) {
+    title = '❌ Order rejected';
+    body = `${a.service}: ${a.rejectReason || 'Rejected by dealer.'}`;
+  } else if (a.status === 'processing') {
+    title = '🔄 Order accepted';
+    body = `${a.service} is being processed.`;
+  } else if (a.status === 'completed') {
+    title = '✅ Order completed';
+    body = a.pin ? `${a.service} is ready. Collection PIN: ${a.pin}` : `${a.service} has been completed.`;
+  }
+  await notifyUser(a.customerId, title, body, { type: 'transaction', id: event.params.id });
+});
+
+exports.onGamePointsLedgerCreated = onDocumentCreated('gamePointsLedger/{id}', async event => {
+  const e = event.data.data();
+  if (e.reason === 'entry_fee') await progressionService.incrementLevelPoints(e.uid);
+});
+
+exports.onTopupCreated = onDocumentCreated('topups/{id}', async event => {
+  const t = event.data.data();
+  await notifyRoles(ADMIN_ROLES, '💰 New top-up request', `${t.userName || 'A user'} requested MYR ${Number(t.amount || 0).toFixed(2)}`, { type: 'topup', id: event.params.id });
+});
+
+exports.onTopupUpdated = onDocumentUpdated('topups/{id}', async event => {
+  const b = event.data.before.data(), a = event.data.after.data();
+  if (b.status === a.status) return;
+  if (a.status === 'approved') await notifyUser(a.userId, '✅ Top-up approved', `MYR ${Number(a.amount || 0).toFixed(2)} (${Number(a.points || 0).toFixed(2)} pts) has been credited to your wallet.`, { type: 'topup', id: event.params.id });
+  else if (a.status === 'rejected') await notifyUser(a.userId, '❌ Top-up rejected', a.rejectReason || 'Your top-up request was rejected.', { type: 'topup', id: event.params.id });
+});
+
+exports.onSupportTicketCreated = onDocumentCreated('supportTickets/{id}', async event => {
+  const t = event.data.data();
+  await notifyRoles(ADMIN_ROLES, '🎧 New support request', `${t.userName || 'A user'}: ${t.subject || 'Support request'}`, { type: 'supportTicket', id: event.params.id });
+});
+
+exports.onSupportTicketUpdated = onDocumentUpdated('supportTickets/{id}', async event => {
+  const b = event.data.before.data(), a = event.data.after.data();
+  if (b.status === a.status) return;
+  if (a.status === 'in_progress') await notifyUser(a.userId, '🔄 Support request update', `We're looking into \"${a.subject || 'your request'}\".`, { type: 'supportTicket', id: event.params.id });
+  else if (a.status === 'resolved') await notifyUser(a.userId, '✅ Support request resolved', a.adminNote || `Your request \"${a.subject || ''}\" has been resolved.`, { type: 'supportTicket', id: event.params.id });
+});
+
+exports.onInquiryCreated = onDocumentCreated('inquiries/{id}', async event => {
+  const i = event.data.data();
+  await notifyRoles(ADMIN_ROLES, '✈️ New travel inquiry', `${i.type}: ${i.from} → ${i.to} (${i.date})`, { type: 'inquiry', id: event.params.id });
+});
+
+exports.onInquiryUpdated = onDocumentUpdated('inquiries/{id}', async event => {
+  const b = event.data.before.data(), a = event.data.after.data();
+  if (b.status !== 'closed' && a.status === 'closed' && a.type === 'flight' && a.ticketUrl) await progressionService.incrementTierPoints(a.customerId);
+  if (b.status === a.status) return;
+  if (a.status === 'contacted') await notifyUser(a.customerId, '📞 We called about your inquiry', `An agent has reached out about your ${a.type} inquiry.`, { type: 'inquiry', id: event.params.id });
+  else if (a.status === 'closed') await notifyUser(a.customerId, '✅ Inquiry closed', `Your ${a.type} inquiry has been closed.`, { type: 'inquiry', id: event.params.id });
+});
+
+// Support Chat only. Direct/Group/Room Chat triggers have been retired.
+exports.onChatMessageCreated = onDocumentCreated('chats/{chatId}/messages/{messageId}', async event => {
+  const m = event.data.data(), chatId = event.params.chatId, preview = m.text && m.text.length > 80 ? `${m.text.slice(0, 77)}...` : m.text;
+  await progressionService.incrementLevelPoints(m.senderId);
+  if (m.senderRole === 'customer') await notifyRoles(STAFF_ROLES, `💬 ${m.senderName || 'Customer'}`, preview || 'New message', { type: 'chat', chatId });
+  else await notifyUser(chatId, `💬 ${m.senderName || 'MySheba Support'}`, preview || 'New message', { type: 'chat', chatId });
+});
+
+// 1-to-1 voice/video call notifications only. Group calling is retired.
+exports.onCallCreated = onDocumentCreated('calls/{callId}', async event => {
+  const c = event.data.data();
+  if (c.status !== 'ringing' || c.isGroup === true || !c.calleeUid) return;
+  const kind = c.type === 'video' ? '📹 Video call' : '📞 Voice call';
+  const callType = c.type === 'video' ? 'video' : 'audio';
+  const uid = c.calleeUid;
+  const s = await db.collection('users').doc(uid).get();
+  const d = s.exists ? s.data() : {};
+  if (d.callSettings && d.callSettings.notificationsEnabled === false) return;
+  await Promise.all([
+    notifyUser(uid, kind, `${c.callerName || 'Someone'} is calling you`, { type: 'call', callId: event.params.callId }, { priority: 'high', channelId: 'calls' }),
+    sendCallDataMessage(uid, {
+      type: 'call',
+      callId: event.params.callId,
+      callerName: c.callerName || 'Someone',
+      callType,
+      callerUid: c.callerUid || '',
+    }),
+  ]);
+});
+
+const MARKETPLACE_REPORT_HIDE_THRESHOLD = 5;
+exports.onMarketplaceReportCreated = onDocumentCreated('marketplaceReports/{reportId}', async event => {
+  const r = event.data.data();
+  if (!r.listingId) return;
+  const ref = db.collection('marketplaceListings').doc(r.listingId), s = await ref.get();
+  if (!s.exists) return;
+  const d = s.data(), count = (d.reportCount || 0) + 1, patch = { reportCount: admin.firestore.FieldValue.increment(1) };
+  if (count >= MARKETPLACE_REPORT_HIDE_THRESHOLD && d.status !== 'hidden') patch.status = 'hidden';
+  await ref.update(patch);
+  await notifyRoles(ADMIN_ROLES, '🚩 New marketplace report', `${r.reason || 'Reported'}: \"${d.title || 'A listing'}\"`, { type: 'marketplaceReport', listingId: r.listingId });
+});
+
+const ACCOMMODATION_REPORT_HIDE_THRESHOLD = 5;
+exports.onAccommodationReportCreated = onDocumentCreated('propertyReports/{reportId}', async event => {
+  const r = event.data.data();
+  if (!r.propertyId) return;
+  const ref = db.collection('properties').doc(r.propertyId), s = await ref.get();
+  if (!s.exists) return;
+  const d = s.data(), count = (d.reportCount || 0) + 1, patch = { reportCount: admin.firestore.FieldValue.increment(1) };
+  if (count >= ACCOMMODATION_REPORT_HIDE_THRESHOLD && d.status !== 'hidden') patch.status = 'hidden';
+  await ref.update(patch);
+  await notifyRoles(ADMIN_ROLES, '🚩 New property report', `${r.reason || 'Reported'}: \"${d.title || 'A property'}\"`, { type: 'propertyReport', propertyId: r.propertyId });
+});
+
+const ROOMMATE_REPORT_HIDE_THRESHOLD = 5;
+exports.onRoommateReportCreated = onDocumentCreated('roommateReports/{reportId}', async event => {
+  const r = event.data.data();
+  if (!r.requestId) return;
+  const ref = db.collection('roommateRequests').doc(r.requestId), s = await ref.get();
+  if (!s.exists) return;
+  const d = s.data(), count = (d.reportCount || 0) + 1, patch = { reportCount: admin.firestore.FieldValue.increment(1) };
+  if (count >= ROOMMATE_REPORT_HIDE_THRESHOLD && d.status !== 'hidden') patch.status = 'hidden';
+  await ref.update(patch);
+  await notifyRoles(ADMIN_ROLES, '🚩 New roommate request report', `${r.reason || 'Reported'}: request by \"${d.posterName || 'a user'}\"`, { type: 'roommateReport', requestId: r.requestId });
+});
+
+const SERVICE_PROVIDER_REPORT_HIDE_THRESHOLD = 5;
+exports.onServiceProviderReportCreated = onDocumentCreated('serviceProviderReports/{reportId}', async event => {
+  const r = event.data.data();
+  if (!r.providerId) return;
+  const ref = db.collection('serviceProviders').doc(r.providerId), s = await ref.get();
+  if (!s.exists) return;
+  const d = s.data(), count = (d.reportCount || 0) + 1, patch = { reportCount: admin.firestore.FieldValue.increment(1) };
+  if (count >= SERVICE_PROVIDER_REPORT_HIDE_THRESHOLD && d.status !== 'hidden') patch.status = 'hidden';
+  await ref.update(patch);
+  await notifyRoles(ADMIN_ROLES, '🚩 New service listing report', `${r.reason || 'Reported'}: \"${d.name || 'A service'}\"`, { type: 'serviceProviderReport', providerId: r.providerId });
+});
+
+const COMMUNITY_REPORT_HIDE_THRESHOLD = 5;
+exports.onCommunityReportCreated = onDocumentCreated('communityReports/{reportId}', async event => {
+  const r = event.data.data();
+  if (!r.postId) return;
+  const ref = db.collection('communityPosts').doc(r.postId), s = await ref.get();
+  if (!s.exists) return;
+  const d = s.data(), count = (d.reportCount || 0) + 1, patch = { reportCount: admin.firestore.FieldValue.increment(1) }, emergency = d.type === 'emergency';
+  if (count >= COMMUNITY_REPORT_HIDE_THRESHOLD && !emergency && d.status !== 'hidden') patch.status = 'hidden';
+  await ref.update(patch);
+  await notifyRoles(ADMIN_ROLES, emergency ? '🚨 Emergency post report' : '🚩 New community post report', `${r.reason || 'Reported'}: \"${d.title || 'A post'}\"`, { type: 'communityReport', postId: r.postId });
+});
+
+const SOCIAL_REPORT_HIDE_THRESHOLD = 5;
+exports.onSocialReportCreated = onDocumentCreated('socialReports/{reportId}', async event => {
+  const r = event.data.data();
+  if (!r.postId) return;
+  const ref = db.collection('socialPosts').doc(r.postId), s = await ref.get();
+  if (!s.exists) return;
+  const d = s.data(), count = (d.reportCount || 0) + 1, patch = { reportCount: admin.firestore.FieldValue.increment(1) };
+  if (count >= SOCIAL_REPORT_HIDE_THRESHOLD && d.status !== 'hidden') patch.status = 'hidden';
+  await ref.update(patch);
+  await notifyRoles(ADMIN_ROLES, '🚩 New social post report', `${r.reason || 'Reported'}: a social post`, { type: 'socialReport', postId: r.postId });
+});
+
+exports.onBusinessProfileWritten = onDocumentWritten('businessProfiles/{uid}', async event => {
+  const before = event.data.before.exists ? event.data.before.data() : null;
+  const a = event.data.after.exists ? event.data.after.data() : null;
+  if (!a) return;
+  const was = !!(before && before.isBusinessProfile);
+  if (!a.isBusinessProfile || was) return;
+  await notifyUser(event.params.uid, '🏢 You’ve been upgraded to a Business Profile!', 'Add your business name, logo, and description from your Profile to start standing out across the Marketplace.', { type: 'businessProfile' });
+});
