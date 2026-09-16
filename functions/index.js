@@ -42,10 +42,6 @@ exports.chargeMobileBanking = require('./walletService').chargeMobileBanking;
 exports.chargeRemittance = require('./walletService').chargeRemittance;
 exports.rejectMobileBankingTransaction = require('./walletService').rejectMobileBankingTransaction;
 exports.rejectRemittanceTransaction = require('./walletService').rejectRemittanceTransaction;
-exports.chargeGamePoints = require('./walletService').chargeGamePoints;
-exports.withdrawGamePoints = require('./walletService').withdrawGamePoints;
-exports.transferGamePoints = require('./walletService').transferGamePoints;
-exports.giftGamePoints = require('./walletService').giftGamePoints;
 exports.approveVerification = require('./verificationService').approveVerification;
 exports.rejectVerification = require('./verificationService').rejectVerification;
 exports.setBusinessProfileStatus = require('./businessProfileService').setBusinessProfileStatus;
@@ -147,22 +143,10 @@ exports.onTransactionUpdated = onDocumentUpdated('transactions/{id}', async even
   if (b.status !== 'completed' && a.status === 'completed' && TIER_QUALIFYING_SERVICES.includes(a.service)) await progressionService.incrementTierPoints(a.customerId);
   if (b.status === a.status && b.rejected === a.rejected) return;
   let title = 'Order update', body = `${a.service} is now ${a.status}.`;
-  if (a.rejected) {
-    title = '❌ Order rejected';
-    body = `${a.service}: ${a.rejectReason || 'Rejected by dealer.'}`;
-  } else if (a.status === 'processing') {
-    title = '🔄 Order accepted';
-    body = `${a.service} is being processed.`;
-  } else if (a.status === 'completed') {
-    title = '✅ Order completed';
-    body = a.pin ? `${a.service} is ready. Collection PIN: ${a.pin}` : `${a.service} has been completed.`;
-  }
+  if (a.rejected) { title = '❌ Order rejected'; body = `${a.service}: ${a.rejectReason || 'Rejected by dealer.'}`; }
+  else if (a.status === 'processing') { title = '🔄 Order accepted'; body = `${a.service} is being processed.`; }
+  else if (a.status === 'completed') { title = '✅ Order completed'; body = a.pin ? `${a.service} is ready. Collection PIN: ${a.pin}` : `${a.service} has been completed.`; }
   await notifyUser(a.customerId, title, body, { type: 'transaction', id: event.params.id });
-});
-
-exports.onGamePointsLedgerCreated = onDocumentCreated('gamePointsLedger/{id}', async event => {
-  const e = event.data.data();
-  if (e.reason === 'entry_fee') await progressionService.incrementLevelPoints(e.uid);
 });
 
 exports.onTopupCreated = onDocumentCreated('topups/{id}', async event => {
@@ -202,7 +186,6 @@ exports.onInquiryUpdated = onDocumentUpdated('inquiries/{id}', async event => {
   else if (a.status === 'closed') await notifyUser(a.customerId, '✅ Inquiry closed', `Your ${a.type} inquiry has been closed.`, { type: 'inquiry', id: event.params.id });
 });
 
-// Support Chat only. Direct/Group/Room Chat triggers have been retired.
 exports.onChatMessageCreated = onDocumentCreated('chats/{chatId}/messages/{messageId}', async event => {
   const m = event.data.data(), chatId = event.params.chatId, preview = m.text && m.text.length > 80 ? `${m.text.slice(0, 77)}...` : m.text;
   await progressionService.incrementLevelPoints(m.senderId);
@@ -210,7 +193,6 @@ exports.onChatMessageCreated = onDocumentCreated('chats/{chatId}/messages/{messa
   else await notifyUser(chatId, `💬 ${m.senderName || 'MySheba Support'}`, preview || 'New message', { type: 'chat', chatId });
 });
 
-// 1-to-1 voice/video call notifications only. Group calling is retired.
 exports.onCallCreated = onDocumentCreated('calls/{callId}', async event => {
   const c = event.data.data();
   if (c.status !== 'ringing' || c.isGroup === true || !c.calleeUid) return;
@@ -222,13 +204,7 @@ exports.onCallCreated = onDocumentCreated('calls/{callId}', async event => {
   if (d.callSettings && d.callSettings.notificationsEnabled === false) return;
   await Promise.all([
     notifyUser(uid, kind, `${c.callerName || 'Someone'} is calling you`, { type: 'call', callId: event.params.callId }, { priority: 'high', channelId: 'calls' }),
-    sendCallDataMessage(uid, {
-      type: 'call',
-      callId: event.params.callId,
-      callerName: c.callerName || 'Someone',
-      callType,
-      callerUid: c.callerUid || '',
-    }),
+    sendCallDataMessage(uid, { type: 'call', callId: event.params.callId, callerName: c.callerName || 'Someone', callType, callerUid: c.callerUid || '' }),
   ]);
 });
 
