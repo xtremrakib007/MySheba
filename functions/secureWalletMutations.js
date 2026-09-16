@@ -19,19 +19,27 @@ function safeText(value, max) {
   return String(value ?? '').trim().slice(0, max);
 }
 
+function validMoney(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 && n <= MAX_AMOUNT && Number.isSafeInteger(Math.round(n * 100)) ? n : null;
+}
+
+function validBalance(value) {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) && n >= 0 && Number.isSafeInteger(Math.round(n * 100)) ? n : null;
+}
+
 exports.createSelfTopup = onCall(async (request) => {
   const { uid, requestId } = requireRequest(request);
   const db = admin.firestore();
   const data = request.data || {};
-  const amount = Number(data.amount);
+  const amount = validMoney(data.amount);
   const method = safeText(data.method || 'transfer', 40);
   const bankName = safeText(data.bankName, 120);
   const refNo = safeText(data.refNo, 120);
   const receiptUrl = safeText(data.receiptUrl, 2048);
 
-  if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_AMOUNT) {
-    throw new HttpsError('invalid-argument', 'Enter a valid amount.');
-  }
+  if (amount === null) throw new HttpsError('invalid-argument', 'Enter a valid amount.');
 
   await checkVelocity(db, uid, 'createSelfTopup', { ip: getClientIp(request) });
 
@@ -60,10 +68,8 @@ exports.createSelfTopup = onCall(async (request) => {
         throw new HttpsError('permission-denied', 'Only admin/superadmin can self top-up.');
       }
 
-      const currentBalance = Number(caller.walletBalance || 0);
-      if (!Number.isFinite(currentBalance) || currentBalance < 0) {
-        throw new HttpsError('failed-precondition', 'Wallet balance is invalid.');
-      }
+      const currentBalance = validBalance(caller.walletBalance);
+      if (currentBalance === null) throw new HttpsError('failed-precondition', 'Wallet balance is invalid.');
       const newBalance = currentBalance + amount;
       if (!Number.isSafeInteger(Math.round(newBalance * 100))) {
         throw new HttpsError('failed-precondition', 'Wallet balance is too large.');
