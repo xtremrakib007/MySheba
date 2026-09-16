@@ -49,9 +49,6 @@ export async function ensureChat(customer) {
       lastSenderRole: '',
       unreadForCustomer: 0,
       unreadForStaff: 0,
-      // merge:true means this never clobbers an assignment already set on
-      // an existing thread - only fills these in the first time a thread
-      // doc is created.
       assignedToUid: '',
       assignedToName: '',
       assignedToRole: '',
@@ -61,11 +58,6 @@ export async function ensureChat(customer) {
   );
 }
 
-/**
- * Sends a message into a thread and updates the thread's preview/unread
- * counters. `sender.role` is 'customer' or 'staff' - staff replies bump
- * unreadForCustomer, customer messages bump unreadForStaff.
- */
 export async function sendMessage(chatId, sender, text) {
   const trimmed = (text || '').trim();
   if (!chatId || !trimmed) return;
@@ -95,8 +87,6 @@ export async function sendMessage(chatId, sender, text) {
   );
 }
 
-// Human-friendly preview shown in the inbox list / thread meta for a media
-// message, since `lastMessage` is plain text there.
 const MEDIA_PREVIEW = {
   image: '\uD83D\uDCF7 Photo',
   video: '\uD83C\uDFA5 Video',
@@ -104,12 +94,6 @@ const MEDIA_PREVIEW = {
   voice: '\uD83C\uDFA4 Voice message',
 };
 
-/**
- * Sends a media message (photo, video, document, or voice note) into a
- * thread. `media` is the result of mediaUpload.uploadChatMedia plus a
- * `type` field ('image' | 'video' | 'document' | 'voice') and, for voice
- * notes, a `duration` in seconds.
- */
 export async function sendMediaMessage(chatId, sender, media) {
   if (!chatId || !media || !media.url) return;
 
@@ -144,9 +128,7 @@ export async function sendMediaMessage(chatId, sender, media) {
   );
 }
 
-/** Live list of messages in one thread, oldest first. Capped to the most
- * recent 100 - see the matching note in directChatService.js's
- * subscribeMessages for why this matters and the pagination trade-off. */
+/** Live list of messages in one support thread, oldest first. Capped to the most recent 100. */
 export function subscribeMessages(chatId, callback, onError) {
   const q = query(collection(db, COLLECTION, chatId, MESSAGES), orderBy('createdAt', 'asc'), limitToLast(100));
   return onSnapshot(
@@ -165,7 +147,7 @@ export function subscribeChatMeta(chatId, callback, onError) {
   );
 }
 
-/** Live list of every customer thread, most recently active first - used by the staff Chats inbox. */
+/** Live list of every customer support thread, most recently active first - used by the staff Chats inbox. */
 export function subscribeAllChats(callback, onError) {
   const q = query(collection(db, COLLECTION), orderBy('lastMessageAt', 'desc'));
   return onSnapshot(
@@ -182,9 +164,7 @@ export async function markChatRead(chatId, role) {
   await setDoc(doc(db, COLLECTION, chatId), { [field]: 0 }, { merge: true });
 }
 
-/** Live list of every admin/superadmin/dealer/dealer - used to populate
- * the "Assign to" picker on a support thread. Sorted client-side (same
- * no-orderBy reasoning as elsewhere) so this doesn't need a composite index. */
+/** Live list of assignable admin/superadmin/dealer staff for support threads. */
 export function subscribeAssignableStaff(callback, onError) {
   const q = query(
     collection(db, 'users'),
@@ -201,10 +181,7 @@ export function subscribeAssignableStaff(callback, onError) {
   );
 }
 
-/** Assigns this thread to a specific admin/dealer so it's clear who owns
- * resolving it - shown on both the customer-facing "Support" screen queue
- * and the staff inbox. Any staff member can (re)assign, not just the one
- * currently assigned, so a superadmin can always hand a thread off. */
+/** Assigns this support thread to a specific admin/dealer. */
 export async function assignChat(chatId, staff) {
   if (!chatId || !staff || !staff.id) return;
   await setDoc(
