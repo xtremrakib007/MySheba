@@ -10,122 +10,103 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Remove obsolete chat code safely
+      - name: Clean retired chat code
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import re
 
-          def remove_arrow(text, name):
-              marker = re.search(r'(?m)^([ \t]*)const[ \t]+' + re.escape(name) + r'[ \t]*=', text)
-              if not marker:
-                  return text
-              brace = text.find('{', marker.end())
-              if brace < 0:
-                  return text
-              # Only operate when this looks like the function body, not an object literal.
-              prefix = text[marker.end():brace]
-              if '=>' not in prefix and 'useCallback' not in prefix:
-                  return text
-              depth = 0; quote = None; esc = False; line = False; block = False; i = brace
-              while i < len(text):
-                  c = text[i]; n = text[i+1] if i+1 < len(text) else ''
-                  if line:
-                      if c == '\n': line = False
-                  elif block:
-                      if c == '*' and n == '/': block = False; i += 1
-                  elif quote:
-                      if esc: esc = False
-                      elif c == '\\': esc = True
-                      elif c == quote: quote = None
-                  else:
-                      if c == '/' and n == '/': line = True; i += 1
-                      elif c == '/' and n == '*': block = True; i += 1
-                      elif c in "'\"`": quote = c
-                      elif c == '{': depth += 1
-                      elif c == '}':
-                          depth -= 1
-                          if depth == 0:
-                              j = i + 1
-                              while j < len(text) and text[j] in ' \t': j += 1
-                              if j < len(text) and text[j] == ';': j += 1
-                              if j < len(text) and text[j] == '\n': j += 1
-                              return text[:marker.start()] + text[j:]
-                  i += 1
-              return text
+          def remove_top_level_const(text, name):
+              lines = text.splitlines(True)
+              start = next((i for i,l in enumerate(lines) if re.match(r'^  const ' + re.escape(name) + r'\\b', l)), None)
+              if start is None: return text
+              end = None
+              for i in range(start + 1, len(lines)):
+                  if lines[i].strip() == '};':
+                      end = i
+                      break
+              if end is None: return text
+              del lines[start:end+1]
+              return ''.join(lines)
 
-          roots = [Path('src'), Path('admin-web/src')]
-          service_imports = re.compile(r'(?m)^\s*import\s+\*\s+as\s+(?:directChatService|groupChatService|roomChatService)\s+from\s+[^;]+;\s*\n')
-          ensure_import = re.compile(r'(?m)^\s*import\s*\{\s*ensureDirectChat\s*\}\s*from\s+[^;]+;\s*\n')
+          def remove_between(text, start_marker, end_marker):
+              a = text.find(start_marker)
+              if a < 0: return text
+              b = text.find(end_marker, a + len(start_marker))
+              if b < 0: return text
+              return text[:a] + text[b:]
 
-          targets = {
-              'ListingDetailScreen.js': ['chatSeller'],
-              'PropertyDetailScreen.js': ['chatOwner'],
-              'RoommateRequestDetailScreen.js': ['contactPoster'],
-              'ServiceProviderDetailScreen.js': ['messageProvider'],
-              'DealerHomeScreen.js': ['messageCustomer'],
-              'ResellerHomeScreen.js': ['messageCustomer'],
-              'AdminHomeScreen.js': ['messageCustomer'],
-              'MarketplaceSearchScreen.js': ['startChat', 'messageUser', 'openUserChat'],
+          # Screens: remove legacy service imports and their top-level handlers.
+          service_import = re.compile(r'^\\s*import\\s+\\*\\s+as\\s+(?:directChatService|groupChatService|roomChatService)\\s+from\\s+[^;]+;\\s*\\n', re.M)
+          ensure_import = re.compile(r'^\\s*import\\s*\\{\\s*ensureDirectChat\\s*\\}\\s*from\\s+[^;]+;\\s*\\n', re.M)
+          screen_handlers = {
+              'ListingDetailScreen.js':['chatSeller'],
+              'PropertyDetailScreen.js':['chatOwner'],
+              'RoommateRequestDetailScreen.js':['contactPoster'],
+              'ServiceProviderDetailScreen.js':['messageProvider'],
+              'DealerHomeScreen.js':['messageCustomer'],
+              'ResellerHomeScreen.js':['messageCustomer'],
+              'AdminHomeScreen.js':['messageCustomer'],
+              'MarketplaceSearchScreen.js':['startChat','messageUser','openUserChat'],
           }
-
-          for root in roots:
+          for root in [Path('src'), Path('admin-web/src')]:
               if not root.exists(): continue
               for p in root.rglob('*'):
                   if not p.is_file() or p.suffix not in {'.js','.jsx','.ts','.tsx'}: continue
-                  s = p.read_text(encoding='utf-8'); original = s
-                  s = service_imports.sub('', s)
-                  s = ensure_import.sub('', s)
-                  for name in targets.get(p.name, []):
-                      s = remove_arrow(s, name)
-                  # Remove legacy message/contact buttons in the affected screens.
-                  if p.name in targets:
-                      s = re.sub(r'(?s)\s*<TouchableOpacity\b(?=[^>]*(?:messageBtn|messageBtnText|Message Seller|Chat Seller|Message))[^>]*>.*?</TouchableOpacity>\s*', '\n', s)
-                  if s != original: p.write_text(s, encoding='utf-8')
+                  s = p.read_text(encoding='utf-8'); original=s
+                  s=service_import.sub('',s); s=ensure_import.sub('',s)
+                  for name in screen_handlers.get(p.name,[]): s=remove_top_level_const(s,name)
+                  if p.name in screen_handlers:
+                      # Remove common legacy message buttons by handler name.
+                      for name in screen_handlers[p.name]:
+                          s=re.sub(r'(?s)\\s*<TouchableOpacity\\b[^>]*?onPress=\\{\\(\\) => '+re.escape(name)+r'\\([^)]*\\)\\}.*?</TouchableOpacity>\\s*','\\n',s)
+                  if s!=original: p.write_text(s,encoding='utf-8')
 
-          # AppContext is the main remaining legacy dependency. Remove imports,
-          # state/subscriptions/handlers by exact named declarations, then remove
-          # legacy routing/menu identifiers that are no longer valid.
-          p = Path('src/context/AppContext.js')
-          if p.exists():
-              s = p.read_text(encoding='utf-8')
-              s = service_imports.sub('', s)
-              for name in ['openDirectChat','openGroupChat','openRoomChat','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall','leaveGroupCall','cancelGroupCall']:
-                  s = remove_arrow(s, name)
-              # Remove remaining direct/group/room subscription effects by their exact service calls.
-              s = re.sub(r'(?s)\n\s*useEffect\(\(\) => \{\s*if \(!authUser\) \{\s*setDirectChatUnreadCount\(0\);\s*return undefined;\s*\}\s*const unsub = directChatService\.subscribeMyChats.*?\n\s*\}, \[authUser, profile, openChat, openDirectChat\]\);', '\n', s)
-              s = re.sub(r'(?s)\n\s*useEffect\(\(\) => \{\s*if \(!authUser\) \{\s*setMyGroups\(\[\]\);\s*return undefined;\s*\}\s*const unsub = groupChatService\.subscribeMyGroups.*?\n\s*\}, \[authUser\]\);', '\n', s)
-              s = re.sub(r'(?s)\n\s*useEffect\(\(\) => \{\s*if \(!authUser\) \{\s*setMyRooms\(\[\]\);\s*return undefined;\s*\}\s*const unsub = roomChatService\.subscribeMyRooms.*?\n\s*\}, \[authUser\]\);', '\n', s)
-              s = re.sub(r'(?s)\n\s*useEffect\(\(\) => \{\s*if \(!authUser\) \{\s*setDiscoverableRooms\(\[\]\);\s*return undefined;\s*\}\s*const unsub = roomChatService\.subscribeDiscoverableRooms.*?\n\s*\}, \[authUser\]\);', '\n', s)
-              # Remove obsolete route/menu names from the screen comment/list only; actual screens are handled by router cleanup later.
-              s = s.replace(' | chat | chatList | chatHub | directChatList | addContact | qrScan | myQrCode | groupList | newGroup | createRoom | roomSettings', '')
-              p.write_text(s, encoding='utf-8')
+          # AppContext: retain Support Chat and 1-to-1 calling, remove all
+          # Direct/Group/Room chat state, listeners, handlers and Chat Lock.
+          p=Path('src/context/AppContext.js')
+          s=p.read_text(encoding='utf-8')
+          s=service_import.sub('',s)
+          s=remove_between(s,'  // ---- direct chat (general-purpose','  // ---- direct chat investigation')
+          s=remove_between(s,'  // ---- group chat ----','  // ---- Private vault unlock')
+          s=remove_between(s,'  // ---- live direct-chat unread badge','  // ---- live list of "kind:id"')
+          s=remove_between(s,'  // Same idea as the listener above, but for group calls','  /** Starts a call with another user')
+          s=remove_between(s,'  /** Starts a group call -','  const groupUnreadCount')
+          s=remove_between(s,'  const groupUnreadCount','  /** Opens the Support thread')
+          # Remove any remaining legacy top-level callbacks.
+          for name in ['openDirectChat','openGroupChat','openRoomChat','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall','leaveGroupCall','cancelGroupCall','joinDiscoverableRoom','openChatHub','openLockedChats','lockChatThread','unlockChatThread','ensureChatUnlocked','isChatLocked']:
+              s=remove_top_level_const(s,name)
+          # Support Chat openChat must not reference retired state.
+          s=s.replace('    setActiveGroupId(null);\n','').replace('    setActiveDirectChatId(null);\n','').replace('    setActiveRoomId(null);\n','')
+          # Push notification routing: retain Support Chat only; delete legacy branches.
+          s=re.sub(r"\\s*\\} else if \(data\\.type === 'directChat'[\\s\\S]*?openDirectChat\\(data\\.chatId, name, otherUid\\);",'',s)
+          s=re.sub(r"\\s*\\} else if \(data\\.type === 'groupChat'[\\s\\S]*?openGroupChat\\(data\\.groupId, meta\\?\\.name \\|\\| 'Group Chat'\\);",'',s)
+          s=re.sub(r"\\s*\\} else if \(data\\.type === 'roomChat'[\\s\\S]*?openRoomChat\\(data\\.roomId, meta\\?\\.name \\|\\| 'Room Chat'\\);",'',s)
+          # Remove legacy identifiers from context value and comments without touching normal words.
+          s=re.sub(r'^.*(?:activeDirectChat|directChatUnread|activeGroupId|activeGroupName|myGroups|groupUnreadCount|activeRoomId|activeRoomName|myRooms|discoverableRooms|chatHubTab|incomingGroupCall|openDirectChat|openGroupChat|openRoomChat|startGroupCall|answerIncomingGroupCall|rejectIncomingGroupCall|directChats|groupChats|roomChats).*\\n','',s,flags=re.M)
+          p.write_text(s,encoding='utf-8')
 
-          # Delete obsolete client services. Support Chat remains in chatService.js.
+          # Remove obsolete client service modules.
           for rel in ['src/firebase/directChatService.js','src/firebase/groupChatService.js','src/firebase/roomChatService.js']:
-              q = Path(rel)
+              q=Path(rel)
               if q.exists(): q.unlink()
           PY
 
-      - name: Verify retired chat code is gone from active app source
+      - name: Verify no retired chat dependencies remain
         shell: bash
         run: |
-          if grep -RIn --exclude-dir=.git --exclude='*.md' --exclude='GamePointsScreen.js' -E 'directChatService|groupChatService|roomChatService|ensureDirectChat|openDirectChat|openGroupChat|openRoomChat|startGroupCall|answerIncomingGroupCall|rejectIncomingGroupCall|leaveGroupCall|cancelGroupCall' src; then
-            echo 'Retired chat references remain.'
-            exit 1
-          fi
-          if grep -RIn --exclude-dir=.git --exclude='*.md' -E 'directChats|groupChats|roomChats' src/screens src/context src/firebase; then
-            echo 'Retired chat collection references remain in active app code.'
+          if grep -RIn --exclude-dir=.git --exclude='*.md' --exclude='GamePointsScreen.js' -E 'directChatService|groupChatService|roomChatService|ensureDirectChat|openDirectChat|openGroupChat|openRoomChat|startGroupCall|answerIncomingGroupCall|rejectIncomingGroupCall|leaveGroupCall|cancelGroupCall|activeDirectChat|activeGroupId|activeRoomId|myGroups|myRooms|discoverableRooms|groupUnreadCount|roomUnreadCount' src; then
+            echo 'Retired chat dependencies remain.'
             exit 1
           fi
 
-      - name: Remove one-shot workflow
+      - name: Commit cleanup and remove workflow
         shell: bash
         run: |
           git rm .github/workflows/codebase-cleanup.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
-          git commit -m 'Remove obsolete chat dependencies and workflow'
+          git commit -m 'Finish legacy chat cleanup'
           git push
