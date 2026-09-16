@@ -21,8 +21,6 @@ jobs:
           from pathlib import Path
           p=Path('/tmp/AppContext.js')
           s=p.read_text(encoding='utf-8')
-
-          # Remove retired imports.
           imports=[
             "import * as directChatService from '../firebase/directChatService';",
             "import * as groupChatService from '../firebase/groupChatService';",
@@ -30,108 +28,81 @@ jobs:
             "import * as chatLockService from '../firebase/chatLockService';",
           ]
           s='\n'.join(line for line in s.splitlines() if line.strip() not in imports)+'\n'
+          for token in ['chatHub | ','directChatList | ','addContact | ','qrScan | ','myQrCode | ','groupList | ','newGroup | ','createRoom | ','roomSettings | ','investigateChat | ']: s=s.replace(token,'')
 
-          # Remove retired navigation names from the screen documentation.
-          for token in ['chatHub | ','directChatList | ','addContact | ','qrScan | ','myQrCode | ','groupList | ','newGroup | ','createRoom | ','roomSettings | ','investigateChat | ']:
-              s=s.replace(token,'')
-
-          def section(text,start_marker,end_marker,required=True):
-              a=text.find(start_marker)
-              if a<0:
-                  if required: raise SystemExit('Missing section start: '+start_marker)
-                  return text,''
-              z=text.find(end_marker,a)
-              if z<0:
-                  raise SystemExit('Missing section end: '+end_marker)
+          def cut(text,start,end):
+              a=text.find(start)
+              if a<0: raise SystemExit('Missing: '+start)
+              z=text.find(end,a)
+              if z<0: raise SystemExit('Missing boundary: '+end)
               return text[:a]+text[z:],text[a:z]
 
-          # Preserve only the ringtone state from the retired direct-chat state block.
-          direct_start='  // ---- direct chat (general-purpose 1:1 "Chat" tab, any two accounts) ----'
-          s,direct_block=section(s,direct_start,'  // ---- marketplace (Buy & Sell) ----')
-          ringtone_lines=[]
-          for line in direct_block.splitlines():
-              if 'const [activeRingtoneContactUid' in line or 'const [activeRingtoneContactName' in line:
-                  ringtone_lines.append(line)
-          if len(ringtone_lines)!=2:
-              raise SystemExit('Ringtone state was not recovered')
-          support_marker="  const [activeChatReturnTo, setActiveChatReturnTo] = useState('chatList');"
-          s=s.replace(support_marker,support_marker+'\n\n  // ---- 1-to-1 call ringtone selection state ----\n'+'\n'.join(ringtone_lines),1)
+          # Extract the real Support openChat callback before deleting the old Chat Lock section.
+          oa=s.find('  /** Opens the Support thread')
+          if oa<0: raise SystemExit('Support openChat callback not found in known-good source')
+          ob=s.find('  /** Opens a group chat thread',oa)
+          if ob<0: raise SystemExit('Group chat callback boundary not found')
+          open_chat=s[oa:ob]
 
-          # Preserve the Support openChat callback, but remove direct/group/room chat helpers.
-          open_chat_start='  /** Opens the Support thread'
-          open_group_start='  /** Opens a group chat thread'
-          a=direct_block.find(open_chat_start)
-          if a<0: raise SystemExit('Support openChat callback not found')
-          b=direct_block.find(open_group_start,a)
-          if b<0: raise SystemExit('Group chat boundary not found')
-          open_chat=direct_block[a:b]
-          # Insert support callback after support state and ringtone state.
-          s=s.replace(support_marker+'\n\n  // ---- 1-to-1 call ringtone selection state ----\n'+'\n'.join(ringtone_lines),support_marker+'\n\n  // ---- 1-to-1 call ringtone selection state ----\n'+'\n'.join(ringtone_lines)+'\n\n'+open_chat.rstrip(),1)
+          # Preserve ringtone state from the retired direct-chat section.
+          ds='  // ---- direct chat (general-purpose 1:1 "Chat" tab, any two accounts) ----'
+          s,direct_block=cut(s,ds,'  // ---- marketplace (Buy & Sell) ----')
+          ringtone=[line for line in direct_block.splitlines() if 'const [activeRingtoneContactUid' in line or 'const [activeRingtoneContactName' in line]
+          if len(ringtone)!=2: raise SystemExit('Ringtone state not found')
+          support="  const [activeChatReturnTo, setActiveChatReturnTo] = useState('chatList');"
+          insert=support+'\n\n  // ---- 1-to-1 call ringtone selection state ----\n'+'\n'.join(ringtone)+'\n\n'+open_chat.rstrip()
+          s=s.replace(support,insert,1)
 
-          # Remove the entire group/room/chat-hub/chat-lock block while preserving private vault state.
-          s,_=section(s,'  // ---- group chat ----','  // ---- Private vault unlock')
+          # Remove group/room/chat-hub/chat-lock state and helpers, retaining private-vault state.
+          s,_=cut(s,'  // ---- group chat ----','  // ---- Private vault unlock')
 
-          # Remove group-call state.
+          # Remove incoming group-call state and listener.
           s='\n'.join(line for line in s.splitlines() if 'const [incomingGroupCall' not in line)+'\n'
+          marker='  // Same idea as the listener above, but for group calls'
+          if marker in s: s,_=cut(s,marker,'  /** Starts a call with another user')
 
-          # Remove group-call listener effect.
-          s,_=section(s,'  // Same idea as the listener above, but for group calls','  /** Starts a call with another user',required=False)
-
-          # Remove group-call callbacks and any group unread/chat-lock helper code after them.
-          group_call_marker='  /** Starts a group call'
-          if group_call_marker in s:
-              s,_=section(s,group_call_marker,'  /** Opens the Support thread',required=False)
-          # The Support openChat callback was already restored earlier; group helper block may have been removed.
-
-          # If the group-call section was immediately followed by Chat Lock helpers, remove them too.
+          # Remove group-call callbacks and trailing group unread/chat-lock helpers.
+          if '  /** Starts a group call' in s:
+              s,_=cut(s,'  /** Starts a group call','  // ---- Chat Lock helpers')
           if '  // ---- Chat Lock helpers' in s:
-              s,_=section(s,'  // ---- Chat Lock helpers','  /** Opens the Support thread',required=False)
+              s,_=cut(s,'  // ---- Chat Lock helpers','  /** Opens the Support thread')
 
-          # Clean notification routing: keep Support, top-up and support-ticket notifications only.
-          notif='  useEffect(() => {\n    if (!authUser) return undefined;\n\n    const handleResponse = async (response) => {'
-          na=s.find(notif)
-          if na>=0:
-              nz=s.find('  }, [authUser, profile, openChat, openDirectChat, openGroupChat, openRoomChat, setAdminTab, setScreen]);',na)
-              if nz<0: raise SystemExit('Notification effect boundary not found')
-              block=s[na:nz+len('  }, [authUser, profile, openChat, openDirectChat, openGroupChat, openRoomChat, setAdminTab, setScreen]);')]
-              # Remove the direct/group/room branch chain only.
-              chain_start=block.find("        } else if (data.type === 'directChat'")
-              chain_end=block.find("        } else if (data.type === 'topup'",chain_start)
-              if chain_start>=0 and chain_end>=0:
-                  block=block[:chain_start]+block[chain_end:]
-              block=block.replace('  }, [authUser, profile, openChat, openDirectChat, openGroupChat, openRoomChat, setAdminTab, setScreen]);','  }, [authUser, profile, openChat, setAdminTab, setScreen]);')
-              s=s[:na]+block+s[nz+len('  }, [authUser, profile, openChat, openDirectChat, openGroupChat, openRoomChat, setAdminTab, setScreen]);'):]
+          # Notification routing: keep Support, top-up and support-ticket paths only.
+          start=s.find('  useEffect(() => {\n    if (!authUser) return undefined;\n\n    const handleResponse = async (response) => {')
+          if start>=0:
+              end_marker='  }, [authUser, profile, openChat, openDirectChat, openGroupChat, openRoomChat, setAdminTab, setScreen]);'
+              end=s.find(end_marker,start)
+              if end<0: raise SystemExit('Notification effect end not found')
+              block=s[start:end+len(end_marker)]
+              a=block.find("        } else if (data.type === 'directChat'")
+              z=block.find("        } else if (data.type === 'topup'",a)
+              if a>=0 and z>=0: block=block[:a]+block[z:]
+              block=block.replace(end_marker,'  }, [authUser, profile, openChat, setAdminTab, setScreen]);')
+              s=s[:start]+block+s[end+len(end_marker):]
 
-          # Remove any direct/group/room chat fields from the Context value by section boundaries.
-          value_start=s.find('  const value = {')
-          if value_start<0: raise SystemExit('Context value not found')
-          value_end=s.find('  };\n\n  return <AppContext.Provider',value_start)
-          if value_end<0: raise SystemExit('Context value end not found')
-          value=s[value_start:value_end]
-          value=value.replace('    // direct chat\n','')
-          # Remove direct/investigation value fields until marketplace comment.
-          a=value.find('    activeDirectChatId')
-          if a>=0:
-              z=value.find('    // marketplace',a)
+          # Context value cleanup.
+          vs=s.find('  const value = {')
+          ve=s.find('  };\n\n  return <AppContext.Provider',vs)
+          if vs<0 or ve<0: raise SystemExit('Context value boundaries missing')
+          value=s[vs:ve]
+          if '    activeDirectChatId' in value:
+              a=value.find('    activeDirectChatId'); z=value.find('    // marketplace',a)
               if z<0: raise SystemExit('Marketplace value boundary missing')
               value=value[:a]+value[z:]
-          # Remove group/room/chat-hub/lock value fields.
-          a=value.find('    // group chat')
-          if a>=0:
-              z=value.find('    // private vault unlock',a)
+          if '    // group chat' in value:
+              a=value.find('    // group chat'); z=value.find('    // private vault unlock',a)
               if z<0: raise SystemExit('Private vault value boundary missing')
               value=value[:a]+value[z:]
           value=value.replace('    incomingGroupCall, startGroupCall, answerIncomingGroupCall, rejectIncomingGroupCall,\n','')
-          s=s[:value_start]+value+s[value_end:]
+          s=s[:vs]+value+s[ve:]
 
-          # Final forbidden-symbol validation for AppContext only.
           forbidden=['directChatService','groupChatService','roomChatService','chatLockService','openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','subscribeIncomingGroupCalls','incomingGroupCall','activeDirectChat','activeGroupId','activeRoomId','myGroups','myRooms','chatHubTab','investigateChat','lockChatThread','unlockChatThread','joinDiscoverableRoom']
           bad=[x for x in forbidden if x in s]
           if bad: raise SystemExit('Retired AppContext refs remain: '+', '.join(bad))
           required=['activeChatId','activeChatName','chatUnreadCount','activeChatReturnTo','openChat','activeRingtoneContactUid','activeRingtoneContactName','activeCall','incomingCall','startCall','answerIncomingCall','rejectIncomingCall','callService']
           missing=[x for x in required if x not in s]
           if missing: raise SystemExit('Required Support/1-to-1 calling refs missing: '+', '.join(missing))
-          if len(s)<100000: raise SystemExit('Unexpectedly short rebuilt AppContext: '+str(len(s)))
+          if len(s)<100000: raise SystemExit('Unexpectedly short AppContext: '+str(len(s)))
           p.write_text(s,encoding='utf-8')
           print('Rebuilt AppContext bytes:',len(s))
           PY
