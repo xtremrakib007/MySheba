@@ -30,7 +30,7 @@ jobs:
           }
           s='\n'.join(x for x in s.splitlines() if x.strip() not in imports)+'\n'
           for token in ['chatHub | ','directChatList | ','addContact | ','qrScan | ','myQrCode | ','groupList | ','newGroup | ','createRoom | ','roomSettings | ','investigateChat | ']: s=s.replace(token,'')
-          states=['activeDirectChatId','activeDirectChatName','activeDirectChatUid','directChatUnreadCount','chatDraftText','activeInvestigateChatId','activeInvestigateReport','lockedChatIds','chatVaultUnlocked','activeGroupId','activeGroupName','myGroups','groupUnreadCount','activeRoomId','activeRoomName','myRooms','discoverableRooms','chatHubTab','incomingGroupCall']
+          states=['activeDirectChatId','activeDirectChatName','activeDirectChatUid','directChatUnreadCount','chatDraftText','activeInvestigateChatId','activeInvestigateReport','activeGroupId','activeGroupName','myGroups','groupUnreadCount','activeRoomId','activeRoomName','myRooms','discoverableRooms','chatHubTab','lockedChatIds','chatVaultUnlocked','incomingGroupCall']
           s=''.join(x for x in s.splitlines(True) if not any(('const ['+n) in x for n in states))
           def remove_callback(t,n):
             marker='const '+n+' = useCallback'; a=t.find(marker)
@@ -52,19 +52,51 @@ jobs:
                   while j<len(t) and t[j] in ' ;\t\r\n':j+=1
                   return t[:a]+t[j:]
             raise SystemExit('unbalanced callback '+n)
-          for n in ['openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall','openInvestigateChat']:
+          for n in ['openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall','openInvestigateChat','lockChatThread','unlockChatThread']:
             while 'const '+n+' = useCallback' in s:s=remove_callback(s,n)
-          retired=['activeDirectChatId','activeDirectChatName','activeDirectChatUid','directChatUnreadCount','openDirectChat','activeInvestigateChatId','activeInvestigateReport','openInvestigateChat','chatDraftText','activeGroupId','activeGroupName','myGroups','groupUnreadCount','openGroupChat','activeRoomId','activeRoomName','myRooms','discoverableRooms','openRoomChat','chatHubTab','openChatHub','incomingGroupCall','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall','investigateChat']
+          retired_services=['directChatService','groupChatService','roomChatService','subscribeIncomingGroupCalls','chatLockService']
+          while True:
+            marker='  useEffect(() => {'; a=s.find(marker); removed=False
+            while a>=0:
+              b=s.find('{',a);d=0;q=None;e=False;close=None
+              for i in range(b,len(s)):
+                c=s[i]
+                if q:
+                  if e:e=False
+                  elif c=='\\':e=True
+                  elif c==q:q=None
+                  continue
+                if c in "'\"`":q=c
+                elif c=='{':d+=1
+                elif c=='}':
+                  d-=1
+                  if d==0:close=i;break
+              if close is None:break
+              z=s.find(');',close)
+              if z<0:break
+              block=s[a:z+2]
+              if any(x in block for x in retired_services):s=s[:a]+s[z+2:];removed=True;break
+              a=s.find(marker,z+2)
+            if not removed:break
+          for header in ['  // ---- direct chat (general-purpose','  // ---- direct chat investigation','  // ---- Chat Lock']:
+            a=s.find(header)
+            if a>=0:
+              z=s.find('  // ---- marketplace',a)
+              if z<0:z=s.find('  // ---- 1-to-1 calling',a)
+              if z>=0:s=s[:a]+s[z:]
+          retired=['activeDirectChatId','activeDirectChatName','activeDirectChatUid','directChatUnreadCount','openDirectChat','activeInvestigateChatId','activeInvestigateReport','openInvestigateChat','chatDraftText','activeGroupId','activeGroupName','myGroups','groupUnreadCount','openGroupChat','activeRoomId','activeRoomName','myRooms','discoverableRooms','openRoomChat','chatHubTab','openChatHub','incomingGroupCall','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall','investigateChat','lockChatThread','unlockChatThread','lockedChatIds','chatVaultUnlocked']
           s=''.join(x for x in s.splitlines(True) if not any(n in x for n in retired))
-          forbidden=['directChatService','groupChatService','roomChatService','chatLockService','openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','subscribeIncomingGroupCalls','incomingGroupCall','activeDirectChat','activeGroupId','activeRoomId','myGroups','myRooms','chatHubTab','investigateChat']
+          # Remove any remaining retired-service/comment lines after structural blocks are gone.
+          s=''.join(x for x in s.splitlines(True) if not any(n in x for n in retired_services))
+          forbidden=['directChatService','groupChatService','roomChatService','chatLockService','openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','subscribeIncomingGroupCalls','incomingGroupCall','activeDirectChat','activeGroupId','activeRoomId','myGroups','myRooms','chatHubTab','investigateChat','lockChatThread','unlockChatThread']
           bad=[n for n in forbidden if n in s]
-          if bad: raise SystemExit('retired refs remain: '+', '.join(bad))
+          if bad:raise SystemExit('retired refs remain: '+', '.join(bad))
           required=['activeChatId','chatUnreadCount','activeRingtoneContactUid','activeRingtoneContactName','activeCall','incomingCall','callService']
           missing=[n for n in required if n not in s]
-          if missing: raise SystemExit('required refs missing: '+', '.join(missing))
-          if len(s)<20000: raise SystemExit('unexpectedly short AppContext: '+str(len(s)))
+          if missing:raise SystemExit('required refs missing: '+', '.join(missing))
+          if len(s)<20000:raise SystemExit('unexpectedly short AppContext: '+str(len(s)))
           Path('src/context/AppContext.js').write_text(s,encoding='utf-8')
-          print('AppContext verified:',len(s),'bytes')
+          print('verified AppContext bytes',len(s))
           PY
           git diff --check
       - name: Commit verified AppContext
