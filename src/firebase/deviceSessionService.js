@@ -64,5 +64,6 @@ export async function listTrustedDevices() {
 
 export async function revokeTrustedDevice(deviceId) {
   const fn = httpsCallable(functions, 'revokeTrustedDevice');
-  await fn({ deviceId });
+  const { data } = await fn({ deviceId });
+  return data || {};
 }
