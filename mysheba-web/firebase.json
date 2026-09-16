@@ -69,13 +69,6 @@
         }
       },
       {
-        "source": "/listing/**",
-        "function": {
-          "functionId": "listingRedirect",
-          "region": "asia-southeast1"
-        }
-      },
-      {
         "source": "/verifyEmail",
         "destination": "/verifyEmail/index.html"
       },
