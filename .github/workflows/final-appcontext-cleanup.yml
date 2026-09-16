@@ -1,4 +1,4 @@
-name: Final AppContext cleanup v2
+name: Final AppContext cleanup v3
 on:
   push:
     branches: [main]
@@ -45,7 +45,9 @@ jobs:
           if marker in s: s,_=cut(s,marker,'  /** Starts a call with another user')
           if '  /** Starts a group call' in s: s,_=cut(s,'  /** Starts a group call','  // ---- Chat Lock helpers')
           if '  // ---- Chat Lock helpers' in s: s,_=cut(s,'  // ---- Chat Lock helpers','  /** Opens the Support thread')
-          # Remove all retired live-list effects; keep the following private-vault AppState effect.
+          # Remove all remaining group/direct/room helper callbacks after Support openChat.
+          if '  /** Opens a group chat thread' in s:
+              s,_=cut(s,'  /** Opens a group chat thread','  // ---- push notification taps')
           effect_ranges=[
             ('  // ---- live direct-chat unread badge','  // ---- live list of groups'),
             ('  // ---- live list of groups','  // ---- live list of rooms'),
@@ -55,7 +57,6 @@ jobs:
           ]
           for a,b in effect_ranges:
             if a in s: s,_=cut(s,a,b)
-          # Remove retired notification branches, keeping Support/top-up/support-ticket/call handling.
           start=s.find('  useEffect(() => {\n    if (!authUser) return undefined;\n\n    const handleResponse = async (response) => {')
           if start>=0:
             end_marker='  }, [authUser, profile, openChat, openDirectChat, openGroupChat, openRoomChat, setAdminTab, setScreen]);'
@@ -66,7 +67,6 @@ jobs:
               if a>=0 and z>=0: block=block[:a]+block[z:]
               block=block.replace(end_marker,'  }, [authUser, profile, openChat, setAdminTab, setScreen]);')
               s=s[:start]+block+s[end+len(end_marker):]
-          # Context value cleanup.
           vs=s.find('  const value = {'); ve=s.find('  };\n\n  return <AppContext.Provider',vs)
           if vs<0 or ve<0: raise SystemExit('Context value boundaries missing')
           value=s[vs:ve]
