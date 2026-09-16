@@ -1,0 +1,55 @@
+name: Fix userManagement
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-usermanagement.yml'
+  workflow_dispatch:
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Remove unreachable and orphaned legacy code
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+          p = Path('functions/userManagement.js')
+          s = p.read_text()
+          old = """      if (callerRole === 'dealer') {\n        dealerId = callerUid;\n      } else if (callerRole === 'dealer') {\n        dealerId = callerProfile.dealerId || null;\n"""
+          new = """      if (callerRole === 'dealer') {\n        dealerId = callerUid;\n"""
+          if old not in s:
+            raise SystemExit('Duplicate dealer branch not found')
+          s = s.replace(old, new, 1)
+
+          start = s.find("    // Everything else (login, wallet, chat, other services) is untouched.\n")
+          end = s.find("  if (action === 'downgradeRole') {", start)
+          if start < 0 or end < 0:
+            raise SystemExit('Orphaned ban block boundaries not found')
+          s = s[:start] + s[end:]
+
+          s = s.replace("//   - a dealer/dealer creating a customer -> always their own pool", "//   - a dealer creating a customer -> always their own pool")
+          s = s.replace("//   - a dealer/dealer creating their own customer has no", "//   - a dealer creating their own customer has no")
+          s = s.replace("//     dealer/dealer creating their own customer has no", "//     dealer creating their own customer has no")
+          s = s.replace("An admin can ban customers/dealers/dealers", "An admin can suspend customers/dealers")
+          p.write_text(s)
+      - name: Syntax check and verify cleanup
+        run: |
+          node --check functions/userManagement.js
+          ! grep -n "else if (callerRole === 'dealer')" functions/userManagement.js
+          ! grep -n "Everything else (login, wallet, chat" functions/userManagement.js
+          ! grep -n "const { targetUid, banned, reason }" functions/userManagement.js
+      - name: Commit and remove workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add functions/userManagement.js
+          git rm -f .github/workflows/fix-usermanagement.yml
+          git commit -m 'fix: clean unreachable and orphaned user management code'
+          git push
