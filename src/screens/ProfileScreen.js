@@ -353,7 +353,6 @@ const result = await ImagePicker.launchImageLibraryAsync({
               </TouchableOpacity>
             )}
           </View>
-          <Text style={styles.fieldNote}>Sets which homepage layout and community content you see.</Text>
         </View>
 
         <View style={styles.card}>

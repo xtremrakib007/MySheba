@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Cloud Functions for MySheba - sends Expo push notifications when transactions, top-ups, inquiries, or chat messages change.",
-  "main": "index.js",
+  "main": "secureIndexV2.js",
   "engines": {
     "node": "22"
   },

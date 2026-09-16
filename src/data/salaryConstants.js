@@ -91,7 +91,6 @@ export const RECURRENCE_TYPES = {
 // deductions are freeform + Add Allowance / + Add Deduction, never a
 // fixed enum, since "not every foreign worker has the same deductions."
 export const SUGGESTED_ALLOWANCES = ['Housing Allowance', 'Transport Allowance', 'Food Allowance'];
-export const SUGGESTED_DEDUCTIONS = ['EPF', 'SOCSO', 'EIS', 'PCB / Tax', 'Accommodation', 'Advance'];
 
 export const CURRENCY = 'RM';
 

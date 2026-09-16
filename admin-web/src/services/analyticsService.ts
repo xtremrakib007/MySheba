@@ -1,10 +1,6 @@
 // Admin > Analytics — Overview half ported near-verbatim from the mobile
-// app's src/firebase/analyticsService.js (same reasoning as that file:
-// reads collections every other module already writes to, so nothing new
-// needs to stay in sync). Activity Logs half wraps logService.js's three
-// subscriptions - superadmin-only per firestore.rules, unlike Overview
-// which any admin can see (isAdmin() blanket read on every collection it
-// touches).
+// app's src/firebase/analyticsService.js. Activity Logs half wraps
+// logService.js's three subscriptions.
 
 import {
   collection,
@@ -26,28 +22,10 @@ import { db, auth } from '../firebase/config';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// Mirrors REPORT_KINDS from marketplaceModerationService.js exactly -
-// five report collections, one per module. Worth flagging separately:
-// the existing Marketplace Moderation page in this admin web app only
-// reads 'marketplaceReports' (the 'listing' kind) - it doesn't yet cover
-// property/roommate/service/community reports. That's a pre-existing gap
-// in that page, not something this file should paper over; Analytics
-// counts against the real five so its numbers stay honest even though
-// the moderation queue itself doesn't act on all of them yet.
 const REPORT_KINDS: Record<string, { label: string; collection: string }> = {
-  listing: { label: 'Buy & Sell', collection: 'marketplaceReports' },
-  property: { label: 'Accommodation', collection: 'propertyReports' },
-  roommate: { label: 'Room Sharing', collection: 'roommateReports' },
-  service: { label: 'Local Services', collection: 'serviceProviderReports' },
-  community: { label: 'Community', collection: 'communityReports' },
 };
 
 const MODULES: Record<string, { label: string; icon: string; collection: string; closedStatus: string | null; closedLabel: string | null }> = {
-  listings: { label: 'Buy & Sell', icon: '🛒', collection: 'marketplaceListings', closedStatus: 'sold', closedLabel: 'Sold' },
-  properties: { label: 'Accommodation', icon: '🏠', collection: 'properties', closedStatus: 'rented', closedLabel: 'Rented' },
-  roommates: { label: 'Room Sharing', icon: '👥', collection: 'roommateRequests', closedStatus: 'closed', closedLabel: 'Closed' },
-  services: { label: 'Local Services', icon: '🧰', collection: 'serviceProviders', closedStatus: null, closedLabel: null },
-  community: { label: 'Community', icon: '📢', collection: 'communityPosts', closedStatus: null, closedLabel: null },
 };
 
 async function countOf(collectionName: string, ...constraints: any[]): Promise<number> {
@@ -111,17 +89,13 @@ export interface ReportStats {
 async function getReportStats(): Promise<ReportStats> {
   const kinds = Object.entries(REPORT_KINDS);
   const counts = await Promise.all(kinds.map(([, cfg]) => countOf(cfg.collection)));
-  const resolvedCounts = await Promise.all(
-    kinds.map(([, cfg]) => countOf(cfg.collection, where('status', '==', 'resolved')))
-  );
+  const resolvedCounts = await Promise.all(kinds.map(([, cfg]) => countOf(cfg.collection, where('status', '==', 'resolved'))));
   const byKind = kinds.map(([kind, cfg], i) => ({ kind, label: cfg.label, total: counts[i], open: counts[i] - resolvedCounts[i] }));
   return { total: counts.reduce((a, b) => a + b, 0), open: byKind.reduce((a, k) => a + k.open, 0), byKind };
 }
 
 async function getReviewStats(): Promise<{ count: number; avg: number }> {
   const [sellerSnap, providerSnap] = await Promise.all([
-    getDocs(collection(db, 'marketplaceSellerStats')),
-    getDocs(query(collection(db, 'serviceProviders'))),
   ]);
   let count = 0;
   let sum = 0;
@@ -138,10 +112,7 @@ async function getReviewStats(): Promise<{ count: number; avg: number }> {
   return { count, avg: count > 0 ? sum / count : 0 };
 }
 
-export interface TrendPoint {
-  label: string;
-  count: number;
-}
+export interface TrendPoint { label: string; count: number; }
 
 async function getWeeklyTrend(): Promise<TrendPoint[]> {
   const days = Array.from({ length: 7 }, (_, i) => {
@@ -153,46 +124,33 @@ async function getWeeklyTrend(): Promise<TrendPoint[]> {
   const totals = days.map(() => 0);
   const weekStart = Timestamp.fromMillis(days[0].getTime());
 
-  await Promise.all(
-    Object.values(MODULES).map(async (cfg) => {
-      try {
-        const snap = await getDocs(
-          query(collection(db, cfg.collection), where('createdAt', '>=', weekStart), orderBy('createdAt', 'asc'), limit(500))
-        );
-        snap.forEach((d) => {
-          const ts = d.data().createdAt;
-          if (!ts?.seconds) return;
-          const dayIdx = Math.floor((ts.seconds * 1000 - weekStart.toMillis()) / DAY_MS);
-          if (dayIdx >= 0 && dayIdx < 7) totals[dayIdx] += 1;
-        });
-      } catch (err) {
-        console.warn(`Could not fetch weekly trend for ${cfg.collection}:`, err);
-      }
-    })
-  );
+  await Promise.all(Object.values(MODULES).map(async (cfg) => {
+    try {
+      const snap = await getDocs(query(collection(db, cfg.collection), where('createdAt', '>=', weekStart), orderBy('createdAt', 'asc'), limit(500)));
+      snap.forEach((d) => {
+        const ts = d.data().createdAt;
+        if (!ts?.seconds) return;
+        const dayIdx = Math.floor((ts.seconds * 1000 - weekStart.toMillis()) / DAY_MS);
+        if (dayIdx >= 0 && dayIdx < 7) totals[dayIdx] += 1;
+      });
+    } catch (err) {
+      console.warn(`Could not fetch weekly trend for ${cfg.collection}:`, err);
+    }
+  }));
 
   return days.map((d, i) => ({ label: d.toLocaleDateString(undefined, { weekday: 'short' }), count: totals[i] }));
 }
 
-export interface CategoryCount {
-  category: string;
-  count: number;
-}
+export interface CategoryCount { category: string; count: number; }
 
 async function getTopCategories(): Promise<CategoryCount[]> {
   try {
-    const snap = await getDocs(
-      query(collection(db, 'marketplaceListings'), where('status', '==', 'active'), orderBy('createdAt', 'desc'), limit(500))
-    );
     const tally: Record<string, number> = {};
     snap.forEach((d) => {
       const c = d.data().category || 'Other';
       tally[c] = (tally[c] || 0) + 1;
     });
-    return Object.entries(tally)
-      .map(([category, count]) => ({ category, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
+    return Object.entries(tally).map(([category, count]) => ({ category, count })).sort((a, b) => b.count - a.count).slice(0, 5);
   } catch (err) {
     console.warn('Could not fetch top categories:', err);
     return [];
@@ -217,7 +175,7 @@ export async function getDashboard(): Promise<AnalyticsDashboard> {
     getReviewStats().catch(() => ({ count: 0, avg: 0 })),
     getWeeklyTrend().catch(() => []),
     getTopCategories().catch(() => []),
-    countOf('directChats'),
+    countOf('chats'),
   ]);
   return { modules, users, reports, reviews, trend, topCategories, conversations };
 }
@@ -227,10 +185,7 @@ export async function getDashboard(): Promise<AnalyticsDashboard> {
 // errorLog/userAuditLog). Ports logService.js's three subscriptions.
 // ---------------------------------------------------------------------
 
-export interface LogEntry {
-  id: string;
-  [key: string]: unknown;
-}
+export interface LogEntry { id: string; [key: string]: unknown; }
 
 function mapLog(d: QueryDocumentSnapshot<DocumentData>): LogEntry {
   const data = d.data();

@@ -1,4 +1,3 @@
-# Merge: phase10 (Social Feed/Gift/Country Homepage/Tier) + combined lineage's Biometric opt-in
 
 ## Base
 `mysheba-phase10-backup` (your device's working copy, v5.4.0.5, uncommitted
@@ -40,9 +39,6 @@ in phase10 before this merge.
   instead of direct field access, which is equivalent but slightly safer.
 
 ## Not touched
-Everything else in phase10 — Social Feed (`SocialFeedScreen.js`,
-`socialFeedService.js`, `CreateSocialPostScreen.js`,
-`SocialPostDetailScreen.js`), Country Homepage
 (`homepageConfigService.js`, `CountryModal.js`), Game Point Gifting
 (`GamePointsGiftScreen.js`), and Tier/Level (`TierPromotionsScreen.js`,
 `progressionService.js`) — is untouched and carried through as-is.

@@ -126,7 +126,6 @@ export default {
     visa: 'Visa',
     mydigital: 'Kad Ketibaan Malaysia',
     passport: 'Pasport',
-    marketplace: 'Pasar',
     myDocuments: 'Dokumen Saya',
     salary: 'Gaji & OT',
     esim: 'MY e-SIM',

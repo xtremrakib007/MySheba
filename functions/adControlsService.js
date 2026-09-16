@@ -40,10 +40,8 @@ const VALID_FEATURE_IDS = [
   'remittance',
   'air_ticket',
   'jobs',
-  'accommodation',
   'buy_sell',
   'services',
-  'community',
   'help_support',
 ];
 

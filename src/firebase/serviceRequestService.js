@@ -1,8 +1,6 @@
-// Local Services > "Service Request" (Marketplace PRD sitemap). A
 // customer sends a provider a lead with a short message - mirrors
 // inquiryService.js's new -> contacted -> closed status flow rather than
 // being a live chat (though the provider can always open Direct Chat with
-// the customer separately, same as the other three Marketplace modules'
 // "contact" buttons).
 //
 // Data model:

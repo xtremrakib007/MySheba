@@ -13,32 +13,15 @@ import PromptModal from '../components/PromptModal';
 import AttachFileModal from '../components/AttachFileModal';
 import HeaderDecor from '../components/HeaderDecor';
 import * as transactionService from '../firebase/transactionService';
-import * as directChatService from '../firebase/directChatService';
 import * as mediaUpload from '../firebase/mediaUpload';
 import * as inquiryService from '../firebase/inquiryService';
 
-// Reseller dashboard: a customer who registered under this reseller's code
-// has their Recharge/Internet/Remittance orders land here first (resellerId,
-// no dealerId yet - see transactionService.createTransaction). A reseller
-// has a real per-order choice while an order is still unforwarded (dealerId
-// == null, see firestore.rules): Accept/Reject/Complete it themselves, OR
-// forward it to a specific dealer (assignDealer, reused from the admin
-// "Appoint Dealer" flow). The moment it's forwarded it leaves the
-// reseller's actionable queues and becomes read-only under the
-// "Sent to Dealer" tab.
-//
-// Phase 10 service-tier split: Reseller no longer touches Mobile Banking
-// (that's Dealer-only now, see firestore.rules' canHandleTransaction()) -
-// resellerTxs itself only ever contains Recharge/Internet/Remittance (see
-// AppContext.js's broadcast-transactions filter). Reseller also now owns
-// Flight inquiries (the "Flight Inquiries" tab below) - Bus/Train are
-// WebView bookings and never reach any staff queue.
 const FEATURES = [
   { key: 'pending', icon: '⏳', bg: '#FFF8E1', name: 'Pending' },
   { key: 'processing', icon: '🔄', bg: '#E3F2FD', name: 'Processing' },
   { key: 'completed', icon: '✅', bg: '#E8F5E9', name: 'Completed' },
   { key: 'inquiries', icon: '✈️', bg: '#E8EAF6', name: 'Flight Inquiries' },
-  ];
+];
 
 const BADGE_COLORS = {
   pending: { bg: '#FFF8E1', text: '#F57F17' },
@@ -49,7 +32,6 @@ const BADGE_COLORS = {
   closed: { bg: '#E8F5E9', text: '#2E7D32' },
 };
 
-/** Same idea as formatTxCopy() elsewhere but for a Flight inquiry. */
 function formatInquiryCopy(inq) {
   const lines = [
     `Type: ${inq.type || ''}`,
@@ -70,18 +52,17 @@ export default function ResellerHomeScreen() {
   const styles = createStyles(colors);
   const {
     resellerTxs, resellerTab, setResellerTab, logout, setScreen, openSidebar,
-    authUser, profile, openDirectChat, inquiries,
+    authUser,
+    inquiries,
     setHomeBackInterceptor,
     resellerViewingSection: viewingSection, setResellerViewingSection: setViewingSection,
   } = useApp();
 
   const [busyId, setBusyId] = useState(null);
   const [rejectId, setRejectId] = useState(null);
-  const [pinId, setPinId] = useState(null); // { id, service }
+  const [pinId, setPinId] = useState(null);
   const [receiptTxId, setReceiptTxId] = useState(null);
-  const [messagingId, setMessagingId] = useState(null);
   const [detailTx, setDetailTx] = useState(null);
-  const [messagingInquiryId, setMessagingInquiryId] = useState(null);
   const [ticketInquiryId, setTicketInquiryId] = useState(null);
 
   useEffect(() => {
@@ -95,14 +76,10 @@ export default function ResellerHomeScreen() {
     return () => setHomeBackInterceptor(null);
   }, [viewingSection, setHomeBackInterceptor]);
 
-  // Resellers share the same broadcast pool as Dealers. A claimed order is
-  // still visible, but only the accepter can complete it.
   const pendingTxs = resellerTxs.filter((t) => t.status === 'pending' && !t.rejectedBy?.[authUser?.uid]);
   const processingTxs = resellerTxs.filter((t) => t.status === 'processing' && t.claimedBy === authUser?.uid);
   const completedTxs = resellerTxs.filter((t) => t.status === 'completed' && t.claimedBy === authUser?.uid);
-
   const newInquiriesCount = inquiries.filter((i) => (i.status || 'new') === 'new').length;
-
   const counts = {
     pending: pendingTxs.length,
     processing: processingTxs.length,
@@ -111,7 +88,6 @@ export default function ResellerHomeScreen() {
   };
   const listByTab = { pending: pendingTxs, processing: processingTxs, completed: completedTxs };
   const visibleTxs = listByTab[resellerTab] || [];
-
   const featureBadges = { pending: counts.pending || undefined, processing: counts.processing || undefined, inquiries: counts.inquiries || undefined };
   const features = FEATURES.map((f) => ({ ...f, badge: featureBadges[f.key] }));
   const activeFeature = features.find((f) => f.key === resellerTab);
@@ -177,57 +153,6 @@ export default function ResellerHomeScreen() {
     }
   };
 
-  const messageCustomer = async (tx) => {
-    if (!tx.customerId) {
-      showAlert('MySheba', 'This order has no customer account attached.');
-      return;
-    }
-    setMessagingId(tx.id);
-    try {
-      const customerName = tx.customerPhone || 'Customer';
-      const chatId = await directChatService.ensureDirectChat(
-        { uid: authUser.uid, name: profile?.name || 'Reseller' },
-        { uid: tx.customerId, name: customerName }
-      );
-      openDirectChat(chatId, customerName, tx.customerId, `Hi, regarding your ${tx.service} order (MYR ${Number(tx.total || 0).toFixed(2)}) - `);
-    } catch (e) {
-      showAlert('MySheba', 'Could not start this conversation. Please try again.');
-    } finally {
-      setMessagingId(null);
-    }
-  };
-
-  /** "Contact" opens an in-app chat thread with the customer who submitted
-   * the flight inquiry, prefilled with the trip reference. Falls back to an
-   * alert if the inquiry has no linked customer account (e.g. a guest
-   * submission). Same pattern as AdminHomeScreen's messageInquiry. */
-  const messageInquiry = async (inq) => {
-    if (!inq.customerId) {
-      showAlert('MySheba', 'This inquiry has no customer account attached to message in-app. Use Call or WhatsApp instead.');
-      return;
-    }
-    setMessagingInquiryId(inq.id);
-    try {
-      await inquiryService.updateInquiryStatus(inq.id, 'contacted');
-      const customerName = inq.name || inq.phone || 'Customer';
-      const chatId = await directChatService.ensureDirectChat(
-        { uid: authUser.uid, name: profile?.name || 'Reseller' },
-        { uid: inq.customerId, name: customerName }
-      );
-      openDirectChat(
-        chatId,
-        customerName,
-        inq.customerId,
-        `Hi ${inq.name || ''}, regarding your ${inq.type} inquiry (${inq.from} → ${inq.to} · ${inq.date}${inq.time ? ` · ${inq.time}` : ''}) - `
-      );
-    } catch (e) {
-      showAlert('MySheba', 'Could not start this conversation. Please try again.');
-    } finally {
-      setMessagingInquiryId(null);
-    }
-  };
-
-  /** Plain phone call - marks the inquiry contacted too, since a call is just as much "contact" as a chat message. */
   const callInquiry = async (inq) => {
     try {
       await inquiryService.updateInquiryStatus(inq.id, 'contacted');
@@ -241,7 +166,6 @@ export default function ResellerHomeScreen() {
     }
   };
 
-  /** Opens WhatsApp with the customer's number, prefilled with the trip reference. */
   const whatsappInquiry = async (inq) => {
     if (!inq.phone) {
       showAlert('MySheba', 'No phone number on this inquiry.');
@@ -249,9 +173,7 @@ export default function ResellerHomeScreen() {
     }
     try {
       await inquiryService.updateInquiryStatus(inq.id, 'contacted');
-    } catch (e) {
-      // non-fatal - still open WhatsApp even if the status update fails
-    }
+    } catch (e) {}
     const digits = inq.phone.replace(/[^\d]/g, '');
     const msg = encodeURIComponent(
       `Hi ${inq.name || ''}, this is MySheba regarding your ${inq.type} inquiry (${inq.from} → ${inq.to} · ${inq.date}${inq.time ? ` · ${inq.time}` : ''}).`
@@ -261,10 +183,6 @@ export default function ResellerHomeScreen() {
     });
   };
 
-  /** Every inquiry a reseller handles is Flight (resellerHome only ever
-   * subscribes to type == 'flight', see AppContext.js), so closing always
-   * needs a ticket attachment - unlike AdminHomeScreen's closeInquiry,
-   * there's no plain-close branch for Bus/Train here. */
   const closeInquiry = (inq) => {
     setTicketInquiryId(inq.id);
   };
@@ -317,8 +235,6 @@ export default function ResellerHomeScreen() {
       <ScrollView contentContainerStyle={styles.list}>
         {!viewingSection && (
           <>
-            {/* Same home-page banner slider every other role sees - see
-                src/components/BannerSlider.js. */}
             <BannerSlider />
             <ServiceGrid
               extraTiles={[
@@ -363,13 +279,6 @@ export default function ResellerHomeScreen() {
                   {inq.status !== 'closed' && (
                     <>
                       <View style={styles.actions}>
-                        <TouchableOpacity
-                          style={styles.primaryBtn}
-                          onPress={() => messageInquiry(inq)}
-                          disabled={messagingInquiryId === inq.id}
-                        >
-                          <Text style={styles.actionBtnText}>{messagingInquiryId === inq.id ? '…' : '💬 Contact'}</Text>
-                        </TouchableOpacity>
                         <TouchableOpacity style={styles.successBtn} onPress={() => callInquiry(inq)}>
                           <Text style={styles.actionBtnText}>📞 Call</Text>
                         </TouchableOpacity>
@@ -413,37 +322,23 @@ export default function ResellerHomeScreen() {
                   </View>
                 )}
                 <Text style={styles.txAmount}>MYR {Number(tx.total || 0).toFixed(2)}</Text>
-                <View style={styles.actions}>
-                  <TouchableOpacity
-                    style={styles.messageBtn}
-                    onPress={() => messageCustomer(tx)}
-                    disabled={messagingId === tx.id}
-                  >
-                    <Text style={styles.messageBtnText}>{messagingId === tx.id ? '…' : '💬 Message'}</Text>
-                  </TouchableOpacity>
-                </View>
-
                 {resellerTab === 'pending' && (
-                  <>
-                    <View style={styles.actions}>
-                      <TouchableOpacity style={styles.successBtn} onPress={() => accept(tx.id)} disabled={busyId === tx.id}>
-                        <Text style={styles.actionBtnText}>✓ Accept</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.errorBtn} onPress={() => setRejectId({ id: tx.id, service: tx.service })} disabled={busyId === tx.id}>
-                        <Text style={styles.actionBtnText}>✕ Reject</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </>
+                  <View style={styles.actions}>
+                    <TouchableOpacity style={styles.successBtn} onPress={() => accept(tx.id)} disabled={busyId === tx.id || !canActOnOrder(tx)}>
+                      <Text style={styles.actionBtnText}>✓ Accept</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.errorBtn} onPress={() => setRejectId({ id: tx.id, service: tx.service })} disabled={busyId === tx.id || !canActOnOrder(tx)}>
+                      <Text style={styles.actionBtnText}>✕ Reject</Text>
+                    </TouchableOpacity>
+                  </View>
                 )}
-
                 {resellerTab === 'processing' && (
                   <View style={styles.actions}>
-                    <TouchableOpacity style={styles.primaryBtn} onPress={() => onComplete(tx)} disabled={busyId === tx.id}>
+                    <TouchableOpacity style={styles.primaryBtn} onPress={() => onComplete(tx)} disabled={busyId === tx.id || !canActOnOrder(tx)}>
                       <Text style={styles.actionBtnText}>✓ Complete</Text>
                     </TouchableOpacity>
                   </View>
                 )}
-
                 {resellerTab === 'completed' && !!tx.pin && (
                   <Text style={styles.txDetail}>🔐 Collection PIN: {tx.pin}</Text>
                 )}
@@ -458,22 +353,8 @@ export default function ResellerHomeScreen() {
         </>
         )}
       </ScrollView>
-      <PromptModal
-        visible={!!rejectId}
-        title="Rejection reason:"
-        placeholder="Enter reason"
-        onSubmit={confirmReject}
-        onCancel={() => setRejectId(null)}
-      />
-      <PromptModal
-        visible={!!pinId}
-        title="Enter 4-digit confirmation code:"
-        placeholder="4-digit code"
-        secure
-        maxLength={4}
-        onSubmit={confirmPin}
-        onCancel={() => setPinId(null)}
-      />
+      <PromptModal visible={!!rejectId} title="Rejection reason:" placeholder="Enter reason" onSubmit={confirmReject} onCancel={() => setRejectId(null)} />
+      <PromptModal visible={!!pinId} title="Enter 4-digit confirmation code:" placeholder="4-digit code" secure maxLength={4} onSubmit={confirmPin} onCancel={() => setPinId(null)} />
       <AttachFileModal
         visible={!!receiptTxId}
         title="Attach the transfer receipt"
@@ -481,13 +362,7 @@ export default function ResellerHomeScreen() {
         onDone={confirmReceiptComplete}
         onCancel={() => setReceiptTxId(null)}
       />
-      <TransactionDetailModal
-        visible={!!detailTx}
-        type="tx"
-        item={detailTx}
-        onClose={() => setDetailTx(null)}
-        showCost
-      />
+      <TransactionDetailModal visible={!!detailTx} type="tx" item={detailTx} onClose={() => setDetailTx(null)} showCost />
       <AttachFileModal
         visible={!!ticketInquiryId}
         title="Attach the flight ticket"

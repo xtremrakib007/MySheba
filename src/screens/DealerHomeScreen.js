@@ -14,7 +14,6 @@ import AttachFileModal from '../components/AttachFileModal';
 import * as mediaUpload from '../firebase/mediaUpload';
 import HeaderDecor from '../components/HeaderDecor';
 import * as transactionService from '../firebase/transactionService';
-import * as directChatService from '../firebase/directChatService';
 
 const FEATURES = [
   { key: 'pending', icon: '⏳', bg: '#FFF8E1', name: 'Pending' },
@@ -24,7 +23,6 @@ const FEATURES = [
 ];
 
 // NOTE: the old dealer-only BUY_SERVICES grid (Recharge/Internet/.../
-// Marketplace) and TOOL_DEFS grid (User Mgmt/Transfer Pts) used to live
 // here. Dealer now gets the exact same shared <ServiceGrid> every other
 // role sees ("All features available for all roles"), and the dealer-only
 // management tools moved to their own page - see DealerFeaturesScreen.js -
@@ -50,7 +48,7 @@ export default function DealerHomeScreen() {
   const styles = createStyles(colors);
   const {
     dealerTxs, dealerTab, setDealerTab, logout, setScreen, openSidebar,
-    authUser, profile, openDirectChat,
+    authUser, profile,
     setHomeBackInterceptor,
     // viewingSection now lives in context (dealerViewingSection) so
     // DealerFeaturesScreen tiles can open a section directly - see that file.
@@ -61,7 +59,6 @@ export default function DealerHomeScreen() {
   const [busyId, setBusyId] = useState(null);
   const [receiptTxId, setReceiptTxId] = useState(null);
   const [receiptPinTx, setReceiptPinTx] = useState(null);
-  const [messagingId, setMessagingId] = useState(null);
   const [detailTx, setDetailTx] = useState(null);
 
   // Let the hardware back button close this sub-section instead of
@@ -85,7 +82,6 @@ export default function DealerHomeScreen() {
 
   const visibleTxs = dealerTxs.filter((t) => t.status === dealerTab && !(t.status === 'pending' && t.rejectedBy?.[authUser?.uid]));
 
-  const myRole = profile?.role;
   const canActOnOrder = (tx) => !tx.claimedBy || tx.claimedBy === authUser?.uid;
 
   const featureBadges = { pending: counts.pending || undefined, processing: counts.processing || undefined };
@@ -148,26 +144,6 @@ export default function DealerHomeScreen() {
       showAlert('MySheba', e.message || 'Could not complete this order.');
     } finally {
       setBusyId(null);
-    }
-  };
-
-  const messageCustomer = async (tx) => {
-    if (!tx.customerId) {
-      showAlert('MySheba', 'This order has no customer account attached.');
-      return;
-    }
-    setMessagingId(tx.id);
-    try {
-      const customerName = tx.customerPhone || 'Customer';
-      const chatId = await directChatService.ensureDirectChat(
-        { uid: authUser.uid, name: profile?.name || 'Dealer' },
-        { uid: tx.customerId, name: customerName }
-      );
-      openDirectChat(chatId, customerName, tx.customerId, `Hi, regarding your ${tx.service} order (MYR ${Number(tx.total || 0).toFixed(2)}) - `);
-    } catch (e) {
-      showAlert('MySheba', 'Could not start this conversation. Please try again.');
-    } finally {
-      setMessagingId(null);
     }
   };
 
@@ -259,15 +235,6 @@ export default function DealerHomeScreen() {
                   </View>
                 )}
                 <Text style={styles.txAmount}>MYR {Number(tx.total || 0).toFixed(2)}</Text>
-                <View style={styles.actions}>
-                  <TouchableOpacity
-                    style={styles.messageBtn}
-                    onPress={() => messageCustomer(tx)}
-                    disabled={messagingId === tx.id}
-                  >
-                    <Text style={styles.messageBtnText}>{messagingId === tx.id ? '…' : '💬 Message'}</Text>
-                  </TouchableOpacity>
-                </View>
                 {tx.status === 'pending' && (
                   <View style={styles.actions}>
                     <TouchableOpacity
@@ -383,8 +350,6 @@ function createStyles(colors) {
     successBtn: { backgroundColor: colors.success, paddingVertical: 6, paddingHorizontal: 12, borderRadius: radius.sm },
     errorBtn: { backgroundColor: colors.error, paddingVertical: 6, paddingHorizontal: 12, borderRadius: radius.sm },
     primaryBtn: { backgroundColor: colors.primary, paddingVertical: 6, paddingHorizontal: 12, borderRadius: radius.sm },
-    messageBtn: { backgroundColor: '#F0F0F0', paddingVertical: 6, paddingHorizontal: 12, borderRadius: radius.sm },
-    messageBtnText: { color: colors.primary, fontSize: 11, fontWeight: '600' },
     actionBtnText: { color: 'white', fontSize: 11, fontWeight: '600' },
     waitingNote: { fontSize: 11, color: '#999', fontStyle: 'italic', marginTop: 8 },
   });

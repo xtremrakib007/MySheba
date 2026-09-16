@@ -1,47 +1,52 @@
 // Customer identity verification service.
 // Phone verification happens at registration; this service handles the separate KYC review request.
-import { doc, setDoc, onSnapshot, collection, query, where, orderBy, serverTimestamp } from 'firebase/firestore';
+import { doc, onSnapshot, collection, query, where, orderBy } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './config';
 
 const REQUESTS = 'verificationRequests';
 
-export async function submitVerificationRequest(uid, { name, phone }, documentUrl, kycData = {}) {
+export async function verifyNativeKycFace(embedding, livenessPassed = true) {
+  const fn = httpsCallable(functions, 'createDiditKycSession');
+  const result = await fn({ embedding, livenessPassed });
+  return result.data || {};
+}
+
+export async function submitVerificationRequest(uid, { name }, documentUrl, kycData = {}) {
+  if (!uid) throw new Error('You must be signed in.');
   const front = kycData.frontDocumentUrl || documentUrl || '';
   const back = kycData.backDocumentUrl || '';
   const selfie = kycData.selfieUrl || '';
-  await setDoc(doc(db, REQUESTS, uid), {
-    uid,
-    name: name || '',
-    phone: phone || '',
-    documentUrl: front,
-    documentType: kycData.documentType || '',
-    documentNumber: kycData.documentNumber || '',
-    nationality: kycData.nationality || '',
-    dateOfBirth: kycData.dateOfBirth || '',
-    gender: kycData.gender || '',
-    occupation: kycData.occupation || '',
-    skilledLabour: kycData.skilledLabour || '',
-    companyName: kycData.companyName || '',
-    employerName: kycData.employerName || '',
-    address: kycData.address || '',
-    passportPlaceOfIssue: kycData.passportPlaceOfIssue || '',
-    passportIssueDate: kycData.passportIssueDate || '',
-    passportExpiryDate: kycData.passportExpiryDate || '',
-    sourceOfFunds: kycData.sourceOfFunds || '',
-    // Keep both names because the Admin Web verification queue already
-    // consumes these explicit image fields.
-    frontDocumentUrl: front,
-    backDocumentUrl: back,
-    selfieUrl: selfie,
-    frontImageUrl: front,
-    backImageUrl: back,
-    selfieImageUrl: selfie,
-    status: 'pending',
-    note: '',
-    rejectionReason: '',
-    submittedAt: serverTimestamp(),
+
+  // KYC requests are created only by the trusted callable. The client can
+  // upload evidence, but cannot choose status, phone, review fields, or
+  // overwrite an existing pending/approved request directly in Firestore.
+  const fn = httpsCallable(functions, 'createDiditKycSession');
+  const result = await fn({
+    mode: 'submit',
+    kycData: {
+      uid,
+      name: name || '',
+      documentUrl: front,
+      documentType: kycData.documentType || '',
+      documentNumber: kycData.documentNumber || '',
+      nationality: kycData.nationality || '',
+      dateOfBirth: kycData.dateOfBirth || '',
+      gender: kycData.gender || '',
+      address: kycData.address || '',
+      passportExpiryDate: kycData.passportExpiryDate || '',
+      frontDocumentUrl: front,
+      backDocumentUrl: back,
+      selfieUrl: selfie,
+      frontImageUrl: front,
+      backImageUrl: back,
+      selfieImageUrl: selfie,
+      liveFaceVerified: kycData.liveFaceVerified === true,
+      liveFaceMethod: kycData.liveFaceMethod || 'front_camera_challenge',
+      biometricModel: kycData.biometricModel || 'mobilefacenet-512',
+    },
   });
+  return result.data || {};
 }
 
 export function subscribeMyVerificationRequest(uid, callback, onError) {

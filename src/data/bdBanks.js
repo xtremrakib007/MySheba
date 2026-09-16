@@ -3385,7 +3385,6 @@ export const bdBanks = [
     { key: "225914155", name: "ZINDA BAZAR", subtitle: "Sylhet", routing: "225914155" },
     { key: "225277092", name: "ZINZIRA", subtitle: "Dhaka", routing: "225277092" },
   ] },
-  { name: "Community Bank Bangladesh PLC", branches: [
     { key: "310150132", name: "AGRABAD", subtitle: "CHITTAGONG", routing: "310150132" },
     { key: "310150466", name: "ANDERKILLA", subtitle: "", routing: "310150466" },
     { key: "310271279", name: "CHAWK BAZAR", subtitle: "", routing: "310271279" },
@@ -9903,7 +9902,6 @@ export const bdBanks = [
     { key: "190261117", name: "UTTARKHAN", subtitle: "DHAKA-NORTH", routing: "190261117" },
     { key: "190157768", name: "WASA MOOR", subtitle: "", routing: "190157768" },
   ] },
-  { name: "Social Islami Bank PLC", branches: [
     { key: "195270608", name: "AGENT BANKING", subtitle: "DHAKA-SOUTH", routing: "195270608" },
     { key: "195150131", name: "AGRABAD", subtitle: "Chittagong", routing: "195150131" },
     { key: "195120040", name: "AKHAURA", subtitle: "", routing: "195120040" },

@@ -1,7 +1,5 @@
 // ONE-TIME backfill for the "🏢 Business" feed badge (PRD section 15).
 //
-// sellerIsBusiness/ownerIsBusiness (marketplaceService.createListing,
-// accommodationService.createProperty, serviceProviderService.createProvider)
 // is a creation-time snapshot, same as sellerVerified always was - so any
 // business granted status *before* this feature shipped won't show the
 // badge on posts they already had live until they edit or re-post one.
@@ -54,9 +52,7 @@ async function main() {
   console.log(`Found ${businessUids.length} currently-granted Business Profile(s).`);
   if (businessUids.length === 0) return;
 
-  await patchCollection('marketplaceListings', 'sellerId', 'sellerIsBusiness', businessUids);
   await patchCollection('properties', 'ownerId', 'ownerIsBusiness', businessUids);
-  await patchCollection('serviceProviders', 'ownerId', 'ownerIsBusiness', businessUids);
 }
 
 main()

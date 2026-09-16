@@ -1,5 +1,4 @@
 // Small, non-interactive map + marker for *DetailScreen views (Property,
-// Listing, ServiceProviderDetail, CommunityPostDetail, BusinessProfile).
 // Tapping it opens the device's native Maps app for directions - it does
 // not open the full LocationPickerModal (that's for editing, this is
 // read-only display).

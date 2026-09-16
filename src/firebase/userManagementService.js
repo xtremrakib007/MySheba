@@ -185,12 +185,7 @@ export async function assignReseller({ targetUid, resellerId }) {
   return data;
 }
 
-/** Bans (or unbans) a user from posting new Marketplace content - see
- * MarketplaceModerationScreen. Scoped ban only (see firestore.rules'
- * isMarketplaceBanned()); does not disable the account or touch login.
  * Admin/superadmin only, and an admin can never ban another staff account. */
-export async function setMarketplaceBan({ targetUid, banned, reason }) {
   const fn = httpsCallable(functions, 'manageUser');
-  const { data } = await fn({ action: 'setMarketplaceBan', targetUid, banned, reason });
   return data;
 }

@@ -91,8 +91,6 @@ export const PLACEMENT_LABELS: Record<PlacementId, string> = {
   [PLACEMENT_IDS.JOBS_TOP]: 'Jobs - Top',
   [PLACEMENT_IDS.JOBS_BOTTOM]: 'Jobs - Bottom',
 
-  [PLACEMENT_IDS.ACCOMMODATION_TOP]: 'Accommodation - Top',
-  [PLACEMENT_IDS.ACCOMMODATION_BOTTOM]: 'Accommodation - Bottom',
 
   [PLACEMENT_IDS.BUY_SELL_TOP]: 'Buy & Sell - Top',
   [PLACEMENT_IDS.BUY_SELL_BOTTOM]: 'Buy & Sell - Bottom',
@@ -100,8 +98,6 @@ export const PLACEMENT_LABELS: Record<PlacementId, string> = {
   [PLACEMENT_IDS.SERVICES_TOP]: 'Services - Top',
   [PLACEMENT_IDS.SERVICES_BOTTOM]: 'Services - Bottom',
 
-  [PLACEMENT_IDS.COMMUNITY_TOP]: 'Community - Top',
-  [PLACEMENT_IDS.COMMUNITY_BOTTOM]: 'Community - Bottom',
 
   [PLACEMENT_IDS.HELP_SUPPORT_TOP]: 'Help / Support - Top',
   [PLACEMENT_IDS.HELP_SUPPORT_BOTTOM]: 'Help / Support - Bottom',

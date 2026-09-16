@@ -1,14 +1,10 @@
-// Small "🏢 Business" badge - drop next to a seller/owner/provider name
-// once their businessProfiles/{uid}.isBusinessProfile is true (granted
-// only by the setBusinessProfileStatus Cloud Function - see
-// businessProfileService.js). Takes the boolean directly, same pattern as
-// VerifiedBadge.js, so screens that already loaded the business profile
-// don't need an extra subscription just to render this.
+// Small "🏢 Business" badge - shown next to a user's name when their
+// Business Profile status is active. The status is granted/revoked by the
+// setBusinessProfileStatus Cloud Function and is passed in by the screen
+// that already loaded the user's business profile.
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { radius } from '../theme/theme';
-
-import { useTheme } from "../theme/ThemeContext";
 
 export default function BusinessBadge({ isBusiness, size = 'md' }) {
   if (!isBusiness) return null;

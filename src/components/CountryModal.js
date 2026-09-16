@@ -34,7 +34,6 @@ export default function CountryModal({ visible, onClose, value, onSelect }) {
             <Text style={styles.title}>Country / Region</Text>
             <Text style={styles.subtitle}>
               Sets your home country/region. Malaysia sees the standard service homepage; other
-              regions get a community-first homepage with services still one tap away.
             </Text>
 
             <ScrollView style={styles.list} contentContainerStyle={{ flexGrow: 0 }}>

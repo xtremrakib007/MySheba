@@ -18,11 +18,9 @@ import AttachFileModal from '../components/AttachFileModal';
 import * as mediaUpload from '../firebase/mediaUpload';
 import HeaderDecor from '../components/HeaderDecor';
 import * as inquiryService from '../firebase/inquiryService';
-import * as directChatService from '../firebase/directChatService';
 import * as ratesService from '../firebase/ratesService';
 import * as settingsService from '../firebase/settingsService';
 import * as supportContactService from '../firebase/supportContactService';
-import * as socialLinksService from '../firebase/socialLinksService';
 import * as paymentSettingsService from '../firebase/paymentSettingsService';
 import * as internetPricingService from '../firebase/internetPricingService';
 import * as bannerService from '../firebase/bannerService';
@@ -48,7 +46,6 @@ const FEATURES = [
   { key: 'payments', icon: '💳', bg: '#E1F5FE', name: 'Payments' },
   { key: 'categories', icon: '🗂️', bg: '#EDE7F6', name: 'Categories' },
   { key: 'support', icon: '☎️', bg: '#E0F2F1', name: 'Support' },
-  { key: 'social', icon: '🌐', bg: '#FCE4EC', name: 'Social' },
   { key: 'homepage', icon: '🏠', bg: '#E0F7FA', name: 'Homepage' },
   { key: 'banners', icon: '🖼️', bg: '#FFF0F0', name: 'Banners' },
   { key: 'announcements', icon: '📣', bg: '#E0F7FA', name: 'Announce' },
@@ -98,7 +95,6 @@ const PRICING_FIELDS = [
   { key: 'dealerEarningPercent', label: '🤝 Dealer Earning on Customer Transfer (%)' },
   { key: 'rechargeCostPercent', label: '📉 Mobile Recharge Cost (%)' },
   { key: 'rechargeProfitPercent', label: '📈 Mobile Recharge Profit (%)' },
-  { key: 'gamePointsFeePercent', label: '🎮 GameBot Winner Payout Fee (%)' },
 ];
 
 // Point cost for each "point deduct" webview feature - locked/warned on in
@@ -106,16 +102,11 @@ const PRICING_FIELDS = [
 // paymentWebviewService.js. Editing one of these updates the live price
 // for every key that shares it (e.g. FOMEMA + Visa both read
 // webviewAccessCost) - see AppContext.pointCosts.
-// Next Update PRD §4 - Game Point Gifting (80/20 rule, giftGamePoints in
 // functions/walletService.js). Min/max reuse the same points-cost editor
 // as POINT_COST_FIELDS below (same PromptModal, same unit); the
 // enable/disable switch is its own row since it's a boolean, not a
 // numeric price - see the direct-toggle row in the Pricing tab below
 // rather than a PromptModal entry.
-const GIFT_LIMIT_FIELDS = [
-  { key: 'gamePointsGiftMinAmount', label: '🎁 Gift Minimum (pts)' },
-  { key: 'gamePointsGiftMaxAmount', label: '🎁 Gift Maximum (pts)' },
-];
 
 const POINT_COST_FIELDS = [
   { key: 'webviewAccessCost', label: '🏥 FOMEMA / Visa Status Check (pts)' },
@@ -146,12 +137,10 @@ const ACCESS_WINDOW_FIELDS = [
   { key: 'webviewAccessWindowHours', label: '⏱️ FOMEMA / Visa Free Access Window (hours)' },
 ];
 
-// Marketplace "Listing Boost" / Featured Listings (Phase 3 monetization,
 // PRD section 15) - actually charged in the boostListing Cloud Function
 // (functions/walletService.js). listingBoostCost reuses the pts editor,
 // listingBoostDurationDays gets its own "days" unit below.
 const BOOST_COST_FIELDS = [
-  { key: 'listingBoostCost', label: '🚀 Marketplace Listing Boost (pts)' },
 ];
 const BOOST_DURATION_FIELDS = [
   { key: 'listingBoostDurationDays', label: '📅 Boost Duration (days)' },
@@ -167,7 +156,6 @@ const BOOST_DURATION_FIELDS = [
 const RECHARGE_PRICING_FIELDS = [
   { key: 'rechargePointCostPerUnit', label: '📶 Mobile Recharge (× face value)' },
   { key: 'internetPointCostPerUnit', label: '🌐 Internet Package (× face value)' },
-  { key: 'gamePointsCostPerUnit', label: '🎮 Game Points (× face value)' },
 ];
 
 // Role-Based Pricing (superadmin only) - lets a superadmin give any of
@@ -186,7 +174,7 @@ const ROLE_PRICE_FIELDS = [...POINT_COST_FIELDS, ...BOOST_COST_FIELDS, ...MODULE
 // property to every field object) so POINT_COST_FIELDS/BOOST_COST_FIELDS/
 // MODULE_SUBSCRIPTION_COST_FIELDS - each also rendered elsewhere with
 // their own already-correct hardcoded "pts" - don't need touching.
-const ROLE_PRICE_UNIT_OVERRIDES = { rechargePointCostPerUnit: '×', internetPointCostPerUnit: '×', gamePointsCostPerUnit: '×' };
+const ROLE_PRICE_UNIT_OVERRIDES = { rechargePointCostPerUnit: '×', internetPointCostPerUnit: '×' };
 function rolePriceUnitFor(key) {
   return ROLE_PRICE_UNIT_OVERRIDES[key] || 'pts';
 }
@@ -209,7 +197,6 @@ const SUPPORT_FIELDS = [
   { key: 'whatsapp', label: '💬 WhatsApp Support Number', placeholder: 'e.g. 601123083556 (no + or leading 0)' },
 ];
 
-// Official social links, shown on the customer Support screen's Follow Us
 // row (hidden per-platform until set) and used by ShareListingSheet.js's
 // "share to official page" targets. facebookAppId isn't a link - it's the
 // Meta developer App ID (free to create, no App Review needed) that
@@ -281,18 +268,14 @@ export default function AdminHomeScreen() {
   } = useTheme();
 
   const styles = createStyles(colors);
-  const { authUser, profile, dealerTxs, inquiries, topups, banners, announcements, adminTab, setAdminTab, rates, pricing, internetPricing, supportContact, socialLinks, paymentSettings, logout, setScreen, openSidebar, openDirectChat, marketplaceCategories, serviceCategories, setHomeBackInterceptor, adminViewingSection: viewingSection, setAdminViewingSection: setViewingSection, homepageConfig } = useApp();
-  const [messagingInquiryId, setMessagingInquiryId] = useState(null);
   const [editRateKey, setEditRateKey] = useState(null);
   const [editPricingKey, setEditPricingKey] = useState(null);
   const [editPointCostKey, setEditPointCostKey] = useState(null);
   // Role-Based Pricing (superadmin only): { role, key } for the field
   // currently being edited, or null when the modal's closed.
   const [editRolePrice, setEditRolePrice] = useState(null);
-  const [addCategoryModule, setAddCategoryModule] = useState(null); // 'marketplace' | 'services' | null
   const [categoryBusy, setCategoryBusy] = useState(false);
   const [editSupportKey, setEditSupportKey] = useState(null);
-  const [editSocialKey, setEditSocialKey] = useState(null);
   const [editPaymentKey, setEditPaymentKey] = useState(null); // 'jompayBillerId' | 'jompayRefNo' | null
   const [qrModalVisible, setQrModalVisible] = useState(false); // DuitNow QR upload modal
   // Next Update PRD §2 - Homepage tab (superadmin-only, see firestore.rules
@@ -501,31 +484,7 @@ export default function AdminHomeScreen() {
    * the inquiry, prefilled with the order reference so the admin doesn't have
    * to retype the route/date. Falls back to an alert if the inquiry has no
    * linked customer account (e.g. a guest submission). */
-  const messageInquiry = async (inq) => {
-    if (!inq.customerId) {
-      showAlert('MySheba', 'This inquiry has no customer account attached to message in-app. Use Call or WhatsApp instead.');
-      return;
-    }
-    setMessagingInquiryId(inq.id);
-    try {
-      await inquiryService.updateInquiryStatus(inq.id, 'contacted');
-      const customerName = inq.name || inq.phone || 'Customer';
-      const chatId = await directChatService.ensureDirectChat(
-        { uid: authUser.uid, name: profile?.name || 'Admin' },
-        { uid: inq.customerId, name: customerName }
-      );
-      openDirectChat(
-        chatId,
-        customerName,
-        inq.customerId,
-        `Hi ${inq.name || ''}, regarding your ${inq.type} inquiry (${inq.from} → ${inq.to} · ${inq.date}${inq.time ? ` · ${inq.time}` : ''}) - `
-      );
-    } catch (e) {
-      showAlert('MySheba', 'Could not start this conversation. Please try again.');
-    } finally {
-      setMessagingInquiryId(null);
-    }
-  };
+;
 
   /** Plain phone call - marks the inquiry contacted too, since a call is just as much "contact" as a chat message. */
   const callInquiry = async (inq) => {
@@ -609,12 +568,8 @@ export default function AdminHomeScreen() {
 
   // Boolean, not numeric - unlike every other pricing field above, so it
   // toggles directly on tap instead of going through PromptModal. Treats
-  // an absent field as ON, matching giftGamePoints's own default (see
-  // DEFAULT_PRICING.gamePointsGiftEnabled in functions/walletService.js).
   const toggleGiftEnabled = async () => {
-    const next = !(pricing.gamePointsGiftEnabled !== false);
     try {
-      await settingsService.updatePricing('gamePointsGiftEnabled', next);
     } catch (e) {
       showAlert('MySheba', e.message || 'Could not update this setting.');
     }
@@ -697,12 +652,8 @@ export default function AdminHomeScreen() {
     }
   };
 
-  const saveSocialLink = async (value) => {
-    const key = editSocialKey;
-    setEditSocialKey(null);
     if (!key) return;
     try {
-      await socialLinksService.updateSocialLink(key, value.trim());
     } catch (e) {
       showAlert('MySheba', e.message || 'Could not update this setting.');
     }
@@ -914,7 +865,6 @@ export default function AdminHomeScreen() {
               <Text style={styles.hintText}>
                 Dealer earning is credited automatically whenever a dealer/dealer sends points to one of their own customers.
                 Recharge cost/profit is shown on recharge orders for reporting - it doesn't change what the customer pays.
-                GameBot Winner Payout Fee is taken off the pot before GameBot pays out a room game winner (dice/lowcard/highcard/cricket/29) -
                 it's never credited anywhere, just kept out of the payout. Draw refunds (29) are unaffected - players get their full entry fee back.
               </Text>
             </View>
@@ -975,7 +925,6 @@ export default function AdminHomeScreen() {
             </View>
 
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>🚀 Marketplace Boost</Text>
               {BOOST_COST_FIELDS.map((r) => (
                 <View key={r.key} style={styles.rateRow}>
                   <Text style={{ flex: 1 }}>{r.label}</Text>
@@ -995,19 +944,15 @@ export default function AdminHomeScreen() {
                 </View>
               ))}
               <Text style={styles.hintText}>
-                Sellers spend points from their own wallet to feature a listing at the top of Marketplace
                 for this many days (see the listing detail screen's Boost button). Re-boosting an
                 already-featured listing extends it rather than restarting the clock.
               </Text>
             </View>
 
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>🎉 Game Point Gifting</Text>
               <View style={styles.rateRow}>
                 <Text style={{ flex: 1 }}>Gifting Enabled</Text>
-                <Text style={styles.rateValue}>{pricing.gamePointsGiftEnabled !== false ? 'ON' : 'OFF'}</Text>
                 <TouchableOpacity style={styles.editBtn} onPress={toggleGiftEnabled}>
-                  <Text style={styles.editBtnText}>{pricing.gamePointsGiftEnabled !== false ? 'Turn Off' : 'Turn On'}</Text>
                 </TouchableOpacity>
               </View>
               {GIFT_LIMIT_FIELDS.map((r) => (
@@ -1098,8 +1043,6 @@ export default function AdminHomeScreen() {
 
         {adminTab === 'categories' && (
           <View>
-            {['marketplace', 'services'].map((module) => {
-              const list = module === 'marketplace' ? marketplaceCategories : serviceCategories;
               return (
                 <View key={module} style={styles.card}>
                   <Text style={styles.cardTitle}>{MODULE_LABELS[module]}</Text>
@@ -1151,15 +1094,11 @@ export default function AdminHomeScreen() {
           </View>
         )}
 
-        {adminTab === 'social' && (
           <View>
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>🌐 Official Social Links</Text>
               {SOCIAL_FIELDS.map((r) => (
                 <View key={r.key} style={styles.rateRow}>
                   <Text style={{ flex: 1 }}>{r.label}</Text>
-                  <Text style={styles.rateValue} numberOfLines={1}>{socialLinks[r.key] || 'Not set'}</Text>
-                  <TouchableOpacity style={styles.editBtn} onPress={() => setEditSocialKey(r.key)}>
                     <Text style={styles.editBtnText}>Edit</Text>
                   </TouchableOpacity>
                 </View>
@@ -1174,8 +1113,6 @@ export default function AdminHomeScreen() {
               {SOCIAL_TECHNICAL_FIELDS.map((r) => (
                 <View key={r.key} style={styles.rateRow}>
                   <Text style={{ flex: 1 }}>{r.label}</Text>
-                  <Text style={styles.rateValue} numberOfLines={1}>{socialLinks[r.key] || 'Not set'}</Text>
-                  <TouchableOpacity style={styles.editBtn} onPress={() => setEditSocialKey(r.key)}>
                     <Text style={styles.editBtnText}>Edit</Text>
                   </TouchableOpacity>
                 </View>
@@ -1284,7 +1221,6 @@ export default function AdminHomeScreen() {
                   <Text style={styles.cardTitle}>🏠 Country / Region Homepage</Text>
                   <Text style={styles.hintText}>
                     Malaysia keeps the standard service-first homepage by default. Any other country
-                    defaults to a community-first homepage the moment a user sets it in Profile - add an
                     override below only if a specific country needs different modules than that default.
                   </Text>
                 </View>
@@ -1297,18 +1233,14 @@ export default function AdminHomeScreen() {
                       <Text style={styles.cardTitle}>{c ? `${c.flag} ${c.name}` : code}</Text>
                       <View style={styles.rateRow}>
                         <Text style={{ flex: 1 }}>Layout</Text>
-                        <Text style={styles.rateValue}>{mod.layout === 'service' ? 'Service-first' : 'Social-first'}</Text>
                         <TouchableOpacity
                           style={styles.editBtn}
-                          onPress={() => updateHomepageModule(code, 'layout', mod.layout === 'service' ? 'social' : 'service')}
                         >
                           <Text style={styles.editBtnText}>Switch</Text>
                         </TouchableOpacity>
                       </View>
                       {[
                         { key: 'showServices', label: 'Services module' },
-                        { key: 'showSocialFeed', label: 'Social feed module' },
-                        { key: 'showCommunityFeed', label: 'Community feed module' },
                         { key: 'showBanners', label: 'Banners module' },
                       ].map((row) => (
                         <View key={row.key} style={styles.rateRow}>
@@ -1440,13 +1372,7 @@ export default function AdminHomeScreen() {
                   {inq.status !== 'closed' && (
                     <>
                       <View style={styles.actions}>
-                        <TouchableOpacity
-                          style={styles.primaryBtn}
-                          onPress={() => messageInquiry(inq)}
-                          disabled={messagingInquiryId === inq.id}
-                        >
-                          <Text style={styles.actionBtnText}>{messagingInquiryId === inq.id ? '…' : '💬 Contact'}</Text>
-                        </TouchableOpacity>
+                        
                         <TouchableOpacity style={styles.callBtn} onPress={() => callInquiry(inq)}>
                           <Text style={styles.actionBtnText}>📞 Call</Text>
                         </TouchableOpacity>
@@ -1620,14 +1546,9 @@ export default function AdminHomeScreen() {
         onCancel={() => setEditSupportKey(null)}
       />
       <PromptModal
-        visible={!!editSocialKey}
         title="New value:"
         placeholder={
-          SOCIAL_FIELDS.find((f) => f.key === editSocialKey)?.placeholder ||
-          SOCIAL_TECHNICAL_FIELDS.find((f) => f.key === editSocialKey)?.placeholder
         }
-        onSubmit={saveSocialLink}
-        onCancel={() => setEditSocialKey(null)}
       />
       <PromptModal
         visible={!!editPaymentKey}

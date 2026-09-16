@@ -130,7 +130,6 @@ export default {
     visa: 'Visa',
     mydigital: 'Malaysia Arrival Card',
     passport: 'Passport',
-    marketplace: 'Marketplace',
     myDocuments: 'My Documents',
     salary: 'Salary & OT',
     esim: 'MY e-SIM',

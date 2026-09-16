@@ -63,14 +63,14 @@ export default function BottomNav() {
 
 function createStyles(colors) {
   return StyleSheet.create({
-    nav: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 6, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: '#E5E7EB' },
+    nav: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 6, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border },
     btn: { alignItems: 'center', paddingVertical: 4, paddingHorizontal: 6, flex: 1 },
     btnHome: { marginTop: -12 },
-    iconCircle: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', marginBottom: 2, backgroundColor: '#F1F3F4' },
+    iconCircle: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', marginBottom: 2, backgroundColor: colors.surface },
     iconCircleHome: { width: 50, height: 50, borderRadius: 25, borderWidth: 3, borderColor: colors.card, elevation: 5 },
-    icon: { fontSize: 18, color: '#9AA0A6' },
+    icon: { fontSize: 18, color: colors.placeholder },
     iconActive: { fontSize: 18 },
     iconHomeText: { fontSize: 25 },
-    label: { fontSize: 10, color: '#6B7280', fontWeight: '500' },
+    label: { fontSize: 10, color: colors.textSecondary, fontWeight: '500' },
   });
 }

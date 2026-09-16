@@ -1,6 +1,5 @@
 // Admin Panel > Analytics (sitemap section; PRD section 19 "Success
 // Metrics"). Admin/superadmin only (same MODERATION_ROLES gate as
-// Marketplace Moderation - see Sidebar.js). Read-only dashboard over
 // analyticsService.getDashboard() - no live subscriptions since these are
 // aggregate counts, not a feed; pull-to-refresh instead.
 //
@@ -25,14 +24,7 @@ import { subscribeAllUsers } from '../firebase/userManagementService';
 const ROLE_LABELS = { customer: 'Customers', dealer: 'Dealers', dealer: 'Dealers', reseller: 'Resellers', admin: 'Admins', superadmin: 'Super Admins' };
 
 // Which screen each module's row should open, keyed exactly the same way
-// as MODULES in analyticsService.js (listings/properties/roommates/
-// services/community), so this stays correct if that map is reordered.
 const MODULE_SCREENS = {
-  listings: 'marketplaceHome',
-  properties: 'accommodationHome',
-  roommates: 'roomSharingHome',
-  services: 'servicesHome',
-  community: 'communityHome',
 };
 
 const LOG_TABS = [
@@ -326,7 +318,6 @@ export default function AdminAnalyticsScreen() {
         <TouchableOpacity style={styles.backBtn} onPress={goBackOrHome}>
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Marketplace Analytics</Text>
       </LinearGradient>
 
       {isSuperAdmin && (
@@ -375,16 +366,13 @@ export default function AdminAnalyticsScreen() {
                 />
                 <StatCard
                   icon="🛍️" label="Active listings" value={activeListings} sub="across all modules"
-                  onPress={() => setScreen('marketplaceModeration')}
                 />
                 <StatCard icon="💬" label="Conversations" value={data.conversations} />
                 <StatCard
                   icon="🚩" label="Open reports" value={data.reports.open} sub={`${data.reports.total} total filed`}
-                  onPress={() => setScreen('marketplaceModeration')}
                 />
                 <StatCard
                   icon="⭐" label="Avg. rating" value={data.reviews.avg ? data.reviews.avg.toFixed(1) : '—'} sub={`${data.reviews.count} reviews`}
-                  onPress={() => setScreen('marketplaceModeration')}
                 />
                 <StatCard
                   icon="✅" label="Verified sellers" value={data.users.verified}
@@ -399,7 +387,6 @@ export default function AdminAnalyticsScreen() {
               </View>
             </Section>
 
-            <Section title="Marketplace Modules">
               <View style={styles.card}>
                 {modules.map(([key, m], i) => (
                   <React.Fragment key={key}>
@@ -436,7 +423,6 @@ export default function AdminAnalyticsScreen() {
                 {data.reports.byKind.map((k, i) => (
                   <React.Fragment key={k.kind}>
                     {i > 0 && <View style={styles.divider} />}
-                    <RoleRow label={k.label} count={`${k.open} open · ${k.total} total`} onPress={() => setScreen('marketplaceModeration')} />
                   </React.Fragment>
                 ))}
               </View>

@@ -1,9 +1,7 @@
 // Admin Web service for settings/pricing — mirrors the mobile app's
 // src/firebase/settingsService.js exactly (same doc, same field names,
 // same defaults, same role-override shape). Kept in its own file/page,
-// separate from Rates (rates/current — exchange rates), since the
-// mobile app itself treats these as two separate screens (Admin >
-// Rates vs Admin > Pricing).
+// separate from Rates (rates/current — exchange rates).
 
 import { deleteField, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -23,7 +21,6 @@ export const ROLE_PRICE_KEYS = [
   'salaryOtCost',
   'rechargePointCostPerUnit',
   'internetPointCostPerUnit',
-  'gamePointsCostPerUnit',
 ] as const;
 export type RolePriceKey = (typeof ROLE_PRICE_KEYS)[number];
 
@@ -33,7 +30,6 @@ export interface PricingSettings {
   rechargeProfitPercent: number;
   rechargePointCostPerUnit: number;
   internetPointCostPerUnit: number;
-  gamePointsCostPerUnit: number;
   webviewAccessCost: number;
   webviewSubmitCost: number;
   paymentSuccessCost: number;
@@ -44,7 +40,6 @@ export interface PricingSettings {
   webviewAccessWindowHours: number;
   listingBoostCost: number;
   listingBoostDurationDays: number;
-  gamePointsFeePercent: number;
   rolePricing: Partial<Record<PricingRole, Partial<Record<RolePriceKey, number>>>>;
 }
 
@@ -54,7 +49,6 @@ export const DEFAULT_PRICING: PricingSettings = {
   rechargeProfitPercent: 5,
   rechargePointCostPerUnit: 1,
   internetPointCostPerUnit: 1,
-  gamePointsCostPerUnit: 1,
   webviewAccessCost: 2,
   webviewSubmitCost: 2,
   paymentSuccessCost: 3,
@@ -65,7 +59,6 @@ export const DEFAULT_PRICING: PricingSettings = {
   webviewAccessWindowHours: 1,
   listingBoostCost: 5,
   listingBoostDurationDays: 7,
-  gamePointsFeePercent: 10,
   rolePricing: {},
 };
 
@@ -78,11 +71,6 @@ export async function updatePricing(key: keyof PricingSettings, value: number): 
   await setDoc(SETTINGS_DOC, { [key]: value, updatedAt: serverTimestamp() }, { merge: true });
 }
 
-/** Superadmin-only in the UI, matching the mobile app's AdminHomeScreen
- * gate — firestore.rules itself allows a plain admin to write settings/
- * pricing EXCEPT the rolePricing field, which only isSuperadmin() can
- * touch, so this must stay restricted client-side too even though the
- * rest of the page isn't. */
 export async function updateRolePrice(
   role: PricingRole,
   key: RolePriceKey,

@@ -114,7 +114,6 @@ export default function CategoriesPage() {
     <div>
       <h1 className="text-2xl font-bold">Categories</h1>
       <p className="mt-1 text-sm text-[var(--color-ink-soft)]">
-        Listing categories per marketplace module. New listings pick from these lists; removing a
         category doesn't change the text already saved on existing listings.
       </p>
 

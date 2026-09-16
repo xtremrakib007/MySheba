@@ -34,8 +34,10 @@ export default function IdentityVerificationPage() {
     finally { setBusyId(null); }
   }
   async function handleReject(req: VerificationRequest) {
+    const reason = rejectionReason.trim();
+    if (!reason) { setError('Enter a reason before rejecting a KYC request.'); return; }
     setBusyId(req.id);
-    try { await reviewKycVerification(req, 'rejected', rejectionReason.trim() || undefined); setRequests((prev) => prev.filter((r) => r.id !== req.id)); setRejectingId(null); setRejectionReason(''); }
+    try { await reviewKycVerification(req, 'rejected', reason); setRequests((prev) => prev.filter((r) => r.id !== req.id)); setRejectingId(null); setRejectionReason(''); setError(null); }
     catch (err) { console.error(err); setError('Rejection failed.'); }
     finally { setBusyId(null); }
   }
@@ -50,7 +52,7 @@ export default function IdentityVerificationPage() {
         return <div key={req.id} className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-card)] p-5">
           <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="font-semibold">{req.name}</p><p className="text-xs text-[var(--color-ink-soft)]">{req.phone ?? '—'} · {req.documentType ?? 'Document type unknown'} · Submitted {req.submittedAt ?? '—'}</p></div><div className="flex gap-2"><button disabled={busy} onClick={() => handleApprove(req)} className="rounded-lg bg-[var(--color-success)] px-4 py-2 text-xs font-semibold text-white disabled:opacity-40">Approve</button><button disabled={busy} onClick={() => setRejectingId(isRejecting ? null : req.id)} className="rounded-lg border border-[var(--color-danger)] px-4 py-2 text-xs font-semibold text-[var(--color-danger)] disabled:opacity-40">Reject</button></div></div>
           <div className="mt-4 grid grid-cols-1 gap-3 rounded-xl bg-[var(--color-bg)] p-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Detail label="Document type" value={kyc.documentType}/><Detail label="Document number" value={kyc.documentNumber}/><Detail label="Nationality" value={kyc.nationality}/><Detail label="Date of birth" value={kyc.dateOfBirth}/><Detail label="Gender" value={kyc.gender}/><Detail label="Occupation" value={kyc.occupation}/><Detail label="Skilled labour / skill" value={kyc.skilledLabour}/><Detail label="Company name" value={kyc.companyName}/><Detail label="Employer name" value={kyc.employerName}/><Detail label="Address" value={kyc.address}/><Detail label="Passport place of issue" value={kyc.passportPlaceOfIssue}/><Detail label="Passport issue date" value={kyc.passportIssueDate}/><Detail label="Passport expiry date" value={kyc.passportExpiryDate}/><Detail label="Source of funds" value={kyc.sourceOfFunds}/>
+            <Detail label="Document type" value={kyc.documentType}/><Detail label="Document number" value={kyc.documentNumber}/><Detail label="Nationality" value={kyc.nationality}/><Detail label="Date of birth" value={kyc.dateOfBirth}/><Detail label="Gender" value={kyc.gender}/><Detail label="Address" value={kyc.address}/><Detail label="Passport expiry date" value={kyc.passportExpiryDate}/><Detail label="Live face verified" value={kyc.liveFaceVerified ? 'Yes' : 'No'}/>
           </div>
           <div className="mt-4 flex flex-wrap gap-4"><ImageThumb url={(req.frontImageUrl ?? kyc.frontDocumentUrl ?? kyc.documentUrl ?? null) as string | null} label="Document front / passport"/><ImageThumb url={(req.backImageUrl ?? kyc.backDocumentUrl ?? null) as string | null} label="Document back"/><ImageThumb url={(req.selfieImageUrl ?? kyc.selfieUrl ?? null) as string | null} label="Selfie"/></div>
           {isRejecting && <div className="mt-4 flex gap-2"><input value={rejectionReason} onChange={(e) => setRejectionReason(e.target.value)} placeholder="Reason for rejection" className="flex-1 rounded-lg border border-[var(--color-line)] px-3 py-2 text-sm outline-none focus:border-[var(--color-danger)]"/><button disabled={busy} onClick={() => handleReject(req)} className="rounded-lg bg-[var(--color-danger)] px-4 py-2 text-xs font-semibold text-white disabled:opacity-40">Confirm reject</button></div>}

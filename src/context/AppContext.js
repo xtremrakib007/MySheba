@@ -1,52 +1,80 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { Platform, BackHandler, ToastAndroid, AppState } from 'react-native';
-import { showAlert } from '../utils/appAlert';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  useMemo,
+} from "react";
+import { Platform, BackHandler, ToastAndroid, AppState } from "react-native";
+import { showAlert } from "../utils/appAlert";
 
-import * as authService from '../firebase/authService';
-import * as securityPinService from '../firebase/securityPinService';
-import { getAppLockEnabled, setAppLockEnabledPref, getBiometricEnabledPref, setBiometricEnabledPref, clearBiometricEnabledPref } from '../firebase/appLockPrefs';
-import { isBiometricAvailable } from '../firebase/biometricAuth';
-import * as deviceSessionService from '../firebase/deviceSessionService';
-import * as inquiryService from '../firebase/inquiryService';
-import * as transactionService from '../firebase/transactionService';
-import * as ratesService from '../firebase/ratesService';
-import * as settingsService from '../firebase/settingsService';
-import * as featureAccessService from '../firebase/featureAccessService';
-import * as adControlsService from '../firebase/adControlsService';
-import * as homepageConfigService from '../firebase/homepageConfigService';
-import * as adService from '../firebase/adService';
-import * as supportContactService from '../firebase/supportContactService';
-import * as socialLinksService from '../firebase/socialLinksService';
-import * as paymentSettingsService from '../firebase/paymentSettingsService';
-import * as internetPricingService from '../firebase/internetPricingService';
-import * as categoryService from '../firebase/categoryService';
-import * as bannerService from '../firebase/bannerService';
-import * as announcementService from '../firebase/announcementService';
-import * as topupService from '../firebase/topupService';
-import * as chatService from '../firebase/chatService';
-import * as directChatService from '../firebase/directChatService';
-import * as groupChatService from '../firebase/groupChatService';
-import * as roomChatService from '../firebase/roomChatService';
-import * as chatLockService from '../firebase/chatLockService';
-import * as callService from '../firebase/callService';
+import * as authService from "../firebase/authService";
+import * as securityPinService from "../firebase/securityPinService";
+import {
+  getAppLockEnabled,
+  setAppLockEnabledPref,
+  getBiometricEnabledPref,
+  setBiometricEnabledPref,
+  clearBiometricEnabledPref,
+} from "../firebase/appLockPrefs";
+import { isBiometricAvailable } from "../firebase/biometricAuth";
+import * as deviceSessionService from "../firebase/deviceSessionService";
+import * as inquiryService from "../firebase/inquiryService";
+import * as transactionService from "../firebase/transactionService";
+import * as ratesService from "../firebase/ratesService";
+import * as settingsService from "../firebase/settingsService";
+import * as featureAccessService from "../firebase/featureAccessService";
+import * as adControlsService from "../firebase/adControlsService";
+import * as homepageConfigService from "../firebase/homepageConfigService";
+import * as adService from "../firebase/adService";
+import * as supportContactService from "../firebase/supportContactService";
+import * as socialLinksService from "../firebase/socialLinksService";
+import * as paymentSettingsService from "../firebase/paymentSettingsService";
+import * as internetPricingService from "../firebase/internetPricingService";
+import * as categoryService from "../firebase/categoryService";
+import * as bannerService from "../firebase/bannerService";
+import * as announcementService from "../firebase/announcementService";
+import * as topupService from "../firebase/topupService";
+import * as chatService from "../firebase/chatService";
+import * as callService from "../firebase/callService";
 import {
   registerForPushNotificationsAsync,
   addNotificationResponseListener,
   getLastNotificationResponseAsync,
   getFcmToken,
-} from '../notifications/pushService';
-import { maybeSaveReceiver } from '../firebase/receiverService';
-import { ensureWebviewAccess, chargeWebviewSubmission } from '../firebase/webviewAccessService';
-import { ensureModuleSubscription } from '../firebase/moduleSubscriptionService';
-import { checkPaymentEntryAccess, chargePaymentSuccess } from '../firebase/paymentWebviewService';
-import { withCallSettingsDefaults } from '../data/callSettingsConstants';
-import { cacheCallSettings, cacheCallerRingtones } from '../notifications/callSettingsCache';
-import { setCallerRingtone as saveCallerRingtone, removeCallerRingtone as deleteCallerRingtone, subscribeCallerRingtones } from '../firebase/callerRingtoneService';
+} from "../notifications/pushService";
+import { maybeSaveReceiver } from "../firebase/receiverService";
 import {
-  WEBVIEW_ACCESS_COST, WEBVIEW_SUBMIT_COST, PAYMENT_SUCCESS_COST, WEBVIEW_ACCESS_WINDOW_HOURS,
-  ACCESS_CLICK_WEBVIEWS, SUBMIT_CHARGED_WEBVIEWS, PAYMENT_CHARGED_WEBVIEWS,
+  ensureWebviewAccess,
+  chargeWebviewSubmission,
+} from "../firebase/webviewAccessService";
+import { ensureModuleSubscription } from "../firebase/moduleSubscriptionService";
+import {
+  checkPaymentEntryAccess,
+  chargePaymentSuccess,
+} from "../firebase/paymentWebviewService";
+import { withCallSettingsDefaults } from "../data/callSettingsConstants";
+import {
+  cacheCallSettings,
+  cacheCallerRingtones,
+} from "../notifications/callSettingsCache";
+import {
+  setCallerRingtone as saveCallerRingtone,
+  removeCallerRingtone as deleteCallerRingtone,
+  subscribeCallerRingtones,
+} from "../firebase/callerRingtoneService";
+import {
+  WEBVIEW_ACCESS_COST,
+  WEBVIEW_SUBMIT_COST,
+  PAYMENT_SUCCESS_COST,
+  WEBVIEW_ACCESS_WINDOW_HOURS,
+  ACCESS_CLICK_WEBVIEWS,
+  SUBMIT_CHARGED_WEBVIEWS,
+  PAYMENT_CHARGED_WEBVIEWS,
   amountToPoints,
-} from '../data/countries';
+} from "../data/countries";
 
 const AppContext = createContext(null);
 
@@ -73,18 +101,18 @@ const SERVICE_STEPS = {
 
 // Flight/Bus/Train are "contact-me" inquiries sent straight to Admin.
 // Everything else goes through the Dealer processing queue.
-const TRAVEL_SERVICES = ['flight', 'bus', 'train'];
-const TRAVEL_LABELS = { flight: 'Flight', bus: 'Bus', train: 'Train' };
+const TRAVEL_SERVICES = ["flight", "bus", "train"];
+const TRAVEL_LABELS = { flight: "Flight", bus: "Bus", train: "Train" };
 const DEALER_LABELS = {
-  recharge: 'Recharge',
-  mobilebanking: 'Mobile Banking',
-  internet: 'Internet',
-  remittance: 'Remittance',
+  recharge: "Recharge",
+  mobilebanking: "Mobile Banking",
+  internet: "Internet",
+  remittance: "Remittance",
 };
 
 /** Builds the {service, details, amount, total} payload the dealer queue needs, from the wizard's serviceData. */
 function buildTransactionPayload(service, serviceData, pricing, rates) {
-  if (service === 'recharge') {
+  if (service === "recharge") {
     const rawAmount = serviceData.amount || 0;
     // Non-Malaysia orders are entered in the destination country's local
     // currency (e.g. BDT) - convert to points (MYR) with the admin-set
@@ -97,28 +125,30 @@ function buildTransactionPayload(service, serviceData, pricing, rates) {
     // editable %) - it never changes what the customer pays, which stays
     // the face value they picked.
     const costPercent = pricing ? Number(pricing.rechargeCostPercent) || 0 : 0;
-    const profitPercent = pricing ? Number(pricing.rechargeProfitPercent) || 0 : 0;
+    const profitPercent = pricing
+      ? Number(pricing.rechargeProfitPercent) || 0
+      : 0;
     const cost = Math.round(amount * (costPercent / 100) * 100) / 100;
     const profit = Math.round(amount * (profitPercent / 100) * 100) / 100;
     return {
       service: DEALER_LABELS.recharge,
-      details: `${serviceData.operator || ''} - ${serviceData.currency || 'MYR'} ${rawAmount}`,
+      details: `${serviceData.operator || ""} - ${serviceData.currency || "MYR"} ${rawAmount}`,
       amount,
       total: amount,
       cost,
       profit,
     };
   }
-  if (service === 'mobilebanking') {
+  if (service === "mobilebanking") {
     const myr = serviceData.myr || 0;
     return {
       service: DEALER_LABELS.mobilebanking,
-      details: `${serviceData.provider || ''} - MYR ${myr.toFixed(2)} (Receiver: ${serviceData.phone || ''})`,
+      details: `${serviceData.provider || ""} - MYR ${myr.toFixed(2)} (Receiver: ${serviceData.phone || ""})`,
       amount: myr,
       total: myr + 5,
     };
   }
-  if (service === 'internet') {
+  if (service === "internet") {
     const rawAmount = serviceData.amount || 0;
     // Same conversion as recharge above - the package's face price is in
     // the destination country's local currency, points shown/charged are
@@ -126,26 +156,33 @@ function buildTransactionPayload(service, serviceData, pricing, rates) {
     const amount = amountToPoints(rawAmount, serviceData.country, rates);
     return {
       service: DEALER_LABELS.internet,
-      details: `${serviceData.operator || ''} - ${serviceData.package || ''} (${serviceData.currency || 'MYR'} ${rawAmount})`,
+      details: `${serviceData.operator || ""} - ${serviceData.package || ""} (${serviceData.currency || "MYR"} ${rawAmount})`,
       amount,
       total: amount,
     };
   }
-  if (service === 'remittance') {
+  if (service === "remittance") {
     const sendAmt = serviceData.sendAmt || 0;
     const fee = serviceData.transferFee || 0;
-    const METHOD_LABELS = { deposit: 'Bank Account', cash: 'Cash Pickup', ewallet: 'eWallet' };
-    const methodLabel = METHOD_LABELS[serviceData.method] || '';
-    const receiverName = `${serviceData.receiverFirstName || ''} ${serviceData.receiverLastName || ''}`.trim();
-    const senderPart = serviceData.senderName ? ` · Sender: ${serviceData.senderName}` : '';
+    const METHOD_LABELS = {
+      deposit: "Bank Account",
+      cash: "Cash Pickup",
+      ewallet: "eWallet",
+    };
+    const methodLabel = METHOD_LABELS[serviceData.method] || "";
+    const receiverName =
+      `${serviceData.receiverFirstName || ""} ${serviceData.receiverLastName || ""}`.trim();
+    const senderPart = serviceData.senderName
+      ? ` · Sender: ${serviceData.senderName}`
+      : "";
     return {
       service: DEALER_LABELS.remittance,
-      details: `${methodLabel} to ${receiverName} (${serviceData.country || ''}) via ${serviceData.paymentMethod || ''}${senderPart}`,
+      details: `${methodLabel} to ${receiverName} (${serviceData.country || ""}) via ${serviceData.paymentMethod || ""}${senderPart}`,
       amount: sendAmt,
       total: sendAmt + fee,
     };
   }
-  return { service, details: '', amount: 0, total: 0 };
+  return { service, details: "", amount: 0, total: 0 };
 }
 
 export function AppProvider({ children }) {
@@ -153,19 +190,20 @@ export function AppProvider({ children }) {
   const [authUser, setAuthUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [authError, setAuthError] = useState('');
+  const [authError, setAuthError] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
   // { uid, email } while a login is waiting on single-device-login
   // verification (functions/deviceSessionService.js) - see doLogin/
   // doGoogleLogin/confirmDeviceVerification below and DeviceVerifyScreen.js.
-  const [pendingDeviceVerification, setPendingDeviceVerification] = useState(null);
+  const [pendingDeviceVerification, setPendingDeviceVerification] =
+    useState(null);
   const [pendingGooglePhone, setPendingGooglePhone] = useState(false);
 
   // ---- navigation state ----
   // No more manual role picker - `screen` starts on 'login' and, once
   // signed in, the account's Firestore `role` field (in `profile.role`)
   // decides which home screen to land on. See the bootstrap effect below.
-  const [screen, setScreen] = useState('login'); // login | register | forgotPassword | customerHome | service | dealerHome | resellerHome | adminHome | webview | buspicker | support | history | topup | chat | chatList | chatHub | directChatList | addContact | qrScan | myQrCode | groupList | newGroup | createRoom | roomSettings | settings | profile | myAccount | reports | notifications | marketplaceHome | marketplaceCreateListing | marketplaceMyListings | marketplaceMyReviews | marketplaceListingDetail | marketplaceModeration | verifyIdentity | verificationManagement | adminAnalytics | myDocuments | documentType | addDocument | documentDetails | documentViewer | moreFeatures | adminFeatures | apiProviderManagement | dealerFeatures | resellerFeatures | featureAccess | tierPromotions | adFeatureControls | bannerManagement | salaryReports | notepad | addNote | noteDetail | help | investigateChat | friendsList | callSettings | ringtonePicker
+  const [screen, setScreen] = useState("login"); // login | register | forgotPassword | customerHome | service | dealerHome | resellerHome | adminHome | webview | buspicker | support | history | topup | chat | chatList | settings | profile | myAccount | reports | notifications | marketplaceHome | marketplaceCreateListing | marketplaceMyListings | marketplaceMyReviews | marketplaceListingDetail | marketplaceModeration | verifyIdentity | verificationManagement | adminAnalytics | myDocuments | documentType | addDocument | documentDetails | documentViewer | moreFeatures | adminFeatures | apiProviderManagement | dealerFeatures | resellerFeatures | featureAccess | tierPromotions | adFeatureControls | bannerManagement | salaryReports | notepad | addNote | noteDetail | help | friendsList | callSettings | ringtonePicker
 
   // ---- back-button navigation history ----
   // Tracks prior screens so the Android hardware back button can step
@@ -205,7 +243,7 @@ export function AppProvider({ children }) {
   // hardware back should never be able to land here again (there's no valid
   // "go back to login" while signed in), so they're never pushed onto the
   // back-history stack below.
-  const PRE_AUTH_SCREENS = ['login', 'register', 'deviceVerify', 'googlePhone'];
+  const PRE_AUTH_SCREENS = ["login", "register", "deviceVerify", "googlePhone"];
 
   useEffect(() => {
     const prev = prevScreenRef.current;
@@ -232,175 +270,32 @@ export function AppProvider({ children }) {
 
   // ---- support chat (customer <-> Support only - see SupportScreen.js) ----
   const [activeChatId, setActiveChatId] = useState(null); // the customer uid whose thread is open
-  const [activeChatName, setActiveChatName] = useState('');
+  const [activeChatName, setActiveChatName] = useState("");
   const [chatUnreadCount, setChatUnreadCount] = useState(0); // badge count for the signed-in side
   // Which screen ChatScreen's back button should return to - staff can open
   // a support thread from either the Chats inbox (chatList) or the
   // "Messages" tab inside Support Tickets (adminSupport); defaults to
   // 'chatList' to match the existing behavior for every other entry point.
-  const [activeChatReturnTo, setActiveChatReturnTo] = useState('chatList');
+  const [activeChatReturnTo, setActiveChatReturnTo] = useState("chatList");
 
-  // ---- direct chat (general-purpose 1:1 "Chat" tab, any two accounts) ----
-  const [activeDirectChatId, setActiveDirectChatId] = useState(null);
-  const [activeDirectChatName, setActiveDirectChatName] = useState('');
-  const [activeDirectChatUid, setActiveDirectChatUid] = useState(null); // other participant's uid - needed to start a call
-  const [directChatUnreadCount, setDirectChatUnreadCount] = useState(0);
-  // Which contact RingtonePickerScreen is currently editing - same
-  // "dedicated nav state alongside setScreen" pattern as activeDirectChatId
-  // above, since `screen` itself is a bare string with no params (see the
-  // useState('login') list). Set by openRingtonePicker below.
-  const [activeRingtoneContactUid, setActiveRingtoneContactUid] = useState(null);
-  const [activeRingtoneContactName, setActiveRingtoneContactName] = useState('');
-  // Prefills the message box (without auto-sending) the next time a direct
-  // chat opens - e.g. a dealer's "message customer about this order" button.
-  const [chatDraftText, setChatDraftText] = useState('');
+  // ---- 1-to-1 call ringtone selection ----
+  const [activeRingtoneContactUid, setActiveRingtoneContactUid] =
+    useState(null);
+  const [activeRingtoneContactName, setActiveRingtoneContactName] =
+    useState("");
 
-  // ---- direct chat investigation (superadmin-only, read-only view of a
-  // reported conversation - see ChatReportsScreen's "Investigate" button
-  // and InvestigateChatScreen.js). Deliberately separate state from
-  // activeDirectChatId/openDirectChat above: this isn't "the signed-in
-  // user's own thread" (no security-PIN vault check, no call button, no
-  // message box), it's an admin tool gated by firestore.rules'
-  // underInvestigation flag instead. ----
-  const [activeInvestigateChatId, setActiveInvestigateChatId] = useState(null);
-  const [activeInvestigateReport, setActiveInvestigateReport] = useState(null); // { id, reportedUid, reportedName, reporterName }
+  /** Opens the Support thread - `chatId` is the customer's uid, `name` is
+   * who to show in the header/inbox. `returnTo` (staff only) is which
+   * screen the back button should land on - defaults to the Chats inbox
+   * ('chatList') to match every existing caller; AdminSupportScreen's
+   * "Messages" tab passes 'adminSupport' so back returns there instead. */
+  const openChat = useCallback((chatId, name, returnTo) => {
+    setActiveChatId(chatId);
 
-  /** Opens the read-only conversation viewer for a report a superadmin is
-   * investigating - `report` is { id, reportedUid, reportedName, reporterName }. */
-  const openInvestigateChat = useCallback((chatId, report) => {
-    setActiveInvestigateChatId(chatId);
-    setActiveInvestigateReport(report || null);
-    setScreen('investigateChat');
+    setActiveChatName(name || "");
+    setActiveChatReturnTo(returnTo || "chatList");
+    setScreen("chat");
   }, []);
-
-  // ---- marketplace (Buy & Sell) ---- Screens call marketplaceService.js
-  // directly (same pattern as ProfileScreen -> authService), so all that
-  // lives here is the one piece of navigation state a listing's detail
-  // screen needs: which listing to show. "Chat Seller" reuses
-  // openDirectChat above - no separate marketplace chat state.
-  const [activeListingId, setActiveListingId] = useState(null);
-  const openMarketplace = useCallback(() => setScreen('marketplaceHome'), []);
-  const openListingDetail = useCallback((listingId) => {
-    setActiveListingId(listingId);
-    setScreen('marketplaceListingDetail');
-  }, []);
-
-  // ---- PHASE 9 - MY SHEBA ADVERTISER AND CAMPAIGN MANAGEMENT ---- Same
-  // "dedicated nav state alongside setScreen" pattern as activeListingId/
-  // activePropertyId above: AdvertiserManagementScreen is the roster (no
-  // id needed to open it), AdvertiserDetailScreen needs to know which
-  // ad_advertisers doc to show.
-  const [activeAdvertiserId, setActiveAdvertiserId] = useState(null);
-  const openAdvertiserManagement = useCallback(() => setScreen('advertiserManagement'), []);
-  const openAdvertiserDetail = useCallback((advertiserId) => {
-    setActiveAdvertiserId(advertiserId);
-    setScreen('advertiserDetail');
-  }, []);
-
-  // ---- inbound deep links ("Open in App" on the mysheba.top listing
-  // preview page - see functions/listingPreview.js, and ShareListingSheet's
-  // shared links). Handles both mysheba://listing/<id> (the app's own
-  // scheme, works the moment the app is installed - no server files
-  // needed) and, in case Android/iOS App Links get set up later without
-  // any change to this parser, https://mysheba.top/listing/<id>.
-  //
-  // A link tapped while the app is already running is handled the instant
-  // it arrives. A link that launched (or resumed) the app cold has to wait
-  // - auth hasn't resolved yet, and the role-based post-login redirect
-  // above would otherwise stomp straight over it - so it's parked in this
-  // ref and the effect below applies it once auth/profile settle.
-  const pendingDeepLinkListingIdRef = useRef(null);
-
-  const parseListingIdFromUrl = useCallback((url) => {
-    if (!url) return null;
-    const match = String(url).match(/(?:mysheba:\/\/listing\/|mysheba\.top\/listing\/)([^/?#]+)/);
-    return match ? decodeURIComponent(match[1]) : null;
-  }, []);
-
-  const handleDeepLink = useCallback((url) => {
-    const listingId = parseListingIdFromUrl(url);
-    if (!listingId) return;
-    if (authUser && profile && !authLoading) {
-      openListingDetail(listingId);
-    } else {
-      pendingDeepLinkListingIdRef.current = listingId;
-    }
-  }, [authUser, profile, authLoading, openListingDetail, parseListingIdFromUrl]);
-
-  useEffect(() => {
-    if (authLoading || !authUser || !profile) return;
-    const pendingId = pendingDeepLinkListingIdRef.current;
-    if (!pendingId) return;
-    pendingDeepLinkListingIdRef.current = null;
-    openListingDetail(pendingId);
-  }, [authLoading, authUser, profile, openListingDetail]);
-
-  // ---- accommodation (Phase 2 of the Marketplace PRD) ---- Same pattern
-  // as marketplace above: screens call accommodationService.js directly,
-  // so all that lives here is which property to show. "Contact Owner"
-  // reuses openDirectChat above - no separate accommodation chat state.
-  const [activePropertyId, setActivePropertyId] = useState(null);
-  const openAccommodation = useCallback(() => setScreen('accommodationHome'), []);
-  const openPropertyDetail = useCallback((propertyId) => {
-    setActivePropertyId(propertyId);
-    setScreen('accommodationPropertyDetail');
-  }, []);
-
-  // ---- room sharing (Phase 2 of the Marketplace PRD) ---- Same pattern
-  // as accommodation above: screens call roommateService.js directly, so
-  // all that lives here is which request to show. "Chat" reuses
-  // openDirectChat above - no separate room-sharing chat state.
-  const [activeRoommateRequestId, setActiveRoommateRequestId] = useState(null);
-  const openRoomSharing = useCallback(() => setScreen('roomSharingHome'), []);
-  const openRoommateRequestDetail = useCallback((requestId) => {
-    setActiveRoommateRequestId(requestId);
-    setScreen('roomSharingRequestDetail');
-  }, []);
-
-  // ---- local services (Phase 2 of the Marketplace PRD, section 8) ----
-  // Same pattern as accommodation/room sharing above: screens call
-  // serviceProviderService.js / serviceReviewService.js /
-  // serviceRequestService.js directly, so all that lives here is which
-  // provider to show. "Message" reuses openDirectChat above - no separate
-  // local-services chat state. ("Request Service" is a lead form, not a
-  // chat - see serviceRequestService.js - so it needs no navigation state
-  // of its own either.)
-  const [activeProviderId, setActiveProviderId] = useState(null);
-  const openServiceProvidersHome = useCallback(() => setScreen('servicesHome'), []);
-  const openServiceProviderDetail = useCallback((providerId) => {
-    setActiveProviderId(providerId);
-    setScreen('servicesProviderDetail');
-  }, []);
-
-  // ---- community (PRD section 9 - Jobs/Events/Lost & Found/Emergency/
-  // News) ---- Same pattern as accommodation/room sharing/local services
-  // above: screens call communityService.js directly, so all that lives
-  // here is which post to show. Likes/comments live entirely in
-  // communityService too - no extra navigation state needed for those.
-  const [activeCommunityPostId, setActiveCommunityPostId] = useState(null);
-  const openCommunity = useCallback(() => setScreen('communityHome'), []);
-  const openCommunityPostDetail = useCallback((postId) => {
-    setActiveCommunityPostId(postId);
-    setScreen('communityPostDetail');
-  }, []);
-
-  // ---- social feed (Next Update PRD §3 - general Facebook-style posts,
-  // distinct from the typed Community module above) ---- Same pattern as
-  // community above: screens call socialFeedService.js directly, so all
-  // that lives here is which post is open. Likes/comments/shares/reports
-  // live entirely in socialFeedService too - no extra navigation state.
-  const [activeSocialPostId, setActiveSocialPostId] = useState(null);
-  const openSocialFeed = useCallback(() => setScreen('socialFeed'), []);
-  const openCreateSocialPost = useCallback(() => setScreen('createSocialPost'), []);
-  const openSocialPostDetail = useCallback((postId) => {
-    setActiveSocialPostId(postId);
-    setScreen('socialPostDetail');
-  }, []);
-
-  // ---- unified marketplace search (PRD sitemap: Search Products/Rooms/
-  // Services/Users) - a single screen, no navigation state of its own
-  // needed beyond the screen switch itself; see MarketplaceSearchScreen.js.
-  const openMarketplaceSearch = useCallback(() => setScreen('marketplaceSearch'), []);
 
   // ---- My Documents (private per-user document vault - passport, visa,
   // work permit, etc.) ---- Screens call documentService.js directly
@@ -414,19 +309,25 @@ export function AppProvider({ children }) {
   // openMyDocuments itself is defined further below, alongside
   // ensureModuleAccess (needs pointCosts-adjacent pricing state) - see
   // "Notepad / My Documents / Salary & OT monthly subscription gate".
-  const openDocumentTypePicker = useCallback(() => setScreen('documentType'), []);
-  const openAddDocument = useCallback((documentType, existingDocumentId = null) => {
-    setActiveDocumentType(documentType);
-    setEditDocumentId(existingDocumentId);
-    setScreen('addDocument');
-  }, []);
+  const openDocumentTypePicker = useCallback(
+    () => setScreen("documentType"),
+    [],
+  );
+  const openAddDocument = useCallback(
+    (documentType, existingDocumentId = null) => {
+      setActiveDocumentType(documentType);
+      setEditDocumentId(existingDocumentId);
+      setScreen("addDocument");
+    },
+    [],
+  );
   const openDocumentDetail = useCallback((documentId) => {
     setActiveDocumentId(documentId);
-    setScreen('documentDetails');
+    setScreen("documentDetails");
   }, []);
   const openDocumentViewer = useCallback((documentId) => {
     setActiveDocumentId(documentId);
-    setScreen('documentViewer');
+    setScreen("documentViewer");
   }, []);
 
   // ---- Notepad (private per-user notes, plus Credit/Debit/Loan "money
@@ -442,11 +343,11 @@ export function AppProvider({ children }) {
   // see "Notepad / My Documents / Salary & OT monthly subscription gate".
   const openAddNote = useCallback((existingNoteId = null) => {
     setEditNoteId(existingNoteId);
-    setScreen('addNote');
+    setScreen("addNote");
   }, []);
   const openNoteDetail = useCallback((noteId) => {
     setActiveNoteId(noteId);
-    setScreen('noteDetail');
+    setScreen("noteDetail");
   }, []);
 
   // ---- MySheba Help (a single "ask a question" entry point inside
@@ -459,10 +360,10 @@ export function AppProvider({ children }) {
   // applies + clears it on mount so a later plain visit to Support never
   // sees stale prefill data.
   const [helpPrefill, setHelpPrefill] = useState(null); // { subject, message } | null
-  const openHelp = useCallback(() => setScreen('help'), []);
+  const openHelp = useCallback(() => setScreen("help"), []);
   const openSupportWithPrefill = useCallback((subject, message) => {
     setHelpPrefill({ subject, message });
-    setScreen('support');
+    setScreen("support");
   }, []);
 
   // ---- Business Profile (PRD section 15 Monetization Plan - "Business
@@ -472,10 +373,11 @@ export function AppProvider({ children }) {
   // activeProviderId above. Opened either from a listing/property/
   // service's seller/owner/provider row (view someone else's), or from My
   // Account (view/edit your own).
-  const [activeBusinessProfileUid, setActiveBusinessProfileUid] = useState(null);
+  const [activeBusinessProfileUid, setActiveBusinessProfileUid] =
+    useState(null);
   const openBusinessProfile = useCallback((uid) => {
     setActiveBusinessProfileUid(uid);
-    setScreen('businessProfile');
+    setScreen("businessProfile");
   }, []);
 
   // ---- Contact Profile ---- read-only view of the other person in a 1:1
@@ -487,7 +389,7 @@ export function AppProvider({ children }) {
   const openContactProfile = useCallback((uid) => {
     if (!uid) return;
     setActiveContactProfileUid(uid);
-    setScreen('contactProfile');
+    setScreen("contactProfile");
   }, []);
 
   // openSalary / openSalaryReports are defined further below, next to
@@ -512,17 +414,17 @@ export function AppProvider({ children }) {
   const openCreatePayslip = useCallback((sourceRecordId = null) => {
     setPayslipSourceRecordId(sourceRecordId);
     setEditPayslipId(null);
-    setScreen('createPayslip');
+    setScreen("createPayslip");
   }, []);
   const openEditPayslip = useCallback((payslipId) => {
     setEditPayslipId(payslipId);
     setPayslipSourceRecordId(null);
-    setScreen('createPayslip');
+    setScreen("createPayslip");
   }, []);
-  const openPayslipHistory = useCallback(() => setScreen('payslipHistory'), []);
+  const openPayslipHistory = useCallback(() => setScreen("payslipHistory"), []);
   const openPayslipDetails = useCallback((payslipId) => {
     setActivePayslipId(payslipId);
-    setScreen('payslipDetails');
+    setScreen("payslipDetails");
   }, []);
 
   // ---- Security PIN gate (My Documents, Transfer Points, Notepad, Chat
@@ -535,18 +437,17 @@ export function AppProvider({ children }) {
   // Only one gate can be open at a time; a second call while one is pending
   // auto-cancels the first rather than stacking modals. Moved above the
   // group/direct/room chat section (rather than staying down by
-  // resetSecurityPin) so openDirectChat/openGroupChat/openRoomChat below can
   // close over it directly for Chat Lock's unlock-on-open check.
   const [pinGateRequest, setPinGateRequest] = useState(null); // { actionLabel } | null
   const pinGateResolverRef = useRef(null);
   const requireSecurityPin = useCallback((actionLabel) => {
     if (pinGateResolverRef.current) {
-      pinGateResolverRef.current.reject(new Error('Cancelled'));
+      pinGateResolverRef.current.reject(new Error("Cancelled"));
       pinGateResolverRef.current = null;
     }
     return new Promise((resolve, reject) => {
       pinGateResolverRef.current = { resolve, reject };
-      setPinGateRequest({ actionLabel: actionLabel || '' });
+      setPinGateRequest({ actionLabel: actionLabel || "" });
     });
   }, []);
   const resolvePinGate = useCallback(() => {
@@ -555,35 +456,10 @@ export function AppProvider({ children }) {
     setPinGateRequest(null);
   }, []);
   const cancelPinGate = useCallback(() => {
-    pinGateResolverRef.current?.reject(new Error('Cancelled'));
+    pinGateResolverRef.current?.reject(new Error("Cancelled"));
     pinGateResolverRef.current = null;
     setPinGateRequest(null);
   }, []);
-
-  // ---- group chat ----
-  const [activeGroupId, setActiveGroupId] = useState(null);
-  const [activeGroupName, setActiveGroupName] = useState('');
-  const [myGroups, setMyGroups] = useState([]); // every group the signed-in user belongs to
-
-  // ---- room chat (community rooms with join rules + house rules) ----
-  const [activeRoomId, setActiveRoomId] = useState(null);
-  const [activeRoomName, setActiveRoomName] = useState('');
-  const [myRooms, setMyRooms] = useState([]); // every room the signed-in user belongs to
-  const [discoverableRooms, setDiscoverableRooms] = useState([]); // public (open/approval) rooms the user hasn't joined yet - see Rooms tab's "Discover" section
-
-  // ---- unified Chat hub (Direct / Groups / Rooms tabs, see ChatHubScreen) ----
-  const [chatHubTab, setChatHubTab] = useState('direct'); // 'direct' | 'groups' | 'rooms'
-
-  // ---- Chat Lock (WhatsApp-style per-thread lock, see chatLockService.js) ----
-  // lockedChatIds holds "kind:id" keys (kind is 'direct' | 'group' | 'room')
-  // for every thread the signed-in user has personally locked - it's a live
-  // subscription so a lock/unlock made on another device shows up here too.
-  // chatVaultUnlocked tracks whether they've already passed the security PIN
-  // gate to view locked threads THIS session - like WhatsApp, it re-locks
-  // (see the AppState listener below) whenever the app is backgrounded, so
-  // leaving the app and coming back always re-prompts.
-  const [lockedChatIds, setLockedChatIds] = useState([]);
-  const [chatVaultUnlocked, setChatVaultUnlocked] = useState(false);
 
   // ---- Private vault unlock (Notepad + My Documents share this one flag;
   // Transfer Points intentionally does NOT - it always re-prompts) ----
@@ -610,7 +486,9 @@ export function AppProvider({ children }) {
   const [appLockEnabled, setAppLockEnabledState] = useState(false);
   const [appLocked, setAppLocked] = useState(false);
   const appLockEnabledRef = useRef(false);
-  useEffect(() => { appLockEnabledRef.current = appLockEnabled; }, [appLockEnabled]);
+  useEffect(() => {
+    appLockEnabledRef.current = appLockEnabled;
+  }, [appLockEnabled]);
   // How long the app can sit backgrounded before the next foreground demands
   // PIN/biometric again. Below this, coming back (checking a notification,
   // switching to the camera for a QR scan, a quick app-switch) resumes
@@ -625,13 +503,16 @@ export function AppProvider({ children }) {
     getAppLockEnabled().then(setAppLockEnabledState);
   }, []);
 
-  const setAppLockEnabled = useCallback(async (value) => {
-    if (value && !profile?.securityPinSet) {
-      await requireSecurityPin('App Lock');
-    }
-    setAppLockEnabledState(value);
-    await setAppLockEnabledPref(value);
-  }, [requireSecurityPin, profile]);
+  const setAppLockEnabled = useCallback(
+    async (value) => {
+      if (value && !profile?.securityPinSet) {
+        await requireSecurityPin("App Lock");
+      }
+      setAppLockEnabledState(value);
+      await setAppLockEnabledPref(value);
+    },
+    [requireSecurityPin, profile],
+  );
 
   const unlockApp = useCallback(() => setAppLocked(false), []);
 
@@ -655,19 +536,22 @@ export function AppProvider({ children }) {
     });
   }, []);
 
-  const setBiometricEnabled = useCallback(async (value) => {
-    if (value && !profile?.securityPinSet) {
-      await requireSecurityPin('Biometric Unlock');
-    }
-    if (value) {
-      // Biometric unlock without App Lock being on doesn't mean anything -
-      // opting in turns App Lock on too, same PIN-must-exist gate
-      // setAppLockEnabled already runs.
-      await setAppLockEnabled(true);
-    }
-    setBiometricEnabledState(value);
-    await setBiometricEnabledPref(value);
-  }, [profile, requireSecurityPin, setAppLockEnabled]);
+  const setBiometricEnabled = useCallback(
+    async (value) => {
+      if (value && !profile?.securityPinSet) {
+        await requireSecurityPin("Biometric Unlock");
+      }
+      if (value) {
+        // Biometric unlock without App Lock being on doesn't mean anything -
+        // opting in turns App Lock on too, same PIN-must-exist gate
+        // setAppLockEnabled already runs.
+        await setAppLockEnabled(true);
+      }
+      setBiometricEnabledState(value);
+      await setBiometricEnabledPref(value);
+    },
+    [profile, requireSecurityPin, setAppLockEnabled],
+  );
 
   // Fires once per fresh sign-in (not on every render/re-auth of an
   // already-decided device): if this device has never been asked
@@ -677,7 +561,13 @@ export function AppProvider({ children }) {
   // device has no biometric hardware/enrollment - nothing to opt into.
   const [showBiometricPrompt, setShowBiometricPrompt] = useState(false);
   useEffect(() => {
-    if (!authUser || !biometricPrefLoadedRef.current || biometricEnabled !== null || biometricPromptedRef.current) return undefined;
+    if (
+      !authUser ||
+      !biometricPrefLoadedRef.current ||
+      biometricEnabled !== null ||
+      biometricPromptedRef.current
+    )
+      return undefined;
     biometricPromptedRef.current = true;
     isBiometricAvailable().then((avail) => {
       if (avail) setShowBiometricPrompt(true);
@@ -685,28 +575,29 @@ export function AppProvider({ children }) {
     return undefined;
   }, [authUser, biometricEnabled]);
 
-  const dismissBiometricPrompt = useCallback(async (enable) => {
-    setShowBiometricPrompt(false);
-    if (enable) {
-      await setBiometricEnabled(true);
-    } else {
-      // "Not Now" - remembered for the rest of this login, but NOT written
-      // as a permanent "never ask" the way BIOMETRIC_KEY='0' would read if
-      // set here too broadly; matches setBiometricEnabled(false) below so a
-      // later logout still clears it back to null for the next sign-in.
-      setBiometricEnabledState(false);
-      await setBiometricEnabledPref(false);
-    }
-  }, [setBiometricEnabled]);
-
+  const dismissBiometricPrompt = useCallback(
+    async (enable) => {
+      setShowBiometricPrompt(false);
+      if (enable) {
+        await setBiometricEnabled(true);
+      } else {
+        // "Not Now" - remembered for the rest of this login, but NOT written
+        // as a permanent "never ask" the way BIOMETRIC_KEY='0' would read if
+        // set here too broadly; matches setBiometricEnabled(false) below so a
+        // later logout still clears it back to null for the next sign-in.
+        setBiometricEnabledState(false);
+        await setBiometricEnabledPref(false);
+      }
+    },
+    [setBiometricEnabled],
+  );
 
   // ---- voice / video calls (Agora) ----
   const [activeCall, setActiveCall] = useState(null); // the call doc currently on-screen (ringing/accepted)
   const [incomingCall, setIncomingCall] = useState(null); // a 1:1 call ringing FOR me
-  const [incomingGroupCall, setIncomingGroupCall] = useState(null); // a group call ringing FOR me
 
   // ---- service wizard state (mirrors currentService/currentStep/totalSteps/serviceData) ----
-  const [currentService, setCurrentService] = useState('');
+  const [currentService, setCurrentService] = useState("");
   const [currentStep, setCurrentStep] = useState(0);
   const [serviceData, setServiceData] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -715,8 +606,8 @@ export function AppProvider({ children }) {
   const [dealerTxs, setDealerTxs] = useState([]);
   const [inquiries, setInquiries] = useState([]);
   const [topups, setTopups] = useState([]);
-  const [dealerTab, setDealerTab] = useState('pending');
-  const [adminTab, setAdminTab] = useState('all');
+  const [dealerTab, setDealerTab] = useState("pending");
+  const [adminTab, setAdminTab] = useState("all");
   // Whether Admin/Dealer Home is showing a Dashboard sub-section (e.g.
   // Pending, Rates, Banners) vs. its default landing view. Lifted out of
   // AdminHomeScreen/DealerHomeScreen local state so AdminFeaturesScreen /
@@ -731,7 +622,7 @@ export function AppProvider({ children }) {
   // means "not yet forwarded to a dealer" (no dealerId set); 'sent' means
   // forwarded and now living in that dealer's own queue. ----
   const [resellerTxs, setResellerTxs] = useState([]);
-  const [resellerTab, setResellerTab] = useState('pending');
+  const [resellerTab, setResellerTab] = useState("pending");
   const [resellerViewingSection, setResellerViewingSection] = useState(false);
 
   // ---- rates ----
@@ -746,7 +637,9 @@ export function AppProvider({ children }) {
   // management tool - superadmin-editable from Superadmin > Feature Access
   // (see featureAccessService.js). Customer features (ServiceGrid) aren't
   // part of this - those stay identical for every role. ----
-  const [featureAccess, setFeatureAccess] = useState(featureAccessService.DEFAULT_FEATURE_ACCESS);
+  const [featureAccess, setFeatureAccess] = useState(
+    featureAccessService.DEFAULT_FEATURE_ACCESS,
+  );
 
   // PHASE 4 - Global/per-feature advertisement controls (ad_settings/general,
   // ad_feature_controls/{featureId}), subscribed once here rather than once
@@ -755,15 +648,21 @@ export function AppProvider({ children }) {
   // Firestore listeners for the same two small config docs. Same
   // "merge with defaults, don't require a write just to read" shape as
   // featureAccess above - see adControlsService.js.
-  const [adSettings, setAdSettings] = useState(adControlsService.DEFAULT_AD_SETTINGS);
-  const [adFeatureControls, setAdFeatureControls] = useState(adControlsService.DEFAULT_AD_FEATURE_CONTROLS);
+  const [adSettings, setAdSettings] = useState(
+    adControlsService.DEFAULT_AD_SETTINGS,
+  );
+  const [adFeatureControls, setAdFeatureControls] = useState(
+    adControlsService.DEFAULT_AD_FEATURE_CONTROLS,
+  );
   // Next Update PRD §2 - Country/Region homepage config, read-only here
   // (writes are superadmin-only, direct from AdminHomeScreen's Homepage
   // tab - see homepageConfigService.updateCountryModules). Same
   // fail-quiet-on-listener-error shape as adSettings/adFeatureControls
   // above: a config hiccup just leaves the last-known/default layout in
   // place rather than surfacing as a broken home screen.
-  const [homepageConfig, setHomepageConfig] = useState(homepageConfigService.DEFAULT_HOMEPAGE_CONFIG);
+  const [homepageConfig, setHomepageConfig] = useState(
+    homepageConfigService.DEFAULT_HOMEPAGE_CONFIG,
+  );
   // PHASE 9 - see the subscription below for why this is campaigns only
   // (not advertisers too) - keyed by doc id for adTargetingService's
   // getEligibleAds step 13 (campaignId -> AdCampaign).
@@ -774,8 +673,12 @@ export function AppProvider({ children }) {
   // category picker or filter chips reads these live instead of the
   // hardcoded arrays that used to live in marketplaceService.js /
   // serviceProviderService.js. ----
-  const [marketplaceCategories, setMarketplaceCategories] = useState(categoryService.DEFAULT_CATEGORIES.marketplace);
-  const [serviceCategories, setServiceCategories] = useState(categoryService.DEFAULT_CATEGORIES.services);
+  const [marketplaceCategories, setMarketplaceCategories] = useState(
+    categoryService.DEFAULT_CATEGORIES.marketplace,
+  );
+  const [serviceCategories, setServiceCategories] = useState(
+    categoryService.DEFAULT_CATEGORIES.services,
+  );
 
   // ---- live point cost per "point deduct" webview key, admin-editable
   // from Admin > Pricing > Point Feature Costs, with optional per-role
@@ -787,13 +690,25 @@ export function AppProvider({ children }) {
   // see openWebView below. ----
   const pointCosts = useMemo(() => {
     const role = profile?.role;
-    const access = settingsService.priceForRole(pricing, 'webviewAccessCost', role) ?? WEBVIEW_ACCESS_COST;
-    const submit = settingsService.priceForRole(pricing, 'webviewSubmitCost', role) ?? WEBVIEW_SUBMIT_COST;
-    const payment = settingsService.priceForRole(pricing, 'paymentSuccessCost', role) ?? PAYMENT_SUCCESS_COST;
+    const access =
+      settingsService.priceForRole(pricing, "webviewAccessCost", role) ??
+      WEBVIEW_ACCESS_COST;
+    const submit =
+      settingsService.priceForRole(pricing, "webviewSubmitCost", role) ??
+      WEBVIEW_SUBMIT_COST;
+    const payment =
+      settingsService.priceForRole(pricing, "paymentSuccessCost", role) ??
+      PAYMENT_SUCCESS_COST;
     const map = {};
-    ACCESS_CLICK_WEBVIEWS.forEach((key) => { map[key] = access; });
-    SUBMIT_CHARGED_WEBVIEWS.forEach((key) => { map[key] = submit; });
-    PAYMENT_CHARGED_WEBVIEWS.forEach((key) => { map[key] = payment; });
+    ACCESS_CLICK_WEBVIEWS.forEach((key) => {
+      map[key] = access;
+    });
+    SUBMIT_CHARGED_WEBVIEWS.forEach((key) => {
+      map[key] = submit;
+    });
+    PAYMENT_CHARGED_WEBVIEWS.forEach((key) => {
+      map[key] = payment;
+    });
     return map;
   }, [pricing, profile?.role]);
 
@@ -801,7 +716,8 @@ export function AppProvider({ children }) {
   // charges again - admin-editable from Admin > Pricing > Access Window
   // (see settingsService.js). Falls back to WEBVIEW_ACCESS_WINDOW_HOURS
   // only if the pricing doc hasn't loaded yet.
-  const accessWindowHours = pricing.webviewAccessWindowHours ?? WEBVIEW_ACCESS_WINDOW_HOURS;
+  const accessWindowHours =
+    pricing.webviewAccessWindowHours ?? WEBVIEW_ACCESS_WINDOW_HOURS;
 
   // ---- Notepad / My Documents / Salary & OT monthly subscription gate ----
   // Unlike the webview features above, these three are a recurring monthly
@@ -815,9 +731,11 @@ export function AppProvider({ children }) {
   const moduleSubscriptionCosts = useMemo(() => {
     const role = profile?.role;
     return {
-      notepad: settingsService.priceForRole(pricing, 'notepadCost', role) ?? 0,
-      myDocuments: settingsService.priceForRole(pricing, 'myDocumentsCost', role) ?? 0,
-      salaryOt: settingsService.priceForRole(pricing, 'salaryOtCost', role) ?? 0,
+      notepad: settingsService.priceForRole(pricing, "notepadCost", role) ?? 0,
+      myDocuments:
+        settingsService.priceForRole(pricing, "myDocumentsCost", role) ?? 0,
+      salaryOt:
+        settingsService.priceForRole(pricing, "salaryOtCost", role) ?? 0,
     };
   }, [pricing, profile?.role]);
   const moduleSubscriptionDays = pricing.moduleSubscriptionDays ?? 30;
@@ -826,56 +744,85 @@ export function AppProvider({ children }) {
   const ensureModuleAccess = useCallback(
     (key, enter) => {
       const cost = moduleSubscriptionCosts[key];
-      if (!cost || !authUser?.uid) { enter(); return; }
+      if (!cost || !authUser?.uid) {
+        enter();
+        return;
+      }
       if (moduleAccessBusy) return;
 
       const windowMs = moduleSubscriptionDays * 24 * 60 * 60 * 1000;
       const lastCharge = profile?.moduleSubscription?.[key];
       const stillActive = !!lastCharge && Date.now() - lastCharge < windowMs;
-      if (stillActive) { enter(); return; }
+      if (stillActive) {
+        enter();
+        return;
+      }
 
-      const balance = typeof profile?.walletBalance === 'number' ? profile.walletBalance : 0;
+      const balance =
+        typeof profile?.walletBalance === "number" ? profile.walletBalance : 0;
       if (balance < cost) {
         showAlert(
-          'MySheba',
-          `This module needs a ${cost} pt/month subscription. Your current balance is ${balance} pts - top up your wallet first.`
+          "MySheba",
+          `This module needs a ${cost} pt/month subscription. Your current balance is ${balance} pts - top up your wallet first.`,
         );
         return;
       }
 
       showAlert(
-        'Monthly subscription',
+        "Monthly subscription",
         `This module costs ${cost} pts/month. Your current balance is ${balance} pts.\n\nSubscribe and continue?`,
         [
-          { text: 'Cancel', style: 'cancel' },
+          { text: "Cancel", style: "cancel" },
           {
-            text: 'Subscribe',
+            text: "Subscribe",
             onPress: async () => {
               setModuleAccessBusy(true);
               try {
                 await ensureModuleSubscription(authUser.uid, key);
                 enter();
               } catch (err) {
-                showAlert('MySheba', err.message || `You need ${cost} pts for this - top up your wallet first.`);
+                showAlert(
+                  "MySheba",
+                  err.message ||
+                    `You need ${cost} pts for this - top up your wallet first.`,
+                );
               } finally {
                 setModuleAccessBusy(false);
               }
             },
           },
-        ]
+        ],
       );
     },
-    [authUser, moduleAccessBusy, profile, moduleSubscriptionCosts, moduleSubscriptionDays]
+    [
+      authUser,
+      moduleAccessBusy,
+      profile,
+      moduleSubscriptionCosts,
+      moduleSubscriptionDays,
+    ],
   );
 
-  const openMyDocuments = useCallback(() => ensureModuleAccess('myDocuments', () => setScreen('myDocuments')), [ensureModuleAccess]);
-  const openNotepad = useCallback(() => ensureModuleAccess('notepad', () => setScreen('notepad')), [ensureModuleAccess]);
-  const openSalary = useCallback(() => ensureModuleAccess('salaryOt', () => setScreen('salaryDashboard')), [ensureModuleAccess]);
+  const openMyDocuments = useCallback(
+    () => ensureModuleAccess("myDocuments", () => setScreen("myDocuments")),
+    [ensureModuleAccess],
+  );
+  const openNotepad = useCallback(
+    () => ensureModuleAccess("notepad", () => setScreen("notepad")),
+    [ensureModuleAccess],
+  );
+  const openSalary = useCallback(
+    () => ensureModuleAccess("salaryOt", () => setScreen("salaryDashboard")),
+    [ensureModuleAccess],
+  );
   // Date-range Work Log report (Start/End Work totals + PDF export/share) -
   // see src/screens/SalaryReportsScreen.js. Gated on the same 'salaryOt'
   // key as openSalary so a direct deep-link to Reports can't skip the
   // subscription charge.
-  const openSalaryReports = useCallback(() => ensureModuleAccess('salaryOt', () => setScreen('salaryReports')), [ensureModuleAccess]);
+  const openSalaryReports = useCallback(
+    () => ensureModuleAccess("salaryOt", () => setScreen("salaryReports")),
+    [ensureModuleAccess],
+  );
 
   // ---- internet package price overrides, per operator - admin-editable
   // from Admin > Pricing (see internetPricingService.js). ----
@@ -883,19 +830,25 @@ export function AppProvider({ children }) {
 
   // ---- Call/WhatsApp support numbers - admin-editable from Admin >
   // Support (see supportContactService.js). Blank until admin sets them. ----
-  const [supportContact, setSupportContact] = useState(supportContactService.DEFAULT_SUPPORT_CONTACT);
+  const [supportContact, setSupportContact] = useState(
+    supportContactService.DEFAULT_SUPPORT_CONTACT,
+  );
 
   // ---- Official social media links (Facebook/Instagram/TikTok/LinkedIn/X)
   // + facebookAppId - admin-editable from Admin > Social (see
   // socialLinksService.js). Shown on the Support screen's "Follow us" row
   // and used by ShareListingSheet.js for Story-sharing attribution. ----
-  const [socialLinks, setSocialLinks] = useState(socialLinksService.DEFAULT_SOCIAL_LINKS);
+  const [socialLinks, setSocialLinks] = useState(
+    socialLinksService.DEFAULT_SOCIAL_LINKS,
+  );
 
   // ---- JomPay biller ID/ref + DuitNow QR - superadmin-editable from
   // Admin > Payments (see paymentSettingsService.js). Blank until
   // superadmin sets them; Top-Up screens hide that method's details until
   // it has a value. ----
-  const [paymentSettings, setPaymentSettings] = useState(paymentSettingsService.DEFAULT_PAYMENT_SETTINGS);
+  const [paymentSettings, setPaymentSettings] = useState(
+    paymentSettingsService.DEFAULT_PAYMENT_SETTINGS,
+  );
 
   // ---- home page banner slider (admin-managed) ----
   const [banners, setBanners] = useState([]);
@@ -909,12 +862,21 @@ export function AppProvider({ children }) {
   const [rawAnnouncements, setRawAnnouncements] = useState([]);
 
   // ---- webview ----
-  const [webViewKey, setWebViewKey] = useState('fomema');
+  const [webViewKey, setWebViewKey] = useState("fomema");
   const [webViewBusy, setWebViewBusy] = useState(false);
 
   // ---- rate popup / result modal (mirrors #ratePopup / #resultModal) ----
   const [ratePopupVisible, setRatePopupVisible] = useState(false);
-  const [resultModal, setResultModal] = useState({ visible: false, kind: null, txId: '', service: '', details: '', amount: 0, total: 0, createdAt: null });
+  const [resultModal, setResultModal] = useState({
+    visible: false,
+    kind: null,
+    txId: "",
+    service: "",
+    details: "",
+    amount: 0,
+    total: 0,
+    createdAt: null,
+  });
 
   const totalSteps = SERVICE_STEPS[currentService] || 3;
 
@@ -929,7 +891,10 @@ export function AppProvider({ children }) {
 
     const unsub = authService.subscribeAuth((user) => {
       setAuthUser(user);
-      if (profileUnsub) { profileUnsub(); profileUnsub = null; }
+      if (profileUnsub) {
+        profileUnsub();
+        profileUnsub = null;
+      }
 
       if (!user) {
         setProfile(null);
@@ -939,10 +904,13 @@ export function AppProvider({ children }) {
         setSidebarVisible(false);
         screenHistoryRef.current = [];
         isPoppingRef.current = false;
-        prevScreenRef.current = 'login';
+        prevScreenRef.current = "login";
         exitArmedRef.current = false;
-        setScreen('login');
-        if (!initialRouteDone) { initialRouteDone = true; setAuthLoading(false); }
+        setScreen("login");
+        if (!initialRouteDone) {
+          initialRouteDone = true;
+          setAuthLoading(false);
+        }
         return;
       }
 
@@ -968,23 +936,40 @@ export function AppProvider({ children }) {
           (async () => {
             if (!p) {
               setProfile(null);
-              if (!initialRouteDone) { initialRouteDone = true; setAuthLoading(false); }
+              if (!initialRouteDone) {
+                initialRouteDone = true;
+                setAuthLoading(false);
+              }
               return;
             }
 
             try {
               const deviceId = await deviceSessionService.getDeviceId();
 
-              if (p.pendingDeviceApproval && p.pendingDeviceApproval.deviceId === deviceId) {
-                setPendingDeviceVerification({ uid: user.uid, email: p.email || '' });
+              if (
+                p.pendingDeviceApproval &&
+                p.pendingDeviceApproval.deviceId === deviceId
+              ) {
+                setPendingDeviceVerification({
+                  uid: user.uid,
+                  email: p.email || "",
+                });
                 setProfile(p);
-                setScreen('deviceVerify');
-                if (!initialRouteDone) { initialRouteDone = true; setAuthLoading(false); }
+                setScreen("deviceVerify");
+                if (!initialRouteDone) {
+                  initialRouteDone = true;
+                  setAuthLoading(false);
+                }
                 return;
               }
 
-              const localSessionId = await deviceSessionService.getLocalSessionId();
-              if (localSessionId && p.activeSessionId && p.activeSessionId !== localSessionId) {
+              const localSessionId =
+                await deviceSessionService.getLocalSessionId();
+              if (
+                localSessionId &&
+                p.activeSessionId &&
+                p.activeSessionId !== localSessionId
+              ) {
                 // Do not sign the user out merely because the app was closed,
                 // backgrounded, or restored after a device-session refresh.
                 // Firebase Auth persistence is the source of truth for app
@@ -996,8 +981,11 @@ export function AppProvider({ children }) {
                   await authService.logout();
                   setProfile(null);
                   screenHistoryRef.current = [];
-                  setScreen('login');
-                  showAlert('Signed Out', 'Your account was signed in on another device, so you were signed out here.');
+                  setScreen("login");
+                  showAlert(
+                    "Signed Out",
+                    "Your account was signed in on another device, so you were signed out here.",
+                  );
                   return;
                 }
               }
@@ -1011,18 +999,23 @@ export function AppProvider({ children }) {
               // Restoring a persisted session on app launch - jump straight
               // to the right home screen for this account's role instead of
               // showing Login again.
-              if (p && (p.role === 'dealer' || p.role === 'dealer')) setScreen('dealerHome');
-              else if (p && p.role === 'reseller') setScreen('resellerHome');
-              else if (p && (p.role === 'admin' || p.role === 'superadmin')) setScreen('adminHome');
-              else setScreen('customerHome');
+              if (p && (p.role === "dealer" || p.role === "dealer"))
+                setScreen("dealerHome");
+              else if (p && p.role === "reseller") setScreen("resellerHome");
+              else if (p && (p.role === "admin" || p.role === "superadmin"))
+                setScreen("adminHome");
+              else setScreen("customerHome");
               setAuthLoading(false);
             }
           })();
         },
         () => {
           setProfile(null);
-          if (!initialRouteDone) { initialRouteDone = true; setAuthLoading(false); }
-        }
+          if (!initialRouteDone) {
+            initialRouteDone = true;
+            setAuthLoading(false);
+          }
+        },
       );
     });
 
@@ -1042,8 +1035,8 @@ export function AppProvider({ children }) {
       if (!PRE_AUTH_SCREENS.includes(screen)) {
         screenHistoryRef.current = [];
         isPoppingRef.current = false;
-        prevScreenRef.current = 'login';
-        setScreen('login');
+        prevScreenRef.current = "login";
+        setScreen("login");
       }
     }
   }, [authLoading, authUser, profile, screen]);
@@ -1085,13 +1078,12 @@ export function AppProvider({ children }) {
     })();
   }, [authUser, profile]);
 
-
   useEffect(() => {
     if (!authUser) return undefined;
     ratesService.ensureRates().catch(() => {});
     const unsub = ratesService.subscribeRates(
       (r) => setRates(r),
-      logListenerError('rates')
+      logListenerError("rates"),
     );
     return unsub;
   }, [authUser]);
@@ -1101,7 +1093,7 @@ export function AppProvider({ children }) {
     settingsService.ensurePricing().catch(() => {});
     const unsub = settingsService.subscribePricing(
       (p) => setPricing(p),
-      logListenerError('pricing')
+      logListenerError("pricing"),
     );
     return unsub;
   }, [authUser]);
@@ -1111,7 +1103,7 @@ export function AppProvider({ children }) {
     featureAccessService.ensureFeatureAccess().catch(() => {});
     const unsub = featureAccessService.subscribeFeatureAccess(
       (fa) => setFeatureAccess(fa),
-      logListenerError('featureAccess')
+      logListenerError("featureAccess"),
     );
     return unsub;
   }, [authUser]);
@@ -1125,7 +1117,7 @@ export function AppProvider({ children }) {
     if (!authUser) return undefined;
     const unsub = adControlsService.subscribeAdSettings(
       (s) => setAdSettings(s),
-      logListenerError('adSettings')
+      logListenerError("adSettings"),
     );
     return unsub;
   }, [authUser]);
@@ -1134,7 +1126,7 @@ export function AppProvider({ children }) {
     if (!authUser) return undefined;
     const unsub = adControlsService.subscribeAdFeatureControls(
       (fc) => setAdFeatureControls(fc),
-      logListenerError('adFeatureControls')
+      logListenerError("adFeatureControls"),
     );
     return unsub;
   }, [authUser]);
@@ -1143,7 +1135,7 @@ export function AppProvider({ children }) {
     if (!authUser) return undefined;
     const unsub = homepageConfigService.subscribeHomepageConfig(
       (c) => setHomepageConfig(c),
-      logListenerError('homepageConfig')
+      logListenerError("homepageConfig"),
     );
     return unsub;
   }, [authUser]);
@@ -1164,21 +1156,30 @@ export function AppProvider({ children }) {
   useEffect(() => {
     if (!authUser) return undefined;
     const unsub = adService.subscribeCampaigns(
-      (list) => setAdCampaignsById(Object.fromEntries(list.map((c) => [c.id, c]))),
-      logListenerError('adCampaigns')
+      (list) =>
+        setAdCampaignsById(Object.fromEntries(list.map((c) => [c.id, c]))),
+      logListenerError("adCampaigns"),
     );
     return unsub;
   }, [authUser]);
 
   useEffect(() => {
     if (!authUser) return undefined;
-    const unsub = categoryService.subscribeCategories('marketplace', setMarketplaceCategories, logListenerError('marketplaceCategories'));
+    const unsub = categoryService.subscribeCategories(
+      "marketplace",
+      setMarketplaceCategories,
+      logListenerError("marketplaceCategories"),
+    );
     return unsub;
   }, [authUser]);
 
   useEffect(() => {
     if (!authUser) return undefined;
-    const unsub = categoryService.subscribeCategories('services', setServiceCategories, logListenerError('serviceCategories'));
+    const unsub = categoryService.subscribeCategories(
+      "services",
+      setServiceCategories,
+      logListenerError("serviceCategories"),
+    );
     return unsub;
   }, [authUser]);
 
@@ -1187,7 +1188,7 @@ export function AppProvider({ children }) {
     supportContactService.ensureSupportContact().catch(() => {});
     const unsub = supportContactService.subscribeSupportContact(
       (c) => setSupportContact(c),
-      logListenerError('supportContact')
+      logListenerError("supportContact"),
     );
     return unsub;
   }, [authUser]);
@@ -1197,7 +1198,7 @@ export function AppProvider({ children }) {
     socialLinksService.ensureSocialLinks().catch(() => {});
     const unsub = socialLinksService.subscribeSocialLinks(
       (s) => setSocialLinks(s),
-      logListenerError('socialLinks')
+      logListenerError("socialLinks"),
     );
     return unsub;
   }, [authUser]);
@@ -1207,7 +1208,7 @@ export function AppProvider({ children }) {
     paymentSettingsService.ensurePaymentSettings().catch(() => {});
     const unsub = paymentSettingsService.subscribePaymentSettings(
       (s) => setPaymentSettings(s),
-      logListenerError('paymentSettings')
+      logListenerError("paymentSettings"),
     );
     return unsub;
   }, [authUser]);
@@ -1216,7 +1217,7 @@ export function AppProvider({ children }) {
     if (!authUser) return undefined;
     const unsub = internetPricingService.subscribeInternetPricing(
       (map) => setInternetPricing(map),
-      logListenerError('internetPricing')
+      logListenerError("internetPricing"),
     );
     return unsub;
   }, [authUser]);
@@ -1229,7 +1230,7 @@ export function AppProvider({ children }) {
     if (!authUser) return undefined;
     const unsub = bannerService.subscribeBanners(
       (list) => setBanners(list),
-      logListenerError('banners')
+      logListenerError("banners"),
     );
     return unsub;
   }, [authUser]);
@@ -1238,11 +1239,17 @@ export function AppProvider({ children }) {
   // stream; Dealer and Reseller dashboards share the pending/processing/
   // completed broadcast pool. Customer history remains separate below.
   useEffect(() => {
-    const needsTx = screen === 'dealerHome' || screen === 'adminHome' || screen === 'reports' || screen === 'resellerHome';
+    const needsTx =
+      screen === "dealerHome" ||
+      screen === "adminHome" ||
+      screen === "reports" ||
+      screen === "resellerHome";
     const role = profile && profile.role;
     if (!needsTx || !role || !authUser) return undefined;
 
-    const isStaffQueue = ['dealer', 'reseller', 'admin', 'superadmin'].includes(role);
+    const isStaffQueue = ["dealer", "reseller", "admin", "superadmin"].includes(
+      role,
+    );
     if (!isStaffQueue) return undefined;
 
     // Phase 10: Dealer and Reseller no longer share one undifferentiated
@@ -1250,19 +1257,20 @@ export function AppProvider({ children }) {
     // (enforced server-side too, see firestore.rules' canHandleTransaction()
     // - this filter is UX, that's the actual security boundary). Admin/
     // superadmin keep the full unfiltered stream, same as before.
-    const unsub = transactionService.subscribeBroadcastTransactions(
-      (txs) => {
-        if (role === 'admin' || role === 'superadmin') {
-          setDealerTxs(txs);
-          setResellerTxs(txs);
-        } else if (role === 'dealer') {
-          setDealerTxs(txs.filter((t) => t.service === 'Mobile Banking'));
-        } else if (role === 'reseller') {
-          setResellerTxs(txs.filter((t) => ['Recharge', 'Internet', 'Remittance'].includes(t.service)));
-        }
-      },
-      logListenerError('transactions:broadcast')
-    );
+    const unsub = transactionService.subscribeBroadcastTransactions((txs) => {
+      if (role === "admin" || role === "superadmin") {
+        setDealerTxs(txs);
+        setResellerTxs(txs);
+      } else if (role === "dealer") {
+        setDealerTxs(txs.filter((t) => t.service === "Mobile Banking"));
+      } else if (role === "reseller") {
+        setResellerTxs(
+          txs.filter((t) =>
+            ["Recharge", "Internet", "Remittance"].includes(t.service),
+          ),
+        );
+      }
+    }, logListenerError("transactions:broadcast"));
     return unsub;
   }, [screen, profile, authUser]);
 
@@ -1274,11 +1282,12 @@ export function AppProvider({ children }) {
   // powers the customer-facing notification bell.) ----
   useEffect(() => {
     const role = profile && profile.role;
-    const needsAnnouncements = screen === 'adminHome' && (role === 'admin' || role === 'superadmin');
+    const needsAnnouncements =
+      screen === "adminHome" && (role === "admin" || role === "superadmin");
     if (!needsAnnouncements) return undefined;
     const unsub = announcementService.subscribeAnnouncements(
       (list) => setAnnouncements(list),
-      logListenerError('announcements')
+      logListenerError("announcements"),
     );
     return unsub;
   }, [screen, profile]);
@@ -1288,10 +1297,13 @@ export function AppProvider({ children }) {
   // addressed to them ('all' or their own role) - see firestore.rules,
   // which opens read access to any signed-in user for this reason. ----
   useEffect(() => {
-    if (!authUser) { setRawAnnouncements([]); return undefined; }
+    if (!authUser) {
+      setRawAnnouncements([]);
+      return undefined;
+    }
     const unsub = announcementService.subscribeAnnouncements(
       (list) => setRawAnnouncements(list),
-      logListenerError('myAnnouncements')
+      logListenerError("myAnnouncements"),
     );
     return unsub;
   }, [authUser]);
@@ -1299,16 +1311,21 @@ export function AppProvider({ children }) {
   const myNotifications = useMemo(() => {
     const role = profile && profile.role;
     if (!role) return [];
-    return rawAnnouncements.filter((a) => a.audience === 'all' || a.audience === role);
+    return rawAnnouncements.filter(
+      (a) => a.audience === "all" || a.audience === role,
+    );
   }, [rawAnnouncements, profile]);
 
   const hasUnreadNotifications = useMemo(() => {
     if (myNotifications.length === 0) return false;
     const lastSeen = profile && profile.lastSeenAnnouncementAt;
     if (!lastSeen) return true;
-    const lastSeenMs = lastSeen.toMillis ? lastSeen.toMillis() : new Date(lastSeen).getTime();
+    const lastSeenMs = lastSeen.toMillis
+      ? lastSeen.toMillis()
+      : new Date(lastSeen).getTime();
     return myNotifications.some((a) => {
-      const createdMs = a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : 0;
+      const createdMs =
+        a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : 0;
       return createdMs > lastSeenMs;
     });
   }, [myNotifications, profile]);
@@ -1325,87 +1342,59 @@ export function AppProvider({ children }) {
   // Bus/Train are WebView bookings now and never reach a reseller. ----
   useEffect(() => {
     const role = profile && profile.role;
-    const isAdminScreen = (screen === 'adminHome' || screen === 'reports') && ['admin', 'superadmin'].includes(role);
-    const isResellerScreen = screen === 'resellerHome' && role === 'reseller';
+    const isAdminScreen =
+      (screen === "adminHome" || screen === "reports") &&
+      ["admin", "superadmin"].includes(role);
+    const isResellerScreen = screen === "resellerHome" && role === "reseller";
     if (!isAdminScreen && !isResellerScreen) return undefined;
     const unsub = inquiryService.subscribeInquiries(
-      (list) => setInquiries(isResellerScreen ? list.filter((i) => i.type === 'flight') : list),
-      logListenerError('inquiries')
+      (list) =>
+        setInquiries(
+          isResellerScreen ? list.filter((i) => i.type === "flight") : list,
+        ),
+      logListenerError("inquiries"),
     );
     return unsub;
   }, [screen, profile]);
 
   // ---- live top-up requests, only needed on the Admin dashboard ----
   useEffect(() => {
-    const isStaff = profile && ['admin', 'superadmin'].includes(profile.role);
-    if ((screen !== 'adminHome' && screen !== 'reports') || !isStaff) return undefined;
+    const isStaff = profile && ["admin", "superadmin"].includes(profile.role);
+    if ((screen !== "adminHome" && screen !== "reports") || !isStaff)
+      return undefined;
     const unsub = topupService.subscribeTopups(
       (list) => setTopups(list),
-      logListenerError('topups')
+      logListenerError("topups"),
     );
     return unsub;
   }, [screen, profile]);
 
   // ---- live chat unread badge - customers watch their own thread; staff watch every thread's total. ----
   useEffect(() => {
-    if (!authUser || !profile) { setChatUnreadCount(0); return undefined; }
-    const isStaff = ['dealer', 'reseller', 'admin', 'superadmin'].includes(profile.role);
+    if (!authUser || !profile) {
+      setChatUnreadCount(0);
+      return undefined;
+    }
+    const isStaff = ["dealer", "reseller", "admin", "superadmin"].includes(
+      profile.role,
+    );
     if (isStaff) {
       const unsub = chatService.subscribeAllChats(
-        (list) => setChatUnreadCount(list.reduce((sum, c) => sum + (c.unreadForStaff || 0), 0)),
-        logListenerError('chats:staff')
+        (list) =>
+          setChatUnreadCount(
+            list.reduce((sum, c) => sum + (c.unreadForStaff || 0), 0),
+          ),
+        logListenerError("chats:staff"),
       );
       return unsub;
     }
     const unsub = chatService.subscribeChatMeta(
       authUser.uid,
       (meta) => setChatUnreadCount(meta ? meta.unreadForCustomer || 0 : 0),
-      logListenerError('chats:customer')
+      logListenerError("chats:customer"),
     );
     return unsub;
   }, [authUser, profile]);
-
-  // ---- live direct-chat unread badge - same logic for every role, since
-  // direct chats have no staff/customer asymmetry. ----
-  useEffect(() => {
-    if (!authUser) { setDirectChatUnreadCount(0); return undefined; }
-    const unsub = directChatService.subscribeMyChats(
-      authUser.uid,
-      (list) => setDirectChatUnreadCount(list.reduce((sum, c) => sum + ((c.unreadCounts && c.unreadCounts[authUser.uid]) || 0), 0)),
-      logListenerError('directChats')
-    );
-    return unsub;
-  }, [authUser]);
-
-  // ---- live list of groups the signed-in user belongs to ----
-  useEffect(() => {
-    if (!authUser) { setMyGroups([]); return undefined; }
-    const unsub = groupChatService.subscribeMyGroups(authUser.uid, (list) => setMyGroups(list), logListenerError('groupChats'));
-    return unsub;
-  }, [authUser]);
-
-  // ---- live list of rooms the signed-in user belongs to ----
-  useEffect(() => {
-    if (!authUser) { setMyRooms([]); return undefined; }
-    const unsub = roomChatService.subscribeMyRooms(authUser.uid, (list) => setMyRooms(list), logListenerError('roomChats'));
-    return unsub;
-  }, [authUser]);
-
-  // ---- live list of public (open/approval) rooms the user can discover and
-  // join but isn't a member of yet - e.g. the seeded GameBot rooms. Without
-  // this, a room only ever appeared once someone was already a member of it. ----
-  useEffect(() => {
-    if (!authUser) { setDiscoverableRooms([]); return undefined; }
-    const unsub = roomChatService.subscribeDiscoverableRooms(authUser.uid, (list) => setDiscoverableRooms(list), logListenerError('roomChats'));
-    return unsub;
-  }, [authUser]);
-
-  // ---- live list of "kind:id" keys the signed-in user has locked (Chat Lock) ----
-  useEffect(() => {
-    if (!authUser) { setLockedChatIds([]); setChatVaultUnlocked(false); setPrivateVaultUnlocked(false); return undefined; }
-    const unsub = chatLockService.subscribeLockedChats(authUser.uid, (keys) => setLockedChatIds(keys), logListenerError('lockedChats'));
-    return unsub;
-  }, [authUser]);
 
   // Re-locks the Locked Chats vault AND the Notepad/My Documents private
   // vault whenever the app leaves the foreground - same behavior as
@@ -1415,8 +1404,11 @@ export function AppProvider({ children }) {
   // deliberately not included here - see requireSecurityPin call in
   // TransferPointsScreen, which never checks privateVaultUnlocked.)
   useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state !== 'active') { setChatVaultUnlocked(false); setPrivateVaultUnlocked(false); }
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state !== "active") {
+        setChatVaultUnlocked(false);
+        setPrivateVaultUnlocked(false);
+      }
     });
     return () => sub.remove();
   }, []);
@@ -1435,10 +1427,13 @@ export function AppProvider({ children }) {
   // nagging biometric every single backgrounding within one sitting.
   useEffect(() => {
     if (!appLockEnabled || !authUser) return undefined;
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state !== 'active') {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state !== "active") {
         backgroundedAtRef.current = Date.now();
-      } else if (backgroundedAtRef.current && Date.now() - backgroundedAtRef.current >= APP_LOCK_GRACE_MS) {
+      } else if (
+        backgroundedAtRef.current &&
+        Date.now() - backgroundedAtRef.current >= APP_LOCK_GRACE_MS
+      ) {
         setAppLocked(true);
         backgroundedAtRef.current = null;
       } else {
@@ -1453,14 +1448,18 @@ export function AppProvider({ children }) {
   // has nothing to check against without one), require unlock immediately
   // rather than only after the first backgrounding.
   useEffect(() => {
-    if (appLockEnabled && authUser && profile?.securityPinSet) setAppLocked(true);
+    if (appLockEnabled && authUser && profile?.securityPinSet)
+      setAppLocked(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appLockEnabled, authUser?.uid, profile?.securityPinSet]);
 
   // Listens for a call ringing FOR me no matter what screen I'm on, so the
   // incoming-call prompt can show up over any screen (see IncomingCallModal).
   useEffect(() => {
-    if (!authUser) { setIncomingCall(null); return undefined; }
+    if (!authUser) {
+      setIncomingCall(null);
+      return undefined;
+    }
     const unsub = callService.subscribeIncomingCalls(authUser.uid, (call) => {
       // Don't re-prompt for a call I'm already on.
       setIncomingCall(call && call.id !== activeCall?.id ? call : null);
@@ -1468,27 +1467,30 @@ export function AppProvider({ children }) {
     return unsub;
   }, [authUser, activeCall]);
 
-  // Same idea as the listener above, but for group calls (see
-  // subscribeIncomingGroupCalls - keyed off ringingUids instead of a single
-  // calleeUid, since several people can be rung at once).
-  useEffect(() => {
-    if (!authUser) { setIncomingGroupCall(null); return undefined; }
-    const unsub = callService.subscribeIncomingGroupCalls(authUser.uid, (call) => {
-      setIncomingGroupCall(call && call.id !== activeCall?.id ? call : null);
-    });
-    return unsub;
-  }, [authUser, activeCall]);
-
   /** Starts a call with another user and switches to the call screen.
    * `caller` is supplied by the call site (e.g. ChatScreen) rather than
    * built here, so it always reflects the profile the screen has in hand. */
-  const startCall = useCallback(async (caller, callee, type = 'video') => {
-    if (!authUser) return;
-    const { callId, channelName } = await callService.startCall(caller, callee, type);
-    setActiveCall({ id: callId, channelName, type, callerUid: caller.uid, callerName: caller.name,
-      calleeUid: callee.uid, calleeName: callee.name });
-    setScreen('call');
-  }, [authUser]);
+  const startCall = useCallback(
+    async (caller, callee, type = "video") => {
+      if (!authUser) return;
+      const { callId, channelName } = await callService.startCall(
+        caller,
+        callee,
+        type,
+      );
+      setActiveCall({
+        id: callId,
+        channelName,
+        type,
+        callerUid: caller.uid,
+        callerName: caller.name,
+        calleeUid: callee.uid,
+        calleeName: callee.name,
+      });
+      setScreen("call");
+    },
+    [authUser],
+  );
 
   /** Accepts the currently-ringing incoming call and switches to the call screen. */
   const answerIncomingCall = useCallback(async () => {
@@ -1496,7 +1498,7 @@ export function AppProvider({ children }) {
     await callService.acceptCall(incomingCall.id);
     setActiveCall(incomingCall);
     setIncomingCall(null);
-    setScreen('call');
+    setScreen("call");
   }, [incomingCall]);
 
   /** Declines the currently-ringing incoming call without joining. */
@@ -1505,106 +1507,6 @@ export function AppProvider({ children }) {
     await callService.declineCall(incomingCall.id);
     setIncomingCall(null);
   }, [incomingCall]);
-
-  /** Starts a group call - rings every other member of `group` ({id, name,
-   * memberUids, memberNames}, a groupChats doc) and switches to the call
-   * screen for the caller right away, same as startCall. `caller` is
-   * supplied by the call site, same reasoning as startCall above. */
-  const startGroupCall = useCallback(async (caller, group, type = 'video') => {
-    if (!authUser) return;
-    const { callId, channelName } = await callService.startGroupCall(caller, group, type);
-    const calleeUids = (group.memberUids || []).filter((uid) => uid !== caller.uid);
-    setActiveCall({
-      id: callId, channelName, type, isGroup: true,
-      groupId: group.id, groupName: group.name || 'Group',
-      callerUid: caller.uid, callerName: caller.name,
-      participantUids: [caller.uid, ...calleeUids],
-      participantNames: { ...(group.memberNames || {}), [caller.uid]: caller.name },
-      ringingUids: calleeUids,
-      activeUids: [caller.uid],
-      status: 'ringing',
-    });
-    setScreen('call');
-  }, [authUser]);
-
-  /** Accepts the currently-ringing incoming group call and switches to the call screen. */
-  const answerIncomingGroupCall = useCallback(async () => {
-    if (!incomingGroupCall || !authUser) return;
-    await callService.acceptGroupCall(incomingGroupCall.id, authUser.uid);
-    setActiveCall(incomingGroupCall);
-    setIncomingGroupCall(null);
-    setScreen('call');
-  }, [incomingGroupCall, authUser]);
-
-  /** Declines the currently-ringing incoming group call without joining. */
-  const rejectIncomingGroupCall = useCallback(async () => {
-    if (!incomingGroupCall || !authUser) return;
-    await callService.declineGroupCall(incomingGroupCall.id, authUser.uid);
-    setIncomingGroupCall(null);
-  }, [incomingGroupCall, authUser]);
-
-  const groupUnreadCount = myGroups.reduce(
-    (sum, g) => sum + ((g.unreadCounts && authUser && g.unreadCounts[authUser.uid]) || 0),
-    0
-  );
-
-  const roomUnreadCount = myRooms.reduce(
-    (sum, r) => sum + ((r.unreadCounts && authUser && r.unreadCounts[authUser.uid]) || 0),
-    0
-  );
-
-  // Badge shown on the bottom-nav "Chat" tab - the sum across all three
-  // thread kinds now that Direct/Groups/Rooms live behind one entry point.
-  const chatHubUnreadCount = directChatUnreadCount + groupUnreadCount + roomUnreadCount;
-
-  // ---- Chat Lock helpers (kind is 'direct' | 'group' | 'room') ----
-  /** Whether the signed-in user has personally locked this thread. */
-  const isChatLocked = useCallback((kind, id) => (
-    !!kind && !!id && lockedChatIds.includes(chatLockService.lockKey(kind, id))
-  ), [lockedChatIds]);
-
-  /** If `kind`/`id` is a locked thread and the Locked Chats vault isn't
-   * already unlocked this session, prompts the security PIN gate before
-   * letting the caller proceed - resolves true once it's safe to open the
-   * thread, false if the person cancelled. Unlocked/non-locked threads
-   * resolve true immediately with no prompt. */
-  const ensureChatUnlocked = useCallback(async (kind, id) => {
-    if (!isChatLocked(kind, id) || chatVaultUnlocked) return true;
-    try {
-      await requireSecurityPin('this locked chat');
-      setChatVaultUnlocked(true);
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }, [isChatLocked, chatVaultUnlocked, requireSecurityPin]);
-
-  /** Locks a thread so it's hidden from the normal Chat hub list and only
-   * reachable from Locked Chats behind the security PIN. */
-  const lockChatThread = useCallback(async (kind, id) => {
-    if (!authUser || !kind || !id) return;
-    await chatLockService.lockChat(authUser.uid, kind, id);
-  }, [authUser]);
-
-  /** Reverses lockChatThread - the thread returns to the normal Chat hub list. */
-  const unlockChatThread = useCallback(async (kind, id) => {
-    if (!authUser || !kind || !id) return;
-    await chatLockService.unlockChat(authUser.uid, kind, id);
-  }, [authUser]);
-
-  /** Enters the Locked Chats folder - prompts the security PIN if the vault
-   * isn't already unlocked this session, then switches screens. */
-  const openLockedChats = useCallback(async () => {
-    if (!chatVaultUnlocked) {
-      try {
-        await requireSecurityPin('Locked Chats');
-        setChatVaultUnlocked(true);
-      } catch (e) {
-        return;
-      }
-    }
-    setScreen('lockedChats');
-  }, [chatVaultUnlocked, requireSecurityPin]);
 
   /** Opens the Support thread - `chatId` is the customer's uid, `name` is
    * who to show in the header/inbox. `returnTo` (staff only) is which
@@ -1616,73 +1518,9 @@ export function AppProvider({ children }) {
     setActiveGroupId(null);
     setActiveDirectChatId(null);
     setActiveRoomId(null);
-    setActiveChatName(name || '');
-    setActiveChatReturnTo(returnTo || 'chatList');
-    setScreen('chat');
-  }, []);
-
-  /** Opens a group chat thread. If it's locked and the Locked Chats vault
-   * isn't already unlocked this session, prompts the security PIN first
-   * (see ensureChatUnlocked) - stays on the current screen if cancelled. */
-  const openGroupChat = useCallback(async (groupId, name) => {
-    if (!(await ensureChatUnlocked('group', groupId))) return;
-    setActiveGroupId(groupId);
-    setActiveChatId(null);
-    setActiveDirectChatId(null);
-    setActiveRoomId(null);
-    setActiveGroupName(name || '');
-    setScreen('chat');
-  }, [ensureChatUnlocked]);
-
-  /** Opens a direct (1:1, any-role) chat thread - `chatId` is the directChats doc id, `name` is the other participant's name, `otherUid` is their uid (needed to start a call from the chat header). Optional `draftText` prefills (but doesn't send) the message box, e.g. for "message customer about this order". If it's locked and the Locked Chats vault isn't already unlocked this session, prompts the security PIN first (see ensureChatUnlocked) - stays on the current screen if cancelled. */
-  const openDirectChat = useCallback(async (chatId, name, otherUid, draftText) => {
-    if (!(await ensureChatUnlocked('direct', chatId))) return;
-    setActiveDirectChatId(chatId);
-    setActiveChatId(null);
-    setActiveGroupId(null);
-    setActiveRoomId(null);
-    setActiveDirectChatName(name || '');
-    setActiveDirectChatUid(otherUid || null);
-    if (draftText) setChatDraftText(draftText);
-    setScreen('chat');
-  }, [ensureChatUnlocked]);
-
-  /** Opens a room chat thread. If it's locked and the Locked Chats vault
-   * isn't already unlocked this session, prompts the security PIN first
-   * (see ensureChatUnlocked) - stays on the current screen if cancelled. */
-  const openRoomChat = useCallback(async (roomId, name) => {
-    if (!(await ensureChatUnlocked('room', roomId))) return;
-    setActiveRoomId(roomId);
-    setActiveChatId(null);
-    setActiveGroupId(null);
-    setActiveDirectChatId(null);
-    setActiveRoomName(name || '');
-    setScreen('chat');
-  }, [ensureChatUnlocked]);
-
-  /**
-   * Joins a room surfaced in the Rooms tab's "Discover" section. 'open'
-   * rooms join instantly and go straight into the thread; 'approval' rooms
-   * file a join request and stay on the list (nothing to open yet - the
-   * room only shows up under "My Rooms" once an admin approves it and it
-   * starts appearing in subscribeMyRooms). Returns 'joined' | 'requested'
-   * so the screen can show the right feedback.
-   */
-  const joinDiscoverableRoom = useCallback(async (room) => {
-    if (!authUser || !room?.id) return null;
-    if (room.type === 'approval') {
-      await roomChatService.requestToJoinRoom(room.id, { uid: authUser.uid, name: profile?.name || '' });
-      return 'requested';
-    }
-    await roomChatService.joinRoom(room.id, { uid: authUser.uid, name: profile?.name || '' });
-    openRoomChat(room.id, room.name || 'Room Chat');
-    return 'joined';
-  }, [authUser, profile, openRoomChat]);
-
-  /** Opens the unified Chat hub (Direct / Groups / Rooms tabs), optionally landing on a specific tab. */
-  const openChatHub = useCallback((tab) => {
-    if (tab) setChatHubTab(tab);
-    setScreen('chatHub');
+    setActiveChatName(name || "");
+    setActiveChatReturnTo(returnTo || "chatList");
+    setScreen("chat");
   }, []);
 
   // ---- push notification taps: jump to the right thread when the user
@@ -1697,35 +1535,28 @@ export function AppProvider({ children }) {
     const handleResponse = async (response) => {
       const data = response?.notification?.request?.content?.data || {};
       try {
-        if (data.type === 'chat' && data.chatId) {
-          openChat(data.chatId, 'Support');
-        } else if (data.type === 'directChat' && data.chatId) {
-          const meta = await directChatService.getDirectChatMeta(data.chatId);
-          const otherUid = meta?.participants?.find((uid) => uid !== authUser.uid);
-          const name = (otherUid && meta?.participantNames?.[otherUid]) || 'Chat';
-          openDirectChat(data.chatId, name, otherUid);
-        } else if (data.type === 'groupChat' && data.groupId) {
-          const meta = await groupChatService.getGroupMeta(data.groupId);
-          openGroupChat(data.groupId, meta?.name || 'Group Chat');
-        } else if (data.type === 'roomChat' && data.roomId) {
-          const meta = await roomChatService.getRoomMeta(data.roomId);
-          openRoomChat(data.roomId, meta?.name || 'Room Chat');
-        } else if (data.type === 'topup') {
+        if (data.type === "chat" && data.chatId) {
+          openChat(data.chatId, "Support");
+        } else if (data.type === "topup") {
           // Admin/superadmin get notified of a new request to review; the
           // requester gets notified once it's approved/rejected. Route each
           // to wherever that status actually lives for them - staff never
           // see their own self-topups in this queue (see topupService).
-          const isStaff = profile && (profile.role === 'admin' || profile.role === 'superadmin');
-          if (isStaff) { setAdminTab('topups'); setScreen('adminHome'); }
-          else setScreen('history');
-        } else if (data.type === 'supportTicket') {
+          const isStaff =
+            profile &&
+            (profile.role === "admin" || profile.role === "superadmin");
+          if (isStaff) {
+            setAdminTab("topups");
+            setScreen("adminHome");
+          } else setScreen("history");
+        } else if (data.type === "supportTicket") {
           // Every new ticket lands with superadmin first, who decides
           // whether to appoint an admin or dealer to solve it - so only
           // superadmin gets routed to the full queue here. The requester
           // (and any admin who gets appointed) sees status/assignment
           // updates on their own Support screen instead.
-          const isSuperadmin = profile && profile.role === 'superadmin';
-          setScreen(isSuperadmin ? 'adminSupport' : 'support');
+          const isSuperadmin = profile && profile.role === "superadmin";
+          setScreen(isSuperadmin ? "adminSupport" : "support");
         }
         // 'call' notifications need no explicit navigation here - the
         // system-wide incoming-call listener above already surfaces
@@ -1742,7 +1573,7 @@ export function AppProvider({ children }) {
     });
     const sub = addNotificationResponseListener(handleResponse);
     return () => sub.remove();
-  }, [authUser, profile, openChat, openDirectChat, openGroupChat, openRoomChat, setAdminTab, setScreen]);
+  }, [authUser, profile, openChat, setAdminTab, setScreen]);
 
   const openResult = useCallback((kind, txId, svc, extra) => {
     setResultModal({
@@ -1750,7 +1581,7 @@ export function AppProvider({ children }) {
       kind,
       txId,
       service: svc,
-      details: (extra && extra.details) || '',
+      details: (extra && extra.details) || "",
       amount: (extra && extra.amount) || 0,
       total: (extra && extra.total) || 0,
       createdAt: Date.now(),
@@ -1758,7 +1589,16 @@ export function AppProvider({ children }) {
   }, []);
 
   const closeResult = useCallback(() => {
-    setResultModal({ visible: false, kind: null, txId: '', service: '', details: '', amount: 0, total: 0, createdAt: null });
+    setResultModal({
+      visible: false,
+      kind: null,
+      txId: "",
+      service: "",
+      details: "",
+      amount: 0,
+      total: 0,
+      createdAt: null,
+    });
   }, []);
 
   const openSidebar = useCallback(() => setSidebarVisible(true), []);
@@ -1766,10 +1606,15 @@ export function AppProvider({ children }) {
 
   // Home screens where there's nowhere further back to go - hitting back
   // here arms a "press again to exit" confirmation instead of leaving.
-  const HOME_SCREENS = ['customerHome', 'dealerHome', 'resellerHome', 'adminHome'];
+  const HOME_SCREENS = [
+    "customerHome",
+    "dealerHome",
+    "resellerHome",
+    "adminHome",
+  ];
 
   useEffect(() => {
-    if (Platform.OS !== 'android') return undefined;
+    if (Platform.OS !== "android") return undefined;
     const onBackPress = () => {
       if (sidebarVisible) {
         closeSidebar();
@@ -1785,7 +1630,11 @@ export function AppProvider({ children }) {
       // the gov't status-check pages, FOMEMA's clinic finder, bus partner sites)
       // step backward first, so back only leaves the screen once the user
       // is already at that site's own entry page.
-      if (screen === 'webview' && webViewBackInterceptorRef.current && webViewBackInterceptorRef.current()) {
+      if (
+        screen === "webview" &&
+        webViewBackInterceptorRef.current &&
+        webViewBackInterceptorRef.current()
+      ) {
         return true;
       }
       // Mid-wizard on the service screen: step back one field-group at a
@@ -1793,7 +1642,7 @@ export function AppProvider({ children }) {
       // before ever touching the outer screen history - otherwise
       // hardware back would skip every step and jump straight to
       // whatever screen opened the wizard.
-      if (screen === 'service' && currentStep > 0) {
+      if (screen === "service" && currentStep > 0) {
         setCurrentStep((s) => Math.max(0, s - 1));
         return true;
       }
@@ -1810,10 +1659,12 @@ export function AppProvider({ children }) {
           return true;
         }
         exitArmedRef.current = true;
-        if (Platform.OS === 'android') {
-          ToastAndroid.show('Press back again to exit', ToastAndroid.SHORT);
+        if (Platform.OS === "android") {
+          ToastAndroid.show("Press back again to exit", ToastAndroid.SHORT);
         }
-        setTimeout(() => { exitArmedRef.current = false; }, 2000);
+        setTimeout(() => {
+          exitArmedRef.current = false;
+        }, 2000);
         return true;
       }
       const wentBack = goBack();
@@ -1821,12 +1672,12 @@ export function AppProvider({ children }) {
 
       return false;
     };
-    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
     return () => sub.remove();
   }, [screen, sidebarVisible, goBack, closeSidebar, currentStep]);
 
   const goHome = useCallback(() => {
-    const r = profile ? profile.role : '';
+    const r = profile ? profile.role : "";
     // Closing a Dashboard sub-section (e.g. Rates, Banners) so tapping Home
     // while inside one actually returns to the grid landing view. Just
     // calling setScreen() below is a no-op when we're already on
@@ -1842,10 +1693,10 @@ export function AppProvider({ children }) {
     // of arming the exit-app confirmation (see onBackPress's HOME_SCREENS
     // check, which now also skips goBack() outright as a second guard).
     screenHistoryRef.current = [];
-    if (r === 'dealer' || r === 'dealer') setScreen('dealerHome');
-    else if (r === 'reseller') setScreen('resellerHome');
-    else if (r === 'admin' || r === 'superadmin') setScreen('adminHome');
-    else setScreen('customerHome');
+    if (r === "dealer" || r === "dealer") setScreen("dealerHome");
+    else if (r === "reseller") setScreen("resellerHome");
+    else if (r === "admin" || r === "superadmin") setScreen("adminHome");
+    else setScreen("customerHome");
   }, [profile]);
 
   // Used by every screen's own "←" header button - prefers the real
@@ -1862,10 +1713,13 @@ export function AppProvider({ children }) {
     (key, value) => {
       if (!authUser) return;
       authService.updateNotifPrefs(authUser.uid, { [key]: value }).catch(() => {
-        showAlert('MySheba', 'Could not save that preference. Please try again.');
+        showAlert(
+          "MySheba",
+          "Could not save that preference. Please try again.",
+        );
       });
     },
-    [authUser]
+    [authUser],
   );
 
   // Call Settings (ringtone/vibration/volume/notifications toggle) - see
@@ -1874,7 +1728,7 @@ export function AppProvider({ children }) {
   // screen yet), so this fills in defaults for anything missing.
   const callSettings = useMemo(
     () => withCallSettingsDefaults(profile?.callSettings),
-    [profile?.callSettings]
+    [profile?.callSettings],
   );
 
   // Mirror the resolved settings into AsyncStorage every time they change so
@@ -1899,11 +1753,14 @@ export function AppProvider({ children }) {
       if (!authUser) return;
       const next = { ...callSettings, ...patch };
       authService.updateCallSettings(authUser.uid, patch).catch(() => {
-        showAlert('MySheba', 'Could not save that preference. Please try again.');
+        showAlert(
+          "MySheba",
+          "Could not save that preference. Please try again.",
+        );
       });
       cacheCallSettings(next);
     },
-    [authUser, callSettings]
+    [authUser, callSettings],
   );
 
   // Per-caller ringtone/vibration overrides (see callerRingtoneService.js /
@@ -1923,12 +1780,11 @@ export function AppProvider({ children }) {
   }, [callerRingtones]);
 
   /** Opens RingtonePickerScreen for one contact - same dedicated-nav-state
-   * pattern as openDirectChat (see activeDirectChatId etc above), since
    * `screen` itself carries no params. */
   const openRingtonePicker = useCallback((callerUid, callerName) => {
     setActiveRingtoneContactUid(callerUid);
-    setActiveRingtoneContactName(callerName || '');
-    setScreen('ringtonePicker');
+    setActiveRingtoneContactName(callerName || "");
+    setScreen("ringtonePicker");
   }, []);
 
   /** Saves a per-caller ringtone/vibration patch for the currently-open
@@ -1939,14 +1795,22 @@ export function AppProvider({ children }) {
   const updateCallerRingtone = useCallback(
     (callerUid, patch) => {
       if (!authUser || !callerUid) return;
-      const next = { ...callerRingtones, [callerUid]: { ...(callerRingtones[callerUid] || {}), ...patch } };
+      const next = {
+        ...callerRingtones,
+        [callerUid]: { ...(callerRingtones[callerUid] || {}), ...patch },
+      };
       setCallerRingtones(next);
       cacheCallerRingtones(next);
-      saveCallerRingtone(authUser.uid, callerUid, patch, activeRingtoneContactName).catch(() => {
-        showAlert('MySheba', 'Could not save that ringtone. Please try again.');
+      saveCallerRingtone(
+        authUser.uid,
+        callerUid,
+        patch,
+        activeRingtoneContactName,
+      ).catch(() => {
+        showAlert("MySheba", "Could not save that ringtone. Please try again.");
       });
     },
-    [authUser, callerRingtones, activeRingtoneContactName]
+    [authUser, callerRingtones, activeRingtoneContactName],
   );
 
   /** Clears a caller's override entirely (RingtonePickerScreen's "Use
@@ -1959,10 +1823,13 @@ export function AppProvider({ children }) {
       setCallerRingtones(next);
       cacheCallerRingtones(next);
       deleteCallerRingtone(authUser.uid, callerUid).catch(() => {
-        showAlert('MySheba', 'Could not reset that ringtone. Please try again.');
+        showAlert(
+          "MySheba",
+          "Could not reset that ringtone. Please try again.",
+        );
       });
     },
-    [authUser, callerRingtones]
+    [authUser, callerRingtones],
   );
 
   /** Settings screen's "Change Password" - re-authenticates with the
@@ -1999,7 +1866,15 @@ export function AppProvider({ children }) {
    * waiting for the live profile subscription to catch up. */
   const confirmGoogleAccountMerge = useCallback(async (code) => {
     const result = await authService.confirmGoogleAccountMerge(code);
-    setProfile((p) => (p ? { ...p, walletBalance: result.walletBalance, googleLinked: result.googleLinked } : p));
+    setProfile((p) =>
+      p
+        ? {
+            ...p,
+            walletBalance: result.walletBalance,
+            googleLinked: result.googleLinked,
+          }
+        : p,
+    );
     return result;
   }, []);
 
@@ -2016,7 +1891,7 @@ export function AppProvider({ children }) {
 
   const doLogin = useCallback(async (phone, pin, dialCode) => {
     setAuthBusy(true);
-    setAuthError('');
+    setAuthError("");
     try {
       const p = await authService.login(phone, pin, dialCode);
       if (p.pendingDeviceApproval) {
@@ -2032,17 +1907,23 @@ export function AppProvider({ children }) {
           reason: p.pendingDeviceApproval.reason,
           availableMfaMethods: p.pendingDeviceApproval.availableMfaMethods,
         });
-        setScreen('deviceVerify');
+        setScreen("deviceVerify");
         return true;
       }
       setProfile(p);
-      if (p.role === 'dealer' || p.role === 'dealer') { setDealerTab('pending'); setScreen('dealerHome'); }
-      else if (p.role === 'reseller') { setResellerTab('pending'); setScreen('resellerHome'); }
-      else if (p.role === 'admin' || p.role === 'superadmin') { setAdminTab('all'); setScreen('adminHome'); }
-      else setScreen('customerHome');
+      if (p.role === "dealer" || p.role === "dealer") {
+        setDealerTab("pending");
+        setScreen("dealerHome");
+      } else if (p.role === "reseller") {
+        setResellerTab("pending");
+        setScreen("resellerHome");
+      } else if (p.role === "admin" || p.role === "superadmin") {
+        setAdminTab("all");
+        setScreen("adminHome");
+      } else setScreen("customerHome");
       return true;
     } catch (err) {
-      setAuthError(err.message || 'Sign in failed.');
+      setAuthError(err.message || "Sign in failed.");
       return false;
     } finally {
       setAuthBusy(false);
@@ -2055,7 +1936,7 @@ export function AppProvider({ children }) {
   // transparently (see authService.signInWithGoogle).
   const doGoogleLogin = useCallback(async () => {
     setAuthBusy(true);
-    setAuthError('');
+    setAuthError("");
     try {
       const p = await authService.signInWithGoogle();
       if (p.pendingDeviceApproval) {
@@ -2066,14 +1947,20 @@ export function AppProvider({ children }) {
           reason: p.pendingDeviceApproval.reason,
           availableMfaMethods: p.pendingDeviceApproval.availableMfaMethods,
         });
-        setScreen('deviceVerify');
+        setScreen("deviceVerify");
         return true;
       }
       setProfile(p);
-      if (p.role === 'dealer' || p.role === 'dealer') { setDealerTab('pending'); setScreen('dealerHome'); }
-      else if (p.role === 'reseller') { setResellerTab('pending'); setScreen('resellerHome'); }
-      else if (p.role === 'admin' || p.role === 'superadmin') { setAdminTab('all'); setScreen('adminHome'); }
-      else setScreen('customerHome');
+      if (p.role === "dealer" || p.role === "dealer") {
+        setDealerTab("pending");
+        setScreen("dealerHome");
+      } else if (p.role === "reseller") {
+        setResellerTab("pending");
+        setScreen("resellerHome");
+      } else if (p.role === "admin" || p.role === "superadmin") {
+        setAdminTab("all");
+        setScreen("adminHome");
+      } else setScreen("customerHome");
       return true;
     } catch (err) {
       // A user backing out of the Google account picker isn't an error -
@@ -2084,10 +1971,10 @@ export function AppProvider({ children }) {
       // the Google credential is still signed in, waiting on that.
       if (err && err.needsPhone) {
         setPendingGooglePhone(true);
-        setScreen('googlePhone');
+        setScreen("googlePhone");
         return false;
       }
-      setAuthError(err.message || 'Google sign-in failed.');
+      setAuthError(err.message || "Google sign-in failed.");
       return false;
     } finally {
       setAuthBusy(false);
@@ -2104,7 +1991,7 @@ export function AppProvider({ children }) {
    * picker. */
   const completeGooglePhone = useCallback(async (phone) => {
     setAuthBusy(true);
-    setAuthError('');
+    setAuthError("");
     try {
       const p = await authService.completeGoogleSignup(phone);
       if (p.pendingDeviceApproval) {
@@ -2116,18 +2003,24 @@ export function AppProvider({ children }) {
           reason: p.pendingDeviceApproval.reason,
           availableMfaMethods: p.pendingDeviceApproval.availableMfaMethods,
         });
-        setScreen('deviceVerify');
+        setScreen("deviceVerify");
         return true;
       }
       setPendingGooglePhone(false);
       setProfile(p);
-      if (p.role === 'dealer' || p.role === 'dealer') { setDealerTab('pending'); setScreen('dealerHome'); }
-      else if (p.role === 'reseller') { setResellerTab('pending'); setScreen('resellerHome'); }
-      else if (p.role === 'admin' || p.role === 'superadmin') { setAdminTab('all'); setScreen('adminHome'); }
-      else setScreen('customerHome');
+      if (p.role === "dealer" || p.role === "dealer") {
+        setDealerTab("pending");
+        setScreen("dealerHome");
+      } else if (p.role === "reseller") {
+        setResellerTab("pending");
+        setScreen("resellerHome");
+      } else if (p.role === "admin" || p.role === "superadmin") {
+        setAdminTab("all");
+        setScreen("adminHome");
+      } else setScreen("customerHome");
       return true;
     } catch (err) {
-      setAuthError(err.message || 'Could not complete sign-up.');
+      setAuthError(err.message || "Could not complete sign-up.");
       return false;
     } finally {
       setAuthBusy(false);
@@ -2143,7 +2036,7 @@ export function AppProvider({ children }) {
       setPendingGooglePhone(false);
       setProfile(null);
       screenHistoryRef.current = [];
-      setScreen('login');
+      setScreen("login");
     }
   }, []);
 
@@ -2167,40 +2060,58 @@ export function AppProvider({ children }) {
    *     assuming success.
    * Either way, on final success this lands on the normal role-based
    * dashboard, same as a plain doLogin. */
-  const confirmDeviceVerification = useCallback(async (phoneIdToken, emailIdToken, emailOtp) => {
-    if (!pendingDeviceVerification) return false;
-    setAuthBusy(true);
-    setAuthError('');
-    try {
-      const p = pendingDeviceVerification.reason === 'admin_mfa'
-        ? await authService.retryDeviceSession(pendingDeviceVerification.uid, phoneIdToken, emailIdToken, emailOtp)
-        : await authService.confirmDeviceLogin(pendingDeviceVerification.uid, emailIdToken);
+  const confirmDeviceVerification = useCallback(
+    async (phoneIdToken, emailIdToken, emailOtp) => {
+      if (!pendingDeviceVerification) return false;
+      setAuthBusy(true);
+      setAuthError("");
+      try {
+        const p =
+          pendingDeviceVerification.reason === "admin_mfa"
+            ? await authService.retryDeviceSession(
+                pendingDeviceVerification.uid,
+                phoneIdToken,
+                emailIdToken,
+                emailOtp,
+              )
+            : await authService.confirmDeviceLogin(
+                pendingDeviceVerification.uid,
+                emailIdToken,
+              );
 
-      if (p.pendingDeviceApproval) {
-        setPendingDeviceVerification({
-          uid: p.uid,
-          email: p.pendingDeviceApproval.email,
-          phone: p.pendingDeviceApproval.phone,
-          reason: p.pendingDeviceApproval.reason,
-          availableMfaMethods: p.pendingDeviceApproval.availableMfaMethods,
-        });
+        if (p.pendingDeviceApproval) {
+          setPendingDeviceVerification({
+            uid: p.uid,
+            email: p.pendingDeviceApproval.email,
+            phone: p.pendingDeviceApproval.phone,
+            reason: p.pendingDeviceApproval.reason,
+            availableMfaMethods: p.pendingDeviceApproval.availableMfaMethods,
+          });
+          return false;
+        }
+
+        setPendingDeviceVerification(null);
+        setProfile(p);
+        if (p.role === "dealer" || p.role === "dealer") {
+          setDealerTab("pending");
+          setScreen("dealerHome");
+        } else if (p.role === "reseller") {
+          setResellerTab("pending");
+          setScreen("resellerHome");
+        } else if (p.role === "admin" || p.role === "superadmin") {
+          setAdminTab("all");
+          setScreen("adminHome");
+        } else setScreen("customerHome");
+        return true;
+      } catch (err) {
+        setAuthError(err.message || "Verification failed.");
         return false;
+      } finally {
+        setAuthBusy(false);
       }
-
-      setPendingDeviceVerification(null);
-      setProfile(p);
-      if (p.role === 'dealer' || p.role === 'dealer') { setDealerTab('pending'); setScreen('dealerHome'); }
-      else if (p.role === 'reseller') { setResellerTab('pending'); setScreen('resellerHome'); }
-      else if (p.role === 'admin' || p.role === 'superadmin') { setAdminTab('all'); setScreen('adminHome'); }
-      else setScreen('customerHome');
-      return true;
-    } catch (err) {
-      setAuthError(err.message || 'Verification failed.');
-      return false;
-    } finally {
-      setAuthBusy(false);
-    }
-  }, [pendingDeviceVerification]);
+    },
+    [pendingDeviceVerification],
+  );
 
   /** DeviceVerifyScreen's "Cancel and sign out" - the OTHER device (the
    * one still actually active) is untouched by this, since
@@ -2213,25 +2124,46 @@ export function AppProvider({ children }) {
       setPendingDeviceVerification(null);
       setProfile(null);
       screenHistoryRef.current = [];
-      setScreen('login');
+      setScreen("login");
     }
   }, []);
 
-  const doRegister = useCallback(async ({ name, phone, phoneE164, dialCode, email, pin, dealerCode, resellerCode, phoneIdToken }) => {
-    setAuthBusy(true);
-    setAuthError('');
-    try {
-      const p = await authService.registerCustomer({ name, phone, phoneE164, dialCode, email, pin, phoneIdToken });
-      setProfile(p);
-      setScreen('customerHome');
-      return true;
-    } catch (err) {
-      setAuthError(err.message || 'Registration failed.');
-      return false;
-    } finally {
-      setAuthBusy(false);
-    }
-  }, []);
+  const doRegister = useCallback(
+    async ({
+      name,
+      phone,
+      phoneE164,
+      dialCode,
+      email,
+      pin,
+      dealerCode,
+      resellerCode,
+      phoneIdToken,
+    }) => {
+      setAuthBusy(true);
+      setAuthError("");
+      try {
+        const p = await authService.registerCustomer({
+          name,
+          phone,
+          phoneE164,
+          dialCode,
+          email,
+          pin,
+          phoneIdToken,
+        });
+        setProfile(p);
+        setScreen("customerHome");
+        return true;
+      } catch (err) {
+        setAuthError(err.message || "Registration failed.");
+        return false;
+      } finally {
+        setAuthBusy(false);
+      }
+    },
+    [],
+  );
 
   const logout = useCallback(async () => {
     try {
@@ -2252,9 +2184,9 @@ export function AppProvider({ children }) {
       setProfile(null);
       screenHistoryRef.current = [];
       isPoppingRef.current = false;
-      prevScreenRef.current = 'login';
+      prevScreenRef.current = "login";
       exitArmedRef.current = false;
-      setScreen('login');
+      setScreen("login");
     }
   }, []);
 
@@ -2262,7 +2194,7 @@ export function AppProvider({ children }) {
     setCurrentService(service);
     setCurrentStep(0);
     setServiceData({});
-    setScreen('service');
+    setScreen("service");
   }, []);
 
   // Every "point deduct" webview (FOMEMA/Visa, MY Digital/Passport, Bus
@@ -2305,17 +2237,19 @@ export function AppProvider({ children }) {
       if (!cost || !authUser?.uid) {
         setWebViewKey(key);
         setWebViewPaymentCharged(false);
-        setScreen('webview');
+        setScreen("webview");
         return;
       }
       if (webViewBusy) return;
 
-      const alreadyCovered = SUBMIT_CHARGED_WEBVIEWS.includes(key) && !!profile?.webviewSubmitted?.[key];
+      const alreadyCovered =
+        SUBMIT_CHARGED_WEBVIEWS.includes(key) &&
+        !!profile?.webviewSubmitted?.[key];
 
       const enterWebview = () => {
         setWebViewKey(key);
         setWebViewPaymentCharged(false);
-        setScreen('webview');
+        setScreen("webview");
       };
 
       if (alreadyCovered) {
@@ -2323,22 +2257,23 @@ export function AppProvider({ children }) {
         return;
       }
 
-      const balance = typeof profile?.walletBalance === 'number' ? profile.walletBalance : 0;
+      const balance =
+        typeof profile?.walletBalance === "number" ? profile.walletBalance : 0;
       if (balance < cost) {
         showAlert(
-          'MySheba',
-          `You need ${cost} pts to use this feature. Your current balance is ${balance} pts - top up your wallet first.`
+          "MySheba",
+          `You need ${cost} pts to use this feature. Your current balance is ${balance} pts - top up your wallet first.`,
         );
         return;
       }
 
       showAlert(
-        'Points will be deducted',
+        "Points will be deducted",
         `Using this feature costs ${cost} pts. Your current balance is ${balance} pts.\n\nContinue?`,
         [
-          { text: 'Cancel', style: 'cancel' },
+          { text: "Cancel", style: "cancel" },
           {
-            text: 'Continue',
+            text: "Continue",
             onPress: async () => {
               if (!PAYMENT_CHARGED_WEBVIEWS.includes(key)) {
                 enterWebview();
@@ -2349,16 +2284,20 @@ export function AppProvider({ children }) {
                 await checkPaymentEntryAccess(authUser.uid, cost);
                 enterWebview();
               } catch (err) {
-                showAlert('MySheba', err.message || `You need ${cost} pts to use this - top up your wallet first.`);
+                showAlert(
+                  "MySheba",
+                  err.message ||
+                    `You need ${cost} pts to use this - top up your wallet first.`,
+                );
               } finally {
                 setWebViewBusy(false);
               }
             },
           },
-        ]
+        ],
       );
     },
-    [authUser, webViewBusy, profile, pointCosts]
+    [authUser, webViewBusy, profile, pointCosts],
   );
 
   // Shows the Bus screen's 3-option grid (redBus / Bus Online Ticket /
@@ -2367,7 +2306,7 @@ export function AppProvider({ children }) {
   // 'bus-busonlineticket' | 'bus-easybook'), which re-runs the same
   // insufficient-points gate above.
   const openBusPicker = useCallback(() => {
-    setScreen('buspicker');
+    setScreen("buspicker");
   }, []);
 
   // Called once payment success is detected (URL-match in WebViewScreen)
@@ -2382,19 +2321,29 @@ export function AppProvider({ children }) {
       if (!authUser?.uid || webViewPaymentBusy || webViewPaymentCharged) return;
       setWebViewPaymentBusy(true);
       try {
-        const result = await chargePaymentSuccess(authUser.uid, key, pointCosts[key]);
+        const result = await chargePaymentSuccess(
+          authUser.uid,
+          key,
+          pointCosts[key],
+        );
         if (result.charged) {
           setWebViewPaymentCharged(true);
-          showAlert('MySheba', `Payment confirmed - ${result.cost} pts deducted.`);
+          showAlert(
+            "MySheba",
+            `Payment confirmed - ${result.cost} pts deducted.`,
+          );
         }
         return result;
       } catch (err) {
-        showAlert('MySheba', err.message || 'Could not confirm this payment right now.');
+        showAlert(
+          "MySheba",
+          err.message || "Could not confirm this payment right now.",
+        );
       } finally {
         setWebViewPaymentBusy(false);
       }
     },
-    [authUser, webViewPaymentBusy, webViewPaymentCharged, pointCosts]
+    [authUser, webViewPaymentBusy, webViewPaymentCharged, pointCosts],
   );
 
   // Called from the injected click-listener (or its fallback button) in
@@ -2407,18 +2356,29 @@ export function AppProvider({ children }) {
       if (!authUser?.uid || webViewBusy) return;
       setWebViewBusy(true);
       try {
-        const result = await ensureWebviewAccess(authUser.uid, key, pointCosts[key], accessWindowHours);
+        const result = await ensureWebviewAccess(
+          authUser.uid,
+          key,
+          pointCosts[key],
+          accessWindowHours,
+        );
         if (result.charged) {
-          showAlert('MySheba', `${result.cost} pts deducted for this search. Free for the next ${accessWindowHours} hour(s).`);
+          showAlert(
+            "MySheba",
+            `${result.cost} pts deducted for this search. Free for the next ${accessWindowHours} hour(s).`,
+          );
         }
         return result;
       } catch (err) {
-        showAlert('MySheba', err.message || 'Could not confirm this check right now.');
+        showAlert(
+          "MySheba",
+          err.message || "Could not confirm this check right now.",
+        );
       } finally {
         setWebViewBusy(false);
       }
     },
-    [authUser, webViewBusy, pointCosts, accessWindowHours]
+    [authUser, webViewBusy, pointCosts, accessWindowHours],
   );
 
   // Called from the "I've submitted my application" button in
@@ -2430,20 +2390,30 @@ export function AppProvider({ children }) {
       if (!authUser?.uid || webViewSubmitBusy) return;
       setWebViewSubmitBusy(true);
       try {
-        const result = await chargeWebviewSubmission(authUser.uid, key, pointCosts[key]);
+        const result = await chargeWebviewSubmission(
+          authUser.uid,
+          key,
+          pointCosts[key],
+        );
         if (result.charged) {
-          showAlert('MySheba', 'Thanks - your submission is confirmed and points have been deducted.');
+          showAlert(
+            "MySheba",
+            "Thanks - your submission is confirmed and points have been deducted.",
+          );
         } else {
-          showAlert('MySheba', 'This application was already confirmed.');
+          showAlert("MySheba", "This application was already confirmed.");
         }
         return result;
       } catch (err) {
-        showAlert('MySheba', err.message || 'Could not confirm your submission right now.');
+        showAlert(
+          "MySheba",
+          err.message || "Could not confirm your submission right now.",
+        );
       } finally {
         setWebViewSubmitBusy(false);
       }
     },
-    [authUser, webViewSubmitBusy, pointCosts]
+    [authUser, webViewSubmitBusy, pointCosts],
   );
 
   const nextStep = useCallback(() => {
@@ -2480,126 +2450,258 @@ export function AppProvider({ children }) {
             email: serviceData.pEmail,
             notes: serviceData.pNotes,
           },
-          authUser
+          authUser,
         );
-        openResult('travel', id, label);
+        openResult("travel", id, label);
       } else {
-        const payload = buildTransactionPayload(currentService, serviceData, pricing, rates);
+        const payload = buildTransactionPayload(
+          currentService,
+          serviceData,
+          pricing,
+          rates,
+        );
         const id = await transactionService.createTransaction(
           { ...payload, raw: serviceData },
-          { uid: authUser ? authUser.uid : null, phone: profile ? profile.phone : '', dealerId: profile ? profile.dealerId : null, resellerId: profile ? profile.resellerId : null }
+          {
+            uid: authUser ? authUser.uid : null,
+            phone: profile ? profile.phone : "",
+            dealerId: profile ? profile.dealerId : null,
+            resellerId: profile ? profile.resellerId : null,
+          },
         );
-        if (currentService === 'remittance' && authUser?.uid) {
+        if (currentService === "remittance" && authUser?.uid) {
           await maybeSaveReceiver(serviceData, authUser.uid);
         }
-        openResult('dealer', id, payload.service, { details: payload.details, amount: payload.amount, total: payload.total });
+        openResult("dealer", id, payload.service, {
+          details: payload.details,
+          amount: payload.amount,
+          total: payload.total,
+        });
       }
     } catch (err) {
-      showAlert('MySheba', err.message || 'Could not submit your request. Please try again.');
+      showAlert(
+        "MySheba",
+        err.message || "Could not submit your request. Please try again.",
+      );
     } finally {
       setSubmitting(false);
     }
-  }, [currentService, serviceData, authUser, profile, openResult, pricing, rates]);
+  }, [
+    currentService,
+    serviceData,
+    authUser,
+    profile,
+    openResult,
+    pricing,
+    rates,
+  ]);
 
   const value = {
     // auth
-    authUser, profile, authLoading, authError, authBusy,
-    doLogin, doGoogleLogin, doRegister, logout,
-    pendingDeviceVerification, confirmDeviceVerification, cancelDeviceVerification,
-    pendingGooglePhone, completeGooglePhone, cancelGooglePhone,
+    authUser,
+    profile,
+    authLoading,
+    authError,
+    authBusy,
+    doLogin,
+    doGoogleLogin,
+    doRegister,
+    logout,
+    pendingDeviceVerification,
+    confirmDeviceVerification,
+    cancelDeviceVerification,
+    pendingGooglePhone,
+    completeGooglePhone,
+    cancelGooglePhone,
     // nav
-    screen, setScreen, goBack, goBackOrHome, setHomeBackInterceptor, setWebViewBackInterceptor,
+    screen,
+    setScreen,
+    goBack,
+    goBackOrHome,
+    setHomeBackInterceptor,
+    setWebViewBackInterceptor,
     // sidebar drawer
-    sidebarVisible, openSidebar, closeSidebar,
+    sidebarVisible,
+    openSidebar,
+    closeSidebar,
     // wizard
-    currentService, currentStep, totalSteps, serviceData, submitting,
-    setCurrentStep, updateServiceData, nextStep, prevStep,
-    startService, submitService,
+    currentService,
+    currentStep,
+    totalSteps,
+    serviceData,
+    submitting,
+    setCurrentStep,
+    updateServiceData,
+    nextStep,
+    prevStep,
+    startService,
+    submitService,
     // dealer / admin
-    dealerTxs, dealerTab, setDealerTab,
-    adminViewingSection, setAdminViewingSection,
-    dealerViewingSection, setDealerViewingSection,
+    dealerTxs,
+    dealerTab,
+    setDealerTab,
+    adminViewingSection,
+    setAdminViewingSection,
+    dealerViewingSection,
+    setDealerViewingSection,
     // reseller
-    resellerTxs, resellerTab, setResellerTab,
-    resellerViewingSection, setResellerViewingSection,
-    inquiries, adminTab, setAdminTab,
+    resellerTxs,
+    resellerTab,
+    setResellerTab,
+    resellerViewingSection,
+    setResellerViewingSection,
+    inquiries,
+    adminTab,
+    setAdminTab,
     topups,
     rates,
-    pricing, internetPricing, pointCosts, accessWindowHours,
+    pricing,
+    internetPricing,
+    pointCosts,
+    accessWindowHours,
     featureAccess,
-    marketplaceCategories, serviceCategories,
+    marketplaceCategories,
+    serviceCategories,
     supportContact,
     socialLinks,
     paymentSettings,
     banners,
-    adSettings, adFeatureControls, adCampaignsById, homepageConfig,
+    adSettings,
+    adFeatureControls,
+    adCampaignsById,
+    homepageConfig,
     announcements,
-    myNotifications, hasUnreadNotifications, markNotificationsSeen,
+    myNotifications,
+    hasUnreadNotifications,
+    markNotificationsSeen,
     // webview
-    webViewKey, setWebViewKey, openWebView, webViewBusy,
-    submitWebviewApplication, webViewSubmitBusy, confirmWebviewAccess,
-    openBusPicker, confirmPaymentSuccess, webViewPaymentBusy, webViewPaymentCharged,
+    webViewKey,
+    setWebViewKey,
+    openWebView,
+    webViewBusy,
+    submitWebviewApplication,
+    webViewSubmitBusy,
+    confirmWebviewAccess,
+    openBusPicker,
+    confirmPaymentSuccess,
+    webViewPaymentBusy,
+    webViewPaymentCharged,
     // support chat
-    activeChatId, activeChatName, chatUnreadCount, activeChatReturnTo, openChat,
+    activeChatId,
+    activeChatName,
+    chatUnreadCount,
+    activeChatReturnTo,
+    openChat,
     // direct chat
-    activeDirectChatId, activeDirectChatName, activeDirectChatUid, directChatUnreadCount, openDirectChat,
-    activeInvestigateChatId, activeInvestigateReport, openInvestigateChat,
-    chatDraftText, setChatDraftText,
     // marketplace
-    activeListingId, openMarketplace, openListingDetail, handleDeepLink,
-    activeAdvertiserId, openAdvertiserManagement, openAdvertiserDetail,
+    activeListingId,
+    openMarketplace,
+    openListingDetail,
+    handleDeepLink,
+    activeAdvertiserId,
+    openAdvertiserManagement,
+    openAdvertiserDetail,
     // accommodation
-    activePropertyId, openAccommodation, openPropertyDetail,
+    activePropertyId,
+    openAccommodation,
+    openPropertyDetail,
     // room sharing
-    activeRoommateRequestId, openRoomSharing, openRoommateRequestDetail,
+    activeRoommateRequestId,
+    openRoomSharing,
+    openRoommateRequestDetail,
     // local services
-    activeProviderId, openServiceProvidersHome, openServiceProviderDetail,
+    activeProviderId,
+    openServiceProvidersHome,
+    openServiceProviderDetail,
     // community
-    activeCommunityPostId, openCommunity, openCommunityPostDetail,
-    activeSocialPostId, openSocialFeed, openCreateSocialPost, openSocialPostDetail,
+    activeCommunityPostId,
+    openCommunity,
+    openCommunityPostDetail,
+    activeSocialPostId,
+    openSocialFeed,
+    openCreateSocialPost,
+    openSocialPostDetail,
     openMarketplaceSearch,
     // my documents
-    activeDocumentId, activeDocumentType, editDocumentId,
-    openMyDocuments, openDocumentTypePicker, openAddDocument, openDocumentDetail, openDocumentViewer,
+    activeDocumentId,
+    activeDocumentType,
+    editDocumentId,
+    openMyDocuments,
+    openDocumentTypePicker,
+    openAddDocument,
+    openDocumentDetail,
+    openDocumentViewer,
     // notepad
-    activeNoteId, editNoteId, openNotepad, openAddNote, openNoteDetail,
+    activeNoteId,
+    editNoteId,
+    openNotepad,
+    openAddNote,
+    openNoteDetail,
     // MySheba Help
-    helpPrefill, setHelpPrefill, openHelp, openSupportWithPrefill,
+    helpPrefill,
+    setHelpPrefill,
+    openHelp,
+    openSupportWithPrefill,
     // business profile
-    activeBusinessProfileUid, openBusinessProfile,
-    activeContactProfileUid, openContactProfile,
+    activeBusinessProfileUid,
+    openBusinessProfile,
+    activeContactProfileUid,
+    openContactProfile,
     // salary & OT
-    openSalary, openSalaryReports,
+    openSalary,
+    openSalaryReports,
     // create payslip
-    payslipSourceRecordId, editPayslipId, activePayslipId,
-    openCreatePayslip, openEditPayslip, openPayslipHistory, openPayslipDetails,
-    // group chat
-    activeGroupId, activeGroupName, myGroups, groupUnreadCount, openGroupChat,
-    // room chat
-    activeRoomId, activeRoomName, myRooms, roomUnreadCount, openRoomChat,
-    discoverableRooms, joinDiscoverableRoom,
-    // chat hub (Direct / Groups / Rooms tabs)
-    chatHubTab, setChatHubTab, chatHubUnreadCount, openChatHub,
-    lockedChatIds, chatVaultUnlocked, isChatLocked, lockChatThread, unlockChatThread, openLockedChats,
+    payslipSourceRecordId,
+    editPayslipId,
+    activePayslipId,
+    openCreatePayslip,
+    openEditPayslip,
+    openPayslipHistory,
+    openPayslipDetails,
     // private vault unlock (Notepad + My Documents; NOT Transfer Points)
-    privateVaultUnlocked, setPrivateVaultUnlocked,
+    privateVaultUnlocked,
+    setPrivateVaultUnlocked,
     // voice / video calls
-    activeCall, setActiveCall, incomingCall, startCall, answerIncomingCall, rejectIncomingCall,
-    incomingGroupCall, startGroupCall, answerIncomingGroupCall, rejectIncomingGroupCall,
+    activeCall,
+    setActiveCall,
+    incomingCall,
+    startCall,
+    answerIncomingCall,
+    rejectIncomingCall,
     // overlays
-    ratePopupVisible, setRatePopupVisible,
-    resultModal, openResult, closeResult,
+    ratePopupVisible,
+    setRatePopupVisible,
+    resultModal,
+    openResult,
+    closeResult,
     goHome,
     setNotifPref,
-    callSettings, updateCallSettings,
-    callerRingtones, updateCallerRingtone, clearCallerRingtone, openRingtonePicker,
-    activeRingtoneContactUid, activeRingtoneContactName,
+    callSettings,
+    updateCallSettings,
+    callerRingtones,
+    updateCallerRingtone,
+    clearCallerRingtone,
+    openRingtonePicker,
+    activeRingtoneContactUid,
+    activeRingtoneContactName,
     changePassword,
-    linkGoogleAccount, startGoogleAccountMerge, confirmGoogleAccountMerge,
+    linkGoogleAccount,
+    startGoogleAccountMerge,
+    confirmGoogleAccountMerge,
     // security PIN gate (My Documents view/share, Transfer Points send)
-    pinGateRequest, requireSecurityPin, resolvePinGate, cancelPinGate, resetSecurityPin,
-    appLocked, appLockEnabled, setAppLockEnabled, unlockApp,
-    biometricEnabled, setBiometricEnabled, showBiometricPrompt, dismissBiometricPrompt,
+    pinGateRequest,
+    requireSecurityPin,
+    resolvePinGate,
+    cancelPinGate,
+    resetSecurityPin,
+    appLocked,
+    appLockEnabled,
+    setAppLockEnabled,
+    unlockApp,
+    biometricEnabled,
+    setBiometricEnabled,
+    showBiometricPrompt,
+    dismissBiometricPrompt,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
@@ -2607,6 +2709,6 @@ export function AppProvider({ children }) {
 
 export function useApp() {
   const ctx = useContext(AppContext);
-  if (!ctx) throw new Error('useApp must be used within AppProvider');
+  if (!ctx) throw new Error("useApp must be used within AppProvider");
   return ctx;
 }

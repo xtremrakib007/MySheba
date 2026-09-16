@@ -11,7 +11,6 @@ const fields: ConfigField[] = [
       'recharge',
       'remittance',
       'travel',
-      'marketplace',
       'ticketReseller',
     ],
   },

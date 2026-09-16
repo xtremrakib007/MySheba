@@ -2,14 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StyleSheet, View, Platform, Linking } from 'react-native';
-// TEMP DIAGNOSTIC: commented out to test whether @notifee/react-native's
-// native module is causing the launch crash under RN 0.79 / SDK 53.
-// import { ensureCallChannels, registerCallNotificationForegroundHandler } from './src/notifications/callPush';
-
 import { AppProvider, useApp } from './src/context/AppContext';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { LanguageProvider } from './src/i18n/LanguageContext';
-
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
@@ -30,60 +25,18 @@ import TopUpScreen from './src/screens/TopUpScreen';
 import SuperAdminTopUpScreen from './src/screens/SuperAdminTopUpScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import ChatListScreen from './src/screens/ChatListScreen';
-import ChatHubScreen from './src/screens/ChatHubScreen';
-import DirectChatListScreen from './src/screens/DirectChatListScreen';
-import LockedChatsScreen from './src/screens/LockedChatsScreen';
-import AddContactScreen from './src/screens/AddContactScreen';
-import QRScanScreen from './src/screens/QRScanScreen';
-import MyQRCodeScreen from './src/screens/MyQRCodeScreen';
-import FriendsListScreen from './src/screens/FriendsListScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
-import CallSettingsScreen from './src/screens/CallSettingsScreen';
-import RingtonePickerScreen from './src/screens/RingtonePickerScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import MyAccountScreen from './src/screens/MyAccountScreen';
 import ReportsScreen from './src/screens/ReportsScreen';
 import UserManagementScreen from './src/screens/UserManagementScreen';
-import MarketplaceModerationScreen from './src/screens/MarketplaceModerationScreen';
-import ChatReportsScreen from './src/screens/ChatReportsScreen';
-import InvestigateChatScreen from './src/screens/InvestigateChatScreen';
 import TransferPointsScreen from './src/screens/TransferPointsScreen';
-import GamePointsScreen from './src/screens/GamePointsScreen';
-import GamePointsTransferScreen from './src/screens/GamePointsTransferScreen';
-import GamePointsGiftScreen from './src/screens/GamePointsGiftScreen';
-import GroupListScreen from './src/screens/GroupListScreen';
-import NewGroupScreen from './src/screens/NewGroupScreen';
-import CreateRoomScreen from './src/screens/CreateRoomScreen';
-import RoomSettingsScreen from './src/screens/RoomSettingsScreen';
 import CallScreen from './src/screens/CallScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
-import MarketplaceHubScreen from './src/screens/MarketplaceHubScreen';
-import CreateListingScreen from './src/screens/CreateListingScreen';
-import MyListingsScreen from './src/screens/MyListingsScreen';
-import MyReviewsScreen from './src/screens/MyReviewsScreen';
-import ListingDetailScreen from './src/screens/ListingDetailScreen';
-import CreatePropertyScreen from './src/screens/CreatePropertyScreen';
-import MyPropertiesScreen from './src/screens/MyPropertiesScreen';
-import PropertyDetailScreen from './src/screens/PropertyDetailScreen';
-import CreateRoommateRequestScreen from './src/screens/CreateRoommateRequestScreen';
-import MyRoommateRequestsScreen from './src/screens/MyRoommateRequestsScreen';
-import RoommateRequestDetailScreen from './src/screens/RoommateRequestDetailScreen';
-import CreateServiceScreen from './src/screens/CreateServiceScreen';
-import MyServicesScreen from './src/screens/MyServicesScreen';
-import ServiceProviderDetailScreen from './src/screens/ServiceProviderDetailScreen';
-import CreateCommunityPostScreen from './src/screens/CreateCommunityPostScreen';
-import MyCommunityPostsScreen from './src/screens/MyCommunityPostsScreen';
-import CommunityPostDetailScreen from './src/screens/CommunityPostDetailScreen';
-import SocialFeedScreen from './src/screens/SocialFeedScreen';
-import CreateSocialPostScreen from './src/screens/CreateSocialPostScreen';
-import SocialPostDetailScreen from './src/screens/SocialPostDetailScreen';
-import MarketplaceSearchScreen from './src/screens/MarketplaceSearchScreen';
 import VerifyIdentityScreen from './src/screens/VerifyIdentityScreen';
 import VerificationManagementScreen from './src/screens/VerificationManagementScreen';
 import AdminAnalyticsScreen from './src/screens/AdminAnalyticsScreen';
 import BusinessProfileScreen from './src/screens/BusinessProfileScreen';
-import ContactProfileScreen from './src/screens/ContactProfileScreen';
-import GroupSettingsScreen from './src/screens/GroupSettingsScreen';
 import AdminBusinessManagementScreen from './src/screens/AdminBusinessManagementScreen';
 import MyDocumentsScreen from './src/screens/MyDocumentsScreen';
 import NotepadScreen from './src/screens/NotepadScreen';
@@ -118,10 +71,8 @@ import SalaryHistoryScreen from './src/screens/SalaryHistoryScreen';
 import CreatePayslipScreen from './src/screens/CreatePayslipScreen';
 import PayslipHistoryScreen from './src/screens/PayslipHistoryScreen';
 import PayslipDetailsScreen from './src/screens/PayslipDetailsScreen';
-
 import RatePopup from './src/components/RatePopup';
 import ResultModal from './src/components/ResultModal';
-import BottomNav from './src/components/BottomNav';
 import Sidebar from './src/components/Sidebar';
 import IncomingCallModal from './src/components/IncomingCallModal';
 import AppAlertHost from './src/components/AppAlertHost';
@@ -135,17 +86,7 @@ function Root() {
   const { screen, authLoading, handleDeepLink, profile, adminViewingSection } = useApp();
   const { colors, isDark } = useTheme();
   const styles = createStyles(colors);
-  // Splash stays mounted a moment after authLoading flips false so it can
-  // run its "Ready" check + fade-out instead of the app snapping in.
   const [splashVisible, setSplashVisible] = useState(true);
-
-  // Auth/session resolution can update several pieces of state in one React
-  // commit. Admin and superadmin logins are the slowest path because they
-  // also perform device-session/MFA checks. Mount the newly selected screen
-  // on a separate macrotask so AdminHome never mounts in the same commit as
-  // the login/session state transition. This specifically hardens the path
-  // that previously produced RN's "Text strings must be rendered within a
-  // <Text> component" error during admin login.
   const [renderedScreen, setRenderedScreen] = useState(screen);
 
   useEffect(() => {
@@ -154,187 +95,92 @@ function Root() {
     return () => clearTimeout(id);
   }, [screen, renderedScreen]);
 
-  const handleSplashFinished = () => {
-    setTimeout(() => setSplashVisible(false), 0);
-  };
+  const handleSplashFinished = () => setTimeout(() => setSplashVisible(false), 0);
 
-  // Handles mysheba://listing/<id> - tapped from the "Open in App" button
-  // on the mysheba.top preview page, or any other mysheba:// link. Covers
-  // both cases: the link launching the app cold (getInitialURL) and the
-  // link arriving while the app is already running (the 'url' event).
-  // handleDeepLink itself (see AppContext.js) decides whether to navigate
-  // immediately or queue until auth/profile are ready.
   useEffect(() => {
     Linking.getInitialURL().then((url) => { if (url) handleDeepLink(url); }).catch(() => {});
     const sub = Linking.addEventListener('url', ({ url }) => handleDeepLink(url));
     return () => sub.remove();
   }, [handleDeepLink]);
 
-  if (splashVisible) {
-    return (
-      <SafeAreaView style={styles.app} edges={['top', 'bottom']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <AnimatedSplash ready={!authLoading} onFinished={handleSplashFinished} />
-      </SafeAreaView>
-    );
-  }
+  if (splashVisible) return <SafeAreaView style={styles.app} edges={['top', 'bottom']}><StatusBar style={isDark ? 'light' : 'dark'} /><AnimatedSplash ready={!authLoading} onFinished={handleSplashFinished} /></SafeAreaView>;
 
-  return (
-    <SafeAreaView style={styles.app} edges={['top', 'bottom']}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-      <View style={styles.body}>
-        {renderedScreen === 'login' && <LoginScreen />}
-        {renderedScreen === 'register' && <RegisterScreen />}
-        {renderedScreen === 'forgotPassword' && <ForgotPasswordScreen />}
-        {renderedScreen === 'deviceVerify' && <DeviceVerifyScreen />}
-        {renderedScreen === 'googlePhone' && <GooglePhoneScreen />}
-        {renderedScreen === 'customerHome' && <CustomerHomeScreen />}
-        {renderedScreen === 'service' && <ServiceScreen />}
-        {renderedScreen === 'dealerHome' && <DealerHomeScreen />}
-        {renderedScreen === 'resellerHome' && <ResellerHomeScreen />}
-        {renderedScreen === 'adminHome' && ((profile?.role === 'admin' || profile?.role === 'superadmin') && !adminViewingSection ? <AdminFeaturesScreen /> : <AdminHomeScreen />)}
-        {renderedScreen === 'webview' && <WebViewScreen />}
-        {renderedScreen === 'buspicker' && <BusPickerScreen />}
-        {renderedScreen === 'support' && <SupportScreen />}
-        {renderedScreen === 'help' && <HelpScreen />}
-        {renderedScreen === 'adminSupport' && <AdminSupportScreen />}
-        {renderedScreen === 'history' && <HistoryScreen />}
-        {renderedScreen === 'topup' && <TopUpScreen />}
-        {renderedScreen === 'superAdminTopup' && <SuperAdminTopUpScreen />}
-        {renderedScreen === 'chat' && <ChatScreen />}
-        {renderedScreen === 'chatList' && <ChatListScreen />}
-        {renderedScreen === 'chatHub' && <ChatHubScreen />}
-        {renderedScreen === 'directChatList' && <DirectChatListScreen />}
-        {renderedScreen === 'lockedChats' && <LockedChatsScreen />}
-        {renderedScreen === 'addContact' && <AddContactScreen />}
-        {renderedScreen === 'qrScan' && <QRScanScreen />}
-        {renderedScreen === 'myQrCode' && <MyQRCodeScreen />}
-        {renderedScreen === 'friendsList' && <FriendsListScreen />}
-        {renderedScreen === 'settings' && <SettingsScreen />}
-        {renderedScreen === 'callSettings' && <CallSettingsScreen />}
-        {renderedScreen === 'ringtonePicker' && <RingtonePickerScreen />}
-        {renderedScreen === 'profile' && <ProfileScreen />}
-        {renderedScreen === 'myAccount' && <MyAccountScreen />}
-        {renderedScreen === 'reports' && <ReportsScreen />}
-        {renderedScreen === 'userManagement' && <UserManagementScreen />}
-        {renderedScreen === 'marketplaceModeration' && <MarketplaceModerationScreen />}
-        {renderedScreen === 'chatReports' && <ChatReportsScreen />}
-        {renderedScreen === 'investigateChat' && <InvestigateChatScreen />}
-        {renderedScreen === 'transferPoints' && <TransferPointsScreen />}
-        {renderedScreen === 'gamePoints' && <GamePointsScreen />}
-        {renderedScreen === 'gamePointsTransfer' && <GamePointsTransferScreen />}
-        {renderedScreen === 'gamePointsGift' && <GamePointsGiftScreen />}
-        {renderedScreen === 'groupList' && <GroupListScreen />}
-        {renderedScreen === 'newGroup' && <NewGroupScreen />}
-        {renderedScreen === 'createRoom' && <CreateRoomScreen />}
-        {renderedScreen === 'roomSettings' && <RoomSettingsScreen />}
-        {renderedScreen === 'groupSettings' && <GroupSettingsScreen />}
-        {renderedScreen === 'call' && <CallScreen />}
-        {renderedScreen === 'notifications' && <NotificationsScreen />}
-        {(renderedScreen === 'marketplaceHome' || renderedScreen === 'accommodationHome' || renderedScreen === 'roomSharingHome' || renderedScreen === 'servicesHome' || renderedScreen === 'communityHome') && <MarketplaceHubScreen screen={renderedScreen} />}
-        {renderedScreen === 'marketplaceCreateListing' && <CreateListingScreen />}
-        {renderedScreen === 'marketplaceMyListings' && <MyListingsScreen />}
-        {renderedScreen === 'marketplaceMyReviews' && <MyReviewsScreen />}
-        {renderedScreen === 'marketplaceListingDetail' && <ListingDetailScreen />}
-        {renderedScreen === 'accommodationCreateProperty' && <CreatePropertyScreen />}
-        {renderedScreen === 'accommodationMyProperties' && <MyPropertiesScreen />}
-        {renderedScreen === 'accommodationPropertyDetail' && <PropertyDetailScreen />}
-        {renderedScreen === 'roomSharingCreateRequest' && <CreateRoommateRequestScreen />}
-        {renderedScreen === 'roomSharingMyRequests' && <MyRoommateRequestsScreen />}
-        {renderedScreen === 'roomSharingRequestDetail' && <RoommateRequestDetailScreen />}
-        {renderedScreen === 'servicesCreateProvider' && <CreateServiceScreen />}
-        {renderedScreen === 'servicesMyServices' && <MyServicesScreen />}
-        {renderedScreen === 'servicesProviderDetail' && <ServiceProviderDetailScreen />}
-        {renderedScreen === 'communityCreatePost' && <CreateCommunityPostScreen />}
-        {renderedScreen === 'communityMyPosts' && <MyCommunityPostsScreen />}
-        {renderedScreen === 'communityPostDetail' && <CommunityPostDetailScreen />}
-        {renderedScreen === 'socialFeed' && <SocialFeedScreen />}
-        {renderedScreen === 'createSocialPost' && <CreateSocialPostScreen />}
-        {renderedScreen === 'socialPostDetail' && <SocialPostDetailScreen />}
-        {renderedScreen === 'marketplaceSearch' && <MarketplaceSearchScreen />}
-        {renderedScreen === 'verifyIdentity' && <VerifyIdentityScreen />}
-        {renderedScreen === 'verificationManagement' && <VerificationManagementScreen />}
-        {renderedScreen === 'adminAnalytics' && <AdminAnalyticsScreen />}
-        {renderedScreen === 'businessProfile' && <BusinessProfileScreen />}
-        {renderedScreen === 'contactProfile' && <ContactProfileScreen />}
-        {renderedScreen === 'adminBusinessManagement' && <AdminBusinessManagementScreen />}
-        {renderedScreen === 'myDocuments' && <MyDocumentsScreen />}
-        {renderedScreen === 'notepad' && <NotepadScreen />}
-        {renderedScreen === 'addNote' && <AddNoteScreen />}
-        {renderedScreen === 'noteDetail' && <NoteDetailScreen />}
-        {renderedScreen === 'moreFeatures' && <MoreFeaturesScreen />}
-        {renderedScreen === 'adminFeatures' && <AdminFeaturesScreen />}
-        {renderedScreen === 'tierPromotions' && <TierPromotionsScreen />}
-        {renderedScreen === 'apiProviderManagement' && <ApiProviderManagementScreen />}
-        {renderedScreen === 'dealerFeatures' && <DealerFeaturesScreen />}
-        {renderedScreen === 'resellerFeatures' && <ResellerFeaturesScreen />}
-        {renderedScreen === 'featureAccess' && <FeatureAccessScreen />}
-        {renderedScreen === 'adFeatureControls' && <AdFeatureControlsScreen />}
-        {renderedScreen === 'adAnalytics' && <AdAnalyticsScreen />}
-        {renderedScreen === 'bannerManagement' && <BannerManagementScreen />}
-        {renderedScreen === 'advertiserManagement' && <AdvertiserManagementScreen />}
-        {renderedScreen === 'advertiserDetail' && <AdvertiserDetailScreen />}
-        {renderedScreen === 'adPackagesManagement' && <AdPackagesManagementScreen />}
-        {renderedScreen === 'adPaymentsManagement' && <AdPaymentsManagementScreen />}
-        {renderedScreen === 'trustedDevices' && <TrustedDevicesScreen />}
-        {renderedScreen === 'documentType' && <DocumentTypeScreen />}
-        {renderedScreen === 'addDocument' && <AddDocumentScreen />}
-        {renderedScreen === 'documentDetails' && <DocumentDetailsScreen />}
-        {renderedScreen === 'documentViewer' && <DocumentViewerScreen />}
-        {renderedScreen === 'salaryDashboard' && <SalaryDashboardScreen />}
-        {renderedScreen === 'salarySettings' && <SalarySettingsScreen />}
-        {renderedScreen === 'salaryCalculator' && <SalaryCalculatorScreen />}
-        {renderedScreen === 'salaryWorkLog' && <WorkLogScreen />}
-        {renderedScreen === 'salaryReports' && <SalaryReportsScreen />}
-        {renderedScreen === 'salaryMonthlySummary' && <MonthlySummaryScreen />}
-        {renderedScreen === 'salaryHistory' && <SalaryHistoryScreen />}
-        {renderedScreen === 'createPayslip' && <CreatePayslipScreen />}
-        {renderedScreen === 'payslipHistory' && <PayslipHistoryScreen />}
-        {renderedScreen === 'payslipDetails' && <PayslipDetailsScreen />}
-      </View>
-
-      {(renderedScreen === 'customerHome' || renderedScreen === 'dealerHome' || renderedScreen === 'resellerHome' || renderedScreen === 'adminHome' || renderedScreen === 'support' || renderedScreen === 'help' || renderedScreen === 'adminSupport' || renderedScreen === 'history' || renderedScreen === 'topup' || renderedScreen === 'superAdminTopup' || renderedScreen === 'gamePoints' || renderedScreen === 'chatHub' || renderedScreen === 'profile' || renderedScreen === 'settings' || renderedScreen === 'myAccount' || renderedScreen === 'moreFeatures' || renderedScreen === 'adminFeatures' || renderedScreen === 'dealerFeatures' || renderedScreen === 'resellerFeatures' || renderedScreen === 'notifications' || renderedScreen === 'marketplaceHome' || renderedScreen === 'accommodationHome' || renderedScreen === 'roomSharingHome' || renderedScreen === 'servicesHome' || renderedScreen === 'communityHome') && <BottomNav />}
-
-      {/* Global overlays - mirror #ratePopup and #resultModal from the original */}
-      <RatePopup />
-      <ResultModal />
-      <Sidebar />
-      <IncomingCallModal />
-      <AppAlertHost />
-      <SecurityPinGate />
-      <AppLockScreen />
-      <BiometricOptInPrompt />
-    </SafeAreaView>
-  );
+  return <SafeAreaView style={styles.app} edges={['top', 'bottom']}>
+    <StatusBar style={isDark ? 'light' : 'dark'} />
+    <View style={styles.body}>
+      {renderedScreen === 'login' && <LoginScreen />}
+      {renderedScreen === 'register' && <RegisterScreen />}
+      {renderedScreen === 'forgotPassword' && <ForgotPasswordScreen />}
+      {renderedScreen === 'deviceVerify' && <DeviceVerifyScreen />}
+      {renderedScreen === 'googlePhone' && <GooglePhoneScreen />}
+      {renderedScreen === 'customerHome' && <CustomerHomeScreen />}
+      {renderedScreen === 'service' && <ServiceScreen />}
+      {renderedScreen === 'dealerHome' && <DealerHomeScreen />}
+      {renderedScreen === 'resellerHome' && <ResellerHomeScreen />}
+      {renderedScreen === 'adminHome' && ((profile?.role === 'admin' || profile?.role === 'superadmin') && !adminViewingSection ? <AdminFeaturesScreen /> : <AdminHomeScreen />)}
+      {renderedScreen === 'webview' && <WebViewScreen />}
+      {renderedScreen === 'buspicker' && <BusPickerScreen />}
+      {renderedScreen === 'support' && <SupportScreen />}
+      {renderedScreen === 'help' && <HelpScreen />}
+      {renderedScreen === 'adminSupport' && <AdminSupportScreen />}
+      {renderedScreen === 'history' && <HistoryScreen />}
+      {renderedScreen === 'topup' && <TopUpScreen />}
+      {renderedScreen === 'superAdminTopup' && <SuperAdminTopUpScreen />}
+      {renderedScreen === 'chat' && <ChatScreen />}
+      {renderedScreen === 'chatList' && <ChatListScreen />}
+      {renderedScreen === 'settings' && <SettingsScreen />}
+      {renderedScreen === 'profile' && <ProfileScreen />}
+      {renderedScreen === 'myAccount' && <MyAccountScreen />}
+      {renderedScreen === 'reports' && <ReportsScreen />}
+      {renderedScreen === 'userManagement' && <UserManagementScreen />}
+      {renderedScreen === 'transferPoints' && <TransferPointsScreen />}
+      {renderedScreen === 'call' && <CallScreen />}
+      {renderedScreen === 'notifications' && <NotificationsScreen />}
+      {renderedScreen === 'verifyIdentity' && <VerifyIdentityScreen />}
+      {renderedScreen === 'verificationManagement' && <VerificationManagementScreen />}
+      {renderedScreen === 'adminAnalytics' && <AdminAnalyticsScreen />}
+      {renderedScreen === 'businessProfile' && <BusinessProfileScreen />}
+      {renderedScreen === 'adminBusinessManagement' && <AdminBusinessManagementScreen />}
+      {renderedScreen === 'myDocuments' && <MyDocumentsScreen />}
+      {renderedScreen === 'notepad' && <NotepadScreen />}
+      {renderedScreen === 'addNote' && <AddNoteScreen />}
+      {renderedScreen === 'noteDetail' && <NoteDetailScreen />}
+      {renderedScreen === 'moreFeatures' && <MoreFeaturesScreen />}
+      {renderedScreen === 'adminFeatures' && <AdminFeaturesScreen />}
+      {renderedScreen === 'tierPromotions' && <TierPromotionsScreen />}
+      {renderedScreen === 'apiProviderManagement' && <ApiProviderManagementScreen />}
+      {renderedScreen === 'dealerFeatures' && <DealerFeaturesScreen />}
+      {renderedScreen === 'resellerFeatures' && <ResellerFeaturesScreen />}
+      {renderedScreen === 'featureAccess' && <FeatureAccessScreen />}
+      {renderedScreen === 'adFeatureControls' && <AdFeatureControlsScreen />}
+      {renderedScreen === 'adAnalytics' && <AdAnalyticsScreen />}
+      {renderedScreen === 'bannerManagement' && <BannerManagementScreen />}
+      {renderedScreen === 'advertiserManagement' && <AdvertiserManagementScreen />}
+      {renderedScreen === 'advertiserDetail' && <AdvertiserDetailScreen />}
+      {renderedScreen === 'adPackagesManagement' && <AdPackagesManagementScreen />}
+      {renderedScreen === 'adPaymentsManagement' && <AdPaymentsManagementScreen />}
+      {renderedScreen === 'trustedDevices' && <TrustedDevicesScreen />}
+      {renderedScreen === 'documentType' && <DocumentTypeScreen />}
+      {renderedScreen === 'addDocument' && <AddDocumentScreen />}
+      {renderedScreen === 'documentDetails' && <DocumentDetailsScreen />}
+      {renderedScreen === 'documentViewer' && <DocumentViewerScreen />}
+      {renderedScreen === 'salaryDashboard' && <SalaryDashboardScreen />}
+      {renderedScreen === 'salarySettings' && <SalarySettingsScreen />}
+      {renderedScreen === 'salaryCalculator' && <SalaryCalculatorScreen />}
+      {renderedScreen === 'salaryWorkLog' && <WorkLogScreen />}
+      {renderedScreen === 'salaryReports' && <SalaryReportsScreen />}
+      {renderedScreen === 'salaryMonthlySummary' && <MonthlySummaryScreen />}
+      {renderedScreen === 'salaryHistory' && <SalaryHistoryScreen />}
+      {renderedScreen === 'createPayslip' && <CreatePayslipScreen />}
+      {renderedScreen === 'payslipHistory' && <PayslipHistoryScreen />}
+      {renderedScreen === 'payslipDetails' && <PayslipDetailsScreen />}
+    </View>
+    <RatePopup /><ResultModal /><Sidebar /><IncomingCallModal /><AppAlertHost /><SecurityPinGate /><AppLockScreen /><BiometricOptInPrompt />
+  </SafeAreaView>;
 }
 
 export default function App() {
-  useEffect(() => {
-    if (Platform.OS !== 'android') return undefined;
-    // TEMP DIAGNOSTIC: Notifee calls disabled, see import comment above.
-    // ensureCallChannels();
-    // return registerCallNotificationForegroundHandler();
-    return undefined;
-  }, []);
-
-  return (
-    <SafeAreaProvider>
-      <LanguageProvider>
-        <ThemeProvider>
-          <AppProvider>
-            <ErrorBoundary>
-              <Root />
-            </ErrorBoundary>
-          </AppProvider>
-        </ThemeProvider>
-      </LanguageProvider>
-    </SafeAreaProvider>
-  );
+  return <SafeAreaProvider><LanguageProvider><ThemeProvider><AppProvider><ErrorBoundary><Root /></ErrorBoundary></AppProvider></ThemeProvider></LanguageProvider></SafeAreaProvider>;
 }
 
-function createStyles(colors) {
-  return StyleSheet.create({
-    app: { flex: 1, backgroundColor: colors.bg },
-    body: { flex: 1 },
-  });
-}
+function createStyles(colors) { return StyleSheet.create({ app: { flex: 1, backgroundColor: colors.bg }, body: { flex: 1 } }); }

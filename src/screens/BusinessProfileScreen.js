@@ -1,20 +1,11 @@
-// Business Profile (Marketplace PRD section 15 Monetization Plan -
-// "Business profile"; sitemap's Buy & Sell > Seller Profile, generalized
-// to cover Accommodation owners and Local Services providers too). Shows
-// an upgraded, badge-carrying profile - business name, logo, description,
-// category - plus everything that user has posted across Buy & Sell,
-// Accommodation, and Local Services in one page.
+// Business Profile - admin-granted business identity page.
+// The profile contains business name, logo, description, category, and
+// location. Marketplace/property/service-provider listings are retired and
+// are intentionally not rendered here.
 //
-// Business Profile status itself is admin-granted only (Admin Panel >
-// Business Profiles, see AdminBusinessManagementScreen.js) - there's no
-// self-serve upgrade flow. Once granted, the owner can edit their own
-// business name/logo/description/category right here (see
-// businessProfileService.js's updateBusinessDetails) - everyone else sees
-// a read-only page.
-//
-// Opened via AppContext's openBusinessProfile(uid) - from a listing's
-// Seller row, a property's Owner row, a service provider's Provider row,
-// or from My Account ("My Business Profile") for your own.
+// Business Profile status is admin-granted only (Admin Panel > Business
+// Profiles). Once granted, the owner can edit their own business details;
+// everyone else sees a read-only page.
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, Image, StyleSheet, ActivityIndicator } from 'react-native';
 import { showAlert } from '../utils/appAlert';
@@ -22,88 +13,27 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
-import { useTheme } from "../theme/ThemeContext";
+import { useTheme } from '../theme/ThemeContext';
 import HeaderDecor from '../components/HeaderDecor';
 import BusinessBadge from '../components/BusinessBadge';
 import VerifiedBadge from '../components/VerifiedBadge';
 import * as authService from '../firebase/authService';
 import * as businessProfileService from '../firebase/businessProfileService';
-import * as marketplaceService from '../firebase/marketplaceService';
-import * as accommodationService from '../firebase/accommodationService';
-import * as serviceProviderService from '../firebase/serviceProviderService';
 import { uploadBusinessLogo } from '../firebase/mediaUpload';
 import { computeGeohash } from '../utils/geo';
 import LocationPickerModal from '../components/LocationPickerModal';
 import MapPreview from '../components/MapPreview';
 
-const FIELDS = [
-  { key: 'businessName', label: 'Business Name', placeholder: 'e.g. Karim Electronics' },
-  { key: 'businessCategory', label: 'Category', placeholder: 'e.g. Electronics & Mobile Phones' },
-  { key: 'businessDescription', label: 'Description', placeholder: 'Tell buyers what your business offers', multiline: true },
-];
-
-function ItemRow({ image, title, subtitle, onPress }) {
-  const {
-    colors
-  } = useTheme();
-
-  const styles = createStyles(colors);
-  return (
-    <TouchableOpacity style={styles.itemCard} activeOpacity={0.75} onPress={onPress}>
-      {image ? (
-        <Image source={{ uri: image }} style={styles.itemThumb} />
-      ) : (
-        <View style={[styles.itemThumb, styles.itemThumbPlaceholder]}><Text style={{ fontSize: 18 }}>📦</Text></View>
-      )}
-      <View style={{ flex: 1 }}>
-        <Text style={styles.itemTitle} numberOfLines={1}>{title}</Text>
-        {!!subtitle && <Text style={styles.itemSubtitle}>{subtitle}</Text>}
-      </View>
-      <Text style={styles.chevron}>›</Text>
-    </TouchableOpacity>
-  );
-}
-
-function Section({ title, emoji, items, children }) {
-  const {
-    colors
-  } = useTheme();
-
-  const styles = createStyles(colors);
-  if (items && items.length === 0) return null;
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionLabel}>{emoji} {title}</Text>
-      {children}
-    </View>
-  );
-}
-
 export default function BusinessProfileScreen() {
-  const {
-    colors,
-    brandGradient
-  } = useTheme();
-
+  const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const {
-    goBackOrHome, authUser, profile,
-    activeBusinessProfileUid,
-    openListingDetail, openPropertyDetail, openServiceProviderDetail,
-  } = useApp();
+  const { goBackOrHome, authUser, profile, activeBusinessProfileUid } = useApp();
 
   const targetUid = activeBusinessProfileUid;
   const isOwner = !!authUser && authUser.uid === targetUid;
 
   const [biz, setBiz] = useState(undefined); // undefined = loading, null = no doc
-  const [listings, setListings] = useState([]);
-  const [properties, setProperties] = useState([]);
-  const [providers, setProviders] = useState([]);
-  // This user's identity-verified status (users/{uid}.verified) - not part
-  // of the businessProfiles/{uid} doc above, so it's fetched separately.
-  // isOwner already has it via the shared `profile` from context.
   const [targetVerified, setTargetVerified] = useState(false);
-
   const [editingKey, setEditingKey] = useState(null);
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
@@ -117,8 +47,11 @@ export default function BusinessProfileScreen() {
   }, [targetUid]);
 
   useEffect(() => {
-    if (!targetUid) return;
-    if (isOwner) { setTargetVerified(!!profile?.verified); return; }
+    if (!targetUid) return undefined;
+    if (isOwner) {
+      setTargetVerified(!!profile?.verified);
+      return undefined;
+    }
     let cancelled = false;
     authService.fetchProfile(targetUid)
       .then((p) => { if (!cancelled) setTargetVerified(!!p?.verified); })
@@ -126,26 +59,15 @@ export default function BusinessProfileScreen() {
     return () => { cancelled = true; };
   }, [targetUid, isOwner, profile?.verified]);
 
-  useEffect(() => {
-    if (!targetUid) return undefined;
-    const unsubL = marketplaceService.subscribeMyListings(targetUid, setListings, () => {});
-    const unsubP = accommodationService.subscribeMyProperties(targetUid, setProperties, () => {});
-    const unsubS = serviceProviderService.subscribeMyProviders(targetUid, setProviders, () => {});
-    return () => { unsubL && unsubL(); unsubP && unsubP(); unsubS && unsubS(); };
-  }, [targetUid]);
-
-  // Visitors only see what a normal browse feed would show them; the
-  // owner sees everything (including sold/hidden/inactive), same "you see
-  // your own drafts too" idea as MyListingsScreen.
-  const visibleListings = isOwner ? listings : listings.filter((l) => l.status === 'active');
-  const visibleProperties = isOwner ? properties : properties.filter((p) => p.status === 'active');
-  const visibleProviders = isOwner ? providers : providers.filter((p) => p.status === 'active');
-
   const startEdit = (key) => {
     setDraft(biz ? biz[key] || '' : '');
     setEditingKey(key);
   };
-  const cancelEdit = () => { setEditingKey(null); setDraft(''); };
+
+  const cancelEdit = () => {
+    setEditingKey(null);
+    setDraft('');
+  };
 
   const saveField = async (key) => {
     setSaving(true);
@@ -160,7 +82,7 @@ export default function BusinessProfileScreen() {
   };
 
   const changeLogo = async () => {
-const result = await ImagePicker.launchImageLibraryAsync({
+    const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.7,
       allowsEditing: true,
@@ -215,7 +137,7 @@ const result = await ImagePicker.launchImageLibraryAsync({
           <Text style={{ fontSize: 36, marginBottom: 8 }}>🏢</Text>
           <Text style={styles.emptyText}>
             {isOwner
-              ? "You don't have a Business Profile yet. This upgraded seller profile is granted by MySheba admin - contact Support to apply."
+              ? "You don't have a Business Profile yet. This upgraded business profile is granted by MySheba admin - contact Support to apply."
               : "This user doesn't have a Business Profile."}
           </Text>
         </View>
@@ -296,48 +218,6 @@ const result = await ImagePicker.launchImageLibraryAsync({
               <MapPreview latitude={biz.latitude} longitude={biz.longitude} address={biz.businessAddress} />
             )}
           </View>
-
-          <Section title="Products" emoji="🛍️" items={visibleListings}>
-            {visibleListings.map((item) => (
-              <ItemRow
-                key={item.id}
-                image={item.images && item.images[0]}
-                title={item.title}
-                subtitle={`MYR ${Number(item.price || 0).toFixed(2)}`}
-                onPress={() => openListingDetail(item.id)}
-              />
-            ))}
-          </Section>
-
-          <Section title="Properties" emoji="🏠" items={visibleProperties}>
-            {visibleProperties.map((item) => (
-              <ItemRow
-                key={item.id}
-                image={item.images && item.images[0]}
-                title={item.title}
-                subtitle={`MYR ${Number(item.monthlyRent || 0).toFixed(2)}/mo`}
-                onPress={() => openPropertyDetail(item.id)}
-              />
-            ))}
-          </Section>
-
-          <Section title="Services" emoji="🔧" items={visibleProviders}>
-            {visibleProviders.map((item) => (
-              <ItemRow
-                key={item.id}
-                image={item.photo}
-                title={item.name}
-                subtitle={item.category}
-                onPress={() => openServiceProviderDetail(item.id)}
-              />
-            ))}
-          </Section>
-
-          {visibleListings.length === 0 && visibleProperties.length === 0 && visibleProviders.length === 0 && (
-            <View style={styles.center}>
-              <Text style={styles.emptyText}>Nothing posted yet.</Text>
-            </View>
-          )}
         </ScrollView>
       )}
 
@@ -379,13 +259,5 @@ function createStyles(colors) {
     locationRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
     locationText: { fontSize: 13, color: colors.textSecondary, flex: 1, marginRight: 8 },
     cancelLink: { color: '#999', fontWeight: '600', fontSize: 13, marginTop: 6 },
-    section: { marginBottom: 20 },
-    sectionLabel: { fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 8 },
-    itemCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: 10, marginBottom: 8, gap: 10 },
-    itemThumb: { width: 46, height: 46, borderRadius: radius.sm, backgroundColor: '#F1F3F4' },
-    itemThumbPlaceholder: { alignItems: 'center', justifyContent: 'center' },
-    itemTitle: { fontSize: 13, fontWeight: '700', color: colors.text },
-    itemSubtitle: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
-    chevron: { fontSize: 16, color: '#CCC' },
   });
 }

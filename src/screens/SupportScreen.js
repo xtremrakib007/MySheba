@@ -17,8 +17,6 @@ import * as supportTicketService from '../firebase/supportTicketService';
 // stays fixed here since it doesn't need to change per-deployment.
 const SUPPORT_EMAIL = 'info.mysheba@gmail.com';
 
-// Official MySheba social links (see socialLinksService.js, admin-editable
-// from Admin > Social). A platform's icon/label only renders on the Follow
 // Us row below once an admin has actually set its URL - same "hide until
 // configured" idea as the Call/WhatsApp support cards above.
 const SOCIAL_PLATFORMS = [
@@ -169,7 +167,6 @@ export default function SupportScreen() {
   } = useTheme();
 
   const styles = createStyles(colors);
-  const { goBackOrHome, authUser, profile, openChat, chatUnreadCount, supportContact, socialLinks, openHelp, helpPrefill, setHelpPrefill } = useApp();
   const hasPhone = !!supportContact?.phone;
   const hasWhatsapp = !!supportContact?.whatsapp;
 
@@ -328,8 +325,6 @@ export default function SupportScreen() {
     openLink(`mailto:${SUPPORT_EMAIL}?subject=${emailSubject}&body=${body}`, 'your email app');
   };
 
-  const openSocial = (platform) => {
-    const url = socialLinks?.[platform.key];
     if (!url) return;
     openLink(url, platform.label);
   };
@@ -423,12 +418,9 @@ export default function SupportScreen() {
 
           <Text style={styles.hoursNote}>Support hours: 9:00 AM – 9:00 PM, daily.</Text>
 
-          {SOCIAL_PLATFORMS.some((p) => !!socialLinks?.[p.key]) && (
             <View style={styles.followUsBlock}>
               <Text style={styles.followUsTitle}>Follow Us</Text>
               <View style={styles.followUsRow}>
-                {SOCIAL_PLATFORMS.filter((p) => !!socialLinks?.[p.key]).map((p) => (
-                  <TouchableOpacity key={p.key} style={styles.followUsBtn} onPress={() => openSocial(p)}>
                     <Text style={styles.followUsIcon}>{p.icon}</Text>
                   </TouchableOpacity>
                 ))}
