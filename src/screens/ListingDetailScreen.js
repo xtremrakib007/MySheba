@@ -14,7 +14,6 @@ import { REPORT_REASONS, isFeatured } from '../firebase/marketplaceService';
 import * as marketplaceReviewService from '../firebase/marketplaceReviewService';
 import { ratingAvg } from '../firebase/marketplaceReviewService';
 import * as businessProfileService from '../firebase/businessProfileService';
-import { ensureDirectChat } from '../firebase/directChatService';
 import { recordView } from '../firebase/recommendationService';
 import VerifiedBadge from '../components/VerifiedBadge';
 import BusinessBadge from '../components/BusinessBadge';
@@ -33,13 +32,9 @@ function formatDate(ts) {
 }
 
 export default function ListingDetailScreen() {
-  const {
-    colors,
-    brandGradient
-  } = useTheme();
-
+  const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { goBackOrHome, activeListingId, authUser, profile, openDirectChat, setScreen, pricing, openBusinessProfile } = useApp();
+  const { goBackOrHome, activeListingId, authUser, profile, setScreen, pricing, openBusinessProfile } = useApp();
   const [listing, setListing] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
@@ -61,9 +56,6 @@ export default function ListingDetailScreen() {
     return unsub;
   }, [activeListingId]);
 
-  // Logs a lightweight "viewed this category" signal for the Recommended
-  // for You row on the marketplace home screen (see recommendationService.js).
-  // Fires once per listing load, not on every re-render.
   useEffect(() => {
     if (!authUser || !listing?.category) return;
     recordView(authUser.uid, listing.category);
@@ -80,11 +72,6 @@ export default function ListingDetailScreen() {
     return unsub;
   }, [listing?.sellerId]);
 
-  // "🏢 Business" badge + tap-through to the Business Profile page (see
-  // BusinessProfileScreen.js) - unlike sellerVerified, this isn't
-  // denormalized onto the listing (Business Profile can be granted/
-  // revoked after a listing's already posted, and the profile page needs
-  // to always reflect current status), so it's a small live read here.
   useEffect(() => {
     if (!listing?.sellerId) return undefined;
     const unsub = businessProfileService.subscribeBusinessProfile(listing.sellerId, setSellerBiz, () => {});
@@ -141,22 +128,6 @@ export default function ListingDetailScreen() {
       }
     } catch (err) {
       showAlert('MySheba', 'Could not update saved items right now.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const chatSeller = async () => {
-    if (!authUser || isOwner) return;
-    setBusy(true);
-    try {
-      const chatId = await ensureDirectChat(
-        { uid: authUser.uid, name: profile?.name },
-        { uid: listing.sellerId, name: listing.sellerName }
-      );
-      openDirectChat(chatId, listing.sellerName, listing.sellerId, `Hi, is "${listing.title}" still available?`);
-    } catch (err) {
-      showAlert('MySheba', 'Could not open chat right now.');
     } finally {
       setBusy(false);
     }
@@ -356,16 +327,12 @@ export default function ListingDetailScreen() {
             </View>
           ) : (
             <View style={styles.buyerActions}>
-              <TouchableOpacity style={styles.chatBtn} onPress={chatSeller} disabled={busy || listing.status === 'sold'}>
-                <Text style={styles.chatBtnText}>💬 Chat Seller</Text>
-              </TouchableOpacity>
               <TouchableOpacity style={styles.saveBtn} onPress={toggleSave} disabled={busy}>
                 <Text style={styles.saveBtnText}>{saved ? '★ Saved' : '☆ Save'}</Text>
               </TouchableOpacity>
             </View>
           )}
 
-          {/* ---- Seller reviews (sitemap: Complete Transaction -> Leave Review) ---- */}
           <Text style={styles.sectionLabel}>Seller Reviews</Text>
           {!isOwner && authUser && (
             <View style={styles.myReviewBox}>
@@ -453,9 +420,7 @@ function createStyles(colors) {
     reviewerName: { fontSize: 12, fontWeight: '700', color: colors.text },
     reviewComment: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
     buyerActions: { flexDirection: 'row', gap: 10, marginTop: 22 },
-    chatBtn: { flex: 1, backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: 13, alignItems: 'center' },
-    chatBtnText: { color: 'white', fontWeight: '700', fontSize: 13 },
-    saveBtn: { paddingHorizontal: 18, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
+    saveBtn: { flex: 1, paddingVertical: 13, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
     saveBtnText: { color: colors.navy, fontWeight: '700', fontSize: 13 },
     ownerActions: { gap: 10, marginTop: 22 },
     actionBtn: { borderRadius: radius.md, paddingVertical: 13, alignItems: 'center' },
