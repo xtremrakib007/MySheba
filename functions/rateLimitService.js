@@ -9,7 +9,6 @@ const DEFAULT_LIMITS = {
   createSelfTopup: { max: 5, windowMinutes: 60 },
   transferPoints: { max: 20, windowMinutes: 10 },
   chargeWallet: { max: 60, windowMinutes: 60 },
-  boostListing: { max: 10, windowMinutes: 60 },
   account_merge_start: { max: 5, windowMinutes: 60 },
   account_merge_confirm: { max: 10, windowMinutes: 60 },
 };

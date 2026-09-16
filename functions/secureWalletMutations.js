@@ -67,5 +67,4 @@ function wrap(name) {
   });
 }
 
-exports.boostListing = wrap('boostListing');
 exports.createSelfTopup = wrap('createSelfTopup');
