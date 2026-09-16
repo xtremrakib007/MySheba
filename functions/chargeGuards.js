@@ -23,10 +23,14 @@ async function sanitizeRequest(request, requestId) {
   const snap = await db.collection('users').doc(uid).get();
   if (!snap.exists) throw new HttpsError('not-found', 'Account not found.');
   const profile = snap.data() || {};
+  const balance = Number(profile.walletBalance || 0);
+  if (!Number.isFinite(balance) || balance < 0 || !Number.isSafeInteger(Math.round(balance * 100))) {
+    throw new HttpsError('failed-precondition', 'Wallet balance is invalid.');
+  }
 
   // Never trust customer identity, phone, dealer/reseller scope, or role
-  // supplied by the client. The wallet callable must always charge the
-  // authenticated account and create the transaction under that account.
+  // supplied by the client. The wallet callable always charges the
+  // authenticated account and creates the transaction under that account.
   const customer = {
     uid,
     phone: profile.phone || '',
@@ -39,8 +43,6 @@ async function sanitizeRequest(request, requestId) {
   const incomingPayload = incomingData.payload || {};
   const payload = {
     ...incomingPayload,
-    // Persist the idempotency key inside transactions.raw so a response lost
-    // after the wallet transaction commits can be recovered safely.
     raw: { ...(incomingPayload.raw || {}), requestId },
   };
 
@@ -62,9 +64,6 @@ function wrap(name) {
     const db = admin.firestore();
     const guardRef = db.collection('chargeRequests').doc(`${uid}_${requestId}`);
 
-    // Acquire a deterministic per-user request lock before touching the
-    // wallet. Firestore's transaction makes two concurrent submissions with
-    // the same requestId mutually exclusive.
     let existing = null;
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(guardRef);
@@ -90,9 +89,6 @@ function wrap(name) {
         return { id: existing.transactionId, cost: existing.cost || 0, replay: true };
       }
 
-      // The original callable may have completed but the client lost the
-      // response before the guard was marked completed. Recover its order by
-      // the same authenticated UID + requestId stored in transactions.raw.
       const recovered = await db.collection('transactions')
         .where('customerId', '==', uid)
         .where('raw.requestId', '==', requestId)
@@ -131,8 +127,6 @@ function wrap(name) {
       });
       return result;
     } catch (err) {
-      // If the callable failed before committing its wallet transaction,
-      // release the guard so a retry with the same requestId can proceed.
       await guardRef.delete().catch(() => {});
       throw err;
     }
