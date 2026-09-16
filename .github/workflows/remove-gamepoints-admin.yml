@@ -43,7 +43,7 @@ jobs:
           p.write_text(s, encoding='utf-8')
       - name: Verify
         run: |
-          if grep -Ein 'gamePoints|GamePoints|Game Point|GameBot|game bot' src/screens/AdminHomeScreen.js; then exit 1; fi
+          ! grep -Ein 'gamePoints|GamePoints|Game Point|GameBot|game bot' src/screens/AdminHomeScreen.js
       - name: Persist and self-delete workflow
         shell: bash
         run: |
