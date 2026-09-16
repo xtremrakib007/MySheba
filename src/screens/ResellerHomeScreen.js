@@ -78,7 +78,7 @@ export default function ResellerHomeScreen() {
   const pendingTxs = resellerTxs.filter((t) => t.status === 'pending' && !t.rejectedBy?.[authUser?.uid]);
   const processingTxs = resellerTxs.filter((t) => t.status === 'processing' && t.claimedBy === authUser?.uid);
   const completedTxs = resellerTxs.filter((t) => t.status === 'completed' && t.claimedBy === authUser?.uid);
-  const newInquiriesCount = (resellerTxs.inquiries || []).filter((i) => (i.status || 'new') === 'new').length;
+  const newInquiriesCount = inquiries.filter((i) => (i.status || 'new') === 'new').length;
   const counts = {
     pending: pendingTxs.length,
     processing: processingTxs.length,
