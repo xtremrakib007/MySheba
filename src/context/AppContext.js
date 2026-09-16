@@ -1423,15 +1423,6 @@ export function AppProvider({ children }) {
     return unsub;
   }, [authUser, activeCall]);
 
-  // Same idea as the listener above, but for group calls (see
-  // calleeUid, since several people can be rung at once).
-  useEffect(() => {
-    if (!authUser) { setIncomingGroupCall(null); return undefined; }
-      setIncomingGroupCall(call && call.id !== activeCall?.id ? call : null);
-    });
-    return unsub;
-  }, [authUser, activeCall]);
-
   /** Starts a call with another user and switches to the call screen.
    * `caller` is supplied by the call site (e.g. ChatScreen) rather than
    * built here, so it always reflects the profile the screen has in hand. */
