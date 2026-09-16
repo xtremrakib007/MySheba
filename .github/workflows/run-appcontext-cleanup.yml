@@ -1,0 +1,80 @@
+name: Run AppContext chat cleanup
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.event.head_commit.message != 'refactor: remove retired chat state from AppContext'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Clean retired chat state
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          p = Path('src/context/AppContext.js')
+          s = p.read_text(encoding='utf-8')
+
+          s = re.sub(r"^import \* as (?:directChatService|groupChatService|roomChatService|chatLockService) from .*\n", "", s, flags=re.M)
+          s = s.replace(' | chatHub | directChatList | addContact | qrScan | myQrCode | groupList | newGroup | createRoom | roomSettings', '')
+          s = s.replace(' | investigateChat', '')
+
+          names = ('activeDirectChatId','activeDirectChatName','activeDirectChatUid','directChatUnreadCount','chatDraftText','activeInvestigateChatId','activeInvestigateReport','lockedChatIds','chatVaultUnlocked','activeGroupId','activeGroupName','myGroups','groupUnreadCount','activeRoomId','activeRoomName','myRooms','discoverableRooms','chatHubTab','incomingGroupCall')
+          for name in names:
+              s = re.sub(r'^  const \[' + re.escape(name) + r'.*\n', '', s, flags=re.M)
+
+          def remove_callback(text, name):
+              m = re.search(r'^  const ' + re.escape(name) + r'\s*=\s*useCallback\b', text, flags=re.M)
+              if not m: return text
+              ob = text.find('{', m.start()); depth = 0; quote = None; esc = False
+              for i in range(ob, len(text)):
+                  c = text[i]
+                  if quote:
+                      if esc: esc = False
+                      elif c == '\\': esc = True
+                      elif c == quote: quote = None
+                      continue
+                  if c in "'\"`": quote = c
+                  elif c == '{': depth += 1
+                  elif c == '}':
+                      depth -= 1
+                      if depth == 0:
+                          j = i + 1
+                          while j < len(text) and text[j] in ' ;\t\r\n': j += 1
+                          return text[:m.start()] + text[j:]
+              raise SystemExit('Unbalanced callback: ' + name)
+
+          for name in ('openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall','openInvestigateChat'):
+              while re.search(r'^  const ' + re.escape(name) + r'\s*=\s*useCallback\b', s, flags=re.M):
+                  s = remove_callback(s, name)
+
+          retired = re.compile(r'\b(activeDirectChatId|activeDirectChatName|activeDirectChatUid|directChatUnreadCount|openDirectChat|activeInvestigateChatId|activeInvestigateReport|openInvestigateChat|chatDraftText|activeGroupId|activeGroupName|myGroups|groupUnreadCount|openGroupChat|activeRoomId|activeRoomName|myRooms|discoverableRooms|openRoomChat|chatHubTab|openChatHub|incomingGroupCall|startGroupCall|answerIncomingGroupCall|rejectIncomingGroupCall|investigateChat)\b')
+          s = ''.join(line for line in s.splitlines(True) if not retired.search(line))
+
+          forbidden = ('directChatService','groupChatService','roomChatService','chatLockService','openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','subscribeIncomingGroupCalls','incomingGroupCall','activeDirectChat','activeGroupId','activeRoomId','myGroups','myRooms','chatHubTab','investigateChat')
+          bad = [x for x in forbidden if x in s]
+          if bad: raise SystemExit('Retired AppContext refs remain: ' + ', '.join(bad))
+
+          required = ('activeChatId','chatUnreadCount','activeRingtoneContactUid','activeRingtoneContactName','activeCall','incomingCall','callService')
+          missing = [x for x in required if x not in s]
+          if missing: raise SystemExit('Required Support/1-to-1 calling state missing: ' + ', '.join(missing))
+
+          p.write_text(s, encoding='utf-8')
+          print('AppContext retired-chat cleanup prepared successfully')
+
+      - name: Commit AppContext cleanup
+        run: |
+          grep -nE 'directChatService|groupChatService|roomChatService|chatLockService|openDirectChat|openGroupChat|openRoomChat|openChatHub|startGroupCall|subscribeIncomingGroupCalls|incomingGroupCall|activeDirectChat|activeGroupId|activeRoomId|myGroups|myRooms|chatHubTab|investigateChat' src/context/AppContext.js && exit 1 || true
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/context/AppContext.js
+          if git diff --cached --quiet; then echo 'No AppContext change needed'; exit 0; fi
+          git commit -m 'refactor: remove retired chat state from AppContext'
+          git push
