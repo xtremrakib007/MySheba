@@ -75,6 +75,25 @@ exports.completeTransaction = onCall(async (request) => {
   return { ok: true, transactionId: id };
 });
 
+// One-time maintenance callable for removing legacy plaintext collection PINs
+// from completed transactions. Superadmin-only and deliberately not exposed
+// through the client transaction service. Remove this export after migration.
+exports.scrubCompletedTransactionPins = onCall(async (request) => {
+  requireAuth(request); const actor = await getActor(request.auth.uid);
+  if (actor.role !== 'superadmin') throw new HttpsError('permission-denied', 'Only a superadmin can scrub legacy collection PINs.');
+  const db = admin.firestore();
+  const snap = await db.collection('transactions').where('status', '==', 'completed').get();
+  let batch = db.batch(), count = 0, batches = 0;
+  for (const docSnap of snap.docs) {
+    if (!Object.prototype.hasOwnProperty.call(docSnap.data(), 'pin')) continue;
+    batch.update(docSnap.ref, { pin: admin.firestore.FieldValue.delete() });
+    count += 1;
+    if (count % 450 === 0) { await batch.commit(); batches += 1; batch = db.batch(); }
+  }
+  if (count % 450 !== 0) { await batch.commit(); batches += 1; }
+  return { ok: true, scrubbed: count, batches };
+});
+
 exports.assignDealer = onCall(async (request) => {
   requireAuth(request);
   const actor = await getActor(request.auth.uid);
