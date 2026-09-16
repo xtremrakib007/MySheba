@@ -291,9 +291,7 @@ export function AppProvider({ children }) {
    * "Messages" tab passes 'adminSupport' so back returns there instead. */
   const openChat = useCallback((chatId, name, returnTo) => {
     setActiveChatId(chatId);
-    setActiveGroupId(null);
-    setActiveDirectChatId(null);
-    setActiveRoomId(null);
+
     setActiveChatName(name || "");
     setActiveChatReturnTo(returnTo || "chatList");
     setScreen("chat");
