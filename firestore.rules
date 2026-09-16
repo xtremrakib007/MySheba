@@ -19,13 +19,13 @@ service cloud.firestore {
     match /verificationRequests/{uid} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow create, update, delete: if false; }
 
     // Root user profile fields are client-editable only for the signed-in owner,
-    // and only for the explicitly listed presentation/device-preference fields.
-    // Roles, wallet values, assignments, verification, suspension, feature access,
+    // and only for presentation/device-preference fields. Authentication linkage,
+    // roles, wallet values, assignments, verification, suspension, feature access,
     // security/session state and other privileged fields are server-owned.
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin() || (isDealerTier() && resource.data.dealerId == myDealerScope()) || (isReseller() && resource.data.get('resellerId', null) == request.auth.uid));
       allow create: if signedIn() && request.auth.uid == uid && request.resource.data.role == 'customer';
-      allow update: if signedIn() && request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','firstName','lastName','avatarUrl','lastSeenAnnouncementAt','pushToken','pushTokenPlatform','pushTokenUpdatedAt','fcmToken','fcmTokenUpdatedAt','notifPrefs','callSettings','lockedChatIds','googleLinked','googleEmail']);
+      allow update: if signedIn() && request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','firstName','lastName','avatarUrl','lastSeenAnnouncementAt','pushToken','pushTokenPlatform','pushTokenUpdatedAt','fcmToken','fcmTokenUpdatedAt','notifPrefs','callSettings','lockedChatIds']);
       allow delete: if false;
       match /receivers/{receiverId} { allow read, create, update, delete: if signedIn() && request.auth.uid == uid; }
       match /friends/{friendId} { allow read, create, update, delete: if signedIn() && request.auth.uid == uid; }
