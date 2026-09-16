@@ -33,7 +33,6 @@ import UserManagementScreen from './src/screens/UserManagementScreen';
 import TransferPointsScreen from './src/screens/TransferPointsScreen';
 import CallScreen from './src/screens/CallScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
-import MyReviewsScreen from './src/screens/MyReviewsScreen';
 import CreateServiceScreen from './src/screens/CreateServiceScreen';
 import MyServicesScreen from './src/screens/MyServicesScreen';
 import VerifyIdentityScreen from './src/screens/VerifyIdentityScreen';
@@ -139,7 +138,6 @@ function Root() {
       {renderedScreen === 'transferPoints' && <TransferPointsScreen />}
       {renderedScreen === 'call' && <CallScreen />}
       {renderedScreen === 'notifications' && <NotificationsScreen />}
-      {renderedScreen === 'myReviews' && <MyReviewsScreen />}
       {renderedScreen === 'servicesCreateProvider' && <CreateServiceScreen />}
       {renderedScreen === 'servicesMyServices' && <MyServicesScreen />}
       {renderedScreen === 'verifyIdentity' && <VerifyIdentityScreen />}
