@@ -202,6 +202,8 @@ export function AppProvider({ children }) {
   // No more manual role picker - `screen` starts on 'login' and, once
   // signed in, the account's Firestore `role` field (in `profile.role`)
   // decides which home screen to land on. See the bootstrap effect below.
+  const [screen, setScreen] = useState("login");
+
 
   // ---- back-button navigation history ----
   // Tracks prior screens so the Android hardware back button can step
