@@ -7,6 +7,10 @@ import { logActivity, logError } from './logService';
 
 export const METHODS = { transfer: 'Bank Transfer', deposit: 'Bank Deposit', jompay: 'JomPay', duitnow: 'DuitNow QR' };
 
+function createRequestId(prefix = 'pt') {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}`;
+}
+
 export async function uploadReceipt(localUri, uid) {
   const response = await fetch(localUri);
   const blob = await response.blob();
@@ -15,10 +19,10 @@ export async function uploadReceipt(localUri, uid) {
   return getDownloadURL(storageRef);
 }
 
-export async function createTopupRequest(payload) {
+export async function createTopupRequest(payload, requestId = createRequestId('topup')) {
   const fn = httpsCallable(functions, 'submitTopupRequest');
   try {
-    const { data } = await fn({ amount: payload.amount, method: payload.method, bankName: payload.bankName, refNo: payload.refNo, receiptUrl: payload.receiptUrl });
+    const { data } = await fn({ amount: payload.amount, method: payload.method, bankName: payload.bankName, refNo: payload.refNo, receiptUrl: payload.receiptUrl, requestId });
     logActivity('topup_requested', { amount: payload.amount || 0, method: payload.method || 'transfer' });
     return data?.id;
   } catch (e) { logError('topupService.createTopupRequest', e); throw e; }
