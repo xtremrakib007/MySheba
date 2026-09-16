@@ -44,12 +44,11 @@ jobs:
       - name: Verify
         run: |
           ! grep -Ein 'gamePoints|GamePoints|Game Point|GameBot|game bot' src/screens/AdminHomeScreen.js
-      - name: Persist and self-delete workflow
+      - name: Persist cleanup
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git rm .github/workflows/remove-gamepoints-admin.yml
           git add src/screens/AdminHomeScreen.js
           git commit -m 'chore: remove retired Game Points admin UI [skip ci]'
           git push origin HEAD:main
