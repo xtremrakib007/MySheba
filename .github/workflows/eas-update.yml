@@ -27,9 +27,9 @@ jobs:
           if p.exists():
               s = p.read_text(encoding='utf-8')
               marker = 'Game Point Gifting'
-              pos = s.find(marker)
+              pos = s.rfind(marker)
               if pos >= 0:
-                  start = s.rfind('<View style={styles.card}>', 0, pos)
+                  start = s.rfind('<View', 0, pos)
                   if start >= 0:
                       depth = 0; i = start
                       while i < len(s):
