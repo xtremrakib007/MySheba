@@ -1,0 +1,52 @@
+name: Cleanup Admin Direct Chat
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Remove retired Admin Direct Chat code
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          p = Path('src/screens/AdminHomeScreen.js')
+          s = p.read_text(encoding='utf-8')
+
+          s = s.replace("import * as directChatService from '../firebase/directChatService';\n", '')
+          s = s.replace(', openDirectChat, marketplaceCategories', ', marketplaceCategories')
+          s = s.replace('  const [messagingInquiryId, setMessagingInquiryId] = useState(null);\n', '')
+
+          # Remove the retired in-app inquiry messaging handler, preserving Call/WhatsApp.
+          s = re.sub(r'\n  /\*\*.*?AdminHomeScreen.*?messageInquiry.*?\*/\n  const messageInquiry = async \(inq\) => \{.*?\n  \};\n', '\n', s, count=1, flags=re.S)
+          s = re.sub(r'\n  const messageInquiry = async \(inq\) => \{.*?\n  \};\n', '\n', s, count=1, flags=re.S)
+
+          # Remove the inquiry Message button only; Call and WhatsApp remain.
+          s = re.sub(r'\s*<TouchableOpacity(?=[\s\S]*?onPress=\{\(\) => messageInquiry\(inq\)\})([\s\S]*?</TouchableOpacity>)', '', s, count=1)
+          s = re.sub(r'\s*disabled=\{messagingInquiryId === inq\.id\}', '', s)
+
+          p.write_text(s, encoding='utf-8')
+
+          if any(x in s for x in ('directChatService', 'openDirectChat', 'ensureDirectChat', 'messageInquiry', 'messagingInquiryId')):
+              raise SystemExit('Retired Admin Direct Chat reference still remains')
+
+      - name: Commit cleanup and remove this temporary workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/screens/AdminHomeScreen.js
+          git commit -m 'Remove retired Admin Direct Chat actions' || true
+          rm -f .github/workflows/cleanup-admin-direct-chat.yml
+          git add -A
+          git commit -m 'Remove temporary Admin cleanup workflow' || true
+          git push
