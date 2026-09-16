@@ -4,6 +4,7 @@ const { logAudit, logServerError } = require('./logService');
 
 const MAX_AMOUNT = 100000;
 const ADMIN_ROLES = ['admin', 'superadmin'];
+const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 
 exports.adminTopUpPoints = onCall(async request => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
@@ -20,17 +21,30 @@ exports.adminTopUpPoints = onCall(async request => {
   const targetUid = String(data.targetUid || '').trim();
   const amount = Number(data.amount);
   const note = String(data.note || '').trim().slice(0, 500);
+  const requestId = String(data.requestId || '').trim();
 
   if (!targetUid) throw new HttpsError('invalid-argument', 'targetUid is required.');
-  if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_AMOUNT) {
+  if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_AMOUNT || !Number.isSafeInteger(Math.round(amount * 100))) {
     throw new HttpsError('invalid-argument', 'Enter a valid top-up amount.');
+  }
+  if (!REQUEST_ID_RE.test(requestId)) {
+    throw new HttpsError('invalid-argument', 'requestId is required and must be 16-128 safe characters.');
   }
 
   const targetRef = db.collection('users').doc(targetUid);
-  const auditRef = db.collection('pointTopUps').doc();
+  const operationRef = db.collection('pointTopUpOperations').doc(`${callerUid}_${requestId}`);
 
   try {
-    await db.runTransaction(async tx => {
+    const result = await db.runTransaction(async tx => {
+      const opSnap = await tx.get(operationRef);
+      if (opSnap.exists) {
+        const op = opSnap.data() || {};
+        if (op.targetUid !== targetUid || Number(op.amount) !== amount) {
+          throw new HttpsError('already-exists', 'That request ID is already used for another top-up.');
+        }
+        return { id: op.auditId, credited: false, replay: true };
+      }
+
       const targetSnap = await tx.get(targetRef);
       if (!targetSnap.exists) throw new HttpsError('not-found', 'Target user does not exist.');
 
@@ -40,7 +54,7 @@ exports.adminTopUpPoints = onCall(async request => {
       }
 
       const currentBalance = Number(target.walletBalance || 0);
-      if (!Number.isFinite(currentBalance) || currentBalance < 0) {
+      if (!Number.isFinite(currentBalance) || currentBalance < 0 || !Number.isSafeInteger(Math.round(currentBalance * 100))) {
         throw new HttpsError('failed-precondition', 'Target wallet balance is invalid.');
       }
 
@@ -49,6 +63,7 @@ exports.adminTopUpPoints = onCall(async request => {
         throw new HttpsError('failed-precondition', 'Wallet balance is too large.');
       }
 
+      const auditRef = db.collection('pointTopUps').doc();
       tx.update(targetRef, { walletBalance: newBalance });
       tx.set(auditRef, {
         userId: targetUid,
@@ -59,22 +74,35 @@ exports.adminTopUpPoints = onCall(async request => {
         adminUid: callerUid,
         adminName: String(caller.name || caller.displayName || ''),
         adminRole: String(caller.role),
+        requestId,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      tx.create(operationRef, {
+        callerUid,
+        targetUid,
+        amount,
+        requestId,
+        auditId: auditRef.id,
+        status: 'completed',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return { id: auditRef.id, credited: true, replay: false };
     });
 
-    await logAudit({
-      action: 'admin_point_topup',
-      targetUid,
-      performedBy: callerUid,
-      performedByRole: caller.role,
-      details: { amount, note, auditId: auditRef.id },
-    });
+    if (!result.replay) {
+      await logAudit({
+        action: 'admin_point_topup',
+        targetUid,
+        performedBy: callerUid,
+        performedByRole: caller.role,
+        details: { amount, note, auditId: result.id, requestId },
+      });
+    }
 
-    return { id: auditRef.id, credited: true };
+    return result;
   } catch (error) {
     if (error instanceof HttpsError) throw error;
-    await logServerError('adminTopUpPoints', error, { userId: callerUid, targetUid });
+    await logServerError('adminTopUpPoints', error, { userId: callerUid, targetUid, requestId });
     throw new HttpsError('internal', 'Could not complete the point top-up.');
   }
 });
