@@ -16,7 +16,15 @@ service firebase.storage {
 
     match /topup-receipts/{uid}/{fileName} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if signedIn() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*'); allow delete: if false; }
     match /remittance-passports/{uid}/{fileName} { allow read: if signedIn() && (request.auth.uid == uid || isStaff()); allow write: if signedIn() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*'); allow delete: if false; }
-    match /verification-documents/{uid}/{fileName} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if signedIn() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*'); allow delete: if false; }
+
+    // KYC uploads are create-only. The app uses unique timestamped filenames,
+    // so a submitted document URL cannot later be overwritten in place by the owner.
+    match /verification-documents/{uid}/{fileName} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow write: if signedIn() && request.auth.uid == uid && resource == null && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
+      allow delete: if false;
+    }
+
     match /passport-copies/{uid}/{fileName} { allow read: if signedIn() && (request.auth.uid == uid || role() == 'superadmin'); allow write: if signedIn() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf'); allow delete: if false; }
     match /avatars/{uid}/{fileName} { allow read: if signedIn(); allow write: if signedIn() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*'); allow delete: if false; }
     match /business-logos/{uid}/{fileName} { allow read: if signedIn(); allow write: if signedIn() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*'); allow delete: if false; }
