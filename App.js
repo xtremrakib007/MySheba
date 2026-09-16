@@ -37,9 +37,6 @@ import ReportsScreen from './src/screens/ReportsScreen';
 import UserManagementScreen from './src/screens/UserManagementScreen';
 import MarketplaceModerationScreen from './src/screens/MarketplaceModerationScreen';
 import TransferPointsScreen from './src/screens/TransferPointsScreen';
-import GamePointsScreen from './src/screens/GamePointsScreen';
-import GamePointsTransferScreen from './src/screens/GamePointsTransferScreen';
-import GamePointsGiftScreen from './src/screens/GamePointsGiftScreen';
 import CallScreen from './src/screens/CallScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import MarketplaceHubScreen from './src/screens/MarketplaceHubScreen';
@@ -170,9 +167,6 @@ function Root() {
         {renderedScreen === 'userManagement' && <UserManagementScreen />}
         {renderedScreen === 'marketplaceModeration' && <MarketplaceModerationScreen />}
         {renderedScreen === 'transferPoints' && <TransferPointsScreen />}
-        {renderedScreen === 'gamePoints' && <GamePointsScreen />}
-        {renderedScreen === 'gamePointsTransfer' && <GamePointsTransferScreen />}
-        {renderedScreen === 'gamePointsGift' && <GamePointsGiftScreen />}
         {renderedScreen === 'call' && <CallScreen />}
         {renderedScreen === 'notifications' && <NotificationsScreen />}
         {(renderedScreen === 'marketplaceHome' || renderedScreen === 'accommodationHome' || renderedScreen === 'roomSharingHome' || renderedScreen === 'servicesHome' || renderedScreen === 'communityHome') && <MarketplaceHubScreen screen={renderedScreen} />}
@@ -235,7 +229,7 @@ function Root() {
         {renderedScreen === 'payslipHistory' && <PayslipHistoryScreen />}
         {renderedScreen === 'payslipDetails' && <PayslipDetailsScreen />}
       </View>
-      {(renderedScreen === 'customerHome' || renderedScreen === 'dealerHome' || renderedScreen === 'resellerHome' || renderedScreen === 'adminHome' || renderedScreen === 'support' || renderedScreen === 'help' || renderedScreen === 'adminSupport' || renderedScreen === 'history' || renderedScreen === 'topup' || renderedScreen === 'superAdminTopup' || renderedScreen === 'gamePoints' || renderedScreen === 'profile' || renderedScreen === 'settings' || renderedScreen === 'myAccount' || renderedScreen === 'moreFeatures' || renderedScreen === 'adminFeatures' || renderedScreen === 'dealerFeatures' || renderedScreen === 'resellerFeatures' || renderedScreen === 'notifications' || renderedScreen === 'marketplaceHome' || renderedScreen === 'accommodationHome' || renderedScreen === 'roomSharingHome' || renderedScreen === 'servicesHome' || renderedScreen === 'communityHome') && <BottomNav />}
+      {(renderedScreen === 'customerHome' || renderedScreen === 'dealerHome' || renderedScreen === 'resellerHome' || renderedScreen === 'adminHome' || renderedScreen === 'support' || renderedScreen === 'help' || renderedScreen === 'adminSupport' || renderedScreen === 'history' || renderedScreen === 'topup' || renderedScreen === 'superAdminTopup' || renderedScreen === 'profile' || renderedScreen === 'settings' || renderedScreen === 'myAccount' || renderedScreen === 'moreFeatures' || renderedScreen === 'adminFeatures' || renderedScreen === 'dealerFeatures' || renderedScreen === 'resellerFeatures' || renderedScreen === 'notifications' || renderedScreen === 'marketplaceHome' || renderedScreen === 'accommodationHome' || renderedScreen === 'roomSharingHome' || renderedScreen === 'servicesHome' || renderedScreen === 'communityHome') && <BottomNav />}
       <RatePopup /><ResultModal /><Sidebar /><IncomingCallModal /><AppAlertHost /><SecurityPinGate /><AppLockScreen /><BiometricOptInPrompt />
     </SafeAreaView>
   );
