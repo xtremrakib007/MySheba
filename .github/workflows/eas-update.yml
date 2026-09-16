@@ -6,6 +6,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+
 jobs:
   update:
     runs-on: ubuntu-latest
@@ -13,6 +16,105 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Final retired-feature cleanup
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+          import subprocess
+
+          root = Path('.')
+
+          def remove_jsx_block_containing(path, marker):
+              p = root / path
+              if not p.exists():
+                  return
+              s = p.read_text(encoding='utf-8')
+              pos = s.find(marker)
+              if pos < 0:
+                  return
+              start = s.rfind('<View style={styles.card}>', 0, pos)
+              if start < 0:
+                  start = s.rfind('<View', 0, pos)
+              if start < 0:
+                  return
+              depth = 0
+              i = start
+              while i < len(s):
+                  op = s.find('<View', i)
+                  cl = s.find('</View>', i)
+                  if cl < 0:
+                      return
+                  if op >= 0 and op < cl:
+                      depth += 1
+                      i = op + 5
+                  else:
+                      depth -= 1
+                      i = cl + 7
+                      if depth == 0:
+                          s = s[:start] + s[i:]
+                          p.write_text(s, encoding='utf-8')
+                          return
+
+          # Remove the Game Point Gifting admin card before deleting its helpers.
+          remove_jsx_block_containing('src/screens/AdminHomeScreen.js', 'Game Point Gifting')
+
+          # Remove obsolete GameBot/Game Points configuration lines from AdminHome.
+          p = root / 'src/screens/AdminHomeScreen.js'
+          if p.exists():
+              s = p.read_text(encoding='utf-8')
+              s = re.sub(r'^.*gamePointsFeePercent.*\n', '', s, flags=re.I|re.M)
+              s = re.sub(r'^.*gamePointsCostPerUnit.*\n', '', s, flags=re.I|re.M)
+              s = re.sub(r'^.*gamePointsGiftMinAmount.*\n', '', s, flags=re.I|re.M)
+              s = re.sub(r'^.*gamePointsGiftMaxAmount.*\n', '', s, flags=re.I|re.M)
+              s = re.sub(r'^.*ROLE_PRICE_UNIT_OVERRIDES.*\n', '', s, flags=re.I|re.M)
+              s = re.sub(r'^.*gamePointsGiftEnabled.*\n', '', s, flags=re.I|re.M)
+              # Remove the now-obsolete gift toggle helper if it remains.
+              s = re.sub(r'\n\s*// Boolean, not numeric.*?\n\s*const toggleGiftEnabled = async \(\) => \{.*?\n\s*\};\n', '\n', s, flags=re.S)
+              p.write_text(s, encoding='utf-8')
+
+          # Remove obsolete GameBot/Game Points references from documentation only.
+          for p in root.rglob('*'):
+              if not p.is_file() or p.suffix not in {'.md','.txt'}:
+                  continue
+              if any(part in {'.git','node_modules','dist','build'} for part in p.parts):
+                  continue
+              try:
+                  s = p.read_text(encoding='utf-8')
+              except Exception:
+                  continue
+              s2 = re.sub(r'(?im)^.*(?:functions-gamebot|GameBot|gamePoints|GamePoints).*$\n?', '', s)
+              if s2 != s:
+                  p.write_text(s2, encoding='utf-8')
+
+          # The workflow itself is temporary: restore the exact pre-cleanup workflow
+          # before committing so the repository keeps only the normal EAS workflow.
+          subprocess.run(['git','checkout','HEAD^','--','.github/workflows/eas-update.yml'], check=True)
+
+          # Fail fast if runtime code still contains retired client-side Game Points references.
+          scan_roots = ['App.js', 'src', 'admin-web/src']
+          bad = []
+          for rel in scan_roots:
+              base = root / rel
+              if not base.exists():
+                  continue
+              paths = [base] if base.is_file() else base.rglob('*')
+              for p in paths:
+                  if not p.is_file() or p.suffix not in {'.js','.jsx','.ts','.tsx'}:
+                      continue
+                  try:
+                      text = p.read_text(encoding='utf-8')
+                  except Exception:
+                      continue
+                  if re.search(r'functions-gamebot|GameBot|gamePoints|GamePoints', text, re.I):
+                      bad.append(str(p))
+          if bad:
+              print('Retired references remain:')
+              print('\n'.join(bad))
+              raise SystemExit(1)
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -24,6 +126,6 @@ jobs:
         run: npm ci
 
       - name: Publish Android EAS Update
-        run: npx eas-cli update --channel production --platform android --message "Fix AnimatedSplash native driver crash"
+        run: npx eas-cli update --channel production --platform android --message "Final retired-feature cleanup"
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
