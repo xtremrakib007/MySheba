@@ -105,15 +105,13 @@ exports.manageUser = onCall(async (request) => {
     // isolation on transactions and the users list. Resolve who that
     // dealer is (null is fine - see registerWithDealerCode.js for how an
     // unassigned customer's orders still reach Admin):
-    //   - a dealer/dealer creating a customer -> always their own pool
+    //   - a dealer creating a customer -> always their own pool
     //   - an admin/superadmin creating a customer -> may name a dealer, or
     //     leave it unassigned (assignable later via the 'setDealer' action)
     let dealerId = null;
     if (role === 'customer') {
       if (callerRole === 'dealer') {
         dealerId = callerUid;
-      } else if (callerRole === 'dealer') {
-        dealerId = callerProfile.dealerId || null;
       } else if (requestedDealerId) {
         const dealerSnap = await db.collection('users').doc(requestedDealerId).get();
         if (!dealerSnap.exists || dealerSnap.data().role !== 'dealer') {
@@ -276,43 +274,6 @@ exports.manageUser = onCall(async (request) => {
       details: { from: previousResellerId, to: newResellerId },
     });
     return { uid: targetUid, resellerId: newResellerId };
-  }
-
-    // Everything else (login, wallet, chat, other services) is untouched.
-    if (callerRole !== 'admin' && callerRole !== 'superadmin') {
-    }
-    const { targetUid, banned, reason } = request.data;
-    if (!targetUid || typeof banned !== 'boolean') {
-      throw new HttpsError('invalid-argument', 'targetUid and banned (true/false) are required.');
-    }
-    if (targetUid === callerUid) {
-      throw new HttpsError('invalid-argument', 'You cannot ban your own account.');
-    }
-    const targetRef = db.collection('users').doc(targetUid);
-    const targetSnap = await targetRef.get();
-    if (!targetSnap.exists) {
-      throw new HttpsError('not-found', 'That user does not exist.');
-    }
-    // An admin can ban customers/dealers/dealers, but never another
-    // admin or a superadmin - only a superadmin can do that, same
-    // escalation boundary as setRole above.
-    const targetRole = targetSnap.data().role;
-    if ((targetRole === 'admin' || targetRole === 'superadmin') && callerRole !== 'superadmin') {
-      throw new HttpsError('permission-denied', 'Only a superadmin can ban a staff account.');
-    }
-    await targetRef.update(
-      banned
-        ? {
-          }
-        : {
-          }
-    );
-    await logAudit({
-      targetUid,
-      performedBy: callerUid,
-      performedByRole: callerRole,
-      details: { reason: reason || null },
-    });
   }
 
   if (action === 'downgradeRole') {
