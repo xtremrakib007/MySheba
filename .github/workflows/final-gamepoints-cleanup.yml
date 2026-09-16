@@ -1,0 +1,182 @@
+name: Final Game Points Cleanup
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Remove retired Game Points code and references
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          root = Path('.')
+
+          # Code that existed only to support Game Points / GameBot.
+          files = [
+              'src/screens/GamePointsScreen.js',
+              'src/screens/GamePointsTransferScreen.js',
+              'src/screens/GamePointsGiftScreen.js',
+              'src/firebase/gamePointsService.js',
+              'functions/secureGamePoints.js',
+              'functions/virtualGiftService.js',
+          ]
+          for rel in files:
+              p = root / rel
+              if p.exists():
+                  p.unlink()
+
+          def read(p):
+              return p.read_text(encoding='utf-8')
+          def write(p, s):
+              p.write_text(s, encoding='utf-8')
+
+          # Remove exact import lines and JSX route lines from App.js.
+          p = root / 'App.js'
+          if p.exists():
+              s = read(p)
+              s = re.sub(r'^.*GamePointsScreen.*\n', '', s, flags=re.M)
+              s = re.sub(r'^.*GamePointsTransferScreen.*\n', '', s, flags=re.M)
+              s = re.sub(r'^.*GamePointsGiftScreen.*\n', '', s, flags=re.M)
+              s = re.sub(r'^\s*\{renderedScreen === [\'\"]gamePoints[\'\"].*\n', '', s, flags=re.M)
+              s = re.sub(r'^\s*\{renderedScreen === [\'\"]gamePointsTransfer[\'\"].*\n', '', s, flags=re.M)
+              s = re.sub(r'^\s*\{renderedScreen === [\'\"]gamePointsGift[\'\"].*\n', '', s, flags=re.M)
+              # Remove gamePoints from simple boolean/nav expressions without disturbing other routes.
+              s = re.sub(r"\s*\|\| renderedScreen === ['\"]gamePoints['\"]", '', s)
+              write(p, s)
+
+          # Remove Game Points exports/imports from Functions index.
+          p = root / 'functions/index.js'
+          if p.exists():
+              s = read(p)
+              s = re.sub(r'^.*(?:secureGamePoints|gamePointsService|virtualGiftService).*\n', '', s, flags=re.M)
+              # Remove export assignments whose names are Game Points / gift functions.
+              s = re.sub(r'^.*exports\.(?:chargeGamePoints|withdrawGamePoints|transferGamePoints|giftGamePoints)\s*=.*\n', '', s, flags=re.M)
+              write(p, s)
+
+          # Remove Game Points pricing/config fields from the client settings service.
+          p = root / 'src/firebase/settingsService.js'
+          if p.exists():
+              s = read(p)
+              s = re.sub(r"\s*'gamePointsCostPerUnit'", '', s)
+              s = re.sub(r"\n\s*// Wallet points charged per 1 Game Point.*?\n\s*gamePointsCostPerUnit:\s*[^,]+,\n", '\n', s, flags=re.S)
+              s = re.sub(r"\n\s*// % taken off the pot before GameBot.*?\n\s*gamePointsFeePercent:\s*[^,]+,\n", '\n', s, flags=re.S)
+              write(p, s)
+
+          # Remove Game Points pricing from Admin web pricing model/UI.
+          for rel in ['admin-web/src/services/pricingService.ts', 'admin-web/src/pages/PricingPage.tsx', 'src/screens/AdminHomeScreen.js']:
+              p = root / rel
+              if not p.exists():
+                  continue
+              s = read(p)
+              s = re.sub(r'^.*gamePointsFeePercent.*\n', '', s, flags=re.M)
+              s = re.sub(r'^.*gamePointsCostPerUnit.*\n', '', s, flags=re.M)
+              # Remove any line that is explicitly the GameBot winner fee UI label.
+              s = re.sub(r'^.*GameBot Winner Payout Fee.*\n', '', s, flags=re.M)
+              write(p, s)
+
+          # Remove Game Points icon entries.
+          p = root / 'src/components/serviceGridIcons.js'
+          if p.exists():
+              s = read(p)
+              s = re.sub(r'^\s*gamePoints(?:Gift)?:.*\n', '', s, flags=re.M)
+              write(p, s)
+
+          # Remove Game Points from account-merge logic/documentation.
+          p = root / 'functions/accountMergeService.js'
+          if p.exists():
+              s = read(p)
+              # Remove helper and its balance reads where safely isolated.
+              s = re.sub(r'\nasync function getGamePointsBalance\(db, uid\) \{.*?\n\}\n', '\n', s, flags=re.S)
+              s = re.sub(r'^.*(?:gamePoints|GamePoints).*\n', '', s, flags=re.M)
+              write(p, s)
+
+          # Remove obsolete rate-limit entry/comments for Game Points.
+          p = root / 'functions/rateLimitService.js'
+          if p.exists():
+              s = read(p)
+              s = re.sub(r'^.*(?:gamepoints|GamePoints).*\n', '', s, flags=re.I|re.M)
+              write(p, s)
+
+          # Remove GameBot/Game Points references from active source/docs while
+          # retaining the security-deny rules for retired chat collections.
+          extensions = {'.js','.jsx','.ts','.tsx','.md','.json','.txt'}
+          for p in root.rglob('*'):
+              if not p.is_file() or p.suffix not in extensions:
+                  continue
+              if any(part in {'.git','node_modules','dist','build'} for part in p.parts):
+                  continue
+              try:
+                  s = read(p)
+              except Exception:
+                  continue
+              if not re.search(r'GameBot|functions-gamebot|gamePoints|GamePoints', s, re.I):
+                  continue
+              # Historical merge notes are documentation, not runtime code; remove
+              # obsolete standalone references rather than deleting the whole file.
+              s2 = re.sub(r'(?im)^.*(?:GameBot|functions-gamebot|gamePoints|GamePoints).*$\n?', '', s)
+              if s2 != s:
+                  write(p, s2)
+
+          # Remove empty/obsolete GameBot-specific files if any remain after the sweep.
+          for p in [root/'GAMEBOT.md', root/'GAMEPOINTS.md']:
+              if p.exists():
+                  p.unlink()
+
+      - name: Verify retired references are gone from active code
+        shell: bash
+        run: |
+          set -e
+          if grep -RInE --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=build \
+            'functions-gamebot|GameBot|gamePoints|GamePoints|gamepoints' \
+            App.js src functions admin-web/src 2>/dev/null; then
+            echo 'Retired Game Points/GameBot references remain.'
+            exit 1
+          fi
+          test ! -d functions-gamebot
+          test ! -e src/screens/GamePointsScreen.js
+          test ! -e src/screens/GamePointsTransferScreen.js
+          test ! -e src/screens/GamePointsGiftScreen.js
+          test ! -e src/firebase/gamePointsService.js
+          test ! -e functions/secureGamePoints.js
+          test ! -e functions/virtualGiftService.js
+
+      - name: Install and validate app
+        run: |
+          npm ci
+          npx expo export --platform web --output-dir /tmp/mysheba-web-check
+
+      - name: Validate Functions syntax
+        working-directory: functions
+        run: |
+          npm ci
+          find . -type f -name '*.js' -not -path './node_modules/*' -print0 | xargs -0 -n1 node --check
+
+      - name: Commit cleanup
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'No cleanup changes required.'
+          else
+            git commit -m 'chore: remove retired Game Points system'
+            git push origin HEAD:main
+          fi
+          git rm .github/workflows/final-gamepoints-cleanup.yml || true
+          git commit -m 'chore: remove temporary cleanup workflow' || true
+          git push origin HEAD:main || true
