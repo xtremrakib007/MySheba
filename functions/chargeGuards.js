@@ -17,6 +17,24 @@ function getRequestId(request) {
   return requestId;
 }
 
+async function recoverCompleted(db, uid, requestId, guardRef) {
+  const recovered = await db.collection('transactions')
+    .where('customerId', '==', uid)
+    .where('raw.requestId', '==', requestId)
+    .limit(1)
+    .get();
+  if (recovered.empty) return null;
+  const txDoc = recovered.docs[0];
+  const txData = txDoc.data() || {};
+  const cost = Number(txData.pointsCharged ?? txData.cost ?? 0);
+  if (!Number.isFinite(cost) || cost < 0) return null;
+  await guardRef.set({
+    status: 'completed', transactionId: txDoc.id, cost,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { id: txDoc.id, cost, replay: true };
+}
+
 async function sanitizeRequest(request, requestId) {
   const uid = requireAuth(request);
   const db = admin.firestore();
@@ -28,9 +46,6 @@ async function sanitizeRequest(request, requestId) {
     throw new HttpsError('failed-precondition', 'Wallet balance is invalid.');
   }
 
-  // Never trust customer identity, phone, dealer/reseller scope, or role
-  // supplied by the client. The wallet callable always charges the
-  // authenticated account and creates the transaction under that account.
   const customer = {
     uid,
     phone: profile.phone || '',
@@ -46,15 +61,7 @@ async function sanitizeRequest(request, requestId) {
     raw: { ...(incomingPayload.raw || {}), requestId },
   };
 
-  return {
-    ...request,
-    data: {
-      ...incomingData,
-      payload,
-      requestId,
-      customer,
-    },
-  };
+  return { ...request, data: { ...incomingData, payload, requestId, customer } };
 }
 
 function wrap(name) {
@@ -67,46 +74,21 @@ function wrap(name) {
     let existing = null;
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(guardRef);
-      if (snap.exists) {
-        existing = snap.data();
-        return;
-      }
+      if (snap.exists) { existing = snap.data(); return; }
       tx.create(guardRef, {
-        uid,
-        requestId,
-        callable: name,
-        status: 'processing',
+        uid, requestId, callable: name, status: 'processing',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     });
 
     if (existing) {
-      if (existing.callable !== name) {
-        throw new HttpsError('already-exists', 'This request ID was already used for another operation.');
-      }
+      if (existing.callable !== name) throw new HttpsError('already-exists', 'This request ID was already used for another operation.');
       if (existing.status === 'completed' && existing.transactionId) {
         return { id: existing.transactionId, cost: existing.cost || 0, replay: true };
       }
-
-      const recovered = await db.collection('transactions')
-        .where('customerId', '==', uid)
-        .where('raw.requestId', '==', requestId)
-        .limit(1)
-        .get();
-      if (!recovered.empty) {
-        const txDoc = recovered.docs[0];
-        const txData = txDoc.data() || {};
-        const cost = Number(txData.pointsCharged || txData.cost || 0);
-        await guardRef.update({
-          status: 'completed',
-          transactionId: txDoc.id,
-          cost,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        return { id: txDoc.id, cost, replay: true };
-      }
-
+      const recovered = await recoverCompleted(db, uid, requestId, guardRef);
+      if (recovered) return recovered;
       throw new HttpsError('aborted', 'This order is already being processed. Please wait and check your transaction history.');
     }
 
@@ -120,13 +102,17 @@ function wrap(name) {
       const safeRequest = await sanitizeRequest(request, requestId);
       const result = await fn.run(safeRequest);
       await guardRef.update({
-        status: 'completed',
-        transactionId: result?.id || null,
+        status: 'completed', transactionId: result?.id || null,
         cost: Number(result?.cost || 0),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       return result;
     } catch (err) {
+      // A wallet transaction can commit before the callable response or guard
+      // update fails. Recover the committed transaction before releasing the
+      // guard; otherwise a retry could charge the same request twice.
+      const recovered = await recoverCompleted(db, uid, requestId, guardRef).catch(() => null);
+      if (recovered) return recovered;
       await guardRef.delete().catch(() => {});
       throw err;
     }
