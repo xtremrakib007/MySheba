@@ -1,7 +1,7 @@
 // Admin/superadmin transaction queue. Approval is separate from operator
 // acceptance: admin/superadmin approves first, dealer/reseller claims as the
 // Operator, then that Operator completes the order.
-import { collection, doc, getDoc, onSnapshot, orderBy, query, updateDoc, where, type DocumentData, type QueryDocumentSnapshot } from 'firebase/firestore';
+import { collection, doc, getDoc, onSnapshot, orderBy, query, where, type DocumentData, type QueryDocumentSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions, auth } from '../firebase/config';
 
@@ -15,6 +15,6 @@ export async function approveTransaction(id: string): Promise<void> { try { awai
 export async function acceptTransaction(id: string): Promise<void> { try { await httpsCallable(functions, 'acceptTransaction')({ transactionId: id }); } catch (err) { throw new Error((err as Error).message || 'Could not accept this order.'); } }
 export async function rejectTransaction(id: string, reason: string, service: string): Promise<void> { if (!['Recharge', 'Internet', 'Mobile Banking', 'Remittance'].includes(service)) throw new Error('This order type does not support rejection.'); try { await httpsCallable(functions, 'rejectTransaction')({ transactionId: id, reason: reason || '' }); } catch (err) { throw new Error((err as Error).message || 'Could not reject this order right now.'); } }
 export async function completeTransaction(id: string, pin?: string, receiptUrl?: string): Promise<void> { try { await httpsCallable(functions, 'completeTransaction')({ transactionId: id, pin: pin || '', receiptUrl: receiptUrl || '' }); } catch (err) { throw new Error((err as Error).message || 'Could not complete this order.'); } }
-export async function assignDealer(id: string, dealerId: string): Promise<void> { const { serverTimestamp } = await import('firebase/firestore'); await updateDoc(doc(db, COLLECTION, id), { dealerId, updatedAt: serverTimestamp() }); }
+export async function assignDealer(id: string, dealerId: string): Promise<void> { try { await httpsCallable(functions, 'assignDealer')({ transactionId: id, dealerId }); } catch (err) { throw new Error((err as Error).message || 'Could not assign this dealer.'); } }
 export interface DealerOption { id: string; name: string; phone: string; }
 export function subscribeDealerOptions(onUpdate: (dealers: DealerOption[]) => void, onError: (err: Error) => void) { const q = query(collection(db, 'users'), where('role', 'in', ['dealer', 'subdealer'])); return onSnapshot(q, (snap) => { const list = snap.docs.map((d) => ({ id: d.id, name: (d.data().name as string) ?? '', phone: (d.data().phone as string) ?? '' })); list.sort((a, b) => a.name.localeCompare(b.name)); onUpdate(list); }, (err) => onError(err as Error)); }
