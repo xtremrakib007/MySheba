@@ -52,8 +52,21 @@ jobs:
                   while j<len(t) and t[j] in ' ;\t\r\n':j+=1
                   return t[:a]+t[j:]
             raise SystemExit('unbalanced callback '+n)
-          for n in ['openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall','openInvestigateChat','lockChatThread','unlockChatThread']:
+          for n in ['openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall','openInvestigateChat','joinDiscoverableRoom']:
             while 'const '+n+' = useCallback' in s:s=remove_callback(s,n)
+          # Remove the whole computed unread-count/chat-hub block.
+          a=s.find('  const groupUnreadCount =')
+          if a>=0:
+            z=s.find('  // ---- Chat Lock helpers',a)
+            if z<0: raise SystemExit('Chat helper boundary missing')
+            s=s[:a]+s[z:]
+          # Remove the whole retired Chat Lock helper section.
+          a=s.find('  // ---- Chat Lock helpers')
+          if a>=0:
+            z=s.find('  /** Opens the Support thread',a)
+            if z<0: raise SystemExit('Support chat boundary missing')
+            s=s[:a]+s[z:]
+          # Remove retired-service-only effects.
           retired_services=['directChatService','groupChatService','roomChatService','subscribeIncomingGroupCalls','chatLockService']
           while True:
             marker='  useEffect(() => {'; a=s.find(marker); removed=False
@@ -78,17 +91,10 @@ jobs:
               if any(x in block for x in retired_services):s=s[:a]+s[z+2:];removed=True;break
               a=s.find(marker,z+2)
             if not removed:break
-          for header in ['  // ---- direct chat (general-purpose','  // ---- direct chat investigation','  // ---- Chat Lock']:
-            a=s.find(header)
-            if a>=0:
-              z=s.find('  // ---- marketplace',a)
-              if z<0:z=s.find('  // ---- 1-to-1 calling',a)
-              if z>=0:s=s[:a]+s[z:]
-          retired=['activeDirectChatId','activeDirectChatName','activeDirectChatUid','directChatUnreadCount','openDirectChat','activeInvestigateChatId','activeInvestigateReport','openInvestigateChat','chatDraftText','activeGroupId','activeGroupName','myGroups','groupUnreadCount','openGroupChat','activeRoomId','activeRoomName','myRooms','discoverableRooms','openRoomChat','chatHubTab','openChatHub','incomingGroupCall','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall','investigateChat','lockChatThread','unlockChatThread','lockedChatIds','chatVaultUnlocked']
+          retired=['activeDirectChatId','activeDirectChatName','activeDirectChatUid','directChatUnreadCount','openDirectChat','activeInvestigateChatId','activeInvestigateReport','openInvestigateChat','chatDraftText','activeGroupId','activeGroupName','myGroups','groupUnreadCount','openGroupChat','activeRoomId','activeRoomName','myRooms','discoverableRooms','openRoomChat','chatHubTab','openChatHub','incomingGroupCall','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall','investigateChat','lockChatThread','unlockChatThread','lockedChatIds','chatVaultUnlocked','joinDiscoverableRoom']
           s=''.join(x for x in s.splitlines(True) if not any(n in x for n in retired))
-          # At this point service names may survive only in retired comments/labels; remove those lines too.
           s=''.join(x for x in s.splitlines(True) if not any(n in x for n in retired_services))
-          forbidden=['directChatService','groupChatService','roomChatService','chatLockService','openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','subscribeIncomingGroupCalls','incomingGroupCall','activeDirectChat','activeGroupId','activeRoomId','myGroups','myRooms','chatHubTab','investigateChat','lockChatThread','unlockChatThread']
+          forbidden=['directChatService','groupChatService','roomChatService','chatLockService','openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','subscribeIncomingGroupCalls','incomingGroupCall','activeDirectChat','activeGroupId','activeRoomId','myGroups','myRooms','chatHubTab','investigateChat','lockChatThread','unlockChatThread','joinDiscoverableRoom']
           bad=[n for n in forbidden if n in s]
           if bad:raise SystemExit('retired refs remain: '+', '.join(bad))
           required=['activeChatId','chatUnreadCount','activeRingtoneContactUid','activeRingtoneContactName','activeCall','incomingCall','callService']
