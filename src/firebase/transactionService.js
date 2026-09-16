@@ -49,4 +49,4 @@ export async function rejectTransaction(id, reason, service) {
 }
 
 export async function completeTransaction(id, pin, receiptUrl) { try { await httpsCallable(functions, 'completeTransaction')({ transactionId: id, pin: pin || '', receiptUrl: receiptUrl || '' }); } catch (err) { throw new Error(err.message || 'Could not complete this order.'); } }
-export async function assignDealer(id, dealerId) { const { updateDoc } = await import('firebase/firestore'); await updateDoc(doc(db, COLLECTION, id), { dealerId, updatedAt: serverTimestamp() }); }
+export async function assignDealer(id, dealerId) { try { await httpsCallable(functions, 'assignDealer')({ transactionId: id, dealerId }); } catch (err) { throw new Error(err.message || 'Could not assign this dealer.'); } }
