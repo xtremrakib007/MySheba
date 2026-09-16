@@ -20,5 +20,6 @@ functions.approveTopup = secureTopupReview.approveTopup;
 functions.rejectTopup = secureTopupReview.rejectTopup;
 functions.rejectTransaction = rejectionService.rejectTransaction;
 functions.assignDealer = transactionService.assignDealer;
+functions.scrubCompletedTransactionPins = transactionService.scrubCompletedTransactionPins;
 
 module.exports = functions;
