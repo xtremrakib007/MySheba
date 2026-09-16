@@ -1,8 +1,10 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
-const walletService = require('./walletService');
+const { checkVelocity, getClientIp } = require('./rateLimitService');
 
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
+const ADMIN_ROLES = ['admin', 'superadmin'];
+const MAX_AMOUNT = 100000;
 
 function requireRequest(request) {
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
@@ -13,58 +15,94 @@ function requireRequest(request) {
   return { uid: request.auth.uid, requestId };
 }
 
-function safeResult(result) {
-  if (!result || typeof result !== 'object') return {};
-  return Object.fromEntries(Object.entries(result).filter(([, v]) => v === null || ['string', 'number', 'boolean'].includes(typeof v)));
+function safeText(value, max) {
+  return String(value ?? '').trim().slice(0, max);
 }
 
-function wrap(name) {
-  return onCall(async (request) => {
-    const { uid, requestId } = requireRequest(request);
-    const db = admin.firestore();
-    const opRef = db.collection('walletOperations').doc(`${uid}_${name}_${requestId}`);
-    let existing = null;
+exports.createSelfTopup = onCall(async (request) => {
+  const { uid, requestId } = requireRequest(request);
+  const db = admin.firestore();
+  const data = request.data || {};
+  const amount = Number(data.amount);
+  const method = safeText(data.method || 'transfer', 40);
+  const bankName = safeText(data.bankName, 120);
+  const refNo = safeText(data.refNo, 120);
+  const receiptUrl = safeText(data.receiptUrl, 2048);
 
-    await db.runTransaction(async (tx) => {
-      const snap = await tx.get(opRef);
-      if (snap.exists) existing = snap.data();
-      else tx.create(opRef, {
-        uid,
-        type: name,
+  if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_AMOUNT) {
+    throw new HttpsError('invalid-argument', 'Enter a valid amount.');
+  }
+
+  await checkVelocity(db, uid, 'createSelfTopup', { ip: getClientIp(request) });
+
+  const callerRef = db.collection('users').doc(uid);
+  const opRef = db.collection('walletOperations').doc(`${uid}_createSelfTopup_${requestId}`);
+  const topupRef = db.collection('selfTopups').doc();
+
+  try {
+    const result = await db.runTransaction(async (tx) => {
+      const opSnap = await tx.get(opRef);
+      if (opSnap.exists) {
+        const op = opSnap.data() || {};
+        if (op.uid !== uid || op.type !== 'createSelfTopup' || op.requestId !== requestId) {
+          throw new HttpsError('already-exists', 'This request ID is already in use.');
+        }
+        if (Number(op.amount) !== amount) {
+          throw new HttpsError('failed-precondition', 'That request ID does not match this top-up.');
+        }
+        return { id: op.topupId, replay: true };
+      }
+
+      const callerSnap = await tx.get(callerRef);
+      if (!callerSnap.exists) throw new HttpsError('not-found', 'Account not found.');
+      const caller = callerSnap.data() || {};
+      if (!ADMIN_ROLES.includes(caller.role)) {
+        throw new HttpsError('permission-denied', 'Only admin/superadmin can self top-up.');
+      }
+
+      const currentBalance = Number(caller.walletBalance || 0);
+      if (!Number.isFinite(currentBalance) || currentBalance < 0) {
+        throw new HttpsError('failed-precondition', 'Wallet balance is invalid.');
+      }
+      const newBalance = currentBalance + amount;
+      if (!Number.isSafeInteger(Math.round(newBalance * 100))) {
+        throw new HttpsError('failed-precondition', 'Wallet balance is too large.');
+      }
+
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      tx.update(callerRef, { walletBalance: newBalance });
+      tx.set(topupRef, {
+        userId: uid,
+        userPhone: safeText(caller.phone, 40),
+        userName: safeText(caller.name || caller.displayName, 160),
+        userRole: caller.role,
+        amount,
+        points: amount,
+        method,
+        bankName,
+        refNo,
+        receiptUrl,
+        status: 'approved',
         requestId,
-        status: 'processing',
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: now,
+        updatedAt: now,
       });
+      tx.set(opRef, {
+        uid,
+        type: 'createSelfTopup',
+        requestId,
+        amount,
+        topupId: topupRef.id,
+        status: 'completed',
+        createdAt: now,
+        updatedAt: now,
+      });
+      return { id: topupRef.id, replay: false };
     });
 
-    if (existing) {
-      if (existing.uid !== uid || existing.type !== name || existing.requestId !== requestId) {
-        throw new HttpsError('already-exists', 'This request ID is already in use.');
-      }
-      if (existing.status === 'completed') return { ...(existing.result || {}), replay: true };
-      throw new HttpsError('aborted', 'This operation is already being processed. Please wait and check your history.');
-    }
-
-    const fn = walletService[name];
-    if (!fn || typeof fn.run !== 'function') {
-      await opRef.delete().catch(() => {});
-      throw new HttpsError('internal', 'Wallet service is unavailable.');
-    }
-
-    try {
-      const result = await fn.run({ ...request, data: { ...(request.data || {}), requestId } });
-      await opRef.update({
-        status: 'completed',
-        result: safeResult(result),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      return result;
-    } catch (err) {
-      await opRef.delete().catch(() => {});
-      throw err;
-    }
-  });
-}
-
-exports.createSelfTopup = wrap('createSelfTopup');
+    return result;
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError('internal', 'Could not complete the self top-up.');
+  }
+});
