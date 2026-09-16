@@ -15,6 +15,13 @@ function generateCode() { let code = ''; for (let i = 0; i < OTP_LENGTH; i += 1)
 function maskEmail(email) { const at = email.indexOf('@'); if (at <= 0) return email; const local = email.slice(0, at); const shown = local.slice(0, Math.min(2, local.length)); return `${shown}${'*'.repeat(Math.max(3, local.length - shown.length))}${email.slice(at)}`; }
 function requireAuth(request) { if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.'); return request.auth.uid; }
 async function getProfile(db, uid) { const snap = await db.collection('users').doc(uid).get(); return snap.exists ? { id: snap.id, ...snap.data() } : null; }
+function walletBalance(profile) {
+  const value = Number(profile?.walletBalance || 0);
+  if (!Number.isFinite(value) || value < 0 || !Number.isSafeInteger(Math.round(value * 100))) {
+    throw new HttpsError('failed-precondition', 'One of the account wallet balances is invalid.');
+  }
+  return value;
+}
 
 exports.startAccountMerge = onCall(async (request) => {
   const callerUid = requireAuth(request);
@@ -54,8 +61,8 @@ exports.startAccountMerge = onCall(async (request) => {
     throw new HttpsError('internal', 'Could not send the confirmation code. Please try again.');
   }
   await logAudit({ action: 'account_merge_started', targetUid: targetAuthUser.uid, performedBy: callerUid, performedByRole: caller.role, details: { targetEmailMasked: maskEmail(email), ip } });
-  const yourWalletBalance = Number(caller.walletBalance || 0);
-  const targetWalletBalance = Number(target.walletBalance || 0);
+  const yourWalletBalance = walletBalance(caller);
+  const targetWalletBalance = walletBalance(target);
   return { sent: true, emailMasked: maskEmail(email), yourWalletBalance, targetWalletBalance, combinedWalletBalance: yourWalletBalance + targetWalletBalance };
 });
 
@@ -67,22 +74,29 @@ exports.confirmAccountMerge = onCall(async (request) => {
   const ip = getClientIp(request);
   await checkVelocity(db, callerUid, 'account_merge_confirm', { ip });
   const otpRef = db.collection('mergeOtps').doc(callerUid);
-  const otpSnap = await otpRef.get();
-  if (!otpSnap.exists) throw new HttpsError('not-found', 'Please start the merge again from Settings.');
-  const otp = otpSnap.data();
-  if (Number(otp.attempts || 0) >= MAX_ATTEMPTS) throw new HttpsError('resource-exhausted', 'Too many incorrect attempts. Please start the merge again.');
-  const expiresMs = otp.expiresAt?.toMillis ? otp.expiresAt.toMillis() : 0;
-  if (Date.now() > expiresMs) throw new HttpsError('deadline-exceeded', 'That code has expired. Please start the merge again.');
-  if (code !== String(otp.code || '')) {
-    await otpRef.update({ attempts: admin.firestore.FieldValue.increment(1) });
-    throw new HttpsError('invalid-argument', 'Incorrect code. Please try again.');
-  }
-  const targetUid = otp.targetUid;
   const callerRef = db.collection('users').doc(callerUid);
-  const targetRef = db.collection('users').doc(targetUid);
+  let targetUid = null;
   let mergedWalletBalance = 0;
+
   try {
     await db.runTransaction(async (tx) => {
+      const otpSnap = await tx.get(otpRef);
+      if (!otpSnap.exists) throw new HttpsError('not-found', 'Please start the merge again from Settings.');
+      const otp = otpSnap.data();
+      const attempts = Number(otp.attempts || 0);
+      if (!Number.isInteger(attempts) || attempts < 0) throw new HttpsError('failed-precondition', 'The merge verification record is invalid.');
+      if (attempts >= MAX_ATTEMPTS) throw new HttpsError('resource-exhausted', 'Too many incorrect attempts. Please start the merge again.');
+      const expiresMs = otp.expiresAt?.toMillis ? otp.expiresAt.toMillis() : 0;
+      if (!expiresMs || Date.now() > expiresMs) throw new HttpsError('deadline-exceeded', 'That code has expired. Please start the merge again.');
+
+      if (code !== String(otp.code || '')) {
+        tx.update(otpRef, { attempts: attempts + 1 });
+        throw new HttpsError('invalid-argument', 'Incorrect code. Please try again.');
+      }
+
+      targetUid = String(otp.targetUid || '');
+      if (!targetUid || targetUid === callerUid) throw new HttpsError('failed-precondition', 'The merge target is invalid. Please start again.');
+      const targetRef = db.collection('users').doc(targetUid);
       const callerSnap = await tx.get(callerRef);
       const targetSnap = await tx.get(targetRef);
       if (!callerSnap.exists) throw new HttpsError('not-found', 'Your account could not be found.');
@@ -91,29 +105,34 @@ exports.confirmAccountMerge = onCall(async (request) => {
       const targetData = targetSnap.data();
       if (targetData.mergedInto) throw new HttpsError('failed-precondition', 'That account has already been merged into another one.');
       if (callerData.role !== 'customer' || targetData.role !== 'customer') throw new HttpsError('permission-denied', 'This account cannot be merged automatically. Please contact support.');
-      mergedWalletBalance = Number(callerData.walletBalance || 0) + Number(targetData.walletBalance || 0);
+      const callerBalance = walletBalance(callerData);
+      const targetBalance = walletBalance(targetData);
+      mergedWalletBalance = callerBalance + targetBalance;
+      if (!Number.isSafeInteger(Math.round(mergedWalletBalance * 100))) throw new HttpsError('failed-precondition', 'The combined wallet balance is too large.');
+
       tx.update(callerRef, { walletBalance: mergedWalletBalance, googleLinked: true });
       tx.update(targetRef, { walletBalance: 0, mergedInto: callerUid, active: false, mergedAt: admin.firestore.FieldValue.serverTimestamp() });
+      tx.delete(otpRef);
     });
   } catch (err) {
     if (err instanceof HttpsError) throw err;
     await logServerError('confirmAccountMerge.transaction', err, { userId: callerUid });
     throw new HttpsError('internal', 'Could not complete the merge. Please try again.');
   }
+
   let providerLinkFailed = false;
   try {
     const targetAuthUser = await admin.auth().getUser(targetUid);
     const googleProvider = (targetAuthUser.providerData || []).find((p) => p.providerId === 'google.com');
     if (googleProvider) {
       await admin.auth().updateUser(targetUid, { providersToUnlink: ['google.com'] });
-      await admin.auth().updateUser(callerUid, { providerToLink: { providerId: 'google.com', uid: googleProvider.uid, email: googleProvider.email || otp.targetEmail } });
+      await admin.auth().updateUser(callerUid, { providerToLink: { providerId: 'google.com', uid: googleProvider.uid, email: googleProvider.email || '' } });
     } else providerLinkFailed = true;
   } catch (err) {
     providerLinkFailed = true;
     await logServerError('confirmAccountMerge.providerTransfer', err, { userId: callerUid });
   }
   await admin.auth().updateUser(targetUid, { disabled: true }).catch(() => {});
-  await otpRef.delete().catch(() => {});
   await logAudit({ action: 'account_merged', targetUid, performedBy: callerUid, performedByRole: 'customer', details: { mergedWalletBalance, providerLinkFailed, ip } });
   return { merged: true, walletBalance: mergedWalletBalance, googleLinked: !providerLinkFailed, providerLinkFailed };
 });
