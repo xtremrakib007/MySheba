@@ -1,8 +1,7 @@
 // "Business Profile" - PRD section 15 Monetization Plan premium feature.
-// An upgraded, badge-carrying profile for a seller/property owner/service
-// provider: a business name, logo, description, and category, plus a
-// public page listing everything that user has posted across Buy & Sell,
-// BusinessProfileScreen.js).
+// An upgraded, badge-carrying profile with a business name, logo,
+// description, and category, plus a public profile page
+// (BusinessProfileScreen.js).
 //
 // Data model:
 //   businessProfiles/{uid} - one doc per user who has ever been granted
