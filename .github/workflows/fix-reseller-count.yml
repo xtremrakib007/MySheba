@@ -1,4 +1,4 @@
-name: Finalize AppContext cleanup v2
+name: Finalize AppContext cleanup v3
 on:
   push:
     branches: [main]
@@ -12,13 +12,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Rebuild AppContext cleanly from known-good source
+      - name: Rebuild and verify AppContext
         shell: bash
         run: |
           set -euo pipefail
           git show c875464673f0e87ef84f66c7e198a394e80d266f:src/context/AppContext.js > /tmp/AppContext.js
           python3 - <<'PY'
           from pathlib import Path
+          import re
           p=Path('/tmp/AppContext.js'); s=p.read_text(encoding='utf-8')
           imports=["import * as directChatService from '../firebase/directChatService';","import * as groupChatService from '../firebase/groupChatService';","import * as roomChatService from '../firebase/roomChatService';","import * as chatLockService from '../firebase/chatLockService';"]
           s='\n'.join(line for line in s.splitlines() if line.strip() not in imports)+'\n'
@@ -39,8 +40,7 @@ jobs:
           ringtone=[line for line in direct_block.splitlines() if 'const [activeRingtoneContactUid' in line or 'const [activeRingtoneContactName' in line]
           if len(ringtone)!=2: raise SystemExit('Ringtone state not found')
           support="  const [activeChatReturnTo, setActiveChatReturnTo] = useState('chatList');"
-          insert=support+'\n\n  // ---- 1-to-1 call ringtone selection state ----\n'+'\n'.join(ringtone)+'\n\n'+open_chat.rstrip()
-          s=s.replace(support,insert,1)
+          s=s.replace(support,support+'\n\n  // ---- 1-to-1 call ringtone selection state ----\n'+'\n'.join(ringtone)+'\n\n'+open_chat.rstrip(),1)
           s,_=cut(s,'  // ---- group chat ----','  // ---- Private vault unlock')
           s='\n'.join(line for line in s.splitlines() if 'const [incomingGroupCall' not in line)+'\n'
           marker='  // Same idea as the listener above, but for group calls'
@@ -51,7 +51,7 @@ jobs:
           if start>=0:
             end_marker='  }, [authUser, profile, openChat, openDirectChat, openGroupChat, openRoomChat, setAdminTab, setScreen]);'
             end=s.find(end_marker,start)
-            if end<0: raise SystemExit('Notification effect end not found')
+            if end<0: raise SystemExit('Notification effect boundary missing')
             block=s[start:end+len(end_marker)]
             a=block.find("        } else if (data.type === 'directChat'"); z=block.find("        } else if (data.type === 'topup'",a)
             if a>=0 and z>=0: block=block[:a]+block[z:]
@@ -68,11 +68,14 @@ jobs:
             a=value.find('    // group chat'); z=value.find('    // private vault unlock',a)
             if z<0: raise SystemExit('Private vault value boundary missing')
             value=value[:a]+value[z:]
-          value=value.replace('    incomingGroupCall, startGroupCall, answerIncomingGroupCall, rejectIncomingGroupCall,\n','')
+          value=''.join(line for line in value.splitlines(True) if 'joinDiscoverableRoom' not in line and 'incomingGroupCall' not in line and 'startGroupCall' not in line and 'answerIncomingGroupCall' not in line and 'rejectIncomingGroupCall' not in line)
           s=s[:vs]+value+s[ve:]
+          # Strip comments before runtime-reference validation so documentation does not count as executable legacy code.
+          code=re.sub(r'/\*.*?\*/','',s,flags=re.S)
+          code=re.sub(r'//[^\n]*','',code)
           forbidden=['directChatService','groupChatService','roomChatService','chatLockService','openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','subscribeIncomingGroupCalls','incomingGroupCall','activeDirectChat','activeGroupId','activeRoomId','myGroups','myRooms','chatHubTab','investigateChat','lockChatThread','unlockChatThread','joinDiscoverableRoom']
-          bad=[x for x in forbidden if x in s]
-          if bad: raise SystemExit('Retired refs remain: '+', '.join(bad))
+          bad=[x for x in forbidden if x in code]
+          if bad: raise SystemExit('Retired runtime refs remain: '+', '.join(bad))
           required=['activeChatId','activeChatName','chatUnreadCount','activeChatReturnTo','openChat','activeRingtoneContactUid','activeRingtoneContactName','activeCall','incomingCall','startCall','answerIncomingCall','rejectIncomingCall','callService']
           missing=[x for x in required if x not in s]
           if missing: raise SystemExit('Required refs missing: '+', '.join(missing))
