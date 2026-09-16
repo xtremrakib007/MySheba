@@ -14,120 +14,153 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Restore known-good AppContext and remove retired chat state
+      - name: Restore and clean AppContext
         shell: bash
         run: |
           set -euo pipefail
           git checkout c875464673f0e87ef84f66c7e198a394e80d266f -- src/context/AppContext.js
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
           p = Path('src/context/AppContext.js')
           s = p.read_text(encoding='utf-8')
 
-          # Remove retired service imports only. Support chat and calling remain.
-          s = re.sub(r'^import \\* as (?:directChatService|groupChatService|roomChatService|chatLockService) from .*\\n', '', s, flags=re.M)
+          imports = [
+              "import * as directChatService from '../firebase/directChatService';",
+              "import * as groupChatService from '../firebase/groupChatService';",
+              "import * as roomChatService from '../firebase/roomChatService';",
+              "import * as chatLockService from '../firebase/chatLockService';",
+          ]
+          s = '\n'.join(line for line in s.splitlines() if line.strip() not in imports) + '\n'
 
-          # Remove retired route names from the navigation documentation/comment.
-          for token in ('chatHub | ', 'directChatList | ', 'addContact | ', 'qrScan | ', 'myQrCode | ', 'groupList | ', 'newGroup | ', 'createRoom | ', 'roomSettings | ', 'investigateChat | '):
+          route_tokens = [
+              'chatHub | ', 'directChatList | ', 'addContact | ', 'qrScan | ',
+              'myQrCode | ', 'groupList | ', 'newGroup | ', 'createRoom | ',
+              'roomSettings | ', 'investigateChat | '
+          ]
+          for token in route_tokens:
               s = s.replace(token, '')
 
-          def remove_state(text, name):
-              return re.sub(r'^  const \\[' + re.escape(name) + r'[^\\n]*\\n', '', text, flags=re.M)
-
-          # Retired direct/group/room/lock state. Ringtone state is intentionally not listed.
-          for name in (
+          state_names = [
               'activeDirectChatId','activeDirectChatName','activeDirectChatUid','directChatUnreadCount','chatDraftText',
               'activeInvestigateChatId','activeInvestigateReport',
               'activeGroupId','activeGroupName','myGroups','groupUnreadCount',
               'activeRoomId','activeRoomName','myRooms','discoverableRooms','chatHubTab',
               'lockedChatIds','chatVaultUnlocked','incomingGroupCall'
-          ):
-              s = remove_state(s, name)
+          ]
+          lines = s.splitlines(True)
+          s = ''.join(line for line in lines if not any(('const [' + n) in line for n in state_names))
 
           def remove_callback(text, name):
-              m = re.search(r'^  const ' + re.escape(name) + r'\\s*=\\s*useCallback\\b', text, flags=re.M)
-              if not m:
+              marker = 'const ' + name + ' = useCallback'
+              start = text.find(marker)
+              if start < 0:
                   return text
-              ob = text.find('{', m.start())
-              if ob < 0:
-                  raise SystemExit('No callback body: ' + name)
+              start = text.rfind('  ', 0, start)
+              brace = text.find('{', start)
+              if brace < 0:
+                  raise SystemExit('callback body missing: ' + name)
               depth = 0
               quote = None
-              esc = False
-              for i in range(ob, len(text)):
+              escaped = False
+              end = None
+              for i in range(brace, len(text)):
                   c = text[i]
                   if quote:
-                      if esc: esc = False
-                      elif c == '\\\\': esc = True
-                      elif c == quote: quote = None
+                      if escaped:
+                          escaped = False
+                      elif c == '\\':
+                          escaped = True
+                      elif c == quote:
+                          quote = None
                       continue
-                  if c in "'\\\"`": quote = c
-                  elif c == '{': depth += 1
+                  if c in "'\"`":
+                      quote = c
+                  elif c == '{':
+                      depth += 1
                   elif c == '}':
                       depth -= 1
                       if depth == 0:
-                          j = i + 1
-                          while j < len(text) and text[j] in ' ;\\t\\r\\n': j += 1
-                          return text[:m.start()] + text[j:]
-              raise SystemExit('Unbalanced callback: ' + name)
+                          end = i + 1
+                          while end < len(text) and text[end] in ' ;\t\r\n':
+                              end += 1
+                          return text[:start] + text[end:]
+              raise SystemExit('unbalanced callback: ' + name)
 
-          for name in ('openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall','openInvestigateChat'):
-              while re.search(r'^  const ' + re.escape(name) + r'\\s*=\\s*useCallback\\b', s, flags=re.M):
+          for name in ['openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall','openInvestigateChat']:
+              while 'const ' + name + ' = useCallback' in s:
                   s = remove_callback(s, name)
 
-          # Remove useEffect blocks whose bodies subscribe to retired chat services.
+          retired_services = ['directChatService','groupChatService','roomChatService','subscribeIncomingGroupCalls','chatLockService']
           while True:
-              changed = False
-              for m in list(re.finditer(r'^  useEffect\\(\\(\\) => \\{', s, flags=re.M)):
-                  ob = s.find('{', m.start())
+              marker = '  useEffect(() => {'
+              start = s.find(marker)
+              removed = False
+              while start >= 0:
+                  brace = s.find('{', start)
                   depth = 0
                   quote = None
-                  esc = False
+                  escaped = False
                   close = None
-                  for i in range(ob, len(s)):
+                  for i in range(brace, len(s)):
                       c = s[i]
                       if quote:
-                          if esc: esc = False
-                          elif c == '\\\\': esc = True
-                          elif c == quote: quote = None
+                          if escaped:
+                              escaped = False
+                          elif c == '\\':
+                              escaped = True
+                          elif c == quote:
+                              quote = None
                           continue
-                      if c in "'\\\"`": quote = c
-                      elif c == '{': depth += 1
+                      if c in "'\"`":
+                          quote = c
+                      elif c == '{':
+                          depth += 1
                       elif c == '}':
                           depth -= 1
                           if depth == 0:
                               close = i
                               break
-                  if close is None: continue
-                  end = s.find(');', close)
-                  if end < 0: continue
-                  block = s[m.start():end+2]
-                  if any(x in block for x in ('directChatService','groupChatService','roomChatService','subscribeIncomingGroupCalls','chatLockService')):
-                      s = s[:m.start()] + s[end+2:]
-                      changed = True
+                  if close is None:
                       break
-              if not changed: break
+                  end = s.find(');', close)
+                  if end < 0:
+                      break
+                  block = s[start:end+2]
+                  if any(x in block for x in retired_services):
+                      s = s[:start] + s[end+2:]
+                      removed = True
+                      break
+                  start = s.find(marker, end+2)
+              if not removed:
+                  break
 
-          # Remove known retired comment sections, but leave marketplace/support/call sections intact.
-          s = re.sub(r'^  // ---- direct chat \\(general-purpose.*?(?=^  // ---- marketplace)', '', s, flags=re.M|re.S)
-          s = re.sub(r'^  // ---- direct chat investigation.*?(?=^  // ---- marketplace)', '', s, flags=re.M|re.S)
+          for header in ['  // ---- direct chat (general-purpose', '  // ---- direct chat investigation']:
+              start = s.find(header)
+              if start >= 0:
+                  end = s.find('  // ---- marketplace', start)
+                  if end >= 0:
+                      s = s[:start] + s[end:]
 
-          # Remove individual lines that still expose retired identifiers.
-          retired = re.compile(r'\\b(activeDirectChatId|activeDirectChatName|activeDirectChatUid|directChatUnreadCount|openDirectChat|activeInvestigateChatId|activeInvestigateReport|openInvestigateChat|chatDraftText|activeGroupId|activeGroupName|myGroups|groupUnreadCount|openGroupChat|activeRoomId|activeRoomName|myRooms|discoverableRooms|openRoomChat|chatHubTab|openChatHub|incomingGroupCall|startGroupCall|answerIncomingGroupCall|rejectIncomingGroupCall|investigateChat)\\b')
-          s = ''.join(line for line in s.splitlines(True) if not retired.search(line))
+          retired = [
+              'activeDirectChatId','activeDirectChatName','activeDirectChatUid','directChatUnreadCount',
+              'openDirectChat','activeInvestigateChatId','activeInvestigateReport','openInvestigateChat',
+              'chatDraftText','activeGroupId','activeGroupName','myGroups','groupUnreadCount','openGroupChat',
+              'activeRoomId','activeRoomName','myRooms','discoverableRooms','openRoomChat','chatHubTab',
+              'openChatHub','incomingGroupCall','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall',
+              'investigateChat'
+          ]
+          s = ''.join(line for line in s.splitlines(True) if not any(x in line for x in retired))
 
-          # Required functionality must remain.
-          required = ('activeChatId','chatUnreadCount','activeRingtoneContactUid','activeRingtoneContactName','activeCall','incomingCall','callService')
+          required = ['activeChatId','chatUnreadCount','activeRingtoneContactUid','activeRingtoneContactName','activeCall','incomingCall','callService']
           missing = [x for x in required if x not in s]
           if missing:
-              raise SystemExit('Required Support/1-to-1 calling state missing: ' + ', '.join(missing))
+              raise SystemExit('required Support/1-to-1 calling code missing: ' + ', '.join(missing))
 
-          forbidden = ('directChatService','groupChatService','roomChatService','chatLockService','openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','subscribeIncomingGroupCalls','incomingGroupCall','activeDirectChat','activeGroupId','activeRoomId','myGroups','myRooms','chatHubTab','investigateChat')
+          forbidden = ['directChatService','groupChatService','roomChatService','chatLockService','openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','subscribeIncomingGroupCalls','incomingGroupCall','activeDirectChat','activeGroupId','activeRoomId','myGroups','myRooms','chatHubTab','investigateChat']
           bad = [x for x in forbidden if x in s]
           if bad:
-              raise SystemExit('Retired AppContext refs remain: ' + ', '.join(bad))
+              raise SystemExit('retired AppContext refs remain: ' + ', '.join(bad))
 
           p.write_text(s, encoding='utf-8')
           print('AppContext cleanup validation passed')
