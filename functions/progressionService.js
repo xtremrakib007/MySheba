@@ -1,21 +1,7 @@
 // Tier/Level loyalty progression.
-//
-// Tier (named, e.g. "Bronze+") grows from completed qualifying paid
-// service orders - Recharge/Internet/Mobile Banking/Remittance
-// (transactions/{id} status -> 'completed') and Flight ticket
-// confirmations (inquiries/{id} type 'flight' closed with a ticket
-// attached). Level (numeric) grows from chat activity (a message sent)
-// and chat-game spending (a gamePointsLedger 'entry_fee' row - NOT
-// 'pot_winnings', since winning shouldn't itself grant progress).
-//
-// Both counters are only ever written from Firestore triggers in
-// index.js (onTransactionUpdated, onInquiryUpdated, onChatMessageCreated,
-// onGamePointsLedgerCreated), never from a client-callable - a modified
-// client can't fake progress the way it could if this were a plain
-// client-side increment. Firestore Security Rules back this up by
-// freezing users/{uid}.tier*/level* from client writes entirely (see
-// firestore.rules) - only the Admin SDK (which bypasses rules) can touch
-// them, and only these triggers do.
+// Tier grows from completed qualifying paid service orders and flight confirmations.
+// Level grows from supported account activity. Counters are written by trusted
+// server-side triggers only; client writes are blocked by Firestore Rules.
 
 const admin = require('firebase-admin');
 
@@ -45,11 +31,7 @@ const DEFAULT_PROMOTIONS = DEFAULT_TIERS.reduce((acc, t) => {
   return acc;
 }, {});
 
-const DEFAULT_PROGRESSION = {
-  tiers: DEFAULT_TIERS,
-  levelStep: DEFAULT_LEVEL_STEP,
-  promotions: DEFAULT_PROMOTIONS,
-};
+const DEFAULT_PROGRESSION = { tiers: DEFAULT_TIERS, levelStep: DEFAULT_LEVEL_STEP, promotions: DEFAULT_PROMOTIONS };
 
 async function getProgressionSettings() {
   const snap = await progressionDocRef().get();
@@ -109,9 +91,6 @@ async function getTierDiscountPercent(tierKey) {
   return discountPercentFromSettings(settings, tierKey);
 }
 
-// index.js already imports this module directly. Registering the new
-// transaction callables on that parent export lets Firebase Functions expose
-// them without duplicating or restructuring the large existing index module.
 const transactionService = require('./transactionService');
 if (module.parent && module.parent.exports) {
   module.parent.exports.approveTransaction = transactionService.approveTransaction;
@@ -119,14 +98,4 @@ if (module.parent && module.parent.exports) {
   module.parent.exports.completeTransaction = transactionService.completeTransaction;
 }
 
-module.exports = {
-  DEFAULT_TIERS,
-  DEFAULT_LEVEL_STEP,
-  DEFAULT_PROGRESSION,
-  getProgressionSettings,
-  tierForPoints,
-  incrementTierPoints,
-  incrementLevelPoints,
-  getTierDiscountPercent,
-  discountPercentFromSettings,
-};
+module.exports = { DEFAULT_TIERS, DEFAULT_LEVEL_STEP, DEFAULT_PROGRESSION, getProgressionSettings, tierForPoints, incrementTierPoints, incrementLevelPoints, getTierDiscountPercent, discountPercentFromSettings };
