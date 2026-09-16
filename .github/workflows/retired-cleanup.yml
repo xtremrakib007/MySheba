@@ -15,8 +15,6 @@ jobs:
         run: |
           from pathlib import Path
           import re, json
-
-          # Firestore: remove retired collections/rules, while retaining Support Chat and 1-to-1 calls.
           p=Path('firestore.rules'); s=p.read_text(encoding='utf-8')
           retired=['gamePoints','gamePointsLedger','communityPosts','communityLikes','communityComments','communityReports','socialPosts','socialLikes','socialComments','socialReports','marketplaceListings','marketplaceSaves','marketplaceReports','marketplaceReviews','marketplaceSellerStats','properties','propertySaves','propertyReports','roommateRequests','roommateReports','serviceProviders','serviceProviderReports','serviceReviews']
           for name in retired:
@@ -25,42 +23,25 @@ jobs:
           s=s.replace("function callParticipant() { return signedIn() && (resource.data.callerUid == request.auth.uid || resource.data.calleeUid == request.auth.uid || (resource.data.isGroup == true && request.auth.uid in resource.data.get('participantUids', []))); }", "function callParticipant() { return signedIn() && (resource.data.callerUid == request.auth.uid || resource.data.calleeUid == request.auth.uid); }")
           s=s.replace(" && request.resource.data.isGroup != true", "")
           p.write_text(s,encoding='utf-8')
-
-          # Storage: remove retired feature media paths.
           p=Path('storage.rules'); s=p.read_text(encoding='utf-8')
           for name in ['marketplace-images','accommodation-images','service-provider-images']:
               s=re.sub(r'^\s*match /'+re.escape(name)+r'/[^\n]*\n?', '', s, flags=re.M)
           p.write_text(s,encoding='utf-8')
-
-          # Cloud Functions: remove obsolete marketplace/report handler tail and exports.
           p=Path('functions/index.js'); s=p.read_text(encoding='utf-8')
           marker='const MARKETPLACE_REPORT_HIDE_THRESHOLD'
           if marker in s: s=s[:s.index(marker)].rstrip()+'\n'
           s=re.sub(r'^exports\.(boostListing|listingPreview)\s*=.*\n?', '', s, flags=re.M)
           p.write_text(s,encoding='utf-8')
-
-          # Remove obsolete secure mutation/rate-limit entry points.
           p=Path('functions/secureWalletMutations.js'); s=p.read_text(encoding='utf-8'); s=re.sub(r'^exports\.boostListing.*\n?', '', s, flags=re.M); p.write_text(s,encoding='utf-8')
           p=Path('functions/rateLimitService.js'); s=p.read_text(encoding='utf-8'); s=re.sub(r'^\s*boostListing:.*\n?', '', s, flags=re.M); p.write_text(s,encoding='utf-8')
-
-          # App router: remove references to deleted retired screens.
           p=Path('App.js'); s=p.read_text(encoding='utf-8')
           names=['MarketplaceModerationScreen','MarketplaceHubScreen','CreateListingScreen','MyListingsScreen','MyReviewsScreen','ListingDetailScreen','CreatePropertyScreen','MyPropertiesScreen','PropertyDetailScreen','CreateRoommateRequestScreen','MyRoommateRequestsScreen','RoommateRequestDetailScreen','CreateServiceScreen','MyServicesScreen','ServiceProviderDetailScreen','CreateCommunityPostScreen','MyCommunityPostsScreen','CommunityPostDetailScreen','SocialFeedScreen','CreateSocialPostScreen','SocialPostDetailScreen','MarketplaceSearchScreen']
           for n in names: s=re.sub(r'^.*'+re.escape(n)+r'.*\n?', '', s, flags=re.M)
           for token in ['marketplaceHome','accommodationHome','roomSharingHome','servicesHome','communityHome','marketplaceCreateListing','marketplaceMyListings','marketplaceMyReviews','marketplaceListingDetail','accommodationCreateProperty','accommodationMyProperties','accommodationPropertyDetail','roomSharingCreateRequest','roomSharingMyRequests','roomSharingRequestDetail','servicesCreateProvider','servicesMyServices','servicesProviderDetail','communityCreatePost','communityMyPosts','communityPostDetail','socialFeed','createSocialPost','socialPostDetail','marketplaceSearch']:
               s=re.sub(r'^.*'+re.escape(token)+r'.*\n?', '', s, flags=re.M)
           p.write_text(s,encoding='utf-8')
-
-          # Public landing page copy.
           p=Path('public/index.html'); s=p.read_text(encoding='utf-8').replace('Recharge, remittance, mobile banking, marketplace, and more.','Recharge, remittance, mobile banking, support, and more.').replace('Recharge, remittance, mobile banking, marketplace &amp; more - all in one app.','Recharge, remittance, mobile banking &amp; more - all in one app.'); p.write_text(s,encoding='utf-8')
-
-          # Firestore indexes: keep only non-retired collection indexes.
-          p=Path('firestore.indexes.json'); data=json.loads(p.read_text(encoding='utf-8'))
-          retired_l=tuple(retired)
-          data['indexes']=[x for x in data.get('indexes',[]) if not any(str(x.get('collectionGroup','')).lower()==r.lower() for r in retired_l)]
-          p.write_text(json.dumps(data,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
-
-          # Remove this one-shot workflow after the cleanup commit.
+          p=Path('firestore.indexes.json'); data=json.loads(p.read_text(encoding='utf-8')); retired_l=tuple(retired); data['indexes']=[x for x in data.get('indexes',[]) if not any(str(x.get('collectionGroup','')).lower()==r.lower() for r in retired_l)]; p.write_text(json.dumps(data,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
           Path('.github/workflows/retired-cleanup.yml').unlink()
       - name: Verify backend syntax
         run: |
