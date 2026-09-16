@@ -1,0 +1,137 @@
+name: Direct AppContext cleanup
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message != 'refactor: remove retired chat state from AppContext'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore full provider and remove retired chat state
+        shell: bash
+        run: |
+          git show 75d3c25e5ad3435967ec7f58c4db1cfa32ab69f2:src/context/AppContext.js > src/context/AppContext.js
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('src/context/AppContext.js')
+          s = p.read_text(encoding='utf-8')
+
+          # Remove retired service imports.
+          s = re.sub(r'^import \* as (?:directChatService|groupChatService|roomChatService|chatLockService) from .*\n', '', s, flags=re.M)
+
+          # Remove retired navigation names from the screen documentation line.
+          retired_screens = ('chatHub','directChatList','addContact','qrScan','myQrCode','groupList','newGroup','createRoom','roomSettings','investigateChat')
+          for name in retired_screens:
+              s = re.sub(r'\s*\|\s*' + re.escape(name) + r'(?=\s*\||\s*$)', '', s)
+
+          # Remove simple state declarations by exact variable name.
+          state_names = ('activeDirectChatId','activeDirectChatName','activeDirectChatUid','directChatUnreadCount','chatDraftText','activeInvestigateChatId','activeInvestigateReport','lockedChatIds','chatVaultUnlocked','activeGroupId','activeGroupName','myGroups','groupUnreadCount','activeRoomId','activeRoomName','myRooms','discoverableRooms','chatHubTab','incomingGroupCall')
+          for name in state_names:
+              s = re.sub(r'^\s*const \[' + re.escape(name) + r'\s*,[^\n]*\n', '', s, flags=re.M)
+
+          # Remove useCallback declarations with balanced braces.
+          def remove_callback(text, name):
+              m = re.search(r'^\s*const ' + re.escape(name) + r'\s*=\s*useCallback\b', text, flags=re.M)
+              if not m:
+                  return text, False
+              ob = text.find('{', m.start())
+              depth = 0; quote = None; esc = False
+              for i in range(ob, len(text)):
+                  c = text[i]
+                  if quote:
+                      if esc: esc = False
+                      elif c == '\\': esc = True
+                      elif c == quote: quote = None
+                      continue
+                  if c in "'\"`": quote = c
+                  elif c == '{': depth += 1
+                  elif c == '}':
+                      depth -= 1
+                      if depth == 0:
+                          j = i + 1
+                          while j < len(text) and text[j] in ' ;\t\r\n': j += 1
+                          return text[:m.start()] + text[j:], True
+              raise SystemExit('Unbalanced callback: ' + name)
+
+          for name in ('openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall','openInvestigateChat'):
+              while True:
+                  s, changed = remove_callback(s, name)
+                  if not changed: break
+
+          # Remove effects whose bodies subscribe to retired chat services.
+          while True:
+              changed = False
+              for m in list(re.finditer(r'^\s*useEffect\(\(\) => \{', s, flags=re.M)):
+                  ob = s.find('{', m.start()); depth = 0; quote = None; esc = False; close = None
+                  for i in range(ob, len(s)):
+                      c = s[i]
+                      if quote:
+                          if esc: esc = False
+                          elif c == '\\': esc = True
+                          elif c == quote: quote = None
+                          continue
+                      if c in "'\"`": quote = c
+                      elif c == '{': depth += 1
+                      elif c == '}':
+                          depth -= 1
+                          if depth == 0: close = i; break
+                  if close is None: continue
+                  end = s.find(');', close)
+                  if end < 0: continue
+                  block = s[m.start():end+2]
+                  if any(x in block for x in ('directChatService','groupChatService','roomChatService','subscribeIncomingGroupCalls','chatLockService')):
+                      s = s[:m.start()] + s[end+2:]
+                      changed = True
+                      break
+              if not changed: break
+
+          # Remove retired identifiers from remaining context-value/dependency/comment lines.
+          retired = re.compile(r'\b(?:activeDirectChatId|activeDirectChatName|activeDirectChatUid|directChatUnreadCount|openDirectChat|activeInvestigateChatId|activeInvestigateReport|openInvestigateChat|chatDraftText|activeGroupId|activeGroupName|myGroups|groupUnreadCount|openGroupChat|activeRoomId|activeRoomName|myRooms|discoverableRooms|openRoomChat|chatHubTab|openChatHub|incomingGroupCall|startGroupCall|answerIncomingGroupCall|rejectIncomingGroupCall|investigateChat)\b')
+          s = ''.join(line for line in s.splitlines(True) if not retired.search(line))
+
+          # Keep ringtone state immediately after Support Chat state.
+          marker = "  const [activeChatReturnTo, setActiveChatReturnTo] = useState('chatList');"
+          uid_line = "  const [activeRingtoneContactUid, setActiveRingtoneContactUid] = useState(null);"
+          name_line = "  const [activeRingtoneContactName, setActiveRingtoneContactName] = useState('');"
+          if uid_line not in s:
+              if marker not in s: raise SystemExit('Support Chat marker missing')
+              s = s.replace(marker, marker + '\n' + uid_line + '\n' + name_line, 1)
+
+          # Remove stale retired-only prose blocks left between features.
+          s = re.sub(r'\n\s*// ---- direct chat \(general-purpose.*?(?=\n\s*// ---- marketplace)', '\n', s, flags=re.S)
+          s = re.sub(r'\n\s*// ---- direct chat investigation.*?(?=\n\s*// ---- marketplace)', '\n', s, flags=re.S)
+
+          # Ensure no retired runtime identifiers remain outside comments/strings.
+          code = re.sub(r'/\*.*?\*/|//[^\n]*', '', s, flags=re.S)
+          forbidden = ('directChatService','groupChatService','roomChatService','chatLockService','openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','subscribeIncomingGroupCalls','incomingGroupCall','activeDirectChat','activeGroupId','activeRoomId','myGroups','myRooms','chatHubTab','investigateChat')
+          bad = [x for x in forbidden if x in code]
+          if bad: raise SystemExit('Retired runtime refs remain: ' + ', '.join(bad))
+          required = ('activeChatId','chatUnreadCount','activeRingtoneContactUid','activeRingtoneContactName','activeCall','incomingCall','callService')
+          missing = [x for x in required if x not in s]
+          if missing: raise SystemExit('Required Support/1-to-1 refs missing: ' + ', '.join(missing))
+          if len(s) < 50000: raise SystemExit('Unexpectedly short AppContext: ' + str(len(s)))
+
+          p.write_text(s, encoding='utf-8')
+          print('AppContext cleanup prepared:', len(s), 'bytes')
+          PY
+          node --check src/context/AppContext.js
+      - name: Commit cleaned AppContext
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/context/AppContext.js
+          git diff --cached --stat
+          git commit -m 'refactor: remove retired chat state from AppContext'
+          git push
