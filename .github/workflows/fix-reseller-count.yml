@@ -1,66 +1,77 @@
-name: Fix reseller cleanup
+name: Run verified AppContext cleanup
 on:
   push:
     branches: [main]
+permissions:
+  contents: write
 jobs:
-  fix:
+  cleanup:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Restore AppContext from known-good revision
+      - name: Restore known-good AppContext
         run: git show c875464673f0e87ef84f66c7e198a394e80d266f:src/context/AppContext.js > /tmp/AppContext.js
-      - name: Clean AppContext
+      - name: Clean and verify AppContext
+        shell: bash
         run: |
+          set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          import re
           p=Path('/tmp/AppContext.js')
           s=p.read_text(encoding='utf-8')
-          s=re.sub(r'^import \* as (?:directChatService|groupChatService|roomChatService|chatLockService) from .*\n','',s,flags=re.M)
-          for n in ('activeDirectChatId','activeDirectChatName','activeDirectChatUid','directChatUnreadCount','chatDraftText','activeInvestigateChatId','activeInvestigateReport','lockedChatIds','chatVaultUnlocked','activeGroupId','activeGroupName','myGroups','groupUnreadCount','activeRoomId','activeRoomName','myRooms','discoverableRooms','chatHubTab','incomingGroupCall'):
-              s=re.sub(r'^  const \['+re.escape(n)+r'[^\n]*\n','',s,flags=re.M)
+          imports={
+            "import * as directChatService from '../firebase/directChatService';",
+            "import * as groupChatService from '../firebase/groupChatService';",
+            "import * as roomChatService from '../firebase/roomChatService';",
+            "import * as chatLockService from '../firebase/chatLockService';",
+          }
+          s='\n'.join(x for x in s.splitlines() if x.strip() not in imports)+'\n'
+          for token in ['chatHub | ','directChatList | ','addContact | ','qrScan | ','myQrCode | ','groupList | ','newGroup | ','createRoom | ','roomSettings | ','investigateChat | ']: s=s.replace(token,'')
+          states=['activeDirectChatId','activeDirectChatName','activeDirectChatUid','directChatUnreadCount','chatDraftText','activeInvestigateChatId','activeInvestigateReport','lockedChatIds','chatVaultUnlocked','activeGroupId','activeGroupName','myGroups','groupUnreadCount','activeRoomId','activeRoomName','myRooms','discoverableRooms','chatHubTab','incomingGroupCall']
+          s=''.join(x for x in s.splitlines(True) if not any(('const ['+n) in x for n in states))
           def remove_callback(t,n):
-              m=re.search(r'^  const '+re.escape(n)+r'\s*=\s*useCallback\b',t,re.M)
-              if not m:return t
-              ob=t.find('{',m.start());d=0;q=None;e=False
-              for i in range(ob,len(t)):
-                  c=t[i]
-                  if q:
-                      if e:e=False
-                      elif c=='\\':e=True
-                      elif c==q:q=None
-                  elif c in "'\"`":q=c
-                  elif c=='{':d+=1
-                  elif c=='}':
-                      d-=1
-                      if d==0:
-                          j=i+1
-                          while j<len(t) and t[j] in ' ;\t\r\n':j+=1
-                          return t[:m.start()]+t[j:]
-              raise SystemExit('unbalanced callback '+n)
-          for n in ('openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall','openInvestigateChat'):
-              while re.search(r'^  const '+re.escape(n)+r'\s*=\s*useCallback\b',s,re.M):s=remove_callback(s,n)
-          retired=re.compile(r'\b(activeDirectChatId|activeDirectChatName|activeDirectChatUid|directChatUnreadCount|openDirectChat|activeInvestigateChatId|activeInvestigateReport|openInvestigateChat|chatDraftText|activeGroupId|activeGroupName|myGroups|groupUnreadCount|openGroupChat|activeRoomId|activeRoomName|myRooms|discoverableRooms|openRoomChat|chatHubTab|openChatHub|incomingGroupCall|startGroupCall|answerIncomingGroupCall|rejectIncomingGroupCall|investigateChat)\b')
-          s=''.join(line for line in s.splitlines(True) if not retired.search(line))
-          for n in ('chatHub','directChatList','addContact','qrScan','myQrCode','groupList','newGroup','createRoom','roomSettings','investigateChat'):
-              s=re.sub(r'\s*\|\s*'+re.escape(n)+r'(?=\s*\||\s*$)','',s,flags=re.M)
-          forbidden=('directChatService','groupChatService','roomChatService','chatLockService','openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','subscribeIncomingGroupCalls','incomingGroupCall','activeDirectChat','activeGroupId','activeRoomId','myGroups','myRooms','chatHubTab','investigateChat')
-          if any(x in s for x in forbidden):raise SystemExit('retired AppContext references remain')
-          required=('activeChatId','chatUnreadCount','activeRingtoneContactUid','activeRingtoneContactName','activeCall','incomingCall','callService')
-          if any(x not in s for x in required):raise SystemExit('required Support/1-to-1 state missing')
-          if len(s)<20000:raise SystemExit('AppContext unexpectedly short: '+str(len(s)))
+            marker='const '+n+' = useCallback'; a=t.find(marker)
+            if a<0:return t
+            a=t.rfind('  ',0,a); b=t.find('{',a); d=0;q=None;e=False
+            for i in range(b,len(t)):
+              c=t[i]
+              if q:
+                if e:e=False
+                elif c=='\\':e=True
+                elif c==q:q=None
+                continue
+              if c in "'\"`":q=c
+              elif c=='{':d+=1
+              elif c=='}':
+                d-=1
+                if d==0:
+                  j=i+1
+                  while j<len(t) and t[j] in ' ;\t\r\n':j+=1
+                  return t[:a]+t[j:]
+            raise SystemExit('unbalanced callback '+n)
+          for n in ['openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall','openInvestigateChat']:
+            while 'const '+n+' = useCallback' in s:s=remove_callback(s,n)
+          retired=['activeDirectChatId','activeDirectChatName','activeDirectChatUid','directChatUnreadCount','openDirectChat','activeInvestigateChatId','activeInvestigateReport','openInvestigateChat','chatDraftText','activeGroupId','activeGroupName','myGroups','groupUnreadCount','openGroupChat','activeRoomId','activeRoomName','myRooms','discoverableRooms','openRoomChat','chatHubTab','openChatHub','incomingGroupCall','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall','investigateChat']
+          s=''.join(x for x in s.splitlines(True) if not any(n in x for n in retired))
+          forbidden=['directChatService','groupChatService','roomChatService','chatLockService','openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','subscribeIncomingGroupCalls','incomingGroupCall','activeDirectChat','activeGroupId','activeRoomId','myGroups','myRooms','chatHubTab','investigateChat']
+          bad=[n for n in forbidden if n in s]
+          if bad: raise SystemExit('retired refs remain: '+', '.join(bad))
+          required=['activeChatId','chatUnreadCount','activeRingtoneContactUid','activeRingtoneContactName','activeCall','incomingCall','callService']
+          missing=[n for n in required if n not in s]
+          if missing: raise SystemExit('required refs missing: '+', '.join(missing))
+          if len(s)<20000: raise SystemExit('unexpectedly short AppContext: '+str(len(s)))
           Path('src/context/AppContext.js').write_text(s,encoding='utf-8')
-          print('validated AppContext length',len(s))
+          print('AppContext verified:',len(s),'bytes')
           PY
-      - name: Commit AppContext cleanup
+          git diff --check
+      - name: Commit verified AppContext
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/context/AppContext.js
-          git commit -m 'refactor: restore and clean AppContext'
+          git diff --cached --check
+          git commit -m 'refactor: remove retired chat state from AppContext'
           git push
