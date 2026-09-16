@@ -1,0 +1,1 @@
+The Functions lockfile must be regenerated with `npm install --package-lock-only` after aligning the Node engine. Do not deploy this branch until the generated lockfile contains the complete dependency tree.
