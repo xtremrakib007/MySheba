@@ -1,4 +1,4 @@
-name: Final AppContext cleanup v3
+name: Final AppContext cleanup v4
 on:
   push:
     branches: [main]
@@ -33,6 +33,9 @@ jobs:
           oa=s.find('  /** Opens the Support thread'); ob=s.find('  /** Opens a group chat thread',oa)
           if oa<0 or ob<0: raise SystemExit('Support openChat block not found')
           open_chat=s[oa:ob]
+          # Keep only Support-chat operations inside openChat.
+          for line in ['    setActiveGroupId(null);','    setActiveDirectChatId(null);','    setActiveRoomId(null);']:
+            open_chat=open_chat.replace(line,'')
           ds='  // ---- direct chat (general-purpose 1:1 "Chat" tab, any two accounts) ----'
           s,direct=cut(s,ds,'  // ---- marketplace (Buy & Sell) ----')
           ringtone=[x for x in direct.splitlines() if 'activeRingtoneContactUid' in x or 'activeRingtoneContactName' in x]
@@ -45,9 +48,7 @@ jobs:
           if marker in s: s,_=cut(s,marker,'  /** Starts a call with another user')
           if '  /** Starts a group call' in s: s,_=cut(s,'  /** Starts a group call','  // ---- Chat Lock helpers')
           if '  // ---- Chat Lock helpers' in s: s,_=cut(s,'  // ---- Chat Lock helpers','  /** Opens the Support thread')
-          # Remove all remaining group/direct/room helper callbacks after Support openChat.
-          if '  /** Opens a group chat thread' in s:
-              s,_=cut(s,'  /** Opens a group chat thread','  // ---- push notification taps')
+          if '  /** Opens a group chat thread' in s: s,_=cut(s,'  /** Opens a group chat thread','  // ---- push notification taps')
           effect_ranges=[
             ('  // ---- live direct-chat unread badge','  // ---- live list of groups'),
             ('  // ---- live list of groups','  // ---- live list of rooms'),
