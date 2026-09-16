@@ -5,6 +5,9 @@ const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { checkIpAnomaly } = require('./anomalyService');
 
 const KEY_RE = /^[A-Za-z0-9_-]{16,128}$/;
+const MAX_TRANSFER = 100000;
+const MAX_NOTE_LENGTH = 500;
+
 function requireAuth(request) {
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
   return request.auth.uid;
@@ -21,10 +24,15 @@ async function profile(db, uid) {
   return snap.exists ? { id: snap.id, ...snap.data() } : null;
 }
 function canTransferTo(role, caller, recipient) {
-  if (role === 'dealer') return recipient.dealerId === caller.id;
+  if (role === 'dealer') return recipient.role === 'customer' && recipient.dealerId === caller.id;
   if (role === 'admin') return recipient.role === 'dealer';
   if (role === 'superadmin') return ['admin', 'dealer'].includes(recipient.role);
   return false;
+}
+function validBalance(value) {
+  const n = Number(value || 0);
+  if (!Number.isFinite(n) || n < 0 || !Number.isSafeInteger(Math.round(n * 100))) return null;
+  return n;
 }
 
 // A client retry must reuse requestId. The idempotency record and both
@@ -36,9 +44,18 @@ exports.transferPoints = onCall(async (request) => {
   const db = admin.firestore();
   const { toUid, amount, note } = request.data || {};
   const amt = Number(amount);
-  if (!toUid) throw new HttpsError('invalid-argument', 'A recipient is required.');
+  const cleanNote = typeof note === 'string' ? note.trim() : '';
+
+  if (typeof toUid !== 'string' || !toUid.trim()) {
+    throw new HttpsError('invalid-argument', 'A recipient is required.');
+  }
   if (toUid === callerUid) throw new HttpsError('invalid-argument', "You can't transfer points to yourself.");
-  if (!Number.isFinite(amt) || amt <= 0) throw new HttpsError('invalid-argument', 'Enter a valid amount.');
+  if (!Number.isFinite(amt) || amt <= 0 || amt > MAX_TRANSFER || !Number.isSafeInteger(Math.round(amt * 100))) {
+    throw new HttpsError('invalid-argument', `Transfer amount must be greater than 0 and no more than ${MAX_TRANSFER.toLocaleString()} points.`);
+  }
+  if (cleanNote.length > MAX_NOTE_LENGTH) {
+    throw new HttpsError('invalid-argument', `Note must be ${MAX_NOTE_LENGTH} characters or fewer.`);
+  }
 
   const caller = await profile(db, callerUid);
   if (!caller || !['dealer', 'admin', 'superadmin'].includes(caller.role)) {
@@ -80,17 +97,25 @@ exports.transferPoints = onCall(async (request) => {
       const fromSnap = await tx.get(fromRef);
       const toSnap = await tx.get(toRef);
       if (!fromSnap.exists || !toSnap.exists) throw new HttpsError('not-found', 'Account not found.');
-      const fromBalance = Number(fromSnap.data().walletBalance || 0);
+      const fromBalance = validBalance(fromSnap.data().walletBalance);
+      const toBalance = validBalance(toSnap.data().walletBalance);
+      if (fromBalance === null || toBalance === null) {
+        throw new HttpsError('failed-precondition', 'One of the account wallet balances is invalid.');
+      }
       if (fromBalance < amt) throw new HttpsError('failed-precondition', 'Insufficient balance.');
-      const toBalance = Number(toSnap.data().walletBalance || 0);
+      const resultingSenderBalance = fromBalance - amt + earning;
+      const resultingRecipientBalance = toBalance + amt;
+      if (!Number.isSafeInteger(Math.round(resultingSenderBalance * 100)) || !Number.isSafeInteger(Math.round(resultingRecipientBalance * 100))) {
+        throw new HttpsError('failed-precondition', 'The transfer would create an invalid wallet balance.');
+      }
       const dealerScope = caller.role === 'dealer' ? callerUid : caller.dealerId || null;
 
-      tx.update(fromRef, { walletBalance: fromBalance - amt + earning });
-      tx.update(toRef, { walletBalance: toBalance + amt });
+      tx.update(fromRef, { walletBalance: resultingSenderBalance });
+      tx.update(toRef, { walletBalance: resultingRecipientBalance });
       tx.set(transferRef, {
         fromUid: callerUid, fromName: caller.name || '', fromRole: caller.role || '',
         toUid, toName: recipient.name || '', toRole: recipient.role || '',
-        amount: amt, note: note || '', participants: [callerUid, toUid],
+        amount: amt, note: cleanNote, participants: [callerUid, toUid],
         dealerId: dealerScope, dealerEarningPercent: earningPercent || null,
         dealerEarning: earning || null, requestId,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
