@@ -82,45 +82,6 @@ function response(res, status, body) {
   return res.status(status).json(body);
 }
 
-// shared from the app's ListingDetail screen -> mysheba.top -> "Open in
-// MySheba App" / Play Store). This project (mysheba2) owns the mysheba.top
-// domain, but the actual preview page - with the real listing's photo/
-// price/title in its Open Graph tags, plus the mysheba://listing/{id} deep
-// link button - is rendered by the `listingPreview` function that lives in
-// the *app's* Firebase project (satulink-solutions), since that's where the
-// `listings` Firestore data actually is. Rather than duplicating that
-// Firestore read (and needing a satulink-solutions service-account key in
-// this project) or moving the mysheba.top domain, this just 302s the
-// request over to the app project's own default Hosting URL, which applies
-// that project's own `/listing/**` rewrite to `listingPreview`. A 302 (not
-// 301) because this is meant to be a stopgap - if mysheba.top ever gets
-// connected directly to the app project's Hosting instead (the longer-term
-// fix), this redirect goes away rather than being a permanently-cached one.
-//
-// Known limitation: link-preview crawlers (Facebook/WhatsApp/etc.) do
-// generally follow a 302 and read Open Graph tags off the final URL, so
-// the shared-link preview card still works - but the browser address bar
-// will show the satulink-solutions.web.app URL, not mysheba.top, once a
-// person actually taps the link. Fully hiding that requires option 2
-// (connecting the domain directly), not a redirect.
-const APP_HOSTING_ORIGIN = 'https://satulink-solutions.web.app';
-
-exports.listingRedirect = onRequest({
-  region: 'asia-southeast1',
-  timeoutSeconds: 10,
-  memory: '128MiB'
-}, (req, res) => {
-  // req.path is the original request path Hosting matched the rewrite
-  // against, e.g. "/listing/abc123" or "/listing/abc123/" (trailingSlash
-  // is on for this site's Hosting config).
-  const match = /^\/listing\/([^/]+)\/?$/.exec(req.path || '');
-  if (!match || !match[1]) {
-    return res.redirect(302, APP_HOSTING_ORIGIN);
-  }
-  const id = encodeURIComponent(match[1]);
-  return res.redirect(302, `${APP_HOSTING_ORIGIN}/listing/${id}`);
-});
-
 exports.submitContact = onRequest({
   region: 'asia-southeast1',
   timeoutSeconds: 15,
