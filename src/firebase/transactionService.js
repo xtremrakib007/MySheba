@@ -1,5 +1,5 @@
 // Dealer/reseller queue: approve -> accept as Operator -> complete.
-import { collection, addDoc, doc, onSnapshot, query, where, orderBy, serverTimestamp, getDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, where, orderBy, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions, auth } from './config';
 import { logActivity } from './logService';
@@ -11,14 +11,11 @@ function createRequestId() { return `ms_${Date.now()}_${Math.random().toString(3
 
 export async function createTransaction(payload, customer) {
   const chargeFnName = CHARGEABLE_SERVICE_FNS[payload.service];
-  if (chargeFnName) {
-    const requestId = payload.requestId || createRequestId(); payload.requestId = requestId;
-    const fn = httpsCallable(functions, chargeFnName);
-    try { const { data } = await fn({ payload, customer, requestId }); logActivity('transaction_submitted', { service: payload.service, amount: payload.amount || 0, cost: data.cost }); return data.id; }
-    catch (err) { throw new Error(err.message || 'Could not submit this order right now.'); }
-  }
-  const docRef = await addDoc(collection(db, COLLECTION), { service: payload.service, details: payload.details || '', amount: payload.amount || 0, total: payload.total || 0, cost: payload.cost || 0, profit: payload.profit || 0, status: 'pending', approved: false, customerId: customer?.uid || null, customerPhone: customer?.phone || payload.customerPhone || '', resellerId: null, dealerId: null, claimedBy: null, claimedByRole: null, rejectedBy: {}, rejected: false, rejectReason: '', pin: '', raw: payload.raw || {}, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-  logActivity('transaction_submitted', { service: payload.service, amount: payload.amount || 0 }); return docRef.id;
+  if (!chargeFnName) throw new Error('Unsupported transaction service.');
+  const requestId = payload.requestId || createRequestId(); payload.requestId = requestId;
+  const fn = httpsCallable(functions, chargeFnName);
+  try { const { data } = await fn({ payload, customer, requestId }); logActivity('transaction_submitted', { service: payload.service, amount: payload.amount || 0, cost: data.cost }); return data.id; }
+  catch (err) { throw new Error(err.message || 'Could not submit this order right now.'); }
 }
 
 export function subscribeTransactions(callback, onError) { const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc')); return onSnapshot(q, (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), onError); }
