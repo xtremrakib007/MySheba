@@ -3,6 +3,7 @@ on:
   push:
     paths:
       - '.github/workflows/cleanup-appcontext-local-services.yml'
+      - '.github/workflows/cleanup-appcontext-local-services.trigger'
   workflow_dispatch:
 
 jobs:
@@ -21,7 +22,6 @@ jobs:
           import re
           p = Path('src/context/AppContext.js')
           s = p.read_text()
-
           old = '''  // ---- Buy & Sell / Local Services category lists - admin-editable from
   // Admin > Categories (see categoryService.js). Every screen with a
   // category picker or filter chips reads these live instead of the
@@ -44,7 +44,6 @@ jobs:
   );
 
 ''', 1)
-
           old = '''  useEffect(() => {
     if (!authUser) return undefined;
     const unsub = categoryService.subscribeCategories(
@@ -79,7 +78,6 @@ jobs:
   }, [authUser]);
 
 ''', 1)
-
           old = '''  // ---- Business Profile (PRD section 15 Monetization Plan - "Business
   // profile") ---- Screens call businessProfileService.js directly, so all
   // that lives here is which uid's business page to show - same "just the
@@ -95,10 +93,8 @@ jobs:
           if old not in s:
             raise SystemExit('Expected stale Business Profile comment not found')
           s = s.replace(old, new, 1)
-
           s = re.sub(r'\n    // local services\n    activeProviderId,\n    openServiceProvidersHome,\n    openServiceProviderDetail,\n', '\n', s, count=1)
           s = s.replace('    serviceCategories,\n', '')
-
           p.write_text(s)
       - name: Verify
         run: |
@@ -110,6 +106,6 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/context/AppContext.js
-          git rm -f .github/workflows/cleanup-appcontext-local-services.yml
+          git rm -f .github/workflows/cleanup-appcontext-local-services.yml .github/workflows/cleanup-appcontext-local-services.trigger 2>/dev/null || true
           git commit -m 'refactor: remove retired local services context'
           git push
