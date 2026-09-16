@@ -9,6 +9,14 @@ const CHARGEABLE_SERVICE_FNS = { Recharge: 'chargeRecharge', Internet: 'chargeIn
 
 function createRequestId() { return `ms_${Date.now()}_${Math.random().toString(36).slice(2, 18)}`; }
 
+// Never expose a legacy plaintext collection PIN to application state/UI.
+// Completion still accepts the PIN as an input and validates it server-side.
+function mapTransactionDoc(d) {
+  const data = d.data();
+  const { pin: _legacyPin, ...safeData } = data;
+  return { id: d.id, ...safeData };
+}
+
 export async function createTransaction(payload, customer) {
   const chargeFnName = CHARGEABLE_SERVICE_FNS[payload.service];
   if (!chargeFnName) throw new Error('Unsupported transaction service.');
@@ -18,23 +26,23 @@ export async function createTransaction(payload, customer) {
   catch (err) { throw new Error(err.message || 'Could not submit this order right now.'); }
 }
 
-export function subscribeTransactions(callback, onError) { const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc')); return onSnapshot(q, (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), onError); }
+export function subscribeTransactions(callback, onError) { const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc')); return onSnapshot(q, (snap) => callback(snap.docs.map(mapTransactionDoc)), onError); }
 
 export function subscribeBroadcastTransactions(callback, onError) {
   let stopped = false, unsubPending = () => {}, unsubClaimed = () => {}, pending = [], claimed = [];
   const emit = () => { const byId = new Map(); [...pending, ...claimed].forEach((tx) => byId.set(tx.id, tx)); const list = Array.from(byId.values()); list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)); callback(list); };
   (async () => { try { const uid = auth.currentUser?.uid; if (!uid) return; const profileSnap = await getDoc(doc(db, 'users', uid)); if (stopped) return; const role = profileSnap.exists() ? profileSnap.data()?.role : null;
-    if (role === 'admin' || role === 'superadmin') { const q = query(collection(db, COLLECTION), where('status', 'in', ['pending', 'processing', 'completed', 'rejected'])); unsubPending = onSnapshot(q, (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))), onError); return; }
+    if (role === 'admin' || role === 'superadmin') { const q = query(collection(db, COLLECTION), where('status', 'in', ['pending', 'processing', 'completed', 'rejected'])); unsubPending = onSnapshot(q, (snap) => callback(snap.docs.map(mapTransactionDoc).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))), onError); return; }
     if (role !== 'dealer' && role !== 'reseller') return;
     const pendingQuery = role === 'dealer' ? query(collection(db, COLLECTION), where('status', '==', 'pending'), where('service', '==', 'Mobile Banking')) : query(collection(db, COLLECTION), where('status', '==', 'pending'), where('service', 'in', ['Recharge', 'Internet', 'Remittance']));
     const claimedQuery = query(collection(db, COLLECTION), where('claimedBy', '==', uid));
-    unsubPending = onSnapshot(pendingQuery, (snap) => { pending = snap.docs.map((d) => ({ id: d.id, ...d.data() })); emit(); }, onError);
-    unsubClaimed = onSnapshot(claimedQuery, (snap) => { claimed = snap.docs.map((d) => ({ id: d.id, ...d.data() })); emit(); }, onError);
+    unsubPending = onSnapshot(pendingQuery, (snap) => { pending = snap.docs.map(mapTransactionDoc); emit(); }, onError);
+    unsubClaimed = onSnapshot(claimedQuery, (snap) => { claimed = snap.docs.map(mapTransactionDoc); emit(); }, onError);
   } catch (err) { if (!stopped) onError?.(err); } })();
   return () => { stopped = true; unsubPending(); unsubClaimed(); };
 }
 
-export function subscribeMyTransactions(uid, callback, onError) { const q = query(collection(db, COLLECTION), where('customerId', '==', uid)); return onSnapshot(q, (snap) => { const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })); list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)); callback(list); }, onError); }
+export function subscribeMyTransactions(uid, callback, onError) { const q = query(collection(db, COLLECTION), where('customerId', '==', uid)); return onSnapshot(q, (snap) => { const list = snap.docs.map(mapTransactionDoc); list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)); callback(list); }, onError); }
 
 export async function approveTransaction(id) { try { await httpsCallable(functions, 'approveTransaction')({ transactionId: id }); } catch (err) { throw new Error(err.message || 'Could not approve this order.'); } }
 export async function acceptTransaction(id) { try { await httpsCallable(functions, 'acceptTransaction')({ transactionId: id }); } catch (err) { throw new Error(err.message || 'Could not accept this order.'); } }
