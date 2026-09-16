@@ -57,6 +57,7 @@ exports.saveApiProvider = require('./apiProviderService').saveApiProvider;
 exports.deleteApiProvider = require('./apiProviderService').deleteApiProvider;
 exports.getServiceApiSettings = require('./apiProviderService').getServiceApiSettings;
 exports.saveServiceApiSettings = require('./apiProviderService').saveServiceApiSettings;
+exports.assignDealer = require('./transactionService').assignDealer;
 
 admin.initializeApp();
 const db = admin.firestore();
