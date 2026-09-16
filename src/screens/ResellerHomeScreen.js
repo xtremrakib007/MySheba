@@ -53,6 +53,7 @@ export default function ResellerHomeScreen() {
   const {
     resellerTxs, resellerTab, setResellerTab, logout, setScreen, openSidebar,
     authUser,
+    inquiries,
     setHomeBackInterceptor,
     resellerViewingSection: viewingSection, setResellerViewingSection: setViewingSection,
   } = useApp();
