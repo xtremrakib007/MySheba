@@ -236,6 +236,26 @@ export function AppProvider({ children }) {
   // 'chatList' to match the existing behavior for every other entry point.
   const [activeChatReturnTo, setActiveChatReturnTo] = useState('chatList');
 
+  // ---- direct chat (general-purpose 1:1 "Chat" tab, any two accounts) ----
+  // Which contact RingtonePickerScreen is currently editing - same
+  // above, since `screen` itself is a bare string with no params (see the
+  // useState('login') list). Set by openRingtonePicker below.
+  const [activeRingtoneContactUid, setActiveRingtoneContactUid] = useState(null);
+  const [activeRingtoneContactName, setActiveRingtoneContactName] = useState('');
+  // Prefills the message box (without auto-sending) the next time a direct
+  // chat opens - e.g. a dealer's "message customer about this order" button.
+
+  // ---- direct chat investigation (superadmin-only, read-only view of a
+  // reported conversation - see ChatReportsScreen's "Investigate" button
+  // and InvestigateChatScreen.js). Deliberately separate state from
+  // user's own thread" (no security-PIN vault check, no call button, no
+  // message box), it's an admin tool gated by firestore.rules'
+  // underInvestigation flag instead. ----
+
+  /** Opens the read-only conversation viewer for a report a superadmin is
+   * investigating - `report` is { id, reportedUid, reportedName, reporterName }. */
+, []);
+
   // ---- marketplace (Buy & Sell) ---- Screens call marketplaceService.js
   // directly (same pattern as ProfileScreen -> authService), so all that
   // lives here is the one piece of navigation state a listing's detail
@@ -1449,53 +1469,6 @@ export function AppProvider({ children }) {
 
   /** Declines the currently-ringing incoming group call without joining. */
 
-    (sum, g) => sum + ((g.unreadCounts && authUser && g.unreadCounts[authUser.uid]) || 0),
-    0
-  );
-
-    (sum, r) => sum + ((r.unreadCounts && authUser && r.unreadCounts[authUser.uid]) || 0),
-    0
-  );
-
-  // Badge shown on the bottom-nav "Chat" tab - the sum across all three
-  // thread kinds now that Direct/Groups/Rooms live behind one entry point.
-
-  // ---- Chat Lock helpers (kind is 'direct' | 'group' | 'room') ----
-  /** Whether the signed-in user has personally locked this thread. */
-  const isChatLocked = useCallback((kind, id) => (
-
-  /** If `kind`/`id` is a locked thread and the Locked Chats vault isn't
-   * already unlocked this session, prompts the security PIN gate before
-   * letting the caller proceed - resolves true once it's safe to open the
-   * thread, false if the person cancelled. Unlocked/non-locked threads
-   * resolve true immediately with no prompt. */
-  const ensureChatUnlocked = useCallback(async (kind, id) => {
-    try {
-      await requireSecurityPin('this locked chat');
-      setChatVaultUnlocked(true);
-      return true;
-    } catch (e) {
-      return false;
-    }
-
-  /** Locks a thread so it's hidden from the normal Chat hub list and only
-   * reachable from Locked Chats behind the security PIN. */
-, [authUser]);
-
-, [authUser]);
-
-  /** Enters the Locked Chats folder - prompts the security PIN if the vault
-   * isn't already unlocked this session, then switches screens. */
-  const openLockedChats = useCallback(async () => {
-      try {
-        await requireSecurityPin('Locked Chats');
-        setChatVaultUnlocked(true);
-      } catch (e) {
-        return;
-      }
-    }
-    setScreen('lockedChats');
-
   /** Opens the Support thread - `chatId` is the customer's uid, `name` is
    * who to show in the header/inbox. `returnTo` (staff only) is which
    * screen the back button should land on - defaults to the Chats inbox
@@ -1532,12 +1505,6 @@ export function AppProvider({ children }) {
    * starts appearing in subscribeMyRooms). Returns 'joined' | 'requested'
    * so the screen can show the right feedback.
    */
-  const joinDiscoverableRoom = useCallback(async (room) => {
-    if (!authUser || !room?.id) return null;
-    if (room.type === 'approval') {
-      return 'requested';
-    }
-    return 'joined';
 
   /** Opens the unified Chat hub (Direct / Groups / Rooms tabs), optionally landing on a specific tab. */
 , []);
