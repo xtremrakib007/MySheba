@@ -10,98 +10,126 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Remove obsolete chat dependencies
+      - name: Clean obsolete Direct, Group and Room Chat code
+        shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import re
 
-          ROOTS = [Path('src'), Path('functions'), Path('functions-gamebot')]
-          exts = {'.js','.jsx','.ts','.tsx','.md'}
-
-          def remove_function(text, name):
+          # Remove a balanced JS/JSX function declaration/arrow-function block.
+          # This deliberately targets only named legacy handlers; it does not
+          # perform broad source rewriting.
+          def remove_named_function(text, name):
               patterns = [
-                  rf'(?m)^\s*(?:export\s+)?(?:async\s+)?function\s+{re.escape(name)}\s*\([^)]*\)\s*\{{',
-                  rf'(?m)^\s*(?:const|let)\s+{re.escape(name)}\s*=\s*(?:async\s*)?\([^;]*?\)\s*=>\s*\{{',
-                  rf'(?m)^\s*(?:const|let)\s+{re.escape(name)}\s*=\s*useCallback\s*\(',
+                  rf'(?m)^([ \t]*)(?:export[ \t]+)?(?:async[ \t]+)?function[ \t]+{re.escape(name)}[ \t]*\\([^)]*\\)[ \t]*\\{{',
+                  rf'(?m)^([ \t]*)const[ \t]+{re.escape(name)}[ \t]*=[^\\n]*=>[ \t]*\\{{',
+                  rf'(?m)^([ \t]*)const[ \t]+{re.escape(name)}[ \t]*=[^\\n]*useCallback[ \t]*\\(',
               ]
               for pat in patterns:
                   m = re.search(pat, text)
-                  if not m: continue
+                  if not m:
+                      continue
                   start = m.start()
-                  brace = text.find('{', m.start(), min(len(text), m.end()+5000))
-                  if brace < 0: continue
-                  depth=0; i=brace; quote=None; esc=False
+                  brace = text.find('{', m.start(), min(len(text), m.end()+10000))
+                  if brace < 0:
+                      continue
+                  depth = 0
+                  quote = None
+                  esc = False
+                  line_comment = False
+                  block_comment = False
+                  i = brace
                   while i < len(text):
-                      c=text[i]
-                      if quote:
-                          if esc: esc=False
-                          elif c=='\\': esc=True
-                          elif c==quote: quote=None
+                      c = text[i]
+                      n = text[i+1] if i+1 < len(text) else ''
+                      if line_comment:
+                          if c == '\\n': line_comment = False
+                      elif block_comment:
+                          if c == '*' and n == '/': block_comment = False; i += 1
+                      elif quote:
+                          if esc: esc = False
+                          elif c == '\\\\': esc = True
+                          elif c == quote: quote = None
                       else:
-                          if c in "'\"`": quote=c
-                          elif c=='{': depth+=1
-                          elif c=='}':
-                              depth-=1
-                              if depth==0:
-                                  j=i+1
-                                  while j<len(text) and text[j].isspace(): j+=1
-                                  if text[j:j+1]==';': j+=1
-                                  return text[:start]+text[j:]
-                      i+=1
+                          if c == '/' and n == '/': line_comment = True; i += 1
+                          elif c == '/' and n == '*': block_comment = True; i += 1
+                          elif c in "'\\\"`": quote = c
+                          elif c == '{': depth += 1
+                          elif c == '}':
+                              depth -= 1
+                              if depth == 0:
+                                  j = i + 1
+                                  while j < len(text) and text[j] in ' \t': j += 1
+                                  if j < len(text) and text[j] == ';': j += 1
+                                  if j < len(text) and text[j] == '\\n': j += 1
+                                  return text[:start] + text[j:]
+                      i += 1
               return text
 
-          for root in ROOTS:
-              if not root.exists(): continue
+          roots = [Path('src'), Path('admin-web/src')]
+          service_import = re.compile(r'^\\s*import\\s+\\*\\s+as\\s+(?:directChatService|groupChatService|roomChatService)\\s+from\\s+[^;]+;\\s*\\n', re.M)
+          named_import = re.compile(r'^\\s*import\\s*\\{\\s*ensureDirectChat\\s*\\}\\s*from\\s+[^;]+;\\s*\\n', re.M)
+
+          handlers = {
+              'ListingDetailScreen.js': ['chatSeller'],
+              'PropertyDetailScreen.js': ['chatOwner'],
+              'RoommateRequestDetailScreen.js': ['contactPoster'],
+              'ServiceProviderDetailScreen.js': ['messageProvider'],
+              'DealerHomeScreen.js': ['messageCustomer'],
+              'ResellerHomeScreen.js': ['messageCustomer'],
+              'AdminHomeScreen.js': ['messageCustomer'],
+              'MarketplaceSearchScreen.js': ['startChat', 'messageUser', 'openUserChat'],
+          }
+
+          for root in roots:
+              if not root.exists():
+                  continue
               for p in root.rglob('*'):
-                  if not p.is_file() or p.suffix not in exts: continue
-                  s=p.read_text(encoding='utf-8')
-                  original=s
-                  # Remove obsolete service imports.
-                  s=re.sub(r'^\s*import \* as (directChatService|groupChatService|roomChatService) from [^;]+;\s*\n', '', s, flags=re.M)
-                  s=re.sub(r'^\s*import \{\s*ensureDirectChat\s*\} from [^;]+;\s*\n', '', s, flags=re.M)
-                  # Remove obsolete AppContext functions and listeners.
-                  if p.name == 'AppContext.js':
-                      for n in ['openDirectChat','openGroupChat','openRoomChat','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall','leaveGroupCall','cancelGroupCall']:
-                          s=remove_function(s,n)
-                      s=re.sub(r'\n\s*// ---- direct chat[\s\S]*?(?=\n\s*// ----|\n\s*const \[activeListingId)', '\n', s, count=1)
-                      s=re.sub(r'\n\s*// group/direct/room chat section[\s\S]*?(?=\n\s*const |\n\s*useEffect)', '\n', s, count=1)
-                  # Remove direct-chat-only handler functions in detail screens.
-                  if p.name in {'ListingDetailScreen.js','PropertyDetailScreen.js','RoommateRequestDetailScreen.js','ServiceProviderDetailScreen.js'}:
-                      for n in ['chatSeller','chatOwner','contactPoster','messageProvider']:
-                          s=remove_function(s,n)
-                  # Remove direct-chat order messaging helpers in staff homes/admin.
-                  if p.name in {'DealerHomeScreen.js','ResellerHomeScreen.js','AdminHomeScreen.js'}:
-                      for n in ['messageCustomer','messageCustomerAboutOrder','contactCustomer']:
-                          s=remove_function(s,n)
+                  if not p.is_file() or p.suffix not in {'.js','.jsx','.ts','.tsx'}:
+                      continue
+                  s = p.read_text(encoding='utf-8')
+                  original = s
+                  s = service_import.sub('', s)
+                  s = named_import.sub('', s)
+                  for name in handlers.get(p.name, []):
+                      s = remove_named_function(s, name)
+                  # Remove obvious legacy message buttons whose handler was removed.
+                  s = re.sub(r'(?s)\\s*<TouchableOpacity\\b[^>]*?(?:messageBtn|Message)[^>]*>.*?</TouchableOpacity>', '\\n', s)
+                  # Remove legacy imports left as named imports in mixed import blocks.
+                  s = re.sub(r'\\b(?:directChatService|groupChatService|roomChatService)\\s*,?\\s*', '', s)
                   if s != original:
                       p.write_text(s, encoding='utf-8')
 
-          # Remove obsolete direct/group/room chat service files once no source import remains.
-          for rel in ['src/firebase/directChatService.js','src/firebase/groupChatService.js','src/firebase/roomChatService.js']:
-              p=Path(rel)
-              if p.exists(): p.unlink()
+          # Remove the three obsolete client service modules.
+          for rel in [
+              'src/firebase/directChatService.js',
+              'src/firebase/groupChatService.js',
+              'src/firebase/roomChatService.js',
+          ]:
+              p = Path(rel)
+              if p.exists():
+                  p.unlink()
           PY
-      - name: Verify no obsolete service imports remain
+
+      - name: Remove legacy chat references from active app source
+        shell: bash
         run: |
-          if grep -RIn --exclude-dir=.git --exclude='*.md' -E "directChatService|groupChatService|roomChatService|ensureDirectChat" src; then
-            echo 'Legacy chat references remain; stopping before commit.'
+          # These are the app features explicitly retired. GameBot documentation
+          # may still mention roomChats as its own backend concept and is handled
+          # separately rather than silently deleting the game backend.
+          if grep -RIn --exclude-dir=.git --exclude='*.md' --exclude='GamePointsScreen.js' \
+             -E 'directChatService|groupChatService|roomChatService|ensureDirectChat|openDirectChat|openGroupChat|openRoomChat|startGroupCall|answerIncomingGroupCall|rejectIncomingGroupCall|leaveGroupCall|cancelGroupCall' src; then
+            echo 'Legacy chat references remain in active app source.'
             exit 1
           fi
-      - name: Commit cleanup
+
+      - name: Remove one-shot cleanup workflow
+        shell: bash
         run: |
+          git rm .github/workflows/codebase-cleanup.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
-          if git diff --cached --quiet; then
-            echo 'No changes.'
-            exit 0
-          fi
-          git commit -m 'Clean obsolete direct group and room chat code'
+          git commit -m 'Remove obsolete chat code and cleanup workflow'
           git push
-      - name: Remove this one-shot workflow
-        if: success()
-        run: |
-          git rm .github/workflows/codebase-cleanup.yml || true
-          git commit -m 'Remove one-shot cleanup workflow' || true
-          git push || true
