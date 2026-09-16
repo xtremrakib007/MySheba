@@ -1,7 +1,6 @@
 name: Cleanup AppContext retired chats
 
 on:
-  workflow_dispatch:
   push:
     branches: [main]
 
@@ -11,138 +10,110 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Remove retired chat code
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re, subprocess
+          import re
 
           p = Path('src/context/AppContext.js')
           s = p.read_text()
 
-          # Imports for retired Direct/Group/Room chat and Chat Lock.
+          # Remove retired chat imports.
           s = re.sub(r"^import \* as (?:directChatService|groupChatService|roomChatService|chatLockService) from .*\n", "", s, flags=re.M)
 
-          # Remove whole state/comment sections that only belonged to retired chats.
-          for start, end in [
-              (r"  // ---- direct chat \(general-purpose", r"  // ---- marketplace \(Buy & Sell\) ----"),
-              (r"  // ---- group chat ----", r"  // ---- Private vault unlock \("),
-          ]:
-              s, n = re.subn(start + r".*?(?=" + end + r")", "", s, flags=re.S)
-              if n != 1:
-                  raise SystemExit(f'Expected exactly one section: {start}, got {n}')
+          # Remove direct-chat state/investigation block.
+          s, n = re.subn(r"  // ---- direct chat \(general-purpose.*?(?=  // ---- marketplace \(Buy & Sell\) ----)", "", s, flags=re.S)
+          if n != 1: raise SystemExit(f'direct state section count={n}')
 
-          # Chat Lock is retired with Direct/Group/Room chat; keep private vault/app lock.
-          s = re.sub(r"  // ---- Chat Lock \(WhatsApp-style per-thread lock.*?(?=  // ---- Private vault unlock \()", "", s, flags=re.S)
+          # Remove group/room/hub state and retired Chat Lock state.
+          s, n = re.subn(r"  // ---- group chat ----.*?(?=  // ---- Private vault unlock \()", "", s, flags=re.S)
+          if n != 1: raise SystemExit(f'group/room section count={n}')
 
-          # Remove the obsolete group incoming-call state.
+          # Remove obsolete group incoming-call state.
           s = re.sub(r"^  const \[incomingGroupCall, setIncomingGroupCall\] = useState\(null\);.*\n", "", s, flags=re.M)
 
-          def balanced_block(text, start):
-              # Find the first opening brace at/after start and remove through its matching brace.
-              ob = text.find('{', start)
-              if ob < 0:
-                  raise ValueError('opening brace not found')
-              depth = 0
-              quote = None
-              esc = False
+          def remove_callback(text, name):
+              pat = r"  const " + re.escape(name) + r"\s*=\s*useCallback\b"
+              m = re.search(pat, text)
+              if not m: return text
+              ob = text.find('{', m.start())
+              if ob < 0: raise SystemExit(f'no body for {name}')
+              depth=0; quote=None; esc=False
               for i in range(ob, len(text)):
-                  c = text[i]
-                  if quote:
-                      if esc: esc = False
-                      elif c == '\\\\': esc = True
-                      elif c == quote: quote = None
-                      continue
-                  if c in "'\"`": quote = c; continue
-                  if c == '{': depth += 1
-                  elif c == '}':
-                      depth -= 1
-                      if depth == 0:
-                          j = i + 1
-                          while j < len(text) and text[j] in ' ;\\n\\r': j += 1
-                          return text[:start] + text[j:]
-              raise ValueError('unbalanced block')
-
-          # Remove callbacks/functions that only implemented retired chat navigation/calls.
-          names = [
-              'openDirectChat', 'openGroupChat', 'openRoomChat', 'openChatHub',
-              'startGroupCall', 'answerIncomingGroupCall', 'rejectIncomingGroupCall',
-          ]
-          for name in names:
-              while True:
-                  m = re.search(r"  const " + re.escape(name) + r"\\s*=\\s*useCallback\\b", s)
-                  if not m:
-                      break
-                  s = balanced_block(s, m.start())
-
-          # Remove useEffect blocks that subscribe to retired chat/group/room listeners.
-          effect_starts = list(re.finditer(r"  useEffect\\(\\(\\) => \\{", s))
-          for m in reversed(effect_starts):
-              # locate balanced callback body and inspect complete effect through its closing `);`
-              ob = s.find('{', m.start())
-              depth = 0; quote = None; esc = False; close = None
-              for i in range(ob, len(s)):
-                  c = s[i]
+                  c=text[i]
                   if quote:
                       if esc: esc=False
-                      elif c == '\\\\': esc=True
-                      elif c == quote: quote=None
+                      elif c=='\\\\': esc=True
+                      elif c==quote: quote=None
                       continue
                   if c in "'\"`": quote=c; continue
-                  if c == '{': depth += 1
-                  elif c == '}':
-                      depth -= 1
-                      if depth == 0:
-                          close=i; break
-              if close is None: continue
-              end = s.find(');', close)
-              if end < 0: continue
-              block = s[m.start():end+2]
-              if any(x in block for x in ('directChatService', 'groupChatService', 'roomChatService', 'subscribeIncomingGroupCalls', 'activeDirectChatId', 'activeGroupId', 'activeRoomId', 'chatLockService')):
-                  s = s[:m.start()] + s[end+2:]
+                  if c=='{': depth+=1
+                  elif c=='}':
+                      depth-=1
+                      if depth==0:
+                          j=i+1
+                          while j<len(text) and text[j] in ' ;\n\r\t': j+=1
+                          return text[:m.start()]+text[j:]
+              raise SystemExit(f'unbalanced {name}')
 
-          # Remove retired identifiers from the context value object, line-by-line.
-          retired = re.compile(r"activeDirectChatId|activeDirectChatName|activeDirectChatUid|directChatUnreadCount|openDirectChat|activeInvestigateChatId|activeInvestigateReport|openInvestigateChat|chatDraftText|activeGroupId|activeGroupName|myGroups|groupUnreadCount|openGroupChat|activeRoomId|activeRoomName|myRooms|discoverableRooms|openRoomChat|chatHubTab|openChatHub|incomingGroupCall|startGroupCall|answerIncomingGroupCall|rejectIncomingGroupCall")
-          lines = s.splitlines(True)
-          out=[]
-          for line in lines:
-              if retired.search(line) and ('// marketplace' not in line):
-                  continue
-              out.append(line)
-          s=''.join(out)
+          for name in ['openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall']:
+              while re.search(r"  const " + re.escape(name) + r"\s*=\s*useCallback\b", s):
+                  s = remove_callback(s, name)
 
-          # Remove obsolete screen names from the navigation comment.
-          s = s.replace(" | chatHub | directChatList | addContact | qrScan | myQrCode | groupList | newGroup | createRoom | roomSettings", "")
-          s = s.replace(" | investigateChat", "")
-          s = s.replace(" | friendsList", " | friendsList")
+          # Remove useEffect blocks whose body is a retired chat listener.
+          while True:
+              found=False
+              for m in list(re.finditer(r"  useEffect\(\(\) => \{", s)):
+                  ob=s.find('{',m.start()); depth=0; quote=None; esc=False; close=None
+                  for i in range(ob,len(s)):
+                      c=s[i]
+                      if quote:
+                          if esc: esc=False
+                          elif c=='\\\\': esc=True
+                          elif c==quote: quote=None
+                          continue
+                      if c in "'\"`": quote=c; continue
+                      if c=='{': depth+=1
+                      elif c=='}':
+                          depth-=1
+                          if depth==0: close=i; break
+                  if close is None: continue
+                  end=s.find(');',close)
+                  if end<0: continue
+                  block=s[m.start():end+2]
+                  if any(x in block for x in ('directChatService','groupChatService','roomChatService','subscribeIncomingGroupCalls','chatLockService')):
+                      s=s[:m.start()]+s[end+2:]; found=True; break
+              if not found: break
 
-          # Clean stale comments referring to the removed chat features.
-          s = re.sub(r"\n  // ---- direct chat investigation.*?(?=\n  // ---- marketplace)", "\n", s, flags=re.S)
-          s = s.replace('  // lives here is which listing to show. "Chat Seller" reuses\n  // openDirectChat above - no separate marketplace chat state.\n', '  // lives here is which listing to show.\n')
-          s = s.replace('  // reuses openDirectChat above - no separate accommodation chat state.\n', '  // navigation state is kept local to the feature.\n')
-          s = s.replace('  // openDirectChat above - no separate room-sharing chat state.\n', '  // navigation state is kept local to the feature.\n')
-          s = s.replace('  // serviceProviderService.js directly, so all that lives here is which\n  // provider to show. "Message" reuses openDirectChat above - no separate\n  // local-services chat state. ("Request Service" is a lead form, not a\n', '  // serviceProviderService.js directly, so all that lives here is which\n  // provider to show. ("Request Service" is a lead form, not a\n')
-          s = s.replace('  // Security PIN gate (My Documents, Transfer Points, Notepad, Chat\n  // Lock - each gated once on entry)', '  // Security PIN gate (My Documents, Transfer Points, and Notepad - each gated once on entry)')
-          s = s.replace('  // Moved above the\n  // group/direct/room chat section (rather than staying down by\n  // resetSecurityPin) so openDirectChat/openGroupChat/openRoomChat below can\n  // close over it directly for Chat Lock\'s unlock-on-open check.\n', '')
-          s = s.replace('  // Tracks prior screens so the Android hardware back button can step\n', '  // Tracks prior screens so the Android hardware back button can step\n')
+          # Remove retired identifiers from the context value object and stale direct-chat navigation exports.
+          retired = re.compile(r"\b(activeDirectChatId|activeDirectChatName|activeDirectChatUid|directChatUnreadCount|openDirectChat|activeInvestigateChatId|activeInvestigateReport|openInvestigateChat|chatDraftText|activeGroupId|activeGroupName|myGroups|groupUnreadCount|openGroupChat|activeRoomId|activeRoomName|myRooms|discoverableRooms|openRoomChat|chatHubTab|openChatHub|incomingGroupCall|startGroupCall|answerIncomingGroupCall|rejectIncomingGroupCall)\b")
+          s=''.join(line for line in s.splitlines(True) if not retired.search(line))
+
+          # Remove retired screen names from the screen-state comment.
+          s=s.replace(' | chatHub | directChatList | addContact | qrScan | myQrCode | groupList | newGroup | createRoom | roomSettings','')
+          s=s.replace(' | investigateChat','')
+
+          # Clean stale comments left by the removed features.
+          s=re.sub(r"\n  // ---- direct chat investigation.*?(?=\n  // ---- marketplace)","\n",s,flags=re.S)
+          s=s.replace('  // lives here is which listing to show. "Chat Seller" reuses\n  // openDirectChat above - no separate marketplace chat state.\n','  // lives here is which listing to show.\n')
+          s=s.replace('  // reuses openDirectChat above - no separate accommodation chat state.\n','  // navigation state is kept local to the feature.\n')
+          s=s.replace('  // openDirectChat above - no separate room-sharing chat state.\n','  // navigation state is kept local to the feature.\n')
+          s=s.replace('  // serviceProviderService.js directly, so all that lives here is which\n  // provider to show. "Message" reuses openDirectChat above - no separate\n  // local-services chat state. ("Request Service" is a lead form, not a\n','  // serviceProviderService.js directly, so all that lives here is which\n  // provider to show. ("Request Service" is a lead form, not a\n')
+          s=s.replace('  // ---- Security PIN gate (My Documents, Transfer Points, Notepad, Chat\n  // Lock - each gated once on entry) ----','  // ---- Security PIN gate (My Documents, Transfer Points, and Notepad) ----')
+          s=s.replace('  // Security PIN gate (My Documents, Transfer Points, Notepad, Chat\n  // Lock - each gated once on entry)','  // Security PIN gate (My Documents, Transfer Points, and Notepad)')
+          s=re.sub(r"  // Moved above the\n  // group/direct/room chat section.*?unlock-on-open check\.\n",'',s,flags=re.S)
 
           p.write_text(s)
           PY
 
-          # Verify the cleanup really removed the retired references from AppContext.
           if grep -nE 'directChatService|groupChatService|roomChatService|chatLockService|openDirectChat|openGroupChat|openRoomChat|openChatHub|startGroupCall|subscribeIncomingGroupCalls|incomingGroupCall|activeDirectChat|activeGroupId|activeRoomId|myGroups|myRooms|chatHubTab|investigateChat' src/context/AppContext.js; then
-            echo 'Retired chat references remain in AppContext.js'
-            exit 1
+            echo 'Retired chat references remain in AppContext.js'; exit 1
           fi
 
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/context/AppContext.js
-          git diff --cached --quiet || git commit -m 'refactor: remove retired chat state from AppContext'
-          git push
-
-          # Remove this one-shot workflow from the branch after the cleanup commit.
+          if git diff --cached --quiet; then echo 'No AppContext change needed'; else git commit -m 'refactor: remove retired chat state from AppContext'; git push; fi
           rm -f .github/workflows/cleanup-appcontext.yml
           git add -u .github/workflows/cleanup-appcontext.yml
           git commit -m 'chore: remove temporary AppContext cleanup workflow' || true
