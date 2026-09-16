@@ -1,10 +1,8 @@
-// Bright "✓ Verified" badge - drop next to a name anywhere someone's
-// identity-verified status should show (own profile, chat header, another
-// user's profile, a listing's seller row, ...) once their users/{uid}.verified
+// Bright "✓ Verified" badge - drop next to a name anywhere a user's
+// identity-verified status should be shown once their users/{uid}.verified
 // field is true (set only by the approveVerification Cloud Function - see
 // verificationService.js). Takes the boolean directly rather than a uid so
-// screens that already have the profile loaded (or don't need live updates)
-// don't need an extra subscription just to render this.
+// screens that already have the profile loaded don't need an extra subscription.
 //
 // Styled as a glossy, "3D" badge: a bright gradient fill, a drop shadow to
 // lift it off the page, a subtle glass highlight along the top edge, and a
