@@ -4,6 +4,7 @@ const secureTransfer = require('./secureTransfer');
 const secureWalletTransfer = require('./secureWalletTransfer');
 const secureWalletMutations = require('./secureWalletMutations');
 const secureWalletCharge = require('./secureWalletCharge');
+const secureTopupReview = require('./secureTopupReview');
 
 functions.chargeRecharge = guards.chargeRecharge;
 functions.chargeInternetPackage = guards.chargeInternetPackage;
@@ -13,5 +14,7 @@ functions.chargeWallet = secureWalletCharge.chargeWallet;
 functions.transferPoints = secureTransfer.transferPoints;
 functions.walletTransfer = secureWalletTransfer.walletTransfer;
 functions.createSelfTopup = secureWalletMutations.createSelfTopup;
+functions.approveTopup = secureTopupReview.approveTopup;
+functions.rejectTopup = secureTopupReview.rejectTopup;
 
 module.exports = functions;
