@@ -8,7 +8,6 @@ import { useTheme } from "../theme/ThemeContext";
 import HeaderDecor from '../components/HeaderDecor';
 import * as accommodationService from '../firebase/accommodationService';
 import { REPORT_REASONS } from '../firebase/accommodationService';
-import { ensureDirectChat } from '../firebase/directChatService';
 import * as businessProfileService from '../firebase/businessProfileService';
 import BusinessBadge from '../components/BusinessBadge';
 import MapPreview from '../components/MapPreview';
@@ -32,13 +31,9 @@ function formatAvailableDate(value) {
 }
 
 export default function PropertyDetailScreen() {
-  const {
-    colors,
-    brandGradient
-  } = useTheme();
-
+  const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { goBackOrHome, activePropertyId, authUser, profile, openDirectChat, openBusinessProfile } = useApp();
+  const { goBackOrHome, activePropertyId, authUser, openBusinessProfile } = useApp();
   const [property, setProperty] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
@@ -100,22 +95,6 @@ export default function PropertyDetailScreen() {
       }
     } catch (err) {
       showAlert('MySheba', 'Could not update saved items right now.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const chatOwner = async () => {
-    if (!authUser || isOwner) return;
-    setBusy(true);
-    try {
-      const chatId = await ensureDirectChat(
-        { uid: authUser.uid, name: profile?.name },
-        { uid: property.ownerId, name: property.ownerName }
-      );
-      openDirectChat(chatId, property.ownerName, property.ownerId, `Hi, is "${property.title}" still available?`);
-    } catch (err) {
-      showAlert('MySheba', 'Could not open chat right now.');
     } finally {
       setBusy(false);
     }
@@ -275,9 +254,6 @@ export default function PropertyDetailScreen() {
             </View>
           ) : (
             <View style={styles.buyerActions}>
-              <TouchableOpacity style={styles.chatBtn} onPress={chatOwner} disabled={busy || property.status === 'rented'}>
-                <Text style={styles.chatBtnText}>💬 Contact Owner</Text>
-              </TouchableOpacity>
               <TouchableOpacity style={styles.saveBtn} onPress={toggleSave} disabled={busy}>
                 <Text style={styles.saveBtnText}>{saved ? '★ Saved' : '☆ Save'}</Text>
               </TouchableOpacity>
@@ -320,9 +296,7 @@ function createStyles(colors) {
     ownerName: { fontSize: 13, fontWeight: '600', color: colors.text },
     chevron: { fontSize: 18, color: '#CCC' },
     buyerActions: { flexDirection: 'row', gap: 10, marginTop: 22 },
-    chatBtn: { flex: 1, backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: 13, alignItems: 'center' },
-    chatBtnText: { color: 'white', fontWeight: '700', fontSize: 13 },
-    saveBtn: { paddingHorizontal: 18, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
+    saveBtn: { flex: 1, paddingVertical: 13, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
     saveBtnText: { color: colors.navy, fontWeight: '700', fontSize: 13 },
     ownerActions: { gap: 10, marginTop: 22 },
     actionBtn: { borderRadius: radius.md, paddingVertical: 13, alignItems: 'center' },
