@@ -13,10 +13,19 @@ const { logAudit, logServerError } = require('./logService');
 const MAX_TRANSFER_MYR = 10000;
 const MIN_TRANSFER_MYR = 0.01;
 const MAX_RECIPIENT_QUERY = 80;
+const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 
 function requireAuth(request) {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   return request.auth.uid;
+}
+
+function requireRequestId(request) {
+  const requestId = request.data?.requestId;
+  if (typeof requestId !== 'string' || !REQUEST_ID_RE.test(requestId)) {
+    throw new HttpsError('invalid-argument', 'requestId is required and must be 16-128 safe characters.');
+  }
+  return requestId;
 }
 
 function normalizePhone(value) {
@@ -51,7 +60,6 @@ async function resolveRecipient(db, query, senderUid) {
     throw new HttpsError('invalid-argument', 'Enter a valid phone number or Customer ID.');
   }
 
-  // A confirmed recipient UID can be passed back from the preview step.
   let snap = await db.collection('users').doc(q).get();
   if (!snap.exists) snap = null;
 
@@ -127,6 +135,7 @@ exports.listWalletTransfers = onCall(async (request) => {
 
 exports.walletTransfer = onCall(async (request) => {
   const senderUid = requireAuth(request);
+  const requestId = requireRequestId(request);
   const db = admin.firestore();
   const sender = await getProfile(db, senderUid);
   if (!sender) throw new HttpsError('not-found', 'Your account was not found.');
@@ -150,14 +159,33 @@ exports.walletTransfer = onCall(async (request) => {
   const ip = getClientIp(request);
   await checkVelocity(db, senderUid, 'walletTransfer', { ip });
 
+  // Deterministic transfer identity makes the transfer itself idempotent even
+  // if the outer walletOperations marker is lost after the balance transaction
+  // has committed. A reused requestId with different transfer details is rejected.
+  const transferRef = db.collection('walletTransfers').doc(`${senderUid}_${requestId}`);
   const senderRef = db.collection('users').doc(senderUid);
   const recipientRef = db.collection('users').doc(recipientUid);
-  const transferRef = db.collection('walletTransfers').doc();
   const senderLedgerRef = db.collection('walletLedger').doc();
   const recipientLedgerRef = db.collection('walletLedger').doc();
+  let replay = false;
 
   try {
     await db.runTransaction(async (tx) => {
+      const existingTransferSnap = await tx.get(transferRef);
+      if (existingTransferSnap.exists) {
+        const existing = existingTransferSnap.data() || {};
+        if (
+          existing.fromUid !== senderUid ||
+          existing.toUid !== recipientUid ||
+          Number(existing.amountMinor) !== amountCents ||
+          existing.requestId !== requestId
+        ) {
+          throw new HttpsError('already-exists', 'That request ID was already used for a different transfer.');
+        }
+        replay = true;
+        return;
+      }
+
       const senderSnap = await tx.get(senderRef);
       const recipientSnap = await tx.get(recipientRef);
       if (!senderSnap.exists || !recipientSnap.exists) throw new HttpsError('not-found', 'Wallet account not found.');
@@ -181,9 +209,10 @@ exports.walletTransfer = onCall(async (request) => {
       tx.update(senderRef, { walletBalance: myrFromCents(senderAfter), walletBalanceCurrency: 'MYR', walletUpdatedAt: now });
       tx.update(recipientRef, { walletBalance: myrFromCents(recipientAfter), walletBalanceCurrency: 'MYR', walletUpdatedAt: now });
 
-      tx.set(transferRef, {
+      tx.create(transferRef, {
         type: 'wallet_transfer',
         currency: 'MYR',
+        requestId,
         fromUid: senderUid,
         fromName: senderData.displayName || senderData.name || '',
         toUid: recipientUid,
@@ -224,6 +253,16 @@ exports.walletTransfer = onCall(async (request) => {
         createdAt: now,
       });
     });
+
+    if (replay) {
+      return {
+        transferId: transferRef.id,
+        amount: myrFromCents(amountCents),
+        currency: 'MYR',
+        recipient: { uid: recipientUid, name: recipient.name || recipient.displayName || 'MySheba Customer' },
+        replay: true,
+      };
+    }
 
     await logAudit({
       action: 'wallet_transfer',
