@@ -19,16 +19,13 @@ jobs:
 
           def remove_top_level_const(text, name):
               lines = text.splitlines(True)
-              start = next((i for i,l in enumerate(lines) if re.match(r'^  const ' + re.escape(name) + r'\\b', l)), None)
+              prefix = '  const ' + name
+              start = next((i for i,l in enumerate(lines) if l.startswith(prefix) and (len(l)==len(prefix) or not (l[len(prefix)].isalnum() or l[len(prefix)] in '_$'))), None)
               if start is None: return text
-              end = None
               for i in range(start + 1, len(lines)):
                   if lines[i].strip() == '};':
-                      end = i
-                      break
-              if end is None: return text
-              del lines[start:end+1]
-              return ''.join(lines)
+                      return ''.join(lines[:start] + lines[i+1:])
+              return text
 
           def remove_between(text, start_marker, end_marker):
               a = text.find(start_marker)
@@ -37,9 +34,7 @@ jobs:
               if b < 0: return text
               return text[:a] + text[b:]
 
-          # Screens: remove legacy service imports and their top-level handlers.
-          service_import = re.compile(r'^\\s*import\\s+\\*\\s+as\\s+(?:directChatService|groupChatService|roomChatService)\\s+from\\s+[^;]+;\\s*\\n', re.M)
-          ensure_import = re.compile(r'^\\s*import\\s*\\{\\s*ensureDirectChat\\s*\\}\\s*from\\s+[^;]+;\\s*\\n', re.M)
+          retired_imports = ('directChatService','groupChatService','roomChatService')
           screen_handlers = {
               'ListingDetailScreen.js':['chatSeller'],
               'PropertyDetailScreen.js':['chatOwner'],
@@ -50,50 +45,53 @@ jobs:
               'AdminHomeScreen.js':['messageCustomer'],
               'MarketplaceSearchScreen.js':['startChat','messageUser','openUserChat'],
           }
+
           for root in [Path('src'), Path('admin-web/src')]:
               if not root.exists(): continue
               for p in root.rglob('*'):
                   if not p.is_file() or p.suffix not in {'.js','.jsx','.ts','.tsx'}: continue
-                  s = p.read_text(encoding='utf-8'); original=s
-                  s=service_import.sub('',s); s=ensure_import.sub('',s)
+                  s=p.read_text(encoding='utf-8'); original=s
+                  s=''.join(line for line in s.splitlines(True) if not any('/firebase/'+x in line for x in retired_imports) and 'ensureDirectChat' not in line if line.lstrip().startswith('import')) if False else s
+                  lines=s.splitlines(True)
+                  lines=[line for line in lines if not (line.lstrip().startswith('import ') and any('/firebase/'+x in line for x in retired_imports)) and not (line.lstrip().startswith('import ') and 'ensureDirectChat' in line)]
+                  s=''.join(lines)
                   for name in screen_handlers.get(p.name,[]): s=remove_top_level_const(s,name)
-                  if p.name in screen_handlers:
-                      # Remove common legacy message buttons by handler name.
-                      for name in screen_handlers[p.name]:
-                          s=re.sub(r'(?s)\\s*<TouchableOpacity\\b[^>]*?onPress=\\{\\(\\) => '+re.escape(name)+r'\\([^)]*\\)\\}.*?</TouchableOpacity>\\s*','\\n',s)
                   if s!=original: p.write_text(s,encoding='utf-8')
 
-          # AppContext: retain Support Chat and 1-to-1 calling, remove all
-          # Direct/Group/Room chat state, listeners, handlers and Chat Lock.
           p=Path('src/context/AppContext.js')
           s=p.read_text(encoding='utf-8')
-          s=service_import.sub('',s)
+          lines=s.splitlines(True)
+          lines=[line for line in lines if not (line.lstrip().startswith('import ') and any('/firebase/'+x in line for x in retired_imports))]
+          s=''.join(lines)
+
           s=remove_between(s,'  // ---- direct chat (general-purpose','  // ---- direct chat investigation')
           s=remove_between(s,'  // ---- group chat ----','  // ---- Private vault unlock')
           s=remove_between(s,'  // ---- live direct-chat unread badge','  // ---- live list of "kind:id"')
           s=remove_between(s,'  // Same idea as the listener above, but for group calls','  /** Starts a call with another user')
           s=remove_between(s,'  /** Starts a group call -','  const groupUnreadCount')
           s=remove_between(s,'  const groupUnreadCount','  /** Opens the Support thread')
-          # Remove any remaining legacy top-level callbacks.
           for name in ['openDirectChat','openGroupChat','openRoomChat','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall','leaveGroupCall','cancelGroupCall','joinDiscoverableRoom','openChatHub','openLockedChats','lockChatThread','unlockChatThread','ensureChatUnlocked','isChatLocked']:
               s=remove_top_level_const(s,name)
-          # Support Chat openChat must not reference retired state.
           s=s.replace('    setActiveGroupId(null);\n','').replace('    setActiveDirectChatId(null);\n','').replace('    setActiveRoomId(null);\n','')
-          # Push notification routing: retain Support Chat only; delete legacy branches.
-          s=re.sub(r"\\s*\\} else if \(data\\.type === 'directChat'[\\s\\S]*?openDirectChat\\(data\\.chatId, name, otherUid\\);",'',s)
-          s=re.sub(r"\\s*\\} else if \(data\\.type === 'groupChat'[\\s\\S]*?openGroupChat\\(data\\.groupId, meta\\?\\.name \\|\\| 'Group Chat'\\);",'',s)
-          s=re.sub(r"\\s*\\} else if \(data\\.type === 'roomChat'[\\s\\S]*?openRoomChat\\(data\\.roomId, meta\\?\\.name \\|\\| 'Room Chat'\\);",'',s)
-          # Remove legacy identifiers from context value and comments without touching normal words.
-          s=re.sub(r'^.*(?:activeDirectChat|directChatUnread|activeGroupId|activeGroupName|myGroups|groupUnreadCount|activeRoomId|activeRoomName|myRooms|discoverableRooms|chatHubTab|incomingGroupCall|openDirectChat|openGroupChat|openRoomChat|startGroupCall|answerIncomingGroupCall|rejectIncomingGroupCall|directChats|groupChats|roomChats).*\\n','',s,flags=re.M)
+          # Remove legacy notification branches without regex-heavy parsing.
+          for marker in ["        } else if (data.type === 'directChat'", "        } else if (data.type === 'groupChat'", "        } else if (data.type === 'roomChat'"]:
+              while marker in s:
+                  a=s.find(marker)
+                  b=s.find("        } else if (data.type", a+len(marker))
+                  if b < 0: b=s.find("        } else {", a+len(marker))
+                  if b < 0: break
+                  s=s[:a]+s[b:]
+          # Remove stale context-value lines and obsolete comments, one line at a time.
+          legacy_terms=('activeDirectChat','directChatUnread','activeGroupId','activeGroupName','myGroups','groupUnreadCount','activeRoomId','activeRoomName','myRooms','discoverableRooms','chatHubTab','incomingGroupCall','openDirectChat','openGroupChat','openRoomChat','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall','directChats','groupChats','roomChats')
+          s=''.join(line for line in s.splitlines(True) if not any(term in line for term in legacy_terms))
           p.write_text(s,encoding='utf-8')
 
-          # Remove obsolete client service modules.
           for rel in ['src/firebase/directChatService.js','src/firebase/groupChatService.js','src/firebase/roomChatService.js']:
               q=Path(rel)
               if q.exists(): q.unlink()
           PY
 
-      - name: Verify no retired chat dependencies remain
+      - name: Verify retired chat dependencies are gone
         shell: bash
         run: |
           if grep -RIn --exclude-dir=.git --exclude='*.md' --exclude='GamePointsScreen.js' -E 'directChatService|groupChatService|roomChatService|ensureDirectChat|openDirectChat|openGroupChat|openRoomChat|startGroupCall|answerIncomingGroupCall|rejectIncomingGroupCall|leaveGroupCall|cancelGroupCall|activeDirectChat|activeGroupId|activeRoomId|myGroups|myRooms|discoverableRooms|groupUnreadCount|roomUnreadCount' src; then
