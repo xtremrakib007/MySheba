@@ -31,15 +31,7 @@
           "order": "DESCENDING"
         }
       ]
-    },
-    {
-      "collectionGroup": "directChatReports",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "chatId",
-          "order": "ASCENDING"
-        },
+    },,
         {
           "fieldPath": "status",
           "order": "ASCENDING"

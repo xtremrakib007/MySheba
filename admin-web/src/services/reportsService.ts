@@ -23,7 +23,6 @@ export interface OpsOverview {
   pendingVerifications: number | null;
   openTickets: number | null;
   pendingMarketplaceReports: number | null;
-  pendingChatReports: number | null;
 }
 
 async function count(coll: string, field?: string, value?: unknown): Promise<number | null> {
@@ -74,14 +73,12 @@ export async function fetchOpsOverview(): Promise<OpsOverview> {
     pendingVerifications,
     openTickets,
     pendingMarketplaceReports,
-    pendingChatReports,
   ] = await Promise.all([
     count('users'),
     count('users', 'verified', true),
     count('verificationRequests', 'status', 'pending'),
     countOpenTickets(),
     countOpenMarketplaceReports(),
-    count('directChatReports', 'status', 'open'),
   ]);
 
   return {
@@ -90,6 +87,5 @@ export async function fetchOpsOverview(): Promise<OpsOverview> {
     pendingVerifications,
     openTickets,
     pendingMarketplaceReports,
-    pendingChatReports,
   };
 }

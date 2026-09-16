@@ -72,8 +72,6 @@ const SUPERADMIN_GROUPS = [
     { key: 'superAdminTopup', icon: '💎', label: 'Point Top-Up' },
   ] },
   { title: 'Risk & Moderation', icon: '🚨', color: 'primary', items: [
-    { key: 'chatReports', icon: '🚨', label: 'Chat Reports' },
-    { key: 'investigateChat', icon: '🔎', label: 'Investigate Chat' },
     { key: 'marketplaceModeration', icon: '🛍️', label: 'Marketplace Moderation' },
     { key: 'verificationManagement', icon: '🪪', label: 'Verification Queue' },
   ] },

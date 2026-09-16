@@ -16,15 +16,7 @@
         { "fieldPath": "ringingUids", "arrayConfig": "CONTAINS" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
-    },
-    {
-      "collectionGroup": "directChatReports",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "chatId", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" }
-      ]
-    },
+    },,
     {
       "collectionGroup": "users",
       "queryScope": "COLLECTION",
