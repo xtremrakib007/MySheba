@@ -76,26 +76,4 @@ export async function fetchAgoraToken(channelName, uid) {
   return data;
 }
 
-// Compatibility no-ops for stale AppContext code. These APIs intentionally
-// do not create or subscribe to group calls; group calling has been retired.
-export async function startGroupCall() {
-  throw new Error('Group calls have been removed from MySheba.');
-}
-export async function acceptGroupCall() {
-  throw new Error('Group calls have been removed from MySheba.');
-}
-export async function declineGroupCall() {
-  throw new Error('Group calls have been removed from MySheba.');
-}
-export async function leaveGroupCall() {
-  throw new Error('Group calls have been removed from MySheba.');
-}
-export async function cancelGroupCall() {
-  throw new Error('Group calls have been removed from MySheba.');
-}
-export function subscribeIncomingGroupCalls(_uid, callback) {
-  if (typeof callback === 'function') callback(null);
-  return () => {};
-}
-
 export { RING_TIMEOUT_MS };
