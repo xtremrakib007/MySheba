@@ -47,6 +47,13 @@ service cloud.firestore {
       }
     }
 
+    // Direct Chat, Group Chat and Room Chat were removed. Keep their legacy
+    // collections explicitly inaccessible so old clients cannot resurrect or
+    // read those conversations, even if historical documents still exist.
+    match /directChats/{document=**} { allow read, write: if false; }
+    match /groupChats/{document=**} { allow read, write: if false; }
+    match /roomChats/{document=**} { allow read, write: if false; }
+
     match /securityPins/{uid} { allow read, write: if false; }
     match /userIds/{id} { allow read, write: if false; }
     match /otps/{phone} { allow read, write: if false; }
