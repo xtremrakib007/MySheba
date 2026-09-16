@@ -382,3 +382,33 @@ exports.revokeTrustedDevice = onCall(async (request) => {
     throw new HttpsError('internal', 'Could not remove this device. Please try again.');
   }
 });
+
+// The original OTP verifier checks an attempt ceiling, but the legacy flow did
+// not increment the stored counter. Wrap the callable so every email-OTP
+// attempt is counted atomically before the verifier runs. This keeps the
+// existing verification/link flow intact while making the five-attempt limit
+// effective against repeated guesses.
+const originalCheckDeviceSession = exports.checkDeviceSession;
+exports.checkDeviceSession = onCall(async (request) => {
+  const data = request.data || {};
+  if (!data.emailOtp) return originalCheckDeviceSession(request);
+
+  const db = getFirestore();
+  const uid = requireAuth(request);
+  const deviceId = requireDeviceId(request);
+  const ref = userRef(db, uid);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'No profile found for this account.');
+    const challenge = snap.data().pendingAdminEmailChallenge;
+    if (!challenge || challenge.deviceId !== deviceId) {
+      throw new HttpsError('failed-precondition', 'No active verification challenge. Please request a new email.');
+    }
+    const attempts = Number(challenge.attempts || 0);
+    if (attempts >= EMAIL_CHALLENGE_MAX_ATTEMPTS) {
+      throw new HttpsError('resource-exhausted', 'Too many attempts. Request a new verification email.');
+    }
+    tx.update(ref, { 'pendingAdminEmailChallenge.attempts': attempts + 1 });
+  });
+  return originalCheckDeviceSession(request);
+});
