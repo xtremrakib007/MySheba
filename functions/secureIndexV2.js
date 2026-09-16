@@ -7,6 +7,7 @@ const secureWalletCharge = require('./secureWalletCharge');
 const secureTopupReview = require('./secureTopupReview');
 const rejectionService = require('./rejectionService');
 const transactionService = require('./transactionService');
+const googleLinkService = require('./markGoogleLinked');
 
 functions.chargeRecharge = guards.chargeRecharge;
 functions.chargeInternetPackage = guards.chargeInternetPackage;
@@ -21,5 +22,6 @@ functions.rejectTopup = secureTopupReview.rejectTopup;
 functions.rejectTransaction = rejectionService.rejectTransaction;
 functions.assignDealer = transactionService.assignDealer;
 functions.scrubCompletedTransactionPins = transactionService.scrubCompletedTransactionPins;
+functions.markGoogleLinked = googleLinkService.markGoogleLinked;
 
 module.exports = functions;
