@@ -10,158 +10,22 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-
-      - name: Fix reseller inquiry count and clean retired chats
-        shell: python
+      - name: Fix reseller inquiry count
         run: |
+          python3 - <<'PY'
           from pathlib import Path
-          import re
-
-          # Reseller inquiry count fix.
           p = Path('src/screens/ResellerHomeScreen.js')
-          s = p.read_text(encoding='utf-8')
+          s = p.read_text()
           old = "const newInquiriesCount = (resellerTxs.inquiries || []).filter((i) => (i.status || 'new') === 'new').length;"
           new = "const newInquiriesCount = inquiries.filter((i) => (i.status || 'new') === 'new').length;"
-          if old in s:
-              p.write_text(s.replace(old, new, 1), encoding='utf-8')
-
-          # Admin Home: remove retired Direct Chat inquiry messaging, preserve Call/WhatsApp.
-          p = Path('src/screens/AdminHomeScreen.js')
-          s = p.read_text(encoding='utf-8')
-          s = s.replace("import * as directChatService from '../firebase/directChatService';\n", '')
-          s = s.replace(', openDirectChat, marketplaceCategories', ', marketplaceCategories')
-          s = re.sub(r'^  const \[messagingInquiryId, setMessagingInquiryId\] = useState\(null\);\n', '', s, flags=re.M)
-          while True:
-              m = re.search(r'^  const messageInquiry = async \(inq\) => \{', s, flags=re.M)
-              if not m: break
-              ob = s.find('{', m.start()); depth = 0; quote = None; esc = False
-              for i in range(ob, len(s)):
-                  c = s[i]
-                  if quote:
-                      if esc: esc = False
-                      elif c == '\\': esc = True
-                      elif c == quote: quote = None
-                      continue
-                  if c in "'\"`": quote = c; continue
-                  if c == '{': depth += 1
-                  elif c == '}':
-                      depth -= 1
-                      if depth == 0:
-                          s = s[:m.start()] + s[i+1:]
-                          break
-              else: raise SystemExit('Unbalanced Admin messageInquiry function')
-          marker = 'onPress={() => messageInquiry(inq)}'
-          pos = s.find(marker)
-          if pos >= 0:
-              start = s.rfind('<TouchableOpacity', 0, pos)
-              if start < 0: raise SystemExit('Cannot locate Admin Message button')
-              depth = 0; i = start; tag_re = re.compile(r'</?TouchableOpacity\b[^>]*>')
-              while True:
-                  mt = tag_re.search(s, i)
-                  if not mt: raise SystemExit('Unbalanced Admin Message TouchableOpacity')
-                  tag = mt.group(0)
-                  if tag.startswith('</'):
-                      depth -= 1
-                      if depth == 0:
-                          s = s[:start] + s[mt.end():]
-                          break
-                  elif not tag.rstrip().endswith('/>'):
-                      depth += 1
-                  i = mt.end()
-          s = re.sub(r'\n\s*disabled=\{messagingInquiryId === inq\.id\}', '', s)
-          forbidden = ('directChatService','openDirectChat','ensureDirectChat','messageInquiry','messagingInquiryId')
-          if any(x in s for x in forbidden):
-              raise SystemExit('Retired Admin chat refs remain: ' + ', '.join(x for x in forbidden if x in s))
-          p.write_text(s, encoding='utf-8')
-
-          # AppContext: remove Direct/Group/Room/Chat-Lock state and listeners while preserving Support Chat and 1:1 calling.
-          p = Path('src/context/AppContext.js')
-          s = p.read_text(encoding='utf-8')
-          services = ('directChatService','groupChatService','roomChatService','chatLockService')
-          s = ''.join(line for line in s.splitlines(True) if not any(line.startswith('import * as ' + x + ' ') for x in services))
-
-          state_names = {
-              'activeDirectChatId','activeDirectChatName','activeDirectChatUid','directChatUnreadCount','chatDraftText',
-              'activeInvestigateChatId','activeInvestigateReport','lockedChatIds','chatVaultUnlocked',
-              'activeGroupId','activeGroupName','myGroups','groupUnreadCount','activeRoomId','activeRoomName',
-              'myRooms','discoverableRooms','chatHubTab','incomingGroupCall'
-          }
-          s = ''.join(line for line in s.splitlines(True) if not any(re.search(r'\\b'+re.escape(n)+r'\\b', line) for n in state_names))
-
-          # Remove direct investigation callback.
-          s = re.sub(r'^  const openInvestigateChat = useCallback\\(.*?^  \\}, \\[\\]\\);\\n', '', s, flags=re.M|re.S)
-
-          def remove_callback(text, name):
-              m = re.search(r'^  const ' + re.escape(name) + r'\\s*=\\s*useCallback\\b', text, flags=re.M)
-              if not m: return text
-              ob = text.find('{', m.start()); depth = 0; quote = None; esc = False
-              for i in range(ob, len(text)):
-                  c = text[i]
-                  if quote:
-                      if esc: esc = False
-                      elif c == '\\\\': esc = True
-                      elif c == quote: quote = None
-                      continue
-                  if c in "'\\\"`": quote = c; continue
-                  if c == '{': depth += 1
-                  elif c == '}':
-                      depth -= 1
-                      if depth == 0:
-                          j = i + 1
-                          while j < len(text) and text[j] in ' ;\\t\\r\\n': j += 1
-                          return text[:m.start()] + text[j:]
-              raise SystemExit('Unbalanced callback: ' + name)
-
-          for name in ('openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall','openInvestigateChat'):
-              while re.search(r'^  const ' + re.escape(name) + r'\\s*=\\s*useCallback\\b', s, flags=re.M):
-                  s = remove_callback(s, name)
-
-          # Remove effects tied to retired chat services.
-          while True:
-              changed = False
-              for m in list(re.finditer(r'^  useEffect\\(\\(\\) => \\{', s, flags=re.M)):
-                  ob = s.find('{', m.start()); depth = 0; quote = None; esc = False; close = None
-                  for i in range(ob, len(s)):
-                      c = s[i]
-                      if quote:
-                          if esc: esc = False
-                          elif c == '\\\\': esc = True
-                          elif c == quote: quote = None
-                          continue
-                      if c in "'\\\"`": quote = c; continue
-                      if c == '{': depth += 1
-                      elif c == '}':
-                          depth -= 1
-                          if depth == 0: close = i; break
-                  if close is None: continue
-                  end = s.find(');', close)
-                  if end < 0: continue
-                  block = s[m.start():end+2]
-                  if any(x in block for x in services + ('subscribeIncomingGroupCalls',)):
-                      s = s[:m.start()] + s[end+2:]
-                      changed = True
-                      break
-              if not changed: break
-
-          retired = re.compile(r'\\b(activeDirectChatId|activeDirectChatName|activeDirectChatUid|directChatUnreadCount|openDirectChat|activeInvestigateChatId|activeInvestigateReport|openInvestigateChat|chatDraftText|activeGroupId|activeGroupName|myGroups|groupUnreadCount|openGroupChat|activeRoomId|activeRoomName|myRooms|discoverableRooms|openRoomChat|chatHubTab|openChatHub|incomingGroupCall|startGroupCall|answerIncomingGroupCall|rejectIncomingGroupCall|investigateChat)\\b')
-          s = ''.join(line for line in s.splitlines(True) if not retired.search(line))
-          s = s.replace(' | chatHub | directChatList | addContact | qrScan | myQrCode | groupList | newGroup | createRoom | roomSettings', '')
-          s = s.replace(' | investigateChat', '')
-
-          required = ('activeChatId','chatUnreadCount','activeRingtoneContactUid','activeRingtoneContactName','activeCall','incomingCall','callService')
-          missing = [x for x in required if x not in s]
-          if missing: raise SystemExit('Support/1:1 calling state missing: ' + ', '.join(missing))
-          forbidden = services + ('openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','subscribeIncomingGroupCalls','incomingGroupCall','activeDirectChat','activeGroupId','activeRoomId','myGroups','myRooms','chatHubTab','investigateChat')
-          bad = [x for x in forbidden if x in s]
-          if bad: raise SystemExit('Retired AppContext refs remain: ' + ', '.join(bad))
-          p.write_text(s, encoding='utf-8')
+          if old not in s:
+              raise SystemExit('expected stale line not found')
+          p.write_text(s.replace(old, new, 1))
           PY
-
-      - name: Commit cleanup
+      - name: Commit fix
         run: |
-          set -e
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/screens/ResellerHomeScreen.js src/screens/AdminHomeScreen.js src/context/AppContext.js
-          git commit -m 'refactor: remove retired chat flows and state' || exit 0
+          git add src/screens/ResellerHomeScreen.js
+          git commit -m 'Fix reseller inquiry count after chat cleanup' || exit 0
           git push
