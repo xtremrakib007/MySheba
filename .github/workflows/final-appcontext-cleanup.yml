@@ -1,4 +1,4 @@
-name: Final AppContext cleanup
+name: Final AppContext cleanup v2
 on:
   push:
     branches: [main]
@@ -20,8 +20,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import re
-          source=Path('/tmp/AppContext.js')
-          s=source.read_text(encoding='utf-8')
+          s=Path('/tmp/AppContext.js').read_text(encoding='utf-8')
           retired=['directChatService','groupChatService','roomChatService','chatLockService','openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','subscribeIncomingGroupCalls','incomingGroupCall','activeDirectChat','activeGroupId','activeRoomId','myGroups','myRooms','chatHubTab','investigateChat','lockChatThread','unlockChatThread','joinDiscoverableRoom']
           s='\n'.join(line for line in s.splitlines() if not (line.lstrip().startswith('import ') and any(x in line for x in retired)))+'\n'
           for token in ['chatHub | ','directChatList | ','addContact | ','qrScan | ','myQrCode | ','groupList | ','newGroup | ','createRoom | ','roomSettings | ','investigateChat | ']: s=s.replace(token,'')
@@ -46,6 +45,17 @@ jobs:
           if marker in s: s,_=cut(s,marker,'  /** Starts a call with another user')
           if '  /** Starts a group call' in s: s,_=cut(s,'  /** Starts a group call','  // ---- Chat Lock helpers')
           if '  // ---- Chat Lock helpers' in s: s,_=cut(s,'  // ---- Chat Lock helpers','  /** Opens the Support thread')
+          # Remove all retired live-list effects; keep the following private-vault AppState effect.
+          effect_ranges=[
+            ('  // ---- live direct-chat unread badge','  // ---- live list of groups'),
+            ('  // ---- live list of groups','  // ---- live list of rooms'),
+            ('  // ---- live list of rooms','  // ---- live list of public'),
+            ('  // ---- live list of public','  // ---- live list of "kind:id" keys'),
+            ('  // ---- live list of "kind:id" keys','  // Re-locks the Locked Chats vault'),
+          ]
+          for a,b in effect_ranges:
+            if a in s: s,_=cut(s,a,b)
+          # Remove retired notification branches, keeping Support/top-up/support-ticket/call handling.
           start=s.find('  useEffect(() => {\n    if (!authUser) return undefined;\n\n    const handleResponse = async (response) => {')
           if start>=0:
             end_marker='  }, [authUser, profile, openChat, openDirectChat, openGroupChat, openRoomChat, setAdminTab, setScreen]);'
@@ -56,6 +66,7 @@ jobs:
               if a>=0 and z>=0: block=block[:a]+block[z:]
               block=block.replace(end_marker,'  }, [authUser, profile, openChat, setAdminTab, setScreen]);')
               s=s[:start]+block+s[end+len(end_marker):]
+          # Context value cleanup.
           vs=s.find('  const value = {'); ve=s.find('  };\n\n  return <AppContext.Provider',vs)
           if vs<0 or ve<0: raise SystemExit('Context value boundaries missing')
           value=s[vs:ve]
@@ -73,7 +84,7 @@ jobs:
           if missing: raise SystemExit('Required refs missing: '+', '.join(missing))
           bad=[x for x in retired if x in s]
           if bad: raise SystemExit('Retired refs remain: '+', '.join(bad))
-          if len(s)<100000: raise SystemExit('Unexpectedly short AppContext: '+str(len(s)))
+          if len(s)<90000: raise SystemExit('Unexpectedly short AppContext: '+str(len(s)))
           Path('src/context/AppContext.js').write_text(s,encoding='utf-8')
           print('Clean AppContext written:',len(s),'bytes')
           PY
@@ -81,6 +92,7 @@ jobs:
           npx --yes prettier@3 --check src/context/AppContext.js
           git diff --check
       - name: Commit clean AppContext
+        shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
