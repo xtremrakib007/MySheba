@@ -28,8 +28,6 @@ const ITEMS: SearchItem[] = [
   { label: 'Pricing', description: 'Service pricing configuration', path: '/config/pricing', keywords: 'price fee charges', group: 'Configuration' },
   { label: 'Payment Settings', description: 'Payment configuration', path: '/config/payments', keywords: 'payment gateway', group: 'Configuration' },
   { label: 'Feature Access', description: 'Enable or control modules', path: '/feature-access', keywords: 'modules services access', group: 'Configuration' },
-  { label: 'Business Profiles', description: 'Business profile management', path: '/business-profiles', keywords: 'business verified badge', group: 'Marketplace' },
-  { label: 'Marketplace Moderation', description: 'Review reported marketplace content', path: '/marketplace-moderation', keywords: 'moderation report hide restore', group: 'Marketplace' },
   { label: 'Chat Reports', description: 'Review reported direct chat content', path: '/chat-reports', keywords: 'chat report moderation', group: 'Moderation' },
   { label: 'Inquiries', description: 'Flight, bus, train and service inquiries', path: '/inquiries', keywords: 'flight bus train visa passport', group: 'Services' },
   { label: 'Service Operations', description: 'Monitor platform service modules', path: '/service-operations', keywords: 'mobile banking recharge remittance flight bus train', group: 'Services' },

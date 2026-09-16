@@ -23,7 +23,6 @@ const FEATURES = [
 ];
 
 // NOTE: the old dealer-only BUY_SERVICES grid (Recharge/Internet/.../
-// Marketplace) and TOOL_DEFS grid (User Mgmt/Transfer Pts) used to live
 // here. Dealer now gets the exact same shared <ServiceGrid> every other
 // role sees ("All features available for all roles"), and the dealer-only
 // management tools moved to their own page - see DealerFeaturesScreen.js -

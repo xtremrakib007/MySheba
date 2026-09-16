@@ -17,7 +17,6 @@ Expo SDK built on top of that.
   `react-native-maps` 1.14→1.20.1, `react-native-agora` 4.3→4.5.1,
   `@react-native-async-storage/async-storage` 1.23→2.1.2,
   `react-native-safe-area-context`, `react-native-svg`, `react-native-webview`,
-  `@react-native-community/datetimepicker` bumped to their SDK 53 defaults
 - Removed `scripts/fix-expo-modules-core.js` and its `postinstall` hook —
   that patch worked around an SDK 51 `expo-modules-core` bug under API 35
   that doesn't exist in the SDK 53 version of the package
@@ -73,7 +72,6 @@ npm run build:aab
   (`src/firebase/phoneVerification.js`) still work; RNFirebase major bumps
   occasionally change native initialization behavior.
 - **`react-native-maps` 1.20.1** — spot-check any map screens
-  (Local Services, room-sharing/accommodation listings).
 - **React 19** — mostly source-compatible with 18 for typical app code, but
   if any screen uses old-style `propTypes` or legacy context APIs, those
   are removed in 19.

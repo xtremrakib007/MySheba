@@ -30,7 +30,6 @@ import * as adControlsService from "../firebase/adControlsService";
 import * as homepageConfigService from "../firebase/homepageConfigService";
 import * as adService from "../firebase/adService";
 import * as supportContactService from "../firebase/supportContactService";
-import * as socialLinksService from "../firebase/socialLinksService";
 import * as paymentSettingsService from "../firebase/paymentSettingsService";
 import * as internetPricingService from "../firebase/internetPricingService";
 import * as categoryService from "../firebase/categoryService";
@@ -203,7 +202,6 @@ export function AppProvider({ children }) {
   // No more manual role picker - `screen` starts on 'login' and, once
   // signed in, the account's Firestore `role` field (in `profile.role`)
   // decides which home screen to land on. See the bootstrap effect below.
-  const [screen, setScreen] = useState("login"); // login | register | forgotPassword | customerHome | service | dealerHome | resellerHome | adminHome | webview | buspicker | support | history | topup | chat | chatList | settings | profile | myAccount | reports | notifications | marketplaceHome | marketplaceCreateListing | marketplaceMyListings | marketplaceMyReviews | marketplaceListingDetail | marketplaceModeration | verifyIdentity | verificationManagement | adminAnalytics | myDocuments | documentType | addDocument | documentDetails | documentViewer | moreFeatures | adminFeatures | apiProviderManagement | dealerFeatures | resellerFeatures | featureAccess | tierPromotions | adFeatureControls | bannerManagement | salaryReports | notepad | addNote | noteDetail | help | friendsList | callSettings | ringtonePicker
 
   // ---- back-button navigation history ----
   // Tracks prior screens so the Android hardware back button can step
@@ -297,15 +295,12 @@ export function AppProvider({ children }) {
     setScreen("chat");
   }, []);
 
-  // ---- marketplace (Buy & Sell) ---- Screens call marketplaceService.js
   // directly (same pattern as ProfileScreen -> authService), so all that
   // lives here is the one piece of navigation state a listing's detail
   // screen needs: which listing to show. "Chat Seller" reuses
   const [activeListingId, setActiveListingId] = useState(null);
-  const openMarketplace = useCallback(() => setScreen("marketplaceHome"), []);
   const openListingDetail = useCallback((listingId) => {
     setActiveListingId(listingId);
-    setScreen("marketplaceListingDetail");
   }, []);
 
   // ---- PHASE 9 - MY SHEBA ADVERTISER AND CAMPAIGN MANAGEMENT ---- Same
@@ -366,85 +361,42 @@ export function AppProvider({ children }) {
     openListingDetail(pendingId);
   }, [authLoading, authUser, profile, openListingDetail]);
 
-  // ---- accommodation (Phase 2 of the Marketplace PRD) ---- Same pattern
-  // as marketplace above: screens call accommodationService.js directly,
   // so all that lives here is which property to show. "Contact Owner"
   const [activePropertyId, setActivePropertyId] = useState(null);
-  const openAccommodation = useCallback(
-    () => setScreen("accommodationHome"),
     [],
   );
   const openPropertyDetail = useCallback((propertyId) => {
     setActivePropertyId(propertyId);
-    setScreen("accommodationPropertyDetail");
   }, []);
 
-  // ---- room sharing (Phase 2 of the Marketplace PRD) ---- Same pattern
-  // as accommodation above: screens call roommateService.js directly, so
   // all that lives here is which request to show. "Chat" reuses
-  const [activeRoommateRequestId, setActiveRoommateRequestId] = useState(null);
-  const openRoomSharing = useCallback(() => setScreen("roomSharingHome"), []);
-  const openRoommateRequestDetail = useCallback((requestId) => {
-    setActiveRoommateRequestId(requestId);
-    setScreen("roomSharingRequestDetail");
   }, []);
 
-  // ---- local services (Phase 2 of the Marketplace PRD, section 8) ----
-  // Same pattern as accommodation/room sharing above: screens call
-  // serviceProviderService.js / serviceReviewService.js /
   // serviceRequestService.js directly, so all that lives here is which
   // local-services chat state. ("Request Service" is a lead form, not a
   // chat - see serviceRequestService.js - so it needs no navigation state
   // of its own either.)
   const [activeProviderId, setActiveProviderId] = useState(null);
-  const openServiceProvidersHome = useCallback(
-    () => setScreen("servicesHome"),
     [],
   );
-  const openServiceProviderDetail = useCallback((providerId) => {
     setActiveProviderId(providerId);
     setScreen("servicesProviderDetail");
   }, []);
 
-  // ---- community (PRD section 9 - Jobs/Events/Lost & Found/Emergency/
-  // News) ---- Same pattern as accommodation/room sharing/local services
-  // above: screens call communityService.js directly, so all that lives
   // here is which post to show. Likes/comments live entirely in
-  // communityService too - no extra navigation state needed for those.
-  const [activeCommunityPostId, setActiveCommunityPostId] = useState(null);
-  const openCommunity = useCallback(() => setScreen("communityHome"), []);
-  const openCommunityPostDetail = useCallback((postId) => {
-    setActiveCommunityPostId(postId);
-    setScreen("communityPostDetail");
   }, []);
 
-  // ---- social feed (Next Update PRD §3 - general Facebook-style posts,
-  // distinct from the typed Community module above) ---- Same pattern as
-  // community above: screens call socialFeedService.js directly, so all
   // that lives here is which post is open. Likes/comments/shares/reports
-  // live entirely in socialFeedService too - no extra navigation state.
-  const [activeSocialPostId, setActiveSocialPostId] = useState(null);
-  const openSocialFeed = useCallback(() => setScreen("socialFeed"), []);
-  const openCreateSocialPost = useCallback(
-    () => setScreen("createSocialPost"),
     [],
   );
-  const openSocialPostDetail = useCallback((postId) => {
-    setActiveSocialPostId(postId);
-    setScreen("socialPostDetail");
   }, []);
 
-  // ---- unified marketplace search (PRD sitemap: Search Products/Rooms/
   // Services/Users) - a single screen, no navigation state of its own
-  // needed beyond the screen switch itself; see MarketplaceSearchScreen.js.
-  const openMarketplaceSearch = useCallback(
-    () => setScreen("marketplaceSearch"),
     [],
   );
 
   // ---- My Documents (private per-user document vault - passport, visa,
   // work permit, etc.) ---- Screens call documentService.js directly
-  // (same pattern as marketplace/accommodation/etc. above); context only
   // tracks which document is being viewed/edited and which type is being
   // added. editDocumentId is null for "add new", set when opening the
   // Add screen from an existing document's "Edit Details" action.
@@ -477,7 +429,6 @@ export function AppProvider({ children }) {
 
   // ---- Notepad (private per-user notes, plus Credit/Debit/Loan "money
   // notes" for tracking who owes what) ---- Screens call notepadService.js
-  // directly (same pattern as marketplace/documents/etc. above); context
   // only tracks which note is being viewed and which is being edited.
   // editNoteId is null for "add new", set when opening Add from
   // NoteDetailScreen's "Edit" action - same shape as
@@ -497,7 +448,6 @@ export function AppProvider({ children }) {
 
   // ---- MySheba Help (a single "ask a question" entry point inside
   // Support, see src/screens/HelpScreen.js) ---- Most questions route
-  // straight to an existing feature (My Documents, a webview, Community,
   // etc. - just a setScreen()/openX() call, no state of its own needed).
   // Questions with no direct feature (e.g. an employer pay dispute) fall
   // back to Support's own ticket form instead of a new mechanism -
@@ -816,10 +766,6 @@ export function AppProvider({ children }) {
   // ---- Buy & Sell / Local Services category lists - admin-editable from
   // Admin > Categories (see categoryService.js). Every screen with a
   // category picker or filter chips reads these live instead of the
-  // hardcoded arrays that used to live in marketplaceService.js /
-  // serviceProviderService.js. ----
-  const [marketplaceCategories, setMarketplaceCategories] = useState(
-    categoryService.DEFAULT_CATEGORIES.marketplace,
   );
   const [serviceCategories, setServiceCategories] = useState(
     categoryService.DEFAULT_CATEGORIES.services,
@@ -979,12 +925,7 @@ export function AppProvider({ children }) {
     supportContactService.DEFAULT_SUPPORT_CONTACT,
   );
 
-  // ---- Official social media links (Facebook/Instagram/TikTok/LinkedIn/X)
-  // + facebookAppId - admin-editable from Admin > Social (see
-  // socialLinksService.js). Shown on the Support screen's "Follow us" row
   // and used by ShareListingSheet.js for Story-sharing attribution. ----
-  const [socialLinks, setSocialLinks] = useState(
-    socialLinksService.DEFAULT_SOCIAL_LINKS,
   );
 
   // ---- JomPay biller ID/ref + DuitNow QR - superadmin-editable from
@@ -1311,9 +1252,6 @@ export function AppProvider({ children }) {
   useEffect(() => {
     if (!authUser) return undefined;
     const unsub = categoryService.subscribeCategories(
-      "marketplace",
-      setMarketplaceCategories,
-      logListenerError("marketplaceCategories"),
     );
     return unsub;
   }, [authUser]);
@@ -1340,10 +1278,6 @@ export function AppProvider({ children }) {
 
   useEffect(() => {
     if (!authUser) return undefined;
-    socialLinksService.ensureSocialLinks().catch(() => {});
-    const unsub = socialLinksService.subscribeSocialLinks(
-      (s) => setSocialLinks(s),
-      logListenerError("socialLinks"),
     );
     return unsub;
   }, [authUser]);
@@ -2705,10 +2639,8 @@ export function AppProvider({ children }) {
     pointCosts,
     accessWindowHours,
     featureAccess,
-    marketplaceCategories,
     serviceCategories,
     supportContact,
-    socialLinks,
     paymentSettings,
     banners,
     adSettings,
@@ -2738,35 +2670,18 @@ export function AppProvider({ children }) {
     activeChatReturnTo,
     openChat,
     // direct chat
-    // marketplace
     activeListingId,
-    openMarketplace,
     openListingDetail,
     handleDeepLink,
     activeAdvertiserId,
     openAdvertiserManagement,
     openAdvertiserDetail,
-    // accommodation
     activePropertyId,
-    openAccommodation,
     openPropertyDetail,
     // room sharing
-    activeRoommateRequestId,
     openRoomSharing,
-    openRoommateRequestDetail,
     // local services
     activeProviderId,
-    openServiceProvidersHome,
-    openServiceProviderDetail,
-    // community
-    activeCommunityPostId,
-    openCommunity,
-    openCommunityPostDetail,
-    activeSocialPostId,
-    openSocialFeed,
-    openCreateSocialPost,
-    openSocialPostDetail,
-    openMarketplaceSearch,
     // my documents
     activeDocumentId,
     activeDocumentType,

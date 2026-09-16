@@ -11,7 +11,6 @@ const services = [
   { key: 'train', name: 'Train', description: 'Train travel inquiries and staff follow-up.', icon: TrainFront, href: '/inquiries', status: 'Inquiry-based' },
   { key: 'visa', name: 'Visa', description: 'Visa-related customer requests and support.', icon: ShieldCheck, href: '/inquiries', status: 'Operational' },
   { key: 'passport', name: 'Passport', description: 'Passport assistance and customer requests.', icon: ShieldCheck, href: '/inquiries', status: 'Operational' },
-  { key: 'marketplace', name: 'Marketplace', description: 'Listings, moderation and marketplace activity.', icon: Globe2, href: '/marketplace-moderation', status: 'Operational' },
 ];
 
 export default function ServiceOperationsPage() {

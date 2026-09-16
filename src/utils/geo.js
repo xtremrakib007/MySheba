@@ -1,5 +1,3 @@
-// Shared geolocation helpers used across Accommodation, Marketplace,
-// Local Services, Community Events, and Business Directory.
 //
 // Firestore has no native "find things within N km" query, so every
 // location-bearing doc also stores a `geohash` string (via geofire-common).
@@ -13,7 +11,6 @@
 //   const radiusInM = 10 * 1000;
 //   const bounds = geohashQueryBounds(center, radiusInM);
 //   const snaps = await Promise.all(bounds.map(([start, end]) =>
-//     getDocs(query(collection(db, 'serviceProviders'), orderBy('geohash'), startAt(start), endAt(end)))
 //   ));
 //   const docs = snaps.flatMap(s => s.docs.map(d => ({ id: d.id, ...d.data() })));
 //   const nearby = filterByDistance(docs, center, radiusInM / 1000);

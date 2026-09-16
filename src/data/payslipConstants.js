@@ -48,7 +48,6 @@ export const SUGGESTED_EARNINGS = [
   'Other',
 ];
 
-export const SUGGESTED_PAYSLIP_DEDUCTIONS = ['EPF', 'SOCSO', 'EIS', 'PCB / Tax', 'Accommodation', 'Salary Advance', 'Other'];
 
 // PRD section 2 - Legal / Trust requirement. Must appear on every
 // generated payslip (preview + PDF) and must never be removed or

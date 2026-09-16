@@ -1,7 +1,5 @@
 // Full-screen location picker: Google Places Autocomplete search + a
 // drag-pin map to fine-tune, used anywhere a screen needs a real
-// lat/lng (not just a free-text "location" string) - Accommodation,
-// Marketplace, Local Services, Community Events, Business Directory.
 //
 // Talks to the Google Places Web Service directly over fetch (Autocomplete
 // + Place Details + a reverse-geocode call for "use my current location"),

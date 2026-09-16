@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Modal, FlatList, Image } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 

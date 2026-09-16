@@ -34,17 +34,14 @@ export interface FeatureAccess {
   recharge: boolean;
   remittance: boolean;
   travel: boolean;
-  marketplace: boolean;
   ticketReseller: boolean;
 }
 
 export const FEATURE_LABELS: Record<keyof FeatureAccess, string> = {
   mobileBanking: 'Mobile Banking', recharge: 'Recharge / Top-Up', remittance: 'Remittance',
-  travel: 'Travel Inquiries', marketplace: 'Marketplace', ticketReseller: 'Ticket Reseller',
 };
 
 const DEFAULT_FEATURES: FeatureAccess = {
-  mobileBanking: true, recharge: true, remittance: true, travel: true, marketplace: true, ticketReseller: false,
 };
 
 export interface AdminUserRow {

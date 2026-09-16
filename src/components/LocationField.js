@@ -1,5 +1,4 @@
 // Tappable "Location" form field used in CreatePropertyScreen,
-// CreateListingScreen, CreateServiceScreen, CreateCommunityPostScreen -
 // opens LocationPickerModal and reports back { address, latitude,
 // longitude }. Looks like the plain TextInput it replaces so it drops
 // into existing form layouts without any surrounding style changes.

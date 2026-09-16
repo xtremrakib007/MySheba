@@ -2,7 +2,6 @@
 // An upgraded, badge-carrying profile for a seller/property owner/service
 // provider: a business name, logo, description, and category, plus a
 // public page listing everything that user has posted across Buy & Sell,
-// Accommodation, and Local Services in one place (see
 // BusinessProfileScreen.js).
 //
 // Data model:

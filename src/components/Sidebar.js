@@ -51,7 +51,6 @@ const ADMIN_GROUPS = [
   { title: 'Users & Verification', icon: '👥', color: 'secondary', items: [
     { key: 'userManagement', icon: '👥', label: 'User Management' },
     { key: 'verificationManagement', icon: '🪪', label: 'KYC Verification' },
-    { key: 'marketplaceModeration', icon: '🛍️', label: 'Marketplace' },
     { key: 'adminBusinessManagement', icon: '🏢', label: 'Business Profiles' },
   ] },
   { title: 'Platform', icon: '🧩', color: 'primary', items: [
@@ -72,7 +71,6 @@ const SUPERADMIN_GROUPS = [
     { key: 'superAdminTopup', icon: '💎', label: 'Point Top-Up' },
   ] },
   { title: 'Risk & Moderation', icon: '🚨', color: 'primary', items: [
-    { key: 'marketplaceModeration', icon: '🛍️', label: 'Marketplace Moderation' },
     { key: 'verificationManagement', icon: '🪪', label: 'Verification Queue' },
   ] },
   { title: 'Advertising', icon: '📢', color: 'secondary', items: [

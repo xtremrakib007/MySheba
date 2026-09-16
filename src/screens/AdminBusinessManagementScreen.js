@@ -1,6 +1,4 @@
-// Marketplace Admin Panel > Business Profiles (sitemap's Admin Panel,
 // PRD section 15 Monetization Plan - "Business profile"). Admin/superadmin
-// only (gated in Sidebar.js, same pattern as MarketplaceModerationScreen /
 // VerificationManagementScreen). Unlike Verification (a review queue),
 // Business Profile has no request to review - the admin just searches for
 // a user and grants or revokes it directly, via the setBusinessProfileStatus

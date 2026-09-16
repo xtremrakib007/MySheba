@@ -35,11 +35,9 @@ import ProfileScreen from './src/screens/ProfileScreen';
 import MyAccountScreen from './src/screens/MyAccountScreen';
 import ReportsScreen from './src/screens/ReportsScreen';
 import UserManagementScreen from './src/screens/UserManagementScreen';
-import MarketplaceModerationScreen from './src/screens/MarketplaceModerationScreen';
 import TransferPointsScreen from './src/screens/TransferPointsScreen';
 import CallScreen from './src/screens/CallScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
-import MarketplaceHubScreen from './src/screens/MarketplaceHubScreen';
 import CreateListingScreen from './src/screens/CreateListingScreen';
 import MyListingsScreen from './src/screens/MyListingsScreen';
 import MyReviewsScreen from './src/screens/MyReviewsScreen';
@@ -47,19 +45,8 @@ import ListingDetailScreen from './src/screens/ListingDetailScreen';
 import CreatePropertyScreen from './src/screens/CreatePropertyScreen';
 import MyPropertiesScreen from './src/screens/MyPropertiesScreen';
 import PropertyDetailScreen from './src/screens/PropertyDetailScreen';
-import CreateRoommateRequestScreen from './src/screens/CreateRoommateRequestScreen';
-import MyRoommateRequestsScreen from './src/screens/MyRoommateRequestsScreen';
-import RoommateRequestDetailScreen from './src/screens/RoommateRequestDetailScreen';
 import CreateServiceScreen from './src/screens/CreateServiceScreen';
 import MyServicesScreen from './src/screens/MyServicesScreen';
-import ServiceProviderDetailScreen from './src/screens/ServiceProviderDetailScreen';
-import CreateCommunityPostScreen from './src/screens/CreateCommunityPostScreen';
-import MyCommunityPostsScreen from './src/screens/MyCommunityPostsScreen';
-import CommunityPostDetailScreen from './src/screens/CommunityPostDetailScreen';
-import SocialFeedScreen from './src/screens/SocialFeedScreen';
-import CreateSocialPostScreen from './src/screens/CreateSocialPostScreen';
-import SocialPostDetailScreen from './src/screens/SocialPostDetailScreen';
-import MarketplaceSearchScreen from './src/screens/MarketplaceSearchScreen';
 import VerifyIdentityScreen from './src/screens/VerifyIdentityScreen';
 import VerificationManagementScreen from './src/screens/VerificationManagementScreen';
 import AdminAnalyticsScreen from './src/screens/AdminAnalyticsScreen';
@@ -165,31 +152,11 @@ function Root() {
         {renderedScreen === 'myAccount' && <MyAccountScreen />}
         {renderedScreen === 'reports' && <ReportsScreen />}
         {renderedScreen === 'userManagement' && <UserManagementScreen />}
-        {renderedScreen === 'marketplaceModeration' && <MarketplaceModerationScreen />}
         {renderedScreen === 'transferPoints' && <TransferPointsScreen />}
         {renderedScreen === 'call' && <CallScreen />}
         {renderedScreen === 'notifications' && <NotificationsScreen />}
-        {(renderedScreen === 'marketplaceHome' || renderedScreen === 'accommodationHome' || renderedScreen === 'roomSharingHome' || renderedScreen === 'servicesHome' || renderedScreen === 'communityHome') && <MarketplaceHubScreen screen={renderedScreen} />}
-        {renderedScreen === 'marketplaceCreateListing' && <CreateListingScreen />}
-        {renderedScreen === 'marketplaceMyListings' && <MyListingsScreen />}
-        {renderedScreen === 'marketplaceMyReviews' && <MyReviewsScreen />}
-        {renderedScreen === 'marketplaceListingDetail' && <ListingDetailScreen />}
-        {renderedScreen === 'accommodationCreateProperty' && <CreatePropertyScreen />}
-        {renderedScreen === 'accommodationMyProperties' && <MyPropertiesScreen />}
-        {renderedScreen === 'accommodationPropertyDetail' && <PropertyDetailScreen />}
-        {renderedScreen === 'roomSharingCreateRequest' && <CreateRoommateRequestScreen />}
-        {renderedScreen === 'roomSharingMyRequests' && <MyRoommateRequestsScreen />}
-        {renderedScreen === 'roomSharingRequestDetail' && <RoommateRequestDetailScreen />}
         {renderedScreen === 'servicesCreateProvider' && <CreateServiceScreen />}
         {renderedScreen === 'servicesMyServices' && <MyServicesScreen />}
-        {renderedScreen === 'servicesProviderDetail' && <ServiceProviderDetailScreen />}
-        {renderedScreen === 'communityCreatePost' && <CreateCommunityPostScreen />}
-        {renderedScreen === 'communityMyPosts' && <MyCommunityPostsScreen />}
-        {renderedScreen === 'communityPostDetail' && <CommunityPostDetailScreen />}
-        {renderedScreen === 'socialFeed' && <SocialFeedScreen />}
-        {renderedScreen === 'createSocialPost' && <CreateSocialPostScreen />}
-        {renderedScreen === 'socialPostDetail' && <SocialPostDetailScreen />}
-        {renderedScreen === 'marketplaceSearch' && <MarketplaceSearchScreen />}
         {renderedScreen === 'verifyIdentity' && <VerifyIdentityScreen />}
         {renderedScreen === 'verificationManagement' && <VerificationManagementScreen />}
         {renderedScreen === 'adminAnalytics' && <AdminAnalyticsScreen />}
@@ -229,7 +196,6 @@ function Root() {
         {renderedScreen === 'payslipHistory' && <PayslipHistoryScreen />}
         {renderedScreen === 'payslipDetails' && <PayslipDetailsScreen />}
       </View>
-      {(renderedScreen === 'customerHome' || renderedScreen === 'dealerHome' || renderedScreen === 'resellerHome' || renderedScreen === 'adminHome' || renderedScreen === 'support' || renderedScreen === 'help' || renderedScreen === 'adminSupport' || renderedScreen === 'history' || renderedScreen === 'topup' || renderedScreen === 'superAdminTopup' || renderedScreen === 'profile' || renderedScreen === 'settings' || renderedScreen === 'myAccount' || renderedScreen === 'moreFeatures' || renderedScreen === 'adminFeatures' || renderedScreen === 'dealerFeatures' || renderedScreen === 'resellerFeatures' || renderedScreen === 'notifications' || renderedScreen === 'marketplaceHome' || renderedScreen === 'accommodationHome' || renderedScreen === 'roomSharingHome' || renderedScreen === 'servicesHome' || renderedScreen === 'communityHome') && <BottomNav />}
       <RatePopup /><ResultModal /><Sidebar /><IncomingCallModal /><AppAlertHost /><SecurityPinGate /><AppLockScreen /><BiometricOptInPrompt />
     </SafeAreaView>
   );

@@ -1,5 +1,4 @@
 // Admin grant/revoke of the "Business Profile" premium feature (PRD
-// section 15 Monetization Plan - "Business profile") for the Marketplace
 // module. Unlike Verified (a user-submitted request/review flow - see
 // verificationService.js), Business Profile is admin-initiated only: an
 // admin picks an existing user (Admin Panel > Business Profiles screen)

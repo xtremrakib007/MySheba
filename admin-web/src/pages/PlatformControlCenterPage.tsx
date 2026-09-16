@@ -3,7 +3,6 @@ import { CreditCard, Layers, Megaphone, Percent, Receipt, Settings2, Tags, Walle
 
 const groups = [
   { title: 'Money & Commercial', items: [['Rates & Pricing','/config/rates','Exchange rates, remittance and service pricing', Tags],['Pricing','/config/pricing','Customer and service pricing controls', Percent],['Payment Settings','/config/payments','Payment and collection configuration', CreditCard],['Salary Settings','/config/salary','Salary and commission settings', Wallet]] },
-  { title: 'Platform Experience', items: [['Banners','/config/banners','Manage promotional banners and campaigns', Megaphone],['Categories','/config/categories','Marketplace listing categories', Layers],['Module Subscriptions','/config/modules','Enable or configure platform modules', Settings2]] },
   { title: 'Operational Records', items: [['Transactions','/transactions','Review live transaction activity', Receipt]] },
 ] as const;
 

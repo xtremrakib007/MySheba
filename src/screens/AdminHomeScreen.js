@@ -21,7 +21,6 @@ import * as inquiryService from '../firebase/inquiryService';
 import * as ratesService from '../firebase/ratesService';
 import * as settingsService from '../firebase/settingsService';
 import * as supportContactService from '../firebase/supportContactService';
-import * as socialLinksService from '../firebase/socialLinksService';
 import * as paymentSettingsService from '../firebase/paymentSettingsService';
 import * as internetPricingService from '../firebase/internetPricingService';
 import * as bannerService from '../firebase/bannerService';
@@ -47,7 +46,6 @@ const FEATURES = [
   { key: 'payments', icon: '💳', bg: '#E1F5FE', name: 'Payments' },
   { key: 'categories', icon: '🗂️', bg: '#EDE7F6', name: 'Categories' },
   { key: 'support', icon: '☎️', bg: '#E0F2F1', name: 'Support' },
-  { key: 'social', icon: '🌐', bg: '#FCE4EC', name: 'Social' },
   { key: 'homepage', icon: '🏠', bg: '#E0F7FA', name: 'Homepage' },
   { key: 'banners', icon: '🖼️', bg: '#FFF0F0', name: 'Banners' },
   { key: 'announcements', icon: '📣', bg: '#E0F7FA', name: 'Announce' },
@@ -145,12 +143,10 @@ const ACCESS_WINDOW_FIELDS = [
   { key: 'webviewAccessWindowHours', label: '⏱️ FOMEMA / Visa Free Access Window (hours)' },
 ];
 
-// Marketplace "Listing Boost" / Featured Listings (Phase 3 monetization,
 // PRD section 15) - actually charged in the boostListing Cloud Function
 // (functions/walletService.js). listingBoostCost reuses the pts editor,
 // listingBoostDurationDays gets its own "days" unit below.
 const BOOST_COST_FIELDS = [
-  { key: 'listingBoostCost', label: '🚀 Marketplace Listing Boost (pts)' },
 ];
 const BOOST_DURATION_FIELDS = [
   { key: 'listingBoostDurationDays', label: '📅 Boost Duration (days)' },
@@ -208,7 +204,6 @@ const SUPPORT_FIELDS = [
   { key: 'whatsapp', label: '💬 WhatsApp Support Number', placeholder: 'e.g. 601123083556 (no + or leading 0)' },
 ];
 
-// Official social links, shown on the customer Support screen's Follow Us
 // row (hidden per-platform until set) and used by ShareListingSheet.js's
 // "share to official page" targets. facebookAppId isn't a link - it's the
 // Meta developer App ID (free to create, no App Review needed) that
@@ -280,17 +275,14 @@ export default function AdminHomeScreen() {
   } = useTheme();
 
   const styles = createStyles(colors);
-  const { authUser, profile, dealerTxs, inquiries, topups, banners, announcements, adminTab, setAdminTab, rates, pricing, internetPricing, supportContact, socialLinks, paymentSettings, logout, setScreen, openSidebar, marketplaceCategories, serviceCategories, setHomeBackInterceptor, adminViewingSection: viewingSection, setAdminViewingSection: setViewingSection, homepageConfig } = useApp();
   const [editRateKey, setEditRateKey] = useState(null);
   const [editPricingKey, setEditPricingKey] = useState(null);
   const [editPointCostKey, setEditPointCostKey] = useState(null);
   // Role-Based Pricing (superadmin only): { role, key } for the field
   // currently being edited, or null when the modal's closed.
   const [editRolePrice, setEditRolePrice] = useState(null);
-  const [addCategoryModule, setAddCategoryModule] = useState(null); // 'marketplace' | 'services' | null
   const [categoryBusy, setCategoryBusy] = useState(false);
   const [editSupportKey, setEditSupportKey] = useState(null);
-  const [editSocialKey, setEditSocialKey] = useState(null);
   const [editPaymentKey, setEditPaymentKey] = useState(null); // 'jompayBillerId' | 'jompayRefNo' | null
   const [qrModalVisible, setQrModalVisible] = useState(false); // DuitNow QR upload modal
   // Next Update PRD §2 - Homepage tab (superadmin-only, see firestore.rules
@@ -671,12 +663,8 @@ export default function AdminHomeScreen() {
     }
   };
 
-  const saveSocialLink = async (value) => {
-    const key = editSocialKey;
-    setEditSocialKey(null);
     if (!key) return;
     try {
-      await socialLinksService.updateSocialLink(key, value.trim());
     } catch (e) {
       showAlert('MySheba', e.message || 'Could not update this setting.');
     }
@@ -949,7 +937,6 @@ export default function AdminHomeScreen() {
             </View>
 
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>🚀 Marketplace Boost</Text>
               {BOOST_COST_FIELDS.map((r) => (
                 <View key={r.key} style={styles.rateRow}>
                   <Text style={{ flex: 1 }}>{r.label}</Text>
@@ -969,7 +956,6 @@ export default function AdminHomeScreen() {
                 </View>
               ))}
               <Text style={styles.hintText}>
-                Sellers spend points from their own wallet to feature a listing at the top of Marketplace
                 for this many days (see the listing detail screen's Boost button). Re-boosting an
                 already-featured listing extends it rather than restarting the clock.
               </Text>
@@ -1072,8 +1058,6 @@ export default function AdminHomeScreen() {
 
         {adminTab === 'categories' && (
           <View>
-            {['marketplace', 'services'].map((module) => {
-              const list = module === 'marketplace' ? marketplaceCategories : serviceCategories;
               return (
                 <View key={module} style={styles.card}>
                   <Text style={styles.cardTitle}>{MODULE_LABELS[module]}</Text>
@@ -1125,15 +1109,11 @@ export default function AdminHomeScreen() {
           </View>
         )}
 
-        {adminTab === 'social' && (
           <View>
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>🌐 Official Social Links</Text>
               {SOCIAL_FIELDS.map((r) => (
                 <View key={r.key} style={styles.rateRow}>
                   <Text style={{ flex: 1 }}>{r.label}</Text>
-                  <Text style={styles.rateValue} numberOfLines={1}>{socialLinks[r.key] || 'Not set'}</Text>
-                  <TouchableOpacity style={styles.editBtn} onPress={() => setEditSocialKey(r.key)}>
                     <Text style={styles.editBtnText}>Edit</Text>
                   </TouchableOpacity>
                 </View>
@@ -1148,8 +1128,6 @@ export default function AdminHomeScreen() {
               {SOCIAL_TECHNICAL_FIELDS.map((r) => (
                 <View key={r.key} style={styles.rateRow}>
                   <Text style={{ flex: 1 }}>{r.label}</Text>
-                  <Text style={styles.rateValue} numberOfLines={1}>{socialLinks[r.key] || 'Not set'}</Text>
-                  <TouchableOpacity style={styles.editBtn} onPress={() => setEditSocialKey(r.key)}>
                     <Text style={styles.editBtnText}>Edit</Text>
                   </TouchableOpacity>
                 </View>
@@ -1258,7 +1236,6 @@ export default function AdminHomeScreen() {
                   <Text style={styles.cardTitle}>🏠 Country / Region Homepage</Text>
                   <Text style={styles.hintText}>
                     Malaysia keeps the standard service-first homepage by default. Any other country
-                    defaults to a community-first homepage the moment a user sets it in Profile - add an
                     override below only if a specific country needs different modules than that default.
                   </Text>
                 </View>
@@ -1271,18 +1248,14 @@ export default function AdminHomeScreen() {
                       <Text style={styles.cardTitle}>{c ? `${c.flag} ${c.name}` : code}</Text>
                       <View style={styles.rateRow}>
                         <Text style={{ flex: 1 }}>Layout</Text>
-                        <Text style={styles.rateValue}>{mod.layout === 'service' ? 'Service-first' : 'Social-first'}</Text>
                         <TouchableOpacity
                           style={styles.editBtn}
-                          onPress={() => updateHomepageModule(code, 'layout', mod.layout === 'service' ? 'social' : 'service')}
                         >
                           <Text style={styles.editBtnText}>Switch</Text>
                         </TouchableOpacity>
                       </View>
                       {[
                         { key: 'showServices', label: 'Services module' },
-                        { key: 'showSocialFeed', label: 'Social feed module' },
-                        { key: 'showCommunityFeed', label: 'Community feed module' },
                         { key: 'showBanners', label: 'Banners module' },
                       ].map((row) => (
                         <View key={row.key} style={styles.rateRow}>
@@ -1588,14 +1561,9 @@ export default function AdminHomeScreen() {
         onCancel={() => setEditSupportKey(null)}
       />
       <PromptModal
-        visible={!!editSocialKey}
         title="New value:"
         placeholder={
-          SOCIAL_FIELDS.find((f) => f.key === editSocialKey)?.placeholder ||
-          SOCIAL_TECHNICAL_FIELDS.find((f) => f.key === editSocialKey)?.placeholder
         }
-        onSubmit={saveSocialLink}
-        onCancel={() => setEditSocialKey(null)}
       />
       <PromptModal
         visible={!!editPaymentKey}

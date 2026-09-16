@@ -1,9 +1,6 @@
-// Business Profile (Marketplace PRD section 15 Monetization Plan -
 // "Business profile"; sitemap's Buy & Sell > Seller Profile, generalized
-// to cover Accommodation owners and Local Services providers too). Shows
 // an upgraded, badge-carrying profile - business name, logo, description,
 // category - plus everything that user has posted across Buy & Sell,
-// Accommodation, and Local Services in one page.
 //
 // Business Profile status itself is admin-granted only (Admin Panel >
 // Business Profiles, see AdminBusinessManagementScreen.js) - there's no
@@ -28,9 +25,6 @@ import BusinessBadge from '../components/BusinessBadge';
 import VerifiedBadge from '../components/VerifiedBadge';
 import * as authService from '../firebase/authService';
 import * as businessProfileService from '../firebase/businessProfileService';
-import * as marketplaceService from '../firebase/marketplaceService';
-import * as accommodationService from '../firebase/accommodationService';
-import * as serviceProviderService from '../firebase/serviceProviderService';
 import { uploadBusinessLogo } from '../firebase/mediaUpload';
 import { computeGeohash } from '../utils/geo';
 import LocationPickerModal from '../components/LocationPickerModal';
@@ -89,7 +83,6 @@ export default function BusinessProfileScreen() {
   const {
     goBackOrHome, authUser, profile,
     activeBusinessProfileUid,
-    openListingDetail, openPropertyDetail, openServiceProviderDetail,
   } = useApp();
 
   const targetUid = activeBusinessProfileUid;
@@ -128,9 +121,6 @@ export default function BusinessProfileScreen() {
 
   useEffect(() => {
     if (!targetUid) return undefined;
-    const unsubL = marketplaceService.subscribeMyListings(targetUid, setListings, () => {});
-    const unsubP = accommodationService.subscribeMyProperties(targetUid, setProperties, () => {});
-    const unsubS = serviceProviderService.subscribeMyProviders(targetUid, setProviders, () => {});
     return () => { unsubL && unsubL(); unsubP && unsubP(); unsubS && unsubS(); };
   }, [targetUid]);
 
@@ -328,7 +318,6 @@ const result = await ImagePicker.launchImageLibraryAsync({
                 image={item.photo}
                 title={item.name}
                 subtitle={item.category}
-                onPress={() => openServiceProviderDetail(item.id)}
               />
             ))}
           </Section>

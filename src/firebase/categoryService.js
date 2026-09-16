@@ -1,7 +1,6 @@
 // Admin-editable category lists (Admin Panel > Category Management in the
 // sitemap; PRD sections 5 & 8's Buy & Sell / Local Services category
 // lists). Before this file existed, both lists were hardcoded string
-// arrays (marketplaceService.CATEGORIES, serviceProviderService.CATEGORIES)
 // that only a code change could touch.
 //
 // Storage: one doc per module at categories/{module} - `{ items: string[] }`
@@ -20,13 +19,11 @@ import { db } from './config';
 const COLLECTION = 'categories';
 
 export const DEFAULT_CATEGORIES = {
-  marketplace: ['Electronics', 'Mobile Phones', 'Computers', 'Vehicles', 'Furniture', 'Appliances', 'Clothing', 'Other'],
   services: ['Cleaning', 'Moving', 'Driver', 'Repair', 'Food Catering', 'Translation', 'Tuition', 'Freelance'],
 };
 
 // Human-readable labels for the Admin > Categories tab.
 export const MODULE_LABELS = {
-  marketplace: '🛒 Buy & Sell Categories',
   services: '🧰 Local Services Categories',
 };
 

@@ -1,6 +1,3 @@
-// Verification, marketplace, and chat-report moderation queues for
-// MySheba Admin Web. Marketplace/Chat sections mirror real mobile-app
-// schemas confirmed against marketplaceModerationService.js and
 // directChatModerationService.js; Identity Verification's collection
 // name is still an inferred guess pending confirmation against real
 // mobile source.
@@ -110,19 +107,14 @@ export async function reviewVerification(
 }
 
 // ---------------------------------------------------------------------
-// Marketplace Moderation — real schema confirmed against the mobile
-// app's src/firebase/marketplaceModerationService.js. Five report kinds,
 // each its own collection, unified into one feed the same way
 // subscribeAllReports does on mobile. Each kind's underlying post lives
-// in its own module collection (marketplaceListings/properties/
-// roommateRequests/serviceProviders/communityPosts) with a uniform
 // {status, updatedAt} shape - hide sets status:'hidden', restore sets
 // status:'active', delete is a hard doc delete. This replaces an earlier
 // version of this file that only handled 'listing' reports against a
 // guessed listingPath/hidden-flag shape that didn't match reality.
 // ---------------------------------------------------------------------
 
-export type ReportKind = 'listing' | 'property' | 'roommate' | 'service' | 'community';
 export type ReportStatus = 'open' | 'resolved';
 
 interface ReportKindConfig {
@@ -137,40 +129,28 @@ interface ReportKindConfig {
 export const REPORT_KINDS: Record<ReportKind, ReportKindConfig> = {
   listing: {
     label: 'Buy & Sell',
-    collection: 'marketplaceReports',
-    targetCollection: 'marketplaceListings',
     targetIdField: 'listingId',
     targetTitleField: 'listingTitle',
     ownerField: 'sellerId',
   },
   property: {
-    label: 'Accommodation',
     collection: 'propertyReports',
     targetCollection: 'properties',
     targetIdField: 'propertyId',
     targetTitleField: 'propertyTitle',
     ownerField: 'ownerId',
   },
-  roommate: {
     label: 'Room Sharing',
-    collection: 'roommateReports',
-    targetCollection: 'roommateRequests',
     targetIdField: 'requestId',
     targetTitleField: 'requestPosterName',
     ownerField: 'posterId',
   },
   service: {
     label: 'Local Services',
-    collection: 'serviceProviderReports',
-    targetCollection: 'serviceProviders',
     targetIdField: 'providerId',
     targetTitleField: 'providerName',
     ownerField: 'ownerId',
   },
-  community: {
-    label: 'Community',
-    collection: 'communityReports',
-    targetCollection: 'communityPosts',
     targetIdField: 'postId',
     targetTitleField: 'postTitle',
     ownerField: 'authorId',
@@ -179,7 +159,6 @@ export const REPORT_KINDS: Record<ReportKind, ReportKindConfig> = {
 
 const MAX_PER_KIND = 200;
 
-export interface MarketplaceReport {
   id: string;
   kind: ReportKind;
   kindLabel: string;
@@ -192,7 +171,6 @@ export interface MarketplaceReport {
   status: ReportStatus;
 }
 
-function mapReport(kind: ReportKind, d: QueryDocumentSnapshot<DocumentData>): MarketplaceReport {
   const cfg = REPORT_KINDS[kind];
   const data = d.data();
   return {
@@ -214,7 +192,6 @@ function mapReport(kind: ReportKind, d: QueryDocumentSnapshot<DocumentData>): Ma
 /** One-time fetch (not live - moderation doesn't need live target
  * updates) across all five report collections, merged and sorted newest
  * first, same shape subscribeAllReports produces on mobile. */
-export async function fetchAllMarketplaceReports(): Promise<MarketplaceReport[]> {
   const kinds = Object.keys(REPORT_KINDS) as ReportKind[];
   const results = await Promise.all(
     kinds.map(async (kind) => {
@@ -235,8 +212,6 @@ export async function fetchAllMarketplaceReports(): Promise<MarketplaceReport[]>
 
 /** Marks a report resolved (or reopens it) without touching the
  * underlying post. */
-export async function setMarketplaceReportStatus(
-  report: MarketplaceReport,
   status: ReportStatus,
   resolvedByUid: string
 ): Promise<void> {
@@ -256,7 +231,6 @@ export interface TargetStatus {
 /** Current status/owner of the reported post itself - fetched
  * separately since the report doc only has a title snapshot from when
  * it was filed, not the post's live state. */
-export async function fetchTargetStatus(report: MarketplaceReport): Promise<TargetStatus> {
   if (!report.targetId) return { status: null, ownerId: null, exists: false };
   const cfg = REPORT_KINDS[report.kind];
   const snap = await getDoc(doc(db, cfg.targetCollection, report.targetId));
@@ -265,29 +239,23 @@ export async function fetchTargetStatus(report: MarketplaceReport): Promise<Targ
   return { status: data.status ?? null, ownerId: data[cfg.ownerField] ?? null, exists: true };
 }
 
-export async function hideTarget(report: MarketplaceReport): Promise<void> {
   if (!report.targetId) throw new Error('No post reference on this report.');
   const cfg = REPORT_KINDS[report.kind];
   await updateDoc(doc(db, cfg.targetCollection, report.targetId), { status: 'hidden', updatedAt: new Date() });
 }
 
-export async function restoreTarget(report: MarketplaceReport): Promise<void> {
   if (!report.targetId) throw new Error('No post reference on this report.');
   const cfg = REPORT_KINDS[report.kind];
   await updateDoc(doc(db, cfg.targetCollection, report.targetId), { status: 'active', updatedAt: new Date() });
 }
 
-export async function deleteTarget(report: MarketplaceReport): Promise<void> {
   if (!report.targetId) throw new Error('No post reference on this report.');
   const cfg = REPORT_KINDS[report.kind];
   await deleteDoc(doc(db, cfg.targetCollection, report.targetId));
 }
 
-/** Bans/unbans a person from posting to Marketplace - a lighter action
  * than suspending their whole account. Routes through the same
  * `manageUser` Cloud Function userManagementService.ts already uses for
  * role/disable changes. */
-export async function setMarketplaceBan(targetUid: string, banned: boolean, reason?: string): Promise<void> {
   const fn = httpsCallable(functions, 'manageUser');
-  await fn({ action: 'setMarketplaceBan', targetUid, banned, reason: reason || '' });
 }

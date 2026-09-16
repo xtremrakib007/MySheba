@@ -1,8 +1,6 @@
-// Marketplace "Local Services" module (Phase 2 of the Marketplace PRD,
 // section 8) - "My Services" screen. Structurally mirrors
 // MyPropertiesScreen's tab-strip pattern, but the second tab is "Requests
 // Received" rather than "Saved" - Local Services has no equivalent of
-// propertySaves/marketplaceSaves (browsing a provider doesn't have a
 // "save for later" concept in the PRD), while it does have
 // serviceRequestService.subscribeReceivedRequests (leads sent to any of
 // the signed-in user's own provider profiles) with no screen of its own
@@ -14,7 +12,6 @@ import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
 import { useTheme } from "../theme/ThemeContext";
 import HeaderDecor from '../components/HeaderDecor';
-import * as serviceProviderService from '../firebase/serviceProviderService';
 import * as serviceRequestService from '../firebase/serviceRequestService';
 
 function getStatusStyle(colors) {
@@ -117,7 +114,6 @@ export default function MyServicesScreen() {
   } = useTheme();
 
   const styles = createStyles(colors);
-  const { goBackOrHome, openServiceProviderDetail, authUser } = useApp();
   const [tab, setTab] = useState('mine'); // mine | requests
   const [mine, setMine] = useState([]);
   const [requests, setRequests] = useState([]);
@@ -126,7 +122,6 @@ export default function MyServicesScreen() {
 
   useEffect(() => {
     if (!authUser) return undefined;
-    const unsub = serviceProviderService.subscribeMyProviders(authUser.uid, (list) => {
       setMine(list);
       setLoading(false);
     }, () => setLoading(false));
@@ -178,7 +173,6 @@ export default function MyServicesScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => (
-            <ListingRow item={item} onPress={() => openServiceProviderDetail(item.id)} />
           )}
           ListEmptyComponent={
             <View style={styles.center}>

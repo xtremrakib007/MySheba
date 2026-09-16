@@ -278,14 +278,8 @@ exports.manageUser = onCall(async (request) => {
     return { uid: targetUid, resellerId: newResellerId };
   }
 
-  if (action === 'setMarketplaceBan') {
-    // Marketplace Admin Panel > "Ban users" (PRD section 13). Deliberately
-    // scoped to marketplaceBanned rather than disabling the account or
-    // touching auth - see firestore.rules' isMarketplaceBanned(), which
-    // only blocks new Buy & Sell / Accommodation / Room Sharing posts.
     // Everything else (login, wallet, chat, other services) is untouched.
     if (callerRole !== 'admin' && callerRole !== 'superadmin') {
-      throw new HttpsError('permission-denied', 'Only an admin can ban a marketplace user.');
     }
     const { targetUid, banned, reason } = request.data;
     if (!targetUid || typeof banned !== 'boolean') {
@@ -309,26 +303,16 @@ exports.manageUser = onCall(async (request) => {
     await targetRef.update(
       banned
         ? {
-            marketplaceBanned: true,
-            marketplaceBanReason: (reason || '').trim(),
-            marketplaceBannedAt: admin.firestore.FieldValue.serverTimestamp(),
-            marketplaceBannedBy: callerUid,
           }
         : {
-            marketplaceBanned: false,
-            marketplaceBanReason: admin.firestore.FieldValue.delete(),
-            marketplaceBannedAt: admin.firestore.FieldValue.delete(),
-            marketplaceBannedBy: admin.firestore.FieldValue.delete(),
           }
     );
     await logAudit({
-      action: banned ? 'marketplace_user_banned' : 'marketplace_user_unbanned',
       targetUid,
       performedBy: callerUid,
       performedByRole: callerRole,
       details: { reason: reason || null },
     });
-    return { uid: targetUid, marketplaceBanned: banned };
   }
 
   if (action === 'downgradeRole') {
@@ -376,12 +360,9 @@ exports.manageUser = onCall(async (request) => {
 
   if (action === 'suspend') {
     // Blocks (or restores) an account's ability to sign in at all - unlike
-    // setMarketplaceBan, this actually disables the Firebase Auth user, so
     // every login attempt fails with auth/user-disabled (see
     // friendlyAuthError in src/firebase/authService.js) until reactivated.
-    // Superadmin only, and deliberately narrower than setMarketplaceBan's
     // "admin can touch anyone below staff tier" rule: suspending is a much
-    // bigger hammer than a marketplace ban, so it's reserved for the top
     // tier, and a superadmin can never suspend themselves or another
     // superadmin (that could lock every superadmin out of the platform
     // with nobody left who can undo it - only direct Firebase console

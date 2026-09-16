@@ -10,7 +10,6 @@ import HeaderDecor from '../components/HeaderDecor';
  * MySheba Help - a single "ask a question" entry point reachable from
  * Support. Each entry below is a common worker question mapped straight
  * to wherever MySheba already answers it (My Documents, a government
- * webview, Marketplace's Accommodation/Community/Local Services hubs) -
  * no new mechanism, just the same openX() calls the home grid uses. A
  * question with no direct feature (an employer pay dispute) falls back
  * to Support's own ticket form via openSupportWithPrefill - see
@@ -26,8 +25,6 @@ export default function HelpScreen() {
 
   const styles = createStyles(colors);
   const {
-    goBackOrHome, openMyDocuments, openWebView, openAccommodation,
-    openServiceProvidersHome, openCommunity, openSupportWithPrefill,
   } = useApp();
 
   const HELP_ITEMS = [
@@ -52,12 +49,10 @@ export default function HelpScreen() {
     {
       icon: '🏠',
       question: 'I need a room near my workplace.',
-      onPress: openAccommodation,
     },
     {
       icon: '🗣️',
       question: 'I need a Bengali-speaking clinic.',
-      onPress: openServiceProvidersHome,
     },
     {
       icon: '🛂',
@@ -67,7 +62,6 @@ export default function HelpScreen() {
     {
       icon: '💼',
       question: 'I need a job.',
-      onPress: openCommunity,
     },
   ];
 

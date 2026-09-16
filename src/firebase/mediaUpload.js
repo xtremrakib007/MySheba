@@ -43,11 +43,6 @@ export const uploadBusinessLogo = (uid, uri, mimeType) => imageUpload('business-
 export const uploadPaymentQr = (uri, mimeType) => imageUpload('payment-settings', 'duitnow-qr', uri, mimeType);
 export const uploadRemittanceReceipt = (txId, uri, mimeType) => imageUpload('remittance-receipts', txId, uri, mimeType);
 export const uploadOrderReceipt = (txId, uri, mimeType) => imageUpload('order-receipts', txId, uri, mimeType);
-export const uploadMarketplaceImage = (id, uri, mimeType, index) => imageUpload('marketplace-images', id, uri, mimeType, index);
-export const uploadPropertyImage = (id, uri, mimeType, index) => imageUpload('accommodation-images', id, uri, mimeType, index);
-export const uploadServiceProviderPhoto = (id, uri, mimeType) => imageUpload('service-provider-images', id, uri, mimeType);
-export const uploadCommunityImage = (id, uri, mimeType, index) => imageUpload('community-images', id, uri, mimeType, index);
-export const uploadSocialPostImage = (id, uri, mimeType, index) => imageUpload('social-images', id, uri, mimeType, index);
 export const uploadVerificationDocument = (uid, uri, mimeType) => imageUpload('verification-documents', uid, uri, mimeType);
 
 export async function uploadPassportCopy(uid, uri, mimeType) {

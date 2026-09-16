@@ -126,7 +126,6 @@ export default {
     visa: 'ভিসা',
     mydigital: 'মালয়েশিয়া অ্যারাইভাল কার্ড',
     passport: 'পাসপোর্ট',
-    marketplace: 'মার্কেটপ্লেস',
     myDocuments: 'আমার ডকুমেন্টস',
     salary: 'বেতন ও ওভারটাইম',
     esim: 'MY ই-সিম',

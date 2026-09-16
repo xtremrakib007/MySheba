@@ -1,7 +1,6 @@
 const { onRequest } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 
-// Serves a plain HTML page for one marketplace listing, reachable at
 // https://mysheba.top/listing/{id} once mysheba.top is connected to this
 // Firebase project as a custom Hosting domain (Firebase Console > Hosting >
 // Add custom domain) and firebase.json's hosting.rewrites sends /listing/**
@@ -45,7 +44,6 @@ function renderNotFoundPage() {
 }
 
 function renderListingPage(listing, id, requestUrl) {
-  const title = escapeHtml(listing.title || 'MySheba Marketplace listing');
   const price = `MYR ${Number(listing.price || 0).toFixed(2)}${listing.negotiable ? ' (Negotiable)' : ''}`;
   const description = escapeHtml(
     `${price}${listing.location ? ` · ${listing.location}` : ''}${listing.description ? ` — ${listing.description}` : ''}`
@@ -59,7 +57,6 @@ function renderListingPage(listing, id, requestUrl) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${title} - MySheba Marketplace</title>
 <meta name="description" content="${description}">
 
 <meta property="og:type" content="product">
@@ -94,7 +91,6 @@ ${image ? `<meta name="twitter:image" content="${escapeHtml(image)}">` : ''}
 </head>
 <body>
   <div class="wrap">
-    <div class="header">MySheba Marketplace</div>
     ${image ? `<img class="photo" src="${escapeHtml(image)}" alt="${title}">` : ''}
     <div class="body">
       ${sold ? '<div class="badge">SOLD</div>' : ''}
@@ -126,7 +122,6 @@ exports.listingPreview = onRequest(async (req, res) => {
   }
 
   try {
-    const snap = await admin.firestore().collection('marketplaceListings').doc(String(id)).get();
     if (!snap.exists) {
       res.status(404).send(renderNotFoundPage());
       return;

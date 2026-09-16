@@ -23,19 +23,9 @@ import { db, auth } from '../firebase/config';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const REPORT_KINDS: Record<string, { label: string; collection: string }> = {
-  listing: { label: 'Buy & Sell', collection: 'marketplaceReports' },
-  property: { label: 'Accommodation', collection: 'propertyReports' },
-  roommate: { label: 'Room Sharing', collection: 'roommateReports' },
-  service: { label: 'Local Services', collection: 'serviceProviderReports' },
-  community: { label: 'Community', collection: 'communityReports' },
 };
 
 const MODULES: Record<string, { label: string; icon: string; collection: string; closedStatus: string | null; closedLabel: string | null }> = {
-  listings: { label: 'Buy & Sell', icon: '🛒', collection: 'marketplaceListings', closedStatus: 'sold', closedLabel: 'Sold' },
-  properties: { label: 'Accommodation', icon: '🏠', collection: 'properties', closedStatus: 'rented', closedLabel: 'Rented' },
-  roommates: { label: 'Room Sharing', icon: '👥', collection: 'roommateRequests', closedStatus: 'closed', closedLabel: 'Closed' },
-  services: { label: 'Local Services', icon: '🧰', collection: 'serviceProviders', closedStatus: null, closedLabel: null },
-  community: { label: 'Community', icon: '📢', collection: 'communityPosts', closedStatus: null, closedLabel: null },
 };
 
 async function countOf(collectionName: string, ...constraints: any[]): Promise<number> {
@@ -106,8 +96,6 @@ async function getReportStats(): Promise<ReportStats> {
 
 async function getReviewStats(): Promise<{ count: number; avg: number }> {
   const [sellerSnap, providerSnap] = await Promise.all([
-    getDocs(collection(db, 'marketplaceSellerStats')),
-    getDocs(query(collection(db, 'serviceProviders'))),
   ]);
   let count = 0;
   let sum = 0;
@@ -157,7 +145,6 @@ export interface CategoryCount { category: string; count: number; }
 
 async function getTopCategories(): Promise<CategoryCount[]> {
   try {
-    const snap = await getDocs(query(collection(db, 'marketplaceListings'), where('status', '==', 'active'), orderBy('createdAt', 'desc'), limit(500)));
     const tally: Record<string, number> = {};
     snap.forEach((d) => {
       const c = d.data().category || 'Other';

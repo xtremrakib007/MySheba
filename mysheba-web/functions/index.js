@@ -82,7 +82,6 @@ function response(res, status, body) {
   return res.status(status).json(body);
 }
 
-// mysheba.top/listing/{id} - the marketplace share-link preview page (link
 // shared from the app's ListingDetail screen -> mysheba.top -> "Open in
 // MySheba App" / Play Store). This project (mysheba2) owns the mysheba.top
 // domain, but the actual preview page - with the real listing's photo/

@@ -1,6 +1,4 @@
-// Marketplace "Local Services" module (Phase 2 of the Marketplace PRD,
 // section 8) - "List a Service" form. Mirrors CreatePropertyScreen's
-// structure, with two differences that follow from serviceProviderService
 // data model: a single optional photo (one add/remove slot) instead of a
 // multi-photo row, and a price min/max pair instead of one price field
 // (PRD section 8's Provider Profile has "Price range", not a fixed price).
@@ -13,8 +11,6 @@ import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
 import { useTheme } from "../theme/ThemeContext";
 import HeaderDecor from '../components/HeaderDecor';
-import * as serviceProviderService from '../firebase/serviceProviderService';
-import { uploadServiceProviderPhoto } from '../firebase/mediaUpload';
 import LocationField from '../components/LocationField';
 
 export default function CreateServiceScreen() {
@@ -24,7 +20,6 @@ export default function CreateServiceScreen() {
   } = useTheme();
 
   const styles = createStyles(colors);
-  const { goBackOrHome, openServiceProviderDetail, authUser, profile, serviceCategories } = useApp();
 
   const [category, setCategory] = useState(serviceCategories[0]);
   const [name, setName] = useState('');
@@ -59,18 +54,14 @@ const result = await ImagePicker.launchImageLibraryAsync({
 
     setSubmitting(true);
     try {
-      const providerId = await serviceProviderService.createProvider(
         { uid: authUser.uid, name: profile?.name, role: profile?.role },
         { category, name, description, priceMin, priceMax, serviceArea, availability, latitude: coords.latitude, longitude: coords.longitude }
       );
 
       if (photo) {
-        const url = await uploadServiceProviderPhoto(providerId, photo.uri, photo.mimeType);
-        await serviceProviderService.setProviderPhoto(providerId, url);
       }
 
       showAlert('MySheba', 'Your service listing is live!');
-      openServiceProviderDetail(providerId);
     } catch (err) {
       showAlert('MySheba', err.message || 'Could not create the listing. Please try again.');
     } finally {

@@ -3,7 +3,6 @@
 // Generic Firestore CRUD for the ad system's "configuration" collections -
 // advertisements, ad_campaigns, ad_advertisers, ad_placements, ad_packages.
 // Same shape every other service file in this folder uses (compare
-// socialLinksService.js / bannerService.js): plain firebase/firestore v9
 // modular calls against the shared `db` from ./config, no new Firebase
 // initialization anywhere in this file.
 //

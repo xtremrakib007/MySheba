@@ -27,7 +27,6 @@ export default function NotificationCenter() {
   const alerts = useMemo<AlertItem[]>(() => [
     { key: 'kyc', title: 'Pending KYC reviews', value: Number(overview?.pendingVerifications || 0), severity: 'warning', path: '/kyc-operations' },
     { key: 'support', title: 'Open support workload', value: Number(overview?.openTickets || 0), severity: 'warning', path: '/support-operations' },
-    { key: 'marketplace', title: 'Marketplace reports', value: Number(overview?.pendingMarketplaceReports || 0), severity: 'critical', path: '/marketplace-moderation' },
     { key: 'chat', title: 'Chat reports', value: Number(overview?.pendingChatReports || 0), severity: 'critical', path: '/chat-reports' },
   ].filter((item) => item.value > 0), [overview]);
   const unreadItems = useMemo(() => items.filter((item) => !read.includes(item.id)), [items, read]);

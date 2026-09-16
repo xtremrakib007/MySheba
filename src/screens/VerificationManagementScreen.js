@@ -1,6 +1,4 @@
-// Marketplace Admin Panel > Verification Management (sitemap section,
 // Phase 3 of the PRD). Admin/superadmin only (gated in Sidebar.js, same
-// pattern as MarketplaceModerationScreen). Shows every pending identity
 // verification request, lets the admin view the submitted ID document and
 // Approve (grants the ✓ Verified badge via the approveVerification Cloud
 // Function) or Reject (with a reason the user will see - see

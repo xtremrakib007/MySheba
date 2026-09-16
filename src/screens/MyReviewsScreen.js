@@ -6,26 +6,20 @@ import { radius } from '../theme/theme';
 import { useTheme } from "../theme/ThemeContext";
 import HeaderDecor from '../components/HeaderDecor';
 import StarRow from '../components/StarRow';
-import * as marketplaceReviewService from '../firebase/marketplaceReviewService';
 import * as serviceReviewService from '../firebase/serviceReviewService';
-import * as serviceProviderService from '../firebase/serviceProviderService';
 import { fetchProfile } from '../firebase/authService';
 
-// "My Reviews" (My Marketplace) - PRD section 11 / sitemap. Was previously
 // a documented gap: reviews only surfaced one-at-a-time on a listing's or
 // provider's own detail screen, with no place to see everything a user
 // has written or received in one list.
 //
 // "Given" combines:
-//   - marketplaceReviews where reviewerId == me   (Buy & Sell)
 //   - serviceReviews where reviewerId == me       (Local Services)
 // "Received" combines:
-//   - marketplaceReviews where sellerId == me     (sellerId IS my uid)
 //   - serviceReviews on any provider profile I own (providerId is an
 //     auto-id, not my uid, so this first loads my provider ids via
 //     subscribeMyProviders, then subscribes reviews for those ids)
 //
-// Target/reviewer display names aren't stored on marketplace reviews
 // (only reviewerName is), so "Given" rows resolve the seller's name via
 // fetchProfile / getProvider, cached in local state so repeat rows for
 // the same target don't refetch.
@@ -70,13 +64,10 @@ export default function MyReviewsScreen() {
   } = useTheme();
 
   const styles = createStyles(colors);
-  const { goBackOrHome, authUser, openServiceProviderDetail } = useApp();
   const [tab, setTab] = useState('given'); // given | received
   const [loading, setLoading] = useState(true);
 
-  const [givenMarketplace, setGivenMarketplace] = useState([]);
   const [givenService, setGivenService] = useState([]);
-  const [receivedMarketplace, setReceivedMarketplace] = useState([]);
   const [receivedService, setReceivedService] = useState([]);
   const [myProviderIds, setMyProviderIds] = useState([]);
   const [nameCache, setNameCache] = useState({}); // uid/providerId -> display name
@@ -88,7 +79,6 @@ export default function MyReviewsScreen() {
         const profile = await fetchProfile(id);
         setNameCache((prev) => ({ ...prev, [cacheKey]: profile?.name || 'Seller' }));
       } else {
-        const provider = await serviceProviderService.getProvider(id);
         setNameCache((prev) => ({ ...prev, [cacheKey]: provider?.name || 'Service' }));
       }
     } catch {
@@ -98,13 +88,9 @@ export default function MyReviewsScreen() {
 
   useEffect(() => {
     if (!authUser) return undefined;
-    const unsub1 = marketplaceReviewService.subscribeMyReviews(authUser.uid, (list) => {
-      setGivenMarketplace(list);
       setLoading(false);
     }, () => setLoading(false));
     const unsub2 = serviceReviewService.subscribeMyReviews(authUser.uid, setGivenService, () => {});
-    const unsub3 = marketplaceReviewService.subscribeSellerReviews(authUser.uid, setReceivedMarketplace, () => {});
-    const unsub4 = serviceProviderService.subscribeMyProviders(authUser.uid, (list) => {
       setMyProviderIds(list.map((p) => p.id));
     }, () => {});
     return () => { unsub1 && unsub1(); unsub2 && unsub2(); unsub3 && unsub3(); unsub4 && unsub4(); };
@@ -118,7 +104,6 @@ export default function MyReviewsScreen() {
   // unique target - a user reviewing many sellers/providers is still a
   // handful of extra reads, not worth a batched fetch.
   useEffect(() => {
-    givenMarketplace.forEach((r) => {
       const key = `seller:${r.sellerId}`;
       if (nameCache[key] === undefined) resolveName('seller', r.sellerId);
     });
@@ -127,10 +112,8 @@ export default function MyReviewsScreen() {
       if (nameCache[key] === undefined) resolveName('service', r.providerId);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [givenMarketplace, givenService]);
 
   const givenData = [
-    ...givenMarketplace.map((r) => ({
       id: `m_${r.id}`,
       title: nameCache[`seller:${r.sellerId}`] || 'Loading…',
       subtitle: 'Buy & Sell',
@@ -148,12 +131,10 @@ export default function MyReviewsScreen() {
       rating: r.rating,
       comment: r.comment,
       when: r.createdAt,
-      onPress: () => openServiceProviderDetail(r.providerId),
     })),
   ].sort((a, b) => (b.when?.seconds || 0) - (a.when?.seconds || 0));
 
   const receivedData = [
-    ...receivedMarketplace.map((r) => ({
       id: `m_${r.id}`,
       title: r.reviewerName || 'A buyer',
       subtitle: 'Buy & Sell',

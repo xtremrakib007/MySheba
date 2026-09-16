@@ -33,7 +33,6 @@ export const navGroups: NavGroup[] = [
     { label: 'User Operations', path: '/users', icon: Users, enabled: true },
     { label: 'KYC Operations', path: '/kyc-operations', icon: ClipboardList, enabled: true },
     { label: 'Support Operations', path: '/support-operations', icon: Headphones, enabled: true },
-    { label: 'Marketplace Operations', path: '/marketplace-operations', icon: Store, enabled: true },
     { label: 'Service Operations', path: '/service-operations', icon: Workflow, enabled: true },
     { label: 'Inquiries', path: '/inquiries', icon: Plane, enabled: true },
   ] },
@@ -44,7 +43,6 @@ export const navGroups: NavGroup[] = [
   ] },
   { label: 'Verification & Moderation', accent: 'warning', items: [
     { label: 'Identity Verification', path: '/verification', icon: BadgeCheck, enabled: true },
-    { label: 'Marketplace Moderation', path: '/marketplace-moderation', icon: ShieldAlert, enabled: true },
     { label: 'Chat Reports', path: '/chat-reports', icon: MessageSquareWarning, enabled: true },
     { label: 'Security Center', path: '/security', icon: ShieldCheck, enabled: true },
   ] },

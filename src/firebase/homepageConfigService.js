@@ -10,7 +10,6 @@
 // Malaysia (PRD: "Malaysia should continue using the existing service-first
 // homepage") is the only country wired to the pre-existing layout by
 // default; every other country - including any code not present in this
-// doc at all yet - defaults to the social-first layout the PRD describes
 // for "other supported countries". A user with no `country` set on their
 // profile (every account that existed before this feature, plus anyone who
 // hasn't visited Profile > Country/Region yet) is treated as Malaysia, so
@@ -30,19 +29,11 @@ const SETTINGS_DOC = doc(db, 'settings', 'homepageConfig');
 
 // Modules a country's homepage can show. `layout` picks which
 // CustomerHomeScreen body renders (see CustomerHomeScreen.js /
-// SocialHomeScreen.js); the rest are fine-grained toggles both layouts
-// read so a superadmin can, say, turn off the community feed for a country
 // without dropping it all the way back to the plain service grid.
-// showCommunityFeed and showSocialFeed are independent - PRD §3's general
-// Social Feed and the pre-existing typed Community module (Jobs/Events/
 // Lost&Found/Emergency/News) both render as their own section on
-// SocialHomeScreen when their toggle is on, so a superadmin can run either,
 // both, or neither.
 export const DEFAULT_MODULES = {
-  layout: 'social', // 'service' | 'social'
   showServices: true,
-  showCommunityFeed: true,
-  showSocialFeed: true,
   showBanners: true,
 };
 
@@ -53,9 +44,7 @@ export const MALAYSIA_MODULES = {
 
 // Seed shown in the admin UI / used before the doc has ever been saved -
 // matches the PRD's two named starting points (MY service-first, everyone
-// else social-first) without needing a row per country up front; a
 // superadmin only needs to add an entry for a country once they want to
-// diverge from the social-first default.
 export const DEFAULT_HOMEPAGE_CONFIG = {
   MY: MALAYSIA_MODULES,
 };
@@ -67,7 +56,6 @@ export function subscribeHomepageConfig(callback, onError) {
 }
 
 /** Resolves which modules a given user's country should see, falling back
- * through: this country's saved config -> social-first default -> (no
  * country on the profile at all) Malaysia's config, so legacy/not-yet-set
  * accounts keep today's homepage exactly as it is. */
 export function getHomepageModules(homepageConfig, countryCode) {

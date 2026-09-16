@@ -49,7 +49,6 @@ rather keep it under the same console as the rest of the project.
   change, enable/disable an account.
 - **Feature Access** (`/feature-access`): per-customer toggle matrix for
   individual modules (Mobile Banking, Recharge, Remittance, Travel,
-  Marketplace, Ticket Reseller), stored on `users/{uid}.features`.
 - Role-rank permissions (`src/services/userManagementService.ts`):
   admins can manage `user`/`dealer`/`reseller` accounts; superadmins can
   additionally promote to `admin`. Nobody can grant `superadmin` from the
@@ -67,8 +66,6 @@ rather keep it under the same console as the rest of the project.
 - **Identity Verification** (`/verification`): pending KYC queue with
   document/selfie image previews, approve/reject. Approving or rejecting
   mirrors onto `users/{uid}.verificationStatus` and `.verified`.
-- **Marketplace Moderation** (`/marketplace-moderation`): reported
-  listings queue (Buy & Sell / Accommodation / Room Sharing), dismiss or
   remove — removal hides the underlying listing doc when the report
   carries a `listingPath`.
 - **Chat Reports** (`/chat-reports`): reported conversations/messages,
@@ -76,10 +73,8 @@ rather keep it under the same console as the rest of the project.
   `updateUserDisabled` action as User Management, so it also respects
   role-rank permissions).
 - **Assumption flagged**: none of `verificationRequests`,
-  `marketplaceReports`, or `chatReports` collections were in this drop,
   so their shape (see `src/services/moderationService.ts`) is inferred
   from the moderation flows implied by the sitemap. Confirm field names
-  — especially `listingPath` on marketplace reports and
   `reportedUserId` on chat reports — against what the mobile app/report
   Cloud Functions actually write before relying on this in production.
 
@@ -90,7 +85,6 @@ rather keep it under the same console as the rest of the project.
   `messages` subcollection and flips status to `inProgress`), manual
   status change, "assign to me".
 - **Reports** (`/reports`): a live ops-overview dashboard — total/verified
-  users, pending verifications, open tickets, pending marketplace and
   chat reports — using Firestore `getCountFromServer` against the
   collections already established in Phases 2–4. This is a snapshot, not
   historical trends.
@@ -112,7 +106,6 @@ each page just declares its own fields and Firestore collection name:
 | Rates & Pricing | `rates` | buy/sell rate + commission per service |
 | Salary Settings | `salaryTiers` | volume-based dealer/reseller tiers |
 | Banners & Announcements | `banners` | pastes an already-hosted image URL, no upload |
-| Categories | `categories` | per marketplace module |
 | Module Subscriptions | `moduleSubscriptions` | global module on/off + price — distinct from the per-customer [[Feature Access]] toggles in Phase 2 |
 | Payment Settings | `paymentMethods` | payout/payment channels |
 

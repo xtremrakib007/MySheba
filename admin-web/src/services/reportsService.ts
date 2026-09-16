@@ -22,7 +22,6 @@ export interface OpsOverview {
   verifiedUsers: number | null;
   pendingVerifications: number | null;
   openTickets: number | null;
-  pendingMarketplaceReports: number | null;
 }
 
 async function count(coll: string, field?: string, value?: unknown): Promise<number | null> {
@@ -49,18 +48,13 @@ async function countOpenTickets(): Promise<number | null> {
   return (open ?? 0) + (inProgress ?? 0);
 }
 
-// Real status values confirmed against marketplaceModerationService.js:
-// a marketplace report is either 'resolved' or has no status field at
 // all yet (legacy docs predating the status field) - there's no
 // 'pending' value written anywhere, so counting status=='pending'
 // (the old version of this function) always silently returned 0.
 // "Open" has to be computed as total minus resolved instead of matched
 // directly, since Firestore can't count "field is missing OR == x" in
 // one query.
-async function countOpenMarketplaceReports(): Promise<number | null> {
   const [total, resolved] = await Promise.all([
-    count('marketplaceReports'),
-    count('marketplaceReports', 'status', 'resolved'),
   ]);
   if (total === null) return null;
   return total - (resolved ?? 0);
@@ -72,13 +66,11 @@ export async function fetchOpsOverview(): Promise<OpsOverview> {
     verifiedUsers,
     pendingVerifications,
     openTickets,
-    pendingMarketplaceReports,
   ] = await Promise.all([
     count('users'),
     count('users', 'verified', true),
     count('verificationRequests', 'status', 'pending'),
     countOpenTickets(),
-    countOpenMarketplaceReports(),
   ]);
 
   return {
@@ -86,6 +78,5 @@ export async function fetchOpsOverview(): Promise<OpsOverview> {
     verifiedUsers,
     pendingVerifications,
     openTickets,
-    pendingMarketplaceReports,
   };
 }

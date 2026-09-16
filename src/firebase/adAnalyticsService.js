@@ -88,7 +88,6 @@ async function getDailyStatsInRange(startKey, endKey) {
  * campaigns/advertisers is nowhere near the "millions of raw impression
  * documents" scale the PERFORMANCE section is about; this is the same
  * "small config collection, just read it" posture analyticsService.js's
- * getModuleStats already uses for marketplace listings. */
 async function getCountsSummary() {
   const [campaigns, ads, advertiserCount] = await Promise.all([
     getAllDocs(AD_COLLECTIONS.CAMPAIGNS),

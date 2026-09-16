@@ -4,7 +4,6 @@
 // targetFeatures in src/types/ads.ts) or a placement can belong to
 // (adPlacements.ts). Deliberately its own small object, separate from the
 // app's existing internal service keys (ServiceGrid.js's tile keys like
-// 'recharge', 'mobilebanking', 'flight', 'marketplace', 'support') -
 // those drive navigation/routing today and this phase isn't touching
 // that. A later phase's targeting logic is what will map between the two
 // (e.g. FEATURE_IDS.MOBILE_RECHARGE <-> the 'recharge' service key) -
@@ -21,10 +20,8 @@ export const FEATURE_IDS = {
   REMITTANCE: 'remittance',
   AIR_TICKET: 'air_ticket',
   JOBS: 'jobs',
-  ACCOMMODATION: 'accommodation',
   BUY_SELL: 'buy_sell',
   SERVICES: 'services',
-  COMMUNITY: 'community',
   HELP_SUPPORT: 'help_support',
 } as const;
 
@@ -46,10 +43,8 @@ export const FEATURE_LABELS: Record<FeatureId, string> = {
   [FEATURE_IDS.REMITTANCE]: 'Remittance',
   [FEATURE_IDS.AIR_TICKET]: 'Air Ticket',
   [FEATURE_IDS.JOBS]: 'Jobs',
-  [FEATURE_IDS.ACCOMMODATION]: 'Accommodation',
   [FEATURE_IDS.BUY_SELL]: 'Buy & Sell',
   [FEATURE_IDS.SERVICES]: 'Services',
-  [FEATURE_IDS.COMMUNITY]: 'Community',
   [FEATURE_IDS.HELP_SUPPORT]: 'Help / Support',
 };
 

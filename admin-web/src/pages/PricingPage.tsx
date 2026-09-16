@@ -24,7 +24,6 @@ const ROLE_PRICE_LABELS: Record<RolePriceKey, string> = {
   webviewAccessCost: 'FOMEMA / Visa Status Check (pts)',
   webviewSubmitCost: 'Malaysia Arrival Card / Passport Submission (pts)',
   paymentSuccessCost: 'Bus / Train / MY e-SIM Purchase (pts)',
-  listingBoostCost: 'Marketplace Listing Boost (pts)',
   notepadCost: 'Notepad (pts/month)',
   myDocumentsCost: 'My Documents (pts/month)',
   salaryOtCost: 'Salary & OT (pts/month)',
@@ -104,8 +103,6 @@ export default function PricingPage() {
           <FieldRow label="Salary & OT (pts/month)" value={pricing.salaryOtCost} suffix=" pts" onSave={(v) => save('salaryOtCost', v)} />
           <FieldRow label="Subscription Cycle Length (days)" value={pricing.moduleSubscriptionDays} suffix=" days" onSave={(v) => save('moduleSubscriptionDays', v)} />
         </Section>
-        <Section title="Marketplace Boost">
-          <FieldRow label="Marketplace Listing Boost (pts)" value={pricing.listingBoostCost} suffix=" pts" onSave={(v) => save('listingBoostCost', v)} />
           <FieldRow label="Boost Duration (days)" value={pricing.listingBoostDurationDays} suffix=" days" onSave={(v) => save('listingBoostDurationDays', v)} />
         </Section>
         {isSuperadmin ? <Section title="Role-Based Pricing (superadmin only)">{ROLE_PRICE_KEYS.map((key) => <RolePriceRow key={key} priceKey={key} pricing={pricing} onSave={saveRolePrice} />)}</Section> : <div className="rounded-2xl border border-dashed border-[var(--color-line)] bg-[var(--color-card)] p-5 text-sm text-[var(--color-ink-soft)]">Role-Based Pricing is visible to superadmin accounts only.</div>}

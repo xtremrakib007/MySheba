@@ -209,19 +209,15 @@ exports.onCallCreated = onDocumentCreated('calls/{callId}', async event => {
 });
 
 const MARKETPLACE_REPORT_HIDE_THRESHOLD = 5;
-exports.onMarketplaceReportCreated = onDocumentCreated('marketplaceReports/{reportId}', async event => {
   const r = event.data.data();
   if (!r.listingId) return;
-  const ref = db.collection('marketplaceListings').doc(r.listingId), s = await ref.get();
   if (!s.exists) return;
   const d = s.data(), count = (d.reportCount || 0) + 1, patch = { reportCount: admin.firestore.FieldValue.increment(1) };
   if (count >= MARKETPLACE_REPORT_HIDE_THRESHOLD && d.status !== 'hidden') patch.status = 'hidden';
   await ref.update(patch);
-  await notifyRoles(ADMIN_ROLES, '🚩 New marketplace report', `${r.reason || 'Reported'}: \"${d.title || 'A listing'}\"`, { type: 'marketplaceReport', listingId: r.listingId });
 });
 
 const ACCOMMODATION_REPORT_HIDE_THRESHOLD = 5;
-exports.onAccommodationReportCreated = onDocumentCreated('propertyReports/{reportId}', async event => {
   const r = event.data.data();
   if (!r.propertyId) return;
   const ref = db.collection('properties').doc(r.propertyId), s = await ref.get();
@@ -233,51 +229,39 @@ exports.onAccommodationReportCreated = onDocumentCreated('propertyReports/{repor
 });
 
 const ROOMMATE_REPORT_HIDE_THRESHOLD = 5;
-exports.onRoommateReportCreated = onDocumentCreated('roommateReports/{reportId}', async event => {
   const r = event.data.data();
   if (!r.requestId) return;
-  const ref = db.collection('roommateRequests').doc(r.requestId), s = await ref.get();
   if (!s.exists) return;
   const d = s.data(), count = (d.reportCount || 0) + 1, patch = { reportCount: admin.firestore.FieldValue.increment(1) };
   if (count >= ROOMMATE_REPORT_HIDE_THRESHOLD && d.status !== 'hidden') patch.status = 'hidden';
   await ref.update(patch);
-  await notifyRoles(ADMIN_ROLES, '🚩 New roommate request report', `${r.reason || 'Reported'}: request by \"${d.posterName || 'a user'}\"`, { type: 'roommateReport', requestId: r.requestId });
 });
 
 const SERVICE_PROVIDER_REPORT_HIDE_THRESHOLD = 5;
-exports.onServiceProviderReportCreated = onDocumentCreated('serviceProviderReports/{reportId}', async event => {
   const r = event.data.data();
   if (!r.providerId) return;
-  const ref = db.collection('serviceProviders').doc(r.providerId), s = await ref.get();
   if (!s.exists) return;
   const d = s.data(), count = (d.reportCount || 0) + 1, patch = { reportCount: admin.firestore.FieldValue.increment(1) };
   if (count >= SERVICE_PROVIDER_REPORT_HIDE_THRESHOLD && d.status !== 'hidden') patch.status = 'hidden';
   await ref.update(patch);
-  await notifyRoles(ADMIN_ROLES, '🚩 New service listing report', `${r.reason || 'Reported'}: \"${d.name || 'A service'}\"`, { type: 'serviceProviderReport', providerId: r.providerId });
 });
 
 const COMMUNITY_REPORT_HIDE_THRESHOLD = 5;
-exports.onCommunityReportCreated = onDocumentCreated('communityReports/{reportId}', async event => {
   const r = event.data.data();
   if (!r.postId) return;
-  const ref = db.collection('communityPosts').doc(r.postId), s = await ref.get();
   if (!s.exists) return;
   const d = s.data(), count = (d.reportCount || 0) + 1, patch = { reportCount: admin.firestore.FieldValue.increment(1) }, emergency = d.type === 'emergency';
   if (count >= COMMUNITY_REPORT_HIDE_THRESHOLD && !emergency && d.status !== 'hidden') patch.status = 'hidden';
   await ref.update(patch);
-  await notifyRoles(ADMIN_ROLES, emergency ? '🚨 Emergency post report' : '🚩 New community post report', `${r.reason || 'Reported'}: \"${d.title || 'A post'}\"`, { type: 'communityReport', postId: r.postId });
 });
 
 const SOCIAL_REPORT_HIDE_THRESHOLD = 5;
-exports.onSocialReportCreated = onDocumentCreated('socialReports/{reportId}', async event => {
   const r = event.data.data();
   if (!r.postId) return;
-  const ref = db.collection('socialPosts').doc(r.postId), s = await ref.get();
   if (!s.exists) return;
   const d = s.data(), count = (d.reportCount || 0) + 1, patch = { reportCount: admin.firestore.FieldValue.increment(1) };
   if (count >= SOCIAL_REPORT_HIDE_THRESHOLD && d.status !== 'hidden') patch.status = 'hidden';
   await ref.update(patch);
-  await notifyRoles(ADMIN_ROLES, '🚩 New social post report', `${r.reason || 'Reported'}: a social post`, { type: 'socialReport', postId: r.postId });
 });
 
 exports.onBusinessProfileWritten = onDocumentWritten('businessProfiles/{uid}', async event => {
@@ -286,5 +270,4 @@ exports.onBusinessProfileWritten = onDocumentWritten('businessProfiles/{uid}', a
   if (!a) return;
   const was = !!(before && before.isBusinessProfile);
   if (!a.isBusinessProfile || was) return;
-  await notifyUser(event.params.uid, '🏢 You’ve been upgraded to a Business Profile!', 'Add your business name, logo, and description from your Profile to start standing out across the Marketplace.', { type: 'businessProfile' });
 });

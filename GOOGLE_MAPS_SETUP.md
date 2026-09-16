@@ -1,7 +1,5 @@
 # Google Maps setup for MySheba
 
-This covers the Maps/Places/Geocoding integration added across Accommodation,
-Buy & Sell, Local Services, Community Events, and Business Directory.
 
 ## 1. Google Cloud Console
 
@@ -67,10 +65,6 @@ modules until you rebuild it.
 | Shared field | `src/components/LocationField.js` | Tappable form field wrapping the picker, drop-in replacement for the old text `Location` input |
 | Shared preview | `src/components/MapPreview.js` | Small read-only map on detail screens, tap → opens native Maps app for directions |
 | Geo utils | `src/utils/geo.js` | `computeGeohash`, `filterByDistance`, `formatDistance` (geofire-common) |
-| Create screens | `CreatePropertyScreen`, `CreateListingScreen`, `CreateServiceScreen`, `CreateCommunityPostScreen` | Text `Location` input → `LocationField`; saves `latitude`/`longitude` |
-| Detail screens | `PropertyDetailScreen`, `ListingDetailScreen`, `ServiceProviderDetailScreen`, `CommunityPostDetailScreen`, `BusinessProfileScreen` | Show `MapPreview` when coords exist |
-| Home feeds | `AccommodationHomeScreen`, `MarketplaceHomeScreen`, `ServiceProvidersHomeScreen`, `CommunityHomeScreen` | "📍 Nearby" toggle - gets GPS position, sorts by distance within 50 km, shows "X km away" on cards |
-| Firestore writes | `accommodationService.createProperty`, `marketplaceService.createListing`, `serviceProviderService.createProvider`, `communityService.createPost` | Now store `latitude`, `longitude`, `geohash` alongside the existing text `location`/`serviceArea` field |
 | Business Directory | `BusinessProfileScreen` | Owner can now set a business location (map picker) in addition to name/category/description; stored via existing `updateBusinessDetails` (no service change needed) |
 | Config | `app.json`, `app.config.js`, `package.json` | Location permissions, Maps API key wiring, `react-native-maps` / `expo-location` / `geofire-common` deps |
 
@@ -80,12 +74,10 @@ modules until you rebuild it.
   have no `latitude`/`longitude`** - they'll show their old text location
   but no map, and won't appear in "Nearby" results. There's no backfill
   script; owners need to re-set location via the edit flow to get a pin
-  (Accommodation/Marketplace/Services edit screens currently don't expose
   the location field for editing existing items - only creation. Say the
   word if you want that added too.)
 - "Nearby" radius is hardcoded to 50 km (`NEARBY_RADIUS_KM` in each Home
   screen) - easy constant to change per module if you want different radii
-  for, say, Local Services vs Accommodation.
 - The Places Autocomplete call is restricted to `components=country:my`
   (Malaysia) in `LocationPickerModal.js` - remove that if you ever need
   cross-border listings.

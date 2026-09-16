@@ -5,7 +5,6 @@ import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
 import { useTheme } from "../theme/ThemeContext";
 import HeaderDecor from '../components/HeaderDecor';
-import * as accommodationService from '../firebase/accommodationService';
 
 function getStatusStyle(colors) {
   return {
@@ -57,7 +56,6 @@ export default function MyPropertiesScreen() {
 
   useEffect(() => {
     if (!authUser) return undefined;
-    const unsub = accommodationService.subscribeMyProperties(authUser.uid, (list) => {
       setMine(list);
       setLoading(false);
     }, () => setLoading(false));
@@ -66,7 +64,6 @@ export default function MyPropertiesScreen() {
 
   useEffect(() => {
     if (!authUser) return undefined;
-    return accommodationService.subscribeMySaved(authUser.uid, setSaved, () => {});
   }, [authUser]);
 
   const data = tab === 'mine' ? mine : saved;

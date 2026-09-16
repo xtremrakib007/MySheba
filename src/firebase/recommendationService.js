@@ -1,21 +1,16 @@
-// Marketplace "Recommended listings" (Phase 3 of the Marketplace PRD).
 //
 // This is a lightweight, on-device recommender rather than a server-side
 // ML model - it scores the same client-side feed the home screen already
-// loads (subscribeActiveListings, capped at 200 - see marketplaceService.js)
 // using signals from that one user, so there's no separate training
 // pipeline or model to run/host, matching this app's scale for Phase 3.
 //
 // Signals used, weighted by recency:
-//   - marketplaceViews/{uid}: a rolling log of categories the user has
 //     opened (see recordView below), capped client-side to the most
 //     recent MAX_SIGNALS.
-//   - marketplaceSaves (existing "Saved Items" collection): categories of
 //     listings the user has bookmarked count as a stronger signal than a
 //     view.
 //
 // Data model added by this file:
-//   marketplaceViews/{uid}
 //     uid, recent: [{ category, ts (client Date.now() ms) }, ...]  (capped)
 import {
   doc,
@@ -26,7 +21,6 @@ import {
 } from 'firebase/firestore';
 import { db } from './config';
 
-const VIEWS = 'marketplaceViews';
 const MAX_SIGNALS = 30; // rolling window of recent category views kept per user
 const RECOMMEND_COUNT = 10; // how many cards the home screen's "Recommended for You" row shows
 
@@ -75,10 +69,8 @@ function decayedWeight(ageMs, baseWeight) {
 }
 
 /** Builds a { category: weight } affinity map from view signals and saved
- * listings. `saved` is the array from marketplaceService.subscribeMySaved
  * cross-referenced against `listingsById` to recover each save's category
  * (the save doc itself only stores title/price/image for its own list
- * rendering - see marketplaceService.js). */
 export function buildCategoryAffinity(viewSignals, saved, listingsById) {
   const now = Date.now();
   const weights = {};

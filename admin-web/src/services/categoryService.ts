@@ -9,7 +9,6 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
 export const DEFAULT_CATEGORIES: Record<string, string[]> = {
-  marketplace: [
     'Electronics',
     'Mobile Phones',
     'Computers',
@@ -32,7 +31,6 @@ export const DEFAULT_CATEGORIES: Record<string, string[]> = {
 };
 
 export const MODULE_LABELS: Record<string, string> = {
-  marketplace: 'Buy & Sell Categories',
   services: 'Local Services Categories',
 };
 

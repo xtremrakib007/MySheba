@@ -16,14 +16,12 @@ function Overview({ data }: { data: AnalyticsDashboard }) {
   return <div className="mt-6 space-y-6">
     <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
       <Card label="Registered users" value={data.users.total} icon={Users} hint={`${data.users.verified} verified`}/>
-      <Card label="Marketplace activity" value={data.modules.reduce((a,m)=>a+m.total,0)} icon={Activity} hint="Listings, properties, services, community"/>
       <Card label="Open reports" value={data.reports.open} icon={AlertTriangle} hint={`${data.reports.total} total reports`}/>
       <Card label="Average rating" value={data.reviews.avg ? data.reviews.avg.toFixed(1) : '—'} icon={Star} hint={`${data.reviews.count} reviews`}/>
     </div>
 
     <div className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
       <section className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-card)] p-5">
-        <div className="flex items-center justify-between"><div><h2 className="font-bold">Platform Activity</h2><p className="mt-1 text-xs text-[var(--color-ink-soft)]">New marketplace/community records · last 7 days</p></div><TrendingUp size={18} className="text-[var(--color-primary)]"/></div>
         <div className="mt-6 flex h-48 items-end gap-2 sm:gap-4">{data.trend.map((t,i)=><div key={`${t.label}-${i}`} className="flex h-full flex-1 flex-col items-center justify-end gap-1"><span className="text-[10px] font-semibold">{t.count}</span><div className="w-full max-w-12 rounded-t-lg bg-[var(--color-primary)]/70 transition-all" style={{height:`${Math.max(6,(t.count/max)*130)}px`}}/><span className="text-[10px] text-[var(--color-ink-soft)]">{t.label}</span></div>)}</div>
       </section>
       <section className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-card)] p-5"><h2 className="font-bold">User Distribution</h2><div className="mt-5 space-y-3">{roleRows.length ? roleRows.map(([role,count])=><div key={role}><div className="flex justify-between text-xs"><span className="capitalize">{role}</span><b>{count}</b></div><div className="mt-1 h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full bg-[var(--color-secondary)]" style={{width:`${(count/totalRoles)*100}%`}}/></div></div>) : <p className="text-sm text-[var(--color-ink-soft)]">No role data.</p>}</div></section>

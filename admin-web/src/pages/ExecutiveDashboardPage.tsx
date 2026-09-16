@@ -37,7 +37,6 @@ export default function ExecutiveDashboardPage() {
   const attention = [
     ['Pending KYC', overview?.pendingVerifications ?? null, '/verification', BadgeCheck],
     ['Open support', overview?.openTickets ?? null, '/support', Headphones],
-    ['Marketplace reports', overview?.pendingMarketplaceReports ?? null, '/marketplace-moderation', ShieldAlert],
     ['Chat reports', overview?.pendingChatReports ?? null, '/chat-reports', AlertTriangle],
   ].filter((x) => x[1] !== null && Number(x[1]) > 0) as [string, number, string, typeof AlertTriangle][];
 
