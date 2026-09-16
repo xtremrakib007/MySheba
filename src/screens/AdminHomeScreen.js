@@ -18,7 +18,6 @@ import AttachFileModal from '../components/AttachFileModal';
 import * as mediaUpload from '../firebase/mediaUpload';
 import HeaderDecor from '../components/HeaderDecor';
 import * as inquiryService from '../firebase/inquiryService';
-import * as directChatService from '../firebase/directChatService';
 import * as ratesService from '../firebase/ratesService';
 import * as settingsService from '../firebase/settingsService';
 import * as supportContactService from '../firebase/supportContactService';
@@ -281,8 +280,7 @@ export default function AdminHomeScreen() {
   } = useTheme();
 
   const styles = createStyles(colors);
-  const { authUser, profile, dealerTxs, inquiries, topups, banners, announcements, adminTab, setAdminTab, rates, pricing, internetPricing, supportContact, socialLinks, paymentSettings, logout, setScreen, openSidebar, openDirectChat, marketplaceCategories, serviceCategories, setHomeBackInterceptor, adminViewingSection: viewingSection, setAdminViewingSection: setViewingSection, homepageConfig } = useApp();
-  const [messagingInquiryId, setMessagingInquiryId] = useState(null);
+  const { authUser, profile, dealerTxs, inquiries, topups, banners, announcements, adminTab, setAdminTab, rates, pricing, internetPricing, supportContact, socialLinks, paymentSettings, logout, setScreen, openSidebar, marketplaceCategories, serviceCategories, setHomeBackInterceptor, adminViewingSection: viewingSection, setAdminViewingSection: setViewingSection, homepageConfig } = useApp();
   const [editRateKey, setEditRateKey] = useState(null);
   const [editPricingKey, setEditPricingKey] = useState(null);
   const [editPointCostKey, setEditPointCostKey] = useState(null);
@@ -501,31 +499,7 @@ export default function AdminHomeScreen() {
    * the inquiry, prefilled with the order reference so the admin doesn't have
    * to retype the route/date. Falls back to an alert if the inquiry has no
    * linked customer account (e.g. a guest submission). */
-  const messageInquiry = async (inq) => {
-    if (!inq.customerId) {
-      showAlert('MySheba', 'This inquiry has no customer account attached to message in-app. Use Call or WhatsApp instead.');
-      return;
-    }
-    setMessagingInquiryId(inq.id);
-    try {
-      await inquiryService.updateInquiryStatus(inq.id, 'contacted');
-      const customerName = inq.name || inq.phone || 'Customer';
-      const chatId = await directChatService.ensureDirectChat(
-        { uid: authUser.uid, name: profile?.name || 'Admin' },
-        { uid: inq.customerId, name: customerName }
-      );
-      openDirectChat(
-        chatId,
-        customerName,
-        inq.customerId,
-        `Hi ${inq.name || ''}, regarding your ${inq.type} inquiry (${inq.from} → ${inq.to} · ${inq.date}${inq.time ? ` · ${inq.time}` : ''}) - `
-      );
-    } catch (e) {
-      showAlert('MySheba', 'Could not start this conversation. Please try again.');
-    } finally {
-      setMessagingInquiryId(null);
-    }
-  };
+;
 
   /** Plain phone call - marks the inquiry contacted too, since a call is just as much "contact" as a chat message. */
   const callInquiry = async (inq) => {
@@ -1440,13 +1414,7 @@ export default function AdminHomeScreen() {
                   {inq.status !== 'closed' && (
                     <>
                       <View style={styles.actions}>
-                        <TouchableOpacity
-                          style={styles.primaryBtn}
-                          onPress={() => messageInquiry(inq)}
-                          disabled={messagingInquiryId === inq.id}
-                        >
-                          <Text style={styles.actionBtnText}>{messagingInquiryId === inq.id ? '…' : '💬 Contact'}</Text>
-                        </TouchableOpacity>
+                        
                         <TouchableOpacity style={styles.callBtn} onPress={() => callInquiry(inq)}>
                           <Text style={styles.actionBtnText}>📞 Call</Text>
                         </TouchableOpacity>
