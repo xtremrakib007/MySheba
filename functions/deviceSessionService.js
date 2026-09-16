@@ -218,7 +218,6 @@ exports.checkDeviceSession = onCall(async (request) => {
           verifyStaffEmailOtp(profile.pendingAdminEmailChallenge, data.emailOtp, deviceId, email);
           verifiedNewStaffDevice = true; verificationMethod = 'email_otp';
         } else {
-          // Password login only creates the pending state. No email or SMS is sent here.
           if (data.resendEmailChallenge) {
             await sendStaffEmailChallenge({ db, uid, email, deviceId, displayName: profile.name || profile.displayName });
           }
@@ -374,10 +373,29 @@ exports.revokeTrustedDevice = onCall(async (request) => {
   const deviceId = requireDeviceId(request);
   const db = getFirestore();
   try {
-    await userRef(db, uid).update({ [`trustedDevices.${deviceId}`]: FieldValue.delete() });
-    await logAudit({ action: 'staff_trusted_device_revoked', targetUid: uid, performedBy: uid, performedByRole: null, details: { deviceId } });
-    return { ok: true };
+    let wasActive = false;
+    await db.runTransaction(async (tx) => {
+      const ref = userRef(db, uid);
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError('not-found', 'No profile found for this account.');
+      const data = snap.data();
+      wasActive = data.activeDeviceId === deviceId;
+      const patch = { [`trustedDevices.${deviceId}`]: FieldValue.delete() };
+      if (wasActive) {
+        patch.activeSessionId = null;
+        patch.activeDeviceId = null;
+      }
+      if (data.pendingDeviceApproval?.deviceId === deviceId) patch.pendingDeviceApproval = null;
+      tx.update(ref, patch);
+    });
+    if (wasActive) {
+      try { await admin.auth().revokeRefreshTokens(uid); }
+      catch (error) { await logServerError('revokeTrustedDevice.revokeRefreshTokens', error, { userId: uid }); }
+    }
+    await logAudit({ action: 'staff_trusted_device_revoked', targetUid: uid, performedBy: uid, performedByRole: null, details: { deviceId, wasActive } });
+    return { ok: true, wasActive };
   } catch (error) {
+    if (error instanceof HttpsError) throw error;
     await logServerError('revokeTrustedDevice', error, { userId: uid });
     throw new HttpsError('internal', 'Could not remove this device. Please try again.');
   }
@@ -411,4 +429,65 @@ exports.checkDeviceSession = onCall(async (request) => {
     tx.update(ref, { 'pendingAdminEmailChallenge.attempts': attempts + 1 });
   });
   return originalCheckDeviceSession(request);
+});
+
+// confirmDeviceSwitch uses the same email challenge verifier but is a separate
+// callable, so the checkDeviceSession wrapper above cannot count its guesses.
+// Count every email-OTP attempt atomically before verification, with the same
+// five-attempt ceiling and challenge/device binding.
+const originalConfirmDeviceSwitch = exports.confirmDeviceSwitch;
+exports.confirmDeviceSwitch = onCall(async (request) => {
+  const data = request.data || {};
+  if (!data.emailOtp) return originalConfirmDeviceSwitch(request);
+
+  const db = getFirestore();
+  const uid = requireAuth(request);
+  const deviceId = requireDeviceId(request);
+  const ref = userRef(db, uid);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'No profile found for this account.');
+    const profile = snap.data();
+    const pending = profile.pendingDeviceApproval;
+    const challenge = profile.pendingAdminEmailChallenge;
+    if (!pending || pending.deviceId !== deviceId || !challenge || challenge.deviceId !== deviceId) {
+      throw new HttpsError('failed-precondition', 'No active verification challenge. Please sign in again.');
+    }
+    const attempts = Number(challenge.attempts || 0);
+    if (attempts >= EMAIL_CHALLENGE_MAX_ATTEMPTS) {
+      throw new HttpsError('resource-exhausted', 'Too many attempts. Request a new verification email.');
+    }
+    tx.update(ref, { 'pendingAdminEmailChallenge.attempts': attempts + 1 });
+  });
+  return originalConfirmDeviceSwitch(request);
+});
+
+// Reconcile trusted-device state after the legacy checkDeviceSession path.
+// The reconciliation is transactional, preventing two concurrent successful
+// device logins from losing each other through stale trustedDevices snapshots.
+const originalCheckDeviceSessionWithMfa = exports.checkDeviceSession;
+exports.checkDeviceSession = onCall(async (request) => {
+  const result = await originalCheckDeviceSessionWithMfa(request);
+  if (result?.requiresOtp) return result;
+  const data = request.data || {};
+  const deviceId = requireDeviceId(request);
+  const db = getFirestore();
+  const uid = data.uid && !request.auth?.uid ? String(data.uid).trim() : requireAuth(request);
+  const snap = await userRef(db, uid).get();
+  if (!snap.exists) return result;
+  const profile = snap.data();
+  if (!isStaffRole(profile.role)) return result;
+  const ip = getClientIp(request);
+  const label = deviceLabel(request);
+  await db.runTransaction(async (tx) => {
+    const ref = userRef(db, uid);
+    const currentSnap = await tx.get(ref);
+    if (!currentSnap.exists) return;
+    const current = currentSnap.data();
+    const trusted = current.trustedDevices || {};
+    if (!trusted[deviceId] || trusted[deviceId]?.lastIp !== ip || (label && trusted[deviceId]?.label !== label)) {
+      tx.update(ref, { trustedDevices: trustedMap(trusted, deviceId, ip, label) });
+    }
+  });
+  return result;
 });
