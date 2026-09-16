@@ -5,6 +5,7 @@ const DEALER_SERVICES = ['Mobile Banking'];
 const RESELLER_SERVICES = ['Recharge', 'Internet', 'Remittance'];
 const APPROVER_ROLES = ['admin', 'superadmin'];
 const OPERATOR_ROLES = ['dealer', 'reseller'];
+const ASSIGNABLE_ROLES = ['dealer', 'subdealer'];
 
 function requireAuth(request) { if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.'); }
 async function getActor(uid) {
@@ -74,4 +75,40 @@ exports.completeTransaction = onCall(async (request) => {
     tx.update(ref, { status: 'completed', pin, receiptUrl, completedBy: actor.uid, completedByName: actor.name, completedByRole: actor.role, completedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
   });
   return { ok: true, transactionId: id };
+});
+
+exports.assignDealer = onCall(async (request) => {
+  requireAuth(request);
+  const actor = await getActor(request.auth.uid);
+  if (!APPROVER_ROLES.includes(actor.role)) throw new HttpsError('permission-denied', 'Only an admin or superadmin can assign a dealer.');
+
+  const id = String(request.data?.transactionId || '').trim();
+  const dealerId = String(request.data?.dealerId || '').trim();
+  if (!id || !dealerId) throw new HttpsError('invalid-argument', 'Transaction ID and dealer ID are required.');
+  if (dealerId === actor.uid) throw new HttpsError('invalid-argument', 'An admin cannot be assigned as the dealer.');
+
+  const db = admin.firestore();
+  const txRef = db.collection('transactions').doc(id);
+  const dealerRef = db.collection('users').doc(dealerId);
+
+  await db.runTransaction(async (tx) => {
+    const [orderSnap, dealerSnap] = await Promise.all([tx.get(txRef), tx.get(dealerRef)]);
+    if (!orderSnap.exists) throw new HttpsError('not-found', 'That order no longer exists.');
+    if (!dealerSnap.exists) throw new HttpsError('not-found', 'The selected dealer was not found.');
+
+    const order = orderSnap.data();
+    const dealer = dealerSnap.data();
+    if (!['pending'].includes(order.status)) throw new HttpsError('failed-precondition', 'Only pending orders can be assigned.');
+    if (!ASSIGNABLE_ROLES.includes(dealer.role)) throw new HttpsError('failed-precondition', 'The selected user is not a dealer.');
+    if (dealer.role === 'dealer' && !DEALER_SERVICES.includes(order.service)) {
+      throw new HttpsError('failed-precondition', 'This dealer cannot handle this service.');
+    }
+
+    tx.update(txRef, {
+      dealerId,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+  });
+
+  return { ok: true, transactionId: id, dealerId };
 });
