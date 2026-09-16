@@ -33,7 +33,7 @@ service cloud.firestore {
       match /trustedDevices/{deviceId} { allow read, create, update, delete: if signedIn() && (request.auth.uid == uid || isAdmin()); }
     }
 
-    // Support Chat only: one thread per customer UID.
+    // Support Chat only.
     match /chats/{chatId} {
       allow read: if isChatParticipant(chatId) || isStaff();
       allow create: if isChatParticipant(chatId) && request.resource.data.customerId == chatId;
@@ -46,11 +46,64 @@ service cloud.firestore {
       }
     }
 
-    // Direct Chat, Group Chat and Room Chat were removed. Legacy data is
-    // permanently inaccessible from the client.
+    // Removed chat systems: legacy client access is permanently denied.
     match /directChats/{document=**} { allow read, write: if false; }
     match /groupChats/{document=**} { allow read, write: if false; }
     match /roomChats/{document=**} { allow read, write: if false; }
+
+    // Community feed.
+    match /communityPosts/{postId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.authorId == request.auth.uid && request.resource.data.status == 'active';
+      allow update: if isAdmin()
+        || (signedIn() && resource.data.authorId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'description', 'location', 'latitude', 'longitude', 'geohash', 'images', 'updatedAt']))
+        || (signedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount', 'commentCount', 'updatedAt']));
+      allow delete: if isAdmin() || (signedIn() && resource.data.authorId == request.auth.uid);
+    }
+    match /communityLikes/{likeId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.auth.uid == request.resource.data.uid && likeId == request.auth.uid + '_' + request.resource.data.postId;
+      allow delete: if signedIn() && request.auth.uid == resource.data.uid;
+      allow update: if false;
+    }
+    match /communityComments/{commentId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.authorId == request.auth.uid && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 5000;
+      allow update: if false;
+      allow delete: if isAdmin() || (signedIn() && resource.data.authorId == request.auth.uid);
+    }
+    match /communityReports/{reportId} {
+      allow create: if signedIn() && request.resource.data.reporterId == request.auth.uid;
+      allow read: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    // Social feed.
+    match /socialPosts/{postId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.authorId == request.auth.uid && request.resource.data.status == 'active';
+      allow update: if isAdmin()
+        || (signedIn() && resource.data.authorId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'images', 'updatedAt']))
+        || (signedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount', 'commentCount', 'shareCount', 'updatedAt']));
+      allow delete: if isAdmin() || (signedIn() && resource.data.authorId == request.auth.uid);
+    }
+    match /socialLikes/{likeId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.auth.uid == request.resource.data.uid && likeId == request.auth.uid + '_' + request.resource.data.postId;
+      allow delete: if signedIn() && request.auth.uid == resource.data.uid;
+      allow update: if false;
+    }
+    match /socialComments/{commentId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.authorId == request.auth.uid && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 5000;
+      allow update: if false;
+      allow delete: if isAdmin() || (signedIn() && resource.data.authorId == request.auth.uid);
+    }
+    match /socialReports/{reportId} {
+      allow create: if signedIn() && request.resource.data.reporterId == request.auth.uid;
+      allow read: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
 
     match /securityPins/{uid} { allow read, write: if false; }
     match /userIds/{id} { allow read, write: if false; }
@@ -61,8 +114,6 @@ service cloud.firestore {
     match /errorLog/{id} { allow create: if signedIn() && request.resource.data.source == 'client' && request.resource.data.userId == request.auth.uid; allow read: if signedIn() && isSuperadmin(); allow update: if signedIn() && isSuperadmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resolved', 'resolvedBy', 'resolvedAt']); allow delete: if false; }
     match /inquiries/{id} { allow create: if signedIn(); allow read: if signedIn() && (resource.data.customerId == request.auth.uid || isStaff()); allow update: if signedIn() && (isAdmin() || isReseller()); allow delete: if false; }
     match /transactions/{id} {
-      // All four chargeable order types are created by trusted callable
-      // functions. Direct client creation is intentionally disabled.
       allow create: if false;
       allow read: if signedIn() && (resource.data.customerId == request.auth.uid || isAdmin() || (isDealerTier() && resource.data.status == 'pending' && resource.data.service == 'Mobile Banking') || (isReseller() && resource.data.status == 'pending' && resource.data.service in ['Recharge', 'Internet', 'Remittance']) || (isStaff() && resource.data.claimedBy == request.auth.uid));
       allow update: if signedIn() && ((isAdmin() && resource.data.status == 'pending' && resource.data.get('approved', false) != true && request.resource.data.get('approved', false) == true && request.resource.data.get('approvedBy', null) == request.auth.uid && request.resource.data.get('approvedByRole', null) in ['admin', 'superadmin'] && request.resource.data.get('approvedAt', null) != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approved', 'approvedBy', 'approvedByName', 'approvedByRole', 'approvedAt', 'updatedAt'])) || (isAdmin() && request.resource.data.get('customerId', null) == resource.data.get('customerId', null) && request.resource.data.get('service', null) == resource.data.get('service', null) && request.resource.data.get('dealerId', null) != resource.data.get('dealerId', null) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dealerId', 'updatedAt'])) || (canHandleTransaction(resource.data.get('service', null)) && resource.data.status == 'pending' && resource.data.get('approved', false) == true && resource.data.claimedBy == null && request.resource.data.status == 'processing' && request.resource.data.claimedBy == request.auth.uid && request.resource.data.get('claimedByRole', null) == myRole() && request.resource.data.get('claimedByName', null) != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'claimedBy', 'claimedByRole', 'claimedByName', 'updatedAt'])) || (canHandleTransaction(resource.data.get('service', null)) && resource.data.status == 'processing' && resource.data.claimedBy == request.auth.uid && resource.data.get('approved', false) == true && resource.data.get('approvedBy', null) != null && request.resource.data.status == 'completed' && request.resource.data.claimedBy == request.auth.uid && request.resource.data.get('pin', '') != '' && request.resource.data.get('receiptUrl', '') != '' && request.resource.data.get('completedBy', null) == request.auth.uid && request.resource.data.get('completedByRole', null) == myRole() && request.resource.data.get('completedByName', null) != null && request.resource.data.get('completedAt', null) != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'pin', 'receiptUrl', 'completedBy', 'completedByName', 'completedByRole', 'completedAt', 'updatedAt'])) ) && request.resource.data.get('customerId', null) == resource.data.get('customerId', null) && request.resource.data.get('pointsCharged', null) == resource.data.get('pointsCharged', null) && request.resource.data.get('service', null) == resource.data.get('service', null);
