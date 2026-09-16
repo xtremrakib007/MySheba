@@ -6,11 +6,14 @@ on:
 
 jobs:
   cleanup:
+    if: github.event.head_commit.message != 'chore: remove temporary AppContext cleanup workflow'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Remove retired chat code
+      - name: Remove retired chat code safely
+        shell: bash
         run: |
+          set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
           import re
@@ -18,90 +21,96 @@ jobs:
           p = Path('src/context/AppContext.js')
           s = p.read_text()
 
-          # Remove retired chat imports.
-          s = re.sub(r"^import \* as (?:directChatService|groupChatService|roomChatService|chatLockService) from .*\n", "", s, flags=re.M)
+          # Retired service imports only. Support Chat and calling remain.
+          s = re.sub(r"^import \\* as (?:directChatService|groupChatService|roomChatService|chatLockService) from .*\\n", "", s, flags=re.M)
 
-          # Remove direct-chat state/investigation block.
-          s, n = re.subn(r"  // ---- direct chat \(general-purpose.*?(?=  // ---- marketplace \(Buy & Sell\) ----)", "", s, flags=re.S)
-          if n != 1: raise SystemExit(f'direct state section count={n}')
+          # Remove direct-chat state, but deliberately preserve ringtone state.
+          s = re.sub(r"^  // ---- direct chat \(general-purpose.*?^  // Which contact RingtonePickerScreen is currently editing - same.*?^  const \[activeRingtoneContactName, setActiveRingtoneContactName\] = useState\(''\);\\n", "", s, flags=re.M|re.S)
+          s = re.sub(r"^  // Prefills the message box.*?^  const \[chatDraftText, setChatDraftText\] = useState\(''\);\\n", "", s, flags=re.M|re.S)
 
-          # Remove group/room/hub state and retired Chat Lock state.
-          s, n = re.subn(r"  // ---- group chat ----.*?(?=  // ---- Private vault unlock \()", "", s, flags=re.S)
-          if n != 1: raise SystemExit(f'group/room section count={n}')
+          # Remove the retired investigation state/callback block.
+          s = re.sub(r"^  // ---- direct chat investigation.*?(?=^  // ---- marketplace \(Buy & Sell\) ----)", "", s, flags=re.M|re.S)
 
-          # Remove obsolete group incoming-call state.
-          s = re.sub(r"^  const \[incomingGroupCall, setIncomingGroupCall\] = useState\(null\);.*\n", "", s, flags=re.M)
+          # Remove group/room/chat-hub state block, stopping before the private vault state.
+          s, n = re.subn(r"^  // ---- group chat ----.*?(?=^  // ---- Private vault unlock \()", "", s, flags=re.M|re.S)
+          if n > 1:
+              raise SystemExit(f'unexpected group/room section count={n}')
+
+          # Remove obsolete group incoming-call state if still present.
+          s = re.sub(r"^  const \[incomingGroupCall, setIncomingGroupCall\] = useState\(null\);.*\\n", "", s, flags=re.M)
 
           def remove_callback(text, name):
-              pat = r"  const " + re.escape(name) + r"\s*=\s*useCallback\b"
-              m = re.search(pat, text)
-              if not m: return text
+              m = re.search(r"^  const " + re.escape(name) + r"\\s*=\\s*useCallback\\b", text, flags=re.M)
+              if not m:
+                  return text
               ob = text.find('{', m.start())
-              if ob < 0: raise SystemExit(f'no body for {name}')
-              depth=0; quote=None; esc=False
+              if ob < 0:
+                  raise SystemExit(f'no body for {name}')
+              depth = 0; quote = None; esc = False
               for i in range(ob, len(text)):
-                  c=text[i]
+                  c = text[i]
                   if quote:
-                      if esc: esc=False
-                      elif c=='\\\\': esc=True
-                      elif c==quote: quote=None
+                      if esc: esc = False
+                      elif c == '\\\\': esc = True
+                      elif c == quote: quote = None
                       continue
-                  if c in "'\"`": quote=c; continue
-                  if c=='{': depth+=1
-                  elif c=='}':
-                      depth-=1
-                      if depth==0:
-                          j=i+1
-                          while j<len(text) and text[j] in ' ;\n\r\t': j+=1
-                          return text[:m.start()]+text[j:]
+                  if c in "'\"`": quote = c; continue
+                  if c == '{': depth += 1
+                  elif c == '}':
+                      depth -= 1
+                      if depth == 0:
+                          j = i + 1
+                          while j < len(text) and text[j] in ' ;\\n\\r\\t': j += 1
+                          return text[:m.start()] + text[j:]
               raise SystemExit(f'unbalanced {name}')
 
-          for name in ['openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall']:
-              while re.search(r"  const " + re.escape(name) + r"\s*=\s*useCallback\b", s):
+          for name in ('openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall','openInvestigateChat'):
+              while re.search(r"^  const " + re.escape(name) + r"\\s*=\\s*useCallback\\b", s, flags=re.M):
                   s = remove_callback(s, name)
 
-          # Remove useEffect blocks whose body is a retired chat listener.
+          # Remove listener effects that are exclusively for retired chat services.
           while True:
-              found=False
-              for m in list(re.finditer(r"  useEffect\(\(\) => \{", s)):
-                  ob=s.find('{',m.start()); depth=0; quote=None; esc=False; close=None
-                  for i in range(ob,len(s)):
-                      c=s[i]
+              changed = False
+              for m in list(re.finditer(r"^  useEffect\\(\\(\\) => \\{", s, flags=re.M)):
+                  ob = s.find('{', m.start()); depth = 0; quote = None; esc = False; close = None
+                  for i in range(ob, len(s)):
+                      c = s[i]
                       if quote:
-                          if esc: esc=False
-                          elif c=='\\\\': esc=True
-                          elif c==quote: quote=None
+                          if esc: esc = False
+                          elif c == '\\\\': esc = True
+                          elif c == quote: quote = None
                           continue
-                      if c in "'\"`": quote=c; continue
-                      if c=='{': depth+=1
-                      elif c=='}':
-                          depth-=1
-                          if depth==0: close=i; break
+                      if c in "'\"`": quote = c; continue
+                      if c == '{': depth += 1
+                      elif c == '}':
+                          depth -= 1
+                          if depth == 0: close = i; break
                   if close is None: continue
-                  end=s.find(');',close)
-                  if end<0: continue
-                  block=s[m.start():end+2]
+                  end = s.find(');', close)
+                  if end < 0: continue
+                  block = s[m.start():end+2]
                   if any(x in block for x in ('directChatService','groupChatService','roomChatService','subscribeIncomingGroupCalls','chatLockService')):
-                      s=s[:m.start()]+s[end+2:]; found=True; break
-              if not found: break
+                      s = s[:m.start()] + s[end+2:]
+                      changed = True
+                      break
+              if not changed: break
 
-          # Remove retired identifiers from the context value object and stale direct-chat navigation exports.
-          retired = re.compile(r"\b(activeDirectChatId|activeDirectChatName|activeDirectChatUid|directChatUnreadCount|openDirectChat|activeInvestigateChatId|activeInvestigateReport|openInvestigateChat|chatDraftText|activeGroupId|activeGroupName|myGroups|groupUnreadCount|openGroupChat|activeRoomId|activeRoomName|myRooms|discoverableRooms|openRoomChat|chatHubTab|openChatHub|incomingGroupCall|startGroupCall|answerIncomingGroupCall|rejectIncomingGroupCall)\b")
-          s=''.join(line for line in s.splitlines(True) if not retired.search(line))
+          # Remove retired names from the context value, but not ringtone/call names.
+          retired = re.compile(r"\\b(activeDirectChatId|activeDirectChatName|activeDirectChatUid|directChatUnreadCount|openDirectChat|activeInvestigateChatId|activeInvestigateReport|openInvestigateChat|chatDraftText|activeGroupId|activeGroupName|myGroups|groupUnreadCount|openGroupChat|activeRoomId|activeRoomName|myRooms|discoverableRooms|openRoomChat|chatHubTab|openChatHub|incomingGroupCall|startGroupCall|answerIncomingGroupCall|rejectIncomingGroupCall)\\b")
+          s = ''.join(line for line in s.splitlines(True) if not retired.search(line))
 
-          # Remove retired screen names from the screen-state comment.
-          s=s.replace(' | chatHub | directChatList | addContact | qrScan | myQrCode | groupList | newGroup | createRoom | roomSettings','')
-          s=s.replace(' | investigateChat','')
+          s = s.replace(' | chatHub | directChatList | addContact | qrScan | myQrCode | groupList | newGroup | createRoom | roomSettings','')
+          s = s.replace(' | investigateChat','')
+          s = s.replace('  // lives here is the one piece of navigation state a listing\'s detail\n  // screen needs: which listing to show. "Chat Seller" reuses\n  // openDirectChat above - no separate marketplace chat state.\n', '  // lives here is the one piece of navigation state a listing\'s detail\n  // screen needs: which listing to show.\n')
+          s = s.replace('  // Security PIN gate (My Documents, Transfer Points, Notepad, Chat\n  // Lock - each gated once on entry)', '  // Security PIN gate (My Documents, Transfer Points, and Notepad)')
 
-          # Clean stale comments left by the removed features.
-          s=re.sub(r"\n  // ---- direct chat investigation.*?(?=\n  // ---- marketplace)","\n",s,flags=re.S)
-          s=s.replace('  // lives here is which listing to show. "Chat Seller" reuses\n  // openDirectChat above - no separate marketplace chat state.\n','  // lives here is which listing to show.\n')
-          s=s.replace('  // reuses openDirectChat above - no separate accommodation chat state.\n','  // navigation state is kept local to the feature.\n')
-          s=s.replace('  // openDirectChat above - no separate room-sharing chat state.\n','  // navigation state is kept local to the feature.\n')
-          s=s.replace('  // serviceProviderService.js directly, so all that lives here is which\n  // provider to show. "Message" reuses openDirectChat above - no separate\n  // local-services chat state. ("Request Service" is a lead form, not a\n','  // serviceProviderService.js directly, so all that lives here is which\n  // provider to show. ("Request Service" is a lead form, not a\n')
-          s=s.replace('  // ---- Security PIN gate (My Documents, Transfer Points, Notepad, Chat\n  // Lock - each gated once on entry) ----','  // ---- Security PIN gate (My Documents, Transfer Points, and Notepad) ----')
-          s=s.replace('  // Security PIN gate (My Documents, Transfer Points, Notepad, Chat\n  // Lock - each gated once on entry)','  // Security PIN gate (My Documents, Transfer Points, and Notepad)')
-          s=re.sub(r"  // Moved above the\n  // group/direct/room chat section.*?unlock-on-open check\.\n",'',s,flags=re.S)
+          # Ringtone picker is part of one-to-one calling and must survive chat removal.
+          if 'activeRingtoneContactUid' not in s or 'activeRingtoneContactName' not in s:
+              marker = "  const [activeChatReturnTo, setActiveChatReturnTo] = useState('chatList');"
+              insert = marker + "\n  const [activeRingtoneContactUid, setActiveRingtoneContactUid] = useState(null);\n  const [activeRingtoneContactName, setActiveRingtoneContactName] = useState('');"
+              if marker not in s:
+                  raise SystemExit('cannot restore ringtone state: support chat marker missing')
+              s = s.replace(marker, insert, 1)
 
           p.write_text(s)
           PY
@@ -109,12 +118,14 @@ jobs:
           if grep -nE 'directChatService|groupChatService|roomChatService|chatLockService|openDirectChat|openGroupChat|openRoomChat|openChatHub|startGroupCall|subscribeIncomingGroupCalls|incomingGroupCall|activeDirectChat|activeGroupId|activeRoomId|myGroups|myRooms|chatHubTab|investigateChat' src/context/AppContext.js; then
             echo 'Retired chat references remain in AppContext.js'; exit 1
           fi
+          grep -nE 'activeChatId|chatUnreadCount|activeRingtoneContactUid|activeRingtoneContactName|callService|subscribeIncomingCalls' src/context/AppContext.js >/dev/null
 
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/context/AppContext.js
-          if git diff --cached --quiet; then echo 'No AppContext change needed'; else git commit -m 'refactor: remove retired chat state from AppContext'; git push; fi
-          rm -f .github/workflows/cleanup-appcontext.yml
-          git add -u .github/workflows/cleanup-appcontext.yml
-          git commit -m 'chore: remove temporary AppContext cleanup workflow' || true
-          git push || true
+          if git diff --cached --quiet; then
+            echo 'No AppContext change needed'
+          else
+            git commit -m 'refactor: remove retired chat state from AppContext'
+            git push
+          fi
