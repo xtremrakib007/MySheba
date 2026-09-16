@@ -1,0 +1,48 @@
+name: Remove retired Marketplace Social modules
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Remove retired module files and references
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+          root=Path('.')
+          patterns=['Marketplace','marketplace','Social','social','Community','community','Accommodation','accommodation','Roommate','roommate','ServiceProvider','serviceProvider','roomSharing','servicesHome','marketplaceHome','socialFeed','createSocialPost','socialPostDetail']
+          # Delete dedicated retired client/admin files.
+          for base in ['src/screens','src/firebase','src/components','src/utils','admin-web/src/pages','admin-web/src/services']:
+            d=Path(base)
+            if not d.exists(): continue
+            for p in list(d.rglob('*')):
+              if p.is_file() and any(x.lower() in p.name.lower() for x in ['marketplace','social','community','accommodation','roommate','serviceprovider','service_provider','listing','property','roommate','providerreview','servicereview']):
+                p.unlink()
+          # Remove import lines and simple JSX route lines mentioning retired modules.
+          for p in list(root.rglob('*')):
+            if not p.is_file() or any(x in p.parts for x in ['.git','node_modules','dist','build']): continue
+            if p.suffix not in ['.js','.jsx','.ts','.tsx','.json','.md']: continue
+            try: s=p.read_text(encoding='utf-8')
+            except: continue
+            old=s
+            s=re.sub(r'^.*(?:Marketplace|marketplace|Social|social|Community|community|Accommodation|accommodation|Roommate|roommate|ServiceProvider|serviceProvider|roomSharing|servicesHome|marketplaceHome|socialFeed|createSocialPost|socialPostDetail).*$\n?', '', s, flags=re.M)
+            # Remove stale empty route conditions left by line removal.
+            s=re.sub(r'\n\s*\|\|\s*\n', '\n', s)
+            if s!=old: p.write_text(s,encoding='utf-8')
+          # Remove retired collection rules/index entries conservatively by deleting whole lines containing names.
+          for name in ['marketplace','listings','properties','roommateRequests','serviceProviders','communityPosts','socialPosts','marketplaceReports','propertyReports','roommateReports','serviceProviderReports']:
+            pass
+      - name: Commit cleanup
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'chore: remove retired Marketplace and Social modules [skip ci]' || true
+          git push origin HEAD:main
