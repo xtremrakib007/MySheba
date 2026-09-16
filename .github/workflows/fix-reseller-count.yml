@@ -86,7 +86,7 @@ jobs:
               if z>=0:s=s[:a]+s[z:]
           retired=['activeDirectChatId','activeDirectChatName','activeDirectChatUid','directChatUnreadCount','openDirectChat','activeInvestigateChatId','activeInvestigateReport','openInvestigateChat','chatDraftText','activeGroupId','activeGroupName','myGroups','groupUnreadCount','openGroupChat','activeRoomId','activeRoomName','myRooms','discoverableRooms','openRoomChat','chatHubTab','openChatHub','incomingGroupCall','startGroupCall','answerIncomingGroupCall','rejectIncomingGroupCall','investigateChat','lockChatThread','unlockChatThread','lockedChatIds','chatVaultUnlocked']
           s=''.join(x for x in s.splitlines(True) if not any(n in x for n in retired))
-          # Remove any remaining retired-service/comment lines after structural blocks are gone.
+          # At this point service names may survive only in retired comments/labels; remove those lines too.
           s=''.join(x for x in s.splitlines(True) if not any(n in x for n in retired_services))
           forbidden=['directChatService','groupChatService','roomChatService','chatLockService','openDirectChat','openGroupChat','openRoomChat','openChatHub','startGroupCall','subscribeIncomingGroupCalls','incomingGroupCall','activeDirectChat','activeGroupId','activeRoomId','myGroups','myRooms','chatHubTab','investigateChat','lockChatThread','unlockChatThread']
           bad=[n for n in forbidden if n in s]
