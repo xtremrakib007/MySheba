@@ -28,6 +28,7 @@ exports.approveTopup = require('./walletService').approveTopup;
 exports.rejectTopup = require('./walletService').rejectTopup;
 exports.createSelfTopup = require('./walletService').createSelfTopup;
 exports.submitTopupRequest = require('./topupSubmissionService').submitTopupRequest;
+exports.adminTopUpPoints = require('./adminTopUpService').adminTopUpPoints;
 exports.transferPoints = require('./walletService').transferPoints;
 exports.findWalletRecipient = require('./walletTransferService').findWalletRecipient;
 exports.walletTransfer = require('./walletTransferService').walletTransfer;
