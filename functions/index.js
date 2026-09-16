@@ -36,12 +36,8 @@ exports.diditKycWebhook = require('./diditKycService').diditKycWebhook;
 exports.chargeWallet = require('./walletService').chargeWallet;
 exports.chargeRecharge = require('./walletService').chargeRecharge;
 exports.chargeInternetPackage = require('./walletService').chargeInternetPackage;
-exports.rejectRechargeTransaction = require('./walletService').rejectRechargeTransaction;
-exports.rejectInternetPackageTransaction = require('./walletService').rejectInternetPackageTransaction;
 exports.chargeMobileBanking = require('./walletService').chargeMobileBanking;
 exports.chargeRemittance = require('./walletService').chargeRemittance;
-exports.rejectMobileBankingTransaction = require('./walletService').rejectMobileBankingTransaction;
-exports.rejectRemittanceTransaction = require('./walletService').rejectRemittanceTransaction;
 exports.approveVerification = require('./verificationService').approveVerification;
 exports.rejectVerification = require('./verificationService').rejectVerification;
 exports.setBusinessProfileStatus = require('./businessProfileService').setBusinessProfileStatus;
@@ -67,14 +63,12 @@ const db = admin.firestore();
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const STAFF_ROLES = ['dealer', 'reseller', 'admin', 'superadmin'];
 const ADMIN_ROLES = ['admin', 'superadmin'];
-
 function chunk(arr, size) { const out = []; for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size)); return out; }
 async function sendExpoPush(messages) { const valid = messages.filter(m => m && m.to); for (const batch of chunk(valid, 100)) { try { const res = await fetch(EXPO_PUSH_URL, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify(batch.map(m => ({ sound: 'default', ...m }))) }); if (!res.ok) console.error('Expo push HTTP error', res.status, await res.text()); } catch (e) { console.error('Expo push send failed', e); } } }
 async function sendCallDataMessage(uid, data) { if (!uid) return; const snap = await db.collection('users').doc(uid).get(); if (!snap.exists) return; const d = snap.data(); if (!d.fcmToken || (d.notifPrefs && d.notifPrefs.pushEnabled === false) || (d.callSettings && d.callSettings.notificationsEnabled === false)) return; try { await admin.messaging().send({ token: d.fcmToken, data, android: { priority: 'high' } }); } catch (e) { console.error('Call data message send failed', e); } }
 async function getUserPushTarget(uid) { if (!uid) return null; const snap = await db.collection('users').doc(uid).get(); if (!snap.exists) return null; const d = snap.data(); if (!d.pushToken || (d.notifPrefs && d.notifPrefs.pushEnabled === false)) return null; return d.pushToken; }
 async function notifyUser(uid, title, body, data, extra) { const token = await getUserPushTarget(uid); if (token) await sendExpoPush([{ to: token, title, body, data: data || {}, ...(extra || {}) }]); }
 async function notifyRoles(roles, title, body, data) { const snap = await db.collection('users').where('role', 'in', roles).get(); const messages = []; snap.forEach(doc => { const u = doc.data(); if (u.pushToken && !(u.notifPrefs && u.notifPrefs.pushEnabled === false)) messages.push({ to: u.pushToken, title, body, data: data || {} }); }); await sendExpoPush(messages); }
-
 exports.onTransactionCreated = onDocumentCreated('transactions/{id}', async event => { const tx = event.data.data(); const body = `${tx.service} - MYR ${Number(tx.total || 0).toFixed(2)}`; if (tx.resellerId) await notifyUser(tx.resellerId, '🆕 New order', body, { type: 'transaction', id: event.params.id }); else await notifyRoles(['dealer'], '🆕 New order', body, { type: 'transaction', id: event.params.id }); });
 exports.onTransactionUpdated = onDocumentUpdated('transactions/{id}', async event => { const b = event.data.before.data(), a = event.data.after.data(); if (!b.dealerId && a.dealerId) await notifyUser(a.dealerId, '🆕 New order', `${a.service} - MYR ${Number(a.total || 0).toFixed(2)}`, { type: 'transaction', id: event.params.id }); if (b.status !== 'completed' && a.status === 'completed' && TIER_QUALIFYING_SERVICES.includes(a.service)) await progressionService.incrementTierPoints(a.customerId); if (b.status === a.status && b.rejected === a.rejected) return; let title = 'Order update', body = `${a.service} is now ${a.status}.`; if (a.rejected) { title = '❌ Order rejected'; body = `${a.service}: ${a.rejectReason || 'Rejected by dealer.'}`; } else if (a.status === 'processing') { title = '🔄 Order accepted'; body = `${a.service} is being processed.`; } else if (a.status === 'completed') { title = '✅ Order completed'; body = a.pin ? `${a.service} is ready. Collection PIN: ${a.pin}` : `${a.service} has been completed.`; } await notifyUser(a.customerId, title, body, { type: 'transaction', id: event.params.id }); });
 exports.onTopupCreated = onDocumentCreated('topups/{id}', async event => { const t = event.data.data(); await notifyRoles(ADMIN_ROLES, '💰 New top-up request', `${t.userName || 'A user'} requested MYR ${Number(t.amount || 0).toFixed(2)}`, { type: 'topup', id: event.params.id }); });
