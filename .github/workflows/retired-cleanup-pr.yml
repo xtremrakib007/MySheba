@@ -1,0 +1,52 @@
+name: Retired backend cleanup PR
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  cleanup:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'cleanup/retired-backend' && github.event.pull_request.head.sha != github.event.pull_request.base.sha
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: cleanup/retired-backend
+      - name: Clean retired backend references
+        shell: python
+        run: |
+          from pathlib import Path
+          import re, json
+          retired=['gamePoints','gamePointsLedger','communityPosts','communityLikes','communityComments','communityReports','socialPosts','socialLikes','socialComments','socialReports','marketplaceListings','marketplaceSaves','marketplaceReports','marketplaceReviews','marketplaceSellerStats','properties','propertySaves','propertyReports','roommateRequests','roommateReports','serviceProviders','serviceProviderReports','serviceReviews']
+          p=Path('firestore.rules'); s=p.read_text(encoding='utf-8')
+          for name in retired: s=re.sub(r'^\s*match /'+re.escape(name)+r'/[^\n]*\n?', '', s, flags=re.M)
+          s=re.sub(r'^\s*function validRating\([^\n]*\n?', '', s, flags=re.M)
+          s=s.replace("function callParticipant() { return signedIn() && (resource.data.callerUid == request.auth.uid || resource.data.calleeUid == request.auth.uid || (resource.data.isGroup == true && request.auth.uid in resource.data.get('participantUids', []))); }", "function callParticipant() { return signedIn() && (resource.data.callerUid == request.auth.uid || resource.data.calleeUid == request.auth.uid); }")
+          s=s.replace(" && request.resource.data.isGroup != true", "")
+          p.write_text(s,encoding='utf-8')
+          p=Path('storage.rules'); s=p.read_text(encoding='utf-8')
+          for name in ['marketplace-images','accommodation-images','service-provider-images']: s=re.sub(r'^\s*match /'+re.escape(name)+r'/[^\n]*\n?', '', s, flags=re.M)
+          p.write_text(s,encoding='utf-8')
+          p=Path('functions/index.js'); s=p.read_text(encoding='utf-8'); marker='const MARKETPLACE_REPORT_HIDE_THRESHOLD'
+          if marker in s: s=s[:s.index(marker)].rstrip()+'\n'
+          s=re.sub(r'^exports\.(boostListing|listingPreview)\s*=.*\n?', '', s, flags=re.M); p.write_text(s,encoding='utf-8')
+          p=Path('functions/secureWalletMutations.js'); s=p.read_text(encoding='utf-8'); s=re.sub(r'^exports\.boostListing.*\n?', '', s, flags=re.M); p.write_text(s,encoding='utf-8')
+          p=Path('functions/rateLimitService.js'); s=p.read_text(encoding='utf-8'); s=re.sub(r'^\s*boostListing:.*\n?', '', s, flags=re.M); p.write_text(s,encoding='utf-8')
+          p=Path('public/index.html'); s=p.read_text(encoding='utf-8').replace('Recharge, remittance, mobile banking, marketplace, and more.','Recharge, remittance, mobile banking, support, and more.').replace('Recharge, remittance, mobile banking, marketplace &amp; more - all in one app.','Recharge, remittance, mobile banking &amp; more - all in one app.'); p.write_text(s,encoding='utf-8')
+          p=Path('firestore.indexes.json'); data=json.loads(p.read_text(encoding='utf-8')); data['indexes']=[x for x in data.get('indexes',[]) if str(x.get('collectionGroup','')).lower() not in {r.lower() for r in retired}]; p.write_text(json.dumps(data,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+      - name: Verify
+        run: |
+          node --check functions/index.js
+          node --check functions/secureWalletMutations.js
+          node --check functions/rateLimitService.js
+          python -m json.tool firestore.indexes.json >/dev/null
+          ! grep -Ein 'gamePoints|GamePoints|GameBot|marketplaceListings|communityPosts|socialPosts|roommateRequests|serviceProviders' functions/index.js firestore.rules storage.rules
+      - name: Commit cleanup to PR branch
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'chore: apply retired backend cleanup [skip ci]' || exit 0
+          git push origin HEAD:cleanup/retired-backend
