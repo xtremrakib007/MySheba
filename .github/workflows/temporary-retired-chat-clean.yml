@@ -1,0 +1,100 @@
+name: Temporary retired chat cleanup
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Remove retired direct chat callers
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          files = [
+              'src/screens/DealerHomeScreen.js',
+              'src/screens/ResellerHomeScreen.js',
+              'src/screens/AdminHomeScreen.js',
+              'src/screens/ListingDetailScreen.js',
+              'src/screens/PropertyDetailScreen.js',
+              'src/screens/ServiceProviderDetailScreen.js',
+              'src/screens/MarketplaceSearchScreen.js',
+          ]
+
+          def remove_function(src, name):
+              # Remove an entire const name = async (...) => { ... }; function,
+              # using brace counting so nested try/catch blocks are handled.
+              m = re.search(r'(?m)^\\s*const\\s+' + re.escape(name) + r'\\s*=\\s*async\\s*\\([^;]*?\\)\\s*=>\\s*\\{', src)
+              if not m:
+                  return src
+              start = m.start()
+              brace = src.find('{', m.start())
+              depth = 0
+              i = brace
+              while i < len(src):
+                  if src[i] == '{': depth += 1
+                  elif src[i] == '}':
+                      depth -= 1
+                      if depth == 0:
+                          j = i + 1
+                          while j < len(src) and src[j] in ' ;\\n\\r': j += 1
+                          return src[:start] + src[j:]
+                  i += 1
+              return src
+
+          for name in files:
+              p = Path(name)
+              if not p.exists():
+                  continue
+              s = p.read_text()
+              s = re.sub(r'^import .*directChatService.*\\n', '', s, flags=re.M)
+              s = re.sub(r'^import \\{ ensureDirectChat \\} from .*directChatService.*\\n', '', s, flags=re.M)
+              for fn in ('messageCustomer', 'messageProvider', 'chatOwner', 'startChat'):
+                  s = remove_function(s, fn)
+              # Remove direct-chat-only context destructuring names.
+              s = re.sub(r',\\s*openDirectChat\\b', '', s)
+              s = re.sub(r'\\bopenDirectChat\\s*,\\s*', '', s)
+              s = re.sub(r'\\bprofile,\\s*openDirectChat', 'profile', s)
+              # Remove obvious standalone Message/Chat action blocks that call removed handlers.
+              s = re.sub(r'\\n\\s*<View[^>]*style=\\{styles\\.actions\\}[^>]*>\\s*<TouchableOpacity[^>]*onPress=\\{\\(\\) => (?:messageCustomer|messageProvider|chatOwner|startChat)\\([^}]*\\}[^>]*>[\\s\\S]*?</TouchableOpacity>\\s*</View>', '', s)
+              s = re.sub(r'\\n\\s*<TouchableOpacity[^>]*onPress=\\{\\(\\) => (?:messageCustomer|messageProvider|chatOwner|startChat)\\([^}]*\\}[\\s\\S]*?</TouchableOpacity>', '', s)
+              p.write_text(s)
+
+          # Remove obsolete compatibility service and group/room service files once callers are gone.
+          for f in ['src/firebase/directChatService.js', 'src/firebase/groupChatService.js', 'src/firebase/roomChatService.js']:
+              p = Path(f)
+              if p.exists(): p.unlink()
+
+          # Remove stale Direct/Group/Room references from domain-service comments.
+          for f in ['src/firebase/accommodationService.js','src/firebase/roommateService.js','src/firebase/serviceProviderService.js','src/firebase/chatService.js']:
+              p = Path(f)
+              if p.exists():
+                  s = p.read_text()
+                  s = re.sub(r' ?\\(src/firebase/directChatService\\.js\\)', '', s)
+                  s = s.replace(' general-purpose Direct Chat', '')
+                  s = s.replace(' Direct Chat', '')
+                  s = s.replace('directChatService.js', 'the retired chat service')
+                  p.write_text(s)
+
+      - name: Commit cleanup
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'No cleanup changes needed.'
+          else
+            git commit -m 'chore: finish retired chat cleanup'
+            git push
+          fi
