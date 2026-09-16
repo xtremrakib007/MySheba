@@ -27,7 +27,6 @@ jobs:
           s = s.replace(', openDirectChat, marketplaceCategories', ', marketplaceCategories')
           s = re.sub(r'^  const \[messagingInquiryId, setMessagingInquiryId\] = useState\(null\);\n', '', s, flags=re.M)
 
-          # Remove messageInquiry by matching its actual function body, regardless of comments.
           while True:
               m = re.search(r'^  const messageInquiry = async \(inq\) => \{', s, flags=re.M)
               if not m: break
@@ -49,23 +48,21 @@ jobs:
               else:
                   raise SystemExit('Unbalanced messageInquiry function')
 
-          # Remove the complete TouchableOpacity whose subtree invokes messageInquiry(inq).
           marker = 'onPress={() => messageInquiry(inq)}'
           pos = s.find(marker)
           if pos >= 0:
               start = s.rfind('<TouchableOpacity', 0, pos)
               if start < 0: raise SystemExit('Cannot locate Message TouchableOpacity')
-              depth = 0; i = start; tag_re = re.compile(r'</?TouchableOpacity\\b[^>]*>')
-              # Find matching JSX TouchableOpacity, accounting for nesting.
+              depth = 0; i = start
+              tag_re = re.compile(r'</?TouchableOpacity\b[^>]*>')
               while True:
                   mt = tag_re.search(s, i)
                   if not mt: raise SystemExit('Unbalanced TouchableOpacity around messageInquiry')
                   tag = mt.group(0)
                   if tag.startswith('</'):
                       depth -= 1
-                      end = mt.end()
                       if depth == 0:
-                          s = s[:start] + s[end:]
+                          s = s[:start] + s[mt.end():]
                           break
                   elif not tag.rstrip().endswith('/>'):
                       depth += 1
