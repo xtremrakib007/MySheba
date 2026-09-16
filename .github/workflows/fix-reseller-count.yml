@@ -1,4 +1,4 @@
-name: Finalize AppContext cleanup v4
+name: Finalize AppContext cleanup v5
 on:
   push:
     branches: [main]
@@ -65,6 +65,7 @@ jobs:
             if z>=0: value=value[:a]+value[z:]
           s=s[:vs]+value+s[ve:]
           s=''.join(line for line in s.splitlines(True) if not any(x in line for x in retired))
+          s='\n'.join(line for line in s.splitlines() if line.strip() != ', []);')+'\n'
           required=['activeChatId','activeChatName','chatUnreadCount','activeChatReturnTo','openChat','activeRingtoneContactUid','activeRingtoneContactName','activeCall','incomingCall','startCall','answerIncomingCall','rejectIncomingCall','callService']
           missing=[x for x in required if x not in s]
           if missing: raise SystemExit('Required refs missing: '+', '.join(missing))
