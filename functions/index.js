@@ -31,7 +31,6 @@ exports.submitTopupRequest = require('./topupSubmissionService').submitTopupRequ
 exports.adminTopUpPoints = require('./adminTopUpService').adminTopUpPoints;
 exports.transferPoints = require('./walletService').transferPoints;
 exports.findWalletRecipient = require('./walletTransferService').findWalletRecipient;
-exports.walletTransfer = require('./walletTransferService').walletTransfer;
 exports.createDiditKycSession = require('./diditKycService').createDiditKycSession;
 exports.diditKycWebhook = require('./diditKycService').diditKycWebhook;
 exports.chargeWallet = require('./walletService').chargeWallet;
