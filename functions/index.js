@@ -33,7 +33,6 @@ exports.walletTransfer = require('./walletTransferService').walletTransfer;
 exports.createDiditKycSession = require('./diditKycService').createDiditKycSession;
 exports.diditKycWebhook = require('./diditKycService').diditKycWebhook;
 exports.chargeWallet = require('./walletService').chargeWallet;
-exports.boostListing = require('./walletService').boostListing;
 exports.chargeRecharge = require('./walletService').chargeRecharge;
 exports.chargeInternetPackage = require('./walletService').chargeInternetPackage;
 exports.rejectRechargeTransaction = require('./walletService').rejectRechargeTransaction;
@@ -48,7 +47,6 @@ exports.setBusinessProfileStatus = require('./businessProfileService').setBusine
 exports.setupSecurityPin = require('./securityPinService').setupSecurityPin;
 exports.verifySecurityPin = require('./securityPinService').verifySecurityPin;
 exports.resetSecurityPin = require('./securityPinService').resetSecurityPin;
-exports.listingPreview = require('./listingPreview').listingPreview;
 exports.updateAdSettings = require('./adControlsService').updateAdSettings;
 exports.updateAdFeatureControl = require('./adControlsService').updateAdFeatureControl;
 exports.bulkUpdateAdFeatureControls = require('./adControlsService').bulkUpdateAdFeatureControls;
@@ -206,68 +204,4 @@ exports.onCallCreated = onDocumentCreated('calls/{callId}', async event => {
     notifyUser(uid, kind, `${c.callerName || 'Someone'} is calling you`, { type: 'call', callId: event.params.callId }, { priority: 'high', channelId: 'calls' }),
     sendCallDataMessage(uid, { type: 'call', callId: event.params.callId, callerName: c.callerName || 'Someone', callType, callerUid: c.callerUid || '' }),
   ]);
-});
-
-const MARKETPLACE_REPORT_HIDE_THRESHOLD = 5;
-  const r = event.data.data();
-  if (!r.listingId) return;
-  if (!s.exists) return;
-  const d = s.data(), count = (d.reportCount || 0) + 1, patch = { reportCount: admin.firestore.FieldValue.increment(1) };
-  if (count >= MARKETPLACE_REPORT_HIDE_THRESHOLD && d.status !== 'hidden') patch.status = 'hidden';
-  await ref.update(patch);
-});
-
-const ACCOMMODATION_REPORT_HIDE_THRESHOLD = 5;
-  const r = event.data.data();
-  if (!r.propertyId) return;
-  const ref = db.collection('properties').doc(r.propertyId), s = await ref.get();
-  if (!s.exists) return;
-  const d = s.data(), count = (d.reportCount || 0) + 1, patch = { reportCount: admin.firestore.FieldValue.increment(1) };
-  if (count >= ACCOMMODATION_REPORT_HIDE_THRESHOLD && d.status !== 'hidden') patch.status = 'hidden';
-  await ref.update(patch);
-  await notifyRoles(ADMIN_ROLES, '🚩 New property report', `${r.reason || 'Reported'}: \"${d.title || 'A property'}\"`, { type: 'propertyReport', propertyId: r.propertyId });
-});
-
-const ROOMMATE_REPORT_HIDE_THRESHOLD = 5;
-  const r = event.data.data();
-  if (!r.requestId) return;
-  if (!s.exists) return;
-  const d = s.data(), count = (d.reportCount || 0) + 1, patch = { reportCount: admin.firestore.FieldValue.increment(1) };
-  if (count >= ROOMMATE_REPORT_HIDE_THRESHOLD && d.status !== 'hidden') patch.status = 'hidden';
-  await ref.update(patch);
-});
-
-const SERVICE_PROVIDER_REPORT_HIDE_THRESHOLD = 5;
-  const r = event.data.data();
-  if (!r.providerId) return;
-  if (!s.exists) return;
-  const d = s.data(), count = (d.reportCount || 0) + 1, patch = { reportCount: admin.firestore.FieldValue.increment(1) };
-  if (count >= SERVICE_PROVIDER_REPORT_HIDE_THRESHOLD && d.status !== 'hidden') patch.status = 'hidden';
-  await ref.update(patch);
-});
-
-const COMMUNITY_REPORT_HIDE_THRESHOLD = 5;
-  const r = event.data.data();
-  if (!r.postId) return;
-  if (!s.exists) return;
-  const d = s.data(), count = (d.reportCount || 0) + 1, patch = { reportCount: admin.firestore.FieldValue.increment(1) }, emergency = d.type === 'emergency';
-  if (count >= COMMUNITY_REPORT_HIDE_THRESHOLD && !emergency && d.status !== 'hidden') patch.status = 'hidden';
-  await ref.update(patch);
-});
-
-const SOCIAL_REPORT_HIDE_THRESHOLD = 5;
-  const r = event.data.data();
-  if (!r.postId) return;
-  if (!s.exists) return;
-  const d = s.data(), count = (d.reportCount || 0) + 1, patch = { reportCount: admin.firestore.FieldValue.increment(1) };
-  if (count >= SOCIAL_REPORT_HIDE_THRESHOLD && d.status !== 'hidden') patch.status = 'hidden';
-  await ref.update(patch);
-});
-
-exports.onBusinessProfileWritten = onDocumentWritten('businessProfiles/{uid}', async event => {
-  const before = event.data.before.exists ? event.data.before.data() : null;
-  const a = event.data.after.exists ? event.data.after.data() : null;
-  if (!a) return;
-  const was = !!(before && before.isBusinessProfile);
-  if (!a.isBusinessProfile || was) return;
 });
