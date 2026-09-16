@@ -57,6 +57,15 @@ service cloud.firestore {
     match /businessProfiles/{uid} { allow read: if signedIn() && (uid == request.auth.uid || isAdmin()); allow write: if false; }
     match /recommendationViews/{id} { allow read, write: if false; }
     match /announcements/{id} { allow read: if signedIn() && isAdmin(); allow write: if false; }
-    match /supportTickets/{id} { allow read: if signedIn() && (isSuperadmin() || resource.data.get('userId', null) == request.auth.uid || resource.data.get('assignedToUid', '') == request.auth.uid); allow create: if signedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.status == 'open'; allow update: if signedIn() && (isSuperadmin() || isAdmin() || resource.data.get('assignedToUid', '') == request.auth.uid || resource.data.get('userId', null) == request.auth.uid); allow delete: if false; }
+    match /supportTickets/{id} {
+      allow read: if signedIn() && (isSuperadmin() || resource.data.get('userId', null) == request.auth.uid || resource.data.get('assignedToUid', '') == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.status == 'open';
+      allow update: if signedIn() && (
+        isAdmin() ||
+        (resource.data.get('assignedToUid', '') == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['in_progress','resolved']) ||
+        (resource.data.get('userId', null) == request.auth.uid && resource.data.status == 'resolved' && request.resource.data.status == 'open' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']))
+      );
+      allow delete: if false;
+    }
   }
 }
