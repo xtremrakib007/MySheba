@@ -1,6 +1,5 @@
 // Voice/video call signaling for 1-to-1 calls only.
 // Agora handles the actual audio/video once both participants join.
-// The `calls` collection stores the signaling state used to coordinate the call.
 import {
   collection,
   doc,
@@ -75,6 +74,28 @@ export async function fetchAgoraToken(channelName, uid) {
   const fn = httpsCallable(functions, 'generateAgoraToken');
   const { data } = await fn(uid ? { channelName, uid } : { channelName });
   return data;
+}
+
+// Compatibility no-ops for stale AppContext code. These APIs intentionally
+// do not create or subscribe to group calls; group calling has been retired.
+export async function startGroupCall() {
+  throw new Error('Group calls have been removed from MySheba.');
+}
+export async function acceptGroupCall() {
+  throw new Error('Group calls have been removed from MySheba.');
+}
+export async function declineGroupCall() {
+  throw new Error('Group calls have been removed from MySheba.');
+}
+export async function leaveGroupCall() {
+  throw new Error('Group calls have been removed from MySheba.');
+}
+export async function cancelGroupCall() {
+  throw new Error('Group calls have been removed from MySheba.');
+}
+export function subscribeIncomingGroupCalls(_uid, callback) {
+  if (typeof callback === 'function') callback(null);
+  return () => {};
 }
 
 export { RING_TIMEOUT_MS };
