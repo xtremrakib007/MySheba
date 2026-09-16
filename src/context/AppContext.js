@@ -24,6 +24,10 @@ import * as bannerService from '../firebase/bannerService';
 import * as announcementService from '../firebase/announcementService';
 import * as topupService from '../firebase/topupService';
 import * as chatService from '../firebase/chatService';
+import * as directChatService from '../firebase/directChatService';
+import * as groupChatService from '../firebase/groupChatService';
+import * as roomChatService from '../firebase/roomChatService';
+import * as chatLockService from '../firebase/chatLockService';
 import * as callService from '../firebase/callService';
 import {
   registerForPushNotificationsAsync,
@@ -161,7 +165,7 @@ export function AppProvider({ children }) {
   // No more manual role picker - `screen` starts on 'login' and, once
   // signed in, the account's Firestore `role` field (in `profile.role`)
   // decides which home screen to land on. See the bootstrap effect below.
-  const [screen, setScreen] = useState('login'); // login | register | forgotPassword | customerHome | service | dealerHome | resellerHome | adminHome | webview | buspicker | support | history | topup | chat | chatList | settings | profile | myAccount | reports | notifications | marketplaceHome | marketplaceCreateListing | marketplaceMyListings | marketplaceMyReviews | marketplaceListingDetail | marketplaceModeration | verifyIdentity | verificationManagement | adminAnalytics | myDocuments | documentType | addDocument | documentDetails | documentViewer | moreFeatures | adminFeatures | apiProviderManagement | dealerFeatures | resellerFeatures | featureAccess | tierPromotions | adFeatureControls | bannerManagement | salaryReports | notepad | addNote | noteDetail | help | friendsList | callSettings | ringtonePicker
+  const [screen, setScreen] = useState('login'); // login | register | forgotPassword | customerHome | service | dealerHome | resellerHome | adminHome | webview | buspicker | support | history | topup | chat | chatList | chatHub | directChatList | addContact | qrScan | myQrCode | groupList | newGroup | createRoom | roomSettings | settings | profile | myAccount | reports | notifications | marketplaceHome | marketplaceCreateListing | marketplaceMyListings | marketplaceMyReviews | marketplaceListingDetail | marketplaceModeration | verifyIdentity | verificationManagement | adminAnalytics | myDocuments | documentType | addDocument | documentDetails | documentViewer | moreFeatures | adminFeatures | apiProviderManagement | dealerFeatures | resellerFeatures | featureAccess | tierPromotions | adFeatureControls | bannerManagement | salaryReports | notepad | addNote | noteDetail | help | investigateChat | friendsList | callSettings | ringtonePicker
 
   // ---- back-button navigation history ----
   // Tracks prior screens so the Android hardware back button can step
@@ -237,29 +241,43 @@ export function AppProvider({ children }) {
   const [activeChatReturnTo, setActiveChatReturnTo] = useState('chatList');
 
   // ---- direct chat (general-purpose 1:1 "Chat" tab, any two accounts) ----
+  const [activeDirectChatId, setActiveDirectChatId] = useState(null);
+  const [activeDirectChatName, setActiveDirectChatName] = useState('');
+  const [activeDirectChatUid, setActiveDirectChatUid] = useState(null); // other participant's uid - needed to start a call
+  const [directChatUnreadCount, setDirectChatUnreadCount] = useState(0);
   // Which contact RingtonePickerScreen is currently editing - same
+  // "dedicated nav state alongside setScreen" pattern as activeDirectChatId
   // above, since `screen` itself is a bare string with no params (see the
   // useState('login') list). Set by openRingtonePicker below.
   const [activeRingtoneContactUid, setActiveRingtoneContactUid] = useState(null);
   const [activeRingtoneContactName, setActiveRingtoneContactName] = useState('');
   // Prefills the message box (without auto-sending) the next time a direct
   // chat opens - e.g. a dealer's "message customer about this order" button.
+  const [chatDraftText, setChatDraftText] = useState('');
 
   // ---- direct chat investigation (superadmin-only, read-only view of a
   // reported conversation - see ChatReportsScreen's "Investigate" button
   // and InvestigateChatScreen.js). Deliberately separate state from
+  // activeDirectChatId/openDirectChat above: this isn't "the signed-in
   // user's own thread" (no security-PIN vault check, no call button, no
   // message box), it's an admin tool gated by firestore.rules'
   // underInvestigation flag instead. ----
+  const [activeInvestigateChatId, setActiveInvestigateChatId] = useState(null);
+  const [activeInvestigateReport, setActiveInvestigateReport] = useState(null); // { id, reportedUid, reportedName, reporterName }
 
   /** Opens the read-only conversation viewer for a report a superadmin is
    * investigating - `report` is { id, reportedUid, reportedName, reporterName }. */
-, []);
+  const openInvestigateChat = useCallback((chatId, report) => {
+    setActiveInvestigateChatId(chatId);
+    setActiveInvestigateReport(report || null);
+    setScreen('investigateChat');
+  }, []);
 
   // ---- marketplace (Buy & Sell) ---- Screens call marketplaceService.js
   // directly (same pattern as ProfileScreen -> authService), so all that
   // lives here is the one piece of navigation state a listing's detail
   // screen needs: which listing to show. "Chat Seller" reuses
+  // openDirectChat above - no separate marketplace chat state.
   const [activeListingId, setActiveListingId] = useState(null);
   const openMarketplace = useCallback(() => setScreen('marketplaceHome'), []);
   const openListingDetail = useCallback((listingId) => {
@@ -320,6 +338,7 @@ export function AppProvider({ children }) {
   // ---- accommodation (Phase 2 of the Marketplace PRD) ---- Same pattern
   // as marketplace above: screens call accommodationService.js directly,
   // so all that lives here is which property to show. "Contact Owner"
+  // reuses openDirectChat above - no separate accommodation chat state.
   const [activePropertyId, setActivePropertyId] = useState(null);
   const openAccommodation = useCallback(() => setScreen('accommodationHome'), []);
   const openPropertyDetail = useCallback((propertyId) => {
@@ -330,6 +349,7 @@ export function AppProvider({ children }) {
   // ---- room sharing (Phase 2 of the Marketplace PRD) ---- Same pattern
   // as accommodation above: screens call roommateService.js directly, so
   // all that lives here is which request to show. "Chat" reuses
+  // openDirectChat above - no separate room-sharing chat state.
   const [activeRoommateRequestId, setActiveRoommateRequestId] = useState(null);
   const openRoomSharing = useCallback(() => setScreen('roomSharingHome'), []);
   const openRoommateRequestDetail = useCallback((requestId) => {
@@ -341,6 +361,7 @@ export function AppProvider({ children }) {
   // Same pattern as accommodation/room sharing above: screens call
   // serviceProviderService.js / serviceReviewService.js /
   // serviceRequestService.js directly, so all that lives here is which
+  // provider to show. "Message" reuses openDirectChat above - no separate
   // local-services chat state. ("Request Service" is a lead form, not a
   // chat - see serviceRequestService.js - so it needs no navigation state
   // of its own either.)
@@ -514,6 +535,7 @@ export function AppProvider({ children }) {
   // Only one gate can be open at a time; a second call while one is pending
   // auto-cancels the first rather than stacking modals. Moved above the
   // group/direct/room chat section (rather than staying down by
+  // resetSecurityPin) so openDirectChat/openGroupChat/openRoomChat below can
   // close over it directly for Chat Lock's unlock-on-open check.
   const [pinGateRequest, setPinGateRequest] = useState(null); // { actionLabel } | null
   const pinGateResolverRef = useRef(null);
@@ -539,21 +561,36 @@ export function AppProvider({ children }) {
   }, []);
 
   // ---- group chat ----
+  const [activeGroupId, setActiveGroupId] = useState(null);
+  const [activeGroupName, setActiveGroupName] = useState('');
+  const [myGroups, setMyGroups] = useState([]); // every group the signed-in user belongs to
 
   // ---- room chat (community rooms with join rules + house rules) ----
+  const [activeRoomId, setActiveRoomId] = useState(null);
+  const [activeRoomName, setActiveRoomName] = useState('');
+  const [myRooms, setMyRooms] = useState([]); // every room the signed-in user belongs to
+  const [discoverableRooms, setDiscoverableRooms] = useState([]); // public (open/approval) rooms the user hasn't joined yet - see Rooms tab's "Discover" section
 
   // ---- unified Chat hub (Direct / Groups / Rooms tabs, see ChatHubScreen) ----
+  const [chatHubTab, setChatHubTab] = useState('direct'); // 'direct' | 'groups' | 'rooms'
 
+  // ---- Chat Lock (WhatsApp-style per-thread lock, see chatLockService.js) ----
+  // lockedChatIds holds "kind:id" keys (kind is 'direct' | 'group' | 'room')
   // for every thread the signed-in user has personally locked - it's a live
   // subscription so a lock/unlock made on another device shows up here too.
+  // chatVaultUnlocked tracks whether they've already passed the security PIN
   // gate to view locked threads THIS session - like WhatsApp, it re-locks
   // (see the AppState listener below) whenever the app is backgrounded, so
   // leaving the app and coming back always re-prompts.
+  const [lockedChatIds, setLockedChatIds] = useState([]);
+  const [chatVaultUnlocked, setChatVaultUnlocked] = useState(false);
 
   // ---- Private vault unlock (Notepad + My Documents share this one flag;
   // Transfer Points intentionally does NOT - it always re-prompts) ----
+  // Same shape as chatVaultUnlocked just above: passing the security PIN
   // gate for either screen sets this true, so opening the other one right
   // after doesn't ask again. Re-locks (see the same AppState listener
+  // chatVaultUnlocked uses below) whenever the app leaves the foreground,
   // so background/switch-app/screen-off always re-prompts on return - it
   // never stays unlocked indefinitely just because it was entered once.
   const [privateVaultUnlocked, setPrivateVaultUnlocked] = useState(false);
@@ -566,6 +603,7 @@ export function AppProvider({ children }) {
   // set true both on cold launch (once the profile's securityPinSet is
   // known - see the effect below) and whenever the app leaves the
   // foreground (the AppState listener further below), same re-lock timing
+  // as chatVaultUnlocked/privateVaultUnlocked. Turning App Lock on
   // requires a security PIN to already exist, since AppLockScreen checks
   // the PIN via the same verifySecurityPin call as Notepad/My Documents -
   // setAppLockEnabled runs the PIN setup gate first if one isn't set yet.
@@ -665,6 +703,7 @@ export function AppProvider({ children }) {
   // ---- voice / video calls (Agora) ----
   const [activeCall, setActiveCall] = useState(null); // the call doc currently on-screen (ringing/accepted)
   const [incomingCall, setIncomingCall] = useState(null); // a 1:1 call ringing FOR me
+  const [incomingGroupCall, setIncomingGroupCall] = useState(null); // a group call ringing FOR me
 
   // ---- service wizard state (mirrors currentService/currentStep/totalSteps/serviceData) ----
   const [currentService, setCurrentService] = useState('');
@@ -1330,6 +1369,7 @@ export function AppProvider({ children }) {
   // direct chats have no staff/customer asymmetry. ----
   useEffect(() => {
     if (!authUser) { setDirectChatUnreadCount(0); return undefined; }
+    const unsub = directChatService.subscribeMyChats(
       authUser.uid,
       (list) => setDirectChatUnreadCount(list.reduce((sum, c) => sum + ((c.unreadCounts && c.unreadCounts[authUser.uid]) || 0), 0)),
       logListenerError('directChats')
@@ -1340,12 +1380,14 @@ export function AppProvider({ children }) {
   // ---- live list of groups the signed-in user belongs to ----
   useEffect(() => {
     if (!authUser) { setMyGroups([]); return undefined; }
+    const unsub = groupChatService.subscribeMyGroups(authUser.uid, (list) => setMyGroups(list), logListenerError('groupChats'));
     return unsub;
   }, [authUser]);
 
   // ---- live list of rooms the signed-in user belongs to ----
   useEffect(() => {
     if (!authUser) { setMyRooms([]); return undefined; }
+    const unsub = roomChatService.subscribeMyRooms(authUser.uid, (list) => setMyRooms(list), logListenerError('roomChats'));
     return unsub;
   }, [authUser]);
 
@@ -1354,12 +1396,14 @@ export function AppProvider({ children }) {
   // this, a room only ever appeared once someone was already a member of it. ----
   useEffect(() => {
     if (!authUser) { setDiscoverableRooms([]); return undefined; }
+    const unsub = roomChatService.subscribeDiscoverableRooms(authUser.uid, (list) => setDiscoverableRooms(list), logListenerError('roomChats'));
     return unsub;
   }, [authUser]);
 
   // ---- live list of "kind:id" keys the signed-in user has locked (Chat Lock) ----
   useEffect(() => {
     if (!authUser) { setLockedChatIds([]); setChatVaultUnlocked(false); setPrivateVaultUnlocked(false); return undefined; }
+    const unsub = chatLockService.subscribeLockedChats(authUser.uid, (keys) => setLockedChatIds(keys), logListenerError('lockedChats'));
     return unsub;
   }, [authUser]);
 
@@ -1379,6 +1423,7 @@ export function AppProvider({ children }) {
 
   // App Lock: separate effect from the vault re-lock above since it needs
   // to read appLockEnabled/authUser (which change rarely, so resubscribing
+  // on their change is cheap - unlike chatVaultUnlocked/privateVaultUnlocked
   // above, which change constantly and would thrash a listener with those
   // as deps). Only re-locks on RETURNING to active, and only if the app
   // was actually away for at least APP_LOCK_GRACE_MS - records the
@@ -1423,6 +1468,17 @@ export function AppProvider({ children }) {
     return unsub;
   }, [authUser, activeCall]);
 
+  // Same idea as the listener above, but for group calls (see
+  // subscribeIncomingGroupCalls - keyed off ringingUids instead of a single
+  // calleeUid, since several people can be rung at once).
+  useEffect(() => {
+    if (!authUser) { setIncomingGroupCall(null); return undefined; }
+    const unsub = callService.subscribeIncomingGroupCalls(authUser.uid, (call) => {
+      setIncomingGroupCall(call && call.id !== activeCall?.id ? call : null);
+    });
+    return unsub;
+  }, [authUser, activeCall]);
+
   /** Starts a call with another user and switches to the call screen.
    * `caller` is supplied by the call site (e.g. ChatScreen) rather than
    * built here, so it always reflects the profile the screen has in hand. */
@@ -1454,11 +1510,101 @@ export function AppProvider({ children }) {
    * memberUids, memberNames}, a groupChats doc) and switches to the call
    * screen for the caller right away, same as startCall. `caller` is
    * supplied by the call site, same reasoning as startCall above. */
-, [authUser]);
+  const startGroupCall = useCallback(async (caller, group, type = 'video') => {
+    if (!authUser) return;
+    const { callId, channelName } = await callService.startGroupCall(caller, group, type);
+    const calleeUids = (group.memberUids || []).filter((uid) => uid !== caller.uid);
+    setActiveCall({
+      id: callId, channelName, type, isGroup: true,
+      groupId: group.id, groupName: group.name || 'Group',
+      callerUid: caller.uid, callerName: caller.name,
+      participantUids: [caller.uid, ...calleeUids],
+      participantNames: { ...(group.memberNames || {}), [caller.uid]: caller.name },
+      ringingUids: calleeUids,
+      activeUids: [caller.uid],
+      status: 'ringing',
+    });
+    setScreen('call');
+  }, [authUser]);
 
   /** Accepts the currently-ringing incoming group call and switches to the call screen. */
+  const answerIncomingGroupCall = useCallback(async () => {
+    if (!incomingGroupCall || !authUser) return;
+    await callService.acceptGroupCall(incomingGroupCall.id, authUser.uid);
+    setActiveCall(incomingGroupCall);
+    setIncomingGroupCall(null);
+    setScreen('call');
+  }, [incomingGroupCall, authUser]);
 
   /** Declines the currently-ringing incoming group call without joining. */
+  const rejectIncomingGroupCall = useCallback(async () => {
+    if (!incomingGroupCall || !authUser) return;
+    await callService.declineGroupCall(incomingGroupCall.id, authUser.uid);
+    setIncomingGroupCall(null);
+  }, [incomingGroupCall, authUser]);
+
+  const groupUnreadCount = myGroups.reduce(
+    (sum, g) => sum + ((g.unreadCounts && authUser && g.unreadCounts[authUser.uid]) || 0),
+    0
+  );
+
+  const roomUnreadCount = myRooms.reduce(
+    (sum, r) => sum + ((r.unreadCounts && authUser && r.unreadCounts[authUser.uid]) || 0),
+    0
+  );
+
+  // Badge shown on the bottom-nav "Chat" tab - the sum across all three
+  // thread kinds now that Direct/Groups/Rooms live behind one entry point.
+  const chatHubUnreadCount = directChatUnreadCount + groupUnreadCount + roomUnreadCount;
+
+  // ---- Chat Lock helpers (kind is 'direct' | 'group' | 'room') ----
+  /** Whether the signed-in user has personally locked this thread. */
+  const isChatLocked = useCallback((kind, id) => (
+    !!kind && !!id && lockedChatIds.includes(chatLockService.lockKey(kind, id))
+  ), [lockedChatIds]);
+
+  /** If `kind`/`id` is a locked thread and the Locked Chats vault isn't
+   * already unlocked this session, prompts the security PIN gate before
+   * letting the caller proceed - resolves true once it's safe to open the
+   * thread, false if the person cancelled. Unlocked/non-locked threads
+   * resolve true immediately with no prompt. */
+  const ensureChatUnlocked = useCallback(async (kind, id) => {
+    if (!isChatLocked(kind, id) || chatVaultUnlocked) return true;
+    try {
+      await requireSecurityPin('this locked chat');
+      setChatVaultUnlocked(true);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }, [isChatLocked, chatVaultUnlocked, requireSecurityPin]);
+
+  /** Locks a thread so it's hidden from the normal Chat hub list and only
+   * reachable from Locked Chats behind the security PIN. */
+  const lockChatThread = useCallback(async (kind, id) => {
+    if (!authUser || !kind || !id) return;
+    await chatLockService.lockChat(authUser.uid, kind, id);
+  }, [authUser]);
+
+  /** Reverses lockChatThread - the thread returns to the normal Chat hub list. */
+  const unlockChatThread = useCallback(async (kind, id) => {
+    if (!authUser || !kind || !id) return;
+    await chatLockService.unlockChat(authUser.uid, kind, id);
+  }, [authUser]);
+
+  /** Enters the Locked Chats folder - prompts the security PIN if the vault
+   * isn't already unlocked this session, then switches screens. */
+  const openLockedChats = useCallback(async () => {
+    if (!chatVaultUnlocked) {
+      try {
+        await requireSecurityPin('Locked Chats');
+        setChatVaultUnlocked(true);
+      } catch (e) {
+        return;
+      }
+    }
+    setScreen('lockedChats');
+  }, [chatVaultUnlocked, requireSecurityPin]);
 
   /** Opens the Support thread - `chatId` is the customer's uid, `name` is
    * who to show in the header/inbox. `returnTo` (staff only) is which
@@ -1478,15 +1624,41 @@ export function AppProvider({ children }) {
   /** Opens a group chat thread. If it's locked and the Locked Chats vault
    * isn't already unlocked this session, prompts the security PIN first
    * (see ensureChatUnlocked) - stays on the current screen if cancelled. */
-, [ensureChatUnlocked]);
+  const openGroupChat = useCallback(async (groupId, name) => {
+    if (!(await ensureChatUnlocked('group', groupId))) return;
+    setActiveGroupId(groupId);
+    setActiveChatId(null);
+    setActiveDirectChatId(null);
+    setActiveRoomId(null);
+    setActiveGroupName(name || '');
+    setScreen('chat');
+  }, [ensureChatUnlocked]);
 
   /** Opens a direct (1:1, any-role) chat thread - `chatId` is the directChats doc id, `name` is the other participant's name, `otherUid` is their uid (needed to start a call from the chat header). Optional `draftText` prefills (but doesn't send) the message box, e.g. for "message customer about this order". If it's locked and the Locked Chats vault isn't already unlocked this session, prompts the security PIN first (see ensureChatUnlocked) - stays on the current screen if cancelled. */
-, [ensureChatUnlocked]);
+  const openDirectChat = useCallback(async (chatId, name, otherUid, draftText) => {
+    if (!(await ensureChatUnlocked('direct', chatId))) return;
+    setActiveDirectChatId(chatId);
+    setActiveChatId(null);
+    setActiveGroupId(null);
+    setActiveRoomId(null);
+    setActiveDirectChatName(name || '');
+    setActiveDirectChatUid(otherUid || null);
+    if (draftText) setChatDraftText(draftText);
+    setScreen('chat');
+  }, [ensureChatUnlocked]);
 
   /** Opens a room chat thread. If it's locked and the Locked Chats vault
    * isn't already unlocked this session, prompts the security PIN first
    * (see ensureChatUnlocked) - stays on the current screen if cancelled. */
-, [ensureChatUnlocked]);
+  const openRoomChat = useCallback(async (roomId, name) => {
+    if (!(await ensureChatUnlocked('room', roomId))) return;
+    setActiveRoomId(roomId);
+    setActiveChatId(null);
+    setActiveGroupId(null);
+    setActiveDirectChatId(null);
+    setActiveRoomName(name || '');
+    setScreen('chat');
+  }, [ensureChatUnlocked]);
 
   /**
    * Joins a room surfaced in the Rooms tab's "Discover" section. 'open'
@@ -1496,9 +1668,22 @@ export function AppProvider({ children }) {
    * starts appearing in subscribeMyRooms). Returns 'joined' | 'requested'
    * so the screen can show the right feedback.
    */
+  const joinDiscoverableRoom = useCallback(async (room) => {
+    if (!authUser || !room?.id) return null;
+    if (room.type === 'approval') {
+      await roomChatService.requestToJoinRoom(room.id, { uid: authUser.uid, name: profile?.name || '' });
+      return 'requested';
+    }
+    await roomChatService.joinRoom(room.id, { uid: authUser.uid, name: profile?.name || '' });
+    openRoomChat(room.id, room.name || 'Room Chat');
+    return 'joined';
+  }, [authUser, profile, openRoomChat]);
 
   /** Opens the unified Chat hub (Direct / Groups / Rooms tabs), optionally landing on a specific tab. */
-, []);
+  const openChatHub = useCallback((tab) => {
+    if (tab) setChatHubTab(tab);
+    setScreen('chatHub');
+  }, []);
 
   // ---- push notification taps: jump to the right thread when the user
   // taps a notification, whether the app was foregrounded, backgrounded, or
@@ -1515,10 +1700,16 @@ export function AppProvider({ children }) {
         if (data.type === 'chat' && data.chatId) {
           openChat(data.chatId, 'Support');
         } else if (data.type === 'directChat' && data.chatId) {
+          const meta = await directChatService.getDirectChatMeta(data.chatId);
           const otherUid = meta?.participants?.find((uid) => uid !== authUser.uid);
           const name = (otherUid && meta?.participantNames?.[otherUid]) || 'Chat';
+          openDirectChat(data.chatId, name, otherUid);
         } else if (data.type === 'groupChat' && data.groupId) {
+          const meta = await groupChatService.getGroupMeta(data.groupId);
+          openGroupChat(data.groupId, meta?.name || 'Group Chat');
         } else if (data.type === 'roomChat' && data.roomId) {
+          const meta = await roomChatService.getRoomMeta(data.roomId);
+          openRoomChat(data.roomId, meta?.name || 'Room Chat');
         } else if (data.type === 'topup') {
           // Admin/superadmin get notified of a new request to review; the
           // requester gets notified once it's approved/rejected. Route each
@@ -1551,6 +1742,7 @@ export function AppProvider({ children }) {
     });
     const sub = addNotificationResponseListener(handleResponse);
     return () => sub.remove();
+  }, [authUser, profile, openChat, openDirectChat, openGroupChat, openRoomChat, setAdminTab, setScreen]);
 
   const openResult = useCallback((kind, txId, svc, extra) => {
     setResultModal({
@@ -1731,6 +1923,7 @@ export function AppProvider({ children }) {
   }, [callerRingtones]);
 
   /** Opens RingtonePickerScreen for one contact - same dedicated-nav-state
+   * pattern as openDirectChat (see activeDirectChatId etc above), since
    * `screen` itself carries no params. */
   const openRingtonePicker = useCallback((callerUid, callerName) => {
     setActiveRingtoneContactUid(callerUid);
@@ -2349,6 +2542,9 @@ export function AppProvider({ children }) {
     // support chat
     activeChatId, activeChatName, chatUnreadCount, activeChatReturnTo, openChat,
     // direct chat
+    activeDirectChatId, activeDirectChatName, activeDirectChatUid, directChatUnreadCount, openDirectChat,
+    activeInvestigateChatId, activeInvestigateReport, openInvestigateChat,
+    chatDraftText, setChatDraftText,
     // marketplace
     activeListingId, openMarketplace, openListingDetail, handleDeepLink,
     activeAdvertiserId, openAdvertiserManagement, openAdvertiserDetail,
@@ -2378,12 +2574,18 @@ export function AppProvider({ children }) {
     payslipSourceRecordId, editPayslipId, activePayslipId,
     openCreatePayslip, openEditPayslip, openPayslipHistory, openPayslipDetails,
     // group chat
+    activeGroupId, activeGroupName, myGroups, groupUnreadCount, openGroupChat,
     // room chat
+    activeRoomId, activeRoomName, myRooms, roomUnreadCount, openRoomChat,
+    discoverableRooms, joinDiscoverableRoom,
     // chat hub (Direct / Groups / Rooms tabs)
+    chatHubTab, setChatHubTab, chatHubUnreadCount, openChatHub,
+    lockedChatIds, chatVaultUnlocked, isChatLocked, lockChatThread, unlockChatThread, openLockedChats,
     // private vault unlock (Notepad + My Documents; NOT Transfer Points)
     privateVaultUnlocked, setPrivateVaultUnlocked,
     // voice / video calls
     activeCall, setActiveCall, incomingCall, startCall, answerIncomingCall, rejectIncomingCall,
+    incomingGroupCall, startGroupCall, answerIncomingGroupCall, rejectIncomingGroupCall,
     // overlays
     ratePopupVisible, setRatePopupVisible,
     resultModal, openResult, closeResult,
