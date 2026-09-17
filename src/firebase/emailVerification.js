@@ -20,15 +20,31 @@ export async function sendEmailOtp(email) {
   try { const fn=httpsCallable(functions,'registerCustomer'); const r=await timeout(fn({action:'sendEmailVerificationOtp',email:e}),TIMEOUT,'Sending the verification email took too long. Please try again.'); await AsyncStorage.setItem(EMAIL_FOR_SIGN_IN_KEY,e); return r.data; }
   catch(err){ throw new Error(friendly(err)); }
 }
-export const sendEmailLink = sendEmailOtp;
 
-export async function sendDeviceVerificationEmail(deviceId) {
-  if (!deviceId) throw new Error('This device could not be identified. Please sign in again.');
+export async function sendPasswordResetEmail(phone, email) {
+  const e=normalize(email);
+  if (!String(phone || '').trim() || !valid(e)) throw new Error('Please enter your phone number and email address.');
   try {
-    const fn = httpsCallable(functions, 'sendDeviceVerification');
-    const r = await timeout(fn({ deviceId }), TIMEOUT, 'Sending the device verification email took too long. Please try again.');
-    await AsyncStorage.setItem(EMAIL_FOR_SIGN_IN_KEY, normalize(r?.data?.email));
+    const fn = httpsCallable(functions, 'sendPasswordResetEmailVerification');
+    const r = await timeout(fn({ phone: String(phone).trim(), email: e }), TIMEOUT, 'Sending the password-reset email took too long. Please try again.');
+    await AsyncStorage.setItem(EMAIL_FOR_SIGN_IN_KEY, e);
     return r.data;
+  } catch (err) { throw new Error(friendly(err)); }
+}
+
+export async function sendPasswordResetEmailOtp(phone, email) {
+  return sendPasswordResetEmail(phone, email);
+}
+
+export async function verifyPasswordResetEmailOtp(uid, email, code) {
+  const e = normalize(email); const c = String(code || '').trim();
+  if (!uid || !valid(e) || !/^\d{6}$/.test(c)) throw new Error('Enter the 6-digit verification code.');
+  try {
+    const fn = httpsCallable(functions, 'verifyPasswordResetEmailOtp');
+    const r = await timeout(fn({ uid, email: e, code: c }), TIMEOUT, 'Email OTP verification took too long. Please try again.');
+    const verificationId = r?.data?.verificationId;
+    if (!verificationId) throw new Error('The verification result was incomplete. Please request a new code.');
+    return { verificationId, uid, email: e };
   } catch (err) { throw new Error(friendly(err)); }
 }
 
