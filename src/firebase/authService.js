@@ -12,6 +12,7 @@ import {
   onAuthStateChanged,
   updateProfile,
 } from 'firebase/auth';
+import { httpsCallable } from 'firebase/functions';
 import {
   doc,
   getDoc,
@@ -55,6 +56,18 @@ export function isValidEmail(email) {
 export function isValidPin(pin) {
   const value = String(pin || '');
   return value.length >= 6 && value.length <= 20;
+}
+
+export async function updatePushToken(uid, token, platform) {
+  if (!uid || !auth.currentUser || auth.currentUser.uid !== uid) {
+    throw new Error('You must be signed in to register push notifications.');
+  }
+  const value = String(token || '').trim();
+  if (!value) throw new Error('Push token is required.');
+  const tokenType = /^(Exponent|Expo)PushToken\[[A-Za-z0-9_-]+\]$/.test(value) ? 'expo' : 'fcm';
+  const callable = httpsCallable(functions, 'registerPushToken');
+  const { data } = await callable({ token: value, tokenType, platform: String(platform || '').toLowerCase() });
+  return data;
 }
 
 export async function registerCustomer({ name, phone, phoneE164, dialCode, email, pin, phoneIdToken, emailIdToken, emailOtpVerificationId }) {
@@ -210,15 +223,7 @@ export async function signInWithGoogle() {
   try {
     const { data: resolved } = await resolveFn({});
     if (resolved && resolved.found && resolved.customToken) {
-      // The resolver has already verified that this exact Google provider is
-      // attached to the target UID. Do NOT call linkWithCredential here: the
-      // provider is already linked to that account and attempting to relink it
-      // can produce auth/provider-already-linked or auth/credential-already-in-use.
       await signInWithCustomToken(auth, resolved.customToken);
-
-      // The temporary Google Auth user is no longer current after the custom
-      // token sign-in. Do not call delete() on it from the client; doing so can
-      // fail unpredictably and can turn a successful sign-in into a failure.
       await updateDoc(doc(db, 'users', auth.currentUser.uid), {
         googleLinked: true,
         googleEmail: googleEmail || auth.currentUser.email || '',
@@ -229,8 +234,6 @@ export async function signInWithGoogle() {
   } catch (err) {
     if (err && err.code === 'functions/permission-denied') throw new Error(err.message || 'Google sign-in is not permitted.');
     if (err && err.code === 'functions/unauthenticated') throw new Error('Google sign-in expired. Please try again.');
-    // Resolver availability failures may fall back to the normal Google
-    // onboarding flow. Identity/security failures are handled above.
     if (err && (err.code === 'functions/failed-precondition' || err.code === 'functions/internal')) {
       throw new Error(err.message || 'Google sign-in could not be completed. Please try again.');
     }
