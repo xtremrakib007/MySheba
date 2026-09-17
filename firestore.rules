@@ -17,6 +17,7 @@ service cloud.firestore {
         && p.suspended != true
         && p.inactive != true
         && p.disabled != true
+        && p.active != false
         && p.mergedInto == null;
     }
 
