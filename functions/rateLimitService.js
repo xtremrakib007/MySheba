@@ -1,6 +1,5 @@
 // Velocity / rate-limit guard for wallet-mutating Cloud Functions - plus a
-// second, IP-keyed variant (checkAnonymousVelocity) for the pre-auth OTP
-// flow in otpService.js, where there's no uid yet to key off.
+// second, IP-keyed variant (checkAnonymousVelocity) for pre-auth flows.
 const { HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logAudit } = require('./logService');
@@ -18,6 +17,8 @@ const DEFAULT_LIMITS = {
 const DEFAULT_OTP_LIMITS = {
   otp_send: { max: 8, windowMinutes: 60 },
   otp_verify: { max: 20, windowMinutes: 60 },
+  password_reset: { max: 5, windowMinutes: 60 },
+  password_reset_ip: { max: 20, windowMinutes: 60 },
 };
 
 async function getSecuritySettings(db) {
@@ -71,7 +72,7 @@ async function checkAnonymousVelocity(db, identifier, action) {
   const key = identifier || 'unknown';
   const tripped = await slidingWindowTripped(db, 'otpVelocity', `${key}_${action}`, limit);
   if (tripped) {
-    await logAudit({ action: 'otp_velocity_blocked', targetUid: null, performedBy: 'anonymous', performedByRole: null, details: { blockedAction: action, limit, ip: identifier || null } });
+    await logAudit({ action: 'otp_velocity_blocked', targetUid: null, performedBy: 'anonymous', performedByRole: null, details: { blockedAction: action, identifierType: action.startsWith('password_reset') ? 'hashed' : 'ip', limit } });
     throw new HttpsError('resource-exhausted', "You're doing that too quickly. Please wait a bit and try again.");
   }
 }
