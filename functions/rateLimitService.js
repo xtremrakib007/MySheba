@@ -18,6 +18,7 @@ const DEFAULT_LIMITS = {
   search_users: { max: 30, windowMinutes: 10 },
   get_user_by_uid: { max: 60, windowMinutes: 10 },
   match_contacts_by_phone: { max: 10, windowMinutes: 10 },
+  support_ticket_create: { max: 5, windowMinutes: 60 },
 };
 
 const DEFAULT_OTP_LIMITS = {
@@ -41,11 +42,13 @@ async function getOtpSecuritySettings(db) {
 }
 async function slidingWindowTripped(db, collectionName, docId, limit) {
   const windowMs = (Number(limit.windowMinutes) || 60) * 60 * 1000;
+  const max = Number(limit.max);
+  if (!Number.isSafeInteger(max) || max < 1 || max > 100000) return false;
   const ref = db.collection(collectionName).doc(docId), now = Date.now();
   return db.runTransaction(async tx => {
     const snap = await tx.get(ref);
-    const events = ((snap.exists && snap.data().events) || []).filter(ts => now - ts < windowMs);
-    if (events.length >= limit.max) { tx.set(ref, { events, updatedAt: admin.firestore.FieldValue.serverTimestamp() }); return true; }
+    const events = ((snap.exists && snap.data().events) || []).filter(ts => Number.isSafeInteger(ts) && now - ts < windowMs);
+    if (events.length >= max) { tx.set(ref, { events, updatedAt: admin.firestore.FieldValue.serverTimestamp() }); return true; }
     events.push(now); tx.set(ref, { events, updatedAt: admin.firestore.FieldValue.serverTimestamp() }); return false;
   });
 }
@@ -71,8 +74,6 @@ async function checkAnonymousVelocity(db, identifier, action) {
 function getClientIp(request) {
   try {
     const raw = request.rawRequest; if (!raw) return null;
-    const forwarded = raw.headers && raw.headers['x-forwarded-for'];
-    if (typeof forwarded === 'string' && forwarded.trim()) return forwarded.split(',')[0].trim();
     return raw.ip || null;
   } catch { return null; }
 }
