@@ -6,7 +6,7 @@ const MAX_AMOUNT = 100000;
 const ADMIN_ROLES = ['admin', 'superadmin'];
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 
-exports.adminTopUpPoints = onCall(async request => {
+exports.adminTopUpPoints = onCall({ enforceAppCheck: true }, async request => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
 
   const db = admin.firestore();
