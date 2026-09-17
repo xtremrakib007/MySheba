@@ -18,7 +18,7 @@ function isValidPassword(password) { const value = String(password || ''); retur
 function tokenFingerprint(token) { return crypto.createHash('sha256').update(String(token || '')).digest('hex'); }
 async function consumeResetProof(db, token, uid, via) { const ref = db.collection('passwordResetProofs').doc(tokenFingerprint(token)); const result = await db.runTransaction(async tx => { const snap = await tx.get(ref); if (snap.exists) return false; tx.create(ref, { uid, via, createdAt: admin.firestore.FieldValue.serverTimestamp(), expiresAt: Date.now() + RESET_PROOF_TTL_MS }); return true; }); if (!result) throw new HttpsError('failed-precondition', 'This verification has already been used. Please verify again.'); }
 
-exports.resetPassword = onCall(async request => {
+exports.resetPassword = onCall({ enforceAppCheck: true }, async request => {
   const { phone, phoneE164, dialCode, email, newPassword, phoneIdToken, emailIdToken, emailVerificationId } = request.data || {};
   const normalizedPhone = normalizePhone(phone), normalizedE164 = toE164(phoneE164 || phone, dialCode);
   if (!normalizedPhone) throw new HttpsError('invalid-argument', 'Please enter a valid phone number.');
