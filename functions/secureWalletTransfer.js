@@ -25,7 +25,7 @@ function amountMinor(value) {
   return minor;
 }
 
-exports.walletTransfer = onCall(async (request) => {
+exports.walletTransfer = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireAuth(request);
   const requestId = getRequestId(request);
   const db = admin.firestore();
@@ -56,8 +56,6 @@ exports.walletTransfer = onCall(async (request) => {
     if (existing.type !== 'walletTransfer' || existing.uid !== uid || existing.requestId !== requestId) {
       throw new HttpsError('failed-precondition', 'That request ID is already in use.');
     }
-    // Never replay a completed result for a different request payload. The
-    // deterministic transfer document below remains the source of truth.
     if (existing.requestedRecipient !== rawRecipient || Number(existing.requestedAmountMinor) !== requestedAmountMinor) {
       throw new HttpsError('already-exists', 'That request ID was already used for a different transfer.');
     }
