@@ -17,6 +17,7 @@ function normalizeEmail(email) { return String(email || '').trim().toLowerCase()
 function isValidPassword(password) { const value = String(password || ''); return value.length >= 6 && value.length <= 20; }
 function tokenFingerprint(token) { return crypto.createHash('sha256').update(String(token || '')).digest('hex'); }
 async function consumeResetProof(db, token, uid, via) { const ref = db.collection('passwordResetProofs').doc(tokenFingerprint(token)); const result = await db.runTransaction(async tx => { const snap = await tx.get(ref); if (snap.exists) return false; tx.create(ref, { uid, via, createdAt: admin.firestore.FieldValue.serverTimestamp(), expiresAt: Date.now() + RESET_PROOF_TTL_MS }); return true; }); if (!result) throw new HttpsError('failed-precondition', 'This verification has already been used. Please verify again.'); }
+function isActiveProfile(profile) { return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto && profile.active !== false; }
 
 exports.resetPassword = onCall({ enforceAppCheck: true }, async request => {
   const { phone, phoneE164, dialCode, email, newPassword, phoneIdToken, emailIdToken, emailVerificationId } = request.data || {};
@@ -30,7 +31,7 @@ exports.resetPassword = onCall({ enforceAppCheck: true }, async request => {
   let snap; try { snap = await findUserByPhone(db, phone, normalizedE164, dialCode); } catch (err) { await logServerError('resetPassword.findUserByPhone', err, { lookup: 'phone' }); throw new HttpsError('internal', 'Could not find your account right now. Please try again.'); }
   if (snap.empty) throw new HttpsError('not-found', 'No account found with that phone number.');
   const userDoc = snap.docs[0], userData = userDoc.data(), realUid = userDoc.id;
-  if (userData.suspended) throw new HttpsError('permission-denied', 'This account has been suspended. Please contact support.');
+  if (!isActiveProfile(userData)) throw new HttpsError('permission-denied', 'This account is not available. Please contact support.');
   const ip = getClientIp(request); await checkVelocity(db, realUid, 'password_reset', { ip });
   let verificationMethod;
   if (phoneIdToken) {
