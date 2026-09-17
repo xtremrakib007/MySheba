@@ -18,6 +18,8 @@ import { logActivity } from './logService';
 
 const COLLECTION = 'supportTickets';
 const createSupportTicketFn = httpsCallable(functions, 'createSupportTicket');
+const assignSupportTicketFn = httpsCallable(functions, 'assignSupportTicket');
+const unassignSupportTicketFn = httpsCallable(functions, 'unassignSupportTicket');
 
 export const STATUS_LABELS = {
   open: 'Open',
@@ -102,19 +104,16 @@ export async function reopenTicket(id) {
 }
 
 export async function assignTicket(id, staff) {
-  await updateDoc(doc(db, COLLECTION, id), {
-    assignedToUid: staff.id,
-    assignedToName: staff.name || '',
-    assignedToRole: staff.role || '',
-    updatedAt: serverTimestamp(),
+  const result = await assignSupportTicketFn({
+    ticketId: String(id || '').trim(),
+    staffUid: String(staff?.id || '').trim(),
   });
+  return result.data;
 }
 
 export async function unassignTicket(id) {
-  await updateDoc(doc(db, COLLECTION, id), {
-    assignedToUid: '',
-    assignedToName: '',
-    assignedToRole: '',
-    updatedAt: serverTimestamp(),
+  const result = await unassignSupportTicketFn({
+    ticketId: String(id || '').trim(),
   });
+  return result.data;
 }
