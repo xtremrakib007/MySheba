@@ -102,7 +102,7 @@ function resetRateKey(value) {
   return crypto.createHash('sha256').update(String(value || '')).digest('hex');
 }
 
-exports.resetPassword = onCall(async (request) => {
+exports.resetPassword = onCall({ enforceAppCheck: true }, async (request) => {
   const { phone, phoneE164, dialCode, email, newPassword, phoneIdToken, emailIdToken } = request.data || {};
   const normalizedPhone = normalizePhone(phone);
   const normalizedE164 = toE164(phoneE164 || phone, dialCode);
@@ -117,8 +117,6 @@ exports.resetPassword = onCall(async (request) => {
 
   const db = admin.firestore();
 
-  // Rate-limit recovery attempts before account lookup. Use a one-way phone
-  // key so the limiter does not persist the user's raw phone number.
   try {
     await checkAnonymousVelocity(db, resetRateKey(normalizedE164), 'password_reset');
     const ip = getClientIp(request);
@@ -174,11 +172,7 @@ exports.resetPassword = onCall(async (request) => {
   }
 
   await admin.auth().revokeRefreshTokens(realUid).catch(() => {});
-  await userDoc.ref.update({
-    activeSessionId: null,
-    activeDeviceId: null,
-    pendingDeviceApproval: null,
-  }).catch(() => {});
+  await userDoc.ref.update({ activeSessionId: null, activeDeviceId: null, pendingDeviceApproval: null }).catch(() => {});
 
   await logAudit({
     action: 'password_reset',
