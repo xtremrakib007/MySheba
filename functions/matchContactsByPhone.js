@@ -13,6 +13,10 @@ function normalizeDigits(value) {
   return String(value || '').replace(/[^0-9]/g, '');
 }
 
+function isPublicActiveAccount(u) {
+  return u && u.mergedInto == null && u.suspended !== true && u.inactive !== true && u.disabled !== true && u.active !== false;
+}
+
 async function rateLimit(db, uid) {
   const ref = db.collection('userSearchVelocity').doc(`${uid}_contact_match`);
   const now = Date.now();
@@ -59,7 +63,7 @@ exports.matchContactsByPhone = onCall({ enforceAppCheck: true }, async (request)
   snap.forEach((doc) => {
     if (doc.id === callerUid) return;
     const u = doc.data() || {};
-    if (u.mergedInto) return;
+    if (!isPublicActiveAccount(u)) return;
     const phoneDigits = normalizeDigits(u.phone);
     if (!phoneDigits || !wanted.has(phoneDigits)) return;
     results.push({
