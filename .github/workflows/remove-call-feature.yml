@@ -1,0 +1,108 @@
+name: Remove obsolete call feature
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: ${{ !contains(github.event.head_commit.message, '[call-cleanup]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Remove call feature
+        shell: python
+        run: |
+          from pathlib import Path
+          import json, re
+
+          # AppContext: remove call-only imports and all call state/effects/actions.
+          p = Path('src/context/AppContext.js')
+          s = p.read_text()
+          patterns = [
+              r'\nimport \* as callService from "\.\./firebase/callService";',
+              r'\nimport \{ withCallSettingsDefaults \} from "\.\./data/callSettingsConstants";',
+              r'\nimport \{\n  cacheCallSettings,\n  cacheCallerRingtones,\n\} from "\.\./notifications/callSettingsCache";',
+              r'\nimport \{\n  setCallerRingtone as saveCallerRingtone,\n  removeCallerRingtone as deleteCallerRingtone,\n  subscribeCallerRingtones,\n\} from "\.\./firebase/callerRingtoneService";',
+          ]
+          for pat in patterns:
+              s = re.sub(pat, '', s)
+          s = s.replace(' | callSettings | ringtonePicker', '')
+          s = re.sub(r'\n  // ---- 1-to-1 call ringtone selection ----.*?(?=\n  /\*\* Opens the Support thread)', '', s, flags=re.S)
+          s = re.sub(r'\n  // ---- voice / video calls \(Agora\) ----.*?(?=\n  // overlays)', '', s, flags=re.S)
+          # Remove any remaining standalone call-settings memo block.
+          s = re.sub(r'\n  // Call Settings \(ringtone/vibration/volume/notifications toggle\).*?(?=\n  // )', '', s, flags=re.S)
+          # Remove call-only returned context properties.
+          s = re.sub(r'^\s*(activeCall|setActiveCall|incomingCall|startCall|answerIncomingCall|rejectIncomingCall|callSettings|updateCallSettings|callerRingtones|updateCallerRingtone|clearCallerRingtone|activeRingtoneContactUid|activeRingtoneContactName):.*\n', '', s, flags=re.M)
+          # Remove common call-specific useEffect blocks if any survived the section cleanup.
+          s = re.sub(r'\n  useEffect\(\(\) => \{\n.*?callService\.subscribeIncomingCalls.*?\n  \}, \[.*?\]\);', '', s, flags=re.S)
+          s = re.sub(r'\n  useEffect\(\(\) => \{\n.*?subscribeCallerRingtones.*?\n  \}, \[.*?\]\);', '', s, flags=re.S)
+          p.write_text(s)
+
+          # Cloud Functions entrypoint: remove Agora export and call notification trigger.
+          p = Path('functions/index.js')
+          s = p.read_text()
+          s = re.sub(r"exports\.generateAgoraToken = require\('./agoraToken'\)\.generateAgoraToken;\n", '', s)
+          s = re.sub(r"async function sendCallDataMessage\(uid, data\) \{.*?\n\}
+", '', s, flags=re.S)
+          s = re.sub(r"\nexports\.onCallCreated = onDocumentCreated\('calls/\{callId\}'.*?\n", '\n', s)
+          p.write_text(s)
+
+          # Firestore: remove the call collection and helper functions.
+          p = Path('firestore.rules')
+          s = p.read_text()
+          s = re.sub(r"\n    function callParticipant\(\) \{.*?\n", '\n', s)
+          s = re.sub(r"\n    function newCallParticipant\(\) \{.*?\n", '\n', s)
+          s = re.sub(r"\n    match /calls/\{callId\} \{.*?\n", '\n', s)
+          p.write_text(s)
+
+          # Native app config: remove call-only microphone/camera wording and call ringtone assets.
+          p = Path('app.base.json')
+          data = json.loads(p.read_text())
+          def clean(obj):
+              if isinstance(obj, dict):
+                  for k, v in list(obj.items()):
+                      if isinstance(v, str):
+                          obj[k] = v.replace(' and video calls', '').replace(' for voice and video calls', '').replace(' for voice calls', '')
+                      else:
+                          clean(v)
+              elif isinstance(obj, list):
+                  obj[:] = [x for x in obj if not (isinstance(x, str) and ('ringtone.mp3' in x or 'soft.mp3' in x))]
+                  for x in obj: clean(x)
+          clean(data)
+          p.write_text(json.dumps(data, indent=2) + '\n')
+
+          # Keep the permission-removal plugin, but remove its obsolete Agora explanation.
+          p = Path('plugins/withRemoveUnusedPermissions.js')
+          s = p.read_text()
+          s = re.sub(r"// 1\. FOREGROUND_SERVICE_MEDIA_PROJECTION.*?// never screen or media projection\.\n//\n// 2\.", '// 1. FOREGROUND_SERVICE_MEDIA_PROJECTION - not used by MySheba.\n//\n// 2.', s, flags=re.S)
+          p.write_text(s)
+
+          # Remove the obsolete server token module.
+          Path('functions/agoraToken.js').unlink(missing_ok=True)
+
+          # Do not leave the temporary workflow in the repository.
+          Path('.github/workflows/remove-call-feature.yml').unlink()
+
+          # Hard checks: no executable call path should remain in these core files.
+          for name in ['src/context/AppContext.js', 'functions/index.js', 'firestore.rules', 'app.base.json']:
+              text = Path(name).read_text()
+              forbidden = ['generateAgoraToken', 'react-native-agora', 'IncomingCallModal', 'callService', 'onCallCreated', 'match /calls/']
+              bad = [x for x in forbidden if x in text]
+              if bad:
+                  raise SystemExit(f'{name} still contains: {bad}')
+
+      - name: Commit cleanup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "Remove obsolete call feature [call-cleanup]"
+          git push
