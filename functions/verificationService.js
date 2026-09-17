@@ -9,10 +9,15 @@ function requireAuth(request) {
   return request.auth.uid;
 }
 
+function activeAccount(user) {
+  return user && user.suspended !== true && user.inactive !== true && user.disabled !== true && !user.mergedInto;
+}
+
 async function requireAdmin(db, callerUid) {
   const snap = await db.collection('users').doc(callerUid).get();
   const caller = snap.exists ? snap.data() : null;
   if (!caller || !['admin', 'superadmin'].includes(caller.role)) throw new HttpsError('permission-denied', 'Only an admin can review verification requests.');
+  if (!activeAccount(caller)) throw new HttpsError('permission-denied', 'This admin account is not active.');
   return caller;
 }
 
@@ -36,9 +41,7 @@ function validateRequestData(data, uid) {
   if (typeof data.address !== 'string' || data.address.trim().length < 5 || data.address.length > 500) throw new HttpsError('failed-precondition', 'Invalid residential address.');
   if (data.documentType === 'Passport') {
     if (typeof data.passportExpiryDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(data.passportExpiryDate)) throw new HttpsError('failed-precondition', 'Passport expiry date is required.');
-  } else if (data.passportExpiryDate) {
-    throw new HttpsError('failed-precondition', 'Passport expiry date is only valid for passports.');
-  }
+  } else if (data.passportExpiryDate) throw new HttpsError('failed-precondition', 'Passport expiry date is only valid for passports.');
   if (!validStorageUrl(data.frontDocumentUrl, uid) || !validStorageUrl(data.documentUrl, uid)) throw new HttpsError('failed-precondition', 'The identity document upload is invalid.');
   if (data.documentType !== 'Passport' && !validStorageUrl(data.backDocumentUrl, uid)) throw new HttpsError('failed-precondition', 'The back of the identity document is required.');
   if (!validStorageUrl(data.selfieUrl, uid)) throw new HttpsError('failed-precondition', 'The verified face image is missing.');
@@ -61,7 +64,9 @@ exports.approveVerification = onCall({ enforceAppCheck: true }, async (request) 
       validateRequestData(reqData, targetUid);
       const userSnap = await tx.get(userRef);
       if (!userSnap.exists) throw new HttpsError('not-found', 'That user account no longer exists.');
-      if (userSnap.data()?.verificationStatus === 'approved' || userSnap.data()?.verified === true) throw new HttpsError('failed-precondition', 'This user is already verified.');
+      const user = userSnap.data() || {};
+      if (!activeAccount(user)) throw new HttpsError('failed-precondition', 'The user account is not active.');
+      if (user.verificationStatus === 'approved' || user.verified === true) throw new HttpsError('failed-precondition', 'This user is already verified.');
       await finalizeKycFaceTemplate(tx, db, targetUid);
       tx.update(reqRef, { status: 'approved', note: '', rejectionReason: '', reviewedBy: callerUid, reviewedAt: admin.firestore.FieldValue.serverTimestamp(), biometricVerified: true });
       tx.update(userRef, { verified: true, verificationStatus: 'approved' });
@@ -90,6 +95,9 @@ exports.rejectVerification = onCall({ enforceAppCheck: true }, async (request) =
       const reqSnap = await tx.get(reqRef);
       if (!reqSnap.exists) throw new HttpsError('not-found', 'That verification request does not exist.');
       if (reqSnap.data().status !== 'pending') throw new HttpsError('failed-precondition', 'That request has already been reviewed.');
+      const userSnap = await tx.get(userRef);
+      if (!userSnap.exists) throw new HttpsError('not-found', 'That user account no longer exists.');
+      if (!activeAccount(userSnap.data() || {})) throw new HttpsError('failed-precondition', 'The user account is not active.');
       tx.update(reqRef, { status: 'rejected', note: cleanReason, rejectionReason: cleanReason, reviewedBy: callerUid, reviewedAt: admin.firestore.FieldValue.serverTimestamp() });
       tx.update(userRef, { verified: false, verificationStatus: 'rejected' });
       tx.delete(db.collection('pendingBiometricTemplates').doc(targetUid));
