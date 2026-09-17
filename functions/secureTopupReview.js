@@ -3,6 +3,7 @@ const admin = require('firebase-admin');
 const { logAudit, logServerError } = require('./logService');
 
 const ADMIN_ROLES = ['admin', 'superadmin'];
+const ALLOWED_RECIPIENT_ROLES = ['customer', 'dealer', 'reseller'];
 const MAX_AMOUNT = 100000;
 const MONEY_RE = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
 
@@ -12,7 +13,7 @@ function requireAdmin(request) {
 }
 
 function activeAccount(profile) {
-  return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto;
+  return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && profile.active !== false && profile.mergedInto == null;
 }
 
 function validMoney(value) {
@@ -53,8 +54,11 @@ exports.approveTopup = onCall({ enforceAppCheck: true }, async request => {
       const userRef = db.collection('users').doc(userId);
       const userSnap = await tx.get(userRef);
       if (!userSnap.exists) throw new HttpsError('not-found', 'That user account no longer exists.');
+      const user = userSnap.data() || {};
+      if (!activeAccount(user)) throw new HttpsError('failed-precondition', 'The recipient account is not active.');
+      if (!ALLOWED_RECIPIENT_ROLES.includes(user.role)) throw new HttpsError('failed-precondition', 'That account cannot receive wallet top-ups.');
       const points = validMoney(topup.points ?? topup.amount);
-      const balance = validBalance(userSnap.data()?.walletBalance);
+      const balance = validBalance(user.walletBalance);
       if (points === null) throw new HttpsError('failed-precondition', 'Top-up amount is invalid.');
       if (balance === null) throw new HttpsError('failed-precondition', 'User wallet balance is invalid.');
       const newBalance = balance + points;
