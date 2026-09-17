@@ -5,8 +5,6 @@ const DEALER_SERVICES = ['Mobile Banking'];
 const RESELLER_SERVICES = ['Recharge', 'Internet', 'Remittance'];
 const APPROVER_ROLES = ['admin', 'superadmin'];
 const OPERATOR_ROLES = ['dealer', 'reseller'];
-// Transaction assignment is specifically dealer assignment. Subdealers are
-// not transaction operators and must never be assignable through this path.
 const ASSIGNABLE_ROLES = ['dealer'];
 
 function requireAuth(request) { if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.'); }
@@ -24,7 +22,7 @@ function assertOperatorCanHandle(actor, order) {
   if (actor.role === 'reseller' && order.resellerId && order.resellerId !== actor.uid) throw new HttpsError('permission-denied', 'This order is assigned to another reseller.');
 }
 
-exports.approveTransaction = onCall(async (request) => {
+exports.approveTransaction = onCall({ enforceAppCheck: true }, async (request) => {
   requireAuth(request); const actor = await getActor(request.auth.uid);
   if (!APPROVER_ROLES.includes(actor.role)) throw new HttpsError('permission-denied', 'Only an admin or superadmin can approve an order.');
   const id = String(request.data?.transactionId || ''); if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
@@ -38,7 +36,7 @@ exports.approveTransaction = onCall(async (request) => {
   return { ok: true, transactionId: id };
 });
 
-exports.acceptTransaction = onCall(async (request) => {
+exports.acceptTransaction = onCall({ enforceAppCheck: true }, async (request) => {
   requireAuth(request); const actor = await getActor(request.auth.uid);
   const id = String(request.data?.transactionId || ''); if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
   const db = admin.firestore(), ref = db.collection('transactions').doc(id);
@@ -59,7 +57,7 @@ exports.acceptTransaction = onCall(async (request) => {
   return { ok: true, transactionId: id };
 });
 
-exports.completeTransaction = onCall(async (request) => {
+exports.completeTransaction = onCall({ enforceAppCheck: true }, async (request) => {
   requireAuth(request); const actor = await getActor(request.auth.uid);
   if (!OPERATOR_ROLES.includes(actor.role)) throw new HttpsError('permission-denied', 'Only the dealer/reseller Operator can complete an order.');
   const id = String(request.data?.transactionId || ''), pin = String(request.data?.pin || ''), receiptUrl = String(request.data?.receiptUrl || '');
@@ -77,10 +75,7 @@ exports.completeTransaction = onCall(async (request) => {
   return { ok: true, transactionId: id };
 });
 
-// One-time maintenance callable for removing legacy plaintext collection PINs
-// from completed transactions. Superadmin-only and deliberately not exposed
-// through the client transaction service. Remove this export after migration.
-exports.scrubCompletedTransactionPins = onCall(async (request) => {
+exports.scrubCompletedTransactionPins = onCall({ enforceAppCheck: true }, async (request) => {
   requireAuth(request); const actor = await getActor(request.auth.uid);
   if (actor.role !== 'superadmin') throw new HttpsError('permission-denied', 'Only a superadmin can scrub legacy collection PINs.');
   const db = admin.firestore();
@@ -96,7 +91,7 @@ exports.scrubCompletedTransactionPins = onCall(async (request) => {
   return { ok: true, scrubbed: count, batches };
 });
 
-exports.assignDealer = onCall(async (request) => {
+exports.assignDealer = onCall({ enforceAppCheck: true }, async (request) => {
   requireAuth(request);
   const actor = await getActor(request.auth.uid);
   if (!APPROVER_ROLES.includes(actor.role)) throw new HttpsError('permission-denied', 'Only an admin or superadmin can assign a dealer.');
@@ -113,7 +108,7 @@ exports.assignDealer = onCall(async (request) => {
     if (!dealerSnap.exists) throw new HttpsError('not-found', 'The selected dealer was not found.');
     const order = orderSnap.data();
     const dealer = dealerSnap.data();
-    if (!['pending'].includes(order.status)) throw new HttpsError('failed-precondition', 'Only pending orders can be assigned.');
+    if (order.status !== 'pending') throw new HttpsError('failed-precondition', 'Only pending orders can be assigned.');
     if (!ASSIGNABLE_ROLES.includes(dealer.role)) throw new HttpsError('failed-precondition', 'The selected user is not a dealer.');
     if (dealer.role === 'dealer' && !DEALER_SERVICES.includes(order.service)) throw new HttpsError('failed-precondition', 'This dealer cannot handle this service.');
     tx.update(txRef, { dealerId, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
