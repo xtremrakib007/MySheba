@@ -29,7 +29,7 @@ function validBalance(value) {
   return Number.isFinite(n) && n >= 0 && Number.isSafeInteger(Math.round(n * 100)) ? n : null;
 }
 
-exports.createSelfTopup = onCall(async (request) => {
+exports.createSelfTopup = onCall({ enforceAppCheck: true }, async (request) => {
   const { uid, requestId } = requireRequest(request);
   const db = admin.firestore();
   const data = request.data || {};
