@@ -64,7 +64,7 @@ export async function registerCustomer({ name, phone, phoneE164, dialCode, email
   if (!isValidPin(pin)) throw new Error('Password must be 6-20 characters.');
   if (!phoneIdToken) throw new Error('Please verify your phone number first.');
 
-  const registerFn = httpsCallable(functions, 'registerWithDealerCode');
+  const registerFn = httpsCallable(functions, 'registerCustomer');
   await registerFn({ name, phone, phoneE164, dialCode, email, pin, phoneIdToken });
   const authEmail = phoneToEmail(phone, dialCode);
   const cred = await signInWithEmailAndPassword(auth, authEmail, pin);
