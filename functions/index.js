@@ -29,6 +29,7 @@ exports.sendDeviceVerification = require('./deviceVerificationService').sendDevi
 exports.confirmDeviceEmailOtp = require('./deviceVerificationService').confirmDeviceEmailOtp;
 exports.cleanupExpiredVerificationArtifacts = require('./verificationCleanup').cleanupExpiredVerificationArtifacts;
 exports.sendAnnouncement = require('./announcements').sendAnnouncement;
+exports.createSupportTicket = require('./supportTicketService').createSupportTicket;
 
 const secureTransfer = require('./secureTransfer');
 const secureWalletTransfer = require('./secureWalletTransfer');
