@@ -35,6 +35,7 @@ exports.updateDeduction = require('./salaryMutationService').updateDeduction;
 exports.deleteDeduction = require('./salaryMutationService').deleteDeduction;
 exports.saveSalaryEstimate = require('./salaryMutationService').saveSalaryEstimate;
 exports.recordActualSalary = require('./salaryMutationService').recordActualSalary;
+exports.attachSalaryPayslip = require('./salaryMutationService').attachSalaryPayslip;
 exports.deleteSalaryRecord = require('./salaryMutationService').deleteSalaryRecord;
 exports.sendAnnouncement = require('./announcements').sendAnnouncement;
 exports.approveTopup = require('./walletService').approveTopup;
