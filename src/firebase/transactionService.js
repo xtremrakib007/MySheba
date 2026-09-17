@@ -6,6 +6,7 @@ import { db, functions, auth } from './config';
 import { logActivity } from './logService';
 
 const COLLECTION = 'transactions';
+const QUEUE_COLLECTION = 'transactionQueue';
 const CHARGEABLE_SERVICE_FNS = { Recharge: 'chargeRecharge', Internet: 'chargeInternetPackage', 'Mobile Banking': 'chargeMobileBanking', Remittance: 'chargeRemittance' };
 const REJECT_FNS = { Recharge: 'rejectRechargeTransaction', Internet: 'rejectInternetPackageTransaction', 'Mobile Banking': 'rejectMobileBankingTransaction', Remittance: 'rejectRemittanceTransaction' };
 
@@ -42,11 +43,11 @@ export function subscribeTransactions(callback, onError) {
   return onSnapshot(q, (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), onError);
 }
 
-// Customer/dealer/reseller mobile queue. Queries deliberately mirror the Firestore read rules.
+// Dealer/reseller broadcast queue. Full transaction documents are intentionally
+// not read here. transactionQueue contains only server-sanitized operator fields.
 export function subscribeBroadcastTransactions(callback, onError) {
   let stopped = false;
-  let unsubPending = () => {};
-  let unsubClaimed = () => {};
+  const unsubs = [];
   let pending = [];
   let claimed = [];
 
@@ -56,6 +57,15 @@ export function subscribeBroadcastTransactions(callback, onError) {
     const list = Array.from(byId.values());
     list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
     callback(list);
+  };
+
+  const attach = (q, target) => {
+    const unsub = onSnapshot(q, (snap) => {
+      target.length = 0;
+      snap.docs.forEach((d) => target.push({ id: d.id, ...d.data() }));
+      emit();
+    }, (err) => { if (!stopped) onError?.(err); });
+    unsubs.push(unsub);
   };
 
   (async () => {
@@ -68,25 +78,24 @@ export function subscribeBroadcastTransactions(callback, onError) {
 
       if (role === 'admin' || role === 'superadmin') {
         const q = query(collection(db, COLLECTION), where('status', 'in', ['pending', 'processing', 'completed']));
-        unsubPending = onSnapshot(q, (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))), onError);
+        attach(q, pending);
         return;
       }
 
       if (role !== 'dealer' && role !== 'reseller') return;
 
-      const pendingQuery = role === 'dealer'
-        ? query(collection(db, COLLECTION), where('status', '==', 'pending'), where('service', '==', 'Mobile Banking'))
-        : query(collection(db, COLLECTION), where('status', '==', 'pending'), where('service', 'in', ['Recharge', 'Internet', 'Remittance']));
-      const claimedQuery = query(collection(db, COLLECTION), where('claimedBy', '==', uid));
+      if (role === 'dealer') {
+        attach(query(collection(db, QUEUE_COLLECTION), where('service', '==', 'Mobile Banking'), where('status', '==', 'pending'), where('dealerId', '==', null)), pending);
+        attach(query(collection(db, QUEUE_COLLECTION), where('service', '==', 'Mobile Banking'), where('status', '==', 'pending'), where('dealerId', '==', uid)), pending);
+      } else {
+        const services = ['Recharge', 'Internet', 'Remittance'];
+        attach(query(collection(db, QUEUE_COLLECTION), where('service', 'in', services), where('status', '==', 'pending'), where('resellerId', '==', null)), pending);
+        attach(query(collection(db, QUEUE_COLLECTION), where('service', 'in', services), where('status', '==', 'pending'), where('resellerId', '==', uid)), pending);
+      }
 
-      unsubPending = onSnapshot(pendingQuery, (snap) => {
-        pending = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        emit();
-      }, onError);
-      unsubClaimed = onSnapshot(claimedQuery, (snap) => {
-        claimed = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        emit();
-      }, onError);
+      // Claimed/completed history is restricted by Firestore rules to the operator
+      // whose UID is stored in claimedBy, even though this query is intentionally broad.
+      attach(query(collection(db, QUEUE_COLLECTION), where('claimedBy', '==', uid)), claimed);
     } catch (err) {
       if (!stopped) onError?.(err);
     }
@@ -94,8 +103,7 @@ export function subscribeBroadcastTransactions(callback, onError) {
 
   return () => {
     stopped = true;
-    unsubPending();
-    unsubClaimed();
+    unsubs.splice(0).forEach((unsub) => unsub());
   };
 }
 
