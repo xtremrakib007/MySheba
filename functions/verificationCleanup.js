@@ -7,6 +7,7 @@ const COLLECTIONS = [
   { name: 'emailVerificationProofs', field: 'expiresAt' },
   { name: 'passwordResetEmailOtps', field: 'expiresAt' },
   { name: 'passwordResetProofs', field: 'expiresAt' },
+  { name: 'mergeOtps', field: 'expiresAt' },
 ];
 
 async function deleteExpiredCollection(db, name, field, now) {
