@@ -3,7 +3,6 @@ const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('fir
 const admin = require('firebase-admin');
 const progressionService = require('./progressionService');
 const TIER_QUALIFYING_SERVICES = ['Recharge', 'Internet', 'Mobile Banking', 'Remittance'];
-exports.generateAgoraToken = require('./agoraToken').generateAgoraToken;
 exports.manageUser = require('./userManagement').manageUser;
 exports.searchUsers = require('./userSearch').searchUsers;
 exports.getUserByUid = require('./userSearch').getUserByUid;
@@ -36,8 +35,8 @@ exports.recordActualSalary = require('./salaryMutationService').recordActualSala
 exports.attachSalaryPayslip = require('./salaryMutationService').attachSalaryPayslip;
 exports.deleteSalaryRecord = require('./salaryMutationService').deleteSalaryRecord;
 exports.sendAnnouncement = require('./announcements').sendAnnouncement;
-exports.approveTopup = require('./walletService').approveTopup;
-exports.rejectTopup = require('./walletService').rejectTopup;
+exports.approveTopup = require('./secureTopupReview').approveTopup;
+exports.rejectTopup = require('./secureTopupReview').rejectTopup;
 exports.createSelfTopup = require('./walletService').createSelfTopup;
 exports.submitTopupRequest = require('./topupSubmissionService').submitTopupRequest;
 exports.adminTopUpPoints = require('./adminTopUpService').adminTopUpPoints;
@@ -46,10 +45,11 @@ exports.findWalletRecipient = require('./walletTransferService').findWalletRecip
 exports.createDiditKycSession = require('./diditKycService').createDiditKycSession;
 exports.diditKycWebhook = require('./diditKycService').diditKycWebhook;
 exports.chargeWallet = require('./walletService').chargeWallet;
-exports.chargeRecharge = require('./walletService').chargeRecharge;
-exports.chargeInternetPackage = require('./walletService').chargeInternetPackage;
-exports.chargeMobileBanking = require('./walletService').chargeMobileBanking;
-exports.chargeRemittance = require('./walletService').chargeRemittance;
+const chargeGuards = require('./chargeGuards');
+exports.chargeRecharge = chargeGuards.chargeRecharge;
+exports.chargeInternetPackage = chargeGuards.chargeInternetPackage;
+exports.chargeMobileBanking = chargeGuards.chargeMobileBanking;
+exports.chargeRemittance = chargeGuards.chargeRemittance;
 exports.approveVerification = require('./verificationService').approveVerification;
 exports.rejectVerification = require('./verificationService').rejectVerification;
 exports.setBusinessProfileStatus = require('./businessProfileService').setBusinessProfileStatus;
@@ -78,7 +78,6 @@ const STAFF_ROLES = ['dealer', 'reseller', 'admin', 'superadmin'];
 const ADMIN_ROLES = ['admin', 'superadmin'];
 function chunk(arr, size) { const out = []; for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size)); return out; }
 async function sendExpoPush(messages) { const valid = messages.filter(m => m && m.to); for (const batch of chunk(valid, 100)) { try { const res = await fetch(EXPO_PUSH_URL, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify(batch.map(m => ({ sound: 'default', ...m }))) }); if (!res.ok) console.error('Expo push HTTP error', res.status, await res.text()); } catch (e) { console.error('Expo push send failed', e); } } }
-async function sendCallDataMessage(uid, data) { if (!uid) return; const snap = await db.collection('users').doc(uid).get(); if (!snap.exists) return; const d = snap.data(); if (!d.fcmToken || (d.notifPrefs && d.notifPrefs.pushEnabled === false) || (d.callSettings && d.callSettings.notificationsEnabled === false)) return; try { await admin.messaging().send({ token: d.fcmToken, data, android: { priority: 'high' } }); } catch (e) { console.error('Call data message send failed', e); } }
 async function getUserPushTarget(uid) { if (!uid) return null; const snap = await db.collection('users').doc(uid).get(); if (!snap.exists) return null; const d = snap.data(); if (!d.pushToken || (d.notifPrefs && d.notifPrefs.pushEnabled === false)) return null; return d.pushToken; }
 async function notifyUser(uid, title, body, data, extra) { const token = await getUserPushTarget(uid); if (token) await sendExpoPush([{ to: token, title, body, data: data || {}, ...(extra || {}) }]); }
 async function notifyRoles(roles, title, body, data) { const snap = await db.collection('users').where('role', 'in', roles).get(); const messages = []; snap.forEach(doc => { const u = doc.data(); if (u.pushToken && !(u.notifPrefs && u.notifPrefs.pushEnabled === false)) messages.push({ to: u.pushToken, title, body, data: data || {} }); }); await sendExpoPush(messages); }
@@ -91,4 +90,3 @@ exports.onSupportTicketUpdated = onDocumentUpdated('supportTickets/{id}', async 
 exports.onInquiryCreated = onDocumentCreated('inquiries/{id}', async event => { const i = event.data.data(); await notifyRoles(ADMIN_ROLES, '✈️ New travel inquiry', `${i.type}: ${i.from} → ${i.to} (${i.date})`, { type: 'inquiry', id: event.params.id }); });
 exports.onInquiryUpdated = onDocumentUpdated('inquiries/{id}', async event => { const b = event.data.before.data(), a = event.data.after.data(); if (b.status !== 'closed' && a.status === 'closed' && a.type === 'flight' && a.ticketUrl) await progressionService.incrementTierPoints(a.customerId); if (b.status === a.status) return; if (a.status === 'contacted') await notifyUser(a.customerId, '📞 We called about your inquiry', `An agent has reached out about your ${a.type} inquiry.`, { type: 'inquiry', id: event.params.id }); else if (a.status === 'closed') await notifyUser(a.customerId, '✅ Inquiry closed', `Your ${a.type} inquiry has been closed.`, { type: 'inquiry', id: event.params.id }); });
 exports.onChatMessageCreated = onDocumentCreated('chats/{chatId}/messages/{messageId}', async event => { const m = event.data.data(), chatId = event.params.chatId, preview = m.text && m.text.length > 80 ? `${m.text.slice(0, 77)}...` : m.text; await progressionService.incrementLevelPoints(m.senderId); if (m.senderRole === 'customer') await notifyRoles(STAFF_ROLES, `💬 ${m.senderName || 'Customer'}`, preview || 'New message', { type: 'chat', chatId }); else await notifyUser(chatId, `💬 ${m.senderName || 'MySheba Support'}`, preview || 'New message', { type: 'chat', id: event.params.id, }); });
-exports.onCallCreated = onDocumentCreated('calls/{callId}', async event => { const c = event.data.data(); if (c.status !== 'ringing' || c.isGroup === true || !c.calleeUid) return; const kind = c.type === 'video' ? '📹 Video call' : '📞 Voice call'; const callType = c.type === 'video' ? 'video' : 'audio'; const uid = c.calleeUid; const s = await db.collection('users').doc(uid).get(); const d = s.exists ? s.data() : {}; if (d.callSettings && d.callSettings.notificationsEnabled === false) return; await Promise.all([notifyUser(uid, kind, `${c.callerName || 'Someone'} is calling you`, { type: 'call', callId: event.params.callId }, { priority: 'high', channelId: 'calls' }), sendCallDataMessage(uid, { type: 'call', callId: event.params.callId, callerName: c.callerName || 'Someone', callType, callerUid: c.callerUid || '' })]); });
