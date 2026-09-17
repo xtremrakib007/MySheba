@@ -5,6 +5,7 @@ const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestor
 const { assertEmailVerified } = require('./emailVerification');
 const { assertPhoneVerified } = require('./phoneVerification');
 const mailerService = require('./mailerService');
+const { trackTemporaryAuthUser, deleteTrackedTemporaryAuthUser } = require('./temporaryAuthCleanup');
 
 const TTL_MS = 10 * 60 * 1000;
 const RESEND_MS = 30 * 1000;
@@ -97,9 +98,6 @@ exports.confirmDeviceEmailOtp = onCall(async (request) => {
 
   if (phoneIdToken) {
     try {
-      // Always compare against the stored E.164 phone number/country.
-      // Using profile.phone alone silently defaulted to +60 and broke SMS
-      // device verification for non-Malaysian users.
       const expectedPhone = data.phoneE164 || pending.phoneE164 || data.phone || pending.phone || '';
       const expectedDialCode = data.phoneCountryCode || pending.dialCode || '+60';
       await assertPhoneVerified(phoneIdToken, expectedPhone, expectedDialCode);
@@ -143,7 +141,10 @@ exports.confirmDeviceEmailOtp = onCall(async (request) => {
     lastLoginAt: FieldValue.serverTimestamp(),
   });
   try { await admin.auth().revokeRefreshTokens(uid); } catch (err) { console.error('[deviceVerification] revoke tokens failed', err); }
-  if (emailAuthUid) await admin.auth().deleteUser(emailAuthUid).catch(() => {});
+  if (emailAuthUid) {
+    await trackTemporaryAuthUser({ uid: emailAuthUid, purpose: 'device-email-verification', targetUid: uid, email: pending.email || data.email || null });
+    await deleteTrackedTemporaryAuthUser(emailAuthUid);
+  }
   console.log(`[deviceVerification] device approved via ${verifiedVia}`, { uid, deviceId });
   return { requiresOtp: false, sessionId };
 });
