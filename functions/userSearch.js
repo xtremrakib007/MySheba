@@ -1,30 +1,47 @@
 // Search every account by name, phone number, or numeric userId, regardless
-// of role - backs the "Add contact" flow for starting a new direct chat (see
-// src/screens/AddContactScreen.js) and the "New Group" member picker (see
-// src/screens/NewGroupScreen.js). This MUST run server-side: firestore.rules
-// deliberately does NOT let a customer read other users' profile docs, and
-// dealer/dealer reads are scoped to their own dealer pool only - see the
-// users/{uid} rule. So a plain client query can't back either picker. The
-// Admin SDK bypasses those rules, and this function hands back only the
-// public-safe fields a picker needs (uid, name, phone, role, userId) - never
-// walletBalance, dealerId, pinHash-equivalent auth info, etc.
+// of role. Results are intentionally limited to public-safe picker fields.
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logServerError } = require('./logService');
+
+const SEARCH_MAX = 30;
+const SEARCH_WINDOW_MS = 10 * 60 * 1000;
+const QR_MAX = 60;
+const QR_WINDOW_MS = 60 * 60 * 1000;
 
 function normalizeDigits(value) {
   return String(value || '').replace(/[^0-9]/g, '');
 }
 
-exports.searchUsers = onCall(async (request) => {
-  if (!request.auth) {
-    throw new HttpsError('unauthenticated', 'You must be signed in.');
+async function rateLimit(db, uid, action, max, windowMs) {
+  const ref = db.collection('userSearchVelocity').doc(`${uid}_${action}`);
+  const now = Date.now();
+  const tripped = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const events = ((snap.exists && snap.data().events) || [])
+      .filter((ts) => Number.isFinite(ts) && now - ts < windowMs);
+    if (events.length >= max) {
+      tx.set(ref, { events, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      return true;
+    }
+    events.push(now);
+    tx.set(ref, { events, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    return false;
+  });
+  if (tripped) {
+    throw new HttpsError('resource-exhausted', 'Too many account lookups. Please wait and try again.');
   }
+}
+
+exports.searchUsers = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const callerUid = request.auth.uid;
-  const term = String((request.data && request.data.query) || '').trim();
+  const term = String((request.data && request.data.query) || '').trim().slice(0, 100);
   if (term.length < 2) return { results: [] };
 
   const db = admin.firestore();
+  await rateLimit(db, callerUid, 'search', SEARCH_MAX, SEARCH_WINDOW_MS);
+
   let snap;
   try {
     snap = await db.collection('users').get();
@@ -35,25 +52,18 @@ exports.searchUsers = onCall(async (request) => {
 
   const termLower = term.toLowerCase();
   const termDigits = normalizeDigits(term);
-
   const results = [];
+
   snap.forEach((doc) => {
     if (doc.id === callerUid) return;
     const u = doc.data() || {};
-    // Skip accounts merged away by the Google-account-merge flow
-    // (functions/accountMergeService.js) - they're disabled in Auth and
-    // have nothing of their own left; picking one here would start a chat
-    // (or in transferPoints, send points) into a dead end.
     if (u.mergedInto) return;
     const nameLower = String(u.name || '').toLowerCase();
     const phoneDigits = normalizeDigits(u.phone);
     const userIdStr = String(u.userId || '');
-
-    const nameMatch = nameLower.includes(termLower);
-    const phoneMatch = termDigits.length > 0 && phoneDigits.includes(termDigits);
-    const userIdMatch = termDigits.length > 0 && userIdStr.includes(termDigits);
-    if (!nameMatch && !phoneMatch && !userIdMatch) return;
-
+    if (!nameLower.includes(termLower)
+      && !(termDigits.length > 0 && phoneDigits.includes(termDigits))
+      && !(termDigits.length > 0 && userIdStr.includes(termDigits))) return;
     results.push({
       uid: doc.id,
       name: u.name || '',
@@ -67,27 +77,20 @@ exports.searchUsers = onCall(async (request) => {
   return { results: results.slice(0, 25) };
 });
 
-// Looks up one account by uid - backs the "Scan QR" add-contact flow (see
-// src/screens/QRScanScreen.js). A scanned QR only carries a uid (see
-// src/screens/MyQRCodeScreen.js, which encodes the owner's own uid/userId
-// into the code they display); this function turns that into the same
-// public-safe fields searchUsers returns, re-fetched fresh from Firestore
-// rather than trusted from the QR payload itself, and rejects scanning your
-// own code.
+// QR lookup returns the same public-safe fields as searchUsers and never trusts
+// the name/phone/userId embedded in a QR payload.
 exports.getUserByUid = onCall(async (request) => {
-  if (!request.auth) {
-    throw new HttpsError('unauthenticated', 'You must be signed in.');
-  }
+  if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const callerUid = request.auth.uid;
   const targetUid = String((request.data && request.data.uid) || '').trim();
-  if (!targetUid) {
+  if (!targetUid || targetUid.length > 128) {
     throw new HttpsError('invalid-argument', 'Missing uid.');
   }
-  if (targetUid === callerUid) {
-    throw new HttpsError('invalid-argument', 'That is your own code.');
-  }
+  if (targetUid === callerUid) throw new HttpsError('invalid-argument', 'That is your own code.');
 
   const db = admin.firestore();
+  await rateLimit(db, callerUid, 'qr', QR_MAX, QR_WINDOW_MS);
+
   let snap;
   try {
     snap = await db.collection('users').doc(targetUid).get();
@@ -95,17 +98,10 @@ exports.getUserByUid = onCall(async (request) => {
     await logServerError('getUserByUid', err, { userId: callerUid });
     throw new HttpsError('internal', 'Could not look up this account right now.');
   }
-
-  if (!snap.exists) {
-    throw new HttpsError('not-found', 'This account no longer exists.');
-  }
+  if (!snap.exists) throw new HttpsError('not-found', 'This account no longer exists.');
 
   const u = snap.data() || {};
-  if (u.mergedInto) {
-    // Same reasoning as searchUsers above - this account was merged into
-    // another one (functions/accountMergeService.js) and is now disabled.
-    throw new HttpsError('not-found', 'This account no longer exists.');
-  }
+  if (u.mergedInto) throw new HttpsError('not-found', 'This account no longer exists.');
   return {
     result: {
       uid: snap.id,
