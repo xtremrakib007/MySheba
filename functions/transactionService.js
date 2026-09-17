@@ -12,7 +12,7 @@ async function getActor(uid) {
   const snap = await admin.firestore().collection('users').doc(uid).get();
   if (!snap.exists) throw new HttpsError('permission-denied', 'Your staff profile was not found.');
   const p = snap.data();
-  if (p.suspended === true || p.inactive === true || p.disabled === true || p.mergedInto) {
+  if (p.suspended === true || p.inactive === true || p.disabled === true || p.active === false || p.mergedInto) {
     throw new HttpsError('permission-denied', 'Your account is not active.');
   }
   return { uid, role: p.role || '', name: p.fullName || p.name || p.displayName || p.phone || uid };
