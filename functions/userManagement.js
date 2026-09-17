@@ -6,32 +6,18 @@ const { logAudit, logServerError } = require('./logService');
 const APP_EMAIL_DOMAIN = 'mysheba.app';
 function normalizePhone(phone) { return String(phone || '').replace(/[^0-9]/g, ''); }
 function phoneToEmail(phone) { return `${normalizePhone(phone)}@${APP_EMAIL_DOMAIN}`; }
-const ROLE_PERMISSIONS = {
-  dealer: { canCreate: ['customer'], canUpgradeTo: [] },
-  admin: { canCreate: ['customer', 'dealer', 'reseller'], canUpgradeTo: ['dealer', 'reseller'] },
-  superadmin: { canCreate: ['customer', 'dealer', 'admin', 'reseller'], canUpgradeTo: ['dealer', 'admin', 'reseller'] },
-};
-const DOWNGRADE_PERMISSIONS = {
-  dealer: { dealer: 'customer' },
-  admin: { dealer: 'customer', reseller: 'customer' },
-  superadmin: { dealer: 'customer', admin: 'dealer', reseller: 'customer' },
-};
-async function getCallerProfile(uid) {
-  const snap = await admin.firestore().collection('users').doc(uid).get();
-  return snap.exists ? { id: snap.id, ...snap.data() } : null;
-}
-async function getCustomerTarget(db, targetUid) {
-  const ref = db.collection('users').doc(targetUid);
-  const snap = await ref.get();
-  if (!snap.exists) throw new HttpsError('not-found', 'That user does not exist.');
-  if (snap.data().role !== 'customer') throw new HttpsError('invalid-argument', 'Only a customer account can be changed here.');
-  return { ref, snap };
-}
+function active(profile) { return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto; }
+const ROLE_PERMISSIONS = { dealer: { canCreate: ['customer'], canUpgradeTo: [] }, admin: { canCreate: ['customer', 'dealer', 'reseller'], canUpgradeTo: ['dealer', 'reseller'] }, superadmin: { canCreate: ['customer', 'dealer', 'admin', 'reseller'], canUpgradeTo: ['dealer', 'admin', 'reseller'] } };
+const DOWNGRADE_PERMISSIONS = { dealer: { dealer: 'customer' }, admin: { dealer: 'customer', reseller: 'customer' }, superadmin: { dealer: 'customer', admin: 'dealer', reseller: 'customer' } };
+async function getCallerProfile(uid) { const snap = await admin.firestore().collection('users').doc(uid).get(); return snap.exists ? { id: snap.id, ...snap.data() } : null; }
+async function getCustomerTarget(db, targetUid) { const ref = db.collection('users').doc(targetUid); const snap = await ref.get(); if (!snap.exists) throw new HttpsError('not-found', 'That user does not exist.'); if (snap.data().role !== 'customer') throw new HttpsError('invalid-argument', 'Only a customer account can be changed here.'); return { ref, snap }; }
+function assertActiveAssignment(profile, expectedRole, label) { if (!profile || profile.role !== expectedRole) throw new HttpsError('invalid-argument', `That ${label} was not found.`); if (!active(profile)) throw new HttpsError('failed-precondition', `That ${label} is not active.`); }
 
 exports.manageUser = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const callerUid = request.auth.uid;
   const callerProfile = await getCallerProfile(callerUid);
+  if (!active(callerProfile)) throw new HttpsError('permission-denied', 'Your account is not active.');
   const callerRole = callerProfile?.role;
   const perms = ROLE_PERMISSIONS[callerRole];
   if (!perms) throw new HttpsError('permission-denied', 'Your account cannot manage users.');
@@ -47,25 +33,13 @@ exports.manageUser = onCall({ enforceAppCheck: true }, async (request) => {
     let dealerId = null;
     if (role === 'customer') {
       if (callerRole === 'dealer') dealerId = callerUid;
-      else if (requestedDealerId) {
-        const dealerSnap = await db.collection('users').doc(requestedDealerId).get();
-        if (!dealerSnap.exists || dealerSnap.data().role !== 'dealer') throw new HttpsError('invalid-argument', 'That dealer was not found.');
-        dealerId = requestedDealerId;
-      }
+      else if (requestedDealerId) { const dealerSnap = await db.collection('users').doc(requestedDealerId).get(); assertActiveAssignment(dealerSnap.exists ? dealerSnap.data() : null, 'dealer', 'dealer'); dealerId = requestedDealerId; }
     }
     let resellerId = null;
-    if (role === 'customer' && requestedResellerId && (callerRole === 'admin' || callerRole === 'superadmin')) {
-      const resellerSnap = await db.collection('users').doc(requestedResellerId).get();
-      if (!resellerSnap.exists || resellerSnap.data().role !== 'reseller') throw new HttpsError('invalid-argument', 'That reseller was not found.');
-      resellerId = requestedResellerId;
-    }
+    if (role === 'customer' && requestedResellerId && (callerRole === 'admin' || callerRole === 'superadmin')) { const resellerSnap = await db.collection('users').doc(requestedResellerId).get(); assertActiveAssignment(resellerSnap.exists ? resellerSnap.data() : null, 'reseller', 'reseller'); resellerId = requestedResellerId; }
     let userRecord;
     try { userRecord = await admin.auth().createUser({ email: phoneToEmail(phone), password: pin, displayName: name.trim() }); }
-    catch (err) {
-      if (err.code === 'auth/email-already-exists') throw new HttpsError('already-exists', 'An account with this phone number already exists.');
-      await logServerError('manageUser.create', err, { userId: callerUid });
-      throw new HttpsError('internal', 'Could not create the account.');
-    }
+    catch (err) { if (err.code === 'auth/email-already-exists') throw new HttpsError('already-exists', 'An account with this phone number already exists.'); await logServerError('manageUser.create', err, { userId: callerUid }); throw new HttpsError('internal', 'Could not create the account.'); }
     const newProfile = { uid: userRecord.uid, userId: await assignUniqueUserId(db, userRecord.uid), name: name.trim(), phone: normalizePhone(phone), role, walletBalance: 0, notifPrefs: { pushEnabled: true, emailEnabled: true, rateAlerts: false }, createdBy: callerUid, createdAt: admin.firestore.FieldValue.serverTimestamp() };
     if (dealerId) newProfile.dealerId = dealerId;
     if (resellerId) newProfile.resellerId = resellerId;
@@ -94,7 +68,7 @@ exports.manageUser = onCall({ enforceAppCheck: true }, async (request) => {
     if (!targetUid || !dealerId) throw new HttpsError('invalid-argument', 'targetUid and dealerId are required.');
     const { ref: targetRef } = await getCustomerTarget(db, targetUid);
     const dealerSnap = await db.collection('users').doc(dealerId).get();
-    if (!dealerSnap.exists || dealerSnap.data().role !== 'dealer') throw new HttpsError('invalid-argument', 'That dealer was not found.');
+    assertActiveAssignment(dealerSnap.exists ? dealerSnap.data() : null, 'dealer', 'dealer');
     const previousDealerId = (await targetRef.get()).data().dealerId || null;
     await targetRef.update({ dealerId });
     await logAudit({ action: 'dealer_reassigned', targetUid, performedBy: callerUid, performedByRole: callerRole, details: { from: previousDealerId, to: dealerId } });
@@ -107,7 +81,7 @@ exports.manageUser = onCall({ enforceAppCheck: true }, async (request) => {
     if (!targetUid || !resellerId) throw new HttpsError('invalid-argument', 'targetUid and resellerId are required.');
     const { ref: targetRef } = await getCustomerTarget(db, targetUid);
     const resellerSnap = await db.collection('users').doc(resellerId).get();
-    if (!resellerSnap.exists || resellerSnap.data().role !== 'reseller') throw new HttpsError('invalid-argument', 'That reseller was not found.');
+    assertActiveAssignment(resellerSnap.exists ? resellerSnap.data() : null, 'reseller', 'reseller');
     const previousResellerId = (await targetRef.get()).data().resellerId || null;
     await targetRef.update({ resellerId });
     await logAudit({ action: 'reseller_reassigned', targetUid, performedBy: callerUid, performedByRole: callerRole, details: { from: previousResellerId, to: resellerId } });
@@ -150,8 +124,7 @@ exports.manageUser = onCall({ enforceAppCheck: true }, async (request) => {
     const targetRef = db.collection('users').doc(targetUid); const targetSnap = await targetRef.get();
     if (!targetSnap.exists) throw new HttpsError('not-found', 'That user does not exist.');
     if (targetSnap.data().role === 'superadmin') throw new HttpsError('permission-denied', 'A superadmin account cannot be suspended here.');
-    try { await admin.auth().updateUser(targetUid, { disabled: suspended }); }
-    catch (err) { await logServerError('manageUser.suspend', err, { userId: callerUid }); throw new HttpsError('internal', 'Could not update the account.'); }
+    try { await admin.auth().updateUser(targetUid, { disabled: suspended }); } catch (err) { await logServerError('manageUser.suspend', err, { userId: callerUid }); throw new HttpsError('internal', 'Could not update the account.'); }
     await targetRef.update(suspended ? { suspended: true, suspendedAt: admin.firestore.FieldValue.serverTimestamp(), suspendedBy: callerUid } : { suspended: false, suspendedAt: admin.firestore.FieldValue.delete(), suspendedBy: admin.firestore.FieldValue.delete() });
     await logAudit({ action: suspended ? 'user_suspended' : 'user_reactivated', targetUid, performedBy: callerUid, performedByRole: callerRole, details: {} });
     return { uid: targetUid, suspended };
@@ -165,8 +138,7 @@ exports.manageUser = onCall({ enforceAppCheck: true }, async (request) => {
     if (!targetSnap.exists) throw new HttpsError('not-found', 'That user does not exist.');
     const targetData = targetSnap.data();
     if (targetData.role === 'superadmin') throw new HttpsError('permission-denied', 'A superadmin account cannot be deleted here.');
-    try { await admin.auth().deleteUser(targetUid); }
-    catch (err) { if (err.code !== 'auth/user-not-found') { await logServerError('manageUser.delete', err, { userId: callerUid }); throw new HttpsError('internal', 'Could not delete the account.'); } }
+    try { await admin.auth().deleteUser(targetUid); } catch (err) { if (err.code !== 'auth/user-not-found') { await logServerError('manageUser.delete', err, { userId: callerUid }); throw new HttpsError('internal', 'Could not delete the account.'); } }
     await targetRef.delete();
     await logAudit({ action: 'user_deleted', targetUid, performedBy: callerUid, performedByRole: callerRole, details: { role: targetData.role, name: targetData.name || null, phone: targetData.phone || null } });
     return { uid: targetUid, deleted: true };
