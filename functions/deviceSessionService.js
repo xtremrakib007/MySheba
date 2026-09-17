@@ -42,6 +42,12 @@ const otpHash = (value) => crypto.createHash('sha256').update(String(value).trim
 const sessionId = () => crypto.randomBytes(24).toString('hex');
 const userRef = (db, uid) => db.collection('users').doc(uid);
 const isStaffRole = (role) => ['admin', 'superadmin', 'dealer', 'reseller'].includes(role);
+const isActiveAccount = (profile) => !!profile
+  && profile.mergedInto == null
+  && profile.suspended !== true
+  && profile.inactive !== true
+  && profile.disabled !== true
+  && profile.active !== false;
 
 async function resolveUidForVerification(request, db) {
   if (request.auth?.uid) {
@@ -62,6 +68,7 @@ async function resolveUidForVerification(request, db) {
   const snap = await userRef(db, requestedUid).get();
   if (!snap.exists) throw new HttpsError('not-found', 'No profile found for this account.');
   const profile = snap.data();
+  if (!isActiveAccount(profile)) throw new HttpsError('permission-denied', 'This account is not active.');
 
   try {
     if (phoneIdToken) {
@@ -197,7 +204,7 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: true }, async (request) =
     const snap = await ref.get();
     if (!snap.exists) throw new HttpsError('not-found', 'No profile found for this account.');
     const profile = snap.data();
-    if (profile.suspended) throw new HttpsError('permission-denied', 'This account has been suspended. Please contact support.');
+    if (!isActiveAccount(profile)) throw new HttpsError('permission-denied', 'This account is not active.');
 
     let verifiedNewStaffDevice = false;
     let verificationMethod = null;
@@ -239,7 +246,7 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: true }, async (request) =
       const currentSnap = await tx.get(ref);
       if (!currentSnap.exists) throw new HttpsError('not-found', 'No profile found for this account.');
       const current = currentSnap.data();
-      if (current.suspended) throw new HttpsError('permission-denied', 'This account has been suspended.');
+      if (!isActiveAccount(current)) throw new HttpsError('permission-denied', 'This account is not active.');
 
       if (verifiedNewStaffDevice) {
         const id = sessionId();
@@ -290,6 +297,7 @@ exports.confirmDeviceSwitch = onCall({ enforceAppCheck: true }, async (request) 
     const snap = await ref.get();
     if (!snap.exists) throw new HttpsError('not-found', 'No profile found for this account.');
     const profile = snap.data();
+    if (!isActiveAccount(profile)) throw new HttpsError('permission-denied', 'This account is not active.');
     const pending = profile.pendingDeviceApproval;
     if (!pending || pending.deviceId !== deviceId) throw new HttpsError('failed-precondition', 'No pending verification for this device. Please sign in again.');
 
@@ -350,6 +358,7 @@ exports.listTrustedDevices = onCall({ enforceAppCheck: true }, async (request) =
   try {
     const snap = await userRef(db, uid).get();
     if (!snap.exists) throw new HttpsError('not-found', 'No profile found for this account.');
+    if (!isActiveAccount(snap.data())) throw new HttpsError('permission-denied', 'This account is not active.');
     const trusted = snap.data().trustedDevices || {};
     const devices = Object.keys(trusted).map((id) => ({
       deviceId: id,
@@ -379,6 +388,7 @@ exports.revokeTrustedDevice = onCall({ enforceAppCheck: true }, async (request) 
       const snap = await tx.get(ref);
       if (!snap.exists) throw new HttpsError('not-found', 'No profile found for this account.');
       const data = snap.data();
+      if (!isActiveAccount(data)) throw new HttpsError('permission-denied', 'This account is not active.');
       wasActive = data.activeDeviceId === deviceId;
       const patch = { [`trustedDevices.${deviceId}`]: FieldValue.delete() };
       if (wasActive) {
@@ -418,6 +428,7 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: true }, async (request) =
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError('not-found', 'No profile found for this account.');
+    if (!isActiveAccount(snap.data())) throw new HttpsError('permission-denied', 'This account is not active.');
     const challenge = snap.data().pendingAdminEmailChallenge;
     if (!challenge || challenge.deviceId !== deviceId) {
       throw new HttpsError('failed-precondition', 'No active verification challenge. Please request a new email.');
@@ -447,6 +458,7 @@ exports.confirmDeviceSwitch = onCall({ enforceAppCheck: true }, async (request) 
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError('not-found', 'No profile found for this account.');
+    if (!isActiveAccount(snap.data())) throw new HttpsError('permission-denied', 'This account is not active.');
     const profile = snap.data();
     const pending = profile.pendingDeviceApproval;
     const challenge = profile.pendingAdminEmailChallenge;
@@ -476,7 +488,7 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: true }, async (request) =
   const snap = await userRef(db, uid).get();
   if (!snap.exists) return result;
   const profile = snap.data();
-  if (!isStaffRole(profile.role)) return result;
+  if (!isActiveAccount(profile) || !isStaffRole(profile.role)) return result;
   const ip = getClientIp(request);
   const label = deviceLabel(request);
   await db.runTransaction(async (tx) => {
@@ -484,6 +496,7 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: true }, async (request) =
     const currentSnap = await tx.get(ref);
     if (!currentSnap.exists) return;
     const current = currentSnap.data();
+    if (!isActiveAccount(current)) throw new HttpsError('permission-denied', 'This account is not active.');
     const trusted = current.trustedDevices || {};
     if (!trusted[deviceId] || trusted[deviceId]?.lastIp !== ip || (label && trusted[deviceId]?.label !== label)) {
       tx.update(ref, { trustedDevices: trustedMap(trusted, deviceId, ip, label) });
