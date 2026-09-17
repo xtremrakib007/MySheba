@@ -22,10 +22,10 @@ service cloud.firestore {
       match /receivers/{receiverId} { allow read, create, update, delete: if signedIn() && request.auth.uid == uid; }
       match /friends/{friendId} { allow read, create, update, delete: if signedIn() && request.auth.uid == uid; }
       match /workLogs/{workLogId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow create, update, delete: if false; }
-      match /payslips/{payslipId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if isAdmin(); }
-      match /salaryRecords/{recordId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if isAdmin(); }
-      match /allowances/{allowanceId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if isAdmin(); }
-      match /deductions/{deductionId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if isAdmin(); }
+      match /payslips/{payslipId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if false; }
+      match /salaryRecords/{recordId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if false; }
+      match /allowances/{allowanceId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if false; }
+      match /deductions/{deductionId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if false; }
       match /trustedDevices/{deviceId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow create, update, delete: if false; }
     }
     match /securityPins/{uid} { allow read, write: if false; }
