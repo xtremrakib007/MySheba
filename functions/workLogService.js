@@ -1,0 +1,112 @@
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const admin = require('firebase-admin');
+
+const WORK_DAY_STATUS = { WORKED: 'worked', REST_DAY: 'rest_day', LEAVE: 'leave', ABSENT: 'absent' };
+const MAX_HOURS = 24;
+const MAX_OT_HOURS = 16;
+const KL_TZ = 'Asia/Kuala_Lumpur';
+
+function requireAuth(request) {
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
+  return request.auth.uid;
+}
+function validDateKey(value) {
+  const key = String(value || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) throw new HttpsError('invalid-argument', 'Invalid work-log date.');
+  return key;
+}
+function validNumber(value, field, max) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0 || n > max) throw new HttpsError('invalid-argument', `Invalid ${field}.`);
+  return Math.round(n * 100) / 100;
+}
+function timeString(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: KL_TZ, hour: '2-digit', minute: '2-digit', hour12: true }).formatToParts(date);
+  const h = parts.find(p => p.type === 'hour')?.value || '12';
+  const m = parts.find(p => p.type === 'minute')?.value || '00';
+  const ap = parts.find(p => p.type === 'dayPeriod')?.value || 'AM';
+  return `${h}:${m} ${ap}`;
+}
+function parseTime(value) {
+  const m = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(String(value || '').trim());
+  if (!m) return null;
+  let h = Number(m[1]); const min = Number(m[2]);
+  if (h < 1 || h > 12 || min > 59) return null;
+  if (h === 12) h = 0;
+  if (m[3].toUpperCase() === 'PM') h += 12;
+  return h * 60 + min;
+}
+function calculateHours(startTime, endTime, normalHours, breakHours) {
+  const start = parseTime(startTime); const end = parseTime(endTime);
+  if (start == null || end == null) throw new HttpsError('invalid-argument', 'Invalid start or end time.');
+  let minutes = end - start;
+  if (minutes < 0) minutes += 1440;
+  const totalHours = Math.round((minutes / 60) * 100) / 100;
+  const brk = Math.min(validNumber(breakHours || 0, 'break hours', MAX_HOURS), totalHours);
+  const net = Math.round((totalHours - brk) * 100) / 100;
+  const normal = validNumber(normalHours || 8, 'normal hours', MAX_HOURS);
+  const hoursWorked = Math.min(net, normal);
+  const otHours = Math.min(Math.max(0, net - normal), MAX_OT_HOURS);
+  if (net > MAX_HOURS) throw new HttpsError('failed-precondition', 'Worked hours exceed the daily limit.');
+  return { totalHours, breakHours: brk, netHours: net, hoursWorked: Math.round(hoursWorked * 100) / 100, otHours: Math.round(otHours * 100) / 100, belowMinimum: net > 0 && net < 1 };
+}
+function ref(db, uid, date) { return db.collection('users').doc(uid).collection('workLogs').doc(date); }
+
+exports.saveWorkLogEntry = onCall(async request => {
+  const uid = requireAuth(request); const data = request.data || {};
+  const date = validDateKey(data.date);
+  const status = String(data.status || WORK_DAY_STATUS.WORKED);
+  if (!Object.values(WORK_DAY_STATUS).includes(status)) throw new HttpsError('invalid-argument', 'Invalid work-day status.');
+  const hoursWorked = validNumber(data.hoursWorked || 0, 'hours worked', MAX_HOURS);
+  const otHours = validNumber(data.otHours || 0, 'OT hours', MAX_OT_HOURS);
+  const breakHours = validNumber(data.breakHours || 0, 'break hours', MAX_HOURS);
+  if (hoursWorked + otHours > MAX_HOURS) throw new HttpsError('invalid-argument', 'Total worked hours are invalid.');
+  const db = admin.firestore(); const target = ref(db, uid, date);
+  await target.set({
+    date, status, hoursWorked, otHours, otType: data.otType ? String(data.otType).slice(0, 30) : null,
+    startTime: data.startTime ? String(data.startTime).slice(0, 20) : null,
+    endTime: data.endTime ? String(data.endTime).slice(0, 20) : null,
+    breakHours, clockedIn: Boolean(data.clockedIn), notes: String(data.notes || '').trim().slice(0, 2000),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { ok: true, date };
+});
+
+exports.deleteWorkLogEntry = onCall(async request => {
+  const uid = requireAuth(request); const date = validDateKey(request.data?.date);
+  await ref(admin.firestore(), uid, date).delete();
+  return { ok: true, date };
+});
+
+exports.clockInNow = onCall(async request => {
+  const uid = requireAuth(request); const db = admin.firestore();
+  const now = new Date();
+  const date = new Intl.DateTimeFormat('en-CA', { timeZone: KL_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  const target = ref(db, uid, date);
+  const startTime = timeString(now);
+  await db.runTransaction(async tx => {
+    const snap = await tx.get(target);
+    if (snap.exists && snap.data().clockedIn) throw new HttpsError('failed-precondition', 'You are already clocked in for today.');
+    tx.set(target, { date, status: 'worked', hoursWorked: 0, otHours: 0, otType: null, startTime, endTime: null, breakHours: snap.exists ? Number(snap.data().breakHours) || 0 : 0, clockedIn: true, updatedAt: admin.firestore.FieldValue.serverTimestamp(), createdAt: snap.exists && snap.data().createdAt ? snap.data().createdAt : admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+  });
+  return { date, startTime };
+});
+
+exports.clockOutNow = onCall(async request => {
+  const uid = requireAuth(request); const db = admin.firestore();
+  const now = new Date();
+  const date = new Intl.DateTimeFormat('en-CA', { timeZone: KL_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  const target = ref(db, uid, date);
+  const settingsRef = db.collection('users').doc(uid).collection('salarySettings').doc('current');
+  const result = await db.runTransaction(async tx => {
+    const snap = await tx.get(target); const settingsSnap = await tx.get(settingsRef);
+    if (!snap.exists || !snap.data().clockedIn || !snap.data().startTime) throw new HttpsError('failed-precondition', 'Tap Start Work first before ending work for today.');
+    const current = snap.data(); const settings = settingsSnap.exists ? settingsSnap.data() : {};
+    const endTime = timeString(now);
+    const calculated = calculateHours(current.startTime, endTime, settings.normalHoursPerDay || 8, current.breakHours || 0);
+    tx.update(target, { endTime, hoursWorked: calculated.hoursWorked, otHours: calculated.otHours, otType: calculated.otHours > 0 ? 'normal' : null, breakHours: calculated.breakHours, clockedIn: false, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    return { ...calculated, startTime: current.startTime, endTime, date };
+  });
+  return result;
+});
