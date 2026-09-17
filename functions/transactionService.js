@@ -5,13 +5,14 @@ const DEALER_SERVICES = ['Mobile Banking'];
 const RESELLER_SERVICES = ['Recharge', 'Internet', 'Remittance'];
 const APPROVER_ROLES = ['admin', 'superadmin'];
 const OPERATOR_ROLES = ['dealer', 'reseller'];
+const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
 
 function requireAuth(request) { if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.'); }
 async function getActor(uid) {
   const snap = await admin.firestore().collection('users').doc(uid).get();
   if (!snap.exists) throw new HttpsError('permission-denied', 'Your staff profile was not found.');
   const p = snap.data();
-  if (p.suspended || p.inactive || p.disabled) throw new HttpsError('permission-denied', 'Your staff account is not active.');
+  if (p.suspended || p.inactive || p.disabled || p.mergedInto) throw new HttpsError('permission-denied', 'Your staff account is not active.');
   return { uid, role: p.role || '', name: p.fullName || p.name || p.displayName || p.phone || uid };
 }
 function assertOperatorCanHandle(actor, order) {
@@ -20,6 +21,46 @@ function assertOperatorCanHandle(actor, order) {
   if (actor.role === 'reseller' && !RESELLER_SERVICES.includes(order.service)) throw new HttpsError('permission-denied', 'Your reseller account cannot handle this service.');
   if (actor.role === 'dealer' && order.dealerId && order.dealerId !== actor.uid) throw new HttpsError('permission-denied', 'This order is assigned to another dealer.');
   if (actor.role === 'reseller' && order.resellerId && order.resellerId !== actor.uid) throw new HttpsError('permission-denied', 'This order is assigned to another reseller.');
+}
+
+async function validateOrderReceipt(receiptUrl, transactionId) {
+  if (typeof receiptUrl !== 'string' || receiptUrl.length < 1 || receiptUrl.length > 2048) {
+    throw new HttpsError('invalid-argument', 'A valid transfer receipt is required.');
+  }
+  let parsed;
+  try { parsed = new URL(receiptUrl); } catch (_) { throw new HttpsError('invalid-argument', 'Invalid transfer receipt URL.'); }
+  if (parsed.protocol !== 'https:') throw new HttpsError('invalid-argument', 'Invalid transfer receipt URL.');
+
+  const bucket = admin.storage().bucket();
+  const bucketName = bucket.name;
+  let objectPath = null;
+
+  if (parsed.hostname === 'firebasestorage.googleapis.com') {
+    const match = parsed.pathname.match(/^\/v0\/b\/([^/]+)\/o\/(.+)$/);
+    if (!match || decodeURIComponent(match[1]) !== bucketName) throw new HttpsError('invalid-argument', 'Receipt must belong to this storage bucket.');
+    objectPath = decodeURIComponent(match[2]);
+  } else if (parsed.hostname === 'storage.googleapis.com') {
+    const match = parsed.pathname.match(/^\/([^/]+)\/(.+)$/);
+    if (!match || decodeURIComponent(match[1]) !== bucketName) throw new HttpsError('invalid-argument', 'Receipt must belong to this storage bucket.');
+    objectPath = decodeURIComponent(match[2]);
+  } else {
+    throw new HttpsError('invalid-argument', 'Receipt must be hosted in Firebase Storage.');
+  }
+
+  const expectedPrefix = `order-receipts/${transactionId}/`;
+  if (!objectPath.startsWith(expectedPrefix) || objectPath.length <= expectedPrefix.length) {
+    throw new HttpsError('permission-denied', 'Receipt does not belong to this order.');
+  }
+  if (objectPath.includes('..')) throw new HttpsError('invalid-argument', 'Invalid receipt path.');
+
+  const file = bucket.file(objectPath);
+  let metadata;
+  try { [metadata] = await file.getMetadata(); } catch (_) { throw new HttpsError('failed-precondition', 'The uploaded receipt could not be verified.'); }
+  const size = Number(metadata.size || 0);
+  const contentType = String(metadata.contentType || '').toLowerCase();
+  if (!Number.isSafeInteger(size) || size < 1 || size > MAX_RECEIPT_BYTES) throw new HttpsError('invalid-argument', 'Receipt is too large or invalid.');
+  if (!/^image\/(jpeg|png|webp)$/.test(contentType)) throw new HttpsError('invalid-argument', 'Receipt must be a JPEG, PNG, or WebP image.');
+  return receiptUrl;
 }
 
 exports.approveTransaction = onCall({ enforceAppCheck: true }, async (request) => {
@@ -63,14 +104,15 @@ exports.completeTransaction = onCall({ enforceAppCheck: true }, async (request) 
   const id = String(request.data?.transactionId || ''), pin = String(request.data?.pin || ''), receiptUrl = String(request.data?.receiptUrl || '');
   if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
   if (!/^\d{4}$/.test(pin)) throw new HttpsError('invalid-argument', 'A 4-digit collection PIN is required.');
-  if (!receiptUrl) throw new HttpsError('invalid-argument', 'The transfer receipt is required before completion.');
   const db = admin.firestore(), ref = db.collection('transactions').doc(id);
+  const verifiedReceiptUrl = await validateOrderReceipt(receiptUrl, id);
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref); if (!snap.exists) throw new HttpsError('not-found', 'That order no longer exists.');
     const order = snap.data();
     if (order.status !== 'processing' || order.claimedBy !== actor.uid) throw new HttpsError('failed-precondition', 'Only the operator who accepted this order can complete it.');
     if (order.approved !== true || !order.approvedBy) throw new HttpsError('failed-precondition', 'This order has no valid admin approval.');
-    tx.update(ref, { status: 'completed', pin: admin.firestore.FieldValue.delete(), receiptUrl, completedBy: actor.uid, completedByName: actor.name, completedByRole: actor.role, completedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    assertOperatorCanHandle(actor, order);
+    tx.update(ref, { status: 'completed', pin: admin.firestore.FieldValue.delete(), receiptUrl: verifiedReceiptUrl, completedBy: actor.uid, completedByName: actor.name, completedByRole: actor.role, completedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
   });
   return { ok: true, transactionId: id };
 });
