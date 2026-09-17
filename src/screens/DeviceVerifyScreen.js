@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Linking, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { httpsCallable } from 'firebase/functions';
 import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
@@ -10,6 +9,7 @@ import * as emailVerification from '../firebase/emailVerification';
 import * as phoneVerification from '../firebase/phoneVerification';
 import * as authService from '../firebase/authService';
 import * as deviceSessionService from '../firebase/deviceSessionService';
+import { httpsCallable } from 'firebase/functions';
 import { functions } from '../firebase/config';
 
 const STAFF_ROLES = ['admin', 'superadmin', 'dealer', 'reseller'];
@@ -42,36 +42,24 @@ export default function DeviceVerifyScreen() {
       const deviceLabel = deviceSessionService.getDeviceLabel();
       const role = profile?.role;
       const staff = STAFF_ROLES.includes(role);
-      const payload = {
-        uid,
-        deviceId,
-        deviceLabel,
-        phoneIdToken: credential?.phoneIdToken || undefined,
-        emailIdToken: credential?.emailIdToken || undefined,
-        emailOtp: credential?.emailOtp || undefined,
-      };
+      const payload = { uid, deviceId, deviceLabel, phoneIdToken: credential?.phoneIdToken || undefined, emailIdToken: credential?.emailIdToken || undefined, emailOtp: credential?.emailOtp || undefined };
       const fn = httpsCallable(functions, staff ? 'checkDeviceSession' : 'confirmDeviceSwitch');
       const { data } = await fn(payload);
-      if (data?.requiresOtp || (!staff && !data?.sessionId)) {
-        throw new Error('Verification is still pending. Please enter the latest code.');
-      }
+      if (data?.requiresOtp || (!staff && !data?.sessionId)) throw new Error('Verification is still pending. Please enter the latest code.');
       await deviceSessionService.setLocalSessionId(data.sessionId);
       const refreshed = await authService.fetchProfile(uid);
       setScreen(homeForRole(refreshed?.role || role));
-    } catch (e) {
-      setLocalError(e.message || 'Could not complete device verification. Please try again.');
-    } finally { setBusy(false); }
+    } catch (e) { setLocalError(e.message || 'Could not complete device verification. Please try again.'); }
+    finally { setBusy(false); }
   };
 
   const sendEmail = async () => {
     setLocalError(''); setBusy(true);
     try {
       const deviceId = await deviceSessionService.getDeviceId();
-      if (STAFF_ROLES.includes(profile?.role)) {
-        await authService.retryDeviceSession(uid, null, null, null, true);
-      } else {
-        await httpsCallable(functions, 'sendDeviceVerification')({ deviceId });
-      }
+      const fn = httpsCallable(functions, 'checkDeviceSession');
+      const { data } = await fn({ uid, deviceId, deviceLabel: deviceSessionService.getDeviceLabel(), resendEmailChallenge: true });
+      if (!data?.requiresOtp) throw new Error('This device no longer needs verification. Please sign in again.');
       setSent(true); setCode('');
     } catch (e) { setLocalError(e.message || 'Could not send the verification email. Please try again.'); }
     finally { setBusy(false); }
@@ -93,36 +81,27 @@ export default function DeviceVerifyScreen() {
 
   const verifyEmailLink = async (url) => {
     setLocalError(''); setBusy(true);
-    try {
-      const result = await emailVerification.confirmEmailLink(url, email);
-      await finish({ emailIdToken: result.idToken });
-    } catch (e) { setLocalError(e.message || 'Could not verify your email link. Please try again.'); }
+    try { const result = await emailVerification.confirmEmailLink(url, email); await finish({ emailIdToken: result.idToken }); }
+    catch (e) { setLocalError(e.message || 'Could not verify your email link. Please try again.'); }
     finally { setBusy(false); }
   };
 
   const verifySms = async () => {
     if (!/^\d{6}$/.test(code.trim())) { setLocalError('Enter the 6-digit SMS verification code.'); return; }
     setLocalError(''); setBusy(true);
-    try {
-      const result = await phoneVerification.confirmPhoneOtp(phoneConfirmation, code.trim());
-      await finish({ phoneIdToken: result.idToken });
-    } catch (e) { setLocalError(e.message || 'Could not verify the SMS code. Please try again.'); }
+    try { const result = await phoneVerification.confirmPhoneOtp(phoneConfirmation, code.trim()); await finish({ phoneIdToken: result.idToken }); }
+    catch (e) { setLocalError(e.message || 'Could not verify the SMS code. Please try again.'); }
     finally { setBusy(false); }
   };
 
   useEffect(() => {
-    const handleUrl = (url) => {
-      if (method === 'email' && sent && emailVerification.isEmailSignInLink(url)) verifyEmailLink(url);
-    };
+    const handleUrl = (url) => { if (method === 'email' && sent && emailVerification.isEmailSignInLink(url)) verifyEmailLink(url); };
     Linking.getInitialURL().then((url) => { if (url) handleUrl(url); }).catch(() => {});
     const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url));
     return () => sub.remove();
   }, [method, sent, email]);
 
-  const switchMethod = (next) => {
-    if (busy) return;
-    setMethod(next); setSent(false); setCode(''); setPhoneConfirmation(null); setLocalError('');
-  };
+  const switchMethod = (next) => { if (busy) return; setMethod(next); setSent(false); setCode(''); setPhoneConfirmation(null); setLocalError(''); };
 
   return <View style={styles.screen}>
     <LinearGradient colors={brandGradient} start={{x:0,y:0}} end={{x:1,y:0}} style={styles.header}>
