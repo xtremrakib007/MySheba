@@ -1,22 +1,4 @@
-// Admin "send announcement" - a manual, admin-triggered push broadcast, as
-// opposed to every other push in this app (see index.js) which fires
-// automatically off a Firestore write.
-//
-// Flow: Admin/superadmin fills out the form on Admin > Announcements
-// (src/screens/AdminHomeScreen.js), which calls this via
-// src/firebase/announcementService.js:
-//
-//   const fn = httpsCallable(functions, 'sendAnnouncement');
-//   await fn({ title, body, audience: 'all' | 'customer' | 'dealer' |
-//                                      'dealer' | 'admin' | 'superadmin' });
-//
-// This function re-checks the caller is admin/superadmin server-side (same
-// pattern as functions/userManagement.js - never trust a client-sent role),
-// sends the push to every matching user's Expo token (respecting each
-// user's notifPrefs.pushEnabled, same as every other push here), and logs
-// the broadcast to `announcements/{id}` so Admin > Announcements has a
-// history of what was sent, by whom, and how many people it reached.
-
+// Admin "send announcement" - a manual, admin-triggered push broadcast.
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logAudit, logServerError } = require('./logService');
@@ -24,6 +6,9 @@ const { logAudit, logServerError } = require('./logService');
 const ADMIN_ROLES = ['admin', 'superadmin'];
 const AUDIENCES = ['all', 'customer', 'dealer', 'reseller', 'admin', 'superadmin'];
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
+const MAX_TITLE_LENGTH = 120;
+const MAX_BODY_LENGTH = 2000;
+const MAX_PUSH_TOKEN_LENGTH = 256;
 
 function chunk(arr, size) {
   const out = [];
@@ -31,9 +16,18 @@ function chunk(arr, size) {
   return out;
 }
 
-/** Sends a batch of Expo push messages, chunked into groups of 100 per Expo's guidance. */
+function activeAccount(user) {
+  return user && user.suspended !== true && user.inactive !== true && user.disabled !== true && !user.mergedInto;
+}
+
+function validExpoToken(token) {
+  return typeof token === 'string'
+    && token.length <= MAX_PUSH_TOKEN_LENGTH
+    && /^(Expo|Exponent)PushToken\[[^\]]+\]$/.test(token);
+}
+
 async function sendExpoPush(messages) {
-  const valid = messages.filter((m) => m && m.to);
+  const valid = messages.filter((m) => m && validExpoToken(m.to));
   if (valid.length === 0) return;
 
   for (const batch of chunk(valid, 100)) {
@@ -43,57 +37,64 @@ async function sendExpoPush(messages) {
         headers: { 'content-type': 'application/json', accept: 'application/json' },
         body: JSON.stringify(batch.map((m) => ({ sound: 'default', ...m }))),
       });
-      if (!res.ok) {
-        console.error('Expo push HTTP error', res.status, await res.text());
-      }
+      if (!res.ok) console.error('Expo push HTTP error', res.status, await res.text());
     } catch (e) {
       console.error('Expo push send failed', e);
     }
   }
 }
 
-exports.sendAnnouncement = onCall(async (request) => {
-  if (!request.auth) {
-    throw new HttpsError('unauthenticated', 'You must be signed in.');
-  }
+exports.sendAnnouncement = onCall({ enforceAppCheck: true }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
 
   const db = admin.firestore();
   const callerUid = request.auth.uid;
   const callerSnap = await db.collection('users').doc(callerUid).get();
   const callerProfile = callerSnap.exists ? callerSnap.data() : null;
-  if (!callerProfile || !ADMIN_ROLES.includes(callerProfile.role)) {
-    throw new HttpsError('permission-denied', 'Only an admin can send announcements.');
+  if (!callerProfile || !ADMIN_ROLES.includes(callerProfile.role) || !activeAccount(callerProfile)) {
+    throw new HttpsError('permission-denied', 'Only an active admin can send announcements.');
   }
 
   const { title, body, audience } = request.data || {};
-  if (!title || !String(title).trim()) {
-    throw new HttpsError('invalid-argument', 'A title is required.');
+  const titleText = typeof title === 'string' ? title.trim() : '';
+  const bodyText = typeof body === 'string' ? body.trim() : '';
+  if (!titleText || titleText.length > MAX_TITLE_LENGTH) {
+    throw new HttpsError('invalid-argument', `Title is required and must be at most ${MAX_TITLE_LENGTH} characters.`);
   }
-  if (!body || !String(body).trim()) {
-    throw new HttpsError('invalid-argument', 'A message is required.');
+  if (!bodyText || bodyText.length > MAX_BODY_LENGTH) {
+    throw new HttpsError('invalid-argument', `Message is required and must be at most ${MAX_BODY_LENGTH} characters.`);
   }
   if (!AUDIENCES.includes(audience)) {
     throw new HttpsError('invalid-argument', 'Choose a valid audience.');
   }
 
   try {
-    const usersQuery =
-      audience === 'all'
-        ? db.collection('users')
-        : db.collection('users').where('role', '==', audience);
+    // Re-check the caller immediately before the broadcast. Auth status alone
+    // is not enough because a Firestore suspension/inactive flag can change
+    // while an invocation is running.
+    const latestCallerSnap = await db.collection('users').doc(callerUid).get();
+    const latestCaller = latestCallerSnap.exists ? latestCallerSnap.data() : null;
+    if (!latestCaller || !ADMIN_ROLES.includes(latestCaller.role) || !activeAccount(latestCaller)) {
+      throw new HttpsError('permission-denied', 'This admin account is not active.');
+    }
+
+    const usersQuery = audience === 'all'
+      ? db.collection('users')
+      : db.collection('users').where('role', '==', audience);
     const usersSnap = await usersQuery.get();
 
     const messages = [];
     let matched = 0;
     usersSnap.forEach((doc) => {
-      matched += 1;
       const u = doc.data();
-      if (!u.pushToken) return;
+      if (!activeAccount(u)) return;
+      matched += 1;
+      if (!validExpoToken(u.pushToken)) return;
       if (u.notifPrefs && u.notifPrefs.pushEnabled === false) return;
       messages.push({
         to: u.pushToken,
-        title: title.trim(),
-        body: body.trim(),
+        title: titleText,
+        body: bodyText,
         data: { type: 'announcement' },
       });
     });
@@ -101,13 +102,13 @@ exports.sendAnnouncement = onCall(async (request) => {
     await sendExpoPush(messages);
 
     const logRef = await db.collection('announcements').add({
-      title: title.trim(),
-      body: body.trim(),
+      title: titleText,
+      body: bodyText,
       audience,
       matchedCount: matched,
       sentCount: messages.length,
       sentBy: callerUid,
-      sentByName: callerProfile.name || '',
+      sentByName: latestCaller.name || '',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
@@ -115,7 +116,7 @@ exports.sendAnnouncement = onCall(async (request) => {
       action: 'announcement_sent',
       targetUid: null,
       performedBy: callerUid,
-      performedByRole: callerProfile.role,
+      performedByRole: latestCaller.role,
       details: { audience, matchedCount: matched, sentCount: messages.length },
     });
 
