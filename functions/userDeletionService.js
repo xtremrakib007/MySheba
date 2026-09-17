@@ -46,6 +46,8 @@ exports.deleteManagedUser = onCall({ enforceAppCheck: true }, async (request) =>
       db.collection('pendingBiometricTemplates').doc(targetUid).delete().catch(() => {}),
       db.collection('securityPins').doc(targetUid).delete().catch(() => {}),
       db.collection('temporaryAuthCleanup').doc(targetUid).delete().catch(() => {}),
+      db.collection('mergeOtps').doc(targetUid).delete().catch(() => {}),
+      target.userId != null ? db.collection('userIds').doc(String(target.userId)).delete().catch(() => {}) : Promise.resolve(),
     ]);
     // Delete Auth before removing the profile. If Firestore cleanup fails,
     // the remaining profile is already marked disabled/inactive and can be repaired safely.
