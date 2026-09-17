@@ -2,6 +2,7 @@
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   limit as fbLimit,
   orderBy,
@@ -12,7 +13,8 @@ import {
   type DocumentData,
   type QueryDocumentSnapshot,
 } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '../firebase/config';
 import type { AdminRole } from '../contexts/AuthContext';
 
 export type UserRole = 'user' | 'dealer' | 'reseller' | AdminRole;
@@ -41,8 +43,7 @@ export const FEATURE_LABELS: Record<keyof FeatureAccess, string> = {
   mobileBanking: 'Mobile Banking', recharge: 'Recharge / Top-Up', remittance: 'Remittance',
 };
 
-const DEFAULT_FEATURES: FeatureAccess = {
-};
+const DEFAULT_FEATURES: FeatureAccess = {};
 
 export interface AdminUserRow {
   uid: string;
@@ -101,14 +102,46 @@ export function filterBySearch(rows: AdminUserRow[], search: string): AdminUserR
   );
 }
 
+/** Role changes must go through the server-side permission matrix. */
 export async function updateUserRole(uid: string, role: UserRole): Promise<void> {
-  await updateDoc(doc(db, 'users', uid), { role });
+  if (typeof uid !== 'string' || !uid || uid.length > 128) throw new Error('Invalid user ID.');
+  const targetSnap = await getDoc(doc(db, 'users', uid));
+  if (!targetSnap.exists()) throw new Error('That user does not exist.');
+  const currentRole = String(targetSnap.data().role || 'customer');
+  const callable = httpsCallable(functions, 'manageUser');
+
+  if (role === currentRole) return;
+  if (role === 'customer' && ['dealer', 'admin', 'reseller'].includes(currentRole)) {
+    await callable({ action: 'downgradeRole', targetUid: uid });
+    return;
+  }
+  if (['customer', 'user'].includes(currentRole) && ['dealer', 'admin', 'reseller'].includes(role)) {
+    await callable({ action: 'setRole', targetUid: uid, newRole: role });
+    return;
+  }
+  if (currentRole === 'admin' && role === 'dealer') {
+    await callable({ action: 'downgradeRole', targetUid: uid });
+    return;
+  }
+  if (currentRole === 'dealer' && role === 'customer') {
+    await callable({ action: 'downgradeRole', targetUid: uid });
+    return;
+  }
+  if (currentRole === 'reseller' && role === 'customer') {
+    await callable({ action: 'downgradeRole', targetUid: uid });
+    return;
+  }
+  throw new Error(`Unsupported role change: ${currentRole} → ${role}.`);
 }
 
+/** Account suspension must use the Auth-backed server operation; the Firestore-only `disabled` flag is not an authoritative account lock. */
 export async function updateUserDisabled(uid: string, disabled: boolean): Promise<void> {
-  await updateDoc(doc(db, 'users', uid), { disabled });
+  if (typeof uid !== 'string' || !uid || uid.length > 128) throw new Error('Invalid user ID.');
+  const callable = httpsCallable(functions, 'manageUser');
+  await callable({ action: 'suspend', targetUid: uid, suspended: Boolean(disabled) });
 }
 
+/** Feature flags are intentionally the only direct user-profile management write exposed here. */
 export async function updateUserFeatures(uid: string, features: FeatureAccess): Promise<void> {
   await updateDoc(doc(db, 'users', uid), { features });
 }
