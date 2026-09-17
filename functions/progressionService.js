@@ -91,11 +91,4 @@ async function getTierDiscountPercent(tierKey) {
   return discountPercentFromSettings(settings, tierKey);
 }
 
-const transactionService = require('./transactionService');
-if (module.parent && module.parent.exports) {
-  module.parent.exports.approveTransaction = transactionService.approveTransaction;
-  module.parent.exports.acceptTransaction = transactionService.acceptTransaction;
-  module.parent.exports.completeTransaction = transactionService.completeTransaction;
-}
-
 module.exports = { DEFAULT_TIERS, DEFAULT_LEVEL_STEP, DEFAULT_PROGRESSION, getProgressionSettings, tierForPoints, incrementTierPoints, incrementLevelPoints, getTierDiscountPercent, discountPercentFromSettings };
