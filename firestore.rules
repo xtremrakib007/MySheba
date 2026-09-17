@@ -43,6 +43,15 @@ service cloud.firestore {
       allow update: if signedIn() && ((isAdmin() && resource.data.status == 'pending' && resource.data.get('approved', false) != true && request.resource.data.get('approved', false) == true && request.resource.data.get('approvedBy', null) == request.auth.uid && request.resource.data.get('approvedByRole', null) in ['admin','superadmin'] && request.resource.data.get('approvedAt', null) != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approved','approvedBy','approvedByName','approvedByRole','approvedAt','updatedAt'])) || (isAdmin() && resource.data.status == 'pending' && resource.data.service == 'Mobile Banking' && request.resource.data.get('customerId', null) == resource.data.get('customerId', null) && request.resource.data.get('service', null) == resource.data.get('service', null) && request.resource.data.get('dealerId', null) != resource.data.get('dealerId', null) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dealerId','updatedAt'])));
       allow delete: if false;
     }
+    // Sanitized operator queue. The client never reads full transaction documents for broadcast work.
+    match /transactionQueue/{id} {
+      allow read: if signedIn() && (
+        isAdmin() ||
+        (isDealerTier() && resource.data.operatorRole == 'dealer' && resource.data.service == 'Mobile Banking' && (resource.data.get('dealerId', null) == null || resource.data.dealerId == request.auth.uid) && (resource.data.status == 'pending' || resource.data.get('claimedBy', null) == request.auth.uid)) ||
+        (isReseller() && resource.data.operatorRole == 'reseller' && resource.data.service in ['Recharge','Internet','Remittance'] && (resource.data.get('resellerId', null) == null || resource.data.resellerId == request.auth.uid) && (resource.data.status == 'pending' || resource.data.get('claimedBy', null) == request.auth.uid))
+      );
+      allow create, update, delete: if false;
+    }
     match /topups/{id} { allow create, update, delete: if false; allow read: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin()); }
     match /selfTopups/{id} { allow read: if signedIn() && resource.data.userId == request.auth.uid; allow create, update, delete: if false; }
     match /pointTransfers/{id} { allow read: if signedIn() && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid || isAdmin()); allow create, update, delete: if false; }
