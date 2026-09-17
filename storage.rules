@@ -9,9 +9,6 @@ service firebase.storage {
     function isAdmin() { return activeProfile() && role() in ['admin', 'superadmin']; }
     function isStaff() { return activeProfile() && role() in ['dealer', 'reseller', 'admin', 'superadmin']; }
     function transactionOwner(txId) { return activeProfile() && firestore.get(/databases/(default)/documents/transactions/$(txId)).data.customerId == request.auth.uid; }
-    // Operators no longer have direct Firestore read access to full
-    // transactions. Authorize their receipt access from the sanitized queue
-    // instead, which exposes only the operational claim/assignment state.
     function transactionStaff(txId) {
       let tx = firestore.get(/databases/(default)/documents/transactionQueue/$(txId)).data;
       return isAdmin() || (isStaff() && role() in ['dealer', 'reseller'] && tx.get('operatorRole', null) == role() && tx.get('claimedBy', null) == request.auth.uid);
@@ -32,12 +29,12 @@ service firebase.storage {
     match /business-logos/{uid}/{fileName} { allow read: if activeProfile(); allow write: if activeProfile() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && safeImageType(); allow delete: if false; }
 
     match /banner-images/{fileName} { allow read: if activeProfile(); allow write: if activeProfile() && isAdmin() && request.resource.size < 10 * 1024 * 1024 && safeImageType(); allow delete: if false; }
-    match /payment-settings/{fileName} { allow read: if activeProfile(); allow write: if activeProfile() && role() == 'superadmin' && request.resource.size < 10 * 1024 * 1024 && safeImageType(); allow delete: false; }
-    match /order-receipts/{txId}/{fileName} { allow read: if transactionOwner(txId) || transactionStaff(txId); allow write: if transactionStaff(txId) && request.resource.size < 10 * 1024 * 1024 && safeImageType(); allow delete: false; }
-    match /remittance-receipts/{txId}/{fileName} { allow read: if transactionOwner(txId) || transactionStaff(txId); allow write: if transactionStaff(txId) && request.resource.size < 10 * 1024 * 1024 && safeImageType(); allow delete: false; }
-    match /flight-tickets/{inquiryId}/{fileName} { allow read: if activeProfile() && (inquiryOwner(inquiryId) || isAdmin()); allow write: if activeProfile() && isAdmin() && request.resource.size < 10 * 1024 * 1024 && safeImageOrPdfType(); allow delete: false; }
+    match /payment-settings/{fileName} { allow read: if activeProfile(); allow write: if activeProfile() && role() == 'superadmin' && request.resource.size < 10 * 1024 * 1024 && safeImageType(); allow delete: if false; }
+    match /order-receipts/{txId}/{fileName} { allow read: if transactionOwner(txId) || transactionStaff(txId); allow write: if transactionStaff(txId) && request.resource.size < 10 * 1024 * 1024 && safeImageType(); allow delete: if false; }
+    match /remittance-receipts/{txId}/{fileName} { allow read: if transactionOwner(txId) || transactionStaff(txId); allow write: if transactionStaff(txId) && request.resource.size < 10 * 1024 * 1024 && safeImageType(); allow delete: if false; }
+    match /flight-tickets/{inquiryId}/{fileName} { allow read: if activeProfile() && (inquiryOwner(inquiryId) || isAdmin()); allow write: if activeProfile() && isAdmin() && request.resource.size < 10 * 1024 * 1024 && safeImageOrPdfType(); allow delete: if false; }
     match /my-documents/{uid}/{documentId}/{fileName} { allow read: if activeProfile() && request.auth.uid == uid; allow write: if activeProfile() && request.auth.uid == uid && request.resource.size < 15 * 1024 * 1024 && safeImageOrPdfType(); allow delete: if activeProfile() && request.auth.uid == uid; }
-    match /salary-payslips/{uid}/{recordId}/{fileName} { allow read: if activeProfile() && (request.auth.uid == uid || isAdmin()); allow write: if activeProfile() && request.auth.uid == uid && request.resource.size < 15 * 1024 * 1024 && safeImageOrPdfType(); allow delete: false; }
+    match /salary-payslips/{uid}/{recordId}/{fileName} { allow read: if activeProfile() && (request.auth.uid == uid || isAdmin()); allow write: if activeProfile() && request.auth.uid == uid && request.resource.size < 15 * 1024 * 1024 && safeImageOrPdfType(); allow delete: if false; }
 
     match /{allPaths=**} { allow read, write: if false; }
   }
