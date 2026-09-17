@@ -21,11 +21,22 @@ function normalizeService(value) {
   return SERVICE_ALIASES[raw.toLowerCase()] || raw;
 }
 
+function activeAccount(account) {
+  return !!account &&
+    account.mergedInto == null &&
+    account.suspended !== true &&
+    account.inactive !== true &&
+    account.disabled !== true &&
+    account.active !== false;
+}
+
 async function getActor(uid) {
   const snap = await admin.firestore().collection('users').doc(uid).get();
   if (!snap.exists) throw new HttpsError('permission-denied', 'Your staff profile was not found.');
   const actor = snap.data() || {};
-  if (!STAFF_ROLES.includes(actor.role)) throw new HttpsError('permission-denied', 'Staff access is required.');
+  if (!STAFF_ROLES.includes(actor.role) || !activeAccount(actor)) {
+    throw new HttpsError('permission-denied', 'Your staff account is not active.');
+  }
   return actor;
 }
 
