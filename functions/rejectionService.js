@@ -37,7 +37,7 @@ async function getActor(uid) {
   if (!STAFF_ROLES.includes(actor.role) || !activeAccount(actor)) {
     throw new HttpsError('permission-denied', 'Your staff account is not active.');
   }
-  return actor;
+  return { uid, ...actor };
 }
 
 function canReject(actor, tx) {
