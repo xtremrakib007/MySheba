@@ -6,6 +6,7 @@ const secureWalletMutations = require('./secureWalletMutations');
 const secureWalletCharge = require('./secureWalletCharge');
 const secureTopupReview = require('./secureTopupReview');
 const secureTransactionReview = require('./secureTransactionReview');
+const transactionQueue = require('./transactionQueueService');
 
 functions.chargeRecharge = guards.chargeRecharge;
 functions.chargeInternetPackage = guards.chargeInternetPackage;
@@ -21,5 +22,7 @@ functions.rejectRechargeTransaction = secureTransactionReview.rejectRechargeTran
 functions.rejectInternetPackageTransaction = secureTransactionReview.rejectInternetPackageTransaction;
 functions.rejectMobileBankingTransaction = secureTransactionReview.rejectMobileBankingTransaction;
 functions.rejectRemittanceTransaction = secureTransactionReview.rejectRemittanceTransaction;
+functions.onTransactionQueueCreated = transactionQueue.onTransactionQueueCreated;
+functions.onTransactionQueueUpdated = transactionQueue.onTransactionQueueUpdated;
 
 module.exports = functions;
