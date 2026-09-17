@@ -6,16 +6,22 @@ const MAX_AMOUNT = 100000;
 const ADMIN_ROLES = ['admin', 'superadmin'];
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 
+function activeAccount(user) {
+  return user && user.suspended !== true && user.inactive !== true && user.disabled !== true && !user.mergedInto;
+}
+
 exports.adminTopUpPoints = onCall({ enforceAppCheck: true }, async request => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
 
   const db = admin.firestore();
   const callerUid = request.auth.uid;
-  const callerSnap = await db.collection('users').doc(callerUid).get();
+  const callerRef = db.collection('users').doc(callerUid);
+  const callerSnap = await callerRef.get();
   const caller = callerSnap.exists ? callerSnap.data() : null;
   if (!caller || !ADMIN_ROLES.includes(caller.role)) {
     throw new HttpsError('permission-denied', 'Only admin/superadmin can top up points.');
   }
+  if (!activeAccount(caller)) throw new HttpsError('permission-denied', 'This account is not active.');
 
   const data = request.data || {};
   const targetUid = String(data.targetUid || '').trim();
@@ -45,13 +51,21 @@ exports.adminTopUpPoints = onCall({ enforceAppCheck: true }, async request => {
         return { id: op.auditId, credited: false, replay: true };
       }
 
-      const targetSnap = await tx.get(targetRef);
+      const [latestCallerSnap, targetSnap] = await Promise.all([tx.get(callerRef), tx.get(targetRef)]);
+      if (!latestCallerSnap.exists || !activeAccount(latestCallerSnap.data() || {})) {
+        throw new HttpsError('permission-denied', 'This admin account is not active.');
+      }
+      const latestCaller = latestCallerSnap.data() || {};
+      if (!ADMIN_ROLES.includes(latestCaller.role)) {
+        throw new HttpsError('permission-denied', 'Only admin/superadmin can top up points.');
+      }
       if (!targetSnap.exists) throw new HttpsError('not-found', 'Target user does not exist.');
 
-      const target = targetSnap.data();
+      const target = targetSnap.data() || {};
       if (!['dealer', 'reseller'].includes(target.role)) {
         throw new HttpsError('failed-precondition', 'Only dealer/reseller accounts can receive admin point top-ups.');
       }
+      if (!activeAccount(target)) throw new HttpsError('failed-precondition', 'Target account is not active.');
 
       const currentBalance = Number(target.walletBalance || 0);
       if (!Number.isFinite(currentBalance) || currentBalance < 0 || !Number.isSafeInteger(Math.round(currentBalance * 100))) {
@@ -67,13 +81,13 @@ exports.adminTopUpPoints = onCall({ enforceAppCheck: true }, async request => {
       tx.update(targetRef, { walletBalance: newBalance });
       tx.set(auditRef, {
         userId: targetUid,
-        userName: String(target.name || target.displayName || ''),
+        userName: String(target.name || target.displayName || '').slice(0, 160),
         userRole: String(target.role || ''),
         amount,
         note,
         adminUid: callerUid,
-        adminName: String(caller.name || caller.displayName || ''),
-        adminRole: String(caller.role),
+        adminName: String(latestCaller.name || latestCaller.displayName || '').slice(0, 160),
+        adminRole: String(latestCaller.role),
         requestId,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
