@@ -7,6 +7,7 @@ const { assertPhoneVerified } = require('./phoneVerification');
 const { assignUniqueUserId } = require('./userId');
 const { logAudit, logServerError } = require('./logService');
 const emailOtpService = require('./emailOtpService');
+const { trackTemporaryAuthUser, deleteTrackedTemporaryAuthUser } = require('./temporaryAuthCleanup');
 
 const APP_EMAIL_DOMAIN = 'mysheba.app';
 const REGISTRATION_LOCK_MS = 120000;
@@ -104,8 +105,14 @@ async function registerCustomer(request) {
     }
 
     await db.collection('otps').doc(normalizedEmail).delete().catch(() => {});
-    if (emailAuthUid) await admin.auth().deleteUser(emailAuthUid).catch(() => {});
-    if (phoneAuthUid) await admin.auth().deleteUser(phoneAuthUid).catch(() => {});
+    if (emailAuthUid) {
+      await trackTemporaryAuthUser({ uid: emailAuthUid, purpose: 'registration-email-verification', targetUid: userRecord.uid, email: normalizedEmail });
+      await deleteTrackedTemporaryAuthUser(emailAuthUid);
+    }
+    if (phoneAuthUid) {
+      await trackTemporaryAuthUser({ uid: phoneAuthUid, purpose: 'registration-phone-verification', targetUid: userRecord.uid, email: normalizedEmail });
+      await deleteTrackedTemporaryAuthUser(phoneAuthUid);
+    }
     await logAudit({ action: 'account_created', targetUid: userRecord.uid, performedBy: 'system', performedByRole: null, details: { role: 'customer', method: 'phone_pin', verification: verifiedBy, emailVerification: emailOtpUsed ? 'otp' : (emailAuthUid ? 'firebase_link' : null) } });
     return { uid: userRecord.uid, role: 'customer', verification: verifiedBy };
   } finally {
