@@ -35,7 +35,12 @@ service cloud.firestore {
     match /activityLog/{id} { allow create: if signedIn() && request.resource.data.userId == request.auth.uid; allow read: if signedIn() && isSuperadmin(); allow update, delete: if false; }
     match /userAuditLog/{id} { allow read: if signedIn() && isSuperadmin(); allow write: if false; }
     match /errorLog/{id} { allow create: if signedIn() && request.resource.data.source == 'client' && request.resource.data.userId == request.auth.uid; allow read: if signedIn() && isSuperadmin(); allow update: if signedIn() && isSuperadmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resolved','resolvedBy','resolvedAt']); allow delete: if false; }
-    match /inquiries/{id} { allow create: if signedIn() && request.resource.data.customerId == request.auth.uid; allow read: if signedIn() && (resource.data.customerId == request.auth.uid || isStaff()); allow update: if signedIn() && ((isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','ticketUrl','updatedAt']) && request.resource.data.status in ['new','contacted','closed']) || (isReseller() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']) && request.resource.data.status in ['new','contacted','closed'])); allow delete: if false; }
+    match /inquiries/{id} {
+      allow create: if signedIn() && request.resource.data.customerId == request.auth.uid;
+      allow read: if signedIn() && (resource.data.customerId == request.auth.uid || isAdmin());
+      allow update: if signedIn() && isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','ticketUrl','updatedAt']) && request.resource.data.status in ['new','contacted','closed'];
+      allow delete: if false;
+    }
     match /transactions/{id} { allow create, update, delete: if false; allow read: if signedIn() && (resource.data.customerId == request.auth.uid || isAdmin() || (isStaff() && resource.data.claimedBy == request.auth.uid)); }
     match /transactionQueue/{id} { allow read: if signedIn() && (isAdmin() || (isDealerTier() && resource.data.operatorRole == 'dealer' && resource.data.service == 'Mobile Banking' && (resource.data.get('dealerId', null) == null || resource.data.dealerId == request.auth.uid) && (resource.data.status == 'pending' || resource.data.get('claimedBy', null) == request.auth.uid)) || (isReseller() && resource.data.operatorRole == 'reseller' && resource.data.service in ['Recharge','Internet','Remittance'] && (resource.data.get('resellerId', null) == null || resource.data.resellerId == request.auth.uid) && (resource.data.status == 'pending' || resource.data.get('claimedBy', null) == request.auth.uid))); allow create, update, delete: if false; }
     match /topups/{id} { allow create, update, delete: if false; allow read: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin()); }
@@ -44,6 +49,11 @@ service cloud.firestore {
     match /businessProfiles/{uid} { allow read: if signedIn() && (uid == request.auth.uid || isAdmin()); allow write: if false; }
     match /recommendationViews/{id} { allow read, write: if false; }
     match /announcements/{id} { allow read: if signedIn() && isAdmin(); allow write: if false; }
-    match /supportTickets/{id} { allow read: if signedIn() && (isSuperadmin() || resource.data.get('userId', null) == request.auth.uid || resource.data.get('assignedToUid', '') == request.auth.uid); allow create: if signedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.status == 'open'; allow update: if signedIn() && (isAdmin() || (resource.data.get('assignedToUid', '') == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['in_progress','resolved']) || (resource.data.get('userId', null) == request.auth.uid && resource.data.status == 'resolved' && request.resource.data.status == 'open' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']))); allow delete: if false; }
+    match /supportTickets/{id} {
+      allow read: if signedIn() && (isSuperadmin() || resource.data.get('userId', null) == request.auth.uid || resource.data.get('assignedToUid', '') == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.status == 'open';
+      allow update: if signedIn() && ((isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['open','in_progress','resolved']) || (resource.data.get('assignedToUid', '') == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['in_progress','resolved']) || (resource.data.get('userId', null) == request.auth.uid && resource.data.status == 'resolved' && request.resource.data.status == 'open' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt'])));
+      allow delete: if false;
+    }
   }
 }
