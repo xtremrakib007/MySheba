@@ -11,6 +11,10 @@ function requireAdmin(request) {
   return request.auth.uid;
 }
 
+function activeAccount(profile) {
+  return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto;
+}
+
 function validMoney(value) {
   if (typeof value === 'number') {
     if (!Number.isFinite(value) || value <= 0 || value > MAX_AMOUNT) return null;
@@ -34,7 +38,7 @@ exports.approveTopup = onCall({ enforceAppCheck: true }, async request => {
   const db = admin.firestore();
   const callerSnap = await db.collection('users').doc(uid).get();
   const caller = callerSnap.exists ? callerSnap.data() : null;
-  if (!caller || !ADMIN_ROLES.includes(caller.role)) throw new HttpsError('permission-denied', 'Only an admin can approve top-ups.');
+  if (!caller || !activeAccount(caller) || !ADMIN_ROLES.includes(caller.role)) throw new HttpsError('permission-denied', 'Your account cannot approve top-ups.');
   const topupId = String(request.data?.topupId || request.data?.id || '').trim();
   if (!topupId) throw new HttpsError('invalid-argument', 'topupId is required.');
   const ref = db.collection('topups').doc(topupId);
@@ -73,7 +77,7 @@ exports.rejectTopup = onCall({ enforceAppCheck: true }, async request => {
   const db = admin.firestore();
   const callerSnap = await db.collection('users').doc(uid).get();
   const caller = callerSnap.exists ? callerSnap.data() : null;
-  if (!caller || !ADMIN_ROLES.includes(caller.role)) throw new HttpsError('permission-denied', 'Only an admin can reject top-ups.');
+  if (!caller || !activeAccount(caller) || !ADMIN_ROLES.includes(caller.role)) throw new HttpsError('permission-denied', 'Your account cannot reject top-ups.');
   const topupId = String(request.data?.topupId || '').trim();
   const reason = String(request.data?.reason || '').trim().slice(0, 500);
   if (!topupId) throw new HttpsError('invalid-argument', 'topupId is required.');
