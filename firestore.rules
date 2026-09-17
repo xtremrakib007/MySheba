@@ -11,6 +11,14 @@ service cloud.firestore {
     function isReseller() { return myRole() == 'reseller'; }
     function myDealerScope() { return request.auth.uid; }
     function canHandleTransaction(s) { return isAdmin() || (isDealerTier() && s == 'Mobile Banking') || (isReseller() && s in ['Recharge', 'Internet', 'Remittance']); }
+    function activeStaff(uid, expectedRole) {
+      let p = get(/databases/$(database)/documents/users/$(uid)).data;
+      return p.role == expectedRole
+        && p.suspended != true
+        && p.inactive != true
+        && p.disabled != true
+        && p.mergedInto == null;
+    }
 
     match /rates/current { allow read: if signedIn(); allow create: if isSuperadmin(); allow update: if isSuperadmin() || (myRole() == 'admin' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mobileBanking','remittanceFee','remittanceBD_ACC','remittanceBD_CASH','remittanceNP','remittancePK','remittancePH','remittanceLK','remittanceIN','remittanceID','remittanceMM','BD_ACC','BD_CASH','NP','PK','PH','LK','IN','ID','MM','updatedAt'])); allow delete: if false; }
     match /internetPricing/{operator} { allow read: if signedIn(); allow create, update: if isAdmin(); allow delete: if false; }
@@ -52,8 +60,16 @@ service cloud.firestore {
     match /announcements/{id} { allow read: if signedIn() && isAdmin(); allow write: if false; }
     match /supportTickets/{id} {
       allow read: if signedIn() && (isSuperadmin() || resource.data.get('userId', null) == request.auth.uid || resource.data.get('assignedToUid', '') == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.status == 'open' && request.resource.data.keys().hasOnly(['userId','status','subject','description','category','createdAt','userName']);
-      allow update: if signedIn() && ((isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['open','in_progress','resolved']) || (resource.data.get('assignedToUid', '') == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['in_progress','resolved']) || (resource.data.get('userId', null) == request.auth.uid && resource.data.status == 'resolved' && request.resource.data.status == 'open' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt'])));
+      allow create: if false;
+      allow update: if signedIn() && (
+        (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['open','in_progress','resolved'])
+        || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['assignedToUid','assignedToName','assignedToRole','updatedAt']) && (
+          (request.resource.data.assignedToUid == '' && request.resource.data.assignedToName == '' && request.resource.data.assignedToRole == '')
+          || (request.resource.data.assignedToUid != '' && request.resource.data.assignedToRole in ['admin','dealer','reseller'] && activeStaff(request.resource.data.assignedToUid, request.resource.data.assignedToRole) && request.resource.data.assignedToName == get(/databases/$(database)/documents/users/$(request.resource.data.assignedToUid)).data.name)
+        ))
+        || (resource.data.get('assignedToUid', '') == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['in_progress','resolved'])
+        || (resource.data.get('userId', null) == request.auth.uid && resource.data.status == 'resolved' && request.resource.data.status == 'open' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']))
+      );
       allow delete: if false;
     }
   }
