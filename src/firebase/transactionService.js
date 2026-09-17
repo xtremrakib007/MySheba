@@ -26,8 +26,6 @@ export async function createTransaction(payload, customer) {
   catch (err) { throw new Error(err.message || 'Could not submit this order right now.'); }
 }
 
-export function subscribeTransactions(callback, onError) { const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc')); return onSnapshot(q, (snap) => callback(snap.docs.map(mapTransactionDoc)), onError); }
-
 export function subscribeBroadcastTransactions(callback, onError) {
   let stopped = false, unsubPending = () => {}, unsubClaimed = () => {}, pending = [], claimed = [];
   const emit = () => { const byId = new Map(); [...pending, ...claimed].forEach((tx) => byId.set(tx.id, tx)); const list = Array.from(byId.values()); list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)); callback(list); };
