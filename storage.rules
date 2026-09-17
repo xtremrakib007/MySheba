@@ -7,8 +7,11 @@ service firebase.storage {
     function isAdmin() { return role() in ['admin', 'superadmin']; }
     function isStaff() { return role() in ['dealer', 'reseller', 'admin', 'superadmin']; }
     function transactionOwner(txId) { return firestore.get(/databases/(default)/documents/transactions/$(txId)).data.customerId == request.auth.uid; }
+    // Operators no longer have direct Firestore read access to full
+    // transactions. Authorize their receipt access from the sanitized queue
+    // instead, which exposes only the operational claim/assignment state.
     function transactionStaff(txId) {
-      let tx = firestore.get(/databases/(default)/documents/transactions/$(txId)).data;
+      let tx = firestore.get(/databases/(default)/documents/transactionQueue/$(txId)).data;
       return isAdmin() || ((role() in ['dealer', 'reseller']) && tx.get('claimedBy', null) == request.auth.uid);
     }
     function inquiryOwner(inquiryId) { return firestore.get(/databases/(default)/documents/inquiries/$(inquiryId)).data.customerId == request.auth.uid; }
