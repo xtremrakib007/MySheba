@@ -23,10 +23,11 @@ function getRequestId(request) {
   return requestId;
 }
 
-async function recoverCompleted(db, uid, requestId, guardRef) {
+async function recoverCompleted(db, uid, requestId, service, guardRef) {
   const recovered = await db.collection('transactions')
     .where('customerId', '==', uid)
     .where('raw.requestId', '==', requestId)
+    .where('chargedServiceKind', '==', service)
     .limit(1)
     .get();
   if (recovered.empty) return null;
@@ -80,6 +81,8 @@ function wrap(name) {
   return onCall(async (request) => {
     const uid = requireAuth(request);
     const requestId = getRequestId(request);
+    const service = SERVICE_BY_CALLABLE[name];
+    if (!service) throw new HttpsError('internal', 'Unknown charge service.');
     const db = admin.firestore();
     const guardRef = db.collection('chargeRequests').doc(`${uid}_${requestId}`);
 
@@ -88,18 +91,20 @@ function wrap(name) {
       const snap = await tx.get(guardRef);
       if (snap.exists) { existing = snap.data(); return; }
       tx.create(guardRef, {
-        uid, requestId, callable: name, status: 'processing',
+        uid, requestId, callable: name, service, status: 'processing',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     });
 
     if (existing) {
-      if (existing.callable !== name) throw new HttpsError('already-exists', 'This request ID was already used for another operation.');
+      if (existing.callable !== name || existing.service !== service) {
+        throw new HttpsError('already-exists', 'This request ID was already used for another operation.');
+      }
       if (existing.status === 'completed' && existing.transactionId) {
         return { id: existing.transactionId, cost: existing.cost || 0, replay: true };
       }
-      const recovered = await recoverCompleted(db, uid, requestId, guardRef);
+      const recovered = await recoverCompleted(db, uid, requestId, service, guardRef);
       if (recovered) return recovered;
       throw new HttpsError('aborted', 'This order is already being processed. Please wait and check your transaction history.');
     }
@@ -123,7 +128,7 @@ function wrap(name) {
       // A wallet transaction can commit before the callable response or guard
       // update fails. Recover the committed transaction before releasing the
       // guard; otherwise a retry could charge the same request twice.
-      const recovered = await recoverCompleted(db, uid, requestId, guardRef).catch(() => null);
+      const recovered = await recoverCompleted(db, uid, requestId, service, guardRef).catch(() => null);
       if (recovered) return recovered;
       await guardRef.delete().catch(() => {});
       throw err;
