@@ -1,16 +1,6 @@
 // Phone number (SMS) verification - the SERVER half.
-//
-// The client half (src/firebase/phoneVerification.js) uses real Firebase
-// Phone Auth to prove the person registering can receive SMS at the phone
-// number they typed, and hands back a fresh ID token for that (throwaway,
-// separate-from-the-real-account) Firebase Auth identity. This file is
-// what functions/customerRegistration.js calls to check that token
-// server-side before creating the account - never trust the client's word
-// alone that verification happened, same reasoning as otpService.js's
-// assertRecentlyVerified for the email OTP step.
-//
-// Not a callable itself - only used internally by customerRegistration.
-
+// The client uses Firebase Phone Auth to prove possession of the requested
+// number. This module validates the resulting ID token server-side.
 const admin = require('firebase-admin');
 
 const VERIFIED_WINDOW_MS = 15 * 60 * 1000;
@@ -26,7 +16,7 @@ function toE164(phone, dialCode) {
 }
 
 /** Verify that an ID token came from Firebase Phone Auth for the requested
- * phone number and was issued recently enough to be used for registration. */
+ * phone number and was issued recently enough to be used for verification. */
 exports.assertPhoneVerified = async (idToken, phone, dialCode = '+60') => {
   if (!idToken) throw new Error('Please verify your phone number first.');
   let decoded;
@@ -37,6 +27,8 @@ exports.assertPhoneVerified = async (idToken, phone, dialCode = '+60') => {
   }
   if (decoded.phone_number !== toE164(phone, dialCode)) throw new Error('The verified phone number does not match.');
   const authTimeMs = (decoded.auth_time || 0) * 1000;
-  if (Date.now() - authTimeMs > VERIFIED_WINDOW_MS) throw new Error('Your phone verification has expired. Please verify again.');
+  if (!authTimeMs || Date.now() - authTimeMs < 0 || Date.now() - authTimeMs > VERIFIED_WINDOW_MS) {
+    throw new Error('Your phone verification has expired. Please verify again.');
+  }
   return decoded.uid;
 };
