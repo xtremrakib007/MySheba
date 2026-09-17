@@ -15,7 +15,7 @@ function requireRequest(request) {
 function safeText(value, max) { return String(value ?? '').trim().slice(0, max); }
 function validMoney(value) { const n = Number(value); return Number.isFinite(n) && n > 0 && n <= MAX_AMOUNT && Number.isSafeInteger(Math.round(n * 100)) ? n : null; }
 function validBalance(value) { const n = Number(value ?? 0); return Number.isFinite(n) && n >= 0 && Number.isSafeInteger(Math.round(n * 100)) ? n : null; }
-function active(account) { return account && account.suspended !== true && account.inactive !== true && account.disabled !== true && !account.mergedInto; }
+function active(account) { return !!account && account.suspended !== true && account.inactive !== true && account.disabled !== true && account.active !== false && account.mergedInto == null; }
 
 exports.createSelfTopup = onCall({ enforceAppCheck: true }, async (request) => {
   const { uid, requestId } = requireRequest(request);
