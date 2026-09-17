@@ -25,7 +25,7 @@ async function profile(db, uid) {
   return snap.exists ? { id: snap.id, ...snap.data() } : null;
 }
 function active(account) {
-  return !!account && account.suspended !== true && account.inactive !== true && account.disabled !== true && !account.mergedInto;
+  return !!account && account.suspended !== true && account.inactive !== true && account.disabled !== true && account.active !== false && account.mergedInto == null;
 }
 function canTransferTo(role, caller, recipient) {
   if (role === 'dealer') return recipient.role === 'customer' && recipient.dealerId === caller.id;
