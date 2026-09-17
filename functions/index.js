@@ -3,7 +3,6 @@ const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/
 const admin = require('firebase-admin');
 const progressionService = require('./progressionService');
 const TIER_QUALIFYING_SERVICES = ['Recharge', 'Internet', 'Mobile Banking', 'Remittance'];
-
 const userManagement = require('./userManagement');
 const walletTransferService = require('./walletTransferService');
 const secureWalletMutations = require('./secureWalletMutations');
@@ -12,7 +11,7 @@ const secureWalletCharge = require('./secureWalletCharge');
 const secureTopupReview = require('./secureTopupReview');
 const chargeGuards = require('./chargeGuards');
 const supportTicketService = require('./supportTicketService');
-
+const transactionQueue = require('./transactionQueueService');
 exports.manageUser = userManagement.manageUser;
 exports.listManagedUsers = require('./managedUserListService').listManagedUsers;
 exports.searchUsers = require('./userSearch').searchUsers;
@@ -81,8 +80,9 @@ exports.saveServiceApiSettings = require('./apiProviderService').saveServiceApiS
 exports.createSupportTicket = supportTicketService.createSupportTicket;
 exports.assignSupportTicket = supportTicketService.assignSupportTicket;
 exports.unassignSupportTicket = supportTicketService.unassignSupportTicket;
+exports.onTransactionQueueCreated = transactionQueue.onTransactionQueueCreated;
+exports.onTransactionQueueUpdated = transactionQueue.onTransactionQueueUpdated;
 exports.assignDealer = require('./transactionService').assignDealer;
-
 admin.initializeApp();
 const db = admin.firestore();
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
