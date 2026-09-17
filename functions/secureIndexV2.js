@@ -7,7 +7,6 @@ const secureWalletCharge = require('./secureWalletCharge');
 const secureTopupReview = require('./secureTopupReview');
 const rejectionService = require('./rejectionService');
 const transactionService = require('./transactionService');
-const googleLinkService = require('./markGoogleLinked');
 const salaryMutationService = require('./salaryMutationService');
 
 functions.chargeRecharge = guards.chargeRecharge;
@@ -23,7 +22,6 @@ functions.rejectTopup = secureTopupReview.rejectTopup;
 functions.rejectTransaction = rejectionService.rejectTransaction;
 functions.assignDealer = transactionService.assignDealer;
 functions.scrubCompletedTransactionPins = transactionService.scrubCompletedTransactionPins;
-functions.markGoogleLinked = googleLinkService.markGoogleLinked;
 
 // Salary & OT mutations are server-owned. secureIndexV2 is the production
 // functions entrypoint, so these must be attached here (not only exported
