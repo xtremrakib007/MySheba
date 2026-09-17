@@ -1,30 +1,40 @@
-// Matches a batch of phone numbers (from the device's contact list) against
-// registered MySheba accounts - backs the "Friends" screen's WhatsApp-style
-// "people from your contacts who are on MySheba" section (see
-// src/screens/FriendsListScreen.js). Same reasoning as searchUsers.js for
-// why this has to run server-side: firestore.rules doesn't let a client
-// read across every account, and phone numbers are exactly the kind of
-// data that shouldn't be enumerable client-side anyway. The Admin SDK
-// bypasses those rules and only ever hands back the same public-safe
-// fields searchUsers.js does.
+// Matches device-contact phone numbers against registered MySheba accounts.
+// Only public-safe picker fields are returned; the caller never receives
+// arbitrary user documents.
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logServerError } = require('./logService');
+
+const MAX_NUMBERS = 500;
+const MATCH_MAX = 5;
+const MATCH_WINDOW_MS = 60 * 60 * 1000;
 
 function normalizeDigits(value) {
   return String(value || '').replace(/[^0-9]/g, '');
 }
 
-// A cap on how many numbers one call can match, mirroring searchUsers.js's
-// results cap - keeps a single request cheap even for someone with a huge
-// device contact list, and the client only needs to call this once per
-// Friends screen visit (not per keystroke like search), so this is plenty.
-const MAX_NUMBERS = 1000;
+async function rateLimit(db, uid) {
+  const ref = db.collection('userSearchVelocity').doc(`${uid}_contact_match`);
+  const now = Date.now();
+  const tripped = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const events = ((snap.exists && snap.data().events) || [])
+      .filter((ts) => Number.isFinite(ts) && now - ts < MATCH_WINDOW_MS);
+    if (events.length >= MATCH_MAX) {
+      tx.set(ref, { events, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      return true;
+    }
+    events.push(now);
+    tx.set(ref, { events, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    return false;
+  });
+  if (tripped) {
+    throw new HttpsError('resource-exhausted', 'Too many contact matches. Please wait and try again.');
+  }
+}
 
 exports.matchContactsByPhone = onCall(async (request) => {
-  if (!request.auth) {
-    throw new HttpsError('unauthenticated', 'You must be signed in.');
-  }
+  if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const callerUid = request.auth.uid;
   const rawNumbers = Array.isArray(request.data && request.data.phoneNumbers)
     ? request.data.phoneNumbers
@@ -35,6 +45,8 @@ exports.matchContactsByPhone = onCall(async (request) => {
   if (wanted.size === 0) return { results: [] };
 
   const db = admin.firestore();
+  await rateLimit(db, callerUid);
+
   let snap;
   try {
     snap = await db.collection('users').get();
@@ -47,6 +59,7 @@ exports.matchContactsByPhone = onCall(async (request) => {
   snap.forEach((doc) => {
     if (doc.id === callerUid) return;
     const u = doc.data() || {};
+    if (u.mergedInto) return;
     const phoneDigits = normalizeDigits(u.phone);
     if (!phoneDigits || !wanted.has(phoneDigits)) return;
     results.push({
@@ -58,5 +71,5 @@ exports.matchContactsByPhone = onCall(async (request) => {
     });
   });
 
-  return { results };
+  return { results: results.slice(0, 100) };
 });
