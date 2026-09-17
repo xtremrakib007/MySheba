@@ -13,6 +13,7 @@ service cloud.firestore {
     function canHandleTransaction(s) { return isAdmin() || (isDealerTier() && s == 'Mobile Banking') || (isReseller() && s in ['Recharge', 'Internet', 'Remittance']); }
 
     match /rates/current { allow read: if signedIn(); allow create: if isSuperadmin(); allow update: if isSuperadmin() || (myRole() == 'admin' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mobileBanking','remittanceFee','remittanceBD_ACC','remittanceBD_CASH','remittanceNP','remittancePK','remittancePH','remittanceLK','remittanceIN','remittanceID','remittanceMM','BD_ACC','BD_CASH','NP','PK','PH','LK','IN','ID','MM','updatedAt'])); allow delete: if false; }
+    match /internetPricing/{operator} { allow read: if signedIn(); allow create, update: if isAdmin(); allow delete: if false; }
     match /verificationRequests/{uid} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow create, update, delete: if false; }
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
@@ -51,8 +52,6 @@ service cloud.firestore {
     match /announcements/{id} { allow read: if signedIn() && isAdmin(); allow write: if false; }
     match /supportTickets/{id} {
       allow read: if signedIn() && (isSuperadmin() || resource.data.get('userId', null) == request.auth.uid || resource.data.get('assignedToUid', '') == request.auth.uid);
-      // Customers may submit only ticket content. Routing, assignment, notes and
-      // workflow state remain server/admin-controlled to prevent forged staff scope.
       allow create: if signedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.status == 'open' && request.resource.data.keys().hasOnly(['userId','status','subject','description','category','createdAt','userName']);
       allow update: if signedIn() && ((isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['open','in_progress','resolved']) || (resource.data.get('assignedToUid', '') == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['in_progress','resolved']) || (resource.data.get('userId', null) == request.auth.uid && resource.data.status == 'resolved' && request.resource.data.status == 'open' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt'])));
       allow delete: if false;
