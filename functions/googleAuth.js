@@ -3,6 +3,7 @@ const admin = require('firebase-admin');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { assignUniqueUserId } = require('./userId');
 const { logAudit, logServerError } = require('./logService');
+const { trackTemporaryAuthUser, deleteTrackedTemporaryAuthUser } = require('./temporaryAuthCleanup');
 
 const VERIFIED_WINDOW_MS = 15 * 60 * 1000;
 
@@ -118,17 +119,10 @@ exports.signInExistingGoogleAccount = onCall(async (request) => {
 
   const customToken = await admin.auth().createCustomToken(targetUid, { googleSignIn: true });
 
-  // The caller is the temporary Firebase Auth user created by the client's
-  // signInWithCredential() call. Once the custom token is minted, this UID is
-  // no longer needed. Delete it server-side because the client immediately
-  // switches to targetUid and therefore cannot reliably delete the old user.
-  try {
-    await admin.auth().deleteUser(callerUid);
-  } catch (err) {
-    // Cleanup failure must not invalidate an otherwise verified sign-in. The
-    // temporary UID has no MySheba profile and cannot be used to access the
-    // target account. Log it for operational cleanup/retry.
-    await logServerError('signInExistingGoogleAccount.cleanupTemporaryUser', err, { callerUid, targetUid });
+  await trackTemporaryAuthUser({ uid: callerUid, purpose: 'google-existing-account', targetUid, email: googleEmail });
+  const deleted = await deleteTrackedTemporaryAuthUser(callerUid);
+  if (!deleted) {
+    await logServerError('signInExistingGoogleAccount.cleanupTemporaryUser', new Error('Temporary Google Auth user cleanup deferred to scheduled retry.'), { callerUid, targetUid });
   }
 
   return { found: true, customToken, uid: targetUid, profile: { uid: targetUid, ...userData } };
