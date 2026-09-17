@@ -13,14 +13,16 @@ const DOCUMENT_TYPES = ['Passport', 'MyKad / National ID', 'Work Permit / ID', "
 const GENDERS = ['Male', 'Female', 'Other'];
 
 function requireAuth(request) {
-  if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
   return request.auth.uid;
 }
 
+function activeUser(user) {
+  return user && user.suspended !== true && user.inactive !== true && user.disabled !== true && !user.mergedInto;
+}
+
 function normalizeEmbedding(value) {
-  if (!Array.isArray(value) || value.length !== DIMENSIONS) {
-    throw new HttpsError('invalid-argument', `A ${DIMENSIONS}-value face embedding is required.`);
-  }
+  if (!Array.isArray(value) || value.length !== DIMENSIONS) throw new HttpsError('invalid-argument', `A ${DIMENSIONS}-value face embedding is required.`);
   const values = value.map(Number);
   if (values.some((v) => !Number.isFinite(v))) throw new HttpsError('invalid-argument', 'Invalid face embedding.');
   const norm = Math.sqrt(values.reduce((sum, v) => sum + v * v, 0));
@@ -42,14 +44,10 @@ function validStorageUrl(url, uid, required = true) {
 }
 
 function parseDate(value, label) {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    throw new HttpsError('invalid-argument', `Invalid ${label}.`);
-  }
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new HttpsError('invalid-argument', `Invalid ${label}.`);
   const [year, month, day] = value.split('-').map(Number);
   const date = new Date(Date.UTC(year, month - 1, day));
-  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
-    throw new HttpsError('invalid-argument', `Invalid ${label}.`);
-  }
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) throw new HttpsError('invalid-argument', `Invalid ${label}.`);
   return date;
 }
 
@@ -70,31 +68,32 @@ function validateSubmission(data, uid, phone) {
   if (data.documentType === 'Passport') {
     const expiry = parseDate(data.passportExpiryDate, 'passport expiry date');
     if (expiry < today) throw new HttpsError('invalid-argument', 'Passport expiry date cannot be in the past.');
-  } else if (data.passportExpiryDate) {
-    throw new HttpsError('invalid-argument', 'Passport expiry date is only valid for passports.');
-  }
+  } else if (data.passportExpiryDate) throw new HttpsError('invalid-argument', 'Passport expiry date is only valid for passports.');
   if (!validStorageUrl(data.frontDocumentUrl, uid) || !validStorageUrl(data.documentUrl, uid)) throw new HttpsError('invalid-argument', 'Invalid identity document upload.');
   if (data.documentType !== 'Passport' && !validStorageUrl(data.backDocumentUrl, uid)) throw new HttpsError('invalid-argument', 'The back of the identity document is required.');
   if (!validStorageUrl(data.selfieUrl, uid)) throw new HttpsError('invalid-argument', 'The verified face image is required.');
   if (data.liveFaceVerified !== true) throw new HttpsError('failed-precondition', 'Complete live face verification first.');
 }
 
-exports.createDiditKycSession = onCall(async (request) => {
+exports.createDiditKycSession = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireAuth(request);
   const db = admin.firestore();
+
+  const userRef = db.collection('users').doc(uid);
+  const userSnap = await userRef.get();
+  if (!userSnap.exists) throw new HttpsError('not-found', 'Your user profile was not found.');
+  const user = userSnap.data() || {};
+  if (!activeUser(user)) throw new HttpsError('permission-denied', 'This account is not active.');
 
   // Secure KYC submission. The client can upload evidence, but it cannot
   // directly create or overwrite a verification request anymore.
   if (request.data?.mode === 'submit') {
-    const data = request.data?.kycData || {};
-    const userSnap = await db.collection('users').doc(uid).get();
-    if (!userSnap.exists) throw new HttpsError('not-found', 'Your user profile was not found.');
-    const user = userSnap.data() || {};
     if (user.verified === true || user.verificationStatus === 'approved') throw new HttpsError('failed-precondition', 'Your KYC is already approved.');
     const existing = await db.collection(REQUESTS).doc(uid).get();
     if (existing.exists && existing.data()?.status === 'pending') throw new HttpsError('failed-precondition', 'Your KYC is already under review.');
 
     const phone = String(user.phone || user.mobileNumber || user.mobile || '').trim();
+    const data = request.data?.kycData || {};
     const submission = {
       uid,
       phone,
@@ -123,19 +122,28 @@ exports.createDiditKycSession = onCall(async (request) => {
     validateSubmission(submission, uid, phone);
 
     const pendingFace = await db.collection(PENDING).doc(uid).get();
-    if (!pendingFace.exists || pendingFace.data()?.status !== 'pending' || pendingFace.data()?.livenessPassed !== true) {
-      throw new HttpsError('failed-precondition', 'Complete the live face verification before submitting KYC.');
-    }
+    if (!pendingFace.exists || pendingFace.data()?.status !== 'pending' || pendingFace.data()?.livenessPassed !== true) throw new HttpsError('failed-precondition', 'Complete the live face verification before submitting KYC.');
 
-    await db.collection(REQUESTS).doc(uid).set(submission, { merge: false });
-    await db.collection('users').doc(uid).update({ verificationStatus: 'pending', verified: false });
+    await db.runTransaction(async tx => {
+      const [latestUser, latestRequest, latestFace] = await Promise.all([
+        tx.get(userRef),
+        tx.get(db.collection(REQUESTS).doc(uid)),
+        tx.get(db.collection(PENDING).doc(uid)),
+      ]);
+      if (!latestUser.exists || !activeUser(latestUser.data() || {})) throw new HttpsError('permission-denied', 'This account is not active.');
+      const latestUserData = latestUser.data() || {};
+      if (latestUserData.verified === true || latestUserData.verificationStatus === 'approved') throw new HttpsError('failed-precondition', 'Your KYC is already approved.');
+      if (latestRequest.exists && latestRequest.data()?.status === 'pending') throw new HttpsError('failed-precondition', 'Your KYC is already under review.');
+      if (!latestFace.exists || latestFace.data()?.status !== 'pending' || latestFace.data()?.livenessPassed !== true) throw new HttpsError('failed-precondition', 'Complete the live face verification before submitting KYC.');
+      const requestRef = db.collection(REQUESTS).doc(uid);
+      tx.set(requestRef, submission, { merge: false });
+      tx.update(userRef, { verificationStatus: 'pending', verified: false });
+    });
     return { ok: true, status: 'pending' };
   }
 
   const embedding = normalizeEmbedding(request.data?.embedding);
-  if (request.data?.livenessPassed !== true) {
-    throw new HttpsError('failed-precondition', 'Complete the live face movement check first.');
-  }
+  if (request.data?.livenessPassed !== true) throw new HttpsError('failed-precondition', 'Complete the live face movement check first.');
 
   const snap = await db.collection(VERIFIED).get();
   let best = null;
@@ -150,25 +158,11 @@ exports.createDiditKycSession = onCall(async (request) => {
   });
 
   if (best && best.score >= DUPLICATE_THRESHOLD) {
-    await db.collection(PENDING).doc(uid).set({
-      uid,
-      status: 'duplicate',
-      duplicateOf: best.uid,
-      similarity: best.score,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
+    await db.collection(PENDING).doc(uid).set({ uid, status: 'duplicate', duplicateOf: best.uid, similarity: best.score, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
     return { ok: false, duplicate: true, similarity: best.score };
   }
 
-  await db.collection(PENDING).doc(uid).set({
-    uid,
-    status: 'pending',
-    embedding,
-    model: 'mobilefacenet-512',
-    livenessPassed: true,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  }, { merge: true });
-
+  await db.collection(PENDING).doc(uid).set({ uid, status: 'pending', embedding, model: 'mobilefacenet-512', livenessPassed: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
   return { ok: true, duplicate: false, similarity: best?.score || 0 };
 });
 
