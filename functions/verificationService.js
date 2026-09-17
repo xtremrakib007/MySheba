@@ -45,7 +45,7 @@ function validateRequestData(data, uid) {
   if (data.liveFaceVerified !== true) throw new HttpsError('failed-precondition', 'Live face verification is required.');
 }
 
-exports.approveVerification = onCall(async (request) => {
+exports.approveVerification = onCall({ enforceAppCheck: true }, async (request) => {
   const callerUid = requireAuth(request);
   const db = admin.firestore();
   const caller = await requireAdmin(db, callerUid);
@@ -75,7 +75,7 @@ exports.approveVerification = onCall(async (request) => {
   return { ok: true };
 });
 
-exports.rejectVerification = onCall(async (request) => {
+exports.rejectVerification = onCall({ enforceAppCheck: true }, async (request) => {
   const callerUid = requireAuth(request);
   const db = admin.firestore();
   const caller = await requireAdmin(db, callerUid);
