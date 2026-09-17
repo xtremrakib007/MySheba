@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const crypto = require('crypto');
 const { logAudit, logServerError } = require('./logService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const mailerService = require('./mailerService');
@@ -11,7 +12,13 @@ const MAX_ATTEMPTS = 5;
 
 function normalizeEmail(email) { return String(email || '').trim().toLowerCase(); }
 function isValidEmail(email) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email)); }
-function generateCode() { let code = ''; for (let i = 0; i < OTP_LENGTH; i += 1) code += Math.floor(Math.random() * 10); return code; }
+function generateCode() { return String(crypto.randomInt(0, 10 ** OTP_LENGTH)).padStart(OTP_LENGTH, '0'); }
+function hashCode(code, salt) { return crypto.createHmac('sha256', salt).update(code, 'utf8').digest('hex'); }
+function codesEqual(a, b) {
+  const left = Buffer.from(String(a || ''), 'hex');
+  const right = Buffer.from(String(b || ''), 'hex');
+  return left.length === right.length && left.length > 0 && crypto.timingSafeEqual(left, right);
+}
 function maskEmail(email) { const at = email.indexOf('@'); if (at <= 0) return email; const local = email.slice(0, at); const shown = local.slice(0, Math.min(2, local.length)); return `${shown}${'*'.repeat(Math.max(3, local.length - shown.length))}${email.slice(at)}`; }
 function requireAuth(request) { if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.'); return request.auth.uid; }
 async function getProfile(db, uid) { const snap = await db.collection('users').doc(uid).get(); return snap.exists ? { id: snap.id, ...snap.data() } : null; }
@@ -34,6 +41,7 @@ exports.startAccountMerge = onCall(async (request) => {
   if (caller.email && normalizeEmail(caller.email) === email) throw new HttpsError('invalid-argument', 'That is already your account email address.');
   const ip = getClientIp(request);
   await checkVelocity(db, callerUid, 'account_merge_start', { ip });
+
   let targetAuthUser;
   try {
     targetAuthUser = await admin.auth().getUserByEmail(email);
@@ -48,18 +56,55 @@ exports.startAccountMerge = onCall(async (request) => {
   if (!target) throw new HttpsError('not-found', 'That account could not be found.');
   if (target.mergedInto) throw new HttpsError('failed-precondition', 'That account has already been merged into another one.');
   if (target.role !== 'customer') throw new HttpsError('permission-denied', 'That account cannot be merged automatically. Please contact support.');
+
   const otpRef = db.collection('mergeOtps').doc(callerUid);
-  const existing = await otpRef.get();
-  const lastSentMs = existing.exists && existing.data().lastSentAt?.toMillis ? existing.data().lastSentAt.toMillis() : 0;
-  if (Date.now() - lastSentMs < RESEND_COOLDOWN_MS) throw new HttpsError('resource-exhausted', 'Please wait a minute before requesting another code.');
   const code = generateCode();
-  await otpRef.set({ callerUid, targetUid: targetAuthUser.uid, targetEmail: email, code, expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + OTP_TTL_MS), lastSentAt: admin.firestore.FieldValue.serverTimestamp(), attempts: 0, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+  const salt = crypto.randomBytes(16).toString('hex');
+  const codeHash = hashCode(code, salt);
+  const nowMs = Date.now();
+  const expiresAt = admin.firestore.Timestamp.fromMillis(nowMs + OTP_TTL_MS);
   try {
-    await mailerService.sendEmail({ to: email, subject: 'Confirm merging your MySheba accounts', text: `A MySheba account is requesting to link this Google account. Your confirmation code is ${code}. It expires in 5 minutes. If you did not request this, you can ignore this email.`, html: `<p>A MySheba account is requesting to link this Google account.</p><p>Your confirmation code is <b>${code}</b>. It expires in 5 minutes.</p><p>If you did not request this, you can ignore this email.</p>`, context: 'accountMergeService' });
+    await db.runTransaction(async (tx) => {
+      const existing = await tx.get(otpRef);
+      const lastSentMs = existing.exists && existing.data()?.lastSentAt?.toMillis ? existing.data().lastSentAt.toMillis() : 0;
+      if (lastSentMs && nowMs - lastSentMs < RESEND_COOLDOWN_MS) {
+        throw new HttpsError('resource-exhausted', 'Please wait a minute before requesting another code.');
+      }
+      tx.set(otpRef, {
+        callerUid,
+        targetUid: targetAuthUser.uid,
+        targetEmail: email,
+        codeHash,
+        salt,
+        expiresAt,
+        lastSentAt: admin.firestore.Timestamp.fromMillis(nowMs),
+        attempts: 0,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    });
   } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    await logServerError('startAccountMerge.otpTransaction', err, { userId: callerUid });
+    throw new HttpsError('internal', 'Could not prepare the confirmation code. Please try again.');
+  }
+
+  try {
+    await mailerService.sendEmail({
+      to: email,
+      subject: 'Confirm merging your MySheba accounts',
+      text: `A MySheba account is requesting to link this Google account. Your confirmation code is ${code}. It expires in 5 minutes. If you did not request this, you can ignore this email.`,
+      html: `<p>A MySheba account is requesting to link this Google account.</p><p>Your confirmation code is <b>${code}</b>. It expires in 5 minutes.</p><p>If you did not request this, you can ignore this email.</p>`,
+      context: 'accountMergeService',
+    });
+  } catch (err) {
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(otpRef);
+      if (snap.exists && snap.data()?.codeHash === codeHash) tx.delete(otpRef);
+    }).catch(() => {});
     await logServerError('startAccountMerge.sendEmail', err, { userId: callerUid });
     throw new HttpsError('internal', 'Could not send the confirmation code. Please try again.');
   }
+
   await logAudit({ action: 'account_merge_started', targetUid: targetAuthUser.uid, performedBy: callerUid, performedByRole: caller.role, details: { targetEmailMasked: maskEmail(email), ip } });
   const yourWalletBalance = walletBalance(caller);
   const targetWalletBalance = walletBalance(target);
@@ -88,8 +133,12 @@ exports.confirmAccountMerge = onCall(async (request) => {
       if (attempts >= MAX_ATTEMPTS) throw new HttpsError('resource-exhausted', 'Too many incorrect attempts. Please start the merge again.');
       const expiresMs = otp.expiresAt?.toMillis ? otp.expiresAt.toMillis() : 0;
       if (!expiresMs || Date.now() > expiresMs) throw new HttpsError('deadline-exceeded', 'That code has expired. Please start the merge again.');
+      if (typeof otp.codeHash !== 'string' || !/^[0-9a-f]{64}$/i.test(otp.codeHash) || typeof otp.salt !== 'string' || !/^[0-9a-f]{32}$/i.test(otp.salt)) {
+        throw new HttpsError('failed-precondition', 'The merge verification record is invalid. Please start again.');
+      }
 
-      if (code !== String(otp.code || '')) {
+      const attemptHash = hashCode(code, otp.salt);
+      if (!codesEqual(attemptHash, otp.codeHash)) {
         tx.update(otpRef, { attempts: attempts + 1 });
         throw new HttpsError('invalid-argument', 'Incorrect code. Please try again.');
       }
