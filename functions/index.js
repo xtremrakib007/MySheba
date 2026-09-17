@@ -25,6 +25,7 @@ exports.listTrustedDevices = require('./deviceSessionService').listTrustedDevice
 exports.revokeTrustedDevice = require('./deviceSessionService').revokeTrustedDevice;
 exports.sendDeviceVerification = require('./deviceVerificationService').sendDeviceVerification;
 exports.confirmDeviceEmailOtp = require('./deviceVerificationService').confirmDeviceEmailOtp;
+exports.cleanupExpiredVerificationArtifacts = require('./verificationCleanup').cleanupExpiredVerificationArtifacts;
 exports.sendAnnouncement = require('./announcements').sendAnnouncement;
 exports.approveTopup = require('./walletService').approveTopup;
 exports.rejectTopup = require('./walletService').rejectTopup;
