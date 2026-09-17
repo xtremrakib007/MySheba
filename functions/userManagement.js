@@ -28,7 +28,7 @@ async function getCustomerTarget(db, targetUid) {
   return { ref, snap };
 }
 
-exports.manageUser = onCall(async (request) => {
+exports.manageUser = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const callerUid = request.auth.uid;
   const callerProfile = await getCallerProfile(callerUid);
@@ -80,9 +80,11 @@ exports.manageUser = onCall(async (request) => {
     if (!perms.canUpgradeTo.includes(newRole)) throw new HttpsError('permission-denied', `A ${callerRole} cannot upgrade a user to ${newRole}.`);
     const targetRef = db.collection('users').doc(targetUid); const targetSnap = await targetRef.get();
     if (!targetSnap.exists) throw new HttpsError('not-found', 'That user does not exist.');
-    if (callerRole === 'dealer' && newRole === 'dealer' && targetSnap.data().dealerId !== callerUid) throw new HttpsError('permission-denied', 'You can only upgrade your own customers.');
-    const previousRole = targetSnap.data().role; await targetRef.update({ role: newRole });
-    await logAudit({ action: 'role_changed', targetUid, performedBy: callerUid, performedByRole: callerRole, details: { from: previousRole, to: newRole } });
+    const targetData = targetSnap.data();
+    if (targetData.role !== 'customer') throw new HttpsError('permission-denied', 'Role upgrades are only allowed from customer accounts.');
+    if (callerRole === 'dealer' && targetData.dealerId !== callerUid) throw new HttpsError('permission-denied', 'You can only upgrade your own customers.');
+    await targetRef.update({ role: newRole });
+    await logAudit({ action: 'role_changed', targetUid, performedBy: callerUid, performedByRole: callerRole, details: { from: 'customer', to: newRole } });
     return { uid: targetUid, role: newRole };
   }
 
