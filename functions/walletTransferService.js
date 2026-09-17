@@ -15,7 +15,7 @@ function requireAuth(request) { if (!request.auth) throw new HttpsError('unauthe
 function requireRequestId(request) { const requestId = request.data?.requestId; if (typeof requestId !== 'string' || !REQUEST_ID_RE.test(requestId)) throw new HttpsError('invalid-argument', 'requestId is required and must be 16-128 safe characters.'); return requestId; }
 function normalizePhone(value) { return String(value || '').replace(/[^0-9+]/g, '').replace(/^00/, '+'); }
 function normalizeQuery(value) { return String(value || '').trim(); }
-function active(profile) { return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto; }
+function active(profile) { return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && profile.active !== false && profile.mergedInto == null; }
 function parseMoneyCents(value) {
   if (typeof value === 'number') {
     if (!Number.isFinite(value) || !Number.isSafeInteger(Math.round(value * 100))) throw new HttpsError('invalid-argument', 'Enter a valid MYR transfer amount.');
@@ -58,7 +58,7 @@ exports.findWalletRecipient = onCall({ enforceAppCheck: true }, async (request) 
   if (!active(sender)) throw new HttpsError('permission-denied', 'Your account is not active.');
   if (sender.role !== 'customer') throw new HttpsError('permission-denied', 'Wallet-to-wallet transfers are for customer wallets.');
   if (!isKycApproved(sender)) throw new HttpsError('failed-precondition', 'Complete KYC before using wallet transfers.');
-  await checkVelocity(db, uid, 'walletRecipientLookup', { ip: getClientIp(request) });
+  await checkVelocity(db, uid, 'findWalletRecipient', { ip: getClientIp(request) });
   const recipient = await resolveRecipient(db, request.data?.recipient, uid);
   return { uid: recipient.id, name: recipient.displayName || recipient.name || 'MySheba Customer', customerId: recipient.customerId || recipient.userId || '', phoneMasked: String(recipient.phone || '').replace(/(\d{3})\d+(\d{2})$/, '$1••••$2') };
 });
