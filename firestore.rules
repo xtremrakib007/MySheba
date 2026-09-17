@@ -16,9 +16,6 @@ service cloud.firestore {
     match /rates/current { allow read: if signedIn(); allow create: if isSuperadmin(); allow update: if isSuperadmin() || (isAdmin() && myRole() == 'admin' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mobileBanking','remittanceFee','remittanceBD_ACC','remittanceBD_CASH','remittanceNP','remittancePK','remittancePH','remittanceLK','remittanceIN','remittanceID','remittanceMM','BD_ACC','BD_CASH','NP','PK','PH','LK','IN','ID','MM','updatedAt'])); allow delete: if false; }
     match /verificationRequests/{uid} { allow read: if activeProfile() && (request.auth.uid == uid || isAdmin()); allow create, update, delete: if false; }
     match /users/{uid} {
-      // Full user profiles are private. Admin tiers can manage platform users;
-      // regular operators only read their own profile. Dealer-scoped customer
-      // lists are served by manageUser.listScopedUsers as a sanitized projection.
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
       allow create: if false;
       allow update: if activeProfile() && ((request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['googleLinked','googleEmail','notifPrefs'])) || (isAdmin() && (resource.data.role != 'superadmin') && (resource.data.role != 'admin' || isSuperadmin()) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['disabled','features'])) || (isDealerTier() && resource.data.dealerId == myDealerScope() && request.resource.data.diff(resource.data).affectedKeys().hasOnly([]));
@@ -43,19 +40,12 @@ service cloud.firestore {
     match /inquiries/{id} { allow create: if activeProfile() && request.resource.data.customerId == request.auth.uid; allow read: if activeProfile() && (resource.data.customerId == request.auth.uid || isStaff()); allow update: if activeProfile() && ((isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','ticketUrl','updatedAt']) && request.resource.data.status in ['new','contacted','closed']) || (isReseller() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']) && request.resource.data.status in ['new','contacted','closed'])); allow delete: if false; }
     match /transactions/{id} {
       allow create: if false;
-      // Dealer/reseller access to full transaction documents is intentionally removed.
-      // They use the server-maintained sanitized transactionQueue instead.
       allow read: if activeProfile() && (resource.data.customerId == request.auth.uid || isAdmin());
       allow update: if activeProfile() && ((isAdmin() && resource.data.status == 'pending' && resource.data.get('approved', false) != true && request.resource.data.get('approved', false) == true && request.resource.data.get('approvedBy', null) == request.auth.uid && request.resource.data.get('approvedByRole', null) in ['admin','superadmin'] && request.resource.data.get('approvedAt', null) != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approved','approvedBy','approvedByName','approvedByRole','approvedAt','updatedAt'])) || (isAdmin() && resource.data.status == 'pending' && resource.data.service == 'Mobile Banking' && request.resource.data.get('customerId', null) == resource.data.get('customerId', null) && request.resource.data.get('service', null) == resource.data.get('service', null) && request.resource.data.get('dealerId', null) != resource.data.get('dealerId', null) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dealerId','updatedAt'])));
       allow delete: if false;
     }
     match /transactionQueue/{id} {
-      allow read: if activeProfile() && (
-        isAdmin() ||
-        (isDealerTier() && resource.data.operatorRole == 'dealer' && resource.data.service == 'Mobile Banking' && (resource.data.get('dealerId', null) == null || resource.data.dealerId == request.auth.uid) && (resource.data.status == 'pending' || resource.data.get('claimedBy', null) == request.auth.uid)) ||
-        (isReseller() && resource.data.operatorRole == 'reseller' && resource.data.service in ['Recharge','Internet','Remittance'] && (resource.data.get('resellerId', null) == null || resource.data.resellerId == request.auth.uid) && (resource.data.status == 'pending' || resource.data.get('claimedBy', null) == request.auth.uid))
-      );
-      allow create, update, delete: if false;
+      allow read: if activeProfile() && (isAdmin() || (isDealerTier() && resource.data.operatorRole == 'dealer' && resource.data.service == 'Mobile Banking' && (resource.data.get('dealerId', null) == null || resource.data.dealerId == request.auth.uid) && (resource.data.status == 'pending' || resource.data.get('claimedBy', null) == request.auth.uid)) || (isReseller() && resource.data.operatorRole == 'reseller' && resource.data.service in ['Recharge','Internet','Remittance'] && (resource.data.get('resellerId', null) == null || resource.data.resellerId == request.auth.uid) && (resource.data.status == 'pending' || resource.data.get('claimedBy', null) == request.auth.uid))); allow create, update, delete: if false;
     }
     match /topups/{id} { allow create, update, delete: if false; allow read: if activeProfile() && (resource.data.userId == request.auth.uid || isAdmin()); }
     match /selfTopups/{id} { allow read: if activeProfile() && resource.data.userId == request.auth.uid; allow create, update, delete: if false; }
@@ -73,9 +63,11 @@ service cloud.firestore {
     match /ad_impressions/{id} { allow create: if (activeProfile() && request.resource.data.get('userId', null) == request.auth.uid) || (!signedIn() && !request.resource.data.keys().hasAny(['userId'])); allow read: if activeProfile() && (isSuperadmin() || resource.data.get('userId', null) == request.auth.uid); allow update, delete: if false; }
     match /ad_clicks/{id} { allow create: if (activeProfile() && request.resource.data.get('userId', null) == request.auth.uid) || (!signedIn() && !request.resource.data.keys().hasAny(['userId'])); allow read: if activeProfile() && (isSuperadmin() || resource.data.get('userId', null) == request.auth.uid); allow update, delete: if false; }
     match /supportTickets/{id} {
+      // Ticket creation is server-only so App Check, account state, size limits,
+      // and per-user velocity controls cannot be bypassed by direct Firestore writes.
+      allow create: if false;
       allow read: if activeProfile() && (isSuperadmin() || resource.data.get('userId', null) == request.auth.uid || resource.data.get('assignedToUid', '') == request.auth.uid || (isAdmin() && resource.data.get('userId', null) != null));
       allow update: if activeProfile() && ((isSuperadmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','assignedToUid','assignedToName','assignedToRole','updatedAt']) && request.resource.data.status in ['open','in_progress','resolved']) || (isAdmin() && !isSuperadmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['open','in_progress','resolved']) || (resource.data.get('assignedToUid', '') == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['in_progress','resolved']) || (resource.data.get('userId', null) == request.auth.uid && resource.data.status == 'resolved' && request.resource.data.status == 'open' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt'])));
-      allow create: if activeProfile() && request.resource.data.userId == request.auth.uid && request.resource.data.status == 'open' && request.resource.data.keys().hasOnly(['userId','userPhone','userName','userRole','subject','message','status','adminNote','assignedToUid','assignedToName','assignedToRole','createdAt','updatedAt']) && request.resource.data.get('adminNote', '') == '' && request.resource.data.get('assignedToUid', '') == '' && request.resource.data.get('assignedToName', '') == '' && request.resource.data.get('assignedToRole', '') == '';
       allow delete: if false;
     }
   }
