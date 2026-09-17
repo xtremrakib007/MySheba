@@ -6,12 +6,23 @@ const { logAdAudit, logServerError } = require('./logService');
 const PAYMENT_STATUS_TRANSITIONS = { pending:['paid','failed'], paid:['refunded','failed'], failed:['pending','paid'], refunded:[] };
 const VALID_PAYMENT_STATUSES = Object.keys(PAYMENT_STATUS_TRANSITIONS);
 const MAX_AMOUNT = 100000000;
+const MONEY_RE = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
 function requireAuth(request) { if (!request.auth) throw new HttpsError('unauthenticated','You must be signed in.'); return request.auth.uid; }
 async function requireSuperadmin(db, uid) { const snap=await db.collection('users').doc(uid).get(); const caller=snap.exists?snap.data():null; if(!caller||caller.role!=='superadmin') throw new HttpsError('permission-denied','Only a Super Admin can manage advertisement payments.'); return caller; }
 function isNonEmptyString(v) { return typeof v==='string' && v.trim().length>0; }
 function cleanText(v,max) { if(typeof v!=='string') return ''; return v.trim().slice(0,max); }
-function validMoney(v) { const n=Number(v); if(!Number.isFinite(n)||n<=0||n>MAX_AMOUNT||!Number.isSafeInteger(Math.round(n*100))) throw new HttpsError('invalid-argument','amount must be a valid positive amount with at most 2 decimal places.'); return n; }
-function validId(v,label) { const id=cleanText(v,128); if(!id||!/^[-A-Za-z0-9_]+$/.test(id)) throw new HttpsError('invalid-argument',`${label} is invalid.`); return id; }
+function validMoney(v) {
+  if (typeof v === 'number') {
+    if (!Number.isFinite(v) || v <= 0 || v > MAX_AMOUNT) throw new HttpsError('invalid-argument','amount must be a valid positive amount with at most 2 decimal places.');
+    const cents = Math.round(v * 100);
+    if (!Number.isSafeInteger(cents) || Math.abs(v * 100 - cents) > Number.EPSILON * Math.max(1, Math.abs(v * 100))) throw new HttpsError('invalid-argument','amount must be a valid positive amount with at most 2 decimal places.');
+    return v;
+  }
+  if (typeof v !== 'string' || !MONEY_RE.test(v)) throw new HttpsError('invalid-argument','amount must be a valid positive amount with at most 2 decimal places.');
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0 || n > MAX_AMOUNT) throw new HttpsError('invalid-argument','amount is outside the allowed range.');
+  return n;
+}
 
 exports.createAdPayment = onCall({ enforceAppCheck:true }, async (request) => {
   const callerUid=requireAuth(request); const db=admin.firestore(); const caller=await requireSuperadmin(db,callerUid);
