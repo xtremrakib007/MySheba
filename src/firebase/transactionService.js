@@ -1,16 +1,19 @@
 // Dealer/reseller queue: approve -> accept as Operator -> complete.
-import { collection, doc, onSnapshot, query, where, orderBy, getDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, where, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import * as Crypto from 'expo-crypto';
 import { db, functions, auth } from './config';
 import { logActivity } from './logService';
 
 const COLLECTION = 'transactions';
+const QUEUE_COLLECTION = 'transactionQueue';
 const CHARGEABLE_SERVICE_FNS = { Recharge: 'chargeRecharge', Internet: 'chargeInternetPackage', 'Mobile Banking': 'chargeMobileBanking', Remittance: 'chargeRemittance' };
 
-function createRequestId() { return `ms_${Date.now()}_${Math.random().toString(36).slice(2, 18)}`; }
+function createRequestId() {
+  if (typeof Crypto.randomUUID !== 'function') throw new Error('Secure request identifier generation is unavailable. Please update the app.');
+  return Crypto.randomUUID().replace(/-/g, '');
+}
 
-// Never expose a legacy plaintext collection PIN to application state/UI.
-// Completion still accepts the PIN as an input and validates it server-side.
 function mapTransactionDoc(d) {
   const data = d.data();
   const { pin: _legacyPin, ...safeData } = data;
@@ -29,13 +32,31 @@ export async function createTransaction(payload, customer) {
 export function subscribeBroadcastTransactions(callback, onError) {
   let stopped = false, unsubPending = () => {}, unsubClaimed = () => {}, pending = [], claimed = [];
   const emit = () => { const byId = new Map(); [...pending, ...claimed].forEach((tx) => byId.set(tx.id, tx)); const list = Array.from(byId.values()); list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)); callback(list); };
-  (async () => { try { const uid = auth.currentUser?.uid; if (!uid) return; const profileSnap = await getDoc(doc(db, 'users', uid)); if (stopped) return; const role = profileSnap.exists() ? profileSnap.data()?.role : null;
-    if (role === 'admin' || role === 'superadmin') { const q = query(collection(db, COLLECTION), where('status', 'in', ['pending', 'processing', 'completed', 'rejected'])); unsubPending = onSnapshot(q, (snap) => callback(snap.docs.map(mapTransactionDoc).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))), onError); return; }
+  (async () => { try {
+    const uid = auth.currentUser?.uid; if (!uid) return;
+    const profileSnap = await getDoc(doc(db, 'users', uid)); if (stopped) return;
+    const role = profileSnap.exists() ? profileSnap.data()?.role : null;
+    if (role === 'admin' || role === 'superadmin') {
+      const q = query(collection(db, COLLECTION), where('status', 'in', ['pending', 'processing', 'completed', 'rejected']));
+      unsubPending = onSnapshot(q, (snap) => callback(snap.docs.map(mapTransactionDoc).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))), onError); return;
+    }
     if (role !== 'dealer' && role !== 'reseller') return;
-    const pendingQuery = role === 'dealer' ? query(collection(db, COLLECTION), where('status', '==', 'pending'), where('service', '==', 'Mobile Banking')) : query(collection(db, COLLECTION), where('status', '==', 'pending'), where('service', 'in', ['Recharge', 'Internet', 'Remittance']));
-    const claimedQuery = query(collection(db, COLLECTION), where('claimedBy', '==', uid));
-    unsubPending = onSnapshot(pendingQuery, (snap) => { pending = snap.docs.map(mapTransactionDoc); emit(); }, onError);
-    unsubClaimed = onSnapshot(claimedQuery, (snap) => { claimed = snap.docs.map(mapTransactionDoc); emit(); }, onError);
+    if (role === 'dealer') {
+      const q1 = query(collection(db, QUEUE_COLLECTION), where('service', '==', 'Mobile Banking'), where('status', '==', 'pending'), where('dealerId', '==', null));
+      const q2 = query(collection(db, QUEUE_COLLECTION), where('service', '==', 'Mobile Banking'), where('status', '==', 'pending'), where('dealerId', '==', uid));
+      unsubPending = onSnapshot(q1, (snap) => { pending = snap.docs.map((d) => ({ id: d.id, ...d.data() })); emit(); }, onError);
+      const oldPending = unsubPending;
+      unsubClaimed = onSnapshot(q2, (snap) => { const second = snap.docs.map((d) => ({ id: d.id, ...d.data() })); pending = [...pending.filter((x) => !second.some((y) => y.id === x.id)), ...second]; emit(); }, onError);
+      void oldPending;
+    } else {
+      const q1 = query(collection(db, QUEUE_COLLECTION), where('service', 'in', ['Recharge', 'Internet', 'Remittance']), where('status', '==', 'pending'), where('resellerId', '==', null));
+      const q2 = query(collection(db, QUEUE_COLLECTION), where('service', 'in', ['Recharge', 'Internet', 'Remittance']), where('status', '==', 'pending'), where('resellerId', '==', uid));
+      unsubPending = onSnapshot(q1, (snap) => { pending = snap.docs.map((d) => ({ id: d.id, ...d.data() })); emit(); }, onError);
+      unsubClaimed = onSnapshot(q2, (snap) => { const second = snap.docs.map((d) => ({ id: d.id, ...d.data() })); pending = [...pending.filter((x) => !second.some((y) => y.id === x.id)), ...second]; emit(); }, onError);
+    }
+    const claimedQuery = query(collection(db, QUEUE_COLLECTION), where('claimedBy', '==', uid));
+    const claimedUnsub = onSnapshot(claimedQuery, (snap) => { claimed = snap.docs.map((d) => ({ id: d.id, ...d.data() })); emit(); }, onError);
+    const previous = unsubClaimed; unsubClaimed = () => { previous(); claimedUnsub(); };
   } catch (err) { if (!stopped) onError?.(err); } })();
   return () => { stopped = true; unsubPending(); unsubClaimed(); };
 }
