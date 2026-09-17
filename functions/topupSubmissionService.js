@@ -20,7 +20,7 @@ function validMoney(value) {
   return Number.isFinite(n) && n > 0 && n <= MAX_AMOUNT && Number.isSafeInteger(Math.round(n * 100)) ? n : null;
 }
 
-exports.submitTopupRequest = onCall(async request => {
+exports.submitTopupRequest = onCall({ enforceAppCheck: true }, async request => {
   const { uid, requestId } = requireAuth(request);
   const db = admin.firestore();
   const data = request.data || {};
