@@ -1,5 +1,6 @@
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const admin = require('firebase-admin');
+const { cleanupTrackedTemporaryAuthUsers } = require('./temporaryAuthCleanup');
 
 const BATCH_SIZE = 400;
 const COLLECTIONS = [
@@ -77,7 +78,8 @@ exports.cleanupExpiredVerificationArtifacts = onSchedule(
     }
     const expiredEmailChallenges = await clearExpiredUserChallenge(db, 'pendingDeviceEmailChallenge', now);
     const expiredPendingApprovals = await clearExpiredPendingDeviceApprovals(db, now);
+    const cleanedTemporaryAuthUsers = await cleanupTrackedTemporaryAuthUsers();
     deleted += expiredEmailChallenges + expiredPendingApprovals;
-    console.log('[verificationCleanup] deleted expired artifacts:', deleted);
+    console.log('[verificationCleanup] deleted expired artifacts:', deleted, 'temporary auth users cleaned:', cleanedTemporaryAuthUsers);
   },
 );
