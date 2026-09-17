@@ -1,0 +1,163 @@
+name: Remove obsolete chat feature
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: ${{ !contains(github.event.head_commit.message, '[chat-cleanup]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Remove chat UI and services
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          # Files whose sole purpose is chat/messaging.
+          files = [
+              'src/firebase/chatService.js',
+              'src/firebase/chatLockService.js',
+              'src/screens/ChatScreen.js',
+              'src/screens/ChatListScreen.js',
+              'src/screens/SupportChatScreen.js',
+              'src/screens/ChatReportsScreen.js',
+              'src/components/AssignChatModal.js',
+              'src/utils/funActions.js',
+              'src/utils/modCommands.js',
+              'src/notifications/callPush.js',
+              'src/notifications/callSettingsCache.js',
+              'src/firebase/callerRingtoneService.js',
+              'src/data/callSettingsConstants.js',
+              'src/screens/CallSettingsScreen.js',
+              'src/screens/RingtonePickerScreen.js',
+              'src/components/IncomingCallModal.js',
+              'src/screens/CallScreen.js',
+              'src/firebase/callService.js',
+              'src/utils/agoraUid.js',
+              'admin-web/src/services/supportChatService.ts',
+              'admin-web/src/pages/SupportMessagesPage.tsx',
+          ]
+          for name in files:
+              Path(name).unlink(missing_ok=True)
+
+          # AppContext: remove imports and chat/call state. Keep support-ticket
+          # functionality, but remove the live messaging surface.
+          p = Path('src/context/AppContext.js')
+          s = p.read_text()
+          s = re.sub(r'\nimport \* as chatService from "\.\./firebase/chatService";', '', s)
+          s = re.sub(r'\nimport \* as callService from "\.\./firebase/callService";', '', s)
+          s = re.sub(r'\nimport \{ withCallSettingsDefaults \} from "\.\./data/callSettingsConstants";', '', s)
+          s = re.sub(r'\nimport \{\n  cacheCallSettings,\n  cacheCallerRingtones,\n\} from "\.\./notifications/callSettingsCache";', '', s)
+          s = re.sub(r'\nimport \{\n  setCallerRingtone as saveCallerRingtone,\n  removeCallerRingtone as deleteCallerRingtone,\n  subscribeCallerRingtones,\n\} from "\.\./firebase/callerRingtoneService";', '', s)
+          s = s.replace(' | chat | chatList', '')
+          s = s.replace(' | callSettings | ringtonePicker', '')
+          s = re.sub(r'\n  // ---- 1-to-1 call ringtone selection ----.*?(?=\n  /\*\* Opens the Support thread)', '', s, flags=re.S)
+          s = re.sub(r'\n  // ---- voice / video calls \(Agora\) ----.*?(?=\n  // overlays)', '', s, flags=re.S)
+          s = re.sub(r'\n  // Call Settings \(ringtone/vibration/volume/notifications toggle\).*?(?=\n  // )', '', s, flags=re.S)
+          # Remove chat state and openChat function, stopping before the next
+          # unrelated context section.
+          s = re.sub(r'\n  // ---- support chat.*?(?=\n  // ---- My Documents)', '', s, flags=re.S)
+          s = re.sub(r'\n  const openChat = useCallback\(.*?\n  \}, \[\]\);', '', s, flags=re.S)
+          # Remove call/chat returned properties even if their declarations
+          # were formatted differently.
+          for name in [
+              'activeCall','setActiveCall','incomingCall','startCall',
+              'answerIncomingCall','rejectIncomingCall','callSettings',
+              'updateCallSettings','callerRingtones','updateCallerRingtone',
+              'clearCallerRingtone','activeRingtoneContactUid',
+              'activeRingtoneContactName','activeChatId','setActiveChatId',
+              'activeChatName','setActiveChatName','chatUnreadCount',
+              'setChatUnreadCount','activeChatReturnTo','setActiveChatReturnTo',
+          ]:
+              s = re.sub(r'^\s*' + re.escape(name) + r':.*\n', '', s, flags=re.M)
+          s = re.sub(r'^\s*openChat:.*\n', '', s, flags=re.M)
+          p.write_text(s)
+
+          # App.js: remove imports and render branches for chat/call screens.
+          p = Path('App.js')
+          s = p.read_text()
+          for name in ['ChatScreen','ChatListScreen','CallScreen','CallSettingsScreen','RingtonePickerScreen']:
+              s = re.sub(r'^import .*' + name + r'.*\n', '', s, flags=re.M)
+          s = re.sub(r'^\s*case [\'\"](?:chat|chatList|callSettings|ringtonePicker)[\'\"]:.*\n(?:.*\n){0,12}?', '', s, flags=re.M)
+          s = re.sub(r'^\s*\{screen === [\'\"](?:chat|chatList|callSettings|ringtonePicker)[\'\"].*\n(?:.*\n){0,12}?\}\s*\n?', '', s, flags=re.M)
+          p.write_text(s)
+
+          # Remove chat/call menu labels from navigation data where they are
+          # represented as literal screen IDs.
+          for path in [Path('src'), Path('admin-web/src')]:
+              for p in path.rglob('*'):
+                  if p.suffix not in {'.js','.jsx','.ts','.tsx','.json'}: continue
+                  try: text = p.read_text()
+                  except Exception: continue
+                  original = text
+                  text = re.sub(r'\n\s*\{[^\n]*(?:chatList|chatSettings|callSettings|ringtonePicker)[^\n]*\},?', '', text, flags=re.I)
+                  if text != original: p.write_text(text)
+
+          # Server: remove chat/call notification trigger code while keeping
+          # transaction/topup/support-ticket notifications intact.
+          p = Path('functions/index.js')
+          s = p.read_text()
+          s = re.sub(r"^exports\.generateAgoraToken = require\('./agoraToken'\)\.generateAgoraToken;\n", '', s, flags=re.M)
+          s = re.sub(r"\nasync function sendCallDataMessage\(uid, data\) \{.*?\n\}\n", '\n', s, flags=re.S)
+          s = re.sub(r"\nexports\.onCallCreated = onDocumentCreated\('calls/\{callId\}'.*?(?=\nexports\.|\Z)", '\n', s, flags=re.S)
+          p.write_text(s)
+
+          # Firestore: deny legacy chat data and remove call-specific rules.
+          p = Path('firestore.rules')
+          s = p.read_text()
+          s = re.sub(r"\n\s*function callParticipant\(\) \{.*?\n\s*function newCallParticipant\(\) \{.*?\n", '\n', s, flags=re.S)
+          s = re.sub(r"\n\s*match /calls/\{callId\} \{.*?\n\s*\}\n", '\n', s, flags=re.S)
+          # Explicitly block the obsolete live chat collections.
+          if 'match /chats/{chatId}' not in s:
+              marker = '\n    match /chats/{chatId} {\n      allow read, write: if false;\n      match /messages/{messageId} { allow read, write: if false; }\n    }\n'
+              s = s.replace('\n    match /directChats/', marker + '\n    match /directChats/')
+          p.write_text(s)
+
+          # Remove obsolete chat/call sounds from Expo notifications config.
+          p = Path('app.base.json')
+          s = p.read_text()
+          s = s.replace(' for voice and video calls', '')
+          s = s.replace(' for voice calls', '')
+          s = s.replace(' and video calls', '')
+          import json
+          data = json.loads(s)
+          def clean(obj):
+              if isinstance(obj, dict):
+                  for k,v in list(obj.items()):
+                      if isinstance(v, str): obj[k] = v.replace(' for voice and video calls','').replace(' and video calls','').replace(' for voice calls','')
+                      else: clean(v)
+              elif isinstance(obj, list):
+                  obj[:] = [x for x in obj if not (isinstance(x,str) and ('ringtone.mp3' in x or 'soft.mp3' in x))]
+                  for x in obj: clean(x)
+          clean(data)
+          p.write_text(json.dumps(data, indent=2) + '\n')
+
+          # Remove Agora dependency from mobile and server package manifests.
+          for name in ['package.json','functions/package.json']:
+              p = Path(name)
+              data = json.loads(p.read_text())
+              deps = data.get('dependencies', {})
+              deps.pop('react-native-agora', None)
+              deps.pop('agora-token', None)
+              p.write_text(json.dumps(data, indent=2) + '\n')
+
+          # Remove the temporary workflow itself before committing.
+          Path('.github/workflows/remove-chat-feature.yml').unlink(missing_ok=True)
+
+      - name: Commit cleanup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "Remove obsolete chat feature [chat-cleanup]"
+          git push
