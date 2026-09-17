@@ -41,6 +41,22 @@ export async function clearLocalSessionId() {
   await AsyncStorage.removeItem(LOCAL_SESSION_ID_KEY);
 }
 
+export async function validateActiveSession() {
+  const deviceId = await getDeviceId();
+  const sessionId = await getLocalSessionId();
+  if (!sessionId) return false;
+  const fn = httpsCallable(functions, 'validateActiveSession');
+  try {
+    const { data } = await fn({ deviceId, sessionId });
+    return data?.valid === true;
+  } catch (error) {
+    if (error?.code === 'functions/failed-precondition' || error?.code === 'functions/unauthenticated' || error?.code === 'functions/permission-denied' || error?.code === 'functions/not-found') {
+      return false;
+    }
+    throw error;
+  }
+}
+
 export function getDeviceLabel() {
   try {
     const model = Device.modelName || Device.deviceName;
