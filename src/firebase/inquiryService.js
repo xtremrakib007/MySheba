@@ -4,22 +4,14 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './config';
 
 const COLLECTION = 'inquiries';
-
 export async function createInquiry(type, payload, customer) {
   if (!customer?.uid) throw new Error('Not authenticated');
   const create = httpsCallable(functions, 'createInquiry');
-  const result = await create({
-    type,
-    from: payload?.from || '', to: payload?.to || '', date: payload?.date || '',
-    time: payload?.time || '', passengers: payload?.passengers || 1,
-    name: payload?.name || '', phone: payload?.phone || '', email: payload?.email || '',
-    notes: payload?.notes || '',
-  });
+  const result = await create({ type, from: payload?.from || '', to: payload?.to || '', date: payload?.date || '', time: payload?.time || '', passengers: payload?.passengers || 1, name: payload?.name || '', phone: payload?.phone || '', email: payload?.email || '', notes: payload?.notes || '' });
   const id = result.data?.id;
   if (!id) throw new Error('Inquiry was not created.');
   return id;
 }
-
 export function subscribeInquiries(callback, onError) {
   const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'));
   return onSnapshot(q, (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), onError);
