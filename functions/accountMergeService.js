@@ -53,8 +53,9 @@ exports.startAccountMerge = onCall(async (request) => {
   await otpRef.set({ callerUid, targetUid: targetAuthUser.uid, targetEmail: email, codeHash: hashCode(code), expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + OTP_TTL_MS), lastSentAt: admin.firestore.FieldValue.serverTimestamp(), attempts: 0, state: 'pending', createdAt: admin.firestore.FieldValue.serverTimestamp() });
   try { await mailerService.sendEmail({ to: email, subject: 'Confirm merging your MySheba accounts', text: `A MySheba account is requesting to link this Google account. Your confirmation code is ${code}. It expires in 5 minutes. If you did not request this, you can ignore this email.`, html: `<p>A MySheba account is requesting to link this Google account.</p><p>Your confirmation code is <b>${code}</b>. It expires in 5 minutes.</p><p>If you did not request this, you can ignore this email.</p>`, context: 'accountMergeService' }); } catch (err) { await logServerError('startAccountMerge.sendEmail', err, { userId: callerUid }); throw new HttpsError('internal', 'Could not send the confirmation code. Please try again.'); }
   await logAudit({ action: 'account_merge_started', targetUid: targetAuthUser.uid, performedBy: callerUid, performedByRole: caller.role, details: { targetEmailMasked: maskEmail(email), ip } });
-  const yourWalletBalance = walletBalance(caller); const targetWalletBalance = walletBalance(target);
-  return { sent: true, emailMasked: maskEmail(email), yourWalletBalance, targetWalletBalance, combinedWalletBalance: yourWalletBalance + targetWalletBalance };
+  const yourWalletBalance = walletBalance(caller); const targetWalletBalance = walletBalance(target); const combinedWalletBalance = yourWalletBalance + targetWalletBalance;
+  if (!Number.isSafeInteger(Math.round(combinedWalletBalance * 100))) throw new HttpsError('failed-precondition', 'The combined wallet balance is too large.');
+  return { sent: true, emailMasked: maskEmail(email), yourWalletBalance, targetWalletBalance, combinedWalletBalance };
 });
 
 exports.confirmAccountMerge = onCall(async (request) => {
@@ -63,7 +64,7 @@ exports.confirmAccountMerge = onCall(async (request) => {
   if (!/^\d{6}$/.test(code)) throw new HttpsError('invalid-argument', 'Please enter the 6-digit code we sent.');
   const ip = getClientIp(request); await checkVelocity(db, callerUid, 'account_merge_confirm', { ip });
   const otpRef = db.collection('mergeOtps').doc(callerUid); const callerRef = db.collection('users').doc(callerUid);
-  let targetUid; let targetEmail; let mergedWalletBalance = 0; let transferredGoogleProvider = null; let providerTransferred = false;
+  let targetUid; let targetEmail; let mergedWalletBalance = 0; let transferredGoogleProvider = null; let providerTransferred = false; let targetDisabled = false;
 
   // Validate and reserve the OTP before touching either Firebase Auth provider.
   await db.runTransaction(async (tx) => {
@@ -87,6 +88,14 @@ exports.confirmAccountMerge = onCall(async (request) => {
     const targetGoogleProvider = (targetAuthUser.providerData || []).find((p) => p.providerId === 'google.com');
     if (!targetGoogleProvider || normalizeEmail(targetGoogleProvider.email) !== targetEmail) throw new HttpsError('failed-precondition', 'The Google account no longer matches the merge request. Please start again.');
     transferredGoogleProvider = { providerId: 'google.com', uid: targetGoogleProvider.uid, email: targetGoogleProvider.email || targetEmail };
+
+    // Disable the source account before the Firestore commit. If anything fails
+    // before the commit, it can be re-enabled; after the commit there are no
+    // remaining operations whose failure should invalidate the merge.
+    await admin.auth().updateUser(targetUid, { disabled: true });
+    targetDisabled = true;
+    await admin.auth().revokeRefreshTokens(targetUid);
+
     await admin.auth().updateUser(targetUid, { providersToUnlink: ['google.com'] });
     try { await admin.auth().updateUser(callerUid, { providerToLink: transferredGoogleProvider }); providerTransferred = true; }
     catch (err) { await admin.auth().updateUser(targetUid, { providerToLink: transferredGoogleProvider }).catch((rollbackErr) => logServerError('confirmAccountMerge.providerRollbackAfterLinkFailure', rollbackErr, { userId: callerUid })); throw err; }
@@ -105,15 +114,19 @@ exports.confirmAccountMerge = onCall(async (request) => {
       tx.delete(otpRef);
     });
 
-    await admin.auth().updateUser(targetUid, { disabled: true });
-    await admin.auth().revokeRefreshTokens(targetUid);
-    await admin.auth().revokeRefreshTokens(callerUid);
+    // These are post-commit hygiene operations. Failure here must not trigger
+    // the pre-commit rollback path, because the Firestore merge is already final.
+    try { await admin.auth().revokeRefreshTokens(callerUid); }
+    catch (revokeErr) { await logServerError('confirmAccountMerge.revokeCallerTokens', revokeErr, { userId: callerUid }); }
     await logAudit({ action: 'account_merged', targetUid, performedBy: callerUid, performedByRole: 'customer', details: { mergedWalletBalance, providerLinkFailed: false, ip } });
     return { merged: true, walletBalance: mergedWalletBalance, googleLinked: true, providerLinkFailed: false };
   } catch (err) {
     if (providerTransferred && transferredGoogleProvider) {
       try { await admin.auth().updateUser(callerUid, { providersToUnlink: ['google.com'] }); await admin.auth().updateUser(targetUid, { providerToLink: transferredGoogleProvider }); }
       catch (rollbackErr) { await logServerError('confirmAccountMerge.providerRollbackAfterFailure', rollbackErr, { userId: callerUid }); throw new HttpsError('internal', 'The merge failed and automatic recovery was unsuccessful. Please contact support before retrying.'); }
+    }
+    if (targetDisabled) {
+      await admin.auth().updateUser(targetUid, { disabled: false }).catch((rollbackErr) => logServerError('confirmAccountMerge.targetReenable', rollbackErr, { userId: callerUid }));
     }
     await db.runTransaction(async (tx) => { const snap = await tx.get(otpRef); if (snap.exists && snap.data()?.state === 'processing') tx.delete(otpRef); }).catch((cleanupErr) => logServerError('confirmAccountMerge.cleanupOtp', cleanupErr, { userId: callerUid }));
     if (err instanceof HttpsError) throw err;
