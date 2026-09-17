@@ -4,6 +4,7 @@
 // "verified" flag; it recomputes the duplicate decision from the embedding.
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { checkVelocity, getClientIp } = require('./rateLimitService');
 
 const PENDING = 'pendingBiometricTemplates';
 const VERIFIED = 'biometricTemplates';
@@ -13,6 +14,22 @@ const DUPLICATE_THRESHOLD = 0.82;
 function requireAuth(request) {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   return request.auth.uid;
+}
+
+function activeProfile(profile) {
+  return !!profile
+    && profile.suspended !== true
+    && profile.inactive !== true
+    && profile.disabled !== true
+    && profile.active !== false
+    && profile.mergedInto == null;
+}
+
+async function requireActiveAccount(db, uid) {
+  const snap = await db.collection('users').doc(uid).get();
+  if (!snap.exists || !activeProfile(snap.data())) {
+    throw new HttpsError('permission-denied', 'Your account is not active.');
+  }
 }
 
 function cleanEmbedding(value) {
@@ -36,14 +53,16 @@ function cosine(a, b) {
   return dot;
 }
 
-exports.verifyKycFace = onCall(async (request) => {
+exports.verifyKycFace = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireAuth(request);
+  const db = admin.firestore();
+  await requireActiveAccount(db, uid);
+  await checkVelocity(db, uid, 'kyc_face', { ip: getClientIp(request) });
   const embedding = cleanEmbedding(request.data?.embedding);
   if (request.data?.livenessPassed !== true) {
     throw new HttpsError('failed-precondition', 'Complete the live face movement check first.');
   }
 
-  const db = admin.firestore();
   const snap = await db.collection(VERIFIED).get();
   let best = null;
 
