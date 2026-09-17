@@ -15,10 +15,11 @@ service firebase.storage {
     function supportThreadExists(uid) { return firestore.get(/databases/(default)/documents/chats/$(uid)).data.customerId == uid; }
 
     match /topup-receipts/{uid}/{fileName} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if signedIn() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*'); allow delete: if false; }
-    match /remittance-passports/{uid}/{fileName} { allow read: if signedIn() && (request.auth.uid == uid || isStaff()); allow write: if signedIn() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*'); allow delete: if false; }
+    // Passport/KYC material is highly sensitive. Staff-wide reads are not
+    // necessary because the transaction carries the owner-generated URL;
+    // direct Storage reads are restricted to the owner/admins.
+    match /remittance-passports/{uid}/{fileName} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if signedIn() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*'); allow delete: if false; }
 
-    // KYC uploads are create-only. The app uses unique timestamped filenames,
-    // so a submitted document URL cannot later be overwritten in place by the owner.
     match /verification-documents/{uid}/{fileName} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
       allow write: if signedIn() && request.auth.uid == uid && resource == null && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
