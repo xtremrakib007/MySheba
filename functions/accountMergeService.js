@@ -20,7 +20,7 @@ function requireAuth(request) { if (!request.auth) throw new HttpsError('unauthe
 async function getProfile(db, uid) { const snap = await db.collection('users').doc(uid).get(); return snap.exists ? { id: snap.id, ...snap.data() } : null; }
 function walletBalance(profile) { const value = Number(profile?.walletBalance || 0); if (!Number.isFinite(value) || value < 0 || !Number.isSafeInteger(Math.round(value * 100))) throw new HttpsError('failed-precondition', 'One of the account wallet balances is invalid.'); return value; }
 
-exports.startAccountMerge = onCall(async (request) => {
+exports.startAccountMerge = onCall({ enforceAppCheck: true }, async (request) => {
   const callerUid = requireAuth(request);
   const db = admin.firestore();
   const caller = await getProfile(db, callerUid);
@@ -60,7 +60,7 @@ exports.startAccountMerge = onCall(async (request) => {
   return { sent: true, emailMasked: maskEmail(email), yourWalletBalance, targetWalletBalance, combinedWalletBalance };
 });
 
-exports.confirmAccountMerge = onCall(async (request) => {
+exports.confirmAccountMerge = onCall({ enforceAppCheck: true }, async (request) => {
   const callerUid = requireAuth(request); const db = admin.firestore();
   const code = String(request.data?.code || '').trim();
   if (!/^\d{6}$/.test(code)) throw new HttpsError('invalid-argument', 'Please enter the 6-digit code we sent.');
@@ -68,7 +68,6 @@ exports.confirmAccountMerge = onCall(async (request) => {
   const otpRef = db.collection('mergeOtps').doc(callerUid); const callerRef = db.collection('users').doc(callerUid);
   let targetUid; let targetEmail; let mergedWalletBalance = 0; let transferredGoogleProvider = null; let providerTransferred = false; let targetDisabled = false;
 
-  // Validate and reserve the OTP before touching either Firebase Auth provider.
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(otpRef); if (!snap.exists) throw new HttpsError('not-found', 'Please start the merge again from Settings.');
     const otp = snap.data() || {}; targetUid = String(otp.targetUid || ''); targetEmail = normalizeEmail(otp.targetEmail);
@@ -91,14 +90,11 @@ exports.confirmAccountMerge = onCall(async (request) => {
     if (!targetGoogleProvider || normalizeEmail(targetGoogleProvider.email) !== targetEmail) throw new HttpsError('failed-precondition', 'The Google account no longer matches the merge request. Please start again.');
     transferredGoogleProvider = { providerId: 'google.com', uid: targetGoogleProvider.uid, email: targetGoogleProvider.email || targetEmail };
 
-    // Disable the source account before the Firestore commit. If anything fails
-    // before the commit, it can be re-enabled; after the commit there are no
-    // remaining operations whose failure should invalidate the merge.
     await admin.auth().updateUser(targetUid, { disabled: true });
     targetDisabled = true;
     await admin.auth().revokeRefreshTokens(targetUid);
 
-    await admin.auth().updateUser(targetUid, { providersToUnlink: ['google.com'] });
+    await admin.auth().updateUser(targetAuthUser.uid, { providersToUnlink: ['google.com'] });
     try { await admin.auth().updateUser(callerUid, { providerToLink: transferredGoogleProvider }); providerTransferred = true; }
     catch (err) { await admin.auth().updateUser(targetUid, { providerToLink: transferredGoogleProvider }).catch((rollbackErr) => logServerError('confirmAccountMerge.providerRollbackAfterLinkFailure', rollbackErr, { userId: callerUid })); throw err; }
 
@@ -116,8 +112,6 @@ exports.confirmAccountMerge = onCall(async (request) => {
       tx.delete(otpRef);
     });
 
-    // These are post-commit hygiene operations. Failure here must not trigger
-    // the pre-commit rollback path, because the Firestore merge is already final.
     try { await admin.auth().revokeRefreshTokens(callerUid); }
     catch (revokeErr) { await logServerError('confirmAccountMerge.revokeCallerTokens', revokeErr, { userId: callerUid }); }
     await logAudit({ action: 'account_merged', targetUid, performedBy: callerUid, performedByRole: 'customer', details: { mergedWalletBalance, providerLinkFailed: false, ip } });
