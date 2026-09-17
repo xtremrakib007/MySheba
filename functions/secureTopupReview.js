@@ -22,7 +22,7 @@ function validBalance(value) {
   return n;
 }
 
-exports.approveTopup = onCall(async request => {
+exports.approveTopup = onCall({ enforceAppCheck: true }, async request => {
   const uid = requireAdmin(request);
   const db = admin.firestore();
   const callerSnap = await db.collection('users').doc(uid).get();
@@ -61,7 +61,7 @@ exports.approveTopup = onCall(async request => {
   }
 });
 
-exports.rejectTopup = onCall(async request => {
+exports.rejectTopup = onCall({ enforceAppCheck: true }, async request => {
   const uid = requireAdmin(request);
   const db = admin.firestore();
   const callerSnap = await db.collection('users').doc(uid).get();
