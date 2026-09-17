@@ -16,14 +16,8 @@ service cloud.firestore {
     match /verificationRequests/{uid} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow create, update, delete: if false; }
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin() || (isDealerTier() && resource.data.dealerId == myDealerScope()) || (isReseller() && resource.data.get('resellerId', null) == request.auth.uid));
-      // User profiles are provisioned server-side by the registration/user-management callables.
-      // Never allow a client to create a profile with attacker-controlled wallet/role/security fields.
       allow create: if false;
-      allow update: if signedIn() && (
-        (request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['googleLinked','googleEmail','notifPrefs'])) ||
-        (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['disabled','features'])) ||
-        (isDealerTier() && resource.data.dealerId == myDealerScope() && request.resource.data.diff(resource.data).affectedKeys().hasOnly([]))
-      );
+      allow update: if signedIn() && ((request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['googleLinked','googleEmail','notifPrefs'])) || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['disabled','features'])) || (isDealerTier() && resource.data.dealerId == myDealerScope() && request.resource.data.diff(resource.data).affectedKeys().hasOnly([])));
       allow delete: if false;
       match /receivers/{receiverId} { allow read, create, update, delete: if signedIn() && request.auth.uid == uid; }
       match /friends/{friendId} { allow read, create, update, delete: if signedIn() && request.auth.uid == uid; }
@@ -32,7 +26,8 @@ service cloud.firestore {
       match /salaryRecords/{recordId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if isAdmin(); }
       match /allowances/{allowanceId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if isAdmin(); }
       match /deductions/{deductionId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if isAdmin(); }
-      match /trustedDevices/{deviceId} { allow read, create, update, delete: if signedIn() && (request.auth.uid == uid || isAdmin()); }
+      // Trusted-device state is security-sensitive and is mutated only by the server-side device-session callables.
+      match /trustedDevices/{deviceId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow create, update, delete: if false; }
     }
     match /securityPins/{uid} { allow read, write: if false; }
     match /userIds/{id} { allow read, write: if false; }
