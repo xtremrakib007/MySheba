@@ -17,7 +17,7 @@ const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const MAX_SAFE_MINOR = Number.MAX_SAFE_INTEGER;
 
 function requireAuth(request) {
-  if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
   return request.auth.uid;
 }
 
@@ -61,6 +61,10 @@ function isKycApproved(profile) {
   return profile?.verified === true || profile?.verificationStatus === 'approved';
 }
 
+function isActiveAccount(profile) {
+  return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto;
+}
+
 async function getProfile(db, uid) {
   const snap = await db.collection('users').doc(uid).get();
   if (!snap.exists) return null;
@@ -95,7 +99,7 @@ async function resolveRecipient(db, query, senderUid) {
   const doc = snap.docs[0];
   const recipient = { id: doc.id, ...doc.data() };
   if (recipient.id === senderUid) throw new HttpsError('invalid-argument', "You can't transfer money to yourself.");
-  if (recipient.mergedInto) throw new HttpsError('not-found', 'That account is no longer active.');
+  if (!isActiveAccount(recipient)) throw new HttpsError('failed-precondition', 'That recipient account is not active.');
   if (recipient.role !== 'customer') throw new HttpsError('failed-precondition', 'Wallet transfers are currently available between customer wallets only.');
   if (!isKycApproved(recipient)) throw new HttpsError('failed-precondition', 'The recipient has not completed KYC yet.');
 
@@ -106,7 +110,7 @@ exports.findWalletRecipient = onCall({ enforceAppCheck: true }, async (request) 
   const uid = requireAuth(request);
   const db = admin.firestore();
   const sender = await getProfile(db, uid);
-  if (!sender) throw new HttpsError('not-found', 'Your account was not found.');
+  if (!isActiveAccount(sender)) throw new HttpsError('permission-denied', 'Your account is not active.');
   if (sender.role !== 'customer') throw new HttpsError('permission-denied', 'Wallet-to-wallet transfers are for customer wallets.');
   if (!isKycApproved(sender)) throw new HttpsError('failed-precondition', 'Complete KYC before using wallet transfers.');
 
@@ -122,6 +126,8 @@ exports.findWalletRecipient = onCall({ enforceAppCheck: true }, async (request) 
 exports.listWalletTransfers = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireAuth(request);
   const db = admin.firestore();
+  const profile = await getProfile(db, uid);
+  if (!isActiveAccount(profile)) throw new HttpsError('permission-denied', 'Your account is not active.');
   const snap = await db.collection('walletTransfers')
     .where('participants', 'array-contains', uid)
     .orderBy('createdAt', 'desc')
@@ -151,7 +157,7 @@ exports.walletTransfer = onCall({ enforceAppCheck: true }, async (request) => {
   const requestId = requireRequestId(request);
   const db = admin.firestore();
   const sender = await getProfile(db, senderUid);
-  if (!sender) throw new HttpsError('not-found', 'Your account was not found.');
+  if (!isActiveAccount(sender)) throw new HttpsError('permission-denied', 'Your account is not active.');
   if (sender.role !== 'customer') throw new HttpsError('permission-denied', 'Wallet-to-wallet transfers are for customer wallets.');
   if (!isKycApproved(sender)) throw new HttpsError('failed-precondition', 'Complete KYC before using wallet transfers.');
 
@@ -199,6 +205,8 @@ exports.walletTransfer = onCall({ enforceAppCheck: true }, async (request) => {
 
       const senderData = senderSnap.data();
       const recipientData = recipientSnap.data();
+      if (!isActiveAccount(senderData)) throw new HttpsError('permission-denied', 'Your account is not active.');
+      if (!isActiveAccount(recipientData)) throw new HttpsError('failed-precondition', 'The recipient account is not active.');
       if (senderData.role !== 'customer' || recipientData.role !== 'customer') {
         throw new HttpsError('permission-denied', 'Only customer wallets can use this transfer.');
       }
