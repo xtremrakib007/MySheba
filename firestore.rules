@@ -11,9 +11,6 @@ service cloud.firestore {
     function isReseller() { return myRole() == 'reseller'; }
     function myDealerScope() { return request.auth.uid; }
     function canHandleTransaction(s) { return isAdmin() || (isDealerTier() && s == 'Mobile Banking') || (isReseller() && s in ['Recharge', 'Internet', 'Remittance']); }
-    function isChatParticipant(chatId) { return signedIn() && chatId == request.auth.uid; }
-    function callParticipant() { return signedIn() && (resource.data.callerUid == request.auth.uid || resource.data.calleeUid == request.auth.uid); }
-    function newCallParticipant() { return signedIn() && (request.resource.data.callerUid == request.auth.uid || request.resource.data.calleeUid == request.auth.uid); }
 
     match /rates/current { allow read: if signedIn(); allow create: if isSuperadmin(); allow update: if isSuperadmin() || (myRole() == 'admin' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mobileBanking','remittanceFee','remittanceBD_ACC','remittanceBD_CASH','remittanceNP','remittancePK','remittancePH','remittanceLK','remittanceIN','remittanceID','remittanceMM','BD_ACC','BD_CASH','NP','PK','PH','LK','IN','ID','MM','updatedAt'])); allow delete: if false; }
     match /verificationRequests/{uid} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow create, update, delete: if false; }
@@ -24,7 +21,6 @@ service cloud.firestore {
       allow delete: if false;
       match /receivers/{receiverId} { allow read, create, update, delete: if signedIn() && request.auth.uid == uid; }
       match /friends/{friendId} { allow read, create, update, delete: if signedIn() && request.auth.uid == uid; }
-      // Work-log writes contain attendance/payroll inputs and calculated hours; all mutations are server-owned.
       match /workLogs/{workLogId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow create, update, delete: if false; }
       match /payslips/{payslipId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if isAdmin(); }
       match /salaryRecords/{recordId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if isAdmin(); }
@@ -32,21 +28,6 @@ service cloud.firestore {
       match /deductions/{deductionId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if isAdmin(); }
       match /trustedDevices/{deviceId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow create, update, delete: if false; }
     }
-    match /chats/{chatId} {
-      allow read: if isChatParticipant(chatId) || isStaff();
-      allow create: if isChatParticipant(chatId) && request.resource.data.customerId == chatId;
-      allow update: if isStaff() || (isChatParticipant(chatId) && request.resource.data.customerId == resource.data.customerId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['customerName','customerPhone','lastMessage','lastMessageAt','lastSenderRole','unreadForCustomer','unreadForStaff']));
-      allow delete: if false;
-      match /messages/{messageId} {
-        allow read: if isChatParticipant(chatId) || isStaff();
-        allow create: if signedIn() && request.resource.data.senderId == request.auth.uid && request.resource.data.senderRole in ['customer','staff'] && ((isChatParticipant(chatId) && request.resource.data.senderRole == 'customer') || (isStaff() && request.resource.data.senderRole == 'staff'));
-        allow update, delete: if false;
-      }
-    }
-    match /directChats/{document=**} { allow read, write: if false; }
-    match /groupChats/{document=**} { allow read, write: if false; }
-    match /roomChats/{document=**} { allow read, write: if false; }
-    match /calls/{callId} { allow read: if callParticipant(); allow create: if newCallParticipant() && request.resource.data.callerUid == request.auth.uid && request.resource.data.calleeUid != request.auth.uid && request.resource.data.status == 'ringing'; allow update: if callParticipant() && request.resource.data.callerUid == resource.data.callerUid && request.resource.data.calleeUid == resource.data.calleeUid && request.resource.data.channelName == resource.data.channelName && request.resource.data.type == resource.data.type && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']); allow delete: if false; }
     match /securityPins/{uid} { allow read, write: if false; }
     match /userIds/{id} { allow read, write: if false; }
     match /otps/{phone} { allow read, write: if false; }
@@ -55,7 +36,8 @@ service cloud.firestore {
     match /userAuditLog/{id} { allow read: if signedIn() && isSuperadmin(); allow write: if false; }
     match /errorLog/{id} { allow create: if signedIn() && request.resource.data.source == 'client' && request.resource.data.userId == request.auth.uid; allow read: if signedIn() && isSuperadmin(); allow update: if signedIn() && isSuperadmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resolved','resolvedBy','resolvedAt']); allow delete: if false; }
     match /inquiries/{id} { allow create: if signedIn() && request.resource.data.customerId == request.auth.uid; allow read: if signedIn() && (resource.data.customerId == request.auth.uid || isStaff()); allow update: if signedIn() && ((isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','ticketUrl','updatedAt']) && request.resource.data.status in ['new','contacted','closed']) || (isReseller() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']) && request.resource.data.status in ['new','contacted','closed'])); allow delete: if false; }
-    match /transactions/{id} { allow create, update, delete: if false; allow read: if signedIn() && (resource.data.customerId == request.auth.uid || isAdmin() || (isDealerTier() && resource.data.status == 'pending' && resource.data.service == 'Mobile Banking') || (isReseller() && resource.data.status == 'pending' && resource.data.service in ['Recharge','Internet','Remittance']) || (isStaff() && resource.data.claimedBy == request.auth.uid)); }
+    match /transactions/{id} { allow create, update, delete: if false; allow read: if signedIn() && (resource.data.customerId == request.auth.uid || isAdmin() || (isStaff() && resource.data.claimedBy == request.auth.uid)); }
+    match /transactionQueue/{id} { allow read: if signedIn() && (isAdmin() || (isDealerTier() && resource.data.operatorRole == 'dealer' && resource.data.service == 'Mobile Banking' && (resource.data.get('dealerId', null) == null || resource.data.dealerId == request.auth.uid) && (resource.data.status == 'pending' || resource.data.get('claimedBy', null) == request.auth.uid)) || (isReseller() && resource.data.operatorRole == 'reseller' && resource.data.service in ['Recharge','Internet','Remittance'] && (resource.data.get('resellerId', null) == null || resource.data.resellerId == request.auth.uid) && (resource.data.status == 'pending' || resource.data.get('claimedBy', null) == request.auth.uid))); allow create, update, delete: if false; }
     match /topups/{id} { allow create, update, delete: if false; allow read: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin()); }
     match /selfTopups/{id} { allow read: if signedIn() && resource.data.userId == request.auth.uid; allow create, update, delete: if false; }
     match /pointTransfers/{id} { allow read: if signedIn() && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid || isAdmin()); allow create, update, delete: if false; }
