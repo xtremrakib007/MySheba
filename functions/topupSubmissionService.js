@@ -58,6 +58,9 @@ exports.submitTopupRequest = onCall({ enforceAppCheck: true }, async request => 
       const userSnap = await tx.get(userRef);
       if (!userSnap.exists) throw new HttpsError('not-found', 'User account not found.');
       const user = userSnap.data() || {};
+      if (user.suspended === true || user.inactive === true || user.disabled === true || user.active === false || user.mergedInto != null) {
+        throw new HttpsError('permission-denied', 'Your account is not active.');
+      }
       if (!ALLOWED_ROLES.includes(user.role)) throw new HttpsError('permission-denied', 'This account cannot submit wallet top-ups.');
 
       const topupRef = db.collection('topups').doc();
