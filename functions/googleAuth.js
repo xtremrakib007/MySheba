@@ -4,6 +4,8 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { assignUniqueUserId } = require('./userId');
 const { logAudit, logServerError } = require('./logService');
 
+const VERIFIED_WINDOW_MS = 15 * 60 * 1000;
+
 function normalizePhone(phone) {
   return String(phone || '').replace(/[^0-9]/g, '');
 }
@@ -20,6 +22,10 @@ function toE164(phone, dialCode = '+60') {
 }
 function isValidE164(phone) {
   return /^\+[1-9]\d{7,14}$/.test(String(phone || ''));
+}
+function isFreshAuthToken(decoded) {
+  const authTimeMs = Number(decoded?.auth_time || 0) * 1000;
+  return Boolean(authTimeMs) && Date.now() - authTimeMs <= VERIFIED_WINDOW_MS;
 }
 
 async function assertGoogleEmailProof(db, googleEmail, data) {
@@ -44,19 +50,18 @@ async function assertGoogleEmailProof(db, googleEmail, data) {
   let verified;
   try { verified = await admin.auth().verifyIdToken(emailIdToken); }
   catch { throw new HttpsError('failed-precondition', 'Your email verification has expired. Please verify your Google email again.'); }
-  if (!verified.email_verified || normalizeEmail(verified.email) !== googleEmail) throw new HttpsError('permission-denied', 'The email verification does not match your Google account.');
+  if (!verified.email_verified || normalizeEmail(verified.email) !== googleEmail || !isFreshAuthToken(verified)) {
+    throw new HttpsError('permission-denied', 'The email verification does not match or has expired. Please verify your Google email again.');
+  }
 }
 
-// The SMS token is the authoritative proof of the phone number. Do not make
-// account creation depend on a second client-side phone field being present.
-// This also fixes the case where a formatted/local phone is lost between the
-// phone-verification screen and the callable request.
 async function assertGooglePhoneProof(data) {
   const phoneIdToken = String(data?.phoneIdToken || '').trim();
   if (!phoneIdToken) throw new HttpsError('failed-precondition', 'Please verify your phone number by SMS before continuing.');
   let verified;
   try { verified = await admin.auth().verifyIdToken(phoneIdToken); }
   catch { throw new HttpsError('failed-precondition', 'Your SMS verification has expired. Please verify your phone number again.'); }
+  if (!isFreshAuthToken(verified)) throw new HttpsError('failed-precondition', 'Your SMS verification has expired. Please verify your phone number again.');
   const tokenPhoneE164 = toE164(verified.phone_number || '', undefined);
   if (!isValidE164(tokenPhoneE164)) throw new HttpsError('failed-precondition', 'Your SMS verification did not contain a valid phone number. Please verify your phone number again.');
   return tokenPhoneE164;
@@ -90,14 +95,8 @@ exports.ensureGoogleProfile = onCall(async (request) => {
   const googleEmail = normalizeEmail(token.email);
   if (!googleEmail || !token.email_verified) throw new HttpsError('failed-precondition', 'Your Google email must be verified before creating a MySheba account.');
   const data = request.data || {};
-
-  // Verify the SMS token first and use its phone as the canonical value.
-  // The client phone is optional for this step because the verified Firebase
-  // token already proves exactly which number completed SMS verification.
   const verifiedPhoneE164 = await assertGooglePhoneProof(data);
 
-  // If the client supplied a phone, require it to agree with the verified
-  // SMS number. Otherwise fall back safely to the verified token value.
   const phoneInput = String(data.phone || '').trim();
   const phoneE164Input = String(data.phoneE164 || '').trim();
   const dialCode = data.phoneCountryCode || data.dialCode || '+60';
@@ -113,10 +112,7 @@ exports.ensureGoogleProfile = onCall(async (request) => {
 
   const expectedPhoneE164 = verifiedPhoneE164;
   const rawPhone = normalizePhone(phoneInput || expectedPhoneE164);
-  const phoneCandidates = Array.from(new Set([
-    rawPhone,
-    normalizePhone(expectedPhoneE164),
-  ].filter(Boolean)));
+  const phoneCandidates = Array.from(new Set([rawPhone, normalizePhone(expectedPhoneE164)].filter(Boolean)));
 
   const phoneE164Snap = await db.collection('users').where('phoneE164', '==', expectedPhoneE164).limit(1).get();
   if (!phoneE164Snap.empty) throw new HttpsError('already-exists', 'This phone number is already registered to another MySheba account. Sign in to that account instead.');
@@ -132,20 +128,11 @@ exports.ensureGoogleProfile = onCall(async (request) => {
 
   const userId = await assignUniqueUserId(db, uid);
   const profile = {
-    uid,
-    userId,
-    name: token.name || '',
-    email: googleEmail,
-    phone: rawPhone,
-    phoneE164: expectedPhoneE164,
-    phoneCountryCode: dialCode,
-    phoneVerified: true,
-    role: 'customer',
-    dealerId: null,
-    walletBalance: 0,
+    uid, userId, name: token.name || '', email: googleEmail, phone: rawPhone,
+    phoneE164: expectedPhoneE164, phoneCountryCode: dialCode, phoneVerified: true,
+    role: 'customer', dealerId: null, walletBalance: 0,
     notifPrefs: { pushEnabled: true, emailEnabled: true, rateAlerts: false },
-    authProvider: 'google',
-    createdAt: FieldValue.serverTimestamp(),
+    authProvider: 'google', createdAt: FieldValue.serverTimestamp(),
   };
   try {
     await ref.set(profile);
