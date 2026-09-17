@@ -24,7 +24,7 @@ function isValidPhone(phone) { return normalizePhone(phone).length >= 8; }
 function isValidEmail(email) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email)); }
 function isValidPin(pin) { const value = String(pin || ''); return value.length >= 6 && value.length <= 20; }
 
-exports.registerWithDealerCode = onCall(async (request) => {
+exports.registerWithDealerCode = onCall({ enforceAppCheck: true }, async (request) => {
   const data = request.data || {};
   if (data.action === 'sendEmailVerificationOtp') return emailOtpService.sendEmailVerificationOtpInternal(data);
   if (data.action === 'verifyEmailVerificationOtp') return emailOtpService.verifyEmailVerificationOtpInternal(data);
@@ -40,7 +40,6 @@ exports.registerWithDealerCode = onCall(async (request) => {
   const normalizedEmail = normalizeEmail(email);
   const verifiedPhoneE164 = toE164(phoneE164 || phone, phoneE164 ? undefined : dialCode);
 
-  // Either SMS verification OR email link/OTP verification is sufficient.
   let phoneAuthUid = null;
   let emailAuthUid = null;
   let emailOtpUsed = false;
@@ -99,6 +98,21 @@ exports.registerWithDealerCode = onCall(async (request) => {
     const phoneSnap = await db.collection('users').where('phoneE164', '==', verifiedPhoneE164).limit(1).get();
     if (!phoneSnap.empty) throw new HttpsError('already-exists', 'This phone number is already registered to another account.');
 
+    // Never delete an already-established Firebase Auth account merely because its
+    // verification credential was supplied during a new registration attempt.
+    for (const verifiedUid of [emailAuthUid, phoneAuthUid].filter(Boolean)) {
+      try {
+        const verifiedProfile = await db.collection('users').doc(verifiedUid).get();
+        if (verifiedProfile.exists) {
+          throw new HttpsError('already-exists', 'The verified identity is already linked to an existing account.');
+        }
+      } catch (err) {
+        if (err instanceof HttpsError) throw err;
+        await logServerError('registerWithDealerCode.identityCheck', err, { userId: verifiedUid });
+        throw new HttpsError('internal', 'Could not verify the account identity.');
+      }
+    }
+
     const authEmail = phoneToEmail(verifiedPhoneE164);
     let userRecord;
     try {
@@ -132,8 +146,6 @@ exports.registerWithDealerCode = onCall(async (request) => {
     }
 
     await db.collection('otps').doc(normalizedEmail).delete().catch(() => {});
-    if (emailAuthUid) await admin.auth().deleteUser(emailAuthUid).catch(() => {});
-    if (phoneAuthUid) await admin.auth().deleteUser(phoneAuthUid).catch(() => {});
 
     await logAudit({
       action: 'account_created', targetUid: userRecord.uid, performedBy: 'system', performedByRole: null,
