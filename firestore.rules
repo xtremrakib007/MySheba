@@ -15,7 +15,7 @@ service cloud.firestore {
     match /rates/current { allow read: if signedIn(); allow create: if isSuperadmin(); allow update: if isSuperadmin() || (myRole() == 'admin' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mobileBanking','remittanceFee','remittanceBD_ACC','remittanceBD_CASH','remittanceNP','remittancePK','remittancePH','remittanceLK','remittanceIN','remittanceID','remittanceMM','BD_ACC','BD_CASH','NP','PK','PH','LK','IN','ID','MM','updatedAt'])); allow delete: if false; }
     match /verificationRequests/{uid} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow create, update, delete: if false; }
     match /users/{uid} {
-      allow read: if signedIn() && (request.auth.uid == uid || isAdmin() || (isDealerTier() && resource.data.dealerId == myDealerScope()) || (isReseller() && resource.data.get('resellerId', null) == request.auth.uid));
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
       allow create: if signedIn() && request.auth.uid == uid && request.resource.data.role == 'customer';
       allow update: if signedIn() && request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','firstName','lastName','avatarUrl','lastSeenAnnouncementAt','pushToken','pushTokenPlatform','pushTokenUpdatedAt','fcmToken','fcmTokenUpdatedAt','notifPrefs','callSettings','lockedChatIds']);
       allow delete: if false;
