@@ -15,7 +15,7 @@ async function requireSuperadmin(db, callerUid) {
   const snap = await db.collection('users').doc(callerUid).get();
   const caller = snap.exists ? snap.data() : null;
   if (!caller || caller.role !== 'superadmin') throw new HttpsError('permission-denied', 'Only a Super Admin can manage advertisement controls.');
-  if (caller.suspended === true || caller.inactive === true || caller.disabled === true || caller.mergedInto) throw new HttpsError('permission-denied', 'Your account is not active.');
+  if (caller.suspended === true || caller.inactive === true || caller.disabled === true || caller.active === false || caller.mergedInto) throw new HttpsError('permission-denied', 'Your account is not active.');
   return caller;
 }
 function pickValidBooleans(changes, allowedFields) {
