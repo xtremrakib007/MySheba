@@ -8,6 +8,7 @@ const secureTopupReview = require('./secureTopupReview');
 const secureTransactionReview = require('./secureTransactionReview');
 const transactionQueue = require('./transactionQueueService');
 const adTrackingCallable = require('./adTrackingCallable');
+const userDeletionService = require('./userDeletionService');
 
 functions.chargeRecharge = guards.chargeRecharge;
 functions.chargeInternetPackage = guards.chargeInternetPackage;
@@ -26,4 +27,5 @@ functions.rejectRemittanceTransaction = secureTransactionReview.rejectRemittance
 functions.onTransactionQueueCreated = transactionQueue.onTransactionQueueCreated;
 functions.onTransactionQueueUpdated = transactionQueue.onTransactionQueueUpdated;
 functions.recordAdEvent = adTrackingCallable.recordAdEvent;
+functions.deleteManagedUser = userDeletionService.deleteManagedUser;
 module.exports = functions;
