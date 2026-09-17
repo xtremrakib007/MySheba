@@ -38,9 +38,33 @@ function cosine(a, b) {
 
 function validStorageUrl(url, uid, required = true) {
   if (!url) return !required;
-  if (typeof url !== 'string' || !url.startsWith('https://')) return false;
-  const encodedPrefix = encodeURIComponent(`verification-documents/${uid}/`);
-  return url.includes(encodedPrefix) || url.includes(`/verification-documents/${uid}/`);
+  if (typeof url !== 'string' || url.length > 2048) return false;
+  let parsed;
+  try { parsed = new URL(url); } catch (_) { return false; }
+  if (parsed.protocol !== 'https:') return false;
+
+  const bucketName = admin.storage().bucket().name;
+  let objectPath = null;
+  try {
+    if (parsed.hostname === 'firebasestorage.googleapis.com') {
+      const match = parsed.pathname.match(/^\/v0\/b\/([^/]+)\/o\/(.+)$/);
+      if (!match || decodeURIComponent(match[1]) !== bucketName) return false;
+      objectPath = decodeURIComponent(match[2]);
+    } else if (parsed.hostname === 'storage.googleapis.com') {
+      const match = parsed.pathname.match(/^\/([^/]+)\/(.+)$/);
+      if (!match || decodeURIComponent(match[1]) !== bucketName) return false;
+      objectPath = decodeURIComponent(match[2]);
+    } else {
+      return false;
+    }
+  } catch (_) {
+    return false;
+  }
+
+  const expectedPrefix = `verification-documents/${uid}/`;
+  if (!objectPath.startsWith(expectedPrefix) || objectPath.length <= expectedPrefix.length) return false;
+  if (objectPath.includes('..')) return false;
+  return true;
 }
 
 function parseDate(value, label) {
