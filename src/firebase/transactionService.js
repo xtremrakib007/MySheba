@@ -1,6 +1,7 @@
 // Dealer/reseller queue: approve -> accept as Operator -> complete.
 import { collection, addDoc, doc, onSnapshot, query, where, orderBy, serverTimestamp, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import * as Crypto from 'expo-crypto';
 import { db, functions, auth } from './config';
 import { logActivity } from './logService';
 
@@ -9,15 +10,13 @@ const CHARGEABLE_SERVICE_FNS = { Recharge: 'chargeRecharge', Internet: 'chargeIn
 const REJECT_FNS = { Recharge: 'rejectRechargeTransaction', Internet: 'rejectInternetPackageTransaction', 'Mobile Banking': 'rejectMobileBankingTransaction', Remittance: 'rejectRemittanceTransaction' };
 
 function createRequestId() {
-  return `ms_${Date.now()}_${Math.random().toString(36).slice(2, 18)}`;
+  if (typeof Crypto.randomUUID !== 'function') throw new Error('Secure request identifier generation is unavailable. Please update the app.');
+  return Crypto.randomUUID().replace(/-/g, '');
 }
 
 export async function createTransaction(payload, customer) {
   const chargeFnName = CHARGEABLE_SERVICE_FNS[payload.service];
   if (chargeFnName) {
-    // Keep the same requestId on the payload object so a retry/double-submit
-    // of the same order can be recognized server-side instead of charging
-    // the wallet twice.
     const requestId = payload.requestId || createRequestId();
     payload.requestId = requestId;
     const fn = httpsCallable(functions, chargeFnName);
@@ -43,8 +42,7 @@ export function subscribeTransactions(callback, onError) {
   return onSnapshot(q, (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), onError);
 }
 
-// Customer/dealer/reseller mobile queue. Queries deliberately mirror the
-// Firestore read rules so rules are not being used as client-side filters.
+// Customer/dealer/reseller mobile queue. Queries deliberately mirror the Firestore read rules.
 export function subscribeBroadcastTransactions(callback, onError) {
   let stopped = false;
   let unsubPending = () => {};
