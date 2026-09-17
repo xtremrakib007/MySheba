@@ -12,7 +12,8 @@ const DEFAULT_LIMITS = {
   account_merge_confirm: { max: 10, windowMinutes: 60 },
   kyc_face: { max: 5, windowMinutes: 60 },
   kyc_submit: { max: 3, windowMinutes: 60 },
-  walletRecipientLookup: { max: 60, windowMinutes: 60 },
+  findWalletRecipient: { max: 60, windowMinutes: 60 },
+  support_ticket_create: { max: 8, windowMinutes: 60 },
 };
 
 const DEFAULT_OTP_LIMITS = {
