@@ -24,6 +24,48 @@ async function deleteExpiredCollection(db, name, field, now) {
   return deleted;
 }
 
+async function clearExpiredUserChallenge(db, field, now) {
+  let cleared = 0;
+  while (true) {
+    const snap = await db.collection('users').where(`${field}.expiresAt`, '<=', now).limit(BATCH_SIZE).get();
+    if (snap.empty) break;
+    for (const doc of snap.docs) {
+      const result = await db.runTransaction(async tx => {
+        const current = await tx.get(doc.ref);
+        if (!current.exists) return false;
+        const challenge = current.data()?.[field];
+        if (!challenge?.expiresAt?.toMillis || challenge.expiresAt.toMillis() > now.toMillis()) return false;
+        tx.update(doc.ref, { [field]: admin.firestore.FieldValue.delete() });
+        return true;
+      });
+      if (result) cleared += 1;
+    }
+    if (snap.size < BATCH_SIZE) break;
+  }
+  return cleared;
+}
+
+async function clearExpiredPendingDeviceApprovals(db, now) {
+  let cleared = 0;
+  while (true) {
+    const snap = await db.collection('users').where('pendingDeviceApproval.requestedAt', '<=', now).limit(BATCH_SIZE).get();
+    if (snap.empty) break;
+    for (const doc of snap.docs) {
+      const result = await db.runTransaction(async tx => {
+        const current = await tx.get(doc.ref);
+        if (!current.exists) return false;
+        const pending = current.data()?.pendingDeviceApproval;
+        if (!pending?.requestedAt?.toMillis || pending.requestedAt.toMillis() > now.toMillis()) return false;
+        tx.update(doc.ref, { pendingDeviceApproval: admin.firestore.FieldValue.delete() });
+        return true;
+      });
+      if (result) cleared += 1;
+    }
+    if (snap.size < BATCH_SIZE) break;
+  }
+  return cleared;
+}
+
 exports.cleanupExpiredVerificationArtifacts = onSchedule(
   { schedule: 'every 24 hours', timeZone: 'UTC', region: 'asia-southeast1' },
   async () => {
@@ -33,6 +75,9 @@ exports.cleanupExpiredVerificationArtifacts = onSchedule(
     for (const item of COLLECTIONS) {
       deleted += await deleteExpiredCollection(db, item.name, item.field, now);
     }
+    const expiredEmailChallenges = await clearExpiredUserChallenge(db, 'pendingDeviceEmailChallenge', now);
+    const expiredPendingApprovals = await clearExpiredPendingDeviceApprovals(db, now);
+    deleted += expiredEmailChallenges + expiredPendingApprovals;
     console.log('[verificationCleanup] deleted expired artifacts:', deleted);
   },
 );
