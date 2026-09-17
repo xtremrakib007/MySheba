@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import * as securityPinService from '../firebase/securityPinService';
+import * as deviceSessionService from '../firebase/deviceSessionService';
 import { isBiometricAvailable, authenticateWithBiometric } from '../firebase/biometricAuth';
 
 export default function AppLockScreen() {
@@ -25,10 +26,6 @@ export default function AppLockScreen() {
       autoPromptedRef.current = false;
       return;
     }
-    // Gated on the person's own opt-in (biometricEnabled from AppContext -
-    // see BiometricOptInPrompt.js), not just device capability - someone
-    // who said "Not Now" gets the PIN field only, even if their phone has a
-    // fingerprint sensor enrolled.
     if (biometricEnabled === true) {
       isBiometricAvailable().then(setBiometricReady);
     } else {
@@ -36,10 +33,6 @@ export default function AppLockScreen() {
     }
   }, [appLocked, biometricEnabled]);
 
-  // Auto-prompt biometric once each time the lock screen appears, so on
-  // most unlocks the person never has to touch the PIN field at all -
-  // same expectation as any other app's biometric lock. Only fires once
-  // per lock (autoPromptedRef) so a cancelled/failed prompt doesn't loop.
   useEffect(() => {
     if (appLocked && biometricReady && !autoPromptedRef.current) {
       autoPromptedRef.current = true;
@@ -50,9 +43,32 @@ export default function AppLockScreen() {
 
   if (!appLocked) return null;
 
+  const validateSessionBeforeUnlock = async () => {
+    const valid = await deviceSessionService.validateActiveSession();
+    if (!valid) {
+      setPin('');
+      setError('This device session has expired or was replaced. Please sign in again.');
+      await deviceSessionService.clearLocalSessionId().catch(() => {});
+      await logout();
+      return false;
+    }
+    return true;
+  };
+
   const tryBiometric = async () => {
-    const ok = await authenticateWithBiometric('Unlock MySheba');
-    if (ok) unlockApp();
+    if (busy) return;
+    setError('');
+    setBusy(true);
+    try {
+      const ok = await authenticateWithBiometric('Unlock MySheba');
+      if (!ok) return;
+      await validateSessionBeforeUnlock();
+      if (await deviceSessionService.validateActiveSession()) unlockApp();
+    } catch (err) {
+      setError(err?.message || 'Could not verify this device session.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const isValidPin = (p) => /^\d{4,8}$/.test(p);
@@ -63,7 +79,8 @@ export default function AppLockScreen() {
     setBusy(true);
     try {
       await securityPinService.verifySecurityPin(pin);
-      unlockApp();
+      const valid = await validateSessionBeforeUnlock();
+      if (valid) unlockApp();
     } catch (err) {
       setError(err?.message || 'Incorrect PIN.');
       setPin('');
@@ -125,7 +142,7 @@ function createStyles(colors) {
       paddingVertical: 12, paddingHorizontal: 12, fontSize: 20, letterSpacing: 6, textAlign: 'center',
       color: colors.text,
     },
-    error: { color: colors.error, fontSize: 12, marginTop: 12 },
+    error: { color: colors.error, fontSize: 12, marginTop: 12, textAlign: 'center' },
     unlockBtn: {
       width: '100%', backgroundColor: colors.primary, borderRadius: radius.md,
       paddingVertical: 13, alignItems: 'center', marginTop: 18,
