@@ -11,6 +11,7 @@ const DEFAULT_LIMITS = {
   account_merge_start: { max: 5, windowMinutes: 60 },
   account_merge_confirm: { max: 10, windowMinutes: 60 },
   password_reset: { max: 5, windowMinutes: 60 },
+  password_reset_email_send: { max: 5, windowMinutes: 60 },
 };
 
 const DEFAULT_OTP_LIMITS = {
@@ -25,7 +26,6 @@ async function getSecuritySettings(db) {
   for (const action of Object.keys(DEFAULT_LIMITS)) merged[action] = { ...DEFAULT_LIMITS[action], ...(overrides[action] || {}) };
   return merged;
 }
-
 async function getOtpSecuritySettings(db) {
   const snap = await db.collection('settings').doc('security').get();
   const overrides = (snap.exists && snap.data().otpVelocity) || {};
@@ -33,27 +33,18 @@ async function getOtpSecuritySettings(db) {
   for (const action of Object.keys(DEFAULT_OTP_LIMITS)) merged[action] = { ...DEFAULT_OTP_LIMITS[action], ...(overrides[action] || {}) };
   return merged;
 }
-
 async function slidingWindowTripped(db, collectionName, docId, limit) {
   const windowMs = (Number(limit.windowMinutes) || 60) * 60 * 1000;
-  const ref = db.collection(collectionName).doc(docId);
-  const now = Date.now();
-  return db.runTransaction(async (tx) => {
+  const ref = db.collection(collectionName).doc(docId), now = Date.now();
+  return db.runTransaction(async tx => {
     const snap = await tx.get(ref);
-    const events = ((snap.exists && snap.data().events) || []).filter((ts) => now - ts < windowMs);
-    if (events.length >= limit.max) {
-      tx.set(ref, { events, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-      return true;
-    }
-    events.push(now);
-    tx.set(ref, { events, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-    return false;
+    const events = ((snap.exists && snap.data().events) || []).filter(ts => now - ts < windowMs);
+    if (events.length >= limit.max) { tx.set(ref, { events, updatedAt: admin.firestore.FieldValue.serverTimestamp() }); return true; }
+    events.push(now); tx.set(ref, { events, updatedAt: admin.firestore.FieldValue.serverTimestamp() }); return false;
   });
 }
-
 async function checkVelocity(db, uid, action, context = {}) {
-  const limits = await getSecuritySettings(db);
-  const limit = limits[action];
+  const limits = await getSecuritySettings(db), limit = limits[action];
   if (!limit || !limit.max) return;
   const tripped = await slidingWindowTripped(db, 'walletVelocity', `${uid}_${action}`, limit);
   if (tripped) {
@@ -61,10 +52,8 @@ async function checkVelocity(db, uid, action, context = {}) {
     throw new HttpsError('resource-exhausted', "You're doing that too quickly. Please wait a bit and try again.");
   }
 }
-
 async function checkAnonymousVelocity(db, identifier, action) {
-  const limits = await getOtpSecuritySettings(db);
-  const limit = limits[action];
+  const limits = await getOtpSecuritySettings(db), limit = limits[action];
   if (!limit || !limit.max) return;
   const key = identifier || 'unknown';
   const tripped = await slidingWindowTripped(db, 'otpVelocity', `${key}_${action}`, limit);
@@ -73,17 +62,12 @@ async function checkAnonymousVelocity(db, identifier, action) {
     throw new HttpsError('resource-exhausted', "You're doing that too quickly. Please wait a bit and try again.");
   }
 }
-
 function getClientIp(request) {
   try {
-    const raw = request.rawRequest;
-    if (!raw) return null;
+    const raw = request.rawRequest; if (!raw) return null;
     const forwarded = raw.headers && raw.headers['x-forwarded-for'];
     if (typeof forwarded === 'string' && forwarded.trim()) return forwarded.split(',')[0].trim();
     return raw.ip || null;
-  } catch (e) {
-    return null;
-  }
+  } catch { return null; }
 }
-
 module.exports = { checkVelocity, checkAnonymousVelocity, getClientIp, DEFAULT_LIMITS, DEFAULT_OTP_LIMITS };
