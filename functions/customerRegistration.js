@@ -120,6 +120,4 @@ async function registerCustomer(request) {
   }
 }
 
-// Compatibility alias for already-deployed clients. The implementation is now explicitly self-service.
 exports.registerCustomer = onCall(registerCustomer);
-exports.registerWithDealerCode = exports.registerCustomer;
