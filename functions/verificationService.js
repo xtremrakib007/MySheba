@@ -12,7 +12,9 @@ function requireAuth(request) {
 async function requireAdmin(db, callerUid) {
   const snap = await db.collection('users').doc(callerUid).get();
   const caller = snap.exists ? snap.data() : null;
-  if (!caller || !['admin', 'superadmin'].includes(caller.role)) throw new HttpsError('permission-denied', 'Only an admin can review verification requests.');
+  if (!caller || !['admin', 'superadmin'].includes(caller.role) || caller.suspended === true || caller.inactive === true || caller.disabled === true || caller.mergedInto) {
+    throw new HttpsError('permission-denied', 'Your account cannot review verification requests.');
+  }
   return caller;
 }
 
