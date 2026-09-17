@@ -1,7 +1,6 @@
 // Secondary security PIN service. The PIN hash is server-only in securityPins/{uid}.
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const crypto = require('crypto');
-const admin = require('firebase-admin');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 const { logAudit, logServerError } = require('./logService');
 
@@ -23,13 +22,21 @@ exports.setupSecurityPin = onCall(async (request) => {
   const uid = requireAuth(request);
   const { pin } = request.data || {};
   if (!isValidPin(pin)) throw new HttpsError('invalid-argument', 'PIN must be 4-8 digits.');
-  const db = getFirestore(); const ref = pinDocRef(db, uid);
+  const db = getFirestore();
+  const ref = pinDocRef(db, uid);
+  const userRef = db.collection('users').doc(uid);
+
   try {
-    const existing = await ref.get();
-    if (existing.exists) throw new HttpsError('already-exists', 'A security PIN is already set. Use reset instead.');
     const salt = crypto.randomBytes(16).toString('hex');
-    await ref.set({ hash: hashPin(pin, salt), salt, attempts: 0, lockedUntil: null, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
-    await db.collection('users').doc(uid).set({ securityPinSet: true }, { merge: true });
+    const hash = hashPin(pin, salt);
+    await db.runTransaction(async (tx) => {
+      const existing = await tx.get(ref);
+      if (existing.exists) {
+        throw new HttpsError('already-exists', 'A security PIN is already set. Use reset instead.');
+      }
+      tx.create(ref, { hash, salt, attempts: 0, lockedUntil: null, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+      tx.set(userRef, { securityPinSet: true }, { merge: true });
+    });
     await logAudit({ action: 'security_pin_setup', targetUid: uid, performedBy: uid, performedByRole: 'self', details: {} });
     return { ok: true };
   } catch (err) {
@@ -43,45 +50,47 @@ exports.verifySecurityPin = onCall(async (request) => {
   const uid = requireAuth(request);
   const { pin } = request.data || {};
   if (!isValidPin(pin)) throw new HttpsError('invalid-argument', 'Enter your PIN.');
-  const db = getFirestore(); const ref = pinDocRef(db, uid);
+  const db = getFirestore();
+  const ref = pinDocRef(db, uid);
   try {
-    const snap = await ref.get();
-    if (!snap.exists) throw new HttpsError('failed-precondition', 'No security PIN is set up yet.');
-    const data = snap.data() || {};
-
-    let lockedUntil = 0;
-    if (data.lockedUntil) {
-      if (typeof data.lockedUntil.toMillis !== 'function') throw new Error('Invalid security PIN lockout timestamp.');
-      lockedUntil = data.lockedUntil.toMillis();
-    }
-    if (lockedUntil > Date.now()) {
-      const minutesLeft = Math.ceil((lockedUntil - Date.now()) / 60000);
-      throw new HttpsError('resource-exhausted', `Too many attempts. Try again in ${minutesLeft} minute${minutesLeft === 1 ? '' : 's'}.`);
-    }
-
-    if (typeof data.hash !== 'string' || !/^[0-9a-f]{128}$/i.test(data.hash) || typeof data.salt !== 'string' || data.salt.length < 16) {
-      throw new HttpsError('failed-precondition', 'Your security PIN needs to be reset before it can be used.');
-    }
-
-    const attemptHash = hashPin(pin, data.salt);
-    const expected = Buffer.from(data.hash, 'hex');
-    const actual = Buffer.from(attemptHash, 'hex');
-    if (expected.length !== actual.length) throw new Error('Invalid security PIN hash length.');
-    const ok = crypto.timingSafeEqual(actual, expected);
-
-    if (ok) {
-      await ref.update({ attempts: 0, lockedUntil: null });
-      return { valid: true };
-    }
-
-    const attempts = Number.isInteger(data.attempts) && data.attempts >= 0 ? data.attempts + 1 : 1;
-    const patch = { attempts };
-    if (attempts >= MAX_ATTEMPTS) {
-      patch.attempts = 0;
-      patch.lockedUntil = Timestamp.fromMillis(Date.now() + LOCKOUT_MINUTES * 60000);
-    }
-    await ref.update(patch);
-    if (patch.lockedUntil) throw new HttpsError('resource-exhausted', `Too many attempts. Try again in ${LOCKOUT_MINUTES} minutes.`);
+    let result = null;
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError('failed-precondition', 'No security PIN is set up yet.');
+      const data = snap.data() || {};
+      let lockedUntil = 0;
+      if (data.lockedUntil) {
+        if (typeof data.lockedUntil.toMillis !== 'function') throw new Error('Invalid security PIN lockout timestamp.');
+        lockedUntil = data.lockedUntil.toMillis();
+      }
+      if (lockedUntil > Date.now()) {
+        const minutesLeft = Math.ceil((lockedUntil - Date.now()) / 60000);
+        throw new HttpsError('resource-exhausted', `Too many attempts. Try again in ${minutesLeft} minute${minutesLeft === 1 ? '' : 's'}.`);
+      }
+      if (typeof data.hash !== 'string' || !/^[0-9a-f]{128}$/i.test(data.hash) || typeof data.salt !== 'string' || data.salt.length < 16) {
+        throw new HttpsError('failed-precondition', 'Your security PIN needs to be reset before it can be used.');
+      }
+      const attemptHash = hashPin(pin, data.salt);
+      const expected = Buffer.from(data.hash, 'hex');
+      const actual = Buffer.from(attemptHash, 'hex');
+      if (expected.length !== actual.length) throw new Error('Invalid security PIN hash length.');
+      const ok = crypto.timingSafeEqual(actual, expected);
+      if (ok) {
+        tx.update(ref, { attempts: 0, lockedUntil: null, updatedAt: FieldValue.serverTimestamp() });
+        result = { valid: true };
+        return;
+      }
+      const attempts = Number.isInteger(data.attempts) && data.attempts >= 0 ? data.attempts + 1 : 1;
+      if (attempts >= MAX_ATTEMPTS) {
+        tx.update(ref, { attempts: 0, lockedUntil: Timestamp.fromMillis(Date.now() + LOCKOUT_MINUTES * 60000), updatedAt: FieldValue.serverTimestamp() });
+        result = { locked: true };
+        return;
+      }
+      tx.update(ref, { attempts, updatedAt: FieldValue.serverTimestamp() });
+      result = { locked: false };
+    });
+    if (result?.valid) return result;
+    if (result?.locked) throw new HttpsError('resource-exhausted', `Too many attempts. Try again in ${LOCKOUT_MINUTES} minutes.`);
     throw new HttpsError('permission-denied', 'Incorrect PIN.');
   } catch (err) {
     if (err instanceof HttpsError) throw err;
@@ -94,11 +103,15 @@ exports.resetSecurityPin = onCall(async (request) => {
   const uid = requireAuth(request);
   const { pin } = request.data || {};
   if (!isValidPin(pin)) throw new HttpsError('invalid-argument', 'PIN must be 4-8 digits.');
-  const db = getFirestore(); const ref = pinDocRef(db, uid);
+  const db = getFirestore();
+  const ref = pinDocRef(db, uid);
+  const userRef = db.collection('users').doc(uid);
   try {
     const salt = crypto.randomBytes(16).toString('hex');
-    await ref.set({ hash: hashPin(pin, salt), salt, attempts: 0, lockedUntil: null, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }, { merge: false });
-    await db.collection('users').doc(uid).set({ securityPinSet: true }, { merge: true });
+    await db.runTransaction(async (tx) => {
+      tx.set(ref, { hash: hashPin(pin, salt), salt, attempts: 0, lockedUntil: null, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }, { merge: false });
+      tx.set(userRef, { securityPinSet: true }, { merge: true });
+    });
     await logAudit({ action: 'security_pin_reset', targetUid: uid, performedBy: uid, performedByRole: 'self', details: {} });
     return { ok: true };
   } catch (err) {
