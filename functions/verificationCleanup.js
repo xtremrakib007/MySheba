@@ -1,7 +1,6 @@
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const admin = require('firebase-admin');
 const { cleanupTrackedTemporaryAuthUsers } = require('./temporaryAuthCleanup');
-
 const BATCH_SIZE = 400;
 const COLLECTIONS = [
   { name: 'emailVerificationOtps', field: 'expiresAt' },
@@ -9,8 +8,10 @@ const COLLECTIONS = [
   { name: 'passwordResetEmailOtps', field: 'expiresAt' },
   { name: 'passwordResetProofs', field: 'expiresAt' },
   { name: 'mergeOtps', field: 'expiresAt' },
+  // Pending face templates contain biometric data and are intentionally
+  // short-lived. Approved templates are handled by KYC lifecycle logic.
+  { name: 'pendingBiometricTemplates', field: 'expiresAt' },
 ];
-
 async function deleteExpiredCollection(db, name, field, now) {
   let deleted = 0;
   while (true) {
@@ -24,7 +25,6 @@ async function deleteExpiredCollection(db, name, field, now) {
   }
   return deleted;
 }
-
 async function clearExpiredUserChallenge(db, field, now) {
   let cleared = 0;
   while (true) {
@@ -45,7 +45,6 @@ async function clearExpiredUserChallenge(db, field, now) {
   }
   return cleared;
 }
-
 async function clearExpiredPendingDeviceApprovals(db, now) {
   let cleared = 0;
   while (true) {
@@ -66,16 +65,13 @@ async function clearExpiredPendingDeviceApprovals(db, now) {
   }
   return cleared;
 }
-
 exports.cleanupExpiredVerificationArtifacts = onSchedule(
   { schedule: 'every 24 hours', timeZone: 'UTC', region: 'asia-southeast1' },
   async () => {
     const db = admin.firestore();
     const now = admin.firestore.Timestamp.now();
     let deleted = 0;
-    for (const item of COLLECTIONS) {
-      deleted += await deleteExpiredCollection(db, item.name, item.field, now);
-    }
+    for (const item of COLLECTIONS) deleted += await deleteExpiredCollection(db, item.name, item.field, now);
     const expiredEmailChallenges = await clearExpiredUserChallenge(db, 'pendingDeviceEmailChallenge', now);
     const expiredPendingApprovals = await clearExpiredPendingDeviceApprovals(db, now);
     const cleanedTemporaryAuthUsers = await cleanupTrackedTemporaryAuthUsers();
