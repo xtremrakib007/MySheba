@@ -3,7 +3,7 @@ const admin = require('firebase-admin');
 const db={collection:(...a)=>admin.firestore().collection(...a),runTransaction:(...a)=>admin.firestore().runTransaction(...a)};
 const PAY_FREQUENCIES=['monthly','weekly','daily','hourly']; const RECURRENCE_TYPES=['recurring','oneTime','one-time']; const OT_MULTIPLIERS={normal:1.5,restDay:2,publicHoliday:3}; const OT_VERSION='v1'; const MAX_HOURS=24; const MAX_OT_HOURS=16;
 function requireAuth(r){const uid=r.auth?.uid;if(!uid)throw new HttpsError('unauthenticated','You must be signed in.');return uid;}
-async function actor(uid){const s=await db.collection('users').doc(uid).get();if(!s.exists)throw new HttpsError('not-found','Account not found.');return s.data()||{};}
+async function actor(uid){const s=await db.collection('users').doc(uid).get();if(!s.exists)throw new HttpsError('not-found','Account not found.');const p=s.data()||{};if(p.suspended===true||p.inactive===true||p.disabled===true||p.mergedInto)throw new HttpsError('permission-denied','Your account is not active.');return p;}
 function assertOwnerOrAdmin(uid,target,p){if(uid!==target&&!['admin','superadmin'].includes(p.role))throw new HttpsError('permission-denied','You can only change your own salary records.');}
 function cleanText(v,max=120){const t=String(v??'').trim();if(t.length>max)throw new HttpsError('invalid-argument','Text value is too long.');return t;}
 function money(v,f){const n=Number(v);if(!Number.isFinite(n)||n<0||n>100000000||Math.round(n*100)!==n*100)throw new HttpsError('invalid-argument',`Invalid ${f}.`);return Math.round(n*100)/100;}
