@@ -44,6 +44,28 @@ service cloud.firestore {
     match /businessProfiles/{uid} { allow read: if signedIn() && (uid == request.auth.uid || isAdmin()); allow write: if false; }
     match /recommendationViews/{id} { allow read, write: if false; }
     match /announcements/{id} { allow read: if signedIn() && isAdmin(); allow write: if false; }
+
+    // Advertisement configuration: readable to authenticated clients for ad serving;
+    // all configuration mutations remain Super Admin-only. These explicit matches
+    // are required because an omitted collection match is deny-by-default.
+    match /advertisements/{id} { allow read: if signedIn(); allow create, update, delete: if isSuperadmin(); }
+    match /ad_campaigns/{id} { allow read: if signedIn(); allow create, update, delete: if isSuperadmin(); }
+    match /ad_advertisers/{id} { allow read: if signedIn() && isAdmin(); allow create, update, delete: if isSuperadmin(); }
+    match /ad_placements/{id} { allow read: if signedIn(); allow create, update, delete: if isSuperadmin(); }
+    match /ad_packages/{id} { allow read: if signedIn() && isSuperadmin(); allow create, update, delete: if isSuperadmin(); }
+    match /ad_payments/{id} { allow read: if signedIn() && isSuperadmin(); allow create, update, delete: if false; }
+    match /ad_daily_stats/{id} { allow read: if signedIn() && isSuperadmin(); allow create, update, delete: if false; }
+    match /ad_impressions/{id} {
+      allow create: if (signedIn() && request.resource.data.get('userId', null) == request.auth.uid) || (!signedIn() && !request.resource.data.keys().hasAny(['userId']));
+      allow read: if signedIn() && (isSuperadmin() || resource.data.get('userId', null) == request.auth.uid);
+      allow update, delete: if false;
+    }
+    match /ad_clicks/{id} {
+      allow create: if (signedIn() && request.resource.data.get('userId', null) == request.auth.uid) || (!signedIn() && !request.resource.data.keys().hasAny(['userId']));
+      allow read: if signedIn() && (isSuperadmin() || resource.data.get('userId', null) == request.auth.uid);
+      allow update, delete: if false;
+    }
+
     match /supportTickets/{id} { allow read: if signedIn() && (isSuperadmin() || resource.data.get('userId', null) == request.auth.uid || resource.data.get('assignedToUid', '') == request.auth.uid || (isAdmin() && resource.data.get('userId', null) != null)); allow update: if signedIn() && ((isSuperadmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','assignedToUid','assignedToName','assignedToRole','updatedAt']) && request.resource.data.status in ['open','in_progress','resolved']) || (isAdmin() && !isSuperadmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['open','in_progress','resolved']) || (resource.data.get('assignedToUid', '') == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['in_progress','resolved']) || (resource.data.get('userId', null) == request.auth.uid && resource.data.status == 'resolved' && request.resource.data.status == 'open' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']))); allow create: if signedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.status == 'open'; allow delete: if false; }
   }
 }
