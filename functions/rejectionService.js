@@ -42,7 +42,7 @@ function canReject(actor, tx) {
   return false;
 }
 
-exports.rejectTransaction = onCall(async request => {
+exports.rejectTransaction = onCall({ enforceAppCheck: true }, async request => {
   const uid = requireAuth(request);
   const actor = await getActor(uid);
   const id = String(request.data?.transactionId || '').trim();
@@ -64,7 +64,6 @@ exports.rejectTransaction = onCall(async request => {
       throw new HttpsError('failed-precondition', 'This transaction type cannot be rejected here.');
     }
 
-    // Keep retries safe: once rejected, a repeated request is a successful no-op.
     if (tx.rejected === true || tx.status === 'rejected') {
       result = { id, rejected: true, alreadyRejected: true };
       return;
@@ -74,9 +73,6 @@ exports.rejectTransaction = onCall(async request => {
       throw new HttpsError('permission-denied', 'You are not authorized to reject this transaction.');
     }
 
-    // A charged order that has entered processing must not be rejected without
-    // a compensating/refund workflow. Completion and rejection are mutually
-    // exclusive state transitions at this layer.
     if (!['pending', 'approved'].includes(tx.status)) {
       throw new HttpsError('failed-precondition', 'Only pending or approved transactions can be rejected.');
     }
