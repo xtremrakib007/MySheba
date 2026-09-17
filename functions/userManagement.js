@@ -6,7 +6,7 @@ const { logAudit, logServerError } = require('./logService');
 const APP_EMAIL_DOMAIN = 'mysheba.app';
 function normalizePhone(phone) { return String(phone || '').replace(/[^0-9]/g, ''); }
 function phoneToEmail(phone) { return `${normalizePhone(phone)}@${APP_EMAIL_DOMAIN}`; }
-function active(profile) { return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto; }
+function active(profile) { return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto && profile.active !== false; }
 const ROLE_PERMISSIONS = { dealer: { canCreate: ['customer'], canUpgradeTo: [] }, admin: { canCreate: ['customer', 'dealer', 'reseller'], canUpgradeTo: ['dealer', 'reseller'] }, superadmin: { canCreate: ['customer', 'dealer', 'admin', 'reseller'], canUpgradeTo: ['dealer', 'admin', 'reseller'] } };
 const DOWNGRADE_PERMISSIONS = { dealer: { dealer: 'customer' }, admin: { dealer: 'customer', reseller: 'customer' }, superadmin: { dealer: 'customer', admin: 'dealer', reseller: 'customer' } };
 async function getCallerProfile(uid) { const snap = await admin.firestore().collection('users').doc(uid).get(); return snap.exists ? { id: snap.id, ...snap.data() } : null; }
