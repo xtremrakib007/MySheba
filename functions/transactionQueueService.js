@@ -33,8 +33,6 @@ function sanitizeTransaction(id, tx) {
   const operatorRole = queueRole(tx.service);
   if (!operatorRole) return null;
 
-  // Only fields required by the Dealer/Reseller processing UI are copied.
-  // Raw payloads are reduced to an explicit operational allowlist.
   return {
     transactionId: id,
     operatorRole,
@@ -66,7 +64,6 @@ async function syncQueue(id, tx) {
     return;
   }
 
-  // Completed orders remain only for the operator who actually claimed them.
   if (queue.status === 'completed' && !queue.claimedBy) {
     await ref.delete().catch(() => {});
     return;
@@ -75,6 +72,7 @@ async function syncQueue(id, tx) {
   await ref.set(queue, { merge: false });
 }
 
+exports.sanitizeTransaction = sanitizeTransaction;
 exports.onTransactionQueueCreated = onDocumentCreated('transactions/{id}', async event => {
   const tx = event.data?.data();
   if (tx) await syncQueue(event.params.id, tx);
