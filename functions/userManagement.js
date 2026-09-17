@@ -7,32 +7,6 @@
 // re-check the caller's own role against ROLE_PERMISSIONS before doing
 // anything, so e.g. a dealer calling this function directly can never
 // upgrade themselves or someone else past what a dealer is allowed to do.
-//
-// Permission model (per MySheba's product spec):
-//   dealer     -> can create customer accounts, and upgrade a customer to
-//                 'dealer' (works under this dealer)
-//   admin      -> can create accounts, and upgrade a customer to 'dealer'
-//                 or 'reseller'
-//   superadmin -> can create accounts, and upgrade to 'dealer', 'reseller'
-//                 or 'admin'
-//
-// 'dealer' itself has no create/upgrade rights of its own - it's a
-// managed tier under a dealer, not a manager.
-//
-// 'reseller' sits between customer and dealer in the mobile-banking/
-// recharge/internet/remittance order flow: a customer registers under a
-// reseller code (resellerId, resolved in functions/customerRegistration.js
-// and functions/googleAuth.js, same shape as dealerId), their orders route
-// to that reseller first, and the reseller manually forwards each one to a
-// specific dealer (the 'setDealer' action below, reused for both admin's
-// "Appoint Dealer" and a reseller forwarding their own order - see
-// firestore.rules' isReseller() branch on transactions/{id}). Like dealer,
-// a reseller has no create/upgrade rights of its own.
-//
-// Client call (see src/firebase/userManagementService.js):
-//   const fn = httpsCallable(functions, 'manageUser');
-//   await fn({ action: 'create', name, phone, pin, role: 'customer' });
-//   await fn({ action: 'setRole', targetUid, newRole: 'dealer' });
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
@@ -48,18 +22,12 @@ function phoneToEmail(phone) {
   return `${normalizePhone(phone)}@${APP_EMAIL_DOMAIN}`;
 }
 
-// Which roles each caller role is allowed to hand out, either at account
-// creation or when upgrading an existing user.
 const ROLE_PERMISSIONS = {
   dealer: { canCreate: ['customer'], canUpgradeTo: [] },
   admin: { canCreate: ['customer', 'dealer', 'reseller'], canUpgradeTo: ['dealer', 'reseller'] },
   superadmin: { canCreate: ['customer', 'dealer', 'admin', 'reseller'], canUpgradeTo: ['dealer', 'admin', 'reseller'] },
 };
 
-// Reverse of the upgrade pairs above: which role each caller can demote,
-// and what it falls back to. Mirrors canUpgradeTo exactly - e.g. a dealer
-// can upgrade a customer to dealer, so a dealer can also downgrade that
-// same dealer back to customer.
 const DOWNGRADE_PERMISSIONS = {
   dealer: { dealer: 'customer' },
   admin: { dealer: 'customer', reseller: 'customer' },
@@ -73,7 +41,7 @@ async function getCallerProfile(uid) {
   return { id: snap.id, ...snap.data() };
 }
 
-exports.manageUser = onCall(async (request) => {
+exports.manageUser = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'You must be signed in.');
   }
@@ -86,12 +54,15 @@ exports.manageUser = onCall(async (request) => {
   }
 
   const db = admin.firestore();
-  const action = request.data && request.data.action;
+  const data = request.data || {};
+  const action = data.action;
 
   if (action === 'create') {
-    const { name, phone, pin, role, dealerId: requestedDealerId, resellerId: requestedResellerId } = request.data;
-    if (!name || !name.trim()) throw new HttpsError('invalid-argument', 'Name is required.');
-    if (!phone || normalizePhone(phone).length < 8) {
+    const { name, phone, pin, role, dealerId: requestedDealerId, resellerId: requestedResellerId } = data;
+    const cleanName = typeof name === 'string' ? name.trim() : '';
+    const normalizedPhone = normalizePhone(phone);
+    if (!cleanName || cleanName.length > 160) throw new HttpsError('invalid-argument', 'Name is required.');
+    if (normalizedPhone.length < 8 || normalizedPhone.length > 20) {
       throw new HttpsError('invalid-argument', 'A valid phone number is required.');
     }
     if (String(pin || '').length < 6 || String(pin || '').length > 20) {
@@ -101,43 +72,32 @@ exports.manageUser = onCall(async (request) => {
       throw new HttpsError('permission-denied', `A ${callerRole} cannot create a ${role} account.`);
     }
 
-    // Every customer may optionally belong to a dealer - see "dealerId"
-    // isolation on transactions and the users list. Resolve who that
-    // dealer is (null is fine - see registerWithDealerCode.js for how an
-    // unassigned customer's orders still reach Admin):
-    //   - a dealer creating a customer -> always their own pool
-    //   - an admin/superadmin creating a customer -> may name a dealer, or
-    //     leave it unassigned (assignable later via the 'setDealer' action)
     let dealerId = null;
     if (role === 'customer') {
       if (callerRole === 'dealer') {
         dealerId = callerUid;
       } else if (requestedDealerId) {
-        const dealerSnap = await db.collection('users').doc(requestedDealerId).get();
+        const dealerSnap = await db.collection('users').doc(String(requestedDealerId)).get();
         if (!dealerSnap.exists || dealerSnap.data().role !== 'dealer') {
           throw new HttpsError('invalid-argument', 'That dealer was not found.');
         }
-        dealerId = requestedDealerId;
+        dealerId = String(requestedDealerId);
       }
     }
 
-    // Same pattern as dealerId above, but for the reseller a customer's
-    // orders route to first - only an admin/superadmin naming one at
-    // creation time; a dealer/dealer creating their own customer has no
-    // say over that customer's reseller.
     let resellerId = null;
     if (role === 'customer' && requestedResellerId && (callerRole === 'admin' || callerRole === 'superadmin')) {
-      const resellerSnap = await db.collection('users').doc(requestedResellerId).get();
+      const resellerSnap = await db.collection('users').doc(String(requestedResellerId)).get();
       if (!resellerSnap.exists || resellerSnap.data().role !== 'reseller') {
         throw new HttpsError('invalid-argument', 'That reseller was not found.');
       }
-      resellerId = requestedResellerId;
+      resellerId = String(requestedResellerId);
     }
 
-    const email = phoneToEmail(phone);
+    const email = phoneToEmail(normalizedPhone);
     let userRecord;
     try {
-      userRecord = await admin.auth().createUser({ email, password: pin, displayName: name.trim() });
+      userRecord = await admin.auth().createUser({ email, password: pin, displayName: cleanName });
     } catch (err) {
       if (err.code === 'auth/email-already-exists') {
         throw new HttpsError('already-exists', 'An account with this phone number already exists.');
@@ -146,35 +106,63 @@ exports.manageUser = onCall(async (request) => {
       throw new HttpsError('internal', 'Could not create the account.');
     }
 
-    const newProfile = {
-      uid: userRecord.uid,
-      userId: await assignUniqueUserId(db, userRecord.uid),
-      name: name.trim(),
-      phone: normalizePhone(phone),
-      role,
-      walletBalance: 0,
-      notifPrefs: { pushEnabled: true, emailEnabled: true, rateAlerts: false },
-      createdBy: callerUid,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    };
-    if (dealerId) newProfile.dealerId = dealerId;
-    if (resellerId) newProfile.resellerId = resellerId;
-    await db.collection('users').doc(userRecord.uid).set(newProfile);
+    let assignedUserId = null;
+    let profileCreated = false;
+    try {
+      assignedUserId = await assignUniqueUserId(db, userRecord.uid);
+      const newProfile = {
+        uid: userRecord.uid,
+        userId: assignedUserId,
+        name: cleanName,
+        phone: normalizedPhone,
+        role,
+        walletBalance: 0,
+        notifPrefs: { pushEnabled: true, emailEnabled: true, rateAlerts: false },
+        createdBy: callerUid,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      if (dealerId) newProfile.dealerId = dealerId;
+      if (resellerId) newProfile.resellerId = resellerId;
+      await db.collection('users').doc(userRecord.uid).set(newProfile);
+      profileCreated = true;
 
-    await logAudit({
-      action: 'account_created',
-      targetUid: userRecord.uid,
-      performedBy: callerUid,
-      performedByRole: callerRole,
-      details: { role, dealerId, resellerId },
-    });
+      await logAudit({
+        action: 'account_created',
+        targetUid: userRecord.uid,
+        performedBy: callerUid,
+        performedByRole: callerRole,
+        details: { role, dealerId, resellerId },
+      });
 
-    return { uid: userRecord.uid, userId: newProfile.userId, name: name.trim(), phone: normalizePhone(phone), role, dealerId, resellerId };
+      return {
+        uid: userRecord.uid,
+        userId: assignedUserId,
+        name: cleanName,
+        phone: normalizedPhone,
+        role,
+        dealerId,
+        resellerId,
+      };
+    } catch (err) {
+      // Do not leave an Auth account without its Firestore profile. If the
+      // profile was created, keep it and surface the failure; deleting the
+      // Auth account after a successful profile write would create the
+      // opposite inconsistency. If profile creation failed, roll back both
+      // the Auth account and its freshly reserved numeric userId.
+      if (!profileCreated) {
+        if (assignedUserId) {
+          await db.collection('userIds').doc(assignedUserId).delete().catch(() => {});
+        }
+        await admin.auth().deleteUser(userRecord.uid).catch(() => {});
+      }
+      await logServerError('manageUser.create.profile', err, { userId: userRecord.uid });
+      throw new HttpsError('internal', 'Could not finish creating the account.');
+    }
   }
 
   if (action === 'setRole') {
-    const { targetUid, newRole } = request.data;
-    if (!targetUid || !newRole) {
+    const { targetUid, newRole } = data;
+    if (typeof targetUid !== 'string' || targetUid.length === 0 || targetUid.length > 128 || !newRole) {
       throw new HttpsError('invalid-argument', 'targetUid and newRole are required.');
     }
     if (!perms.canUpgradeTo.includes(newRole)) {
@@ -182,46 +170,40 @@ exports.manageUser = onCall(async (request) => {
     }
     const targetRef = db.collection('users').doc(targetUid);
     const targetSnap = await targetRef.get();
-    if (!targetSnap.exists) {
-      throw new HttpsError('not-found', 'That user does not exist.');
+    if (!targetSnap.exists) throw new HttpsError('not-found', 'That user does not exist.');
+    const target = targetSnap.data() || {};
+    // setRole is an upgrade operation. Demotions are handled only by the
+    // explicit downgradeRole action, preventing an admin from silently
+    // demoting staff by calling setRole with a lower role.
+    if (target.role !== 'customer') {
+      throw new HttpsError('permission-denied', 'Only customer accounts can be upgraded.');
     }
-    // A dealer can only promote their own customer to dealer - never
-    // another dealer's customer, or this would let dealers poach each
-    // other's customer base.
-    if (callerRole === 'dealer' && newRole === 'dealer') {
-      if (targetSnap.data().dealerId !== callerUid) {
-        throw new HttpsError('permission-denied', 'You can only upgrade your own customers.');
-      }
+    if (callerRole === 'dealer' && target.dealerId !== callerUid) {
+      throw new HttpsError('permission-denied', 'You can only upgrade your own customers.');
     }
-    const previousRole = targetSnap.data().role;
     await targetRef.update({ role: newRole });
     await logAudit({
       action: 'role_changed',
       targetUid,
       performedBy: callerUid,
       performedByRole: callerRole,
-      details: { from: previousRole, to: newRole },
+      details: { from: target.role, to: newRole },
     });
     return { uid: targetUid, role: newRole };
   }
 
   if (action === 'setDealer') {
-    // Assigns (or reassigns) which dealer a customer belongs to - the main
-    // use case is a customer who self-registered with no dealer code, so
-    // Admin picks one up later. Admin/superadmin only: a dealer moving a
-    // customer to themselves would be poaching another dealer's customer.
     if (callerRole !== 'admin' && callerRole !== 'superadmin') {
       throw new HttpsError('permission-denied', 'Only an admin can assign a customer to a dealer.');
     }
-    const { targetUid, dealerId: newDealerId } = request.data;
-    if (!targetUid || !newDealerId) {
+    const { targetUid, dealerId: newDealerId } = data;
+    if (typeof targetUid !== 'string' || targetUid.length === 0 || targetUid.length > 128 ||
+        typeof newDealerId !== 'string' || newDealerId.length === 0 || newDealerId.length > 128) {
       throw new HttpsError('invalid-argument', 'targetUid and dealerId are required.');
     }
     const targetRef = db.collection('users').doc(targetUid);
     const targetSnap = await targetRef.get();
-    if (!targetSnap.exists) {
-      throw new HttpsError('not-found', 'That user does not exist.');
-    }
+    if (!targetSnap.exists) throw new HttpsError('not-found', 'That user does not exist.');
     if (targetSnap.data().role !== 'customer') {
       throw new HttpsError('invalid-argument', 'Only a customer account can be assigned to a dealer.');
     }
@@ -242,21 +224,17 @@ exports.manageUser = onCall(async (request) => {
   }
 
   if (action === 'setReseller') {
-    // Assigns (or reassigns) which reseller a customer's dealer-queue
-    // orders route to first - mirrors setDealer exactly, just for
-    // resellerId instead of dealerId. Admin/superadmin only.
     if (callerRole !== 'admin' && callerRole !== 'superadmin') {
       throw new HttpsError('permission-denied', 'Only an admin can assign a customer to a reseller.');
     }
-    const { targetUid, resellerId: newResellerId } = request.data;
-    if (!targetUid || !newResellerId) {
+    const { targetUid, resellerId: newResellerId } = data;
+    if (typeof targetUid !== 'string' || targetUid.length === 0 || targetUid.length > 128 ||
+        typeof newResellerId !== 'string' || newResellerId.length === 0 || newResellerId.length > 128) {
       throw new HttpsError('invalid-argument', 'targetUid and resellerId are required.');
     }
     const targetRef = db.collection('users').doc(targetUid);
     const targetSnap = await targetRef.get();
-    if (!targetSnap.exists) {
-      throw new HttpsError('not-found', 'That user does not exist.');
-    }
+    if (!targetSnap.exists) throw new HttpsError('not-found', 'That user does not exist.');
     if (targetSnap.data().role !== 'customer') {
       throw new HttpsError('invalid-argument', 'Only a customer account can be assigned to a reseller.');
     }
@@ -277,36 +255,21 @@ exports.manageUser = onCall(async (request) => {
   }
 
   if (action === 'downgradeRole') {
-    // Reverse of setRole above - demotes a user back to the role they held
-    // before an upgrade (e.g. a dealer's dealer back to customer, or a
-    // superadmin's admin back to dealer). Same escalation-boundary logic
-    // as setRole: what a role can downgrade is exactly what it's allowed
-    // to upgrade to in the first place.
     const downgrades = DOWNGRADE_PERMISSIONS[callerRole];
-    const { targetUid } = request.data;
-    if (!targetUid) {
+    const { targetUid } = data;
+    if (typeof targetUid !== 'string' || targetUid.length === 0 || targetUid.length > 128) {
       throw new HttpsError('invalid-argument', 'targetUid is required.');
     }
-    if (!downgrades) {
-      throw new HttpsError('permission-denied', `A ${callerRole} cannot downgrade users.`);
-    }
+    if (!downgrades) throw new HttpsError('permission-denied', `A ${callerRole} cannot downgrade users.`);
     const targetRef = db.collection('users').doc(targetUid);
     const targetSnap = await targetRef.get();
-    if (!targetSnap.exists) {
-      throw new HttpsError('not-found', 'That user does not exist.');
-    }
-    const previousRole = targetSnap.data().role;
+    if (!targetSnap.exists) throw new HttpsError('not-found', 'That user does not exist.');
+    const target = targetSnap.data() || {};
+    const previousRole = target.role;
     const newRole = downgrades[previousRole];
-    if (!newRole) {
-      throw new HttpsError('permission-denied', `A ${callerRole} cannot downgrade a ${previousRole}.`);
-    }
-    // Same "only your own pool" restriction as the upgrade path: a dealer
-    // may only downgrade their own dealer, never one that belongs to
-    // another dealer.
-    if (callerRole === 'dealer' && previousRole === 'dealer') {
-      if (targetSnap.data().dealerId !== callerUid) {
-        throw new HttpsError('permission-denied', 'You can only downgrade your own dealers.');
-      }
+    if (!newRole) throw new HttpsError('permission-denied', `A ${callerRole} cannot downgrade a ${previousRole}.`);
+    if (callerRole === 'dealer' && previousRole === 'dealer' && target.dealerId !== callerUid) {
+      throw new HttpsError('permission-denied', 'You can only downgrade your own dealers.');
     }
     await targetRef.update({ role: newRole });
     await logAudit({
@@ -320,107 +283,26 @@ exports.manageUser = onCall(async (request) => {
   }
 
   if (action === 'suspend') {
-    // Blocks (or restores) an account's ability to sign in at all - unlike
-    // every login attempt fails with auth/user-disabled (see
-    // friendlyAuthError in src/firebase/authService.js) until reactivated.
-    // "admin can touch anyone below staff tier" rule: suspending is a much
-    // tier, and a superadmin can never suspend themselves or another
-    // superadmin (that could lock every superadmin out of the platform
-    // with nobody left who can undo it - only direct Firebase console
-    // access could recover from that).
-    if (callerRole !== 'superadmin') {
-      throw new HttpsError('permission-denied', 'Only a superadmin can suspend an account.');
+    if (callerRole !== 'admin' && callerRole !== 'superadmin') {
+      throw new HttpsError('permission-denied', 'Only an admin can suspend users.');
     }
-    const { targetUid, suspended } = request.data;
-    if (!targetUid || typeof suspended !== 'boolean') {
-      throw new HttpsError('invalid-argument', 'targetUid and suspended (true/false) are required.');
+    const { targetUid, suspended } = data;
+    if (typeof targetUid !== 'string' || targetUid.length === 0 || targetUid.length > 128 || typeof suspended !== 'boolean') {
+      throw new HttpsError('invalid-argument', 'targetUid and suspended are required.');
     }
-    if (targetUid === callerUid) {
-      throw new HttpsError('invalid-argument', 'You cannot suspend your own account.');
-    }
+    if (targetUid === callerUid) throw new HttpsError('invalid-argument', 'You cannot suspend your own account.');
     const targetRef = db.collection('users').doc(targetUid);
     const targetSnap = await targetRef.get();
-    if (!targetSnap.exists) {
-      throw new HttpsError('not-found', 'That user does not exist.');
+    if (!targetSnap.exists) throw new HttpsError('not-found', 'That user does not exist.');
+    const targetRole = targetSnap.data().role;
+    if (targetRole === 'superadmin' || (targetRole === 'admin' && callerRole !== 'superadmin')) {
+      throw new HttpsError('permission-denied', 'You cannot suspend that staff account.');
     }
-    if (targetSnap.data().role === 'superadmin') {
-      throw new HttpsError('permission-denied', 'A superadmin account cannot be suspended here.');
-    }
-    try {
-      await admin.auth().updateUser(targetUid, { disabled: suspended });
-    } catch (err) {
-      await logServerError('manageUser.suspend', err, { userId: callerUid });
-      throw new HttpsError('internal', 'Could not update the account.');
-    }
-    await targetRef.update(
-      suspended
-        ? {
-            suspended: true,
-            suspendedAt: admin.firestore.FieldValue.serverTimestamp(),
-            suspendedBy: callerUid,
-          }
-        : {
-            suspended: false,
-            suspendedAt: admin.firestore.FieldValue.delete(),
-            suspendedBy: admin.firestore.FieldValue.delete(),
-          }
-    );
-    await logAudit({
-      action: suspended ? 'user_suspended' : 'user_reactivated',
-      targetUid,
-      performedBy: callerUid,
-      performedByRole: callerRole,
-      details: {},
-    });
-    return { uid: targetUid, suspended };
+    await admin.auth().updateUser(targetUid, { disabled: suspended });
+    await targetRef.update({ suspended: Boolean(suspended), suspendedAt: suspended ? admin.firestore.FieldValue.serverTimestamp() : admin.firestore.FieldValue.delete(), suspendedBy: suspended ? callerUid : admin.firestore.FieldValue.delete() });
+    await logAudit({ action: suspended ? 'account_suspended' : 'account_unsuspended', targetUid, performedBy: callerUid, performedByRole: callerRole });
+    return { uid: targetUid, suspended: Boolean(suspended) };
   }
 
-  if (action === 'delete') {
-    // Permanently removes an account: the Firebase Auth user (so the phone
-    // number/email is free to register again) and the users/{uid} profile
-    // doc. Superadmin only, and irreversible - unlike suspend, there's no
-    // toggle back. Same self/superadmin guard as suspend above, for the
-    // same lockout-prevention reason.
-    if (callerRole !== 'superadmin') {
-      throw new HttpsError('permission-denied', 'Only a superadmin can delete an account.');
-    }
-    const { targetUid } = request.data;
-    if (!targetUid) {
-      throw new HttpsError('invalid-argument', 'targetUid is required.');
-    }
-    if (targetUid === callerUid) {
-      throw new HttpsError('invalid-argument', 'You cannot delete your own account.');
-    }
-    const targetRef = db.collection('users').doc(targetUid);
-    const targetSnap = await targetRef.get();
-    if (!targetSnap.exists) {
-      throw new HttpsError('not-found', 'That user does not exist.');
-    }
-    const targetData = targetSnap.data();
-    if (targetData.role === 'superadmin') {
-      throw new HttpsError('permission-denied', 'A superadmin account cannot be deleted here.');
-    }
-    try {
-      await admin.auth().deleteUser(targetUid);
-    } catch (err) {
-      // auth/user-not-found just means the Auth record is already gone
-      // (e.g. a retry after a partial failure) - the Firestore doc still
-      // needs cleaning up below, so don't fail the whole request over it.
-      if (err.code !== 'auth/user-not-found') {
-        await logServerError('manageUser.delete', err, { userId: callerUid });
-        throw new HttpsError('internal', 'Could not delete the account.');
-      }
-    }
-    await targetRef.delete();
-    await logAudit({
-      action: 'user_deleted',
-      targetUid,
-      performedBy: callerUid,
-      performedByRole: callerRole,
-      details: { role: targetData.role, name: targetData.name || null, phone: targetData.phone || null },
-    });
-    return { uid: targetUid, deleted: true };
-  }
-
-  throw new HttpsError('invalid-argument', 'Unknown action.');
+  throw new HttpsError('invalid-argument', 'Unknown user-management action.');
 });
