@@ -29,6 +29,7 @@ export default function ForgotPasswordScreen() {
   const [phoneConfirmation, setPhoneConfirmation] = useState(null);
   const [phoneIdToken, setPhoneIdToken] = useState(null);
   const [emailIdToken, setEmailIdToken] = useState(null);
+  const [emailVerificationId, setEmailVerificationId] = useState(null);
 
   const backToLogin = () => setScreen('login');
   const onContinueFromPhone = () => {
@@ -45,7 +46,7 @@ export default function ForgotPasswordScreen() {
   const completeEmailLink = async (url) => {
     if (!emailVerification.isEmailSignInLink(url)) return false;
     setBusy(true); setError('');
-    try { const result = await emailVerification.confirmEmailLink(url, email); setEmailIdToken(result.idToken); setStep('newPassword'); }
+    try { const result = await emailVerification.confirmEmailLink(url, email); setEmailIdToken(result.idToken); setEmailVerificationId(null); setStep('newPassword'); }
     catch (e) { setError(e.message || 'Could not verify your email address. Please try again.'); }
     finally { setBusy(false); }
     return true;
@@ -54,7 +55,7 @@ export default function ForgotPasswordScreen() {
     setError('');
     if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setError('Please enter a valid email address.');
     setBusy(true);
-    try { await emailVerification.sendPasswordResetEmail(phoneVerification.phoneToE164(phone, phoneCountry.dial), email); setStep('email'); }
+    try { await emailVerification.sendPasswordResetEmail(phoneVerification.phoneToE164(phone, phoneCountry.dial), email); setCode(''); setEmailVerificationId(null); setStep('email'); }
     catch (e) { setError(e.message || 'Could not send the verification email. Please try again.'); }
     finally { setBusy(false); }
   };
@@ -68,17 +69,31 @@ export default function ForgotPasswordScreen() {
     setError('');
     if (!code.trim()) return setError('Please enter the code we sent you.');
     setBusy(true);
-    try { const result = await phoneVerification.confirmPhoneOtp(phoneConfirmation, code.trim()); setPhoneIdToken(result.idToken); setStep('newPassword'); }
+    try { const result = await phoneVerification.confirmPhoneOtp(phoneConfirmation, code.trim()); setPhoneIdToken(result.idToken); setEmailIdToken(null); setEmailVerificationId(null); setStep('newPassword'); }
     catch (e) { setError(e.message || 'Incorrect code. Please try again.'); }
+    finally { setBusy(false); }
+  };
+  const onVerifyEmailCode = async () => {
+    setError('');
+    if (!/^\d{6}$/.test(code.trim())) return setError('Enter the 6-digit verification code.');
+    setBusy(true);
+    try {
+      const result = await emailVerification.verifyPasswordResetEmailOtp(phoneVerification.phoneToE164(phone, phoneCountry.dial), email, code.trim());
+      setEmailVerificationId(result.verificationId);
+      setEmailIdToken(null);
+      setPhoneIdToken(null);
+      setStep('newPassword');
+    } catch (e) { setError(e.message || 'Incorrect verification code. Please try again.'); }
     finally { setBusy(false); }
   };
   const onSubmitNewPassword = async () => {
     setError('');
     if (newPassword.length < 6 || newPassword.length > 20) return setError('Password must be 6-20 characters.');
     if (newPassword !== confirmPassword) return setError('Passwords do not match.');
+    if (!phoneIdToken && !emailIdToken && !emailVerificationId) return setError('Please verify your phone or email first.');
     setBusy(true);
     try {
-      await authService.resetPassword({ phone, phoneE164: phoneVerification.phoneToE164(phone, phoneCountry.dial), dialCode: phoneCountry.dial, email, newPassword, phoneIdToken, emailIdToken });
+      await authService.resetPassword({ phone, phoneE164: phoneVerification.phoneToE164(phone, phoneCountry.dial), dialCode: phoneCountry.dial, email, newPassword, phoneIdToken, emailIdToken, emailVerificationId });
       showAlert('Password Reset', 'Your password has been reset. Please sign in with your new password.', [{ text: 'OK', onPress: backToLogin }]);
     } catch (e) { setError(e.message || 'Could not reset your password. Please try again.'); }
     finally { setBusy(false); }
@@ -89,9 +104,9 @@ export default function ForgotPasswordScreen() {
       <LinearGradient colors={brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}><HeaderDecor /><Text style={styles.headerTitle}>Forgot Password</Text></LinearGradient>
       <View style={styles.body}>
         {step === 'phone' && <><Text style={styles.intro}>Enter the phone number on your account to reset your password.</Text><View style={styles.formGroup}><Text style={styles.label}>Phone Number</Text><View style={{flexDirection:'row',alignItems:'center'}}><TouchableOpacity onPress={()=>setCountryPicker(true)} style={{padding:12,borderWidth:1,borderColor:colors.border,borderRadius:8,marginRight:6,flexDirection:'row',alignItems:'center'}}><Text style={{fontSize:20}}>{phoneCountry.flag}</Text><Text style={{marginLeft:5,fontWeight:'600'}}>{phoneCountry.dial}</Text></TouchableOpacity><TextInput style={styles.input} placeholder="Phone number" keyboardType="phone-pad" value={phone} onChangeText={setPhone}/></View></View><TouchableOpacity style={[styles.btn,busy&&styles.btnDisabled]} onPress={onContinueFromPhone} disabled={busy}><Text style={styles.btnText}>Continue</Text></TouchableOpacity></>}
-        {step === 'choose' && <><Text style={styles.intro}>How would you like to verify it's you?</Text><TouchableOpacity style={[styles.btn,busy&&styles.btnDisabled]} onPress={onSendSms} disabled={busy}>{busy?<ActivityIndicator color="white"/>:<Text style={styles.btnText}>Send SMS Code</Text>}</TouchableOpacity><View style={styles.formGroup}><Text style={styles.label}>Or verify via the email on your account</Text><TextInput style={styles.input} placeholder="Email address" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail}/></View><TouchableOpacity style={[styles.btn,busy&&styles.btnDisabled]} onPress={onSendEmail} disabled={busy}>{busy?<ActivityIndicator color="white"/>:<Text style={styles.btnText}>Send Email Link</Text>}</TouchableOpacity></>}
+        {step === 'choose' && <><Text style={styles.intro}>How would you like to verify it's you?</Text><TouchableOpacity style={[styles.btn,busy&&styles.btnDisabled]} onPress={onSendSms} disabled={busy}>{busy?<ActivityIndicator color="white"/>:<Text style={styles.btnText}>Send SMS Code</Text>}</TouchableOpacity><View style={styles.formGroup}><Text style={styles.label}>Or verify via the email on your account</Text><TextInput style={styles.input} placeholder="Email address" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail}/></View><TouchableOpacity style={[styles.btn,busy&&styles.btnDisabled]} onPress={onSendEmail} disabled={busy}>{busy?<ActivityIndicator color="white"/>:<Text style={styles.btnText}>Send Email Link + Code</Text>}</TouchableOpacity></>}
         {step === 'sms' && <><Text style={styles.intro}>Enter the code we texted to {phone}.</Text><View style={styles.formGroup}><Text style={styles.label}>Verification Code</Text><TextInput style={styles.input} placeholder="123456" keyboardType="number-pad" maxLength={6} value={code} onChangeText={setCode}/></View><TouchableOpacity style={[styles.btn,busy&&styles.btnDisabled]} onPress={onVerifySmsCode} disabled={busy}>{busy?<ActivityIndicator color="white"/>:<Text style={styles.btnText}>Verify Code</Text>}</TouchableOpacity><TouchableOpacity style={styles.resendBtn} onPress={onSendSms} disabled={busy}><Text style={styles.resendText}>Didn't get a code? Resend</Text></TouchableOpacity></>}
-        {step === 'email' && <><Text style={styles.intro}>Tap the link we emailed to {email} to continue. This screen will move on automatically once you do.</Text>{busy&&<ActivityIndicator color={colors.primary} style={{marginBottom:14}}/>}<TouchableOpacity style={styles.resendBtn} onPress={onSendEmail} disabled={busy}><Text style={styles.resendText}>Didn't get a link? Resend</Text></TouchableOpacity></>}
+        {step === 'email' && <><Text style={styles.intro}>Use the verification link we emailed to {email}, or enter the 6-digit code from that same email.</Text><View style={styles.formGroup}><Text style={styles.label}>Email Verification Code</Text><TextInput style={styles.input} placeholder="123456" keyboardType="number-pad" maxLength={6} value={code} onChangeText={setCode}/></View><TouchableOpacity style={[styles.btn,busy&&styles.btnDisabled]} onPress={onVerifyEmailCode} disabled={busy}>{busy?<ActivityIndicator color="white"/>:<Text style={styles.btnText}>Verify Email Code</Text>}</TouchableOpacity>{busy&&<ActivityIndicator color={colors.primary} style={{marginBottom:14}}/>}<TouchableOpacity style={styles.resendBtn} onPress={onSendEmail} disabled={busy}><Text style={styles.resendText}>Didn't get a link or code? Resend</Text></TouchableOpacity></>}
         {step === 'newPassword' && <><Text style={styles.intro}>Choose a new password for your account.</Text><View style={styles.formGroup}><Text style={styles.label}>New Password</Text><TextInput style={styles.input} placeholder="6-20 characters" secureTextEntry value={newPassword} onChangeText={setNewPassword}/></View><View style={styles.formGroup}><Text style={styles.label}>Confirm New Password</Text><TextInput style={styles.input} placeholder="Re-enter new password" secureTextEntry value={confirmPassword} onChangeText={setConfirmPassword}/></View><TouchableOpacity style={[styles.btn,busy&&styles.btnDisabled]} onPress={onSubmitNewPassword} disabled={busy}>{busy?<ActivityIndicator color="white"/>:<Text style={styles.btnText}>Reset Password</Text>}</TouchableOpacity></>}
         {!!error&&<Text style={styles.errorText}>{error}</Text>}
         <TouchableOpacity style={styles.cancelBtn} onPress={backToLogin} disabled={busy}><Text style={styles.cancelText}>Back to Login</Text></TouchableOpacity>
