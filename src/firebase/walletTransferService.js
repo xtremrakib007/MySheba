@@ -1,8 +1,10 @@
 import { httpsCallable } from 'firebase/functions';
+import * as Crypto from 'expo-crypto';
 import { functions } from './config';
 
 function createRequestId() {
-  return `mswt_${Date.now()}_${Math.random().toString(36).slice(2, 18)}`;
+  if (typeof Crypto.randomUUID !== 'function') throw new Error('Secure request ID generation is unavailable.');
+  return `mswt_${Crypto.randomUUID().replace(/-/g, '')}`;
 }
 
 export async function findWalletRecipient(recipient) {
