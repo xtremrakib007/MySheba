@@ -11,6 +11,7 @@ async function getActor(uid) {
   const snap = await admin.firestore().collection('users').doc(uid).get();
   if (!snap.exists) throw new HttpsError('permission-denied', 'Your staff profile was not found.');
   const p = snap.data();
+  if (p.suspended || p.inactive || p.disabled) throw new HttpsError('permission-denied', 'Your staff account is not active.');
   return { uid, role: p.role || '', name: p.fullName || p.name || p.displayName || p.phone || uid };
 }
 function assertOperatorCanHandle(actor, order) {
@@ -42,8 +43,6 @@ exports.acceptTransaction = onCall({ enforceAppCheck: true }, async (request) =>
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref); if (!snap.exists) throw new HttpsError('not-found', 'That order no longer exists.');
     const order = snap.data();
-    // Backward-compatible mobile AdminHome action: an admin pressing the old
-    // Accept control now records approval only and never claims the order.
     if (APPROVER_ROLES.includes(actor.role)) {
       if (order.status !== 'pending') throw new HttpsError('failed-precondition', 'Only pending orders can be approved.');
       if (order.approved === true) throw new HttpsError('already-exists', 'This order is already approved.');
@@ -71,9 +70,6 @@ exports.completeTransaction = onCall({ enforceAppCheck: true }, async (request) 
     const order = snap.data();
     if (order.status !== 'processing' || order.claimedBy !== actor.uid) throw new HttpsError('failed-precondition', 'Only the operator who accepted this order can complete it.');
     if (order.approved !== true || !order.approvedBy) throw new HttpsError('failed-precondition', 'This order has no valid admin approval.');
-    // The PIN is a transient confirmation value supplied at completion. It is
-    // deliberately deleted instead of being retained in transaction history,
-    // where every authorized transaction reader could retrieve it later.
     tx.update(ref, { status: 'completed', pin: admin.firestore.FieldValue.delete(), receiptUrl, completedBy: actor.uid, completedByName: actor.name, completedByRole: actor.role, completedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
   });
   return { ok: true, transactionId: id };
