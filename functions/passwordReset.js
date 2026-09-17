@@ -1,9 +1,11 @@
 // Forgot Password - server half.
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const crypto = require('crypto');
 const { assertPhoneVerified } = require('./phoneVerification');
 const { assertEmailVerified } = require('./emailVerification');
 const { logAudit, logServerError } = require('./logService');
+const { checkAnonymousVelocity, getClientIp } = require('./rateLimitService');
 
 function normalizePhone(phone) {
   return String(phone || '').replace(/[^0-9]/g, '');
@@ -96,16 +98,37 @@ function isValidPassword(pin) {
   return value.length >= 6 && value.length <= 20;
 }
 
+function resetRateKey(value) {
+  return crypto.createHash('sha256').update(String(value || '')).digest('hex');
+}
+
 exports.resetPassword = onCall(async (request) => {
   const { phone, phoneE164, dialCode, email, newPassword, phoneIdToken, emailIdToken } = request.data || {};
   const normalizedPhone = normalizePhone(phone);
   const normalizedE164 = toE164(phoneE164 || phone, dialCode);
+  const hasPhoneProof = typeof phoneIdToken === 'string' && phoneIdToken.length > 0;
+  const hasEmailProof = typeof emailIdToken === 'string' && emailIdToken.length > 0;
 
   if (!normalizedPhone) throw new HttpsError('invalid-argument', 'Please enter a valid phone number.');
   if (!isValidPassword(newPassword)) throw new HttpsError('invalid-argument', 'Password must be 6-20 characters.');
-  if (!phoneIdToken && !emailIdToken) throw new HttpsError('invalid-argument', 'Please verify your phone or email first.');
+  if (hasPhoneProof === hasEmailProof) {
+    throw new HttpsError('invalid-argument', 'Please verify your phone or email first.');
+  }
 
   const db = admin.firestore();
+
+  // Rate-limit recovery attempts before account lookup. Use a one-way phone
+  // key so the limiter does not persist the user's raw phone number.
+  try {
+    await checkAnonymousVelocity(db, resetRateKey(normalizedE164), 'password_reset');
+    const ip = getClientIp(request);
+    if (ip) await checkAnonymousVelocity(db, resetRateKey(ip), 'password_reset_ip');
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    await logServerError('resetPassword.rateLimit', err, { lookup: 'phone' });
+    throw new HttpsError('internal', 'Could not process your request right now. Please try again.');
+  }
+
   let snap;
   try {
     snap = await findUserByPhone(db, phone, normalizedE164, dialCode);
@@ -122,10 +145,9 @@ exports.resetPassword = onCall(async (request) => {
 
   if (userData.suspended) throw new HttpsError('permission-denied', 'This account has been suspended. Please contact support.');
 
-  let tempAuthUid;
-  if (phoneIdToken) {
+  if (hasPhoneProof) {
     try {
-      tempAuthUid = await assertPhoneVerified(phoneIdToken, normalizedE164, undefined);
+      await assertPhoneVerified(phoneIdToken, normalizedE164, undefined);
     } catch (err) {
       throw new HttpsError('failed-precondition', err.message || 'Please verify your phone number first.');
     }
@@ -138,7 +160,7 @@ exports.resetPassword = onCall(async (request) => {
       throw new HttpsError('failed-precondition', 'That email is not associated with this phone number.');
     }
     try {
-      tempAuthUid = await assertEmailVerified(emailIdToken, accountEmail);
+      await assertEmailVerified(emailIdToken, accountEmail);
     } catch (err) {
       throw new HttpsError('failed-precondition', err.message || 'Please verify your email address first.');
     }
@@ -158,14 +180,12 @@ exports.resetPassword = onCall(async (request) => {
     pendingDeviceApproval: null,
   }).catch(() => {});
 
-  if (tempAuthUid) await admin.auth().deleteUser(tempAuthUid).catch(() => {});
-
   await logAudit({
     action: 'password_reset',
     targetUid: realUid,
     performedBy: realUid,
     performedByRole: userData.role,
-    details: { via: phoneIdToken ? 'sms' : 'email' },
+    details: { via: hasPhoneProof ? 'sms' : 'email' },
   });
 
   return { success: true };
