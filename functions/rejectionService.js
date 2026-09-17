@@ -73,8 +73,12 @@ exports.rejectTransaction = onCall(async request => {
     if (!canReject(actor, { ...tx, service })) {
       throw new HttpsError('permission-denied', 'You are not authorized to reject this transaction.');
     }
-    if (!['pending', 'approved', 'processing'].includes(tx.status)) {
-      throw new HttpsError('failed-precondition', 'Only active transactions can be rejected.');
+
+    // A charged order that has entered processing must not be rejected without
+    // a compensating/refund workflow. Completion and rejection are mutually
+    // exclusive state transitions at this layer.
+    if (!['pending', 'approved'].includes(tx.status)) {
+      throw new HttpsError('failed-precondition', 'Only pending or approved transactions can be rejected.');
     }
 
     t.update(ref, {
