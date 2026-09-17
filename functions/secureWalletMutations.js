@@ -29,6 +29,10 @@ function validBalance(value) {
   return Number.isFinite(n) && n >= 0 && Number.isSafeInteger(Math.round(n * 100)) ? n : null;
 }
 
+function isActiveAccount(account) {
+  return account && account.suspended !== true && account.inactive !== true && account.disabled !== true && !account.mergedInto;
+}
+
 exports.createSelfTopup = onCall({ enforceAppCheck: true }, async (request) => {
   const { uid, requestId } = requireRequest(request);
   const db = admin.firestore();
@@ -45,7 +49,7 @@ exports.createSelfTopup = onCall({ enforceAppCheck: true }, async (request) => {
 
   const callerRef = db.collection('users').doc(uid);
   const opRef = db.collection('walletOperations').doc(`${uid}_createSelfTopup_${requestId}`);
-  const topupRef = db.collection('selfTopups').doc();
+  const topupRef = db.collection('selfTopUps').doc();
 
   try {
     const result = await db.runTransaction(async (tx) => {
@@ -64,8 +68,8 @@ exports.createSelfTopup = onCall({ enforceAppCheck: true }, async (request) => {
       const callerSnap = await tx.get(callerRef);
       if (!callerSnap.exists) throw new HttpsError('not-found', 'Account not found.');
       const caller = callerSnap.data() || {};
-      if (!ADMIN_ROLES.includes(caller.role)) {
-        throw new HttpsError('permission-denied', 'Only admin/superadmin can self top-up.');
+      if (!isActiveAccount(caller) || !ADMIN_ROLES.includes(caller.role)) {
+        throw new HttpsError('permission-denied', 'Your account cannot self top-up.');
       }
 
       const currentBalance = validBalance(caller.walletBalance);
