@@ -102,7 +102,7 @@ async function resolveRecipient(db, query, senderUid) {
   return recipient;
 }
 
-exports.findWalletRecipient = onCall(async (request) => {
+exports.findWalletRecipient = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireAuth(request);
   const db = admin.firestore();
   const sender = await getProfile(db, uid);
@@ -119,7 +119,7 @@ exports.findWalletRecipient = onCall(async (request) => {
   };
 });
 
-exports.listWalletTransfers = onCall(async (request) => {
+exports.listWalletTransfers = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireAuth(request);
   const db = admin.firestore();
   const snap = await db.collection('walletTransfers')
@@ -146,7 +146,7 @@ exports.listWalletTransfers = onCall(async (request) => {
   });
 });
 
-exports.walletTransfer = onCall(async (request) => {
+exports.walletTransfer = onCall({ enforceAppCheck: true }, async (request) => {
   const senderUid = requireAuth(request);
   const requestId = requireRequestId(request);
   const db = admin.firestore();
@@ -169,9 +169,6 @@ exports.walletTransfer = onCall(async (request) => {
   const ip = getClientIp(request);
   await checkVelocity(db, senderUid, 'walletTransfer', { ip });
 
-  // Deterministic transfer identity makes the transfer itself idempotent even
-  // if an outer marker is lost after the balance transaction has committed.
-  // A reused requestId with different transfer details is rejected.
   const transferRef = db.collection('walletTransfers').doc(`${senderUid}_${requestId}`);
   const senderRef = db.collection('users').doc(senderUid);
   const recipientRef = db.collection('users').doc(recipientUid);
@@ -226,78 +223,37 @@ exports.walletTransfer = onCall(async (request) => {
       tx.update(recipientRef, { walletBalance: myrFromCents(recipientAfter), walletBalanceCurrency: 'MYR', walletUpdatedAt: now });
 
       tx.create(transferRef, {
-        type: 'wallet_transfer',
-        currency: 'MYR',
-        requestId,
-        fromUid: senderUid,
-        fromName: senderData.displayName || senderData.name || '',
-        toUid: recipientUid,
-        toName: recipientData.displayName || recipientData.name || '',
-        amount: myrFromCents(amountCents),
-        amountMinor: amountCents,
-        note,
-        status: 'completed',
-        participants: [senderUid, recipientUid],
-        createdAt: now,
+        type: 'wallet_transfer', currency: 'MYR', requestId,
+        fromUid: senderUid, fromName: senderData.displayName || senderData.name || '',
+        toUid: recipientUid, toName: recipientData.displayName || recipientData.name || '',
+        amount: myrFromCents(amountCents), amountMinor: amountCents, note,
+        status: 'completed', participants: [senderUid, recipientUid], createdAt: now,
       });
 
       tx.set(senderLedgerRef, {
-        uid: senderUid,
-        type: 'wallet_transfer_debit',
-        direction: 'debit',
-        currency: 'MYR',
-        amount: myrFromCents(amountCents),
-        amountMinor: amountCents,
-        transferId: transferRef.id,
-        counterpartyUid: recipientUid,
-        balanceAfter: myrFromCents(senderAfter),
-        note,
-        createdAt: now,
+        uid: senderUid, type: 'wallet_transfer_debit', direction: 'debit', currency: 'MYR',
+        amount: myrFromCents(amountCents), amountMinor: amountCents, transferId: transferRef.id,
+        counterpartyUid: recipientUid, balanceAfter: myrFromCents(senderAfter), note, createdAt: now,
       });
 
       tx.set(recipientLedgerRef, {
-        uid: recipientUid,
-        type: 'wallet_transfer_credit',
-        direction: 'credit',
-        currency: 'MYR',
-        amount: myrFromCents(amountCents),
-        amountMinor: amountCents,
-        transferId: transferRef.id,
-        counterpartyUid: senderUid,
-        balanceAfter: myrFromCents(recipientAfter),
-        note,
-        createdAt: now,
+        uid: recipientUid, type: 'wallet_transfer_credit', direction: 'credit', currency: 'MYR',
+        amount: myrFromCents(amountCents), amountMinor: amountCents, transferId: transferRef.id,
+        counterpartyUid: senderUid, balanceAfter: myrFromCents(recipientAfter), note, createdAt: now,
       });
     });
 
     if (replay) {
-      return {
-        transferId: transferRef.id,
-        amount: myrFromCents(amountCents),
-        currency: 'MYR',
-        recipient: { uid: recipientUid, name: recipient.name || recipient.displayName || 'MySheba Customer' },
-        replay: true,
-      };
+      return { transferId: transferRef.id, amount: myrFromCents(amountCents), currency: 'MYR', recipient: { uid: recipientUid, name: recipient.name || recipient.displayName || 'MySheba Customer' }, replay: true };
     }
 
     await logAudit({
-      action: 'wallet_transfer',
-      targetUid: recipientUid,
-      performedBy: senderUid,
-      performedByRole: 'customer',
-      details: { transferId: transferRef.id, amount: myrFromCents(amountCents), currency: 'MYR', ip },
+      action: 'wallet_transfer', targetUid: recipientUid, performedBy: senderUid,
+      performedByRole: 'customer', details: { transferId: transferRef.id, amount: myrFromCents(amountCents), currency: 'MYR', ip },
     });
     await checkIpAnomaly(db, senderUid, ip, { action: 'walletTransfer', role: 'customer' });
 
-    return {
-      transferId: transferRef.id,
-      amount: myrFromCents(amountCents),
-      currency: 'MYR',
-      recipient: {
-        uid: recipientUid,
-        name: recipient.name || recipient.displayName || 'MySheba Customer',
-      },
-    };
+    return { transferId: transferRef.id, amount: myrFromCents(amountCents), currency: 'MYR', recipient: { uid: recipientUid, name: recipient.name || recipient.displayName || 'MySheba Customer' } };
   } catch (err) {
     if (err instanceof HttpsError) throw err;
     await logServerError('walletTransfer', err, { userId: senderUid, recipientUid });
