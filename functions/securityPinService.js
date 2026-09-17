@@ -7,10 +7,17 @@ const { logAudit, logServerError } = require('./logService');
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
+const RECENT_AUTH_SECONDS = 5 * 60;
 
 function requireAuth(request) {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   return request.auth.uid;
+}
+function requireRecentAuth(request) {
+  const authTime = Number(request.auth?.token?.auth_time || 0);
+  if (!Number.isFinite(authTime) || authTime <= 0 || Math.floor(Date.now() / 1000) - authTime > RECENT_AUTH_SECONDS) {
+    throw new HttpsError('unauthenticated', 'Please sign in again before changing your security PIN.');
+  }
 }
 function isValidPin(pin) { return typeof pin === 'string' && /^\d{4,8}$/.test(pin); }
 function pinDocRef(db, uid) { return db.collection('securityPins').doc(uid); }
@@ -18,12 +25,22 @@ function hashPin(pin, salt) {
   if (typeof salt !== 'string' || salt.length < 16) throw new Error('Invalid security PIN salt.');
   return crypto.scryptSync(pin, salt, 64).toString('hex');
 }
+function isActiveProfile(profile) {
+  return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto && profile.active !== false;
+}
+async function requireActiveProfile(db, uid) {
+  const snap = await db.collection('users').doc(uid).get();
+  if (!snap.exists || !isActiveProfile(snap.data() || {})) throw new HttpsError('permission-denied', 'Your account is not available.');
+}
 
 exports.setupSecurityPin = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireAuth(request);
+  requireRecentAuth(request);
   const { pin } = request.data || {};
   if (!isValidPin(pin)) throw new HttpsError('invalid-argument', 'PIN must be 4-8 digits.');
-  const db = getFirestore(); const ref = pinDocRef(db, uid);
+  const db = getFirestore();
+  await requireActiveProfile(db, uid);
+  const ref = pinDocRef(db, uid);
   try {
     const existing = await ref.get();
     if (existing.exists) throw new HttpsError('already-exists', 'A security PIN is already set. Use reset instead.');
@@ -43,7 +60,9 @@ exports.verifySecurityPin = onCall({ enforceAppCheck: true }, async (request) =>
   const uid = requireAuth(request);
   const { pin } = request.data || {};
   if (!isValidPin(pin)) throw new HttpsError('invalid-argument', 'Enter your PIN.');
-  const db = getFirestore(); const ref = pinDocRef(db, uid);
+  const db = getFirestore();
+  await requireActiveProfile(db, uid);
+  const ref = pinDocRef(db, uid);
   try {
     const snap = await ref.get();
     if (!snap.exists) throw new HttpsError('failed-precondition', 'No security PIN is set up yet.');
@@ -92,9 +111,12 @@ exports.verifySecurityPin = onCall({ enforceAppCheck: true }, async (request) =>
 
 exports.resetSecurityPin = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireAuth(request);
+  requireRecentAuth(request);
   const { pin } = request.data || {};
   if (!isValidPin(pin)) throw new HttpsError('invalid-argument', 'PIN must be 4-8 digits.');
-  const db = getFirestore(); const ref = pinDocRef(db, uid);
+  const db = getFirestore();
+  await requireActiveProfile(db, uid);
+  const ref = pinDocRef(db, uid);
   try {
     const salt = crypto.randomBytes(16).toString('hex');
     await ref.set({ hash: hashPin(pin, salt), salt, attempts: 0, lockedUntil: null, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }, { merge: false });
