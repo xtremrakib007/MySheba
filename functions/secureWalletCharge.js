@@ -79,6 +79,9 @@ exports.chargeWallet = onCall({ enforceAppCheck: true }, async (request) => {
       ]);
       if (!userSnap.exists) throw new HttpsError('not-found', 'Account not found.');
       const user = userSnap.data() || {};
+      if (user.suspended === true || user.inactive === true || user.disabled === true || user.mergedInto) {
+        throw new HttpsError('permission-denied', 'Your account is not active.');
+      }
       const pricing = { ...DEFAULT_PRICING, ...(pricingSnap.exists ? pricingSnap.data() : {}) };
       const balance = finiteNonNegative(user.walletBalance || 0, 'Wallet balance');
 
