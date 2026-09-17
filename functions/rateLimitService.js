@@ -1,6 +1,5 @@
-// Velocity / rate-limit guard for wallet-mutating Cloud Functions - plus a
-// second, IP-keyed variant (checkAnonymousVelocity) for the pre-auth OTP
-// flow in otpService.js, where there's no uid yet to key off.
+// Velocity / rate-limit guard for wallet-mutating Cloud Functions and
+// pre-auth verification/password-reset flows.
 const { HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logAudit } = require('./logService');
@@ -11,6 +10,7 @@ const DEFAULT_LIMITS = {
   chargeWallet: { max: 60, windowMinutes: 60 },
   account_merge_start: { max: 5, windowMinutes: 60 },
   account_merge_confirm: { max: 10, windowMinutes: 60 },
+  password_reset: { max: 5, windowMinutes: 60 },
 };
 
 const DEFAULT_OTP_LIMITS = {
