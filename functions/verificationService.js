@@ -53,7 +53,7 @@ function validateRequestData(data, uid) {
   if (data.liveFaceVerified !== true) throw new HttpsError('failed-precondition', 'Live face verification is required.');
 }
 
-exports.approveVerification = onCall(async (request) => {
+exports.approveVerification = onCall({ enforceAppCheck: true }, async (request) => {
   const callerUid = requireAuth(request);
   const db = admin.firestore();
   const caller = await requireAdmin(db, callerUid);
@@ -83,7 +83,7 @@ exports.approveVerification = onCall(async (request) => {
   return { ok: true };
 });
 
-exports.rejectVerification = onCall(async (request) => {
+exports.rejectVerification = onCall({ enforceAppCheck: true }, async (request) => {
   const callerUid = requireAuth(request);
   const db = admin.firestore();
   const caller = await requireAdmin(db, callerUid);
@@ -98,6 +98,8 @@ exports.rejectVerification = onCall(async (request) => {
       const reqSnap = await tx.get(reqRef);
       if (!reqSnap.exists) throw new HttpsError('not-found', 'That verification request does not exist.');
       if (reqSnap.data().status !== 'pending') throw new HttpsError('failed-precondition', 'That request has already been reviewed.');
+      const userSnap = await tx.get(userRef);
+      if (!userSnap.exists) throw new HttpsError('not-found', 'That user account no longer exists.');
       tx.update(reqRef, { status: 'rejected', note: cleanReason, rejectionReason: cleanReason, reviewedBy: callerUid, reviewedAt: admin.firestore.FieldValue.serverTimestamp() });
       tx.update(userRef, { verified: false, verificationStatus: 'rejected' });
       tx.delete(db.collection('pendingBiometricTemplates').doc(targetUid));
