@@ -17,7 +17,7 @@ export function unwrapEmailSignInLink(url) {
 
 export async function sendEmailOtp(email) {
   const e=normalize(email); if(!valid(e)) throw new Error('Please enter a valid email address.');
-  try { const fn=httpsCallable(functions,'registerWithDealerCode'); const r=await timeout(fn({action:'sendEmailVerificationOtp',email:e}),TIMEOUT,'Sending the verification email took too long. Please try again.'); await AsyncStorage.setItem(EMAIL_FOR_SIGN_IN_KEY,e); return r.data; }
+  try { const fn=httpsCallable(functions,'registerCustomer'); const r=await timeout(fn({action:'sendEmailVerificationOtp',email:e}),TIMEOUT,'Sending the verification email took too long. Please try again.'); await AsyncStorage.setItem(EMAIL_FOR_SIGN_IN_KEY,e); return r.data; }
   catch(err){ throw new Error(friendly(err)); }
 }
 export const sendEmailLink = sendEmailOtp;
@@ -44,7 +44,7 @@ export async function confirmEmailLink(url, expectedEmail) {
 
 export async function verifyEmailOtp(email, code) {
   const e=normalize(email); const c=String(code||'').trim(); if(!valid(e)) throw new Error('Please enter a valid email address.'); if(!/^\d{6}$/.test(c)) throw new Error('Enter the 6-digit verification code.');
-  try { const fn=httpsCallable(functions,'registerWithDealerCode'); const r=await timeout(fn({action:'verifyEmailVerificationOtp',email:e,code:c}),TIMEOUT,'Email OTP verification took too long. Please try again.'); const verificationId=r?.data?.verificationId; if(!verificationId) throw new Error('The verification result was incomplete. Please request a new code.'); await AsyncStorage.removeItem(EMAIL_FOR_SIGN_IN_KEY).catch(()=>{}); return {verificationId,email:e}; }
+  try { const fn=httpsCallable(functions,'registerCustomer'); const r=await timeout(fn({action:'verifyEmailVerificationOtp',email:e,code:c}),TIMEOUT,'Email OTP verification took too long. Please try again.'); const verificationId=r?.data?.verificationId; if(!verificationId) throw new Error('The verification result was incomplete. Please request a new code.'); await AsyncStorage.removeItem(EMAIL_FOR_SIGN_IN_KEY).catch(()=>{}); return {verificationId,email:e}; }
   catch(err){throw new Error(friendly(err));}
 }
 export const confirmEmailOtp = verifyEmailOtp;
