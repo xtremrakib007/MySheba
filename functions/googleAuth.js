@@ -72,15 +72,52 @@ exports.signInExistingGoogleAccount = onCall(async (request) => {
   const token = request.auth.token || {};
   const provider = token.firebase?.sign_in_provider || '';
   const googleEmail = normalizeEmail(token.email);
+  const callerUid = request.auth.uid;
   if (provider !== 'google.com' || !googleEmail || !token.email_verified) throw new HttpsError('permission-denied', 'A verified Google account is required.');
+
+  let callerAuthUser;
+  try {
+    callerAuthUser = await admin.auth().getUser(callerUid);
+  } catch {
+    throw new HttpsError('permission-denied', 'The Google account could not be verified. Please sign in with Google again.');
+  }
+  const callerGoogleProvider = (callerAuthUser.providerData || []).find((p) => p.providerId === 'google.com');
+  if (!callerGoogleProvider || normalizeEmail(callerGoogleProvider.email) !== googleEmail) {
+    throw new HttpsError('permission-denied', 'The Google account identity could not be verified. Please sign in with Google again.');
+  }
+
   const db = getFirestore();
-  const snap = await db.collection('users').where('email', '==', googleEmail).limit(1).get();
+  const snap = await db.collection('users').where('email', '==', googleEmail).limit(2).get();
   if (snap.empty) return { found: false };
+  if (snap.size > 1) throw new HttpsError('failed-precondition', 'Multiple MySheba accounts use this email. Please contact support.');
+
   const userDoc = snap.docs[0];
+  const targetUid = userDoc.id;
   const userData = userDoc.data() || {};
-  if (userData.suspended) throw new HttpsError('permission-denied', 'This MySheba account has been suspended. Please contact support.');
-  const customToken = await admin.auth().createCustomToken(userDoc.id, { googleSignIn: true });
-  return { found: true, customToken, uid: userDoc.id, profile: { uid: userDoc.id, ...userData } };
+  if (targetUid === callerUid) {
+    return { found: true, alreadySignedIn: true, uid: targetUid, profile: { uid: targetUid, ...userData } };
+  }
+  if (userData.suspended || userData.active === false || userData.mergedInto) {
+    throw new HttpsError('permission-denied', 'This MySheba account is unavailable. Please contact support.');
+  }
+
+  let targetAuthUser;
+  try {
+    targetAuthUser = await admin.auth().getUser(targetUid);
+  } catch {
+    throw new HttpsError('failed-precondition', 'The MySheba account could not be verified. Please contact support.');
+  }
+  if (targetAuthUser.disabled) throw new HttpsError('permission-denied', 'This MySheba account has been disabled. Please contact support.');
+  const targetGoogleProvider = (targetAuthUser.providerData || []).find((p) => p.providerId === 'google.com');
+  if (!targetGoogleProvider || normalizeEmail(targetGoogleProvider.email) !== googleEmail) {
+    throw new HttpsError('permission-denied', 'The Google account is not linked to this MySheba account. Please use Settings → Link Google Account.');
+  }
+  if (targetGoogleProvider.uid && callerGoogleProvider.uid && targetGoogleProvider.uid !== callerGoogleProvider.uid) {
+    throw new HttpsError('permission-denied', 'The Google account identity does not match this MySheba account. Please use Settings → Link Google Account.');
+  }
+
+  const customToken = await admin.auth().createCustomToken(targetUid, { googleSignIn: true });
+  return { found: true, customToken, uid: targetUid, profile: { uid: targetUid, ...userData } };
 });
 
 exports.ensureGoogleProfile = onCall(async (request) => {
