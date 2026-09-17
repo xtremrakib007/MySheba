@@ -2,13 +2,8 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 
 // NOTE: `db` is intentionally NOT created at module load time. index.js
-// requires this file (to build its exports) before it calls
-// admin.initializeApp() - calling admin.firestore() at the top level here
-// would throw "The default Firebase app does not exist" and crash the whole
-// Functions deployment on cold start. Every other service file in this repo
-// (adPaymentService.js, adTrackingService.js, adControlsService.js, etc.)
-// avoids this by calling admin.firestore() lazily inside each function body,
-// once initializeApp() has definitely already run - same pattern here.
+// requires this file before it calls admin.initializeApp(). Every function
+// creates its Firestore handle lazily after initialization.
 const COLLECTION = 'api_providers';
 const SETTINGS = 'api_settings/service_modes';
 const ALLOWED_SERVICES = ['Recharge', 'Internet', 'Bus', 'Train', 'Flight', 'Mobile Banking', 'Remittance', 'Payment Gateway'];
@@ -23,20 +18,10 @@ function assertSuperadmin(db, request) {
 }
 function cleanString(v, max = 500) { return typeof v === 'string' ? v.trim().slice(0, max) : ''; }
 
-// SSRF hardening for baseUrl. Nothing calls out to a stored provider's
-// baseUrl today (see API_PROVIDER_MANAGEMENT.md - this is the config layer
-// only), but a "test connection" button or a real integration will fetch it
-// eventually from a trusted server context, so the URL a Superadmin can
-// store is restricted now rather than left as a future SSRF hole:
-// - https:// only (no plaintext http, no other schemes like file:// etc.)
-// - no localhost/loopback, link-local, private (RFC1918/ULA), or
-//   .internal/.local hostnames, and no bare IPv4/IPv6 literals at all
-//   (a literal IP skips DNS entirely, which is the classic SSRF bypass for
-//   hostname-based blocklists)
 const BLOCKED_HOSTS = /^(localhost|.*\.local|.*\.internal)$/i;
 function isIpLiteral(host) {
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return true; // IPv4
-  if (host.includes(':')) return true; // IPv6 (bracketed host from URL parser)
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return true;
+  if (host.includes(':')) return true;
   return false;
 }
 function validateBaseUrl(baseUrl) {
@@ -58,13 +43,13 @@ function validate(data) {
   return { service, name, baseUrl, authType, apiKey: cleanString(data.apiKey, 1000), username: cleanString(data.username, 200), password: cleanString(data.password, 1000), active: data.active !== false, priority: Math.max(0, Math.min(9999, Number(data.priority) || 0)), timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)), notes: cleanString(data.notes, 1000) };
 }
 
-exports.listApiProviders = onCall(async (request) => {
+exports.listApiProviders = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const snap = await db.collection(COLLECTION).orderBy('priority', 'desc').get();
   return snap.docs.map((d) => { const x = d.data(); return { id: d.id, ...x, apiKey: x.apiKey ? '••••••••' : '', password: x.password ? '••••••••' : '' }; });
 });
-exports.saveApiProvider = onCall(async (request) => {
+exports.saveApiProvider = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const data = validate(request.data || {}), id = cleanString(request.data?.id, 100);
@@ -74,7 +59,7 @@ exports.saveApiProvider = onCall(async (request) => {
   await ref.set({ ...data, updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: request.auth.uid }, { merge: true });
   return { id: ref.id };
 });
-exports.deleteApiProvider = onCall(async (request) => {
+exports.deleteApiProvider = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const id = cleanString(request.data?.id, 100);
@@ -83,15 +68,13 @@ exports.deleteApiProvider = onCall(async (request) => {
   return { ok: true };
 });
 
-// Superadmin chooses which backend each service uses. Legacy is the safe default
-// so adding API providers never changes existing behaviour until explicitly switched.
-exports.getServiceApiSettings = onCall(async (request) => {
+exports.getServiceApiSettings = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const snap = await db.doc(SETTINGS).get();
   return { modes: { ...DEFAULT_MODES, ...(snap.exists ? (snap.data().modes || {}) : {}) } };
 });
-exports.saveServiceApiSettings = onCall(async (request) => {
+exports.saveServiceApiSettings = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const incoming = request.data?.modes || {};
