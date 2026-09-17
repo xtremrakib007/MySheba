@@ -107,7 +107,6 @@
           "cameraPermission": "Allow MySheba to access your camera for KYC identity verification, QR scanning, and video calls."
         }
       ],
-      "@react-native-google-signin/google-signin",
       "@react-native-firebase/app",
       [
         "react-native-google-mobile-ads",
@@ -161,7 +160,6 @@
       "eas": {
         "projectId": "5f0bbeb3-e2d9-4a46-af9f-66379fada1c8"
       },
-      "googleWebClientId": "632456211568-v5f370netearu5lb8ld48lhr28erbp9p.apps.googleusercontent.com",
       "googleMapsApiKey": "GOOGLE_MAPS_API_KEY_PLACEHOLDER",
       "admobAndroidBannerId": "ca-app-pub-5028998697615030/9556346804",
       "admobIosBannerId": "",
