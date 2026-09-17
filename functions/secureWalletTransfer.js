@@ -17,23 +17,35 @@ function getRequestId(request) {
   return id;
 }
 
+function amountMinor(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) throw new HttpsError('invalid-argument', 'Enter a valid MYR amount.');
+  const minor = Math.round(n * 100);
+  if (!Number.isSafeInteger(minor)) throw new HttpsError('invalid-argument', 'Transfer amount is too large.');
+  return minor;
+}
+
 exports.walletTransfer = onCall(async (request) => {
   const uid = requireAuth(request);
   const requestId = getRequestId(request);
   const db = admin.firestore();
+  const rawRecipient = String(request.data?.recipient || '').trim();
+  const requestedAmountMinor = amountMinor(request.data?.amount);
   const opRef = db.collection('walletOperations').doc(`${uid}_walletTransfer_${requestId}`);
 
   let existing = null;
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(opRef);
     if (snap.exists) {
-      existing = snap.data();
+      existing = snap.data() || {};
       return;
     }
     tx.create(opRef, {
       type: 'walletTransfer',
       uid,
       requestId,
+      requestedRecipient: rawRecipient,
+      requestedAmountMinor,
       status: 'processing',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -41,11 +53,16 @@ exports.walletTransfer = onCall(async (request) => {
   });
 
   if (existing) {
-    if (existing.type !== 'walletTransfer' || existing.uid !== uid) {
+    if (existing.type !== 'walletTransfer' || existing.uid !== uid || existing.requestId !== requestId) {
       throw new HttpsError('failed-precondition', 'That request ID is already in use.');
     }
+    // Never replay a completed result for a different request payload. The
+    // deterministic transfer document below remains the source of truth.
+    if (existing.requestedRecipient !== rawRecipient || Number(existing.requestedAmountMinor) !== requestedAmountMinor) {
+      throw new HttpsError('already-exists', 'That request ID was already used for a different transfer.');
+    }
     if (existing.status === 'completed' && existing.transferId) {
-      return { transferId: existing.transferId, amount: existing.amount || 0, currency: 'MYR', replay: true };
+      return { transferId: existing.transferId, amount: Number(existing.amount || 0), currency: existing.currency || 'MYR', replay: true };
     }
 
     const recovered = await db.collection('walletTransfers')
@@ -56,10 +73,14 @@ exports.walletTransfer = onCall(async (request) => {
     if (!recovered.empty) {
       const doc = recovered.docs[0];
       const data = doc.data() || {};
+      if (data.fromUid !== uid || Number(data.amountMinor) !== requestedAmountMinor) {
+        throw new HttpsError('already-exists', 'That request ID was already used for a different transfer.');
+      }
       await opRef.update({
         status: 'completed',
         transferId: doc.id,
         amount: Number(data.amount || 0),
+        currency: data.currency || 'MYR',
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       return { transferId: doc.id, amount: Number(data.amount || 0), currency: data.currency || 'MYR', replay: true };
@@ -79,11 +100,9 @@ exports.walletTransfer = onCall(async (request) => {
         status: 'completed',
         transferId: result?.transferId || null,
         amount: Number(result?.amount || 0),
+        currency: result?.currency || 'MYR',
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      if (result?.transferId) {
-        tx.update(db.collection('walletTransfers').doc(result.transferId), { requestId });
-      }
     });
     return result;
   } catch (err) {
