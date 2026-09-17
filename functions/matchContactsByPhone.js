@@ -21,8 +21,8 @@ function normalizeDigits(value) {
 // Friends screen visit (not per keystroke like search), so this is plenty.
 const MAX_NUMBERS = 1000;
 
-exports.matchContactsByPhone = onCall(async (request) => {
-  if (!request.auth) {
+exports.matchContactsByPhone = onCall({ enforceAppCheck: true }, async (request) => {
+  if (!request.auth?.uid) {
     throw new HttpsError('unauthenticated', 'You must be signed in.');
   }
   const callerUid = request.auth.uid;
@@ -47,6 +47,9 @@ exports.matchContactsByPhone = onCall(async (request) => {
   snap.forEach((doc) => {
     if (doc.id === callerUid) return;
     const u = doc.data() || {};
+    // Suspended/inactive accounts must not remain discoverable through the
+    // contact-matching endpoint after access has been revoked.
+    if (u.suspended === true || u.inactive === true) return;
     const phoneDigits = normalizeDigits(u.phone);
     if (!phoneDigits || !wanted.has(phoneDigits)) return;
     results.push({
