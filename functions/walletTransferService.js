@@ -15,6 +15,7 @@ function requireAuth(request) { if (!request.auth) throw new HttpsError('unauthe
 function requireRequestId(request) { const requestId = request.data?.requestId; if (typeof requestId !== 'string' || !REQUEST_ID_RE.test(requestId)) throw new HttpsError('invalid-argument', 'requestId is required and must be 16-128 safe characters.'); return requestId; }
 function normalizePhone(value) { return String(value || '').replace(/[^0-9+]/g, '').replace(/^00/, '+'); }
 function normalizeQuery(value) { return String(value || '').trim(); }
+function active(profile) { return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto; }
 function parseMoneyCents(value) {
   if (typeof value === 'number') {
     if (!Number.isFinite(value) || !Number.isSafeInteger(Math.round(value * 100))) throw new HttpsError('invalid-argument', 'Enter a valid MYR transfer amount.');
@@ -24,9 +25,7 @@ function parseMoneyCents(value) {
     const text = value.trim();
     if (!MONEY_RE.test(text)) throw new HttpsError('invalid-argument', 'Transfer amount must be a valid MYR amount with no more than 2 decimal places.');
     value = Number(text);
-  } else {
-    throw new HttpsError('invalid-argument', 'Enter a valid MYR transfer amount.');
-  }
+  } else throw new HttpsError('invalid-argument', 'Enter a valid MYR transfer amount.');
   const amountCents = Math.round(Number(value) * 100);
   if (!Number.isSafeInteger(amountCents)) throw new HttpsError('invalid-argument', 'Transfer amount is too large.');
   return amountCents;
@@ -47,7 +46,7 @@ async function resolveRecipient(db, query, senderUid) {
   if (snap.size > 1) throw new HttpsError('failed-precondition', 'More than one account matches. Use the Customer ID.');
   const doc = snap.docs[0], recipient = { id: doc.id, ...doc.data() };
   if (recipient.id === senderUid) throw new HttpsError('invalid-argument', "You can't transfer money to yourself.");
-  if (recipient.mergedInto) throw new HttpsError('not-found', 'That account is no longer active.');
+  if (!active(recipient)) throw new HttpsError('not-found', 'That account is no longer active.');
   if (recipient.role !== 'customer') throw new HttpsError('failed-precondition', 'Wallet transfers are currently available between customer wallets only.');
   if (!isKycApproved(recipient)) throw new HttpsError('failed-precondition', 'The recipient has not completed KYC yet.');
   return recipient;
@@ -56,6 +55,7 @@ async function resolveRecipient(db, query, senderUid) {
 exports.findWalletRecipient = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireAuth(request), db = admin.firestore(), sender = await getProfile(db, uid);
   if (!sender) throw new HttpsError('not-found', 'Your account was not found.');
+  if (!active(sender)) throw new HttpsError('permission-denied', 'Your account is not active.');
   if (sender.role !== 'customer') throw new HttpsError('permission-denied', 'Wallet-to-wallet transfers are for customer wallets.');
   if (!isKycApproved(sender)) throw new HttpsError('failed-precondition', 'Complete KYC before using wallet transfers.');
   const recipient = await resolveRecipient(db, request.data?.recipient, uid);
@@ -64,6 +64,8 @@ exports.findWalletRecipient = onCall({ enforceAppCheck: true }, async (request) 
 
 exports.listWalletTransfers = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireAuth(request), db = admin.firestore();
+  const sender = await getProfile(db, uid);
+  if (!active(sender) || sender.role !== 'customer') throw new HttpsError('permission-denied', 'Wallet transfer history is only available to active customer accounts.');
   const snap = await db.collection('walletTransfers').where('participants', 'array-contains', uid).orderBy('createdAt', 'desc').limit(30).get();
   return snap.docs.map(doc => { const d = doc.data() || {}; return { id: doc.id, type: d.type || 'wallet_transfer', currency: d.currency || 'MYR', fromUid: d.fromUid || '', fromName: d.fromName || '', toUid: d.toUid || '', toName: d.toName || '', amount: Number(d.amount || 0), note: d.note || '', status: d.status || 'completed', createdAt: d.createdAt?.toMillis ? d.createdAt.toMillis() : null }; });
 });
@@ -71,6 +73,7 @@ exports.listWalletTransfers = onCall({ enforceAppCheck: true }, async (request) 
 exports.walletTransfer = onCall({ enforceAppCheck: true }, async (request) => {
   const senderUid = requireAuth(request), requestId = requireRequestId(request), db = admin.firestore(), sender = await getProfile(db, senderUid);
   if (!sender) throw new HttpsError('not-found', 'Your account was not found.');
+  if (!active(sender)) throw new HttpsError('permission-denied', 'Your account is not active.');
   if (sender.role !== 'customer') throw new HttpsError('permission-denied', 'Wallet-to-wallet transfers are for customer wallets.');
   if (!isKycApproved(sender)) throw new HttpsError('failed-precondition', 'Complete KYC before using wallet transfers.');
   const amountCents = parseMoneyCents(request.data?.amount);
@@ -86,6 +89,7 @@ exports.walletTransfer = onCall({ enforceAppCheck: true }, async (request) => {
       const senderSnap = await tx.get(senderRef), recipientSnap = await tx.get(recipientRef);
       if (!senderSnap.exists || !recipientSnap.exists) throw new HttpsError('not-found', 'Wallet account not found.');
       const senderData = senderSnap.data(), recipientData = recipientSnap.data();
+      if (!active(senderData) || !active(recipientData)) throw new HttpsError('failed-precondition', 'Both customer accounts must be active.');
       if (senderData.role !== 'customer' || recipientData.role !== 'customer') throw new HttpsError('permission-denied', 'Only customer wallets can use this transfer.');
       if (!isKycApproved(senderData) || !isKycApproved(recipientData)) throw new HttpsError('failed-precondition', 'Both customer wallets must complete KYC.');
       const senderBalanceCents = cents(senderData.walletBalance), recipientBalanceCents = cents(recipientData.walletBalance);
