@@ -2,13 +2,14 @@
 import { collection, onSnapshot, query, where, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
+import * as Crypto from 'expo-crypto';
 import { db, storage, functions } from './config';
 import { logActivity, logError } from './logService';
 
 export const METHODS = { transfer: 'Bank Transfer', deposit: 'Bank Deposit', jompay: 'JomPay', duitnow: 'DuitNow QR' };
 
 function createRequestId(prefix = 'pt') {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}`;
+  return `${prefix}_${Crypto.randomUUID()}`;
 }
 
 export async function uploadReceipt(localUri, uid) {
