@@ -34,7 +34,10 @@ service cloud.firestore {
       match /salaryRecords/{recordId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if isAdmin(); }
       match /allowances/{allowanceId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if isAdmin(); }
       match /deductions/{deductionId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if isAdmin(); }
-      match /trustedDevices/{deviceId} { allow read, create, update, delete: if signedIn() && (request.auth.uid == uid || isAdmin()); }
+      // Trusted-device registration, refresh and revocation are security-sensitive
+      // and must go through the authenticated Cloud Functions flow. The client
+      // only needs to list devices; it must never manufacture or alter trust state.
+      match /trustedDevices/{deviceId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow create, update, delete: if false; }
     }
 
     match /chats/{chatId} {
