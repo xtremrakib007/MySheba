@@ -22,10 +22,15 @@ function requireAuth(request) {
 }
 function validEmail(email) { return typeof email === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()); }
 function hash(code) { return crypto.createHash('sha256').update(String(code).trim()).digest('hex'); }
+function safeEqualHash(left, right) {
+  const a = Buffer.from(String(left || ''), 'hex');
+  const b = Buffer.from(String(right || ''), 'hex');
+  return a.length === b.length && a.length > 0 && crypto.timingSafeEqual(a, b);
+}
 function code() { return String(crypto.randomInt(100000, 1000000)); }
 function ref(db, uid) { return db.collection('users').doc(uid); }
 
-exports.sendDeviceVerification = onCall(async (request) => {
+exports.sendDeviceVerification = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireAuth(request);
   const deviceId = String(request.data?.deviceId || '').trim();
   if (!deviceId || deviceId.length > 100) throw new HttpsError('invalid-argument', 'Missing or invalid device id.');
@@ -64,17 +69,24 @@ exports.sendDeviceVerification = onCall(async (request) => {
     },
   });
 
-  await mailerService.sendEmail({
-    to: email,
-    subject: 'MySheba device verification — link + 6-digit code',
-    text: `We received a MySheba sign-in request from a new device.\n\nOpen this verification link on that device:\n${link}\n\nOr enter this 6-digit code in the MySheba app:\n${otp}\n\nThe code expires in 10 minutes. If you did not request this, ignore this email.`,
-    html: `<div style="font-family:Arial,sans-serif;line-height:1.6;max-width:600px;margin:auto"><h2>MySheba device verification</h2><p>We received a sign-in request from a new device.</p><p><b>Use the verification link:</b></p><p><a href="${link}" style="display:inline-block;padding:12px 18px;background:#08aaa0;color:#fff;text-decoration:none;border-radius:8px">Verify This Device</a></p><p><b>Or enter this 6-digit code:</b></p><div style="font-size:28px;font-weight:700;letter-spacing:8px;padding:14px 18px;background:#f3f4f6;border-radius:8px;text-align:center">${otp}</div><p>The code expires in 10 minutes.</p></div>`,
-    context: 'deviceVerificationService.sendDeviceVerification',
-  });
+  try {
+    await mailerService.sendEmail({
+      to: email,
+      subject: 'MySheba device verification — link + 6-digit code',
+      text: `We received a MySheba sign-in request from a new device.\n\nOpen this verification link on that device:\n${link}\n\nOr enter this 6-digit code in the MySheba app:\n${otp}\n\nThe code expires in 10 minutes. If you did not request this, ignore this email.`,
+      html: `<div style="font-family:Arial,sans-serif;line-height:1.6;max-width:600px;margin:auto"><h2>MySheba device verification</h2><p>We received a MySheba sign-in request from a new device.</p><p><b>Use the verification link:</b></p><p><a href="${link}" style="display:inline-block;padding:12px 18px;background:#08aaa0;color:#fff;text-decoration:none;border-radius:8px">Verify This Device</a></p><p><b>Or enter this 6-digit code:</b></p><div style="font-size:28px;font-weight:700;letter-spacing:8px;padding:14px 18px;background:#f3f4f6;border-radius:8px;text-align:center">${otp}</div><p>The code expires in 10 minutes. If you did not request this, ignore this email.</p></div>`,
+      context: 'deviceVerificationService.sendDeviceVerification',
+    });
+  } catch (err) {
+    // Do not leave a challenge that the user can never complete if delivery failed.
+    await userRef.update({ pendingDeviceEmailChallenge: FieldValue.delete() }).catch(() => {});
+    console.error('[deviceVerification] email send failed', err);
+    throw new HttpsError('internal', 'Could not send the verification email. Please try again.');
+  }
   return { sent: true, email };
 });
 
-exports.confirmDeviceEmailOtp = onCall(async (request) => {
+exports.confirmDeviceEmailOtp = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireAuth(request);
   const deviceId = String(request.data?.deviceId || '').trim();
   const otp = String(request.data?.code || '').trim();
@@ -122,7 +134,7 @@ exports.confirmDeviceEmailOtp = onCall(async (request) => {
     }
     if (challenge.expiresAt?.toMillis?.() < Date.now()) throw new HttpsError('deadline-exceeded', 'That verification code expired. Request a new email.');
     if ((challenge.attempts || 0) >= MAX_ATTEMPTS) throw new HttpsError('resource-exhausted', 'Too many attempts. Request a new verification email.');
-    if (hash(otp) !== challenge.codeHash) {
+    if (!safeEqualHash(hash(otp), challenge.codeHash)) {
       await userRef.update({ 'pendingDeviceEmailChallenge.attempts': FieldValue.increment(1) });
       throw new HttpsError('invalid-argument', 'Incorrect verification code.');
     }
