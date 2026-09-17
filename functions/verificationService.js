@@ -17,9 +17,19 @@ async function requireAdmin(db, callerUid) {
 }
 
 function validStorageUrl(url, uid) {
-  if (typeof url !== 'string' || !url.startsWith('https://')) return false;
-  const encodedPrefix = encodeURIComponent(`verification-documents/${uid}/`);
-  return url.includes(encodedPrefix) || url.includes(`/verification-documents/${uid}/`);
+  if (typeof url !== 'string' || url.length > 4096) return false;
+  let parsed;
+  try { parsed = new URL(url); } catch (_) { return false; }
+  if (parsed.protocol !== 'https:' || parsed.hostname !== 'firebasestorage.googleapis.com') return false;
+  const bucket = admin.storage().bucket().name;
+  const prefix = `/v0/b/${bucket}/o/`;
+  if (!parsed.pathname.startsWith(prefix)) return false;
+  let objectPath;
+  try { objectPath = decodeURIComponent(parsed.pathname.slice(prefix.length)); } catch (_) { return false; }
+  const expectedPrefix = `verification-documents/${uid}/`;
+  if (!objectPath.startsWith(expectedPrefix)) return false;
+  const fileName = objectPath.slice(expectedPrefix.length);
+  return !!fileName && !fileName.includes('\\0') && !fileName.split('/').some((part) => part === '..');
 }
 
 function validateRequestData(data, uid) {
@@ -36,9 +46,7 @@ function validateRequestData(data, uid) {
   if (typeof data.address !== 'string' || data.address.trim().length < 5 || data.address.length > 500) throw new HttpsError('failed-precondition', 'Invalid residential address.');
   if (data.documentType === 'Passport') {
     if (typeof data.passportExpiryDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(data.passportExpiryDate)) throw new HttpsError('failed-precondition', 'Passport expiry date is required.');
-  } else if (data.passportExpiryDate) {
-    throw new HttpsError('failed-precondition', 'Passport expiry date is only valid for passports.');
-  }
+  } else if (data.passportExpiryDate) throw new HttpsError('failed-precondition', 'Passport expiry date is only valid for passports.');
   if (!validStorageUrl(data.frontDocumentUrl, uid) || !validStorageUrl(data.documentUrl, uid)) throw new HttpsError('failed-precondition', 'The identity document upload is invalid.');
   if (data.documentType !== 'Passport' && !validStorageUrl(data.backDocumentUrl, uid)) throw new HttpsError('failed-precondition', 'The back of the identity document is required.');
   if (!validStorageUrl(data.selfieUrl, uid)) throw new HttpsError('failed-precondition', 'The verified face image is missing.');
