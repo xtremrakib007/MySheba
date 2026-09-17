@@ -6,6 +6,10 @@ const MAX_AMOUNT = 100000;
 const ADMIN_ROLES = ['admin', 'superadmin'];
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 
+function activeAccount(profile) {
+  return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto;
+}
+
 exports.adminTopUpPoints = onCall({ enforceAppCheck: true }, async request => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
 
@@ -15,6 +19,9 @@ exports.adminTopUpPoints = onCall({ enforceAppCheck: true }, async request => {
   const caller = callerSnap.exists ? callerSnap.data() : null;
   if (!caller || !ADMIN_ROLES.includes(caller.role)) {
     throw new HttpsError('permission-denied', 'Only admin/superadmin can top up points.');
+  }
+  if (!activeAccount(caller)) {
+    throw new HttpsError('permission-denied', 'This account is not active.');
   }
 
   const data = request.data || {};
