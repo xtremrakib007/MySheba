@@ -9,12 +9,29 @@ const MAX_TRANSFER_MYR = 10000;
 const MIN_TRANSFER_MYR = 0.01;
 const MAX_RECIPIENT_QUERY = 80;
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
+const MONEY_RE = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
 
 function requireAuth(request) { if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.'); return request.auth.uid; }
 function requireRequestId(request) { const requestId = request.data?.requestId; if (typeof requestId !== 'string' || !REQUEST_ID_RE.test(requestId)) throw new HttpsError('invalid-argument', 'requestId is required and must be 16-128 safe characters.'); return requestId; }
 function normalizePhone(value) { return String(value || '').replace(/[^0-9+]/g, '').replace(/^00/, '+'); }
 function normalizeQuery(value) { return String(value || '').trim(); }
-function cents(value) { return Math.round(Number(value || 0) * 100); }
+function parseMoneyCents(value) {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || !Number.isSafeInteger(Math.round(value * 100))) throw new HttpsError('invalid-argument', 'Enter a valid MYR transfer amount.');
+    const text = String(value);
+    if (!MONEY_RE.test(text)) throw new HttpsError('invalid-argument', 'Transfer amount must use no more than 2 decimal places.');
+  } else if (typeof value === 'string') {
+    const text = value.trim();
+    if (!MONEY_RE.test(text)) throw new HttpsError('invalid-argument', 'Transfer amount must be a valid MYR amount with no more than 2 decimal places.');
+    value = Number(text);
+  } else {
+    throw new HttpsError('invalid-argument', 'Enter a valid MYR transfer amount.');
+  }
+  const amountCents = Math.round(Number(value) * 100);
+  if (!Number.isSafeInteger(amountCents)) throw new HttpsError('invalid-argument', 'Transfer amount is too large.');
+  return amountCents;
+}
+function cents(value) { const n = Number(value || 0); return Number.isFinite(n) ? Math.round(n * 100) : NaN; }
 function myrFromCents(value) { return value / 100; }
 function isKycApproved(profile) { return profile?.verified === true || profile?.verificationStatus === 'approved'; }
 async function getProfile(db, uid) { const snap = await db.collection('users').doc(uid).get(); if (!snap.exists) return null; return { id: snap.id, ...snap.data() }; }
@@ -56,8 +73,8 @@ exports.walletTransfer = onCall({ enforceAppCheck: true }, async (request) => {
   if (!sender) throw new HttpsError('not-found', 'Your account was not found.');
   if (sender.role !== 'customer') throw new HttpsError('permission-denied', 'Wallet-to-wallet transfers are for customer wallets.');
   if (!isKycApproved(sender)) throw new HttpsError('failed-precondition', 'Complete KYC before using wallet transfers.');
-  const amountCents = cents(request.data?.amount);
-  if (!Number.isInteger(amountCents) || amountCents < cents(MIN_TRANSFER_MYR) || amountCents > cents(MAX_TRANSFER_MYR)) throw new HttpsError('invalid-argument', 'Enter a valid MYR transfer amount.');
+  const amountCents = parseMoneyCents(request.data?.amount);
+  if (amountCents < Math.round(MIN_TRANSFER_MYR * 100) || amountCents > Math.round(MAX_TRANSFER_MYR * 100)) throw new HttpsError('invalid-argument', 'Enter a valid MYR transfer amount.');
   const recipient = await resolveRecipient(db, request.data?.recipient, senderUid), recipientUid = recipient.id, note = String(request.data?.note || '').trim().slice(0, 120), ip = getClientIp(request);
   await checkVelocity(db, senderUid, 'walletTransfer', { ip });
   const transferRef = db.collection('walletTransfers').doc(`${senderUid}_${requestId}`), senderRef = db.collection('users').doc(senderUid), recipientRef = db.collection('users').doc(recipientUid), senderLedgerRef = db.collection('walletLedger').doc(), recipientLedgerRef = db.collection('walletLedger').doc();
