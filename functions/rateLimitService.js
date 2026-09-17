@@ -1,5 +1,5 @@
 // Velocity / rate-limit guard for wallet-mutating Cloud Functions and
-// pre-auth verification/password-reset flows.
+// account discovery / pre-auth verification/password-reset flows.
 const { HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logAudit } = require('./logService');
@@ -12,6 +12,9 @@ const DEFAULT_LIMITS = {
   account_merge_confirm: { max: 10, windowMinutes: 60 },
   password_reset: { max: 5, windowMinutes: 60 },
   password_reset_email_send: { max: 5, windowMinutes: 60 },
+  search_users: { max: 30, windowMinutes: 10 },
+  get_user_by_uid: { max: 60, windowMinutes: 10 },
+  match_contacts_by_phone: { max: 10, windowMinutes: 10 },
 };
 
 const DEFAULT_OTP_LIMITS = {
