@@ -10,10 +10,15 @@ const PENDING = 'pendingBiometricTemplates';
 const VERIFIED = 'biometricTemplates';
 const DIMENSIONS = 512;
 const DUPLICATE_THRESHOLD = 0.82;
+const PENDING_TTL_MS = 30 * 60 * 1000;
 
 function requireAuth(request) {
-  if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
   return request.auth.uid;
+}
+
+function isActiveUser(user) {
+  return user && user.suspended !== true && user.inactive !== true && user.disabled !== true && !user.mergedInto;
 }
 
 function cleanEmbedding(value) {
@@ -39,13 +44,18 @@ function cosine(a, b) {
 
 exports.verifyKycFace = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireAuth(request);
+  const db = admin.firestore();
+  const userSnap = await db.collection('users').doc(uid).get();
+  if (!userSnap.exists || !isActiveUser(userSnap.data() || {})) {
+    throw new HttpsError('permission-denied', 'This account is not active.');
+  }
+
+  await checkVelocity(db, uid, 'verifyKycFace', { ip: getClientIp(request) });
+
   const embedding = cleanEmbedding(request.data?.embedding);
   if (request.data?.livenessPassed !== true) {
     throw new HttpsError('failed-precondition', 'Complete the live face movement check first.');
   }
-
-  const db = admin.firestore();
-  await checkVelocity(db, uid, 'verifyKycFace', { ip: getClientIp(request) });
 
   const snap = await db.collection(VERIFIED).get();
   let best = null;
@@ -62,27 +72,33 @@ exports.verifyKycFace = onCall({ enforceAppCheck: true }, async (request) => {
     }
   });
 
+  const pendingRef = db.collection(PENDING).doc(uid);
+  const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + PENDING_TTL_MS);
+
   if (best && best.score >= DUPLICATE_THRESHOLD) {
-    await db.collection(PENDING).doc(uid).set({
+    await pendingRef.set({
       uid,
       status: 'duplicate',
       duplicateOf: best.uid,
       similarity: best.score,
+      expiresAt,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
-    return { ok: false, duplicate: true, similarity: best.score };
+    // Do not expose the matched UID or similarity score to the client.
+    return { ok: false, duplicate: true };
   }
 
-  await db.collection(PENDING).doc(uid).set({
+  await pendingRef.set({
     uid,
     status: 'pending',
     embedding,
     model: 'mobilefacenet-512',
     livenessPassed: true,
+    expiresAt,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   }, { merge: true });
 
-  return { ok: true, duplicate: false, similarity: best?.score || 0 };
+  return { ok: true, duplicate: false };
 });
 
 // Called only after an admin approves the KYC request. Keeping templates in
@@ -96,6 +112,10 @@ exports.finalizeKycFaceTemplate = async (tx, db, uid) => {
     throw new HttpsError('failed-precondition', 'A validated face template is required before approval.');
   }
   const data = pending.data();
+  if (!data.expiresAt || data.expiresAt.toMillis() < Date.now()) {
+    tx.delete(pendingRef);
+    throw new HttpsError('failed-precondition', 'The face verification has expired. Please verify your face again.');
+  }
   tx.set(templateRef, {
     uid,
     embedding: data.embedding,
