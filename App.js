@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { StyleSheet, View, Platform, Linking } from 'react-native';
+import { StyleSheet, View, Linking } from 'react-native';
 import { AppProvider, useApp } from './src/context/AppContext';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { LanguageProvider } from './src/i18n/LanguageContext';
@@ -31,7 +31,6 @@ import MyAccountScreen from './src/screens/MyAccountScreen';
 import ReportsScreen from './src/screens/ReportsScreen';
 import UserManagementScreen from './src/screens/UserManagementScreen';
 import TransferPointsScreen from './src/screens/TransferPointsScreen';
-import CallScreen from './src/screens/CallScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import VerifyIdentityScreen from './src/screens/VerifyIdentityScreen';
 import VerificationManagementScreen from './src/screens/VerificationManagementScreen';
@@ -74,7 +73,6 @@ import PayslipDetailsScreen from './src/screens/PayslipDetailsScreen';
 import RatePopup from './src/components/RatePopup';
 import ResultModal from './src/components/ResultModal';
 import Sidebar from './src/components/Sidebar';
-import IncomingCallModal from './src/components/IncomingCallModal';
 import AppAlertHost from './src/components/AppAlertHost';
 import SecurityPinGate from './src/components/SecurityPinGate';
 import AppLockScreen from './src/components/AppLockScreen';
@@ -134,7 +132,6 @@ function Root() {
       {renderedScreen === 'reports' && <ReportsScreen />}
       {renderedScreen === 'userManagement' && <UserManagementScreen />}
       {renderedScreen === 'transferPoints' && <TransferPointsScreen />}
-      {renderedScreen === 'call' && <CallScreen />}
       {renderedScreen === 'notifications' && <NotificationsScreen />}
       {renderedScreen === 'verifyIdentity' && <VerifyIdentityScreen />}
       {renderedScreen === 'verificationManagement' && <VerificationManagementScreen />}
@@ -175,7 +172,7 @@ function Root() {
       {renderedScreen === 'payslipHistory' && <PayslipHistoryScreen />}
       {renderedScreen === 'payslipDetails' && <PayslipDetailsScreen />}
     </View>
-    <RatePopup /><ResultModal /><Sidebar /><IncomingCallModal /><AppAlertHost /><SecurityPinGate /><AppLockScreen /><BiometricOptInPrompt />
+    <RatePopup /><ResultModal /><Sidebar /><AppAlertHost /><SecurityPinGate /><AppLockScreen /><BiometricOptInPrompt />
   </SafeAreaView>;
 }
 
