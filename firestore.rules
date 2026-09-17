@@ -16,9 +16,6 @@ service cloud.firestore {
     match /verificationRequests/{uid} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow create, update, delete: if false; }
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
-      // User profiles are created by trusted server callables only. Direct client
-      // creation would let a new account forge server-owned fields such as wallet,
-      // verification, role, suspension, or assignment state.
       allow create: if false;
       allow update: if signedIn() && request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','firstName','lastName','avatarUrl','lastSeenAnnouncementAt','pushToken','pushTokenPlatform','pushTokenUpdatedAt','fcmToken','fcmTokenUpdatedAt','notifPrefs','callSettings','lockedChatIds']);
       allow delete: if false;
@@ -39,9 +36,6 @@ service cloud.firestore {
     match /userAuditLog/{id} { allow read: if signedIn() && isSuperadmin(); allow write: if false; }
     match /errorLog/{id} { allow create: if signedIn() && request.resource.data.source == 'client' && request.resource.data.userId == request.auth.uid; allow read: if signedIn() && isSuperadmin(); allow update: if signedIn() && isSuperadmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resolved','resolvedBy','resolvedAt']); allow delete: if false; }
     match /inquiries/{id} {
-      // Customer-created inquiries must enter the workflow as a new inquiry.
-      // In particular, clients cannot create a closed flight inquiry with a fake
-      // ticketUrl, which would otherwise trigger server-side tier-point credit.
       allow create: if signedIn() && request.resource.data.customerId == request.auth.uid && request.resource.data.status == 'new' && request.resource.data.keys().hasOnly(['customerId','type','from','to','date','status','createdAt']);
       allow read: if signedIn() && (resource.data.customerId == request.auth.uid || isAdmin());
       allow update: if signedIn() && isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','ticketUrl','updatedAt']) && request.resource.data.status in ['new','contacted','closed'];
@@ -57,7 +51,9 @@ service cloud.firestore {
     match /announcements/{id} { allow read: if signedIn() && isAdmin(); allow write: if false; }
     match /supportTickets/{id} {
       allow read: if signedIn() && (isSuperadmin() || resource.data.get('userId', null) == request.auth.uid || resource.data.get('assignedToUid', '') == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.status == 'open';
+      // Customers may submit only ticket content. Routing, assignment, notes and
+      // workflow state remain server/admin-controlled to prevent forged staff scope.
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.status == 'open' && request.resource.data.keys().hasOnly(['userId','status','subject','description','category','createdAt','userName']);
       allow update: if signedIn() && ((isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['open','in_progress','resolved']) || (resource.data.get('assignedToUid', '') == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['in_progress','resolved']) || (resource.data.get('userId', null) == request.auth.uid && resource.data.status == 'resolved' && request.resource.data.status == 'open' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt'])));
       allow delete: if false;
     }
