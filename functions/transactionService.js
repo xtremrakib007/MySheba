@@ -21,7 +21,7 @@ function assertOperatorCanHandle(actor, order) {
   if (actor.role === 'reseller' && order.resellerId && order.resellerId !== actor.uid) throw new HttpsError('permission-denied', 'This order is assigned to another reseller.');
 }
 
-exports.approveTransaction = onCall(async (request) => {
+exports.approveTransaction = onCall({ enforceAppCheck: true }, async (request) => {
   requireAuth(request); const actor = await getActor(request.auth.uid);
   if (!APPROVER_ROLES.includes(actor.role)) throw new HttpsError('permission-denied', 'Only an admin or superadmin can approve an order.');
   const id = String(request.data?.transactionId || ''); if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
@@ -35,7 +35,7 @@ exports.approveTransaction = onCall(async (request) => {
   return { ok: true, transactionId: id };
 });
 
-exports.acceptTransaction = onCall(async (request) => {
+exports.acceptTransaction = onCall({ enforceAppCheck: true }, async (request) => {
   requireAuth(request); const actor = await getActor(request.auth.uid);
   const id = String(request.data?.transactionId || ''); if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
   const db = admin.firestore(), ref = db.collection('transactions').doc(id);
@@ -58,7 +58,7 @@ exports.acceptTransaction = onCall(async (request) => {
   return { ok: true, transactionId: id };
 });
 
-exports.completeTransaction = onCall(async (request) => {
+exports.completeTransaction = onCall({ enforceAppCheck: true }, async (request) => {
   requireAuth(request); const actor = await getActor(request.auth.uid);
   if (!OPERATOR_ROLES.includes(actor.role)) throw new HttpsError('permission-denied', 'Only the dealer/reseller Operator can complete an order.');
   const id = String(request.data?.transactionId || ''), pin = String(request.data?.pin || ''), receiptUrl = String(request.data?.receiptUrl || '');
