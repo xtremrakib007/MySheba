@@ -1,16 +1,12 @@
 // Backfills a unique numeric userId onto accounts that predate this
-// feature (created before assignUniqueUserId existed in older registration
-// or user-management paths). Called lazily by the client right after a
-// normal phone+PIN login when the fetched profile has no userId yet - see
-// src/firebase/authService.js login(). A no-op (just echoes back the existing
-// one) for every account created after this shipped, since those already got
-// a userId at creation time.
+// feature. Called lazily by the client after login when the profile has no
+// userId yet. Existing accounts are returned unchanged.
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { assignUniqueUserId } = require('./userId');
 const { logServerError } = require('./logService');
 
-exports.ensureUserId = onCall(async (request) => {
+exports.ensureUserId = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'You must be signed in.');
   }
@@ -26,9 +22,19 @@ exports.ensureUserId = onCall(async (request) => {
 
   try {
     const userId = await assignUniqueUserId(db, uid);
-    await ref.update({ userId });
-    return { uid, userId };
+    // Do not blindly overwrite a value assigned concurrently by another
+    // invocation. A transaction makes the lazy backfill race-safe.
+    const result = await db.runTransaction(async (tx) => {
+      const current = await tx.get(ref);
+      if (!current.exists) throw new HttpsError('not-found', 'Profile not found.');
+      const currentUserId = current.data()?.userId;
+      if (currentUserId) return currentUserId;
+      tx.update(ref, { userId });
+      return userId;
+    });
+    return { uid, userId: result };
   } catch (err) {
+    if (err instanceof HttpsError) throw err;
     await logServerError('ensureUserId', err, { userId: uid });
     throw new HttpsError('internal', 'Could not assign a user ID.');
   }
