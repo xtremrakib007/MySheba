@@ -2,20 +2,27 @@
 import { collection, onSnapshot, query, where, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
+import * as Crypto from 'expo-crypto';
 import { db, storage, functions } from './config';
 import { logActivity, logError } from './logService';
 
 export const METHODS = { transfer: 'Bank Transfer', deposit: 'Bank Deposit', jompay: 'JomPay', duitnow: 'DuitNow QR' };
 
 function createRequestId(prefix = 'pt') {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}`;
+  if (typeof Crypto.randomUUID !== 'function') throw new Error('Secure request ID generation is unavailable.');
+  return `${prefix}_${Crypto.randomUUID().replace(/-/g, '')}`;
 }
 
 export async function uploadReceipt(localUri, uid) {
+  if (!localUri || !uid) throw new Error('Missing receipt upload details.');
   const response = await fetch(localUri);
   const blob = await response.blob();
-  const storageRef = ref(storage, `topup-receipts/${uid}/${Date.now()}.jpg`);
-  await uploadBytes(storageRef, blob, { contentType: blob.type || 'image/jpeg' });
+  if (blob.size <= 0 || blob.size > 10 * 1024 * 1024) throw new Error('Receipt image must be between 1 byte and 10 MB.');
+  const contentType = blob.type || 'image/jpeg';
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(contentType)) throw new Error('Receipt must be a JPEG, PNG, or WebP image.');
+  const extension = contentType === 'image/png' ? 'png' : contentType === 'image/webp' ? 'webp' : 'jpg';
+  const storageRef = ref(storage, `topup-receipts/${uid}/${Date.now()}-${Crypto.randomUUID().replace(/-/g, '')}.${extension}`);
+  await uploadBytes(storageRef, blob, { contentType });
   return getDownloadURL(storageRef);
 }
 
