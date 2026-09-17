@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { logAudit } = require('./logService');
 
 const DEALER_SERVICES = ['Mobile Banking'];
 const RESELLER_SERVICES = ['Recharge', 'Internet', 'Remittance'];
@@ -26,12 +27,15 @@ exports.approveTransaction = onCall(async (request) => {
   if (!APPROVER_ROLES.includes(actor.role)) throw new HttpsError('permission-denied', 'Only an admin or superadmin can approve an order.');
   const id = String(request.data?.transactionId || ''); if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
   const db = admin.firestore(), ref = db.collection('transactions').doc(id);
+  let auditOrder = null;
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref); if (!snap.exists) throw new HttpsError('not-found', 'That order no longer exists.');
     const order = snap.data(); if (order.status !== 'pending') throw new HttpsError('failed-precondition', 'Only pending orders can be approved.');
     if (order.approved === true) throw new HttpsError('already-exists', 'This order is already approved.');
+    auditOrder = { customerId: order.customerId || null, service: order.service || null };
     tx.update(ref, { approved: true, approvedBy: actor.uid, approvedByName: actor.name, approvedByRole: actor.role, approvedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
   });
+  void logAudit({ action: 'transaction_approved', targetUid: auditOrder?.customerId || null, performedBy: actor.uid, performedByRole: actor.role, details: { transactionId: id, service: auditOrder?.service || null } });
   return { ok: true, transactionId: id };
 });
 
@@ -39,6 +43,7 @@ exports.acceptTransaction = onCall(async (request) => {
   requireAuth(request); const actor = await getActor(request.auth.uid);
   const id = String(request.data?.transactionId || ''); if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
   const db = admin.firestore(), ref = db.collection('transactions').doc(id);
+  let auditEvent = null;
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref); if (!snap.exists) throw new HttpsError('not-found', 'That order no longer exists.');
     const order = snap.data();
@@ -48,13 +53,16 @@ exports.acceptTransaction = onCall(async (request) => {
       if (order.status !== 'pending') throw new HttpsError('failed-precondition', 'Only pending orders can be approved.');
       if (order.approved === true) throw new HttpsError('already-exists', 'This order is already approved.');
       tx.update(ref, { approved: true, approvedBy: actor.uid, approvedByName: actor.name, approvedByRole: actor.role, approvedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      auditEvent = { action: 'transaction_approved', customerId: order.customerId || null, service: order.service || null };
       return;
     }
     assertOperatorCanHandle(actor, order);
     if (order.status !== 'pending' || order.claimedBy) throw new HttpsError('failed-precondition', 'This order was already accepted by another operator.');
     if (order.approved !== true || !order.approvedBy) throw new HttpsError('failed-precondition', 'This order must be approved by an admin or superadmin first.');
     tx.update(ref, { status: 'processing', claimedBy: actor.uid, claimedByRole: actor.role, claimedByName: actor.name, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    auditEvent = { action: 'transaction_claimed', customerId: order.customerId || null, service: order.service || null };
   });
+  if (auditEvent) void logAudit({ action: auditEvent.action, targetUid: auditEvent.customerId, performedBy: actor.uid, performedByRole: actor.role, details: { transactionId: id, service: auditEvent.service } });
   return { ok: true, transactionId: id };
 });
 
@@ -66,12 +74,15 @@ exports.completeTransaction = onCall(async (request) => {
   if (!/^\d{4}$/.test(pin)) throw new HttpsError('invalid-argument', 'A 4-digit collection PIN is required.');
   if (!receiptUrl) throw new HttpsError('invalid-argument', 'The transfer receipt is required before completion.');
   const db = admin.firestore(), ref = db.collection('transactions').doc(id);
+  let auditOrder = null;
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref); if (!snap.exists) throw new HttpsError('not-found', 'That order no longer exists.');
     const order = snap.data();
     if (order.status !== 'processing' || order.claimedBy !== actor.uid) throw new HttpsError('failed-precondition', 'Only the operator who accepted this order can complete it.');
     if (order.approved !== true || !order.approvedBy) throw new HttpsError('failed-precondition', 'This order has no valid admin approval.');
+    auditOrder = { customerId: order.customerId || null, service: order.service || null };
     tx.update(ref, { status: 'completed', pin, receiptUrl, completedBy: actor.uid, completedByName: actor.name, completedByRole: actor.role, completedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
   });
+  void logAudit({ action: 'transaction_completed', targetUid: auditOrder?.customerId || null, performedBy: actor.uid, performedByRole: actor.role, details: { transactionId: id, service: auditOrder?.service || null } });
   return { ok: true, transactionId: id };
 });
