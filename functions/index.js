@@ -38,12 +38,15 @@ exports.findWalletRecipient = require('./walletTransferService').findWalletRecip
 exports.createDiditKycSession = require('./diditKycService').createDiditKycSession;
 exports.diditKycWebhook = require('./diditKycService').diditKycWebhook;
 exports.chargeWallet = require('./walletService').chargeWallet;
-exports.chargeRecharge = require('./walletService').chargeRecharge;
-exports.chargeInternetPackage = require('./walletService').chargeInternetPackage;
+// Product charges MUST use chargeGuards: it enforces per-user/request
+// idempotency and prevents a committed charge being duplicated by a retry.
+const chargeGuards = require('./chargeGuards');
+exports.chargeRecharge = chargeGuards.chargeRecharge;
+exports.chargeInternetPackage = chargeGuards.chargeInternetPackage;
 exports.rejectRechargeTransaction = require('./walletService').rejectRechargeTransaction;
 exports.rejectInternetPackageTransaction = require('./walletService').rejectInternetPackageTransaction;
-exports.chargeMobileBanking = require('./walletService').chargeMobileBanking;
-exports.chargeRemittance = require('./walletService').chargeRemittance;
+exports.chargeMobileBanking = chargeGuards.chargeMobileBanking;
+exports.chargeRemittance = chargeGuards.chargeRemittance;
 exports.rejectMobileBankingTransaction = require('./walletService').rejectMobileBankingTransaction;
 exports.rejectRemittanceTransaction = require('./walletService').rejectRemittanceTransaction;
 exports.approveVerification = require('./verificationService').approveVerification;
