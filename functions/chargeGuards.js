@@ -3,6 +3,8 @@ const admin = require('firebase-admin');
 const walletService = require('./walletService');
 
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
+const RECHARGE_COUNTRIES = new Set(['BD', 'IN', 'NP', 'PK', 'PH', 'ID', 'MM', 'KH']);
+const REMITTANCE_COUNTRIES = new Set(['BD', 'NP', 'PK', 'PH', 'LK', 'IN', 'ID', 'MM']);
 
 function requireAuth(request) {
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
@@ -45,7 +47,24 @@ async function recoverCompleted(db, uid, requestId, guardRef) {
   return { id: txDoc.id, cost, replay: true };
 }
 
-async function sanitizeRequest(request, requestId) {
+function validateCountry(name, payload) {
+  const raw = payload?.raw || {};
+  const country = raw.country == null ? '' : String(raw.country).trim().toUpperCase();
+  if (name === 'chargeRemittance') {
+    if (!country || !REMITTANCE_COUNTRIES.has(country)) {
+      throw new HttpsError('invalid-argument', 'A supported remittance country is required.');
+    }
+  } else if (name === 'chargeRecharge' || name === 'chargeInternetPackage') {
+    // Missing country preserves the existing Malaysia/default behavior. Explicit
+    // unsupported countries must never silently fall back to a 1:1 exchange rate.
+    if (country && country !== 'MY' && !RECHARGE_COUNTRIES.has(country)) {
+      throw new HttpsError('invalid-argument', 'Unsupported recharge country.');
+    }
+    if (raw.country && raw.country !== country) raw.country = country;
+  }
+}
+
+async function sanitizeRequest(request, requestId, name) {
   const uid = requireAuth(request);
   const db = admin.firestore();
   const snap = await db.collection('users').doc(uid).get();
@@ -71,6 +90,7 @@ async function sanitizeRequest(request, requestId) {
     ...incomingPayload,
     raw: { ...(incomingPayload.raw || {}), requestId },
   };
+  validateCountry(name, payload);
 
   return { ...request, data: { ...incomingData, payload, requestId, customer } };
 }
@@ -115,7 +135,7 @@ function wrap(name) {
     }
 
     try {
-      const safeRequest = await sanitizeRequest(request, requestId);
+      const safeRequest = await sanitizeRequest(request, requestId, name);
       const result = await fn.run(safeRequest);
       await guardRef.update({
         status: 'completed', transactionId: result?.id || null,
