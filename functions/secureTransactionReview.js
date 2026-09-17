@@ -19,6 +19,9 @@ async function getActor(db, uid) {
   const snap = await db.collection('users').doc(uid).get();
   if (!snap.exists) throw new HttpsError('permission-denied', 'Your staff profile was not found.');
   const profile = snap.data();
+  if (profile.suspended || profile.inactive || profile.disabled) {
+    throw new HttpsError('permission-denied', 'Your staff account is not active.');
+  }
   const role = String(profile.role || '');
   if (!ROLE_SERVICES[role]) throw new HttpsError('permission-denied', 'Only authorized staff can reject an order.');
   return { uid, role, dealerId: profile.dealerId || null };
