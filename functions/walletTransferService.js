@@ -14,6 +14,7 @@ const MAX_TRANSFER_MYR = 10000;
 const MIN_TRANSFER_MYR = 0.01;
 const MAX_RECIPIENT_QUERY = 80;
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
+const MAX_SAFE_MINOR = Number.MAX_SAFE_INTEGER;
 
 function requireAuth(request) {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
@@ -36,8 +37,20 @@ function normalizeQuery(value) {
   return String(value || '').trim();
 }
 
-function cents(value) {
-  return Math.round(Number(value || 0) * 100);
+function toMinor(value, label = 'Amount') {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) {
+    throw new HttpsError('failed-precondition', `${label} is invalid.`);
+  }
+  const minor = Math.round(n * 100);
+  if (!Number.isSafeInteger(minor)) {
+    throw new HttpsError('failed-precondition', `${label} is too large.`);
+  }
+  return minor;
+}
+
+function cents(value, label = 'Wallet balance') {
+  return toMinor(value, label);
 }
 
 function myrFromCents(value) {
@@ -142,14 +155,11 @@ exports.walletTransfer = onCall(async (request) => {
   if (sender.role !== 'customer') throw new HttpsError('permission-denied', 'Wallet-to-wallet transfers are for customer wallets.');
   if (!isKycApproved(sender)) throw new HttpsError('failed-precondition', 'Complete KYC before using wallet transfers.');
 
-  const amountCents = cents(request.data?.amount);
-  if (!Number.isInteger(amountCents) || amountCents < 1) {
-    throw new HttpsError('invalid-argument', 'Enter a valid MYR amount.');
-  }
-  if (amountCents < cents(MIN_TRANSFER_MYR)) {
+  const amountCents = toMinor(request.data?.amount, 'Transfer amount');
+  if (amountCents < cents(MIN_TRANSFER_MYR, 'Minimum transfer')) {
     throw new HttpsError('invalid-argument', `Minimum transfer is MYR ${MIN_TRANSFER_MYR.toFixed(2)}.`);
   }
-  if (amountCents > cents(MAX_TRANSFER_MYR)) {
+  if (amountCents > cents(MAX_TRANSFER_MYR, 'Maximum transfer')) {
     throw new HttpsError('invalid-argument', `Maximum transfer is MYR ${MAX_TRANSFER_MYR.toFixed(2)} per transaction.`);
   }
 
@@ -160,8 +170,8 @@ exports.walletTransfer = onCall(async (request) => {
   await checkVelocity(db, senderUid, 'walletTransfer', { ip });
 
   // Deterministic transfer identity makes the transfer itself idempotent even
-  // if the outer walletOperations marker is lost after the balance transaction
-  // has committed. A reused requestId with different transfer details is rejected.
+  // if an outer marker is lost after the balance transaction has committed.
+  // A reused requestId with different transfer details is rejected.
   const transferRef = db.collection('walletTransfers').doc(`${senderUid}_${requestId}`);
   const senderRef = db.collection('users').doc(senderUid);
   const recipientRef = db.collection('users').doc(recipientUid);
@@ -200,10 +210,16 @@ exports.walletTransfer = onCall(async (request) => {
 
       const senderBalanceCents = cents(senderData.walletBalance);
       const recipientBalanceCents = cents(recipientData.walletBalance);
+      if (senderBalanceCents > MAX_SAFE_MINOR || recipientBalanceCents > MAX_SAFE_MINOR) {
+        throw new HttpsError('failed-precondition', 'One of the account wallet balances is too large.');
+      }
       if (senderBalanceCents < amountCents) throw new HttpsError('failed-precondition', 'Insufficient wallet balance.');
 
       const senderAfter = senderBalanceCents - amountCents;
       const recipientAfter = recipientBalanceCents + amountCents;
+      if (!Number.isSafeInteger(recipientAfter) || !Number.isSafeInteger(senderAfter)) {
+        throw new HttpsError('failed-precondition', 'The transfer would create an invalid wallet balance.');
+      }
       const now = admin.firestore.FieldValue.serverTimestamp();
 
       tx.update(senderRef, { walletBalance: myrFromCents(senderAfter), walletBalanceCurrency: 'MYR', walletUpdatedAt: now });
