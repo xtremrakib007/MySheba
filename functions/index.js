@@ -3,7 +3,19 @@ const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/
 const admin = require('firebase-admin');
 const progressionService = require('./progressionService');
 const TIER_QUALIFYING_SERVICES = ['Recharge', 'Internet', 'Mobile Banking', 'Remittance'];
-exports.manageUser = require('./userManagement').manageUser;
+
+// Keep the default Functions entrypoint secure too. secureIndexV2 is the
+// production entrypoint, but index.js must not expose weaker wallet/charge
+// implementations if somebody deploys it directly or changes `main` later.
+const userManagement = require('./userManagement');
+const walletTransferService = require('./walletTransferService');
+const secureWalletMutations = require('./secureWalletMutations');
+const secureTransfer = require('./secureTransfer');
+const secureWalletCharge = require('./secureWalletCharge');
+const secureTopupReview = require('./secureTopupReview');
+const chargeGuards = require('./chargeGuards');
+
+exports.manageUser = userManagement.manageUser;
 exports.searchUsers = require('./userSearch').searchUsers;
 exports.getUserByUid = require('./userSearch').getUserByUid;
 exports.matchContactsByPhone = require('./matchContactsByPhone').matchContactsByPhone;
@@ -35,17 +47,15 @@ exports.recordActualSalary = require('./salaryMutationService').recordActualSala
 exports.attachSalaryPayslip = require('./salaryMutationService').attachSalaryPayslip;
 exports.deleteSalaryRecord = require('./salaryMutationService').deleteSalaryRecord;
 exports.sendAnnouncement = require('./announcements').sendAnnouncement;
-exports.approveTopup = require('./secureTopupReview').approveTopup;
-exports.rejectTopup = require('./secureTopupReview').rejectTopup;
-exports.createSelfTopup = require('./walletService').createSelfTopup;
+exports.approveTopup = secureTopupReview.approveTopup;
+exports.rejectTopup = secureTopupReview.rejectTopup;
+exports.createSelfTopup = secureWalletMutations.createSelfTopup;
 exports.submitTopupRequest = require('./topupSubmissionService').submitTopupRequest;
 exports.adminTopUpPoints = require('./adminTopUpService').adminTopUpPoints;
-exports.transferPoints = require('./walletService').transferPoints;
-exports.findWalletRecipient = require('./walletTransferService').findWalletRecipient;
+exports.transferPoints = secureTransfer.transferPoints;
+exports.findWalletRecipient = walletTransferService.findWalletRecipient;
 exports.createDiditKycSession = require('./diditKycService').createDiditKycSession;
-exports.diditKycWebhook = require('./diditKycService').diditKycWebhook;
-exports.chargeWallet = require('./walletService').chargeWallet;
-const chargeGuards = require('./chargeGuards');
+exports.chargeWallet = secureWalletCharge.chargeWallet;
 exports.chargeRecharge = chargeGuards.chargeRecharge;
 exports.chargeInternetPackage = chargeGuards.chargeInternetPackage;
 exports.chargeMobileBanking = chargeGuards.chargeMobileBanking;
