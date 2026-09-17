@@ -4,6 +4,7 @@ const { checkVelocity, getClientIp } = require('./rateLimitService');
 
 const MAX_AMOUNT = 100000;
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
+const MONEY_RE = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
 const ALLOWED_ROLES = ['customer', 'dealer', 'reseller'];
 
 function requireAuth(request) {
@@ -16,8 +17,15 @@ function requireAuth(request) {
 }
 
 function validMoney(value) {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || value <= 0 || value > MAX_AMOUNT) return null;
+    const cents = Math.round(value * 100);
+    if (!Number.isSafeInteger(cents) || Math.abs(value * 100 - cents) > Number.EPSILON * Math.max(1, Math.abs(value * 100))) return null;
+    return value;
+  }
+  if (typeof value !== 'string' || !MONEY_RE.test(value)) return null;
   const n = Number(value);
-  return Number.isFinite(n) && n > 0 && n <= MAX_AMOUNT && Number.isSafeInteger(Math.round(n * 100)) ? n : null;
+  return Number.isFinite(n) && n > 0 && n <= MAX_AMOUNT ? n : null;
 }
 
 exports.submitTopupRequest = onCall({ enforceAppCheck: true }, async request => {
