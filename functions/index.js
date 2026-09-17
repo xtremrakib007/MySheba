@@ -1,5 +1,5 @@
 // MySheba push notifications - the SERVER half.
-const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('firebase-functions/v2/firestore');
+const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const admin = require('firebase-admin');
 const progressionService = require('./progressionService');
 const TIER_QUALIFYING_SERVICES = ['Recharge', 'Internet', 'Mobile Banking', 'Remittance'];
@@ -74,7 +74,6 @@ exports.assignDealer = require('./transactionService').assignDealer;
 admin.initializeApp();
 const db = admin.firestore();
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
-const STAFF_ROLES = ['dealer', 'reseller', 'admin', 'superadmin'];
 const ADMIN_ROLES = ['admin', 'superadmin'];
 function chunk(arr, size) { const out = []; for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size)); return out; }
 async function sendExpoPush(messages) { const valid = messages.filter(m => m && m.to); for (const batch of chunk(valid, 100)) { try { const res = await fetch(EXPO_PUSH_URL, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify(batch.map(m => ({ sound: 'default', ...m }))) }); if (!res.ok) console.error('Expo push HTTP error', res.status, await res.text()); } catch (e) { console.error('Expo push send failed', e); } } }
@@ -89,4 +88,3 @@ exports.onSupportTicketCreated = onDocumentCreated('supportTickets/{id}', async 
 exports.onSupportTicketUpdated = onDocumentUpdated('supportTickets/{id}', async event => { const b = event.data.before.data(), a = event.data.after.data(); if (b.status === a.status) return; if (a.status === 'in_progress') await notifyUser(a.userId, '🔄 Support request update', `We're looking into \"${a.subject || 'your request'}\".`, { type: 'supportTicket', id: event.params.id }); else if (a.status === 'resolved') await notifyUser(a.userId, '✅ Support request resolved', a.adminNote || `Your request \"${a.subject || ''}\" has been resolved.`, { type: 'supportTicket', id: event.params.id }); });
 exports.onInquiryCreated = onDocumentCreated('inquiries/{id}', async event => { const i = event.data.data(); await notifyRoles(ADMIN_ROLES, '✈️ New travel inquiry', `${i.type}: ${i.from} → ${i.to} (${i.date})`, { type: 'inquiry', id: event.params.id }); });
 exports.onInquiryUpdated = onDocumentUpdated('inquiries/{id}', async event => { const b = event.data.before.data(), a = event.data.after.data(); if (b.status !== 'closed' && a.status === 'closed' && a.type === 'flight' && a.ticketUrl) await progressionService.incrementTierPoints(a.customerId); if (b.status === a.status) return; if (a.status === 'contacted') await notifyUser(a.customerId, '📞 We called about your inquiry', `An agent has reached out about your ${a.type} inquiry.`, { type: 'inquiry', id: event.params.id }); else if (a.status === 'closed') await notifyUser(a.customerId, '✅ Inquiry closed', `Your ${a.type} inquiry has been closed.`, { type: 'inquiry', id: event.params.id }); });
-exports.onChatMessageCreated = onDocumentCreated('chats/{chatId}/messages/{messageId}', async event => { const m = event.data.data(), chatId = event.params.chatId, preview = m.text && m.text.length > 80 ? `${m.text.slice(0, 77)}...` : m.text; await progressionService.incrementLevelPoints(m.senderId); if (m.senderRole === 'customer') await notifyRoles(STAFF_ROLES, `💬 ${m.senderName || 'Customer'}`, preview || 'New message', { type: 'chat', chatId }); else await notifyUser(chatId, `💬 ${m.senderName || 'MySheba Support'}`, preview || 'New message', { type: 'chat', id: event.params.id, }); });
