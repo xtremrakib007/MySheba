@@ -42,11 +42,11 @@ functions.checkDeviceSession = onCall({ enforceAppCheck: true }, async (request)
   if (uid && emailOtp) {
     const db = admin.firestore();
     const ref = db.collection('users').doc(uid);
-    await db.runTransaction(async (tx) => {
+    const invalidOtp = await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) throw new HttpsError('not-found', 'No profile found for this account.');
       const profile = snap.data() || {};
-      if (!STAFF_ROLES.has(profile.role)) return;
+      if (!STAFF_ROLES.has(profile.role)) return false;
       const challenge = profile.pendingAdminEmailChallenge;
       if (!challenge) throw new HttpsError('failed-precondition', 'No active verification challenge. Please request a new email.');
       if (challenge.deviceId !== String(data.deviceId || '').trim()) throw new HttpsError('failed-precondition', 'No active verification challenge. Please request a new email.');
@@ -57,9 +57,11 @@ functions.checkDeviceSession = onCall({ enforceAppCheck: true }, async (request)
       const valid = /^\d{6}$/.test(emailOtp) && hashOtp(emailOtp) === challenge.codeHash;
       if (!valid) {
         tx.update(ref, { 'pendingAdminEmailChallenge.attempts': admin.firestore.FieldValue.increment(1) });
-        throw new HttpsError('invalid-argument', 'Incorrect verification code.');
+        return true;
       }
+      return false;
     });
+    if (invalidOtp) throw new HttpsError('invalid-argument', 'Incorrect verification code.');
   }
   return baseCheckDeviceSession.run(request);
 });
