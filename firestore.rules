@@ -16,7 +16,10 @@ service cloud.firestore {
     match /verificationRequests/{uid} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow create, update, delete: if false; }
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
-      allow create: if signedIn() && request.auth.uid == uid && request.resource.data.role == 'customer';
+      // User profiles are created by trusted server callables only. Direct client
+      // creation would let a new account forge server-owned fields such as wallet,
+      // verification, role, suspension, or assignment state.
+      allow create: if false;
       allow update: if signedIn() && request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','firstName','lastName','avatarUrl','lastSeenAnnouncementAt','pushToken','pushTokenPlatform','pushTokenUpdatedAt','fcmToken','fcmTokenUpdatedAt','notifPrefs','callSettings','lockedChatIds']);
       allow delete: if false;
       match /receivers/{receiverId} { allow read, create, update, delete: if signedIn() && request.auth.uid == uid; }
