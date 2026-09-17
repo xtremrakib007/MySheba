@@ -1,10 +1,6 @@
 // Production auth for MySheba.
 import {
   signInWithEmailAndPassword,
-  signInWithCredential,
-  signInWithCustomToken,
-  linkWithCredential,
-  GoogleAuthProvider,
   EmailAuthProvider,
   reauthenticateWithCredential,
   updatePassword,
@@ -16,21 +12,16 @@ import { httpsCallable } from 'firebase/functions';
 import {
   doc,
   getDoc,
-  setDoc,
   updateDoc,
   onSnapshot,
-  collection,
   serverTimestamp,
 } from 'firebase/firestore';
 import { auth, db, functions } from './config';
-import { getGoogleIdToken, getGoogleIdTokenAndProfile, googleSignOut } from './googleAuth';
 import { logActivity } from './logService';
 import { getDeviceId, getDeviceLabel, setLocalSessionId, clearLocalSessionId } from './deviceSessionService';
 import { toE164 as phoneToE164 } from '../data/phoneCountries';
 
 const APP_EMAIL_DOMAIN = 'mysheba.app';
-let pendingGoogleLinkCredential = null;
-let pendingGoogleLinkEmail = '';
 
 export function normalizePhone(phone) {
   return String(phone || '').replace(/[^0-9]/g, '');
@@ -81,52 +72,6 @@ export async function registerCustomer({ name, phone, phoneE164, dialCode, email
   return { uid: cred.user.uid, ...snap.data() };
 }
 
-async function markGoogleLinkedOnServer() {
-  const markFn = httpsCallable(functions, 'markGoogleLinked');
-  const { data } = await markFn({});
-  return data;
-}
-
-async function linkPendingGoogleCredentialIfNeeded() {
-  if (!pendingGoogleLinkCredential) return;
-  const credential = pendingGoogleLinkCredential;
-  const email = pendingGoogleLinkEmail;
-  pendingGoogleLinkCredential = null;
-  pendingGoogleLinkEmail = '';
-  const user = auth.currentUser;
-  if (!user) {
-    pendingGoogleLinkCredential = credential;
-    pendingGoogleLinkEmail = email;
-    throw new Error('Your Google sign-in could not be completed. Please try Google sign-in again.');
-  }
-  try {
-    await linkWithCredential(user, credential);
-    await markGoogleLinkedOnServer();
-    logActivity('linkGoogleAccount', { method: 'googleRecovery' });
-  } catch (err) {
-    pendingGoogleLinkCredential = credential;
-    pendingGoogleLinkEmail = email;
-    if (err && err.code === 'auth/provider-already-linked') {
-      pendingGoogleLinkCredential = null;
-      pendingGoogleLinkEmail = '';
-      return;
-    }
-    if (err && err.code === 'auth/credential-already-in-use') {
-      throw new Error('This Google account is already linked to another account. Please contact MySheba support.');
-    }
-    throw new Error(friendlyAuthError(err));
-  }
-}
-
-export function hasPendingGoogleLink() {
-  return !!pendingGoogleLinkCredential;
-}
-
-export function clearPendingGoogleLink() {
-  pendingGoogleLinkCredential = null;
-  pendingGoogleLinkEmail = '';
-}
-
 export async function login(phone, pin, dialCode = '+60') {
   if (!isValidPhone(phone)) throw new Error('Please enter a valid phone number.');
   if (!pin) throw new Error('Please enter your password.');
@@ -136,9 +81,14 @@ export async function login(phone, pin, dialCode = '+60') {
     cred = await signInWithEmailAndPassword(auth, email, pin);
   } catch (err) {
     if (dialCode === '+60') {
-      try { cred = await signInWithEmailAndPassword(auth, legacyPhoneToEmail(phone), pin); }
-      catch (_) { throw new Error(friendlyAuthError(err)); }
-    } else throw new Error(friendlyAuthError(err));
+      try {
+        cred = await signInWithEmailAndPassword(auth, legacyPhoneToEmail(phone), pin);
+      } catch (_) {
+        throw new Error(friendlyAuthError(err));
+      }
+    } else {
+      throw new Error(friendlyAuthError(err));
+    }
   }
 
   const snap = await getDoc(doc(db, 'users', cred.user.uid));
@@ -155,19 +105,6 @@ export async function login(phone, pin, dialCode = '+60') {
     } catch (e) {}
   }
 
-  let googleWasLinked = false;
-  try {
-    googleWasLinked = !!pendingGoogleLinkCredential;
-    await linkPendingGoogleCredentialIfNeeded();
-    if (pendingGoogleLinkCredential) {
-      await signOut(auth);
-      throw new Error('Google could not be linked to this account. Please try again from Settings.');
-    }
-  } catch (err) {
-    await signOut(auth);
-    throw err;
-  }
-
   const deviceId = await getDeviceId();
   const sessionFn = httpsCallable(functions, 'checkDeviceSession');
   let sessionResult;
@@ -178,165 +115,50 @@ export async function login(phone, pin, dialCode = '+60') {
     await signOut(auth);
     throw new Error(friendlyAuthError(err));
   }
+
   if (sessionResult.requiresOtp) {
     logActivity('loginPendingDeviceApproval', { method: 'phone', reason: sessionResult.reason });
-    return { uid: cred.user.uid, ...profileData, pendingDeviceApproval: { deviceId, email: sessionResult.email, phone: sessionResult.phone, reason: sessionResult.reason, availableMfaMethods: sessionResult.availableMfaMethods } };
+    return {
+      uid: cred.user.uid,
+      ...profileData,
+      pendingDeviceApproval: {
+        deviceId,
+        email: sessionResult.email,
+        phone: sessionResult.phone,
+        reason: sessionResult.reason,
+        availableMfaMethods: sessionResult.availableMfaMethods,
+      },
+    };
   }
+
   await setLocalSessionId(sessionResult.sessionId);
   logActivity('login', { method: 'phone' });
-  return { uid: cred.user.uid, ...profileData, ...(googleWasLinked ? { googleLinked: true } : {}) };
-}
-
-// Google sign-in now handles the important legacy case where the Google email
-// belongs to an existing phone/password MySheba account. The server verifies
-// the Google identity, finds the existing UID, mints a custom token for that
-// UID, and the client then links the Google credential to that same account.
-export async function signInWithGoogle() {
-  const idToken = await getGoogleIdToken();
-  const credential = GoogleAuthProvider.credential(idToken);
-  try {
-    await signInWithCredential(auth, credential);
-  } catch (err) {
-    throw new Error(friendlyAuthError(err));
-  }
-
-  const resolveFn = httpsCallable(functions, 'signInExistingGoogleAccount');
-  try {
-    const { data: resolved } = await resolveFn({});
-    if (resolved && resolved.found && resolved.customToken) {
-      const temporaryGoogleUser = auth.currentUser;
-      const googleEmail = temporaryGoogleUser?.email || '';
-      try {
-        await temporaryGoogleUser?.delete();
-      } catch (deleteErr) {
-        await signOut(auth).catch(() => {});
-        throw new Error('Google sign-in could not be linked to your MySheba account. Please try again.');
-      }
-
-      await signInWithCustomToken(auth, resolved.customToken);
-      try {
-        await linkWithCredential(auth.currentUser, credential);
-      } catch (linkErr) {
-        if (linkErr && linkErr.code !== 'auth/provider-already-linked') {
-          await signOut(auth).catch(() => {});
-          throw new Error(friendlyAuthError(linkErr));
-        }
-      }
-      await markGoogleLinkedOnServer();
-      logActivity('linkGoogleAccount', { method: 'googleExistingAccount' });
-      return finishGoogleSignIn({}, null);
-    }
-  } catch (err) {
-    if (err && err.code === 'functions/permission-denied') throw new Error(err.message || 'Google sign-in is not permitted.');
-    if (err && err.code === 'functions/unauthenticated') throw new Error('Google sign-in expired. Please try again.');
-    if (err && err.message && err.message.includes('Google sign-in could not be linked')) throw err;
-    // If the resolver itself is unavailable, do not block normal Google
-    // onboarding. The existing ensureGoogleProfile flow remains the fallback.
-  }
-
-  return finishGoogleSignIn({}, credential);
-}
-
-export async function completeGoogleSignup(phone) {
-  if (!auth.currentUser) throw new Error('Your Google sign-in has expired. Please start again.');
-  return finishGoogleSignIn({ phone }, null);
-}
-
-async function finishGoogleSignIn(ensureProfileArgs, googleCredential = null) {
-  if (!auth.currentUser) throw new Error('Your Google sign-in has expired. Please start again.');
-  let data;
-  const existingProfileSnap = await getDoc(doc(db, 'users', auth.currentUser.uid));
-  if (existingProfileSnap.exists()) {
-    data = existingProfileSnap.data();
-  } else {
-    const ensureProfileFn = httpsCallable(functions, 'ensureGoogleProfile');
-    try {
-      const result = await ensureProfileFn(ensureProfileArgs);
-      data = result.data;
-    } catch (err) {
-      if (err && err.message === 'PHONE_REQUIRED') {
-        const needsPhoneErr = new Error('A mobile number is required to finish creating your account.');
-        needsPhoneErr.needsPhone = true;
-        throw needsPhoneErr;
-      }
-      const duplicateEmail =
-        (err && (err.code === 'functions/already-exists' || err.code === 'already-exists')) ||
-        /already (registered|exists).*MySheba/i.test(String(err && err.message || ''));
-      if (duplicateEmail && googleCredential) {
-        pendingGoogleLinkCredential = googleCredential;
-        pendingGoogleLinkEmail = auth.currentUser.email || '';
-        const temporaryGoogleUser = auth.currentUser;
-        try { await temporaryGoogleUser.delete(); }
-        catch (deleteErr) {
-          pendingGoogleLinkCredential = null;
-          pendingGoogleLinkEmail = '';
-          await signOut(auth).catch(() => {});
-          throw new Error('This Google email already belongs to an existing MySheba account.');
-        }
-        throw new Error('This Google email already belongs to an existing MySheba account.');
-      }
-      await signOut(auth).catch(() => {});
-      throw new Error(err && err.message || 'Google sign-in failed.');
-    }
-  }
-
-  const deviceId = await getDeviceId();
-  const sessionFn = httpsCallable(functions, 'checkDeviceSession');
-  let sessionResult;
-  try {
-    const res = await sessionFn({ deviceId, deviceLabel: getDeviceLabel() });
-    sessionResult = res.data;
-  } catch (err) {
-    await signOut(auth);
-    throw new Error(friendlyAuthError(err));
-  }
-  if (sessionResult.requiresOtp) {
-    logActivity('loginPendingDeviceApproval', { method: 'google', reason: sessionResult.reason });
-    return { uid: auth.currentUser.uid, ...data, pendingDeviceApproval: { deviceId, email: sessionResult.email, phone: sessionResult.phone, reason: sessionResult.reason, availableMfaMethods: sessionResult.availableMfaMethods } };
-  }
-  await setLocalSessionId(sessionResult.sessionId);
-  logActivity('login', { method: 'google' });
-  return { uid: auth.currentUser.uid, ...data };
-}
-
-export async function linkGoogleAccount() {
-  const user = auth.currentUser;
-  if (!user) throw new Error('You must be signed in.');
-  const { idToken, email } = await getGoogleIdTokenAndProfile();
-  const credential = GoogleAuthProvider.credential(idToken);
-  try {
-    await linkWithCredential(user, credential);
-  } catch (err) {
-    if (err && err.code === 'auth/credential-already-in-use') {
-      const mergeErr = new Error('That Google account is already linked to a different MySheba account.');
-      mergeErr.mergeAvailable = true;
-      mergeErr.googleEmail = email;
-      throw mergeErr;
-    }
-    if (err && err.code === 'auth/provider-already-linked') throw new Error('A Google account is already linked to this account.');
-    throw new Error(friendlyAuthError(err));
-  }
-  await markGoogleLinkedOnServer();
-  logActivity('linkGoogleAccount');
-}
-
-export async function startGoogleAccountMerge(email) {
-  const fn = httpsCallable(functions, 'startAccountMerge');
-  try { const { data } = await fn({ email }); return data; }
-  catch (err) { throw new Error(friendlyAuthError(err)); }
-}
-
-export async function confirmGoogleAccountMerge(code) {
-  const fn = httpsCallable(functions, 'confirmAccountMerge');
-  try { const { data } = await fn({ code }); return data; }
-  catch (err) { throw new Error(friendlyAuthError(err)); }
+  return { uid: cred.user.uid, ...profileData };
 }
 
 export async function retryDeviceSession(uid, phoneIdToken, emailIdToken, emailOtp, resendEmailChallenge = false) {
   const deviceId = await getDeviceId();
   const sessionFn = httpsCallable(functions, 'checkDeviceSession');
-  const { data: sessionResult } = await sessionFn({ deviceId, deviceLabel: getDeviceLabel(), phoneIdToken, emailIdToken, emailOtp, resendEmailChallenge });
-  if (sessionResult.requiresOtp) return { uid, pendingDeviceApproval: { deviceId, email: sessionResult.email, phone: sessionResult.phone, reason: sessionResult.reason, availableMfaMethods: sessionResult.availableMfaMethods } };
+  const { data: sessionResult } = await sessionFn({
+    deviceId,
+    deviceLabel: getDeviceLabel(),
+    phoneIdToken,
+    emailIdToken,
+    emailOtp,
+    resendEmailChallenge,
+  });
+  if (sessionResult.requiresOtp) {
+    return {
+      uid,
+      pendingDeviceApproval: {
+        deviceId,
+        email: sessionResult.email,
+        phone: sessionResult.phone,
+        reason: sessionResult.reason,
+        availableMfaMethods: sessionResult.availableMfaMethods,
+      },
+    };
+  }
   await setLocalSessionId(sessionResult.sessionId);
   const snap = await getDoc(doc(db, 'users', uid));
   if (!snap.exists()) throw new Error('No profile found for this account.');
@@ -356,7 +178,6 @@ export async function confirmDeviceLogin(uid, emailIdToken) {
 }
 
 export async function logout() {
-  clearPendingGoogleLink();
   logActivity('logout');
   try {
     const deviceId = await getDeviceId();
@@ -364,11 +185,12 @@ export async function logout() {
     await clearFn({ deviceId });
   } catch (e) {}
   await clearLocalSessionId();
-  await googleSignOut();
   await signOut(auth);
 }
 
-export function subscribeAuth(callback) { return onAuthStateChanged(auth, callback); }
+export function subscribeAuth(callback) {
+  return onAuthStateChanged(auth, callback);
+}
 
 export async function fetchProfile(uid) {
   const snap = await getDoc(doc(db, 'users', uid));
@@ -397,7 +219,9 @@ export async function updateUserNameParts(uid, { firstName, lastName }) {
 export async function updateUserFields(uid, patch) {
   if (!uid || !patch || Object.keys(patch).length === 0) return;
   const clean = {};
-  Object.keys(patch).forEach((k) => { clean[k] = typeof patch[k] === 'string' ? patch[k].trim() : patch[k]; });
+  Object.keys(patch).forEach((k) => {
+    clean[k] = typeof patch[k] === 'string' ? patch[k].trim() : patch[k];
+  });
   await updateDoc(doc(db, 'users', uid), clean);
 }
 
@@ -414,7 +238,11 @@ export async function markAnnouncementsSeen(uid) {
 
 export async function updatePushToken(uid, token, platform) {
   if (!uid || !token) return;
-  await updateDoc(doc(db, 'users', uid), { pushToken: token, pushTokenPlatform: platform || '', pushTokenUpdatedAt: serverTimestamp() });
+  await updateDoc(doc(db, 'users', uid), {
+    pushToken: token,
+    pushTokenPlatform: platform || '',
+    pushTokenUpdatedAt: serverTimestamp(),
+  });
 }
 
 export async function updateFcmToken(uid, fcmToken) {
@@ -425,7 +253,9 @@ export async function updateFcmToken(uid, fcmToken) {
 export async function updateNotifPrefs(uid, prefs) {
   if (!uid) return;
   const patch = {};
-  Object.keys(prefs || {}).forEach((k) => { patch[`notifPrefs.${k}`] = prefs[k]; });
+  Object.keys(prefs || {}).forEach((k) => {
+    patch[`notifPrefs.${k}`] = prefs[k];
+  });
   if (Object.keys(patch).length === 0) return;
   await updateDoc(doc(db, 'users', uid), patch);
 }
@@ -433,7 +263,9 @@ export async function updateNotifPrefs(uid, prefs) {
 export async function updateCallSettings(uid, settings) {
   if (!uid) return;
   const patch = {};
-  Object.keys(settings || {}).forEach((k) => { patch[`callSettings.${k}`] = settings[k]; });
+  Object.keys(settings || {}).forEach((k) => {
+    patch[`callSettings.${k}`] = settings[k];
+  });
   if (Object.keys(patch).length === 0) return;
   await updateDoc(doc(db, 'users', uid), patch);
 }
@@ -441,25 +273,31 @@ export async function updateCallSettings(uid, settings) {
 export async function changePassword(currentPin, newPin) {
   const user = auth.currentUser;
   if (!user) throw new Error('You must be signed in to change your password.');
-  if (!user.email) throw new Error('This account signed in with Google and has no password to change.');
+  if (!user.email) throw new Error('This account does not have a password to change.');
   if (!currentPin) throw new Error('Please enter your current password.');
   if (!isValidPin(newPin)) throw new Error('New password must be 6-20 characters.');
   if (currentPin === newPin) throw new Error('New password must be different from your current password.');
   await reauthenticate(currentPin);
-  try { await updatePassword(user, newPin); }
-  catch (err) { throw new Error(friendlyAuthError(err)); }
+  try {
+    await updatePassword(user, newPin);
+  } catch (err) {
+    throw new Error(friendlyAuthError(err));
+  }
   logActivity('changePassword');
 }
 
 export async function reauthenticate(currentPassword) {
   const user = auth.currentUser;
   if (!user) throw new Error('You must be signed in.');
-  if (!user.email) throw new Error('This account signed in with Google and has no password.');
+  if (!user.email) throw new Error('This account does not have a password.');
   if (!currentPassword) throw new Error('Please enter your current password.');
   const credential = EmailAuthProvider.credential(user.email, currentPassword);
-  try { await reauthenticateWithCredential(user, credential); }
-  catch (err) {
-    if (err && (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential')) throw new Error('Your current password is incorrect.');
+  try {
+    await reauthenticateWithCredential(user, credential);
+  } catch (err) {
+    if (err && (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential')) {
+      throw new Error('Your current password is incorrect.');
+    }
     throw new Error(friendlyAuthError(err));
   }
 }
@@ -468,7 +306,7 @@ function friendlyAuthError(err) {
   const code = err && err.code;
   if (code === 'auth/user-not-found' || code === 'auth/invalid-credential' || code === 'auth/wrong-password') return 'Incorrect phone number or password.';
   if (code === 'auth/user-disabled') return 'This account has been suspended. Please contact support.';
-  if (code === 'auth/account-exists-with-different-credential') return 'An account already exists with this email using a different sign-in method.';
+  if (code === 'auth/account-exists-with-different-credential') return 'An account already exists with this email.';
   if (code === 'auth/too-many-requests') return 'Too many attempts. Please try again later.';
   if (code === 'auth/network-request-failed') return 'Network error. Check your connection and try again.';
   if (code === 'auth/weak-password') return 'New password is too weak. Please choose a stronger one.';
