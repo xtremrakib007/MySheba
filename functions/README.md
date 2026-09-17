@@ -30,7 +30,7 @@ automatically. If it doesn't, open `app.json` and replace:
 
 with the real ID it gave you. Without this, `registerForPushNotificationsAsync()`
 in `src/notifications/pushService.js` will fail silently and no token will
-ever be saved - nothing else will look "broken", push notifications will
+never be saved - nothing else will look "broken", push notifications will
 just never arrive.
 
 ## 2. One-time: install and deploy the Cloud Functions
@@ -81,25 +81,9 @@ anyone with no saved token at all.
 
 ## Phone OTP verification (registration)
 
-`functions/otpService.js` adds two callables - `sendOtp({ phone })` and
-`verifyOtp({ phone, code })` - used by `src/screens/RegisterScreen.js` to
-confirm someone owns the phone number they're registering with before
-`registerWithDealerCode` creates the account (it re-checks server-side that
-the phone was verified in the last 15 minutes, so this can't be bypassed
-from the client).
-
-Without any setup, it still works end-to-end for testing: with no SMS
-provider configured, the code is written to the function's logs instead of
-texted (`firebase functions:log`, look for `[otpService]`). To actually text
-the code, set these three env vars (any Twilio-compatible account works)
-and redeploy:
-
-```bash
-firebase functions:secrets:set TWILIO_ACCOUNT_SID
-firebase functions:secrets:set TWILIO_AUTH_TOKEN
-firebase functions:secrets:set TWILIO_FROM_NUMBER
-firebase deploy --only functions
-```
+Registration is handled by the `registerCustomer` callable. The registration
+flow confirms ownership of the phone number server-side before the account is
+created, so a modified client cannot bypass the verification requirement.
 
 ## Not included (out of scope for this pass)
 
@@ -112,5 +96,5 @@ firebase deploy --only functions
   with `notifPrefs.rateAlerts === true`.
 - **OTP-based login** - OTP is used for registration only (see above); sign
   in still uses phone+PIN via Firebase email/password auth as before (see
-  `src/firebase/authService.js`). The same `sendOtp`/`verifyOtp` callables
-  could be reused for an OTP login step later if needed.
+  `src/firebase/authService.js`). The same verification infrastructure could
+  be reused for an OTP login step later if needed.
