@@ -3,6 +3,12 @@ const admin = require('firebase-admin');
 const walletService = require('./walletService');
 
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
+const SERVICE_BY_CALLABLE = {
+  chargeRecharge: 'recharge',
+  chargeInternetPackage: 'internet',
+  chargeMobileBanking: 'mobilebanking',
+  chargeRemittance: 'remittance',
+};
 
 function requireAuth(request) {
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
@@ -35,8 +41,10 @@ async function recoverCompleted(db, uid, requestId, guardRef) {
   return { id: txDoc.id, cost, replay: true };
 }
 
-async function sanitizeRequest(request, requestId) {
+async function sanitizeRequest(request, requestId, callableName) {
   const uid = requireAuth(request);
+  const service = SERVICE_BY_CALLABLE[callableName];
+  if (!service) throw new HttpsError('internal', 'Unknown charge service.');
   const db = admin.firestore();
   const snap = await db.collection('users').doc(uid).get();
   if (!snap.exists) throw new HttpsError('not-found', 'Account not found.');
@@ -58,6 +66,10 @@ async function sanitizeRequest(request, requestId) {
   const incomingPayload = incomingData.payload || {};
   const payload = {
     ...incomingPayload,
+    // These fields are accounting metadata. Never let the caller choose them.
+    service,
+    cost: 0,
+    profit: 0,
     raw: { ...(incomingPayload.raw || {}), requestId },
   };
 
@@ -99,7 +111,7 @@ function wrap(name) {
     }
 
     try {
-      const safeRequest = await sanitizeRequest(request, requestId);
+      const safeRequest = await sanitizeRequest(request, requestId, name);
       const result = await fn.run(safeRequest);
       await guardRef.update({
         status: 'completed', transactionId: result?.id || null,
