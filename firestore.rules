@@ -39,11 +39,13 @@ service cloud.firestore {
     match /inquiries/{id} { allow create: if signedIn() && request.resource.data.customerId == request.auth.uid; allow read: if signedIn() && (resource.data.customerId == request.auth.uid || isStaff()); allow update: if signedIn() && ((isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','ticketUrl','updatedAt']) && request.resource.data.status in ['new','contacted','closed']) || (isReseller() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']) && request.resource.data.status in ['new','contacted','closed'])); allow delete: if false; }
     match /transactions/{id} {
       allow create: if false;
-      allow read: if signedIn() && (resource.data.customerId == request.auth.uid || isAdmin() || (isDealerTier() && resource.data.status == 'pending' && resource.data.service == 'Mobile Banking') || (isReseller() && resource.data.status == 'pending' && resource.data.service in ['Recharge','Internet','Remittance']) || (isStaff() && resource.data.claimedBy == request.auth.uid));
+      // Dealer/reseller access to full transaction documents is intentionally removed.
+      // They use the server-maintained sanitized transactionQueue instead.
+      allow read: if signedIn() && (resource.data.customerId == request.auth.uid || isAdmin());
       allow update: if signedIn() && ((isAdmin() && resource.data.status == 'pending' && resource.data.get('approved', false) != true && request.resource.data.get('approved', false) == true && request.resource.data.get('approvedBy', null) == request.auth.uid && request.resource.data.get('approvedByRole', null) in ['admin','superadmin'] && request.resource.data.get('approvedAt', null) != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approved','approvedBy','approvedByName','approvedByRole','approvedAt','updatedAt'])) || (isAdmin() && resource.data.status == 'pending' && resource.data.service == 'Mobile Banking' && request.resource.data.get('customerId', null) == resource.data.get('customerId', null) && request.resource.data.get('service', null) == resource.data.get('service', null) && request.resource.data.get('dealerId', null) != resource.data.get('dealerId', null) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dealerId','updatedAt'])));
       allow delete: if false;
     }
-    // Sanitized operator queue. The client never reads full transaction documents for broadcast work.
+    // Sanitized operator queue. Only server-side triggers can create/update/delete these docs.
     match /transactionQueue/{id} {
       allow read: if signedIn() && (
         isAdmin() ||
