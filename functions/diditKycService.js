@@ -168,7 +168,6 @@ exports.createDiditKycSession = onCall({ enforceAppCheck: true }, async (request
       const requestRef = db.collection(REQUESTS).doc(uid);
       tx.set(requestRef, submission, { merge: false });
       tx.update(userRef, { verificationStatus: 'pending', verified: false });
-      tx.delete(db.collection(PENDING).doc(uid));
     });
     return { ok: true, status: 'pending' };
   }
