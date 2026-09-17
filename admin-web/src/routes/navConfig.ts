@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import {
-  LayoutDashboard, Users, SlidersHorizontal, BadgeCheck, ShieldAlert, MessageSquareWarning,
+  LayoutDashboard, Users, SlidersHorizontal, BadgeCheck, ShieldAlert,
   MessageCircle, LifeBuoy, BarChart3, Tag, Wallet, Megaphone, BellRing, LayoutGrid, Layers,
   CreditCard, Coins, Smartphone, PercentCircle, Receipt, Plane, Send, Building2, LineChart, Lock,
   Activity, Search, TriangleAlert, ClipboardList, Headphones, Store, BriefcaseBusiness, Banknote,
@@ -43,7 +43,6 @@ export const navGroups: NavGroup[] = [
   ] },
   { label: 'Verification & Moderation', accent: 'warning', items: [
     { label: 'Identity Verification', path: '/verification', icon: BadgeCheck, enabled: true },
-    { label: 'Chat Reports', path: '/chat-reports', icon: MessageSquareWarning, enabled: true },
     { label: 'Security Center', path: '/security', icon: ShieldCheck, enabled: true },
   ] },
   { label: 'Finance & Risk', accent: 'danger', items: [
@@ -54,7 +53,6 @@ export const navGroups: NavGroup[] = [
   ] },
   { label: 'Support & Communications', accent: 'danger', items: [
     { label: 'Support Tickets', path: '/support', icon: LifeBuoy, enabled: true },
-    { label: 'Support Messages', path: '/support-messages', icon: MessageCircle, enabled: true },
     { label: 'Announcements', path: '/announcements', icon: BellRing, enabled: true },
     { label: 'Communications Center', path: '/communications', icon: Megaphone, enabled: true },
     { label: 'Notification Delivery', path: '/notification-delivery', icon: Activity, enabled: true },
