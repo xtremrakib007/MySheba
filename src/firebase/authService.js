@@ -57,15 +57,27 @@ export function isValidPin(pin) {
   return value.length >= 6 && value.length <= 20;
 }
 
-export async function registerCustomer({ name, phone, phoneE164, dialCode, email, pin, phoneIdToken }) {
+export async function registerCustomer({ name, phone, phoneE164, dialCode, email, pin, phoneIdToken, emailIdToken, emailOtpVerificationId }) {
   if (!name || !name.trim()) throw new Error('Please enter your full name.');
   if (!isValidPhone(phone)) throw new Error('Please enter a valid phone number.');
   if (!isValidEmail(email)) throw new Error('Please enter a valid email address.');
   if (!isValidPin(pin)) throw new Error('Password must be 6-20 characters.');
-  if (!phoneIdToken) throw new Error('Please verify your phone number first.');
+  if (!phoneIdToken && !emailIdToken && !emailOtpVerificationId) {
+    throw new Error('Please verify your phone number by SMS or verify your email address by link/OTP first.');
+  }
 
   const registerFn = httpsCallable(functions, 'registerCustomer');
-  await registerFn({ name, phone, phoneE164, dialCode, email, pin, phoneIdToken });
+  await registerFn({
+    name,
+    phone,
+    phoneE164,
+    dialCode,
+    email,
+    pin,
+    phoneIdToken,
+    emailIdToken,
+    emailOtpVerificationId,
+  });
   const authEmail = phoneToEmail(phone, dialCode);
   const cred = await signInWithEmailAndPassword(auth, authEmail, pin);
   const snap = await getDoc(doc(db, 'users', cred.user.uid));
