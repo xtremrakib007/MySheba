@@ -62,8 +62,8 @@ export default function AppLockScreen() {
     try {
       const ok = await authenticateWithBiometric('Unlock MySheba');
       if (!ok) return;
-      await validateSessionBeforeUnlock();
-      if (await deviceSessionService.validateActiveSession()) unlockApp();
+      const valid = await validateSessionBeforeUnlock();
+      if (valid) unlockApp();
     } catch (err) {
       setError(err?.message || 'Could not verify this device session.');
     } finally {
