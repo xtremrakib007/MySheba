@@ -9,7 +9,7 @@ const ALLOWED_ROLES = ['customer', 'dealer', 'reseller', 'admin', 'superadmin'];
 const ASSIGNABLE_ROLES = ['admin', 'superadmin', 'dealer', 'reseller'];
 
 function activeProfile(profile) {
-  return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto;
+  return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && profile.active !== false && !profile.mergedInto;
 }
 
 async function getActiveActor(db, uid) {
