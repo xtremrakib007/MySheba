@@ -33,7 +33,7 @@ async function rateLimit(db, uid) {
   }
 }
 
-exports.matchContactsByPhone = onCall(async (request) => {
+exports.matchContactsByPhone = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const callerUid = request.auth.uid;
   const rawNumbers = Array.isArray(request.data && request.data.phoneNumbers)
