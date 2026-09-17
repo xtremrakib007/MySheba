@@ -3,6 +3,13 @@ const admin = require('firebase-admin');
 
 const DEALER_SERVICE = 'Mobile Banking';
 const RESELLER_SERVICES = new Set(['Recharge', 'Internet', 'Remittance']);
+const OPERATIONAL_RAW_FIELDS = [
+  'phone', 'senderName', 'senderPhone', 'senderCompany', 'senderPassportNo', 'senderPassportExpiry',
+  'senderAddress', 'receiverFirstName', 'receiverLastName', 'receiverRelationship', 'receiverPhone',
+  'receiverBankName', 'receiverAccountNumber', 'receiverBranch', 'receiverRoutingNumber',
+  'receiverPickupNetwork', 'receiverIdType', 'receiverIdNumber', 'receiverPickupCity',
+  'receiverWalletProvider', 'receiverWalletNumber', 'country', 'method',
+];
 
 function queueRole(service) {
   if (service === DEALER_SERVICE) return 'dealer';
@@ -10,12 +17,24 @@ function queueRole(service) {
   return null;
 }
 
+function sanitizeRaw(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out = {};
+  for (const key of OPERATIONAL_RAW_FIELDS) {
+    const value = raw[key];
+    if (typeof value === 'string') out[key] = value.slice(0, 500);
+    else if (typeof value === 'number' && Number.isFinite(value)) out[key] = value;
+    else if (typeof value === 'boolean') out[key] = value;
+  }
+  return out;
+}
+
 function sanitizeTransaction(id, tx) {
   const operatorRole = queueRole(tx.service);
   if (!operatorRole) return null;
 
-  // Only fields required by Dealer/Reseller processing UI are copied.
-  // Never mirror raw payloads, wallet metadata, customer ids, or financial audit fields.
+  // Only fields required by the Dealer/Reseller processing UI are copied.
+  // Raw payloads are reduced to an explicit operational allowlist.
   return {
     transactionId: id,
     operatorRole,
@@ -26,7 +45,8 @@ function sanitizeTransaction(id, tx) {
     total: Number.isFinite(Number(tx.total)) ? Number(tx.total) : 0,
     customerPhone: typeof tx.customerPhone === 'string' ? tx.customerPhone.slice(0, 64) : '',
     details: typeof tx.details === 'string' ? tx.details.slice(0, 2000) : '',
-    receiverPhone: typeof tx.raw?.phone === 'string' ? tx.raw.phone.slice(0, 64) : '',
+    raw: sanitizeRaw(tx.raw),
+    receiptUrl: typeof tx.receiptUrl === 'string' ? tx.receiptUrl.slice(0, 2048) : '',
     dealerId: tx.dealerId || null,
     resellerId: tx.resellerId || null,
     claimedBy: tx.claimedBy || null,
@@ -41,14 +61,12 @@ async function syncQueue(id, tx) {
   const ref = admin.firestore().collection('transactionQueue').doc(id);
   const queue = sanitizeTransaction(id, tx);
 
-  // Rejected orders and unsupported services must never remain in an operator queue.
   if (!queue || tx.rejected === true || !['pending', 'processing', 'completed'].includes(queue.status)) {
     await ref.delete().catch(() => {});
     return;
   }
 
   // Completed orders remain only for the operator who actually claimed them.
-  // Pending orders are visible only to the appropriate service role.
   if (queue.status === 'completed' && !queue.claimedBy) {
     await ref.delete().catch(() => {});
     return;
