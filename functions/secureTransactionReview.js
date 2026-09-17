@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { logAudit } = require('./logService');
 
 const SERVICE_BY_FUNCTION = {
   rejectRechargeTransaction: 'recharge', rejectInternetPackageTransaction: 'internet',
@@ -27,9 +28,10 @@ function makeRejectCallable(service) {
     if (!transactionId) throw new HttpsError('invalid-argument', 'transactionId is required.');
     if (reason.length > 500) throw new HttpsError('invalid-argument', 'Rejection reason is too long.');
     const ref = db.collection('transactions').doc(transactionId);
+    let order;
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref); if (!snap.exists) throw new HttpsError('not-found', 'That order does not exist.');
-      const order = snap.data();
+      order = snap.data();
       if (order.chargedServiceKind !== service) throw new HttpsError('failed-precondition', 'Wrong service.');
       if (order.status !== 'pending' || order.claimedBy || order.rejected === true) throw new HttpsError('failed-precondition', 'That order has already been processed.');
       if (actor.role === 'dealer' && order.dealerId && order.dealerId !== actor.uid) throw new HttpsError('permission-denied', 'This order is assigned to another dealer.');
@@ -39,6 +41,18 @@ function makeRejectCallable(service) {
         rejectedBy: actor.uid, rejectedByRole: actor.role, rejectedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+    });
+    await logAudit({
+      action: 'transaction_rejected',
+      targetUid: order?.customerId || null,
+      performedBy: actor.uid,
+      performedByRole: actor.role,
+      details: {
+        transactionId,
+        service,
+        amount: Number.isFinite(Number(order?.amount)) ? Number(order.amount) : null,
+        reason: reason.slice(0, 500),
+      },
     });
     return { rejected: true };
   });
