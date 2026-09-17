@@ -20,6 +20,9 @@ functions.createSelfTopup = secureWalletMutations.createSelfTopup;
 functions.approveTopup = secureTopupReview.approveTopup;
 functions.rejectTopup = secureTopupReview.rejectTopup;
 functions.rejectTransaction = rejectionService.rejectTransaction;
+functions.approveTransaction = transactionService.approveTransaction;
+functions.acceptTransaction = transactionService.acceptTransaction;
+functions.completeTransaction = transactionService.completeTransaction;
 functions.assignDealer = transactionService.assignDealer;
 functions.scrubCompletedTransactionPins = transactionService.scrubCompletedTransactionPins;
 
