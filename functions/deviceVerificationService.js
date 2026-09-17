@@ -22,6 +22,13 @@ function requireAuth(request) {
 }
 function validEmail(email) { return typeof email === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()); }
 function hash(code) { return crypto.createHash('sha256').update(String(code).trim()).digest('hex'); }
+function safeEqualHash(leftHex, rightHex) {
+  try {
+    const left = Buffer.from(String(leftHex || ''), 'hex');
+    const right = Buffer.from(String(rightHex || ''), 'hex');
+    return left.length === right.length && left.length > 0 && crypto.timingSafeEqual(left, right);
+  } catch { return false; }
+}
 function code() { return String(crypto.randomInt(100000, 1000000)); }
 function ref(db, uid) { return db.collection('users').doc(uid); }
 
@@ -122,7 +129,7 @@ exports.confirmDeviceEmailOtp = onCall(async (request) => {
     }
     if (challenge.expiresAt?.toMillis?.() < Date.now()) throw new HttpsError('deadline-exceeded', 'That verification code expired. Request a new email.');
     if ((challenge.attempts || 0) >= MAX_ATTEMPTS) throw new HttpsError('resource-exhausted', 'Too many attempts. Request a new verification email.');
-    if (hash(otp) !== challenge.codeHash) {
+    if (!safeEqualHash(hash(otp), challenge.codeHash)) {
       await userRef.update({ 'pendingDeviceEmailChallenge.attempts': FieldValue.increment(1) });
       throw new HttpsError('invalid-argument', 'Incorrect verification code.');
     }
