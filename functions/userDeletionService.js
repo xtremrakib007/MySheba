@@ -4,6 +4,12 @@ const { logAudit, logServerError } = require('./logService');
 
 function activeAdmin(profile) { return profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto && ['admin', 'superadmin'].includes(profile.role); }
 
+async function deleteStoragePrefix(bucket, prefix) {
+  const [files] = await bucket.getFiles({ prefix });
+  if (!files.length) return;
+  await Promise.all(files.map((file) => file.delete()));
+}
+
 exports.deleteManagedUser = onCall({ enforceAppCheck: true }, async (request) => {
   const callerUid = request.auth?.uid;
   if (!callerUid) throw new HttpsError('unauthenticated', 'You must be signed in.');
@@ -24,8 +30,6 @@ exports.deleteManagedUser = onCall({ enforceAppCheck: true }, async (request) =>
   const balance = Number(target.walletBalance || 0);
   if (!Number.isFinite(balance) || Math.abs(balance) > 0.000001) throw new HttpsError('failed-precondition', 'The account must have a zero wallet balance before deletion.');
 
-  // Single-field queries avoid a new composite-index dependency and inspect all
-  // records for this account so an older pending item cannot be missed.
   const [txSnap, topupSnap] = await Promise.all([
     db.collection('transactions').where('customerId', '==', targetUid).get(),
     db.collection('topups').where('userId', '==', targetUid).get(),
@@ -42,7 +46,10 @@ exports.deleteManagedUser = onCall({ enforceAppCheck: true }, async (request) =>
   }
 
   try {
+    const bucket = admin.storage().bucket();
     await Promise.all([
+      deleteStoragePrefix(bucket, `verification-documents/${targetUid}/`),
+      deleteStoragePrefix(bucket, `topup-receipts/${targetUid}/`),
       db.collection('biometricTemplates').doc(targetUid).delete().catch(() => {}),
       db.collection('pendingBiometricTemplates').doc(targetUid).delete().catch(() => {}),
       db.collection('securityPins').doc(targetUid).delete().catch(() => {}),
