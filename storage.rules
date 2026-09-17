@@ -12,12 +12,8 @@ service firebase.storage {
       return isAdmin() || ((role() in ['dealer', 'reseller']) && tx.get('claimedBy', null) == request.auth.uid);
     }
     function inquiryOwner(inquiryId) { return firestore.get(/databases/(default)/documents/inquiries/$(inquiryId)).data.customerId == request.auth.uid; }
-    function supportThreadExists(uid) { return firestore.get(/databases/(default)/documents/chats/$(uid)).data.customerId == uid; }
 
     match /topup-receipts/{uid}/{fileName} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if signedIn() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*'); allow delete: if false; }
-    // Passport/KYC material is highly sensitive. Staff-wide reads are not
-    // necessary because the transaction carries the owner-generated URL;
-    // direct Storage reads are restricted to the owner/admins.
     match /remittance-passports/{uid}/{fileName} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if signedIn() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*'); allow delete: if false; }
 
     match /verification-documents/{uid}/{fileName} {
@@ -30,10 +26,12 @@ service firebase.storage {
     match /avatars/{uid}/{fileName} { allow read: if signedIn(); allow write: if signedIn() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*'); allow delete: if false; }
     match /business-logos/{uid}/{fileName} { allow read: if signedIn(); allow write: if signedIn() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*'); allow delete: if false; }
 
-    // Support Chat media only. Direct, Group and Room media paths were removed.
+    // Support attachments are user-scoped. Do not allow arbitrary staff members
+    // to read another user's files by guessing the UID in the Storage path.
+    // Legacy chat-thread authorization is intentionally removed.
     match /chat-media/support/{uid}/{fileName} {
-      allow read: if signedIn() && (request.auth.uid == uid || isStaff());
-      allow write: if signedIn() && request.resource.size < 50 * 1024 * 1024 && request.resource.contentType.matches('(image|video|audio)/.*') && (request.auth.uid == uid || (isStaff() && supportThreadExists(uid)));
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow write: if signedIn() && request.auth.uid == uid && request.resource.size < 50 * 1024 * 1024 && request.resource.contentType.matches('(image|video|audio)/.*');
       allow delete: if false;
     }
 
