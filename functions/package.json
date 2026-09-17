@@ -10,7 +10,8 @@
   "scripts": {
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
-    "shell": "firebase functions:shell"
+    "shell": "firebase functions:shell",
+    "backfill:transaction-queue": "node scripts/backfillTransactionQueue.js"
   },
   "dependencies": {
     "firebase-admin": "^12.1.0",
