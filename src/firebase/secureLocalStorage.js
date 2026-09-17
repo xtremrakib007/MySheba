@@ -7,28 +7,19 @@
 // setups. It's fine for non-sensitive prefs, but never for auth tokens or
 // personal data.
 //
-// Used for:
-//   - src/firebase/config.js - Firebase Auth's persisted session. Without
-//     this, the ID/refresh tokens that let someone stay signed in across
-//     app restarts would sit in AsyncStorage as plain JSON - anyone who
-//     pulled them off the device could impersonate the signed-in user
-//     indefinitely (until confirmDeviceSwitch's revokeRefreshTokens or a
-//     manual logout, see functions/deviceSessionService.js).
-//   - src/screens/LoginScreen.js - the "Remember Me" phone number (PII).
-//
-// The encrypted blob itself still lives in AsyncStorage (SecureStore alone
-// caps out around 2KB/item on Android, too small for Firebase's persisted
-// session object) - only the AES-256 key that protects it lives in
-// SecureStore (iOS Keychain / Android Keystore, hardware-backed on most
-// devices) and never touches AsyncStorage. Dumping AsyncStorage's raw files
-// off a compromised device gets nothing but ciphertext without also
-// compromising the Keychain/Keystore.
+// The encrypted blob itself still lives in AsyncStorage. The AES-256 key that
+// protects it lives in SecureStore (iOS Keychain / Android Keystore). Values
+// use authenticated encryption semantics: AES-256-CBC provides confidentiality
+// and a separate HMAC-SHA256 tag provides integrity/authenticity. A forged or
+// corrupted blob therefore fails closed instead of being accepted as a
+// modified Firebase persistence object.
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
 import CryptoJS from 'crypto-js';
 
 const KEY_STORAGE_NAME = 'mysheba_local_enc_key_v1';
+const STORAGE_VERSION = 'v2';
 
 let cachedKeyHex = null;
 
@@ -37,7 +28,7 @@ async function getOrCreateKeyHex() {
 
   let hex = await SecureStore.getItemAsync(KEY_STORAGE_NAME);
   if (!hex) {
-    const randomBytes = await Crypto.getRandomBytesAsync(32); // 256-bit AES key
+    const randomBytes = await Crypto.getRandomBytesAsync(32); // 256-bit master key
     hex = Array.from(randomBytes)
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
@@ -47,37 +38,61 @@ async function getOrCreateKeyHex() {
   return hex;
 }
 
+function deriveKey(keyHex, purpose) {
+  return CryptoJS.SHA256(`${purpose}:${keyHex}`);
+}
+
+function constantTimeHexEqual(left, right) {
+  const a = String(left || '').toLowerCase();
+  const b = String(right || '').toLowerCase();
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 async function encrypt(plaintext) {
   const keyHex = await getOrCreateKeyHex();
-  const key = CryptoJS.enc.Hex.parse(keyHex);
+  const encryptionKey = deriveKey(keyHex, 'encryption');
+  const macKey = deriveKey(keyHex, 'authentication');
   const iv = CryptoJS.lib.WordArray.random(16); // fresh IV every write - never reuse with the same key
-  const encrypted = CryptoJS.AES.encrypt(plaintext, key, {
+  const encrypted = CryptoJS.AES.encrypt(plaintext, encryptionKey, {
     iv,
     mode: CryptoJS.mode.CBC,
     padding: CryptoJS.pad.Pkcs7,
   });
-  return `${iv.toString(CryptoJS.enc.Hex)}:${encrypted.ciphertext.toString(CryptoJS.enc.Hex)}`;
+  const ivHex = iv.toString(CryptoJS.enc.Hex);
+  const ciphertextHex = encrypted.ciphertext.toString(CryptoJS.enc.Hex);
+  const authenticatedData = `${STORAGE_VERSION}:${ivHex}:${ciphertextHex}`;
+  const tagHex = CryptoJS.HmacSHA256(authenticatedData, macKey).toString(CryptoJS.enc.Hex);
+  return `${authenticatedData}:${tagHex}`;
 }
 
 async function decrypt(payload) {
-  if (typeof payload !== 'string' || !payload.includes(':')) return null;
+  if (typeof payload !== 'string') return null;
+  const parts = payload.split(':');
+  if (parts.length !== 4 || parts[0] !== STORAGE_VERSION) return null;
+  const [, ivHex, ctHex, tagHex] = parts;
+  if (!/^[0-9a-f]{32}$/i.test(ivHex) || !/^[0-9a-f]+$/i.test(ctHex) || !/^[0-9a-f]{64}$/i.test(tagHex) || ctHex.length === 0 || ctHex.length % 32 !== 0) return null;
   try {
     const keyHex = await getOrCreateKeyHex();
-    const key = CryptoJS.enc.Hex.parse(keyHex);
-    const [ivHex, ctHex] = payload.split(':');
+    const encryptionKey = deriveKey(keyHex, 'encryption');
+    const macKey = deriveKey(keyHex, 'authentication');
+    const authenticatedData = `${STORAGE_VERSION}:${ivHex}:${ctHex}`;
+    const expectedTag = CryptoJS.HmacSHA256(authenticatedData, macKey).toString(CryptoJS.enc.Hex);
+    if (!constantTimeHexEqual(expectedTag, tagHex)) return null;
     const iv = CryptoJS.enc.Hex.parse(ivHex);
     const ciphertext = CryptoJS.enc.Hex.parse(ctHex);
-    const decrypted = CryptoJS.AES.decrypt({ ciphertext }, key, {
+    const decrypted = CryptoJS.AES.decrypt({ ciphertext }, encryptionKey, {
       iv,
       mode: CryptoJS.mode.CBC,
       padding: CryptoJS.pad.Pkcs7,
     });
     return decrypted.toString(CryptoJS.enc.Utf8) || null;
   } catch (e) {
-    // Undecryptable - e.g. the Keystore/Keychain entry was lost on
-    // reinstall or OS-level data reset. Fail closed (treat as "nothing
-    // stored") rather than throwing, so a lost key just means "sign in
-    // again", never a crash.
+    // Undecryptable, unauthenticated, or otherwise malformed data fails
+    // closed. A lost Keystore/Keychain entry or a storage-format migration
+    // therefore means "sign in again", never "accept modified auth state".
     return null;
   }
 }
@@ -86,10 +101,8 @@ async function decrypt(payload) {
  * Drop-in replacement for AsyncStorage's own {getItem,setItem,removeItem}
  * shape. Firebase's getReactNativePersistence() only needs those three
  * methods, so this can be passed directly in place of the raw AsyncStorage
- * import (see src/firebase/config.js) - every value is AES-256-CBC
- * encrypted before it reaches AsyncStorage and decrypted transparently on
- * read. Also used directly (getItem/setItem/removeItem) anywhere else a
- * single sensitive value needs to be cached locally.
+ * import (see src/firebase/config.js). Sensitive values are authenticated
+ * before they are returned to callers.
  */
 export const secureAsyncStorage = {
   async getItem(key) {
