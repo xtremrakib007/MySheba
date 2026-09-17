@@ -98,6 +98,15 @@ function isValidPassword(pin) {
   return value.length >= 6 && value.length <= 20;
 }
 
+function isActiveAccount(profile) {
+  return !!profile
+    && profile.suspended !== true
+    && profile.inactive !== true
+    && profile.disabled !== true
+    && profile.active !== false
+    && profile.mergedInto == null;
+}
+
 function resetRateKey(value) {
   return crypto.createHash('sha256').update(String(value || '')).digest('hex');
 }
@@ -141,7 +150,9 @@ exports.resetPassword = onCall({ enforceAppCheck: true }, async (request) => {
   const userData = userDoc.data();
   const realUid = userDoc.id;
 
-  if (userData.suspended) throw new HttpsError('permission-denied', 'This account has been suspended. Please contact support.');
+  if (!isActiveAccount(userData)) {
+    throw new HttpsError('permission-denied', 'This account is not active. Please contact support.');
+  }
 
   if (hasPhoneProof) {
     try {
