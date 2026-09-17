@@ -7,6 +7,7 @@ const { checkIpAnomaly } = require('./anomalyService');
 const KEY_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const MAX_TRANSFER = 100000;
 const MAX_NOTE_LENGTH = 500;
+const MONEY_RE = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
 
 function requireAuth(request) {
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
@@ -34,6 +35,17 @@ function validBalance(value) {
   if (!Number.isFinite(n) || n < 0 || !Number.isSafeInteger(Math.round(n * 100))) return null;
   return n;
 }
+function parseMoney(value) {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || value <= 0 || value > MAX_TRANSFER) return null;
+    const cents = Math.round(value * 100);
+    if (!Number.isSafeInteger(cents) || Math.abs(value * 100 - cents) > Number.EPSILON * Math.max(1, Math.abs(value * 100))) return null;
+    return value;
+  }
+  if (typeof value !== 'string' || !MONEY_RE.test(value)) return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 && n <= MAX_TRANSFER ? n : null;
+}
 
 // A client retry must reuse requestId. The idempotency record and both
 // balances are committed in ONE Firestore transaction, so two concurrent
@@ -43,15 +55,15 @@ exports.transferPoints = onCall({ enforceAppCheck: true }, async (request) => {
   const requestId = requireRequestId(request);
   const db = admin.firestore();
   const { toUid, amount, note } = request.data || {};
-  const amt = Number(amount);
+  const amt = parseMoney(amount);
   const cleanNote = typeof note === 'string' ? note.trim() : '';
 
   if (typeof toUid !== 'string' || !toUid.trim()) {
     throw new HttpsError('invalid-argument', 'A recipient is required.');
   }
   if (toUid === callerUid) throw new HttpsError('invalid-argument', "You can't transfer points to yourself.");
-  if (!Number.isFinite(amt) || amt <= 0 || amt > MAX_TRANSFER || !Number.isSafeInteger(Math.round(amt * 100))) {
-    throw new HttpsError('invalid-argument', `Transfer amount must be greater than 0 and no more than ${MAX_TRANSFER.toLocaleString()} points.`);
+  if (amt === null) {
+    throw new HttpsError('invalid-argument', `Transfer amount must be greater than 0 and no more than ${MAX_TRANSFER.toLocaleString()} points, with at most 2 decimal places.`);
   }
   if (cleanNote.length > MAX_NOTE_LENGTH) {
     throw new HttpsError('invalid-argument', `Note must be ${MAX_NOTE_LENGTH} characters or fewer.`);
