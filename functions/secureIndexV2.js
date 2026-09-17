@@ -7,6 +7,7 @@ const secureWalletCharge = require('./secureWalletCharge');
 const secureTopupReview = require('./secureTopupReview');
 const secureTransactionReview = require('./secureTransactionReview');
 const transactionQueue = require('./transactionQueueService');
+const adTrackingCallable = require('./adTrackingCallable');
 
 functions.chargeRecharge = guards.chargeRecharge;
 functions.chargeInternetPackage = guards.chargeInternetPackage;
@@ -17,12 +18,12 @@ functions.transferPoints = secureTransfer.transferPoints;
 functions.walletTransfer = secureWalletTransfer.walletTransfer;
 functions.createSelfTopup = secureWalletMutations.createSelfTopup;
 functions.approveTopup = secureTopupReview.approveTopup;
-functions.rejectTopup = secureTopupReview.rejectTopup;
+functions.rejectTopup = secureTransactionReview.rejectTopup;
 functions.rejectRechargeTransaction = secureTransactionReview.rejectRechargeTransaction;
 functions.rejectInternetPackageTransaction = secureTransactionReview.rejectInternetPackageTransaction;
 functions.rejectMobileBankingTransaction = secureTransactionReview.rejectMobileBankingTransaction;
 functions.rejectRemittanceTransaction = secureTransactionReview.rejectRemittanceTransaction;
 functions.onTransactionQueueCreated = transactionQueue.onTransactionQueueCreated;
 functions.onTransactionQueueUpdated = transactionQueue.onTransactionQueueUpdated;
-
+functions.recordAdEvent = adTrackingCallable.recordAdEvent;
 module.exports = functions;
