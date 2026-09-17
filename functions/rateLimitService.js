@@ -19,6 +19,7 @@ const DEFAULT_LIMITS = {
   get_user_by_uid: { max: 60, windowMinutes: 10 },
   match_contacts_by_phone: { max: 10, windowMinutes: 10 },
   support_ticket_create: { max: 5, windowMinutes: 60 },
+  inquiry_create: { max: 5, windowMinutes: 60 },
 };
 
 const DEFAULT_OTP_LIMITS = {
