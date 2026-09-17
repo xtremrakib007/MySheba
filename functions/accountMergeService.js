@@ -43,7 +43,9 @@ exports.startAccountMerge = onCall(async (request) => {
     throw new HttpsError('internal', 'Could not look up that account. Please try again.');
   }
   if (targetAuthUser.uid === callerUid) throw new HttpsError('invalid-argument', 'That is already your account.');
-  if (!(targetAuthUser.providerData || []).some((p) => p.providerId === 'google.com')) throw new HttpsError('failed-precondition', 'That account is not signed in with Google.');
+  const targetGoogleProvider = (targetAuthUser.providerData || []).find((p) => p.providerId === 'google.com');
+  if (!targetGoogleProvider || normalizeEmail(targetGoogleProvider.email) !== email) throw new HttpsError('failed-precondition', 'That account is not linked to the requested Google account.');
+  if (targetAuthUser.disabled) throw new HttpsError('failed-precondition', 'That Google account is disabled.');
   const target = await getProfile(db, targetAuthUser.uid);
   if (!target) throw new HttpsError('not-found', 'That account could not be found.');
   if (target.mergedInto) throw new HttpsError('failed-precondition', 'That account has already been merged into another one.');
@@ -77,33 +79,73 @@ exports.confirmAccountMerge = onCall(async (request) => {
   const callerRef = db.collection('users').doc(callerUid);
   let targetUid = null;
   let mergedWalletBalance = 0;
+  let transferredGoogleProvider = null;
+  let providerTransferred = false;
+
+  const otpSnapshot = await otpRef.get();
+  if (!otpSnapshot.exists) throw new HttpsError('not-found', 'Please start the merge again from Settings.');
+  const otpData = otpSnapshot.data() || {};
+  targetUid = String(otpData.targetUid || '');
+  const targetEmail = normalizeEmail(otpData.targetEmail);
+  if (!targetUid || targetUid === callerUid || !isValidEmail(targetEmail)) throw new HttpsError('failed-precondition', 'The merge target is invalid. Please start again.');
+
+  // Provider transfer happens before the wallet transaction. This prevents the
+  // old behavior where money/account state could be merged even if Google
+  // provider transfer failed. The Firestore transaction below is still the
+  // atomic point for the wallet/profile state.
+  try {
+    const [callerAuthUser, targetAuthUser] = await Promise.all([
+      admin.auth().getUser(callerUid),
+      admin.auth().getUser(targetUid),
+    ]);
+    if (callerAuthUser.disabled) throw new HttpsError('permission-denied', 'Your account is disabled. Please contact support.');
+    if (targetAuthUser.disabled) throw new HttpsError('failed-precondition', 'The Google account is disabled. Please start the merge again.');
+    const callerGoogleProvider = (callerAuthUser.providerData || []).find((p) => p.providerId === 'google.com');
+    if (callerGoogleProvider) throw new HttpsError('already-exists', 'Your account already has a Google account linked. No merge is required.');
+    const targetGoogleProvider = (targetAuthUser.providerData || []).find((p) => p.providerId === 'google.com');
+    if (!targetGoogleProvider || normalizeEmail(targetGoogleProvider.email) !== targetEmail) throw new HttpsError('failed-precondition', 'The Google account no longer matches the merge request. Please start again.');
+    transferredGoogleProvider = { providerId: 'google.com', uid: targetGoogleProvider.uid, email: targetGoogleProvider.email || targetEmail };
+
+    await admin.auth().updateUser(targetUid, { providersToUnlink: ['google.com'] });
+    try {
+      await admin.auth().updateUser(callerUid, { providerToLink: transferredGoogleProvider });
+      providerTransferred = true;
+    } catch (linkErr) {
+      await admin.auth().updateUser(targetUid, { providerToLink: transferredGoogleProvider }).catch((rollbackErr) => {
+        logServerError('confirmAccountMerge.providerRollbackAfterLinkFailure', rollbackErr, { userId: callerUid });
+      });
+      throw linkErr;
+    }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    await logServerError('confirmAccountMerge.providerTransfer', err, { userId: callerUid });
+    throw new HttpsError('failed-precondition', 'Could not link the Google account safely. No wallet merge was completed. Please try again.');
+  }
 
   try {
     await db.runTransaction(async (tx) => {
       const otpSnap = await tx.get(otpRef);
       if (!otpSnap.exists) throw new HttpsError('not-found', 'Please start the merge again from Settings.');
-      const otp = otpSnap.data();
+      const otp = otpSnap.data() || {};
       const attempts = Number(otp.attempts || 0);
       if (!Number.isInteger(attempts) || attempts < 0) throw new HttpsError('failed-precondition', 'The merge verification record is invalid.');
       if (attempts >= MAX_ATTEMPTS) throw new HttpsError('resource-exhausted', 'Too many incorrect attempts. Please start the merge again.');
       const expiresMs = otp.expiresAt?.toMillis ? otp.expiresAt.toMillis() : 0;
       if (!expiresMs || Date.now() > expiresMs) throw new HttpsError('deadline-exceeded', 'That code has expired. Please start the merge again.');
-
       if (code !== String(otp.code || '')) {
         tx.update(otpRef, { attempts: attempts + 1 });
         throw new HttpsError('invalid-argument', 'Incorrect code. Please try again.');
       }
+      if (String(otp.targetUid || '') !== targetUid || normalizeEmail(otp.targetEmail) !== targetEmail) throw new HttpsError('failed-precondition', 'The merge request has changed. Please start again.');
 
-      targetUid = String(otp.targetUid || '');
-      if (!targetUid || targetUid === callerUid) throw new HttpsError('failed-precondition', 'The merge target is invalid. Please start again.');
       const targetRef = db.collection('users').doc(targetUid);
       const callerSnap = await tx.get(callerRef);
       const targetSnap = await tx.get(targetRef);
       if (!callerSnap.exists) throw new HttpsError('not-found', 'Your account could not be found.');
       if (!targetSnap.exists) throw new HttpsError('not-found', 'That account no longer exists.');
-      const callerData = callerSnap.data();
-      const targetData = targetSnap.data();
-      if (targetData.mergedInto) throw new HttpsError('failed-precondition', 'That account has already been merged into another one.');
+      const callerData = callerSnap.data() || {};
+      const targetData = targetSnap.data() || {};
+      if (targetData.mergedInto || targetData.active === false) throw new HttpsError('failed-precondition', 'That account has already been merged or deactivated.');
       if (callerData.role !== 'customer' || targetData.role !== 'customer') throw new HttpsError('permission-denied', 'This account cannot be merged automatically. Please contact support.');
       const callerBalance = walletBalance(callerData);
       const targetBalance = walletBalance(targetData);
@@ -115,24 +157,23 @@ exports.confirmAccountMerge = onCall(async (request) => {
       tx.delete(otpRef);
     });
   } catch (err) {
+    if (providerTransferred && transferredGoogleProvider) {
+      try {
+        await admin.auth().updateUser(callerUid, { providersToUnlink: ['google.com'] });
+        await admin.auth().updateUser(targetUid, { providerToLink: transferredGoogleProvider });
+      } catch (rollbackErr) {
+        await logServerError('confirmAccountMerge.providerRollbackAfterFirestoreFailure', rollbackErr, { userId: callerUid });
+        throw new HttpsError('internal', 'The merge could not be completed and automatic recovery failed. Please contact support before retrying.');
+      }
+    }
     if (err instanceof HttpsError) throw err;
     await logServerError('confirmAccountMerge.transaction', err, { userId: callerUid });
     throw new HttpsError('internal', 'Could not complete the merge. Please try again.');
   }
 
-  let providerLinkFailed = false;
-  try {
-    const targetAuthUser = await admin.auth().getUser(targetUid);
-    const googleProvider = (targetAuthUser.providerData || []).find((p) => p.providerId === 'google.com');
-    if (googleProvider) {
-      await admin.auth().updateUser(targetUid, { providersToUnlink: ['google.com'] });
-      await admin.auth().updateUser(callerUid, { providerToLink: { providerId: 'google.com', uid: googleProvider.uid, email: googleProvider.email || '' } });
-    } else providerLinkFailed = true;
-  } catch (err) {
-    providerLinkFailed = true;
-    await logServerError('confirmAccountMerge.providerTransfer', err, { userId: callerUid });
-  }
-  await admin.auth().updateUser(targetUid, { disabled: true }).catch(() => {});
-  await logAudit({ action: 'account_merged', targetUid, performedBy: callerUid, performedByRole: 'customer', details: { mergedWalletBalance, providerLinkFailed, ip } });
-  return { merged: true, walletBalance: mergedWalletBalance, googleLinked: !providerLinkFailed, providerLinkFailed };
+  await admin.auth().updateUser(targetUid, { disabled: true }).catch(async (err) => {
+    await logServerError('confirmAccountMerge.disableTarget', err, { userId: callerUid });
+  });
+  await logAudit({ action: 'account_merged', targetUid, performedBy: callerUid, performedByRole: 'customer', details: { mergedWalletBalance, providerLinkFailed: false, ip } });
+  return { merged: true, walletBalance: mergedWalletBalance, googleLinked: true, providerLinkFailed: false };
 });
