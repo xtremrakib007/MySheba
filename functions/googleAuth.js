@@ -6,6 +6,7 @@ const { logAudit, logServerError } = require('./logService');
 const { trackTemporaryAuthUser, deleteTrackedTemporaryAuthUser } = require('./temporaryAuthCleanup');
 
 const VERIFIED_WINDOW_MS = 15 * 60 * 1000;
+const GOOGLE_PROFILE_LOCK_MS = 120000;
 function normalizePhone(phone) { return String(phone || '').replace(/[^0-9]/g, ''); }
 function normalizeEmail(email) { return String(email || '').trim().toLowerCase(); }
 function toE164(phone, dialCode = '+60') { const raw = String(phone || '').trim(); if (raw.startsWith('+')) return `+${normalizePhone(raw)}`; const localDigits = normalizePhone(raw).replace(/^0+/, ''); const countryDigits = normalizePhone(dialCode || '+60'); if (!localDigits || !countryDigits) return ''; return `+${countryDigits}${localDigits}`; }
@@ -57,9 +58,20 @@ exports.signInExistingGoogleAccount = onCall({ enforceAppCheck: true }, async (r
 
 exports.ensureGoogleProfile = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
-  const uid = request.auth.uid; const token = request.auth.token || {}; const db = getFirestore(); const ref = db.collection('users').doc(uid); const snap = await ref.get();
-  if (snap.exists) return { uid, ...snap.data(), isNew: false };
-  const googleEmail = normalizeEmail(token.email); if (!googleEmail || !token.email_verified) throw new HttpsError('failed-precondition', 'Your Google email must be verified before creating a MySheba account.');
+  const uid = request.auth.uid; const token = request.auth.token || {}; const db = getFirestore(); const ref = db.collection('users').doc(uid);
+  const initialSnap = await ref.get();
+  if (initialSnap.exists) return { uid, ...initialSnap.data(), isNew: false };
+
+  // Verify that the callable is actually running for a Google-linked Auth user,
+  // not merely for a token that happens to contain Google-looking claims.
+  let authUser;
+  try { authUser = await admin.auth().getUser(uid); } catch { throw new HttpsError('permission-denied', 'Your Google account could not be verified. Please sign in with Google again.'); }
+  const googleProvider = (authUser.providerData || []).find((p) => p.providerId === 'google.com');
+  const googleEmail = normalizeEmail(token.email);
+  if (!googleProvider || !googleEmail || normalizeEmail(googleProvider.email) !== googleEmail || !token.email_verified) {
+    throw new HttpsError('permission-denied', 'A verified Google account is required.');
+  }
+
   const data = request.data || {}; const verifiedPhoneE164 = await assertGooglePhoneProof(data);
   const phoneInput = String(data.phone || '').trim(); const phoneE164Input = String(data.phoneE164 || '').trim(); const dialCode = data.phoneCountryCode || data.dialCode || '+60'; const suppliedPhoneE164 = toE164(phoneE164Input || phoneInput, dialCode);
   if ((phoneInput || phoneE164Input) && !isValidE164(suppliedPhoneE164)) throw new HttpsError('invalid-argument', 'The phone number format is invalid. Please verify your phone number again.');
@@ -70,8 +82,43 @@ exports.ensureGoogleProfile = onCall({ enforceAppCheck: true }, async (request) 
   let phoneSnap = null; for (const candidate of phoneCandidates) { phoneSnap = await db.collection('users').where('phone', '==', candidate).limit(1).get(); if (!phoneSnap.empty) break; }
   if (phoneSnap && !phoneSnap.empty) throw new HttpsError('already-exists', 'This phone number is already registered to another MySheba account. Sign in to that account instead.');
   const emailSnap = await db.collection('users').where('email', '==', googleEmail).limit(1).get(); if (!emailSnap.empty) throw new HttpsError('already-exists', 'This email is already registered to a MySheba account. Sign in to that account and use Settings → Link Google Account to enable Google sign-in.');
-  const userId = await assignUniqueUserId(db, uid);
-  const profile = { uid, userId, name: token.name || '', email: googleEmail, phone: rawPhone, phoneE164: expectedPhoneE164, phoneCountryCode: dialCode, phoneVerified: true, role: 'customer', dealerId: null, walletBalance: 0, notifPrefs: { pushEnabled: true, emailEnabled: true, rateAlerts: false }, authProvider: 'google', createdAt: FieldValue.serverTimestamp() };
-  try { await ref.set(profile); await logAudit({ action: 'account_created', targetUid: uid, performedBy: 'system', performedByRole: null, details: { role: 'customer', method: 'google', phoneVerified: true } }); return { uid, ...profile, isNew: true }; }
-  catch (err) { await logServerError('ensureGoogleProfile', err, { userId: uid }); throw new HttpsError('internal', 'Could not create the account.'); }
+
+  const lockRef = db.collection('googleProfileCreationLocks').doc(uid);
+  let lockAcquired = false;
+  try {
+    await db.runTransaction(async tx => {
+      const lockSnap = await tx.get(lockRef);
+      const expiresAtMs = lockSnap.exists ? lockSnap.data()?.expiresAt?.toMillis?.() : 0;
+      if (lockSnap.exists && expiresAtMs > Date.now()) throw new HttpsError('resource-exhausted', 'Google account setup is already being processed. Please wait a few seconds and try again.');
+      const currentSnap = await tx.get(ref);
+      if (currentSnap.exists) throw new HttpsError('already-exists', 'Your MySheba profile was created by another request. Please continue.');
+      tx.set(lockRef, { uid, createdAt: FieldValue.serverTimestamp(), expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + GOOGLE_PROFILE_LOCK_MS) });
+    });
+    lockAcquired = true;
+
+    // Re-check uniqueness after acquiring the per-UID lock because another
+    // account could have claimed this phone/email while the first checks ran.
+    const finalEmailSnap = await db.collection('users').where('email', '==', googleEmail).limit(1).get();
+    if (!finalEmailSnap.empty) throw new HttpsError('already-exists', 'This email is already registered to a MySheba account.');
+    const finalPhoneSnap = await db.collection('users').where('phoneE164', '==', expectedPhoneE164).limit(1).get();
+    if (!finalPhoneSnap.empty) throw new HttpsError('already-exists', 'This phone number is already registered to another MySheba account. Sign in to that account instead.');
+
+    const userId = await assignUniqueUserId(db, uid);
+    const profile = { uid, userId, name: token.name || '', email: googleEmail, phone: rawPhone, phoneE164: expectedPhoneE164, phoneCountryCode: dialCode, phoneVerified: true, role: 'customer', dealerId: null, walletBalance: 0, notifPrefs: { pushEnabled: true, emailEnabled: true, rateAlerts: false }, authProvider: 'google', createdAt: FieldValue.serverTimestamp() };
+    try {
+      await ref.create(profile);
+    } catch (err) {
+      await db.collection('userIds').doc(userId).delete().catch(() => {});
+      if (err.code === 6 || err.code === 'already-exists') throw new HttpsError('already-exists', 'Your MySheba profile was created by another request. Please continue.');
+      throw err;
+    }
+    await logAudit({ action: 'account_created', targetUid: uid, performedBy: 'system', performedByRole: null, details: { role: 'customer', method: 'google', phoneVerified: true } });
+    return { uid, ...profile, isNew: true };
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    await logServerError('ensureGoogleProfile', err, { userId: uid });
+    throw new HttpsError('internal', 'Could not create the account.');
+  } finally {
+    if (lockAcquired) await lockRef.delete().catch(() => {});
+  }
 });
