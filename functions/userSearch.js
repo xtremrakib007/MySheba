@@ -13,6 +13,10 @@ function normalizeDigits(value) {
   return String(value || '').replace(/[^0-9]/g, '');
 }
 
+function isPublicActiveAccount(u) {
+  return u && u.mergedInto == null && u.suspended !== true && u.inactive !== true && u.disabled !== true && u.active !== false;
+}
+
 async function rateLimit(db, uid, action, max, windowMs) {
   const ref = db.collection('userSearchVelocity').doc(`${uid}_${action}`);
   const now = Date.now();
@@ -57,7 +61,7 @@ exports.searchUsers = onCall({ enforceAppCheck: true }, async (request) => {
   snap.forEach((doc) => {
     if (doc.id === callerUid) return;
     const u = doc.data() || {};
-    if (u.mergedInto) return;
+    if (!isPublicActiveAccount(u)) return;
     const nameLower = String(u.name || '').toLowerCase();
     const phoneDigits = normalizeDigits(u.phone);
     const userIdStr = String(u.userId || '');
@@ -101,7 +105,7 @@ exports.getUserByUid = onCall({ enforceAppCheck: true }, async (request) => {
   if (!snap.exists) throw new HttpsError('not-found', 'This account no longer exists.');
 
   const u = snap.data() || {};
-  if (u.mergedInto) throw new HttpsError('not-found', 'This account no longer exists.');
+  if (!isPublicActiveAccount(u)) throw new HttpsError('not-found', 'This account no longer exists.');
   return {
     result: {
       uid: snap.id,
