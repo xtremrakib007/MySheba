@@ -41,7 +41,7 @@ async function sanitizeRequest(request, requestId) {
   const snap = await db.collection('users').doc(uid).get();
   if (!snap.exists) throw new HttpsError('not-found', 'Account not found.');
   const profile = snap.data() || {};
-  if (profile.suspended === true || profile.inactive === true || profile.disabled === true || profile.mergedInto) {
+  if (profile.suspended === true || profile.inactive === true || profile.disabled === true || profile.active === false || profile.mergedInto != null) {
     throw new HttpsError('permission-denied', 'Your account is not active.');
   }
   if (profile.role !== 'customer') {
