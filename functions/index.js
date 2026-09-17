@@ -8,7 +8,6 @@ exports.manageUser = require('./userManagement').manageUser;
 exports.searchUsers = require('./userSearch').searchUsers;
 exports.getUserByUid = require('./userSearch').getUserByUid;
 exports.matchContactsByPhone = require('./matchContactsByPhone').matchContactsByPhone;
-exports.registerWithDealerCode = require('./customerRegistration').registerWithDealerCode;
 exports.registerCustomer = require('./customerRegistration').registerCustomer;
 exports.resetPassword = require('./passwordReset').resetPassword;
 exports.sendPasswordResetEmailVerification = require('./passwordResetEmail').sendPasswordResetEmailVerification;
