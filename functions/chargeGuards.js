@@ -64,6 +64,29 @@ function validateCountry(name, payload) {
   }
 }
 
+function sanitizeFinancialInputs(name, payload) {
+  const raw = { ...(payload.raw || {}) };
+  // These are reportable financial fields and must never be supplied by the
+  // client. walletService calculates the authoritative debit as pointsCharged.
+  delete payload.cost;
+  delete payload.profit;
+
+  const numericFields = name === 'chargeMobileBanking'
+    ? ['myr']
+    : name === 'chargeRemittance'
+      ? ['sendAmt']
+      : ['amount'];
+  for (const field of numericFields) {
+    if (raw[field] == null || raw[field] === '') continue;
+    const value = Number(raw[field]);
+    if (!Number.isFinite(value) || value < 0 || !Number.isSafeInteger(Math.round(value * 100))) {
+      throw new HttpsError('invalid-argument', 'Invalid amount.');
+    }
+    raw[field] = Math.round(value * 100) / 100;
+  }
+  payload.raw = raw;
+}
+
 async function sanitizeRequest(request, requestId, name) {
   const uid = requireAuth(request);
   const db = admin.firestore();
@@ -90,6 +113,7 @@ async function sanitizeRequest(request, requestId, name) {
     ...incomingPayload,
     raw: { ...(incomingPayload.raw || {}), requestId },
   };
+  sanitizeFinancialInputs(name, payload);
   validateCountry(name, payload);
 
   return { ...request, data: { ...incomingData, payload, requestId, customer } };
