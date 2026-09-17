@@ -17,6 +17,16 @@ function getRequestId(request) {
   return requestId;
 }
 
+function isActiveAccount(profile) {
+  return profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto;
+}
+
+async function assertActiveAccount(db, uid) {
+  const snap = await db.collection('users').doc(uid).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Account not found.');
+  if (!isActiveAccount(snap.data() || {})) throw new HttpsError('permission-denied', 'Your account is not active.');
+}
+
 async function recoverCompleted(db, uid, requestId, guardRef) {
   const recovered = await db.collection('transactions')
     .where('customerId', '==', uid)
@@ -41,6 +51,7 @@ async function sanitizeRequest(request, requestId) {
   const snap = await db.collection('users').doc(uid).get();
   if (!snap.exists) throw new HttpsError('not-found', 'Account not found.');
   const profile = snap.data() || {};
+  if (!isActiveAccount(profile)) throw new HttpsError('permission-denied', 'Your account is not active.');
   const balance = Number(profile.walletBalance || 0);
   if (!Number.isFinite(balance) || balance < 0 || !Number.isSafeInteger(Math.round(balance * 100))) {
     throw new HttpsError('failed-precondition', 'Wallet balance is invalid.');
@@ -69,6 +80,11 @@ function wrap(name) {
     const uid = requireAuth(request);
     const requestId = getRequestId(request);
     const db = admin.firestore();
+
+    // Check the live Firestore account state before creating the idempotency
+    // record. Auth-disabled tokens can remain usable until token expiry.
+    await assertActiveAccount(db, uid);
+
     const guardRef = db.collection('chargeRequests').doc(`${uid}_${requestId}`);
 
     let existing = null;
