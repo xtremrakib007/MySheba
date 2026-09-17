@@ -16,6 +16,7 @@ const secureTopupReview = require('./secureTopupReview');
 const chargeGuards = require('./chargeGuards');
 
 exports.manageUser = userManagement.manageUser;
+exports.listManagedUsers = require('./managedUserListService').listManagedUsers;
 exports.searchUsers = require('./userSearch').searchUsers;
 exports.getUserByUid = require('./userSearch').getUserByUid;
 exports.matchContactsByPhone = require('./matchContactsByPhone').matchContactsByPhone;
