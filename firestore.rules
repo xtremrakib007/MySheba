@@ -59,7 +59,9 @@ service cloud.firestore {
     match /recommendationViews/{id} { allow read, write: if false; }
     match /announcements/{id} { allow read: if signedIn() && isAdmin(); allow write: if false; }
     match /supportTickets/{id} {
-      allow read: if signedIn() && (isSuperadmin() || resource.data.get('userId', null) == request.auth.uid || resource.data.get('assignedToUid', '') == request.auth.uid);
+      // Admin queue is intentionally visible to admins; assignment mutations
+      // remain server-owned and require the protected callable.
+      allow read: if signedIn() && (isAdmin() || resource.data.get('userId', null) == request.auth.uid || resource.data.get('assignedToUid', '') == request.auth.uid);
       allow create: if false;
       allow update: if signedIn() && (
         (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['open','in_progress','resolved'])
