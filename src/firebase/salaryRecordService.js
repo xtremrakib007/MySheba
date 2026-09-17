@@ -1,15 +1,80 @@
 import { collection, doc, getDoc, getDocs, onSnapshot, query, orderBy, limit, Timestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './config';
+
 function recordsCollection(userId) { return collection(db, 'users', userId, 'salaryRecords'); }
 function recordRef(userId, recordIdStr) { return doc(recordsCollection(userId), recordIdStr); }
 export function recordId(year, month) { return `${year}-${String(month).padStart(2, '0')}`; }
-export async function getSalaryRecord(userId, recordIdStr) { if (!userId) throw new Error('Not authenticated'); const snap = await getDoc(recordRef(userId, recordIdStr)); return snap.exists() ? hydrate(snap.id, snap.data()) : null; }
-export function subscribeSalaryRecord(userId, recordIdStr, onChange, onError) { if (!userId) { onError?.(new Error('Not authenticated')); return () => {}; } return onSnapshot(recordRef(userId, recordIdStr), snap => onChange(snap.exists() ? hydrate(snap.id, snap.data()) : null), err => onError?.(err)); }
-export async function saveSalaryEstimate(userId, recordIdStr, { year, month, breakdown, otCalculationMethod, otCalculationVersion, daysWorked, otHours }) { if (!userId) throw new Error('Not authenticated'); await httpsCallable(functions, 'saveSalaryEstimate')({ userId, recordId: recordIdStr, data: { year, month, daysWorked, otHours, basicPay: breakdown.basicPay, otPay: breakdown.otPay, allowances: breakdown.allowances, deductions: breakdown.deductions, estimatedGross: breakdown.grossPay, estimatedTakeHome: breakdown.takeHomePay, otCalculationMethod, otCalculationVersion } }); }
-export async function recordActualSalary(userId, recordIdStr, actualSalaryReceived) { if (!userId) throw new Error('Not authenticated'); await httpsCallable(functions, 'recordActualSalary')({ userId, recordId: recordIdStr, actualSalaryReceived }); }
-export async function attachPayslip(userId, recordIdStr, fileReference) { if (!userId) throw new Error('Not authenticated'); await httpsCallable(functions, 'attachSalaryPayslip')({ userId, recordId: recordIdStr, fileReference }); }
-export async function deleteSalaryRecord(userId, recordIdStr) { if (!userId) throw new Error('Not authenticated'); await httpsCallable(functions, 'deleteSalaryRecord')({ userId, recordId: recordIdStr }); }
-export async function listSalaryHistory(userId, historyLimit = 24) { if (!userId) throw new Error('Not authenticated'); const snap = await getDocs(query(recordsCollection(userId), orderBy('year', 'desc'), orderBy('month', 'desc'), limit(historyLimit))); return snap.docs.map(d => hydrate(d.id, d.data())); }
-export function subscribeSalaryHistory(userId, onChange, onError, historyLimit = 24) { if (!userId) { onError?.(new Error('Not authenticated')); return () => {}; } return onSnapshot(query(recordsCollection(userId), orderBy('year', 'desc'), orderBy('month', 'desc'), limit(historyLimit)), snap => onChange(snap.docs.map(d => hydrate(d.id, d.data()))), err => onError?.(err)); }
-function hydrate(id, data) { const toMillis = v => (v instanceof Timestamp ? v.toMillis() : v ?? null); return { id, year: data.year, month: data.month, daysWorked: data.daysWorked ?? 0, otHours: data.otHours ?? 0, basicPay: data.basicPay ?? 0, otPay: data.otPay ?? 0, allowances: data.allowances ?? 0, deductions: data.deductions ?? 0, estimatedGross: data.estimatedGross ?? 0, estimatedTakeHome: data.estimatedTakeHome ?? 0, otCalculationMethod: data.otCalculationMethod ?? null, otCalculationVersion: data.otCalculationVersion ?? null, actualSalaryReceived: data.actualSalaryReceived ?? null, difference: data.difference ?? null, payslipFileReference: data.payslipFileReference ?? null, createdAt: toMillis(data.createdAt), updatedAt: toMillis(data.updatedAt) }; }
+
+export async function getSalaryRecord(userId, recordIdStr) {
+  if (!userId) throw new Error('Not authenticated');
+  const snap = await getDoc(recordRef(userId, recordIdStr));
+  return snap.exists() ? hydrate(snap.id, snap.data()) : null;
+}
+
+export function subscribeSalaryRecord(userId, recordIdStr, onChange, onError) {
+  if (!userId) { onError?.(new Error('Not authenticated')); return () => {}; }
+  return onSnapshot(recordRef(userId, recordIdStr), snap => onChange(snap.exists() ? hydrate(snap.id, snap.data()) : null), err => onError?.(err));
+}
+
+// The calculation is now authoritative on the server. Keep the historical
+// argument shape so existing screens continue to work, but deliberately do
+// not send breakdown/days/OT values supplied by the client.
+export async function saveSalaryEstimate(userId, recordIdStr, { year, month } = {}) {
+  if (!userId) throw new Error('Not authenticated');
+  const result = await httpsCallable(functions, 'saveSalaryEstimate')({
+    userId,
+    recordId: recordIdStr || recordId(year, month),
+  });
+  return result.data?.calculation || null;
+}
+
+export async function recordActualSalary(userId, recordIdStr, actualSalaryReceived) {
+  if (!userId) throw new Error('Not authenticated');
+  await httpsCallable(functions, 'recordActualSalary')({ userId, recordId: recordIdStr, actualSalaryReceived });
+}
+
+export async function attachPayslip(userId, recordIdStr, fileReference) {
+  if (!userId) throw new Error('Not authenticated');
+  await httpsCallable(functions, 'attachSalaryPayslip')({ userId, recordId: recordIdStr, fileReference });
+}
+
+export async function deleteSalaryRecord(userId, recordIdStr) {
+  if (!userId) throw new Error('Not authenticated');
+  await httpsCallable(functions, 'deleteSalaryRecord')({ userId, recordId: recordIdStr });
+}
+
+export async function listSalaryHistory(userId, historyLimit = 24) {
+  if (!userId) throw new Error('Not authenticated');
+  const snap = await getDocs(query(recordsCollection(userId), orderBy('year', 'desc'), orderBy('month', 'desc'), limit(historyLimit)));
+  return snap.docs.map(d => hydrate(d.id, d.data()));
+}
+
+export function subscribeSalaryHistory(userId, onChange, onError, historyLimit = 24) {
+  if (!userId) { onError?.(new Error('Not authenticated')); return () => {}; }
+  return onSnapshot(query(recordsCollection(userId), orderBy('year', 'desc'), orderBy('month', 'desc'), limit(historyLimit)), snap => onChange(snap.docs.map(d => hydrate(d.id, d.data()))), err => onError?.(err));
+}
+
+function hydrate(id, data) {
+  const toMillis = v => (v instanceof Timestamp ? v.toMillis() : v ?? null);
+  return {
+    id,
+    year: data.year,
+    month: data.month,
+    daysWorked: data.daysWorked ?? 0,
+    otHours: data.otHours ?? 0,
+    basicPay: data.basicPay ?? 0,
+    otPay: data.otPay ?? 0,
+    allowances: data.allowances ?? 0,
+    deductions: data.deductions ?? 0,
+    estimatedGross: data.estimatedGross ?? 0,
+    estimatedTakeHome: data.estimatedTakeHome ?? 0,
+    otCalculationMethod: data.otCalculationMethod ?? null,
+    otCalculationVersion: data.otCalculationVersion ?? null,
+    actualSalaryReceived: data.actualSalaryReceived ?? null,
+    difference: data.difference ?? null,
+    payslipFileReference: data.payslipFileReference ?? null,
+    createdAt: toMillis(data.createdAt),
+    updatedAt: toMillis(data.updatedAt),
+  };
+}
