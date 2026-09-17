@@ -3,7 +3,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logAudit, logServerError } = require('./logService');
 function requireAuth(request){if(!request.auth)throw new HttpsError('unauthenticated','You must be signed in.');return request.auth.uid;}
-async function requireAdmin(db,uid){const snap=await db.collection('users').doc(uid).get();const caller=snap.exists?snap.data():null;if(!caller||!['admin','superadmin'].includes(caller.role))throw new HttpsError('permission-denied','Only an admin can manage Business Profiles.');return caller;}
+async function requireAdmin(db,uid){const snap=await db.collection('users').doc(uid).get();const caller=snap.exists?snap.data():null;if(!caller||!['admin','superadmin'].includes(caller.role)||caller.suspended===true||caller.inactive===true||caller.disabled===true||caller.mergedInto)throw new HttpsError('permission-denied','Your account cannot manage Business Profiles.');return caller;}
 exports.setBusinessProfileStatus=onCall({enforceAppCheck:true},async(request)=>{
  const callerUid=requireAuth(request),db=admin.firestore(),caller=await requireAdmin(db,callerUid); const {targetUid,granted}=request.data||{};
  if(typeof targetUid!=='string'||!/^[A-Za-z0-9_-]{1,128}$/.test(targetUid))throw new HttpsError('invalid-argument','targetUid is invalid.');
