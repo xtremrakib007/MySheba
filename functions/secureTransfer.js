@@ -35,10 +35,7 @@ function validBalance(value) {
   return n;
 }
 
-// A client retry must reuse requestId. The idempotency record and both
-// balances are committed in ONE Firestore transaction, so two concurrent
-// submissions with the same requestId can never debit twice.
-exports.transferPoints = onCall(async (request) => {
+exports.transferPoints = onCall({ enforceAppCheck: true }, async (request) => {
   const callerUid = requireAuth(request);
   const requestId = requireRequestId(request);
   const db = admin.firestore();
