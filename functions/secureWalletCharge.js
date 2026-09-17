@@ -84,6 +84,7 @@ exports.chargeWallet = onCall({ enforceAppCheck: true }, async (request) => {
 
       let cost;
       let resultData;
+      let field = null;
       let freeWindowMs = 0;
       const now = Date.now();
 
@@ -122,6 +123,7 @@ exports.chargeWallet = onCall({ enforceAppCheck: true }, async (request) => {
         tx.create(opRef, { uid, type: 'chargeWallet', kind, key: cleanKeyValue, requestId: rid, result: resultData, status: 'completed', createdAt: admin.firestore.FieldValue.serverTimestamp() });
         return resultData;
       }
+      if (!field) throw new HttpsError('failed-precondition', 'Wallet charge target is invalid.');
       if (balance < cost) throw new HttpsError('failed-precondition', `You need ${cost} pts.`);
       const newBalance = balance - cost;
       if (!Number.isSafeInteger(Math.round(newBalance * 100))) throw new HttpsError('failed-precondition', 'The resulting wallet balance is invalid.');
