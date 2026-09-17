@@ -22,7 +22,7 @@ function validBalance(value) {
   return n;
 }
 
-exports.approveTopup = onCall(async request => {
+exports.approveTopup = onCall({ enforceAppCheck: true }, async request => {
   const uid = requireAdmin(request);
   const db = admin.firestore();
   const callerSnap = await db.collection('users').doc(uid).get();
@@ -61,7 +61,7 @@ exports.approveTopup = onCall(async request => {
   }
 });
 
-exports.rejectTopup = onCall(async request => {
+exports.rejectTopup = onCall({ enforceAppCheck: true }, async request => {
   const uid = requireAdmin(request);
   const db = admin.firestore();
   const callerSnap = await db.collection('users').doc(uid).get();
@@ -72,13 +72,16 @@ exports.rejectTopup = onCall(async request => {
   if (!topupId) throw new HttpsError('invalid-argument', 'topupId is required.');
   const ref = db.collection('topups').doc(topupId);
   try {
+    let targetUid = null;
     await db.runTransaction(async tx => {
       const snap = await tx.get(ref);
       if (!snap.exists) throw new HttpsError('not-found', 'That top-up request does not exist.');
-      if ((snap.data() || {}).status !== 'pending') throw new HttpsError('failed-precondition', 'That request has already been reviewed.');
+      const topup = snap.data() || {};
+      if (topup.status !== 'pending') throw new HttpsError('failed-precondition', 'That request has already been reviewed.');
+      targetUid = String(topup.userId || '').trim() || null;
       tx.update(ref, { status: 'rejected', rejectReason: reason || 'Rejected by admin.', approvedBy: uid, rejectedBy: uid, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
     });
-    await logAudit({ action: 'topup_rejected', targetUid: (await ref.get()).data()?.userId || null, performedBy: uid, performedByRole: caller.role, details: { topupId, reason } });
+    await logAudit({ action: 'topup_rejected', targetUid, performedBy: uid, performedByRole: caller.role, details: { topupId, reason } });
     return { rejected: true };
   } catch (error) {
     if (error instanceof HttpsError) throw error;
