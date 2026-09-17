@@ -96,7 +96,7 @@ exports.confirmAccountMerge = onCall({ enforceAppCheck: true }, async (request) 
 
     await admin.auth().updateUser(targetAuthUser.uid, { providersToUnlink: ['google.com'] });
     try { await admin.auth().updateUser(callerUid, { providerToLink: transferredGoogleProvider }); providerTransferred = true; }
-    catch (err) { await admin.auth().updateUser(targetUid, { providerToLink: transferredGoogleProvider }).catch((rollbackErr) => logServerError('confirmAccountMerge.providerRollbackAfterLinkFailure', rollbackErr, { userId: callerUid })); throw err; }
+    catch (err) { await admin.auth().updateUser(targetAuthUser.uid, { providerToLink: transferredGoogleProvider }).catch((rollbackErr) => logServerError('confirmAccountMerge.providerRollbackAfterLinkFailure', rollbackErr, { userId: callerUid })); throw err; }
 
     await db.runTransaction(async (tx) => {
       const otpSnap = await tx.get(otpRef); const callerSnap = await tx.get(callerRef); const targetRef = db.collection('users').doc(targetUid); const targetSnap = await tx.get(targetRef);
@@ -109,6 +109,8 @@ exports.confirmAccountMerge = onCall({ enforceAppCheck: true }, async (request) 
       if (!Number.isSafeInteger(Math.round(mergedWalletBalance * 100))) throw new HttpsError('failed-precondition', 'The combined wallet balance is too large.');
       tx.update(callerRef, { walletBalance: mergedWalletBalance, googleLinked: true });
       tx.update(targetRef, { walletBalance: 0, mergedInto: callerUid, active: false, mergedAt: admin.firestore.FieldValue.serverTimestamp() });
+      tx.delete(db.collection('biometricTemplates').doc(targetUid));
+      tx.delete(db.collection('pendingBiometricTemplates').doc(targetUid));
       tx.delete(otpRef);
     });
 
