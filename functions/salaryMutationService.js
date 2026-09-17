@@ -1,6 +1,6 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
-const db = admin.firestore();
+const db = { collection: (...args) => admin.firestore().collection(...args), runTransaction: (...args) => admin.firestore().runTransaction(...args) };
 const PAY_FREQUENCIES = ['weekly', 'biweekly', 'monthly'];
 const RECURRENCE_TYPES = ['recurring', 'one-time'];
 const OT_METHODS = ['default', 'custom'];
