@@ -6,10 +6,29 @@ const { logAudit, logServerError } = require('./logService');
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
+const RECENT_AUTH_WINDOW_MS = 10 * 60 * 1000;
 
 function requireAuth(request) {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   return request.auth.uid;
+}
+async function requireActiveAccount(db, uid) {
+  const snap = await db.collection('users').doc(uid).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Your account could not be found.');
+  const data = snap.data() || {};
+  if (data.mergedInto != null || data.suspended === true || data.inactive === true || data.disabled === true || data.active === false) {
+    throw new HttpsError('permission-denied', 'Your account is not active.');
+  }
+}
+function requireRecentReauthentication(request) {
+  const authTimeSeconds = Number(request.auth?.token?.auth_time);
+  if (!Number.isFinite(authTimeSeconds) || authTimeSeconds <= 0) {
+    throw new HttpsError('unauthenticated', 'Please sign in again before resetting your security PIN.');
+  }
+  const age = Date.now() - authTimeSeconds * 1000;
+  if (age < 0 || age > RECENT_AUTH_WINDOW_MS) {
+    throw new HttpsError('unauthenticated', 'Please re-authenticate before resetting your security PIN.');
+  }
 }
 function isValidPin(pin) { return typeof pin === 'string' && /^\d{4,8}$/.test(pin); }
 function pinDocRef(db, uid) { return db.collection('securityPins').doc(uid); }
@@ -18,22 +37,20 @@ function hashPin(pin, salt) {
   return crypto.scryptSync(pin, salt, 64).toString('hex');
 }
 
-exports.setupSecurityPin = onCall(async (request) => {
+exports.setupSecurityPin = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireAuth(request);
   const { pin } = request.data || {};
   if (!isValidPin(pin)) throw new HttpsError('invalid-argument', 'PIN must be 4-8 digits.');
   const db = getFirestore();
+  await requireActiveAccount(db, uid);
   const ref = pinDocRef(db, uid);
   const userRef = db.collection('users').doc(uid);
-
   try {
     const salt = crypto.randomBytes(16).toString('hex');
     const hash = hashPin(pin, salt);
     await db.runTransaction(async (tx) => {
       const existing = await tx.get(ref);
-      if (existing.exists) {
-        throw new HttpsError('already-exists', 'A security PIN is already set. Use reset instead.');
-      }
+      if (existing.exists) throw new HttpsError('already-exists', 'A security PIN is already set. Use reset instead.');
       tx.create(ref, { hash, salt, attempts: 0, lockedUntil: null, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
       tx.set(userRef, { securityPinSet: true }, { merge: true });
     });
@@ -46,11 +63,12 @@ exports.setupSecurityPin = onCall(async (request) => {
   }
 });
 
-exports.verifySecurityPin = onCall(async (request) => {
+exports.verifySecurityPin = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireAuth(request);
   const { pin } = request.data || {};
   if (!isValidPin(pin)) throw new HttpsError('invalid-argument', 'Enter your PIN.');
   const db = getFirestore();
+  await requireActiveAccount(db, uid);
   const ref = pinDocRef(db, uid);
   try {
     let result = null;
@@ -99,11 +117,13 @@ exports.verifySecurityPin = onCall(async (request) => {
   }
 });
 
-exports.resetSecurityPin = onCall(async (request) => {
+exports.resetSecurityPin = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireAuth(request);
+  requireRecentReauthentication(request);
   const { pin } = request.data || {};
   if (!isValidPin(pin)) throw new HttpsError('invalid-argument', 'PIN must be 4-8 digits.');
   const db = getFirestore();
+  await requireActiveAccount(db, uid);
   const ref = pinDocRef(db, uid);
   const userRef = db.collection('users').doc(uid);
   try {
