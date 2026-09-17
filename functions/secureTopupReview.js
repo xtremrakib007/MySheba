@@ -10,6 +10,10 @@ function requireAdmin(request) {
   return request.auth.uid;
 }
 
+function isActive(account) {
+  return account && account.suspended !== true && account.inactive !== true && account.disabled !== true && !account.mergedInto;
+}
+
 function validMoney(value) {
   const n = Number(value);
   if (!Number.isFinite(n) || n <= 0 || n > MAX_AMOUNT || !Number.isSafeInteger(Math.round(n * 100))) return null;
@@ -27,7 +31,7 @@ exports.approveTopup = onCall({ enforceAppCheck: true }, async request => {
   const db = admin.firestore();
   const callerSnap = await db.collection('users').doc(uid).get();
   const caller = callerSnap.exists ? callerSnap.data() : null;
-  if (!caller || !ADMIN_ROLES.includes(caller.role)) throw new HttpsError('permission-denied', 'Only an admin can approve top-ups.');
+  if (!isActive(caller) || !ADMIN_ROLES.includes(caller.role)) throw new HttpsError('permission-denied', 'Your account cannot approve top-ups.');
   const topupId = String(request.data?.topupId || request.data?.id || '').trim();
   if (!topupId) throw new HttpsError('invalid-argument', 'topupId is required.');
   const ref = db.collection('topups').doc(topupId);
@@ -42,8 +46,10 @@ exports.approveTopup = onCall({ enforceAppCheck: true }, async request => {
       const userRef = db.collection('users').doc(userId);
       const userSnap = await tx.get(userRef);
       if (!userSnap.exists) throw new HttpsError('not-found', 'That user account no longer exists.');
+      const recipient = userSnap.data() || {};
+      if (!isActive(recipient)) throw new HttpsError('failed-precondition', 'This account is not eligible to receive funds.');
       const points = validMoney(topup.points ?? topup.amount);
-      const balance = validBalance(userSnap.data()?.walletBalance);
+      const balance = validBalance(recipient.walletBalance);
       if (points === null) throw new HttpsError('failed-precondition', 'Top-up amount is invalid.');
       if (balance === null) throw new HttpsError('failed-precondition', 'User wallet balance is invalid.');
       const newBalance = balance + points;
@@ -66,19 +72,22 @@ exports.rejectTopup = onCall({ enforceAppCheck: true }, async request => {
   const db = admin.firestore();
   const callerSnap = await db.collection('users').doc(uid).get();
   const caller = callerSnap.exists ? callerSnap.data() : null;
-  if (!caller || !ADMIN_ROLES.includes(caller.role)) throw new HttpsError('permission-denied', 'Only an admin can reject top-ups.');
+  if (!isActive(caller) || !ADMIN_ROLES.includes(caller.role)) throw new HttpsError('permission-denied', 'Your account cannot reject top-ups.');
   const topupId = String(request.data?.topupId || '').trim();
   const reason = String(request.data?.reason || '').trim().slice(0, 500);
   if (!topupId) throw new HttpsError('invalid-argument', 'topupId is required.');
   const ref = db.collection('topups').doc(topupId);
   try {
+    let targetUid = null;
     await db.runTransaction(async tx => {
       const snap = await tx.get(ref);
       if (!snap.exists) throw new HttpsError('not-found', 'That top-up request does not exist.');
-      if ((snap.data() || {}).status !== 'pending') throw new HttpsError('failed-precondition', 'That request has already been reviewed.');
+      const topup = snap.data() || {};
+      if (topup.status !== 'pending') throw new HttpsError('failed-precondition', 'That request has already been reviewed.');
+      targetUid = String(topup.userId || '').trim() || null;
       tx.update(ref, { status: 'rejected', rejectReason: reason || 'Rejected by admin.', approvedBy: uid, rejectedBy: uid, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
     });
-    await logAudit({ action: 'topup_rejected', targetUid: (await ref.get()).data()?.userId || null, performedBy: uid, performedByRole: caller.role, details: { topupId, reason } });
+    await logAudit({ action: 'topup_rejected', targetUid, performedBy: uid, performedByRole: caller.role, details: { topupId, reason } });
     return { rejected: true };
   } catch (error) {
     if (error instanceof HttpsError) throw error;
