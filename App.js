@@ -23,8 +23,6 @@ import AdminSupportScreen from './src/screens/AdminSupportScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import TopUpScreen from './src/screens/TopUpScreen';
 import SuperAdminTopUpScreen from './src/screens/SuperAdminTopUpScreen';
-import ChatScreen from './src/screens/ChatScreen';
-import ChatListScreen from './src/screens/ChatListScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import MyAccountScreen from './src/screens/MyAccountScreen';

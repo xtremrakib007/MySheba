@@ -37,8 +37,6 @@ import * as categoryService from "../firebase/categoryService";
 import * as bannerService from "../firebase/bannerService";
 import * as announcementService from "../firebase/announcementService";
 import * as topupService from "../firebase/topupService";
-import * as chatService from "../firebase/chatService";
-import * as callService from "../firebase/callService";
 import {
   registerForPushNotificationsAsync,
   addNotificationResponseListener,
@@ -55,16 +53,6 @@ import {
   checkPaymentEntryAccess,
   chargePaymentSuccess,
 } from "../firebase/paymentWebviewService";
-import { withCallSettingsDefaults } from "../data/callSettingsConstants";
-import {
-  cacheCallSettings,
-  cacheCallerRingtones,
-} from "../notifications/callSettingsCache";
-import {
-  setCallerRingtone as saveCallerRingtone,
-  removeCallerRingtone as deleteCallerRingtone,
-  subscribeCallerRingtones,
-} from "../firebase/callerRingtoneService";
 import {
   WEBVIEW_ACCESS_COST,
   WEBVIEW_SUBMIT_COST,
@@ -203,7 +191,7 @@ export function AppProvider({ children }) {
   // No more manual role picker - `screen` starts on 'login' and, once
   // signed in, the account's Firestore `role` field (in `profile.role`)
   // decides which home screen to land on. See the bootstrap effect below.
-  const [screen, setScreen] = useState("login"); // login | register | forgotPassword | customerHome | service | dealerHome | resellerHome | adminHome | webview | buspicker | support | history | topup | chat | chatList | settings | profile | myAccount | reports | notifications | marketplaceHome | marketplaceCreateListing | marketplaceMyListings | marketplaceMyReviews | marketplaceListingDetail | marketplaceModeration | verifyIdentity | verificationManagement | adminAnalytics | myDocuments | documentType | addDocument | documentDetails | documentViewer | moreFeatures | adminFeatures | apiProviderManagement | dealerFeatures | resellerFeatures | featureAccess | tierPromotions | adFeatureControls | bannerManagement | salaryReports | notepad | addNote | noteDetail | help | friendsList | callSettings | ringtonePicker
+  const [screen, setScreen] = useState("login"); // login | register | forgotPassword | customerHome | service | dealerHome | resellerHome | adminHome | webview | buspicker | support | history | topup | settings | profile | myAccount | reports | notifications | marketplaceHome | marketplaceCreateListing | marketplaceMyListings | marketplaceMyReviews | marketplaceListingDetail | marketplaceModeration | verifyIdentity | verificationManagement | adminAnalytics | myDocuments | documentType | addDocument | documentDetails | documentViewer | moreFeatures | adminFeatures | apiProviderManagement | dealerFeatures | resellerFeatures | featureAccess | tierPromotions | adFeatureControls | bannerManagement | salaryReports | notepad | addNote | noteDetail | help | friendsList
 
   // ---- back-button navigation history ----
   // Tracks prior screens so the Android hardware back button can step
@@ -267,35 +255,6 @@ export function AppProvider({ children }) {
 
   // ---- sidebar drawer (Settings / Profile / My Account / Reports) ----
   const [sidebarVisible, setSidebarVisible] = useState(false);
-
-  // ---- support chat (customer <-> Support only - see SupportScreen.js) ----
-  const [activeChatId, setActiveChatId] = useState(null); // the customer uid whose thread is open
-  const [activeChatName, setActiveChatName] = useState("");
-  const [chatUnreadCount, setChatUnreadCount] = useState(0); // badge count for the signed-in side
-  // Which screen ChatScreen's back button should return to - staff can open
-  // a support thread from either the Chats inbox (chatList) or the
-  // "Messages" tab inside Support Tickets (adminSupport); defaults to
-  // 'chatList' to match the existing behavior for every other entry point.
-  const [activeChatReturnTo, setActiveChatReturnTo] = useState("chatList");
-
-  // ---- 1-to-1 call ringtone selection ----
-  const [activeRingtoneContactUid, setActiveRingtoneContactUid] =
-    useState(null);
-  const [activeRingtoneContactName, setActiveRingtoneContactName] =
-    useState("");
-
-  /** Opens the Support thread - `chatId` is the customer's uid, `name` is
-   * who to show in the header/inbox. `returnTo` (staff only) is which
-   * screen the back button should land on - defaults to the Chats inbox
-   * ('chatList') to match every existing caller; AdminSupportScreen's
-   * "Messages" tab passes 'adminSupport' so back returns there instead. */
-  const openChat = useCallback((chatId, name, returnTo) => {
-    setActiveChatId(chatId);
-
-    setActiveChatName(name || "");
-    setActiveChatReturnTo(returnTo || "chatList");
-    setScreen("chat");
-  }, []);
 
   // ---- My Documents (private per-user document vault - passport, visa,
   // work permit, etc.) ---- Screens call documentService.js directly
@@ -1513,15 +1472,6 @@ export function AppProvider({ children }) {
    * screen the back button should land on - defaults to the Chats inbox
    * ('chatList') to match every existing caller; AdminSupportScreen's
    * "Messages" tab passes 'adminSupport' so back returns there instead. */
-  const openChat = useCallback((chatId, name, returnTo) => {
-    setActiveChatId(chatId);
-    setActiveGroupId(null);
-    setActiveDirectChatId(null);
-    setActiveRoomId(null);
-    setActiveChatName(name || "");
-    setActiveChatReturnTo(returnTo || "chatList");
-    setScreen("chat");
-  }, []);
 
   // ---- push notification taps: jump to the right thread when the user
   // taps a notification, whether the app was foregrounded, backgrounded, or
@@ -1722,7 +1672,6 @@ export function AppProvider({ children }) {
     [authUser],
   );
 
-  // Call Settings (ringtone/vibration/volume/notifications toggle) - see
   // CallSettingsScreen.js. `profile.callSettings` is whatever's been saved
   // so far (possibly nothing, for an existing user who hasn't opened this
   // screen yet), so this fills in defaults for anything missing.

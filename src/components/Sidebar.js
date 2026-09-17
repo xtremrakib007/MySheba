@@ -39,7 +39,6 @@ const ADMIN_GROUPS = [
     { key: 'inquiries', icon: '📝', label: 'Inquiries' },
     { key: 'topups', icon: '💳', label: 'Top-Ups' },
     { key: 'support', icon: '🎧', label: 'Support' },
-    { key: 'chatList', icon: '💬', label: 'Chats' },
   ] },
   { title: 'Finance & Pricing', icon: '💰', color: 'primary', items: [
     { key: 'rates', icon: '💱', label: 'Rates' },

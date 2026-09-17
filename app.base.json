@@ -3,8 +3,12 @@
     "name": "MySheba",
     "slug": "rakib",
     "version": "5.4.1.6",
-    "runtimeVersion": { "policy": "sdkVersion" },
-    "updates": { "url": "https://u.expo.dev/5f0bbeb3-e2d9-4a46-af9f-66379fada1c8" },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/5f0bbeb3-e2d9-4a46-af9f-66379fada1c8"
+    },
     "newArchEnabled": false,
     "scheme": "mysheba",
     "orientation": "portrait",
@@ -18,7 +22,10 @@
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_MEDIA_VIDEO"
       ],
-      "adaptiveIcon": { "foregroundImage": "./assets/adaptive-icon.png", "backgroundColor": "#FFFFFF" },
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      },
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.ACCESS_NETWORK_STATE",
@@ -28,13 +35,25 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "com.google.android.gms.permission.AD_ID"
       ],
-      "config": { "googleMaps": { "apiKey": "GOOGLE_MAPS_API_KEY_PLACEHOLDER" } },
+      "config": {
+        "googleMaps": {
+          "apiKey": "GOOGLE_MAPS_API_KEY_PLACEHOLDER"
+        }
+      },
       "intentFilters": [
         {
           "action": "VIEW",
           "autoVerify": true,
-          "data": [{ "scheme": "https", "host": "mysheba.top" }],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "data": [
+            {
+              "scheme": "https",
+              "host": "mysheba.top"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -43,7 +62,9 @@
         "NSCameraUsageDescription": "Allow MySheba to access your camera for KYC identity verification and QR scanning.",
         "NSLocationWhenInUseUsageDescription": "Allow MySheba to access your location to show nearby listings, properties, and service providers on the map."
       },
-      "config": { "googleMapsApiKey": "GOOGLE_MAPS_API_KEY_PLACEHOLDER" }
+      "config": {
+        "googleMapsApiKey": "GOOGLE_MAPS_API_KEY_PLACEHOLDER"
+      }
     },
     "notification": {
       "color": "#1A73E8",
@@ -51,21 +72,84 @@
       "androidCollapsedTitle": "MySheba"
     },
     "plugins": [
-      ["expo-image-picker", { "photosPermission": "Allow MySheba to access your photos so you can upload a top-up bank receipt." }],
-      ["expo-notifications", { "color": "#1A73E8" }],
-      ["expo-contacts", { "contactsPermission": "Allow MySheba to access your contacts so it can show which of your saved numbers are on MySheba, like WhatsApp does." }],
-      ["expo-camera", { "cameraPermission": "Allow MySheba to access your camera for KYC identity verification and QR scanning." }],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow MySheba to access your photos so you can upload a top-up bank receipt."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#1A73E8"
+        }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Allow MySheba to access your contacts so it can show which of your saved numbers are on MySheba, like WhatsApp does."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow MySheba to access your camera for KYC identity verification and QR scanning."
+        }
+      ],
       "@react-native-google-signin/google-signin",
       "@react-native-firebase/app",
-      ["react-native-google-mobile-ads", { "androidAppId": "ca-app-pub-5028998697615030~7504898532", "iosAppId": "ca-app-pub-3940256099942544~1458002511" }],
-      ["react-native-share", { "ios": ["whatsapp", "fb", "instagram", "instagram-stories", "twitter", "linkedin"], "android": ["com.whatsapp", "com.facebook.katana", "com.instagram.android", "com.twitter.android", "com.linkedin.android"] }],
-      ["expo-location", { "locationWhenInUsePermission": "Allow MySheba to access your location to show nearby listings, properties, and service providers on the map." }],
-      ["expo-build-properties", { "android": { "compileSdkVersion": 36, "targetSdkVersion": 36, "buildToolsVersion": "36.0.0", "enableProguardInReleaseBuilds": true, "enableShrinkResourcesInReleaseBuilds": true } }],
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-5028998697615030~7504898532",
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
+        }
+      ],
+      [
+        "react-native-share",
+        {
+          "ios": [
+            "whatsapp",
+            "fb",
+            "instagram",
+            "instagram-stories",
+            "twitter",
+            "linkedin"
+          ],
+          "android": [
+            "com.whatsapp",
+            "com.facebook.katana",
+            "com.instagram.android",
+            "com.twitter.android",
+            "com.linkedin.android"
+          ]
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow MySheba to access your location to show nearby listings, properties, and service providers on the map."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "buildToolsVersion": "36.0.0",
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
+          }
+        }
+      ],
       "./plugins/withRemoveUnusedPermissions",
       "./plugins/withFixNotificationColorMerge"
     ],
     "extra": {
-      "eas": { "projectId": "5f0bbeb3-e2d9-4a46-af9f-66379fada1c8" },
+      "eas": {
+        "projectId": "5f0bbeb3-e2d9-4a46-af9f-66379fada1c8"
+      },
       "googleWebClientId": "632456211568-v5f370netearu5lb8ld48lhr28erbp9p.apps.googleusercontent.com",
       "googleMapsApiKey": "GOOGLE_MAPS_API_KEY_PLACEHOLDER",
       "admobAndroidBannerId": "ca-app-pub-5028998697615030/9556346804",
