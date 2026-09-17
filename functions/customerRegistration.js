@@ -89,6 +89,7 @@ async function registerCustomer(request) {
       throw new HttpsError('internal', 'Could not create the account.');
     }
 
+    let reservedUserId = null;
     const profile = {
       uid: userRecord.uid,
       userId: await assignUniqueUserId(db, userRecord.uid),
@@ -97,9 +98,11 @@ async function registerCustomer(request) {
       notifPrefs: { pushEnabled: true, emailEnabled: true, rateAlerts: false },
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
+    reservedUserId = profile.userId;
     try { await db.collection('users').doc(userRecord.uid).set(profile); }
     catch (err) {
       await admin.auth().deleteUser(userRecord.uid).catch(() => {});
+      if (reservedUserId != null) await db.collection('userIds').doc(String(reservedUserId)).delete().catch(() => {});
       await logServerError('registerCustomer.profile', err, { userId: userRecord.uid });
       throw new HttpsError('internal', 'Could not finish creating the account.');
     }
@@ -120,6 +123,7 @@ async function registerCustomer(request) {
   }
 }
 
+// App Check is required because this callable also exposes unauthenticated verification actions.
 // Compatibility alias for already-deployed clients. The implementation is now explicitly self-service.
-exports.registerCustomer = onCall(registerCustomer);
+exports.registerCustomer = onCall({ enforceAppCheck: true }, registerCustomer);
 exports.registerWithDealerCode = exports.registerCustomer;
