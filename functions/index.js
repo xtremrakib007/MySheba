@@ -23,6 +23,7 @@ exports.confirmDeviceSwitch = require('./deviceSessionService').confirmDeviceSwi
 exports.clearActiveSession = require('./deviceSessionService').clearActiveSession;
 exports.listTrustedDevices = require('./deviceSessionService').listTrustedDevices;
 exports.revokeTrustedDevice = require('./deviceSessionService').revokeTrustedDevice;
+exports.validateActiveSession = require('./validateActiveSessionService').validateActiveSession;
 exports.sendDeviceVerification = require('./deviceVerificationService').sendDeviceVerification;
 exports.confirmDeviceEmailOtp = require('./deviceVerificationService').confirmDeviceEmailOtp;
 exports.cleanupExpiredVerificationArtifacts = require('./verificationCleanup').cleanupExpiredVerificationArtifacts;
