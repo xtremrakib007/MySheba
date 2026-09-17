@@ -5,7 +5,9 @@ const DEALER_SERVICES = ['Mobile Banking'];
 const RESELLER_SERVICES = ['Recharge', 'Internet', 'Remittance'];
 const APPROVER_ROLES = ['admin', 'superadmin'];
 const OPERATOR_ROLES = ['dealer', 'reseller'];
-const ASSIGNABLE_ROLES = ['dealer', 'subdealer'];
+// Transaction assignment is specifically dealer assignment. Subdealers are
+// not transaction operators and must never be assignable through this path.
+const ASSIGNABLE_ROLES = ['dealer'];
 
 function requireAuth(request) { if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.'); }
 async function getActor(uid) {
