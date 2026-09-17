@@ -94,8 +94,10 @@ exports.walletTransfer = onCall({ enforceAppCheck: true }, async (request) => {
       if (senderData.role !== 'customer' || recipientData.role !== 'customer') throw new HttpsError('permission-denied', 'Only customer wallets can use this transfer.');
       if (!isKycApproved(senderData) || !isKycApproved(recipientData)) throw new HttpsError('failed-precondition', 'Both customer wallets must complete KYC.');
       const senderBalanceCents = cents(senderData.walletBalance), recipientBalanceCents = cents(recipientData.walletBalance);
+      if (!Number.isSafeInteger(senderBalanceCents) || !Number.isSafeInteger(recipientBalanceCents) || senderBalanceCents < 0 || recipientBalanceCents < 0) throw new HttpsError('failed-precondition', 'One of the wallet balances is invalid.');
       if (senderBalanceCents < amountCents) throw new HttpsError('failed-precondition', 'Insufficient wallet balance.');
       const senderAfter = senderBalanceCents - amountCents, recipientAfter = recipientBalanceCents + amountCents, now = admin.firestore.FieldValue.serverTimestamp();
+      if (!Number.isSafeInteger(senderAfter) || !Number.isSafeInteger(recipientAfter)) throw new HttpsError('failed-precondition', 'The resulting wallet balance is invalid.');
       tx.update(senderRef, { walletBalance: myrFromCents(senderAfter), walletBalanceCurrency: 'MYR', walletUpdatedAt: now });
       tx.update(recipientRef, { walletBalance: myrFromCents(recipientAfter), walletBalanceCurrency: 'MYR', walletUpdatedAt: now });
       tx.create(transferRef, { type: 'wallet_transfer', currency: 'MYR', requestId, fromUid: senderUid, fromName: senderData.displayName || senderData.name || '', toUid: recipientUid, toName: recipientData.displayName || recipientData.name || '', amount: myrFromCents(amountCents), amountMinor: amountCents, note, status: 'completed', participants: [senderUid, recipientUid], createdAt: now });
