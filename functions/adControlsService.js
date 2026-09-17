@@ -10,26 +10,19 @@ const VALID_FEATURE_IDS = ['home','mobile_recharge','internet_package','mobile_b
 const VALID_SETTINGS_FIELDS = ['adsEnabled','directAdsEnabled','admobEnabled','bannerAdsEnabled','nativeAdsEnabled','interstitialAdsEnabled'];
 const VALID_FEATURE_CONTROL_FIELDS = ['adsEnabled','bannerEnabled','nativeEnabled','interstitialEnabled'];
 
-function requireAuth(request) {
-  if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
-  return request.auth.uid;
-}
+function requireAuth(request) { if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.'); return request.auth.uid; }
 async function requireSuperadmin(db, callerUid) {
   const snap = await db.collection('users').doc(callerUid).get();
   const caller = snap.exists ? snap.data() : null;
   if (!caller || caller.role !== 'superadmin') throw new HttpsError('permission-denied', 'Only a Super Admin can manage advertisement controls.');
+  if (caller.suspended === true || caller.inactive === true || caller.disabled === true || caller.mergedInto) throw new HttpsError('permission-denied', 'Your account is not active.');
   return caller;
 }
 function pickValidBooleans(changes, allowedFields) {
   if (!changes || typeof changes !== 'object' || Array.isArray(changes)) return null;
   const picked = {};
   let any = false;
-  Object.keys(changes).forEach((key) => {
-    if (!allowedFields.includes(key)) throw new HttpsError('invalid-argument', `Unknown field: ${key}`);
-    if (typeof changes[key] !== 'boolean') throw new HttpsError('invalid-argument', `${key} must be true or false.`);
-    picked[key] = changes[key];
-    any = true;
-  });
+  Object.keys(changes).forEach((key) => { if (!allowedFields.includes(key)) throw new HttpsError('invalid-argument', `Unknown field: ${key}`); if (typeof changes[key] !== 'boolean') throw new HttpsError('invalid-argument', `${key} must be true or false.`); picked[key] = changes[key]; any = true; });
   return any ? picked : null;
 }
 
@@ -38,8 +31,7 @@ exports.updateAdSettings = onCall({ enforceAppCheck: true }, async (request) => 
   const changes = pickValidBooleans((request.data || {}).changes, VALID_SETTINGS_FIELDS);
   if (!changes) throw new HttpsError('invalid-argument', 'No valid settings changes were provided.');
   const ref = db.collection(AD_SETTINGS_COLLECTION).doc(AD_SETTINGS_DOC_ID);
-  try { await ref.set({ ...changes, updatedBy: callerUid, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true }); }
-  catch (err) { await logServerError('updateAdSettings', err, { userId: callerUid }); throw new HttpsError('internal', 'Could not update advertisement Global Controls.'); }
+  try { await ref.set({ ...changes, updatedBy: callerUid, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true }); } catch (err) { await logServerError('updateAdSettings', err, { userId: callerUid }); throw new HttpsError('internal', 'Could not update advertisement Global Controls.'); }
   await logAdAudit({ action:'settings_change', targetType:'ad_settings', targetId:AD_SETTINGS_DOC_ID, performedBy:callerUid, details:{changes, performedByRole:caller.role} });
   return { ok:true };
 });
@@ -51,8 +43,7 @@ exports.updateAdFeatureControl = onCall({ enforceAppCheck: true }, async (reques
   const changes = pickValidBooleans((request.data || {}).changes, VALID_FEATURE_CONTROL_FIELDS);
   if (!changes) throw new HttpsError('invalid-argument', 'No valid control changes were provided.');
   const ref = db.collection(AD_FEATURE_CONTROLS_COLLECTION).doc(featureId);
-  try { await ref.set({ featureId, ...changes, updatedBy:callerUid, updatedAt:admin.firestore.FieldValue.serverTimestamp() }, { merge:true }); }
-  catch (err) { await logServerError('updateAdFeatureControl', err, {userId:callerUid}); throw new HttpsError('internal', 'Could not update this feature\'s advertisement controls.'); }
+  try { await ref.set({ featureId, ...changes, updatedBy:callerUid, updatedAt:admin.firestore.FieldValue.serverTimestamp() }, { merge:true }); } catch (err) { await logServerError('updateAdFeatureControl', err, {userId:callerUid}); throw new HttpsError('internal', 'Could not update this feature\'s advertisement controls.'); }
   await logAdAudit({ action:'settings_change', targetType:'ad_feature_control', targetId:featureId, performedBy:callerUid, details:{changes, performedByRole:caller.role} });
   return {ok:true};
 });
