@@ -4,6 +4,7 @@ const { logAudit, logServerError } = require('./logService');
 
 const ADMIN_ROLES = ['admin', 'superadmin'];
 const MAX_AMOUNT = 100000;
+const MONEY_RE = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
 
 function requireAdmin(request) {
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
@@ -11,9 +12,15 @@ function requireAdmin(request) {
 }
 
 function validMoney(value) {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || value <= 0 || value > MAX_AMOUNT) return null;
+    const cents = Math.round(value * 100);
+    if (!Number.isSafeInteger(cents) || Math.abs(value * 100 - cents) > Number.EPSILON * Math.max(1, Math.abs(value * 100))) return null;
+    return value;
+  }
+  if (typeof value !== 'string' || !MONEY_RE.test(value)) return null;
   const n = Number(value);
-  if (!Number.isFinite(n) || n <= 0 || n > MAX_AMOUNT || !Number.isSafeInteger(Math.round(n * 100))) return null;
-  return n;
+  return Number.isFinite(n) && n > 0 && n <= MAX_AMOUNT ? n : null;
 }
 
 function validBalance(value) {
