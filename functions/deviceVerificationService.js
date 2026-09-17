@@ -33,8 +33,6 @@ exports.sendDeviceVerification = onCall(async (request) => {
   const db = getFirestore();
   const userRef = ref(db, uid);
 
-  // Generate the outbound values before reserving the resend slot. If link
-  // generation fails, the user's resend quota is not consumed.
   const otp = code();
   let link;
   try {
@@ -47,7 +45,6 @@ exports.sendDeviceVerification = onCall(async (request) => {
     }
     const email = String(pending.email || data.email || '').trim().toLowerCase();
     if (!validEmail(email)) throw new HttpsError('failed-precondition', 'No valid email address is available for verification.');
-
     link = await admin.auth().generateSignInWithEmailLink(email, LINK_SETTINGS);
   } catch (err) {
     if (err instanceof HttpsError) throw err;
@@ -65,7 +62,6 @@ exports.sendDeviceVerification = onCall(async (request) => {
     if (!pending || pending.deviceId !== deviceId) {
       throw new HttpsError('failed-precondition', 'No pending verification for this device. Please sign in again.');
     }
-
     email = String(pending.email || data.email || '').trim().toLowerCase();
     if (!validEmail(email)) throw new HttpsError('failed-precondition', 'No valid email address is available for verification.');
 
@@ -74,7 +70,6 @@ exports.sendDeviceVerification = onCall(async (request) => {
     if (lastSentAt && now - lastSentAt < RESEND_MS) {
       throw new HttpsError('resource-exhausted', 'Please wait 60 seconds before requesting another verification email.');
     }
-
     const oldWindowStart = Number(rate.windowStartedAtMs) || 0;
     const windowActive = oldWindowStart > 0 && now - oldWindowStart < RESEND_WINDOW_MS;
     const windowStartedAtMs = windowActive ? oldWindowStart : now;
@@ -109,12 +104,9 @@ exports.sendDeviceVerification = onCall(async (request) => {
       context: 'deviceVerificationService.sendDeviceVerification',
     });
   } catch (err) {
-    // Do not roll back the resend quota: a failed mail attempt must not become
-    // a way to bypass the hourly email cap by repeatedly retrying.
     console.error('[deviceVerification] email send failed', err);
     throw new HttpsError('unavailable', 'Could not send the verification email. Please try again later.');
   }
-
   return { sent: true, email };
 });
 
@@ -139,12 +131,10 @@ exports.confirmDeviceEmailOtp = onCall(async (request) => {
   let verified = false;
   let emailAuthUid = null;
   let verifiedVia = null;
+  let sessionId = null;
 
   if (phoneIdToken) {
     try {
-      // Always compare against the stored E.164 phone number/country.
-      // Using profile.phone alone silently defaulted to +60 and broke SMS
-      // device verification for non-Malaysian users.
       const expectedPhone = data.phoneE164 || pending.phoneE164 || data.phone || pending.phone || '';
       const expectedDialCode = data.phoneCountryCode || pending.dialCode || '+60';
       await assertPhoneVerified(phoneIdToken, expectedPhone, expectedDialCode);
@@ -163,31 +153,71 @@ exports.confirmDeviceEmailOtp = onCall(async (request) => {
     }
   } else {
     if (!/^\d{6}$/.test(otp)) throw new HttpsError('invalid-argument', 'Please enter the 6-digit verification code.');
-    const challenge = data.pendingDeviceEmailChallenge;
-    if (!challenge || challenge.deviceId !== deviceId) {
-      throw new HttpsError('failed-precondition', 'No active email verification challenge. Please request a new email.');
-    }
-    if (challenge.expiresAt?.toMillis?.() < Date.now()) throw new HttpsError('deadline-exceeded', 'That verification code expired. Request a new email.');
-    if ((challenge.attempts || 0) >= MAX_ATTEMPTS) throw new HttpsError('resource-exhausted', 'Too many attempts. Request a new verification email.');
-    if (hash(otp) !== challenge.codeHash) {
-      await userRef.update({ 'pendingDeviceEmailChallenge.attempts': FieldValue.increment(1) });
-      throw new HttpsError('invalid-argument', 'Incorrect verification code.');
-    }
+
+    // OTP verification and attempt accounting must be one atomic operation.
+    // A plain read followed by update allows concurrent requests to observe
+    // the same attempt count and potentially exceed MAX_ATTEMPTS.
+    const result = await db.runTransaction(async (tx) => {
+      const current = await tx.get(userRef);
+      if (!current.exists) throw new HttpsError('not-found', 'No profile found for this account.');
+      const currentData = current.data();
+      const currentPending = currentData.pendingDeviceApproval;
+      if (!currentPending || currentPending.deviceId !== deviceId) {
+        throw new HttpsError('failed-precondition', 'No pending verification for this device. Please sign in again.');
+      }
+
+      const challenge = currentData.pendingDeviceEmailChallenge;
+      if (!challenge || challenge.deviceId !== deviceId) {
+        throw new HttpsError('failed-precondition', 'No active email verification challenge. Please request a new email.');
+      }
+      if (challenge.expiresAt?.toMillis?.() < Date.now()) {
+        throw new HttpsError('deadline-exceeded', 'That verification code expired. Request a new email.');
+      }
+
+      const attempts = Number(challenge.attempts) || 0;
+      if (attempts >= MAX_ATTEMPTS) {
+        throw new HttpsError('resource-exhausted', 'Too many attempts. Request a new verification email.');
+      }
+
+      if (hash(otp) !== challenge.codeHash) {
+        const nextAttempts = attempts + 1;
+        tx.update(userRef, {
+          'pendingDeviceEmailChallenge.attempts': nextAttempts,
+        });
+        throw new HttpsError('invalid-argument', 'Incorrect verification code.');
+      }
+
+      const newSessionId = crypto.randomBytes(24).toString('hex');
+      tx.update(userRef, {
+        activeSessionId: newSessionId,
+        activeDeviceId: deviceId,
+        pendingDeviceApproval: null,
+        pendingDeviceEmailChallenge: FieldValue.delete(),
+        pendingDeviceEmailRate: FieldValue.delete(),
+        lastLoginAt: FieldValue.serverTimestamp(),
+      });
+      return newSessionId;
+    });
+
+    sessionId = result;
     verified = true;
     verifiedVia = 'email_otp';
   }
 
   if (!verified) throw new HttpsError('failed-precondition', 'Verification is required.');
 
-  const sessionId = crypto.randomBytes(24).toString('hex');
-  await userRef.update({
-    activeSessionId: sessionId,
-    activeDeviceId: deviceId,
-    pendingDeviceApproval: null,
-    pendingDeviceEmailChallenge: FieldValue.delete(),
-    pendingDeviceEmailRate: FieldValue.delete(),
-    lastLoginAt: FieldValue.serverTimestamp(),
-  });
+  if (!sessionId) {
+    sessionId = crypto.randomBytes(24).toString('hex');
+    await userRef.update({
+      activeSessionId: sessionId,
+      activeDeviceId: deviceId,
+      pendingDeviceApproval: null,
+      pendingDeviceEmailChallenge: FieldValue.delete(),
+      pendingDeviceEmailRate: FieldValue.delete(),
+      lastLoginAt: FieldValue.serverTimestamp(),
+    });
+  }
+
   try { await admin.auth().revokeRefreshTokens(uid); } catch (err) { console.error('[deviceVerification] revoke tokens failed', err); }
   if (emailAuthUid) await admin.auth().deleteUser(emailAuthUid).catch(() => {});
   console.log(`[deviceVerification] device approved via ${verifiedVia}`, { uid, deviceId });
