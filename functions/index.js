@@ -28,27 +28,39 @@ exports.sendDeviceVerification = require('./deviceVerificationService').sendDevi
 exports.confirmDeviceEmailOtp = require('./deviceVerificationService').confirmDeviceEmailOtp;
 exports.cleanupExpiredVerificationArtifacts = require('./verificationCleanup').cleanupExpiredVerificationArtifacts;
 exports.sendAnnouncement = require('./announcements').sendAnnouncement;
-exports.approveTopup = require('./walletService').approveTopup;
-exports.rejectTopup = require('./walletService').rejectTopup;
-exports.createSelfTopup = require('./walletService').createSelfTopup;
+
+// Hardened wallet/top-up/transaction handlers. These modules were already
+// present in the repository but were not active because index.js exported the
+// older walletService implementations directly.
+const secureTransfer = require('./secureTransfer');
+const secureWalletTransfer = require('./secureWalletTransfer');
+const secureWalletMutations = require('./secureWalletMutations');
+const secureWalletCharge = require('./secureWalletCharge');
+const secureTopupReview = require('./secureTopupReview');
+const secureTransactionReview = require('./secureTransactionReview');
+const chargeGuards = require('./chargeGuards');
+
+exports.approveTopup = secureTopupReview.approveTopup;
+exports.rejectTopup = secureTopupReview.rejectTopup;
+exports.createSelfTopup = secureWalletMutations.createSelfTopup;
 exports.submitTopupRequest = require('./topupSubmissionService').submitTopupRequest;
 exports.adminTopUpPoints = require('./adminTopUpService').adminTopUpPoints;
-exports.transferPoints = require('./walletService').transferPoints;
+exports.transferPoints = secureTransfer.transferPoints;
 exports.findWalletRecipient = require('./walletTransferService').findWalletRecipient;
+exports.walletTransfer = secureWalletTransfer.walletTransfer;
+exports.listWalletTransfers = secureWalletTransfer.listWalletTransfers;
 exports.createDiditKycSession = require('./diditKycService').createDiditKycSession;
 exports.diditKycWebhook = require('./diditKycService').diditKycWebhook;
-exports.chargeWallet = require('./walletService').chargeWallet;
-// Product charges MUST use chargeGuards: it enforces per-user/request
-// idempotency and prevents a committed charge being duplicated by a retry.
-const chargeGuards = require('./chargeGuards');
+exports.chargeWallet = secureWalletCharge.chargeWallet;
 exports.chargeRecharge = chargeGuards.chargeRecharge;
 exports.chargeInternetPackage = chargeGuards.chargeInternetPackage;
-exports.rejectRechargeTransaction = require('./walletService').rejectRechargeTransaction;
-exports.rejectInternetPackageTransaction = require('./walletService').rejectInternetPackageTransaction;
 exports.chargeMobileBanking = chargeGuards.chargeMobileBanking;
 exports.chargeRemittance = chargeGuards.chargeRemittance;
-exports.rejectMobileBankingTransaction = require('./walletService').rejectMobileBankingTransaction;
-exports.rejectRemittanceTransaction = require('./walletService').rejectRemittanceTransaction;
+exports.rejectRechargeTransaction = secureTransactionReview.rejectRechargeTransaction;
+exports.rejectInternetPackageTransaction = secureTransactionReview.rejectInternetPackageTransaction;
+exports.rejectMobileBankingTransaction = secureTransactionReview.rejectMobileBankingTransaction;
+exports.rejectRemittanceTransaction = secureTransactionReview.rejectRemittanceTransaction;
+
 exports.approveVerification = require('./verificationService').approveVerification;
 exports.rejectVerification = require('./verificationService').rejectVerification;
 exports.setBusinessProfileStatus = require('./businessProfileService').setBusinessProfileStatus;
