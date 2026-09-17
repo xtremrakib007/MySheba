@@ -67,11 +67,6 @@ async function findUserByPhone(db, phone, phoneE164, dialCode) {
     if (!snap.empty) return snap;
   }
 
-  // Older accounts can have a phone value that was formatted with spaces,
-  // dashes, or a different local/country-code representation. The login
-  // system itself maps these representations to deterministic Firebase
-  // Auth emails, so use Auth as a final account lookup. This avoids a costly
-  // full Firestore users collection scan while still finding legacy users.
   for (const email of candidates.authEmailCandidates) {
     try {
       const authUser = await admin.auth().getUserByEmail(email);
@@ -122,10 +117,9 @@ exports.resetPassword = onCall(async (request) => {
 
   if (userData.suspended) throw new HttpsError('permission-denied', 'This account has been suspended. Please contact support.');
 
-  let tempAuthUid;
   if (phoneIdToken) {
     try {
-      tempAuthUid = await assertPhoneVerified(phoneIdToken, normalizedE164, undefined);
+      await assertPhoneVerified(phoneIdToken, normalizedE164, undefined);
     } catch (err) {
       throw new HttpsError('failed-precondition', err.message || 'Please verify your phone number first.');
     }
@@ -138,7 +132,7 @@ exports.resetPassword = onCall(async (request) => {
       throw new HttpsError('failed-precondition', 'That email is not associated with this phone number.');
     }
     try {
-      tempAuthUid = await assertEmailVerified(emailIdToken, accountEmail);
+      await assertEmailVerified(emailIdToken, accountEmail);
     } catch (err) {
       throw new HttpsError('failed-precondition', err.message || 'Please verify your email address first.');
     }
@@ -157,8 +151,6 @@ exports.resetPassword = onCall(async (request) => {
     activeDeviceId: null,
     pendingDeviceApproval: null,
   }).catch(() => {});
-
-  if (tempAuthUid) await admin.auth().deleteUser(tempAuthUid).catch(() => {});
 
   await logAudit({
     action: 'password_reset',
