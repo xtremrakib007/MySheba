@@ -23,6 +23,9 @@ async function profile(db, uid) {
   const snap = await db.collection('users').doc(uid).get();
   return snap.exists ? { id: snap.id, ...snap.data() } : null;
 }
+function isActiveAccount(account) {
+  return !!account && account.suspended !== true && account.inactive !== true && account.disabled !== true && !account.mergedInto;
+}
 function canTransferTo(role, caller, recipient) {
   if (role === 'dealer') return recipient.role === 'customer' && recipient.dealerId === caller.id;
   if (role === 'admin') return recipient.role === 'dealer';
@@ -55,11 +58,12 @@ exports.transferPoints = onCall({ enforceAppCheck: true }, async (request) => {
   }
 
   const caller = await profile(db, callerUid);
-  if (!caller || !['dealer', 'admin', 'superadmin'].includes(caller.role)) {
+  if (!caller || !['dealer', 'admin', 'superadmin'].includes(caller.role) || !isActiveAccount(caller)) {
     throw new HttpsError('permission-denied', 'Your account cannot transfer points.');
   }
   const recipient = await profile(db, toUid);
   if (!recipient || recipient.mergedInto) throw new HttpsError('not-found', 'That account does not exist.');
+  if (!isActiveAccount(recipient)) throw new HttpsError('failed-precondition', 'The recipient account is not active.');
   if (!canTransferTo(caller.role, caller, recipient)) {
     throw new HttpsError('permission-denied', 'You are not allowed to send points to that account.');
   }
@@ -94,8 +98,15 @@ exports.transferPoints = onCall({ enforceAppCheck: true }, async (request) => {
       const fromSnap = await tx.get(fromRef);
       const toSnap = await tx.get(toRef);
       if (!fromSnap.exists || !toSnap.exists) throw new HttpsError('not-found', 'Account not found.');
-      const fromBalance = validBalance(fromSnap.data().walletBalance);
-      const toBalance = validBalance(toSnap.data().walletBalance);
+      const fromData = fromSnap.data();
+      const toData = toSnap.data();
+      if (!isActiveAccount(fromData)) throw new HttpsError('permission-denied', 'Your account is not active.');
+      if (!isActiveAccount(toData)) throw new HttpsError('failed-precondition', 'The recipient account is not active.');
+      if (!canTransferTo(caller.role, { id: callerUid, ...fromData }, { id: toUid, ...toData })) {
+        throw new HttpsError('permission-denied', 'You are not allowed to send points to that account.');
+      }
+      const fromBalance = validBalance(fromData.walletBalance);
+      const toBalance = validBalance(toData.walletBalance);
       if (fromBalance === null || toBalance === null) {
         throw new HttpsError('failed-precondition', 'One of the account wallet balances is invalid.');
       }
