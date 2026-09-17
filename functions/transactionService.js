@@ -12,6 +12,9 @@ async function getActor(uid) {
   const snap = await admin.firestore().collection('users').doc(uid).get();
   if (!snap.exists) throw new HttpsError('permission-denied', 'Your staff profile was not found.');
   const p = snap.data();
+  if (p.suspended === true || p.inactive === true || p.disabled === true || p.mergedInto) {
+    throw new HttpsError('permission-denied', 'Your account is not active.');
+  }
   return { uid, role: p.role || '', name: p.fullName || p.name || p.displayName || p.phone || uid };
 }
 function assertOperatorCanHandle(actor, order) {
@@ -64,6 +67,7 @@ exports.completeTransaction = onCall({ enforceAppCheck: true }, async (request) 
   if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
   if (!/^\d{4}$/.test(pin)) throw new HttpsError('invalid-argument', 'A 4-digit collection PIN is required.');
   if (!receiptUrl) throw new HttpsError('invalid-argument', 'The transfer receipt is required before completion.');
+  if (receiptUrl.length > 2048 || !/^https?:\/\//i.test(receiptUrl)) throw new HttpsError('invalid-argument', 'The receipt URL is invalid.');
   const db = admin.firestore(), ref = db.collection('transactions').doc(id);
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref); if (!snap.exists) throw new HttpsError('not-found', 'That order no longer exists.');
@@ -110,6 +114,7 @@ exports.assignDealer = onCall({ enforceAppCheck: true }, async (request) => {
     const dealer = dealerSnap.data();
     if (order.status !== 'pending') throw new HttpsError('failed-precondition', 'Only pending orders can be assigned.');
     if (!ASSIGNABLE_ROLES.includes(dealer.role)) throw new HttpsError('failed-precondition', 'The selected user is not a dealer.');
+    if (dealer.suspended === true || dealer.inactive === true || dealer.disabled === true || dealer.mergedInto) throw new HttpsError('failed-precondition', 'The selected dealer is not active.');
     if (dealer.role === 'dealer' && !DEALER_SERVICES.includes(order.service)) throw new HttpsError('failed-precondition', 'This dealer cannot handle this service.');
     tx.update(txRef, { dealerId, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
   });
