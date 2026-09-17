@@ -17,11 +17,6 @@ service cloud.firestore {
 
     match /rates/current { allow read: if signedIn(); allow create: if isSuperadmin(); allow update: if isSuperadmin() || (myRole() == 'admin' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mobileBanking','remittanceFee','remittanceBD_ACC','remittanceBD_CASH','remittanceNP','remittancePK','remittancePH','remittanceLK','remittanceIN','remittanceID','remittanceMM','BD_ACC','BD_CASH','NP','PK','PH','LK','IN','ID','MM','updatedAt'])); allow delete: if false; }
     match /verificationRequests/{uid} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow create, update, delete: if false; }
-
-    // Root user profile fields are client-editable only for the signed-in owner,
-    // and only for presentation/device-preference fields. Authentication linkage,
-    // roles, wallet values, assignments, verification, suspension, feature access,
-    // security/session state and other privileged fields are server-owned.
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin() || (isDealerTier() && resource.data.dealerId == myDealerScope()) || (isReseller() && resource.data.get('resellerId', null) == request.auth.uid));
       allow create: if signedIn() && request.auth.uid == uid && request.resource.data.role == 'customer';
@@ -29,17 +24,14 @@ service cloud.firestore {
       allow delete: if false;
       match /receivers/{receiverId} { allow read, create, update, delete: if signedIn() && request.auth.uid == uid; }
       match /friends/{friendId} { allow read, create, update, delete: if signedIn() && request.auth.uid == uid; }
-      match /workLogs/{workLogId} { allow read, create, update, delete: if signedIn() && (request.auth.uid == uid || isAdmin()); }
+      // Work-log writes contain attendance/payroll inputs and calculated hours; all mutations are server-owned.
+      match /workLogs/{workLogId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow create, update, delete: if false; }
       match /payslips/{payslipId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if isAdmin(); }
       match /salaryRecords/{recordId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if isAdmin(); }
       match /allowances/{allowanceId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if isAdmin(); }
       match /deductions/{deductionId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if isAdmin(); }
-      // Trusted-device registration, refresh and revocation are security-sensitive
-      // and must go through the authenticated Cloud Functions flow. The client
-      // only needs to list devices; it must never manufacture or alter trust state.
       match /trustedDevices/{deviceId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow create, update, delete: if false; }
     }
-
     match /chats/{chatId} {
       allow read: if isChatParticipant(chatId) || isStaff();
       allow create: if isChatParticipant(chatId) && request.resource.data.customerId == chatId;
@@ -63,7 +55,6 @@ service cloud.firestore {
     match /userAuditLog/{id} { allow read: if signedIn() && isSuperadmin(); allow write: if false; }
     match /errorLog/{id} { allow create: if signedIn() && request.resource.data.source == 'client' && request.resource.data.userId == request.auth.uid; allow read: if signedIn() && isSuperadmin(); allow update: if signedIn() && isSuperadmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resolved','resolvedBy','resolvedAt']); allow delete: if false; }
     match /inquiries/{id} { allow create: if signedIn() && request.resource.data.customerId == request.auth.uid; allow read: if signedIn() && (resource.data.customerId == request.auth.uid || isStaff()); allow update: if signedIn() && ((isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','ticketUrl','updatedAt']) && request.resource.data.status in ['new','contacted','closed']) || (isReseller() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']) && request.resource.data.status in ['new','contacted','closed'])); allow delete: if false; }
-    // Transactions are server-owned; all lifecycle mutations use callable Functions.
     match /transactions/{id} { allow create, update, delete: if false; allow read: if signedIn() && (resource.data.customerId == request.auth.uid || isAdmin() || (isDealerTier() && resource.data.status == 'pending' && resource.data.service == 'Mobile Banking') || (isReseller() && resource.data.status == 'pending' && resource.data.service in ['Recharge','Internet','Remittance']) || (isStaff() && resource.data.claimedBy == request.auth.uid)); }
     match /topups/{id} { allow create, update, delete: if false; allow read: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin()); }
     match /selfTopups/{id} { allow read: if signedIn() && resource.data.userId == request.auth.uid; allow create, update, delete: if false; }
