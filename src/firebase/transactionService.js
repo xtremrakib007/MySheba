@@ -30,47 +30,36 @@ export async function createTransaction(payload, customer) {
 }
 
 export function subscribeBroadcastTransactions(callback, onError) {
-  let stopped = false, unsubPending = () => {}, unsubClaimed = () => {}, pending = [], claimed = [];
+  let stopped = false;
+  const unsubs = [];
+  let pending = [];
+  let claimed = [];
   const emit = () => { const byId = new Map(); [...pending, ...claimed].forEach((tx) => byId.set(tx.id, tx)); const list = Array.from(byId.values()); list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)); callback(list); };
+  const attach = (q, target, replace = true) => {
+    const unsub = onSnapshot(q, (snap) => { if (replace) target.length = 0; snap.docs.forEach((d) => { const item = { id: d.id, ...d.data() }; const index = target.findIndex((x) => x.id === item.id); if (index >= 0) target[index] = item; else target.push(item); }); emit(); }, (err) => { if (!stopped) onError?.(err); });
+    unsubs.push(unsub);
+  };
   (async () => { try {
     const uid = auth.currentUser?.uid; if (!uid) return;
     const profileSnap = await getDoc(doc(db, 'users', uid)); if (stopped) return;
     const role = profileSnap.exists() ? profileSnap.data()?.role : null;
-    if (role === 'admin' || role === 'superadmin') {
-      const q = query(collection(db, COLLECTION), where('status', 'in', ['pending', 'processing', 'completed', 'rejected']));
-      unsubPending = onSnapshot(q, (snap) => callback(snap.docs.map(mapTransactionDoc).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))), onError); return;
-    }
+    if (role === 'admin' || role === 'superadmin') { attach(query(collection(db, COLLECTION), where('status', 'in', ['pending', 'processing', 'completed', 'rejected'])), pending); return; }
     if (role !== 'dealer' && role !== 'reseller') return;
     if (role === 'dealer') {
-      const q1 = query(collection(db, QUEUE_COLLECTION), where('service', '==', 'Mobile Banking'), where('status', '==', 'pending'), where('dealerId', '==', null));
-      const q2 = query(collection(db, QUEUE_COLLECTION), where('service', '==', 'Mobile Banking'), where('status', '==', 'pending'), where('dealerId', '==', uid));
-      unsubPending = onSnapshot(q1, (snap) => { pending = snap.docs.map((d) => ({ id: d.id, ...d.data() })); emit(); }, onError);
-      const oldPending = unsubPending;
-      unsubClaimed = onSnapshot(q2, (snap) => { const second = snap.docs.map((d) => ({ id: d.id, ...d.data() })); pending = [...pending.filter((x) => !second.some((y) => y.id === x.id)), ...second]; emit(); }, onError);
-      void oldPending;
+      attach(query(collection(db, QUEUE_COLLECTION), where('service', '==', 'Mobile Banking'), where('status', '==', 'pending'), where('dealerId', '==', null)), pending);
+      attach(query(collection(db, QUEUE_COLLECTION), where('service', '==', 'Mobile Banking'), where('status', '==', 'pending'), where('dealerId', '==', uid)), pending, false);
     } else {
-      const q1 = query(collection(db, QUEUE_COLLECTION), where('service', 'in', ['Recharge', 'Internet', 'Remittance']), where('status', '==', 'pending'), where('resellerId', '==', null));
-      const q2 = query(collection(db, QUEUE_COLLECTION), where('service', 'in', ['Recharge', 'Internet', 'Remittance']), where('status', '==', 'pending'), where('resellerId', '==', uid));
-      unsubPending = onSnapshot(q1, (snap) => { pending = snap.docs.map((d) => ({ id: d.id, ...d.data() })); emit(); }, onError);
-      unsubClaimed = onSnapshot(q2, (snap) => { const second = snap.docs.map((d) => ({ id: d.id, ...d.data() })); pending = [...pending.filter((x) => !second.some((y) => y.id === x.id)), ...second]; emit(); }, onError);
+      attach(query(collection(db, QUEUE_COLLECTION), where('service', 'in', ['Recharge', 'Internet', 'Remittance']), where('status', '==', 'pending'), where('resellerId', '==', null)), pending);
+      attach(query(collection(db, QUEUE_COLLECTION), where('service', 'in', ['Recharge', 'Internet', 'Remittance']), where('status', '==', 'pending'), where('resellerId', '==', uid)), pending, false);
     }
-    const claimedQuery = query(collection(db, QUEUE_COLLECTION), where('claimedBy', '==', uid));
-    const claimedUnsub = onSnapshot(claimedQuery, (snap) => { claimed = snap.docs.map((d) => ({ id: d.id, ...d.data() })); emit(); }, onError);
-    const previous = unsubClaimed; unsubClaimed = () => { previous(); claimedUnsub(); };
+    attach(query(collection(db, QUEUE_COLLECTION), where('claimedBy', '==', uid)), claimed);
   } catch (err) { if (!stopped) onError?.(err); } })();
-  return () => { stopped = true; unsubPending(); unsubClaimed(); };
+  return () => { stopped = true; unsubs.splice(0).forEach((unsub) => unsub()); };
 }
 
 export function subscribeMyTransactions(uid, callback, onError) { const q = query(collection(db, COLLECTION), where('customerId', '==', uid)); return onSnapshot(q, (snap) => { const list = snap.docs.map(mapTransactionDoc); list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)); callback(list); }, onError); }
-
 export async function approveTransaction(id) { try { await httpsCallable(functions, 'approveTransaction')({ transactionId: id }); } catch (err) { throw new Error(err.message || 'Could not approve this order.'); } }
 export async function acceptTransaction(id) { try { await httpsCallable(functions, 'acceptTransaction')({ transactionId: id }); } catch (err) { throw new Error(err.message || 'Could not accept this order.'); } }
-
-export async function rejectTransaction(id, reason, service) {
-  if (!['Recharge', 'Internet', 'Mobile Banking', 'Remittance'].includes(service)) throw new Error('This order type does not support rejection.');
-  try { return (await httpsCallable(functions, 'rejectTransaction')({ transactionId: id, reason: reason || '' })).data; }
-  catch (err) { throw new Error(err.message || 'Could not reject this order right now.'); }
-}
-
+export async function rejectTransaction(id, reason, service) { if (!['Recharge', 'Internet', 'Mobile Banking', 'Remittance'].includes(service)) throw new Error('This order type does not support rejection.'); try { return (await httpsCallable(functions, 'rejectTransaction')({ transactionId: id, reason: reason || '' })).data; } catch (err) { throw new Error(err.message || 'Could not reject this order right now.'); } }
 export async function completeTransaction(id, pin, receiptUrl) { try { await httpsCallable(functions, 'completeTransaction')({ transactionId: id, pin: pin || '', receiptUrl: receiptUrl || '' }); } catch (err) { throw new Error(err.message || 'Could not complete this order.'); } }
 export async function assignDealer(id, dealerId) { try { await httpsCallable(functions, 'assignDealer')({ transactionId: id, dealerId }); } catch (err) { throw new Error(err.message || 'Could not assign this dealer.'); } }
