@@ -4,6 +4,7 @@
 // "verified" flag; it recomputes the duplicate decision from the embedding.
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { checkVelocity, getClientIp } = require('./rateLimitService');
 
 const PENDING = 'pendingBiometricTemplates';
 const VERIFIED = 'biometricTemplates';
@@ -36,7 +37,7 @@ function cosine(a, b) {
   return dot;
 }
 
-exports.verifyKycFace = onCall(async (request) => {
+exports.verifyKycFace = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireAuth(request);
   const embedding = cleanEmbedding(request.data?.embedding);
   if (request.data?.livenessPassed !== true) {
@@ -44,6 +45,8 @@ exports.verifyKycFace = onCall(async (request) => {
   }
 
   const db = admin.firestore();
+  await checkVelocity(db, uid, 'verifyKycFace', { ip: getClientIp(request) });
+
   const snap = await db.collection(VERIFIED).get();
   let best = null;
 
