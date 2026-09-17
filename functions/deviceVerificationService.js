@@ -154,9 +154,6 @@ exports.confirmDeviceEmailOtp = onCall(async (request) => {
   } else {
     if (!/^\d{6}$/.test(otp)) throw new HttpsError('invalid-argument', 'Please enter the 6-digit verification code.');
 
-    // OTP verification and attempt accounting must be one atomic operation.
-    // A plain read followed by update allows concurrent requests to observe
-    // the same attempt count and potentially exceed MAX_ATTEMPTS.
     const result = await db.runTransaction(async (tx) => {
       const current = await tx.get(userRef);
       if (!current.exists) throw new HttpsError('not-found', 'No profile found for this account.');
@@ -181,10 +178,8 @@ exports.confirmDeviceEmailOtp = onCall(async (request) => {
 
       if (hash(otp) !== challenge.codeHash) {
         const nextAttempts = attempts + 1;
-        tx.update(userRef, {
-          'pendingDeviceEmailChallenge.attempts': nextAttempts,
-        });
-        throw new HttpsError('invalid-argument', 'Incorrect verification code.');
+        tx.update(userRef, { 'pendingDeviceEmailChallenge.attempts': nextAttempts });
+        return { kind: 'wrong', attempts: nextAttempts };
       }
 
       const newSessionId = crypto.randomBytes(24).toString('hex');
@@ -196,10 +191,17 @@ exports.confirmDeviceEmailOtp = onCall(async (request) => {
         pendingDeviceEmailRate: FieldValue.delete(),
         lastLoginAt: FieldValue.serverTimestamp(),
       });
-      return newSessionId;
+      return { kind: 'verified', sessionId: newSessionId };
     });
 
-    sessionId = result;
+    if (result.kind === 'wrong') {
+      if (result.attempts >= MAX_ATTEMPTS) {
+        throw new HttpsError('resource-exhausted', 'Too many attempts. Request a new verification email.');
+      }
+      throw new HttpsError('invalid-argument', 'Incorrect verification code.');
+    }
+
+    sessionId = result.sessionId;
     verified = true;
     verifiedVia = 'email_otp';
   }
