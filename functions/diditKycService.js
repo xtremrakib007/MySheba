@@ -3,12 +3,14 @@
 // server-side KYC submission operation. No third-party KYC provider is used.
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { checkVelocity, getClientIp } = require('./rateLimitService');
 
 const PENDING = 'pendingBiometricTemplates';
 const VERIFIED = 'biometricTemplates';
 const REQUESTS = 'verificationRequests';
 const DIMENSIONS = 512;
 const DUPLICATE_THRESHOLD = 0.82;
+const PENDING_TTL_MS = 30 * 60 * 1000;
 const DOCUMENT_TYPES = ['Passport', 'MyKad / National ID', 'Work Permit / ID', "Driver's License"];
 const GENDERS = ['Male', 'Female', 'Other'];
 
@@ -109,8 +111,6 @@ exports.createDiditKycSession = onCall({ enforceAppCheck: true }, async (request
   const user = userSnap.data() || {};
   if (!activeUser(user)) throw new HttpsError('permission-denied', 'This account is not active.');
 
-  // Secure KYC submission. The client can upload evidence, but it cannot
-  // directly create or overwrite a verification request anymore.
   if (request.data?.mode === 'submit') {
     if (user.verified === true || user.verificationStatus === 'approved') throw new HttpsError('failed-precondition', 'Your KYC is already approved.');
     const existing = await db.collection(REQUESTS).doc(uid).get();
@@ -147,6 +147,10 @@ exports.createDiditKycSession = onCall({ enforceAppCheck: true }, async (request
 
     const pendingFace = await db.collection(PENDING).doc(uid).get();
     if (!pendingFace.exists || pendingFace.data()?.status !== 'pending' || pendingFace.data()?.livenessPassed !== true) throw new HttpsError('failed-precondition', 'Complete the live face verification before submitting KYC.');
+    if (!pendingFace.data()?.expiresAt || pendingFace.data().expiresAt.toMillis() < Date.now()) {
+      await db.collection(PENDING).doc(uid).delete();
+      throw new HttpsError('failed-precondition', 'The face verification has expired. Please verify your face again.');
+    }
 
     await db.runTransaction(async tx => {
       const [latestUser, latestRequest, latestFace] = await Promise.all([
@@ -159,13 +163,17 @@ exports.createDiditKycSession = onCall({ enforceAppCheck: true }, async (request
       if (latestUserData.verified === true || latestUserData.verificationStatus === 'approved') throw new HttpsError('failed-precondition', 'Your KYC is already approved.');
       if (latestRequest.exists && latestRequest.data()?.status === 'pending') throw new HttpsError('failed-precondition', 'Your KYC is already under review.');
       if (!latestFace.exists || latestFace.data()?.status !== 'pending' || latestFace.data()?.livenessPassed !== true) throw new HttpsError('failed-precondition', 'Complete the live face verification before submitting KYC.');
+      const expiresAt = latestFace.data()?.expiresAt;
+      if (!expiresAt || expiresAt.toMillis() < Date.now()) throw new HttpsError('failed-precondition', 'The face verification has expired. Please verify your face again.');
       const requestRef = db.collection(REQUESTS).doc(uid);
       tx.set(requestRef, submission, { merge: false });
       tx.update(userRef, { verificationStatus: 'pending', verified: false });
+      tx.delete(db.collection(PENDING).doc(uid));
     });
     return { ok: true, status: 'pending' };
   }
 
+  await checkVelocity(db, uid, 'verifyKycFace', { ip: getClientIp(request) });
   const embedding = normalizeEmbedding(request.data?.embedding);
   if (request.data?.livenessPassed !== true) throw new HttpsError('failed-precondition', 'Complete the live face movement check first.');
 
@@ -181,13 +189,14 @@ exports.createDiditKycSession = onCall({ enforceAppCheck: true }, async (request
     } catch (_) {}
   });
 
+  const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + PENDING_TTL_MS);
   if (best && best.score >= DUPLICATE_THRESHOLD) {
-    await db.collection(PENDING).doc(uid).set({ uid, status: 'duplicate', duplicateOf: best.uid, similarity: best.score, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-    return { ok: false, duplicate: true, similarity: best.score };
+    await db.collection(PENDING).doc(uid).set({ uid, status: 'duplicate', duplicateOf: best.uid, similarity: best.score, expiresAt, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    return { ok: false, duplicate: true };
   }
 
-  await db.collection(PENDING).doc(uid).set({ uid, status: 'pending', embedding, model: 'mobilefacenet-512', livenessPassed: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-  return { ok: true, duplicate: false, similarity: best?.score || 0 };
+  await db.collection(PENDING).doc(uid).set({ uid, status: 'pending', embedding, model: 'mobilefacenet-512', livenessPassed: true, expiresAt, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+  return { ok: true, duplicate: false };
 });
 
 exports.diditKycWebhook = async (_request, response) => {
