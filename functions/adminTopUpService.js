@@ -7,7 +7,7 @@ const ADMIN_ROLES = ['admin', 'superadmin'];
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 
 function activeAccount(profile) {
-  return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto;
+  return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && profile.active !== false && profile.mergedInto == null;
 }
 
 exports.adminTopUpPoints = onCall({ enforceAppCheck: true }, async request => {
@@ -59,6 +59,9 @@ exports.adminTopUpPoints = onCall({ enforceAppCheck: true }, async request => {
       const target = targetSnap.data();
       if (!['dealer', 'reseller'].includes(target.role)) {
         throw new HttpsError('failed-precondition', 'Only dealer/reseller accounts can receive admin point top-ups.');
+      }
+      if (!activeAccount(target)) {
+        throw new HttpsError('failed-precondition', 'The target account is not active.');
       }
 
       const currentBalance = Number(target.walletBalance || 0);
