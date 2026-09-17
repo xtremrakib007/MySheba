@@ -65,7 +65,7 @@ async function sanitizeRequest(request, requestId) {
 }
 
 function wrap(name) {
-  return onCall(async (request) => {
+  return onCall({ enforceAppCheck: true }, async (request) => {
     const uid = requireAuth(request);
     const requestId = getRequestId(request);
     const db = admin.firestore();
@@ -108,9 +108,6 @@ function wrap(name) {
       });
       return result;
     } catch (err) {
-      // A wallet transaction can commit before the callable response or guard
-      // update fails. Recover the committed transaction before releasing the
-      // guard; otherwise a retry could charge the same request twice.
       const recovered = await recoverCompleted(db, uid, requestId, guardRef).catch(() => null);
       if (recovered) return recovered;
       await guardRef.delete().catch(() => {});
