@@ -5,6 +5,12 @@ const walletService = require('./walletService');
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const RECHARGE_COUNTRIES = new Set(['BD', 'IN', 'NP', 'PK', 'PH', 'ID', 'MM', 'KH']);
 const REMITTANCE_COUNTRIES = new Set(['BD', 'NP', 'PK', 'PH', 'LK', 'IN', 'ID', 'MM']);
+const SERVICE_LABELS = {
+  chargeRecharge: 'Recharge',
+  chargeInternetPackage: 'Internet',
+  chargeMobileBanking: 'Mobile Banking',
+  chargeRemittance: 'Remittance',
+};
 
 function requireAuth(request) {
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
@@ -111,6 +117,8 @@ async function sanitizeRequest(request, requestId, name) {
   const incomingPayload = incomingData.payload || {};
   const payload = {
     ...incomingPayload,
+    service: SERVICE_LABELS[name],
+    details: typeof incomingPayload.details === 'string' ? incomingPayload.details.slice(0, 2000) : '',
     raw: { ...(incomingPayload.raw || {}), requestId },
   };
   sanitizeFinancialInputs(name, payload);
@@ -125,8 +133,6 @@ function wrap(name) {
     const requestId = getRequestId(request);
     const db = admin.firestore();
 
-    // Check the live Firestore account state before creating the idempotency
-    // record. Auth-disabled tokens can remain usable until token expiry.
     await assertActiveAccount(db, uid);
 
     const guardRef = db.collection('chargeRequests').doc(`${uid}_${requestId}`);
