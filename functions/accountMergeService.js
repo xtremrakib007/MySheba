@@ -18,6 +18,7 @@ function safeEqual(a, b) { const left = Buffer.from(String(a)); const right = Bu
 function maskEmail(email) { const at = email.indexOf('@'); if (at <= 0) return email; const local = email.slice(0, at); const shown = local.slice(0, Math.min(2, local.length)); return `${shown}${'*'.repeat(Math.max(3, local.length - shown.length))}${email.slice(at)}`; }
 function requireAuth(request) { if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.'); return request.auth.uid; }
 async function getProfile(db, uid) { const snap = await db.collection('users').doc(uid).get(); return snap.exists ? { id: snap.id, ...snap.data() } : null; }
+function activeAccount(profile) { return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto && profile.active !== false; }
 function walletBalance(profile) { const value = Number(profile?.walletBalance || 0); if (!Number.isFinite(value) || value < 0 || !Number.isSafeInteger(Math.round(value * 100))) throw new HttpsError('failed-precondition', 'One of the account wallet balances is invalid.'); return value; }
 
 exports.startAccountMerge = onCall({ enforceAppCheck: true }, async (request) => {
@@ -25,7 +26,7 @@ exports.startAccountMerge = onCall({ enforceAppCheck: true }, async (request) =>
   const db = admin.firestore();
   const caller = await getProfile(db, callerUid);
   if (!caller) throw new HttpsError('not-found', 'Your account could not be found.');
-  if (caller.role !== 'customer') throw new HttpsError('permission-denied', 'Account merging is not available for this account type yet. Please contact support.');
+  if (!activeAccount(caller) || caller.role !== 'customer') throw new HttpsError('permission-denied', 'Account merging is not available for this account. Please contact support.');
   const email = normalizeEmail(request.data?.email);
   if (!isValidEmail(email)) throw new HttpsError('invalid-argument', 'That does not look like a valid email address.');
   if (caller.email && normalizeEmail(caller.email) === email) throw new HttpsError('invalid-argument', 'That is already your account email address.');
@@ -43,8 +44,7 @@ exports.startAccountMerge = onCall({ enforceAppCheck: true }, async (request) =>
   if (targetAuthUser.disabled) throw new HttpsError('failed-precondition', 'That Google account is disabled.');
   const target = await getProfile(db, targetAuthUser.uid);
   if (!target) throw new HttpsError('not-found', 'That account could not be found.');
-  if (target.mergedInto || target.active === false) throw new HttpsError('failed-precondition', 'That account has already been merged or deactivated.');
-  if (target.role !== 'customer') throw new HttpsError('permission-denied', 'That account cannot be merged automatically. Please contact support.');
+  if (!activeAccount(target) || target.role !== 'customer') throw new HttpsError('failed-precondition', 'That account is disabled, merged, or inactive.');
   const yourWalletBalance = walletBalance(caller);
   const targetWalletBalance = walletBalance(target);
   const combinedWalletBalance = yourWalletBalance + targetWalletBalance;
@@ -82,8 +82,8 @@ exports.confirmAccountMerge = onCall({ enforceAppCheck: true }, async (request) 
 
   try {
     const [callerAuthUser, targetAuthUser, caller, target] = await Promise.all([admin.auth().getUser(callerUid), admin.auth().getUser(targetUid), getProfile(db, callerUid), getProfile(db, targetUid)]);
-    if (!caller || !target || caller.role !== 'customer' || target.role !== 'customer') throw new HttpsError('permission-denied', 'This account cannot be merged automatically.');
-    if (callerAuthUser.disabled || targetAuthUser.disabled || target.mergedInto || target.active === false) throw new HttpsError('failed-precondition', 'One of the accounts is disabled, merged, or inactive. Please start again.');
+    if (!caller || !target || !activeAccount(caller) || !activeAccount(target) || caller.role !== 'customer' || target.role !== 'customer') throw new HttpsError('permission-denied', 'This account cannot be merged automatically.');
+    if (callerAuthUser.disabled || targetAuthUser.disabled) throw new HttpsError('failed-precondition', 'One of the accounts is disabled, merged, or inactive. Please start again.');
     const callerGoogleProvider = (callerAuthUser.providerData || []).find((p) => p.providerId === 'google.com');
     if (callerGoogleProvider) throw new HttpsError('already-exists', 'Your account already has a Google account linked. No merge is required.');
     const targetGoogleProvider = (targetAuthUser.providerData || []).find((p) => p.providerId === 'google.com');
@@ -104,7 +104,7 @@ exports.confirmAccountMerge = onCall({ enforceAppCheck: true }, async (request) 
       if (!otpSnap.exists || otp.state !== 'processing') throw new HttpsError('failed-precondition', 'The merge request is no longer valid.');
       if (!callerSnap.exists || !targetSnap.exists) throw new HttpsError('not-found', 'One of the accounts no longer exists.');
       const callerData = callerSnap.data() || {}; const targetData = targetSnap.data() || {};
-      if (targetData.mergedInto || targetData.active === false) throw new HttpsError('failed-precondition', 'That account has already been merged or deactivated.');
+      if (!activeAccount(callerData) || !activeAccount(targetData) || callerData.role !== 'customer' || targetData.role !== 'customer') throw new HttpsError('failed-precondition', 'One of the accounts is no longer active. Please start again.');
       const callerBalance = walletBalance(callerData); const targetBalance = walletBalance(targetData); mergedWalletBalance = callerBalance + targetBalance;
       if (!Number.isSafeInteger(Math.round(mergedWalletBalance * 100))) throw new HttpsError('failed-precondition', 'The combined wallet balance is too large.');
       tx.update(callerRef, { walletBalance: mergedWalletBalance, googleLinked: true });
