@@ -56,8 +56,10 @@ exports.matchContactsByPhone = onCall({ enforceAppCheck: true }, async (request)
     // Suspended/inactive/disabled/merged accounts must not remain discoverable
     // through contact matching after access has been revoked.
     if (u.suspended === true || u.inactive === true || u.disabled === true || u.mergedInto) return;
-    const phoneDigits = normalizeDigits(u.phoneE164 || u.phone);
-    if (!phoneDigits || !wanted.has(phoneDigits)) return;
+    const phoneCandidates = [u.phoneE164, u.phone]
+      .map(normalizeDigits)
+      .filter(Boolean);
+    if (!phoneCandidates.some((phone) => wanted.has(phone))) return;
     results.push({
       uid: doc.id,
       name: u.name || '',
