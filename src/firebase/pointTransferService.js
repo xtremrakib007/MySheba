@@ -2,13 +2,15 @@
 // their permitted scope. The actual balance move is server-side.
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import * as Crypto from 'expo-crypto';
 import { db, functions } from './config';
 import { logActivity, logError } from './logService';
 
 const COLLECTION = 'pointTransfers';
 
 function createRequestId() {
-  return `pt_${Date.now()}_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}`;
+  if (typeof Crypto.randomUUID !== 'function') throw new Error('Secure request ID generation is unavailable.');
+  return `pt_${Crypto.randomUUID().replace(/-/g, '')}`;
 }
 
 export async function transferPoints({ to, amount, note }) {
