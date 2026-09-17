@@ -49,7 +49,7 @@ exports.createSelfTopup = onCall({ enforceAppCheck: true }, async (request) => {
 
   const callerRef = db.collection('users').doc(uid);
   const opRef = db.collection('walletOperations').doc(`${uid}_createSelfTopup_${requestId}`);
-  const topupRef = db.collection('selfTopUps').doc();
+  const topupRef = db.collection('selfTopups').doc();
 
   try {
     const result = await db.runTransaction(async (tx) => {
