@@ -49,8 +49,12 @@ async function cleanupTrackedTemporaryAuthUsers() {
       await doc.ref.delete().catch(() => {});
       continue;
     }
+    // Never discard the tracking record merely because its bookkeeping TTL
+    // elapsed: doing so could orphan the temporary Firebase Auth user forever.
+    // Attempt deletion even after MAX_AGE_MS and retain the record on failure
+    // so the scheduled cleanup can retry it later.
     if (item.expiresAt?.toMillis && item.expiresAt.toMillis() <= now.toMillis()) {
-      await doc.ref.delete().catch(() => {});
+      if (await deleteTrackedTemporaryAuthUser(item.uid)) cleaned += 1;
       continue;
     }
     if (await deleteTrackedTemporaryAuthUser(item.uid)) cleaned += 1;
