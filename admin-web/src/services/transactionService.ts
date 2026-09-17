@@ -57,6 +57,8 @@ export async function assignDealer(id: string, dealerId: string): Promise<void> 
 }
 export interface DealerOption { id: string; name: string; phone: string; }
 export function subscribeDealerOptions(onUpdate: (dealers: DealerOption[]) => void, onError: (err: Error) => void) {
-  const q = query(collection(db, 'users'), where('role', 'in', ['dealer', 'subdealer']));
+  // Only actual dealer-role users can claim Mobile Banking transactions.
+  // Legacy `subdealer` entries must not be offered as assignable operators.
+  const q = query(collection(db, 'users'), where('role', '==', 'dealer'));
   return onSnapshot(q, (snap) => { const list = snap.docs.map((d) => ({ id: d.id, name: (d.data().name as string) ?? '', phone: (d.data().phone as string) ?? '' })); list.sort((a, b) => a.name.localeCompare(b.name)); onUpdate(list); }, (err) => onError(err as Error));
 }
