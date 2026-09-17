@@ -23,12 +23,13 @@
 // with the hardcoded base list at the point of use, so both the Admin
 // pricing tab and the customer-facing InternetSteps stay in sync.
 import { collection, doc, setDoc, deleteField, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { randomUUID } from 'expo-crypto';
 import { db } from './config';
 
 const COLLECTION = 'internetPricing';
 
 function newCustomId() {
-  return `c${Date.now()}${Math.floor(Math.random() * 1000)}`;
+  return `c${randomUUID()}`;
 }
 
 function cleanPackageFields({ name, data, valid, price }) {
