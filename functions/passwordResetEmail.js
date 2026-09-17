@@ -96,21 +96,26 @@ async function sendPasswordResetEmailVerification(data, request) {
 }
 
 async function verifyPasswordResetEmailOtp(data) {
-  const uid = String(data?.uid || '').trim();
+  const phone = normalizePhone(data?.phone);
   const email = normalizeEmail(data?.email);
   const code = String(data?.code || '').trim();
-  if (!uid || !validEmail(email) || !/^\d{6}$/.test(code)) throw new HttpsError('invalid-argument', 'Enter the 6-digit verification code.');
+  if (!phone || !validEmail(email) || !/^\d{6}$/.test(code)) throw new HttpsError('invalid-argument', 'Enter the 6-digit verification code.');
 
   const db = admin.firestore();
+  const userDoc = await findAccount(db, phone);
+  if (!userDoc) throw new HttpsError('failed-precondition', 'We could not verify that request.');
+  const user = userDoc.data() || {};
+  if (user.suspended || user.inactive || normalizeEmail(user.email) !== email) {
+    throw new HttpsError('failed-precondition', 'We could not verify that request.');
+  }
+
+  const uid = userDoc.id;
   const ref = db.collection('passwordResetEmailOtps').doc(uid);
   const proofRef = db.collection('emailVerificationProofs').doc(crypto.randomBytes(24).toString('hex'));
   const now = Date.now();
   const result = await db.runTransaction(async tx => {
-    const userRef = db.collection('users').doc(uid);
-    const [otpSnap, userSnap] = await Promise.all([tx.get(ref), tx.get(userRef)]);
-    if (!otpSnap.exists || !userSnap.exists) return { status: 'missing' };
-    const user = userSnap.data() || {};
-    if (normalizeEmail(user.email) !== email) return { status: 'mismatch' };
+    const otpSnap = await tx.get(ref);
+    if (!otpSnap.exists) return { status: 'missing' };
     const item = otpSnap.data() || {};
     if (item.used || !item.expiresAt || now > Number(item.expiresAt)) return { status: 'expired' };
     const attempts = Number(item.attempts || 0);
@@ -119,17 +124,24 @@ async function verifyPasswordResetEmailOtp(data) {
       tx.update(ref, { attempts: attempts + 1 });
       return { status: 'invalid' };
     }
-    tx.set(proofRef, { uid, email, expiresAt: now + PROOF_EXPIRY_MS, used: false, method: 'password-reset-email-otp', createdAt: admin.firestore.FieldValue.serverTimestamp() });
+    tx.set(proofRef, {
+      uid,
+      email,
+      expiresAt: now + PROOF_EXPIRY_MS,
+      used: false,
+      method: 'password-reset-email-otp',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
     tx.update(ref, { used: true, verifiedAt: admin.firestore.FieldValue.serverTimestamp() });
     return { status: 'ok', verificationId: proofRef.id };
   });
 
-  if (result.status === 'missing' || result.status === 'mismatch') throw new HttpsError('failed-precondition', 'We could not verify that request.');
+  if (result.status === 'missing') throw new HttpsError('failed-precondition', 'We could not verify that request.');
   if (result.status === 'expired') throw new HttpsError('failed-precondition', 'That code has expired. Please request a new one.');
   if (result.status === 'locked') throw new HttpsError('resource-exhausted', 'Too many incorrect attempts. Please request a new code.');
   if (result.status === 'invalid') throw new HttpsError('invalid-argument', 'Incorrect verification code.');
   return { verificationId: result.verificationId, uid, email };
 }
 
-exports.sendPasswordResetEmailVerification = onCall(async request => sendPasswordResetEmailVerification(request.data, request));
-exports.verifyPasswordResetEmailOtp = onCall(async request => verifyPasswordResetEmailOtp(request.data));
+exports.sendPasswordResetEmailVerification = onCall({ enforceAppCheck: true }, async request => sendPasswordResetEmailVerification(request.data, request));
+exports.verifyPasswordResetEmailOtp = onCall({ enforceAppCheck: true }, async request => verifyPasswordResetEmailOtp(request.data));
