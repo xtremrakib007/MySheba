@@ -24,6 +24,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
+import * as Crypto from 'expo-crypto';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from './config';
 
@@ -31,13 +32,11 @@ const DEVICE_ID_KEY = 'mysheba_device_id';
 const LOCAL_SESSION_ID_KEY = 'mysheba_local_session_id';
 
 function generateId() {
-  // RFC4122-ish v4 UUID without pulling in a dedicated uuid package -
-  // good enough for a locally-generated, non-cryptographic device tag.
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
+  // Device IDs are security-relevant because the server uses them to bind
+  // the single-device session and trusted-device records. Do not use
+  // Math.random(): it is not intended for security-sensitive identifiers.
+  if (typeof Crypto.randomUUID === 'function') return Crypto.randomUUID();
+  throw new Error('Secure device ID generation is unavailable.');
 }
 
 /** Returns this install's device id, generating and persisting one on first call. */
