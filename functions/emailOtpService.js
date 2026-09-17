@@ -27,41 +27,15 @@ async function sendEmailVerificationOtp(data){
 async function verifyEmailVerificationOtp(data){
   const email=normalizeEmail(data?.email),code=String(data?.code||'').trim();
   if(!validEmail(email)||!/^[0-9]{6}$/.test(code)) throw new HttpsError('invalid-argument','Enter the 6-digit verification code.');
-
-  const db=admin.firestore();
-  const ref=db.collection('emailVerificationOtps').doc(email);
-  const verificationId=crypto.randomBytes(24).toString('hex');
-  const proofRef=db.collection('emailVerificationProofs').doc(verificationId);
-  const now=Date.now();
-
-  // The OTP read, attempt counter, used flag, and proof creation must be
-  // atomic. Without a transaction, two simultaneous correct submissions
-  // could both observe used:false and both receive valid verification
-  // proofs, while concurrent wrong attempts could overwrite each other's
-  // attempt count.
-  const result=await db.runTransaction(async tx=>{
-    const snap=await tx.get(ref);
-    if(!snap.exists) return {status:'missing'};
-    const item=snap.data()||{};
-    if(item.used||!item.expiresAt||now>Number(item.expiresAt)) return {status:'expired'};
-    const attempts=Number(item.attempts||0);
-    if(attempts>=MAX_ATTEMPTS) return {status:'locked'};
-    if(!safeEqual(hashCode(code,item.salt),item.otpHash)){
-      tx.update(ref,{attempts:attempts+1});
-      return {status:'invalid'};
-    }
-    tx.set(proofRef,{email,expiresAt:now+VERIFIED_EXPIRY_MS,used:false,method:'otp',createdAt:admin.firestore.FieldValue.serverTimestamp()});
-    tx.update(ref,{used:true,verifiedAt:admin.firestore.FieldValue.serverTimestamp()});
-    return {status:'ok',verificationId};
-  });
-
+  const db=admin.firestore(); const ref=db.collection('emailVerificationOtps').doc(email); const verificationId=crypto.randomBytes(24).toString('hex'); const proofRef=db.collection('emailVerificationProofs').doc(verificationId); const now=Date.now();
+  const result=await db.runTransaction(async tx=>{const snap=await tx.get(ref);if(!snap.exists)return{status:'missing'};const item=snap.data()||{};if(item.used||!item.expiresAt||now>Number(item.expiresAt))return{status:'expired'};const attempts=Number(item.attempts||0);if(attempts>=MAX_ATTEMPTS)return{status:'locked'};if(!safeEqual(hashCode(code,item.salt),item.otpHash)){tx.update(ref,{attempts:attempts+1});return{status:'invalid'};}tx.set(proofRef,{email,expiresAt:now+VERIFIED_EXPIRY_MS,used:false,method:'otp',createdAt:admin.firestore.FieldValue.serverTimestamp()});tx.update(ref,{used:true,verifiedAt:admin.firestore.FieldValue.serverTimestamp()});return{status:'ok',verificationId};});
   if(result.status==='missing') throw new HttpsError('failed-precondition','No active email verification. Please request a new code.');
   if(result.status==='expired') throw new HttpsError('failed-precondition','That code has expired. Please request a new one.');
   if(result.status==='locked') throw new HttpsError('resource-exhausted','Too many incorrect attempts. Please request a new code.');
   if(result.status==='invalid') throw new HttpsError('invalid-argument','Incorrect verification code.');
   return {verificationId:result.verificationId,email};
 }
-exports.sendEmailVerificationOtp=onCall(async r=>sendEmailVerificationOtp(r.data));
-exports.verifyEmailVerificationOtp=onCall(async r=>verifyEmailVerificationOtp(r.data));
+exports.sendEmailVerificationOtp=onCall({ enforceAppCheck: true },async r=>sendEmailVerificationOtp(r.data));
+exports.verifyEmailVerificationOtp=onCall({ enforceAppCheck: true },async r=>verifyEmailVerificationOtp(r.data));
 exports.sendEmailVerificationOtpInternal=sendEmailVerificationOtp;
 exports.verifyEmailVerificationOtpInternal=verifyEmailVerificationOtp;
