@@ -24,10 +24,11 @@ exports.deleteManagedUser = onCall({ enforceAppCheck: true }, async (request) =>
   const balance = Number(target.walletBalance || 0);
   if (!Number.isFinite(balance) || Math.abs(balance) > 0.000001) throw new HttpsError('failed-precondition', 'The account must have a zero wallet balance before deletion.');
 
-  // Use single-field queries so deletion does not depend on a new composite index.
+  // Single-field queries avoid a new composite-index dependency and inspect all
+  // records for this account so an older pending item cannot be missed.
   const [txSnap, topupSnap] = await Promise.all([
-    db.collection('transactions').where('customerId', '==', targetUid).limit(50).get(),
-    db.collection('topups').where('userId', '==', targetUid).limit(50).get(),
+    db.collection('transactions').where('customerId', '==', targetUid).get(),
+    db.collection('topups').where('userId', '==', targetUid).get(),
   ]);
   if (txSnap.docs.some((d) => ['pending', 'processing'].includes(d.data()?.status))) throw new HttpsError('failed-precondition', 'The account has an active transaction and cannot be deleted yet.');
   if (topupSnap.docs.some((d) => d.data()?.status === 'pending')) throw new HttpsError('failed-precondition', 'The account has a pending top-up and cannot be deleted yet.');
