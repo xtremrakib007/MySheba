@@ -35,6 +35,26 @@ async function getCallerProfile(uid) {
   return { id: snap.id, ...snap.data() };
 }
 
+function sanitizeManagedUser(doc) {
+  const data = doc.data() || {};
+  // Dealers only need operational identity/status fields. Never return the
+  // complete profile because it may contain wallet, notification, security,
+  // verification or other private account metadata.
+  return {
+    id: doc.id,
+    uid: typeof data.uid === 'string' ? data.uid : doc.id,
+    userId: typeof data.userId === 'string' ? data.userId : '',
+    name: typeof data.name === 'string' ? data.name : '',
+    phone: typeof data.phone === 'string' ? data.phone : '',
+    role: typeof data.role === 'string' ? data.role : '',
+    dealerId: typeof data.dealerId === 'string' ? data.dealerId : null,
+    resellerId: typeof data.resellerId === 'string' ? data.resellerId : null,
+    suspended: data.suspended === true,
+    disabled: data.disabled === true,
+    createdAt: data.createdAt || null,
+  };
+}
+
 exports.manageUser = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const callerUid = request.auth.uid;
@@ -45,6 +65,14 @@ exports.manageUser = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   const data = request.data || {};
   const action = data.action;
+
+  if (action === 'listScopedUsers') {
+    if (callerRole !== 'dealer') throw new HttpsError('permission-denied', 'Only a dealer can request a scoped customer list.');
+    const snap = await db.collection('users').where('dealerId', '==', callerUid).get();
+    const users = snap.docs.map(sanitizeManagedUser);
+    users.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    return { users };
+  }
 
   if (action === 'create') {
     const { name, phone, pin, role, dealerId: requestedDealerId, resellerId: requestedResellerId } = data;
