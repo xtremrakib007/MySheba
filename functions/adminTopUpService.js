@@ -24,8 +24,9 @@ exports.adminTopUpPoints = onCall({ enforceAppCheck: true }, async request => {
   const requestId = String(data.requestId || '').trim();
 
   if (!targetUid) throw new HttpsError('invalid-argument', 'targetUid is required.');
-  if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_AMOUNT || !Number.isSafeInteger(Math.round(amount * 100))) {
-    throw new HttpsError('invalid-argument', 'Enter a valid top-up amount.');
+  const amountCents = Math.round(amount * 100);
+  if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_AMOUNT || !Number.isSafeInteger(amountCents) || Math.abs(amount * 100 - amountCents) > 1e-9) {
+    throw new HttpsError('invalid-argument', 'Enter a valid top-up amount with at most 2 decimal places.');
   }
   if (!REQUEST_ID_RE.test(requestId)) {
     throw new HttpsError('invalid-argument', 'requestId is required and must be 16-128 safe characters.');
@@ -54,14 +55,16 @@ exports.adminTopUpPoints = onCall({ enforceAppCheck: true }, async request => {
       }
 
       const currentBalance = Number(target.walletBalance || 0);
-      if (!Number.isFinite(currentBalance) || currentBalance < 0 || !Number.isSafeInteger(Math.round(currentBalance * 100))) {
+      const currentBalanceCents = Math.round(currentBalance * 100);
+      if (!Number.isFinite(currentBalance) || currentBalance < 0 || !Number.isSafeInteger(currentBalanceCents) || Math.abs(currentBalance * 100 - currentBalanceCents) > 1e-9) {
         throw new HttpsError('failed-precondition', 'Target wallet balance is invalid.');
       }
 
-      const newBalance = currentBalance + amount;
-      if (!Number.isSafeInteger(Math.round(newBalance * 100))) {
+      const newBalanceCents = currentBalanceCents + amountCents;
+      if (!Number.isSafeInteger(newBalanceCents)) {
         throw new HttpsError('failed-precondition', 'Wallet balance is too large.');
       }
+      const newBalance = newBalanceCents / 100;
 
       const auditRef = db.collection('pointTopUps').doc();
       tx.update(targetRef, { walletBalance: newBalance });
