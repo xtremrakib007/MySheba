@@ -1,0 +1,48 @@
+name: One-time registerCustomer migration
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Migrate legacy registration callable
+        run: |
+          set -e
+          python - <<'PY'
+          from pathlib import Path
+          replacements = {
+              'src/firebase/authService.js': ("httpsCallable(functions, 'registerWithDealerCode')", "httpsCallable(functions, 'registerCustomer')"),
+              'src/screens/RegisterScreen.js': ("httpsCallable(functions, 'registerWithDealerCode')", "httpsCallable(functions, 'registerCustomer')"),
+          }
+          changed = False
+          for filename, (old, new) in replacements.items():
+              p = Path(filename)
+              text = p.read_text()
+              if old in text:
+                  text = text.replace(old, new)
+                  p.write_text(text)
+                  changed = True
+          if not changed:
+              print('No client legacy registration calls remain; removing migration workflow.')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/firebase/authService.js src/screens/RegisterScreen.js
+          if ! git diff --cached --quiet; then
+            git commit -m 'Migrate clients to registerCustomer'
+            git push
+          fi
+          rm -f .github/workflows/migrate-register-customer.yml
+          git add .github/workflows/migrate-register-customer.yml
+          if ! git diff --cached --quiet; then
+            git commit -m 'Remove one-time registration migration workflow'
+            git push
+          fi
