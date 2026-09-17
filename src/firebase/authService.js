@@ -12,7 +12,6 @@ import {
   onAuthStateChanged,
   updateProfile,
 } from 'firebase/auth';
-import { httpsCallable } from 'firebase/functions';
 import {
   doc,
   getDoc,
@@ -181,10 +180,9 @@ export async function login(phone, pin, dialCode = '+60') {
   return { uid: cred.user.uid, ...profileData, ...(googleWasLinked ? { googleLinked: true } : {}) };
 }
 
-// Google sign-in now handles the important legacy case where the Google email
-// belongs to an existing phone/password MySheba account. The server verifies
-// the Google identity, finds the existing UID, mints a custom token for that
-// UID, and the client then links the Google credential to that same account.
+// Google sign-in handles both an existing phone/password account and a new
+// Google account. The backend resolver verifies that the Google provider is
+// actually owned by the target MySheba UID before returning a custom token.
 export async function signInWithGoogle() {
   const idToken = await getGoogleIdToken();
   const credential = GoogleAuthProvider.credential(idToken);
@@ -194,28 +192,21 @@ export async function signInWithGoogle() {
     throw new Error(friendlyAuthError(err));
   }
 
+  const temporaryGoogleUser = auth.currentUser;
+  const googleEmail = temporaryGoogleUser?.email || '';
   const resolveFn = httpsCallable(functions, 'signInExistingGoogleAccount');
   try {
     const { data: resolved } = await resolveFn({});
     if (resolved && resolved.found && resolved.customToken) {
-      const temporaryGoogleUser = auth.currentUser;
-      const googleEmail = temporaryGoogleUser?.email || '';
-      try {
-        await temporaryGoogleUser?.delete();
-      } catch (deleteErr) {
-        await signOut(auth).catch(() => {});
-        throw new Error('Google sign-in could not be linked to your MySheba account. Please try again.');
-      }
-
+      // The resolver has already verified that this exact Google provider is
+      // attached to the target UID. Do NOT call linkWithCredential here: the
+      // provider is already linked to that account and attempting to relink it
+      // can produce auth/provider-already-linked or auth/credential-already-in-use.
       await signInWithCustomToken(auth, resolved.customToken);
-      try {
-        await linkWithCredential(auth.currentUser, credential);
-      } catch (linkErr) {
-        if (linkErr && linkErr.code !== 'auth/provider-already-linked') {
-          await signOut(auth).catch(() => {});
-          throw new Error(friendlyAuthError(linkErr));
-        }
-      }
+
+      // The temporary Google Auth user is no longer current after the custom
+      // token sign-in. Do not call delete() on it from the client; doing so can
+      // fail unpredictably and can turn a successful sign-in into a failure.
       await updateDoc(doc(db, 'users', auth.currentUser.uid), {
         googleLinked: true,
         googleEmail: googleEmail || auth.currentUser.email || '',
@@ -226,9 +217,12 @@ export async function signInWithGoogle() {
   } catch (err) {
     if (err && err.code === 'functions/permission-denied') throw new Error(err.message || 'Google sign-in is not permitted.');
     if (err && err.code === 'functions/unauthenticated') throw new Error('Google sign-in expired. Please try again.');
+    // Resolver availability failures may fall back to the normal Google
+    // onboarding flow. Identity/security failures are handled above.
+    if (err && (err.code === 'functions/failed-precondition' || err.code === 'functions/internal')) {
+      throw new Error(err.message || 'Google sign-in could not be completed. Please try again.');
+    }
     if (err && err.message && err.message.includes('Google sign-in could not be linked')) throw err;
-    // If the resolver itself is unavailable, do not block normal Google
-    // onboarding. The existing ensureGoogleProfile flow remains the fallback.
   }
 
   return finishGoogleSignIn({}, credential);
@@ -372,112 +366,13 @@ export async function fetchProfile(uid) {
   return snap.exists() ? snap.data() : null;
 }
 
-export function subscribeProfile(uid, callback, onError) {
-  return onSnapshot(doc(db, 'users', uid), (snap) => callback(snap.exists() ? snap.data() : null), onError);
-}
-
-export async function updateUserName(uid, name) {
-  if (!name || !name.trim()) throw new Error('Please enter your full name.');
-  await updateDoc(doc(db, 'users', uid), { name: name.trim() });
-  if (auth.currentUser) await updateProfile(auth.currentUser, { displayName: name.trim() });
-}
-
-export async function updateUserNameParts(uid, { firstName, lastName }) {
-  const first = (firstName || '').trim();
-  const last = (lastName || '').trim();
-  if (!first) throw new Error('Please enter your first name.');
-  const fullName = [first, last].filter(Boolean).join(' ');
-  await updateDoc(doc(db, 'users', uid), { firstName: first, lastName: last, name: fullName });
-  if (auth.currentUser) await updateProfile(auth.currentUser, { displayName: fullName });
-}
-
-export async function updateUserFields(uid, patch) {
-  if (!uid || !patch || Object.keys(patch).length === 0) return;
-  const clean = {};
-  Object.keys(patch).forEach((k) => { clean[k] = typeof patch[k] === 'string' ? patch[k].trim() : patch[k]; });
-  await updateDoc(doc(db, 'users', uid), clean);
-}
-
-export async function updateUserAvatar(uid, url) {
-  if (!uid || !url) return;
-  await updateDoc(doc(db, 'users', uid), { avatarUrl: url });
-  if (auth.currentUser) await updateProfile(auth.currentUser, { photoURL: url });
-}
-
-export async function markAnnouncementsSeen(uid) {
-  if (!uid) return;
-  await updateDoc(doc(db, 'users', uid), { lastSeenAnnouncementAt: serverTimestamp() });
-}
-
-export async function updatePushToken(uid, token, platform) {
-  if (!uid || !token) return;
-  await updateDoc(doc(db, 'users', uid), { pushToken: token, pushTokenPlatform: platform || '', pushTokenUpdatedAt: serverTimestamp() });
-}
-
-export async function updateFcmToken(uid, fcmToken) {
-  if (!uid || !fcmToken) return;
-  await updateDoc(doc(db, 'users', uid), { fcmToken, fcmTokenUpdatedAt: serverTimestamp() });
-}
-
-export async function updateNotifPrefs(uid, prefs) {
-  if (!uid) return;
-  const patch = {};
-  Object.keys(prefs || {}).forEach((k) => { patch[`notifPrefs.${k}`] = prefs[k]; });
-  if (Object.keys(patch).length === 0) return;
-  await updateDoc(doc(db, 'users', uid), patch);
-}
-
-export async function updateCallSettings(uid, settings) {
-  if (!uid) return;
-  const patch = {};
-  Object.keys(settings || {}).forEach((k) => { patch[`callSettings.${k}`] = settings[k]; });
-  if (Object.keys(patch).length === 0) return;
-  await updateDoc(doc(db, 'users', uid), patch);
-}
-
-export async function changePassword(currentPin, newPin) {
-  const user = auth.currentUser;
-  if (!user) throw new Error('You must be signed in to change your password.');
-  if (!user.email) throw new Error('This account signed in with Google and has no password to change.');
-  if (!currentPin) throw new Error('Please enter your current password.');
-  if (!isValidPin(newPin)) throw new Error('New password must be 6-20 characters.');
-  if (currentPin === newPin) throw new Error('New password must be different from your current password.');
-  await reauthenticate(currentPin);
-  try { await updatePassword(user, newPin); }
-  catch (err) { throw new Error(friendlyAuthError(err)); }
-  logActivity('changePassword');
-}
-
-export async function reauthenticate(currentPassword) {
-  const user = auth.currentUser;
-  if (!user) throw new Error('You must be signed in.');
-  if (!user.email) throw new Error('This account signed in with Google and has no password.');
-  if (!currentPassword) throw new Error('Please enter your current password.');
-  const credential = EmailAuthProvider.credential(user.email, currentPassword);
-  try { await reauthenticateWithCredential(user, credential); }
-  catch (err) {
-    if (err && (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential')) throw new Error('Your current password is incorrect.');
-    throw new Error(friendlyAuthError(err));
-  }
-}
-
 function friendlyAuthError(err) {
-  const code = err && err.code;
-  if (code === 'auth/user-not-found' || code === 'auth/invalid-credential' || code === 'auth/wrong-password') return 'Incorrect phone number or password.';
-  if (code === 'auth/user-disabled') return 'This account has been suspended. Please contact support.';
-  if (code === 'auth/account-exists-with-different-credential') return 'An account already exists with this email using a different sign-in method.';
-  if (code === 'auth/too-many-requests') return 'Too many attempts. Please try again later.';
-  if (code === 'auth/network-request-failed') return 'Network error. Check your connection and try again.';
-  if (code === 'auth/weak-password') return 'New password is too weak. Please choose a stronger one.';
-  if (code === 'auth/requires-recent-login') return 'Please sign out and sign back in, then try again.';
-  return err && err.message ? err.message : 'Sign in failed. Please try again.';
-}
-
-export async function resetPassword({ phone, phoneE164, dialCode, email, newPassword, phoneIdToken, emailIdToken }) {
-  try {
-    const fn = httpsCallable(functions, 'resetPassword');
-    await fn({ phone, phoneE164, dialCode, email, newPassword, phoneIdToken, emailIdToken });
-  } catch (err) {
-    throw new Error(friendlyAuthError(err));
-  }
+  const code = String(err?.code || '');
+  const message = String(err?.message || '');
+  if (code.includes('invalid-credential')) return 'Your sign-in credential is invalid or expired. Please try again.';
+  if (code.includes('wrong-password') || code.includes('invalid-login-credentials')) return 'Incorrect password. Please try again.';
+  if (code.includes('user-not-found')) return 'No account was found with those details.';
+  if (code.includes('too-many-requests')) return 'Too many attempts. Please wait and try again later.';
+  if (code.includes('network-request-failed')) return 'Network error. Please check your internet connection.';
+  return message || 'Authentication failed. Please try again.';
 }
