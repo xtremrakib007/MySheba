@@ -20,8 +20,9 @@ exports.ensureUserId = onCall({ enforceAppCheck: true }, async (request) => {
   const existing = snap.data().userId;
   if (existing) return { uid, userId: existing };
 
+  let reservedUserId = null;
   try {
-    const userId = await assignUniqueUserId(db, uid);
+    reservedUserId = await assignUniqueUserId(db, uid);
     // Do not blindly overwrite a value assigned concurrently by another
     // invocation. A transaction makes the lazy backfill race-safe.
     const result = await db.runTransaction(async (tx) => {
@@ -29,11 +30,29 @@ exports.ensureUserId = onCall({ enforceAppCheck: true }, async (request) => {
       if (!current.exists) throw new HttpsError('not-found', 'Profile not found.');
       const currentUserId = current.data()?.userId;
       if (currentUserId) return currentUserId;
-      tx.update(ref, { userId });
-      return userId;
+      tx.update(ref, { userId: reservedUserId });
+      return reservedUserId;
     });
+
+    // If another invocation won the race while this invocation was reserving
+    // an ID, release the reservation created by this invocation. Likewise,
+    // only the reservation whose uid matches ours may be removed.
+    if (result !== reservedUserId) {
+      const idRef = db.collection('userIds').doc(String(reservedUserId));
+      await db.runTransaction(async (tx) => {
+        const idSnap = await tx.get(idRef);
+        if (idSnap.exists && idSnap.data()?.uid === uid) tx.delete(idRef);
+      }).catch(() => {});
+    }
     return { uid, userId: result };
   } catch (err) {
+    if (reservedUserId) {
+      const idRef = db.collection('userIds').doc(String(reservedUserId));
+      await db.runTransaction(async (tx) => {
+        const idSnap = await tx.get(idRef);
+        if (idSnap.exists && idSnap.data()?.uid === uid) tx.delete(idRef);
+      }).catch(() => {});
+    }
     if (err instanceof HttpsError) throw err;
     await logServerError('ensureUserId', err, { userId: uid });
     throw new HttpsError('internal', 'Could not assign a user ID.');
