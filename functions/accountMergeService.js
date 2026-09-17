@@ -45,6 +45,10 @@ exports.startAccountMerge = onCall(async (request) => {
   if (!target) throw new HttpsError('not-found', 'That account could not be found.');
   if (target.mergedInto || target.active === false) throw new HttpsError('failed-precondition', 'That account has already been merged or deactivated.');
   if (target.role !== 'customer') throw new HttpsError('permission-denied', 'That account cannot be merged automatically. Please contact support.');
+  const yourWalletBalance = walletBalance(caller);
+  const targetWalletBalance = walletBalance(target);
+  const combinedWalletBalance = yourWalletBalance + targetWalletBalance;
+  if (!Number.isSafeInteger(Math.round(combinedWalletBalance * 100))) throw new HttpsError('failed-precondition', 'The combined wallet balance is too large.');
   const otpRef = db.collection('mergeOtps').doc(callerUid);
   const existing = await otpRef.get();
   const lastSentMs = existing.exists && existing.data().lastSentAt?.toMillis ? existing.data().lastSentAt.toMillis() : 0;
@@ -53,8 +57,6 @@ exports.startAccountMerge = onCall(async (request) => {
   await otpRef.set({ callerUid, targetUid: targetAuthUser.uid, targetEmail: email, codeHash: hashCode(code), expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + OTP_TTL_MS), lastSentAt: admin.firestore.FieldValue.serverTimestamp(), attempts: 0, state: 'pending', createdAt: admin.firestore.FieldValue.serverTimestamp() });
   try { await mailerService.sendEmail({ to: email, subject: 'Confirm merging your MySheba accounts', text: `A MySheba account is requesting to link this Google account. Your confirmation code is ${code}. It expires in 5 minutes. If you did not request this, you can ignore this email.`, html: `<p>A MySheba account is requesting to link this Google account.</p><p>Your confirmation code is <b>${code}</b>. It expires in 5 minutes.</p><p>If you did not request this, you can ignore this email.</p>`, context: 'accountMergeService' }); } catch (err) { await logServerError('startAccountMerge.sendEmail', err, { userId: callerUid }); throw new HttpsError('internal', 'Could not send the confirmation code. Please try again.'); }
   await logAudit({ action: 'account_merge_started', targetUid: targetAuthUser.uid, performedBy: callerUid, performedByRole: caller.role, details: { targetEmailMasked: maskEmail(email), ip } });
-  const yourWalletBalance = walletBalance(caller); const targetWalletBalance = walletBalance(target); const combinedWalletBalance = yourWalletBalance + targetWalletBalance;
-  if (!Number.isSafeInteger(Math.round(combinedWalletBalance * 100))) throw new HttpsError('failed-precondition', 'The combined wallet balance is too large.');
   return { sent: true, emailMasked: maskEmail(email), yourWalletBalance, targetWalletBalance, combinedWalletBalance };
 });
 
