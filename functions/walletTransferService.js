@@ -8,6 +8,8 @@ const { logAudit, logServerError } = require('./logService');
 const MAX_TRANSFER_MYR = 10000;
 const MIN_TRANSFER_MYR = 0.01;
 const MAX_RECIPIENT_QUERY = 80;
+const RECIPIENT_LOOKUP_MAX = 60;
+const RECIPIENT_LOOKUP_WINDOW_MS = 60 * 60 * 1000;
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const MONEY_RE = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
 
@@ -58,6 +60,7 @@ exports.findWalletRecipient = onCall({ enforceAppCheck: true }, async (request) 
   if (!active(sender)) throw new HttpsError('permission-denied', 'Your account is not active.');
   if (sender.role !== 'customer') throw new HttpsError('permission-denied', 'Wallet-to-wallet transfers are for customer wallets.');
   if (!isKycApproved(sender)) throw new HttpsError('failed-precondition', 'Complete KYC before using wallet transfers.');
+  await checkVelocity(db, uid, 'walletRecipientLookup', { ip: getClientIp(request), max: RECIPIENT_LOOKUP_MAX, windowMs: RECIPIENT_LOOKUP_WINDOW_MS });
   const recipient = await resolveRecipient(db, request.data?.recipient, uid);
   return { uid: recipient.id, name: recipient.displayName || recipient.name || 'MySheba Customer', customerId: recipient.customerId || recipient.userId || '', phoneMasked: String(recipient.phone || '').replace(/(\d{3})\d+(\d{2})$/, '$1••••$2') };
 });
