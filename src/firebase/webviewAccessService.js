@@ -49,7 +49,8 @@ export async function ensureWebviewAccess(uid, key) {
  */
 export async function chargeWebviewSubmission(uid, key) {
   try {
-    const { data } = await chargeWalletFn({ kind: 'webview_submit', key });
+    const session = await getSessionProof();
+    const { data } = await chargeWalletFn({ kind: 'webview_submit', key, ...session });
     return data;
   } catch (err) {
     throw new Error(err.message || `You need ${WEBVIEW_SUBMIT_COST} pts to confirm this - top up your wallet first.`);
