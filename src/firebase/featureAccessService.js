@@ -17,6 +17,7 @@ import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/fires
 import { db } from './config';
 
 const FEATURE_ACCESS_DOC = doc(db, 'settings', 'featureAccess');
+export const USER_FEATURE_OVERRIDES_KEY = 'userOverrides';
 
 // Master list of role-gated management tools. `defaultRoles` is the
 // behavior every install ships with (identical to the old hardcoded
@@ -61,9 +62,11 @@ function mergeWithDefaults(data) {
 /** Whether `role` can open feature `key` - a superadmin-set override if one
  * exists for that feature, otherwise the feature's built-in default roles.
  * superadmin can always access every tool, override or not. */
-export function canAccessFeature(featureAccess, key, role) {
+export function canAccessFeature(featureAccess, key, role, uid) {
   if (!role) return false;
   if (role === 'superadmin') return true;
+  const overrides = featureAccess?.[USER_FEATURE_OVERRIDES_KEY]?.[uid];
+  if (overrides && Object.prototype.hasOwnProperty.call(overrides, key)) return overrides[key] === true;
   const roles = (featureAccess && featureAccess[key]) || defaultAccessFor(key);
   return roles.includes(role);
 }
@@ -102,4 +105,13 @@ export async function setFeatureAccessForRole(featureKey, role, enabled) {
     ? Array.from(new Set([...current, role]))
     : current.filter((r) => r !== role);
   await setDoc(FEATURE_ACCESS_DOC, { [featureKey]: next, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+export async function setFeatureAccessForUser(uid, featureKey, enabled) {
+  if (!uid || !FEATURE_DEFS.some((f) => f.key === featureKey)) throw new Error('Invalid user or feature.');
+  const snap = await getDoc(FEATURE_ACCESS_DOC);
+  const data = snap.exists() ? snap.data() : {};
+  const current = data[USER_FEATURE_OVERRIDES_KEY]?.[uid] || {};
+  const next = { ...current, [featureKey]: Boolean(enabled) };
+  await setDoc(FEATURE_ACCESS_DOC, { [USER_FEATURE_OVERRIDES_KEY]: { ...(data[USER_FEATURE_OVERRIDES_KEY] || {}), [uid]: next }, updatedAt: serverTimestamp() }, { merge: true });
 }
