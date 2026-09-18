@@ -17,6 +17,22 @@ async function getActor(uid) {
   }
   return { uid, role: p.role || '', name: p.fullName || p.name || p.displayName || p.phone || uid };
 }
+function validReceiptUrl(url, txId, role) {
+  if (typeof url !== 'string' || url.length > 4096) return false;
+  let parsed;
+  try { parsed = new URL(url); } catch (_) { return false; }
+  if (parsed.protocol !== 'https:' || parsed.hostname !== 'firebasestorage.googleapis.com') return false;
+  const bucket = admin.storage().bucket().name;
+  const prefix = `/v0/b/${bucket}/o/`;
+  if (!parsed.pathname.startsWith(prefix)) return false;
+  let objectPath;
+  try { objectPath = decodeURIComponent(parsed.pathname.slice(prefix.length)); } catch (_) { return false; }
+  const folder = role === 'dealer' ? 'order-receipts' : 'remittance-receipts';
+  const expectedPrefix = `${folder}/${txId}/`;
+  return objectPath.startsWith(expectedPrefix) && objectPath.slice(expectedPrefix.length).length > 0
+    && !objectPath.slice(expectedPrefix.length).split('/').some((part) => part === '..');
+}
+
 function assertOperatorCanHandle(actor, order) {
   if (!OPERATOR_ROLES.includes(actor.role)) throw new HttpsError('permission-denied', 'Only a dealer or reseller can accept an approved order.');
   if (actor.role === 'dealer' && !DEALER_SERVICES.includes(order.service)) throw new HttpsError('permission-denied', 'Your dealer account cannot handle this service.');
@@ -67,7 +83,7 @@ exports.completeTransaction = onCall({ enforceAppCheck: true }, async (request) 
   if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
   if (!/^\d{4}$/.test(pin)) throw new HttpsError('invalid-argument', 'A 4-digit collection PIN is required.');
   if (!receiptUrl) throw new HttpsError('invalid-argument', 'The transfer receipt is required before completion.');
-  if (receiptUrl.length > 2048 || !/^https?:\/\//i.test(receiptUrl)) throw new HttpsError('invalid-argument', 'The receipt URL is invalid.');
+  if (!validReceiptUrl(receiptUrl, id, actor.role)) throw new HttpsError('invalid-argument', 'The receipt URL must be a valid MySheba receipt upload.');
   const db = admin.firestore(), ref = db.collection('transactions').doc(id);
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref); if (!snap.exists) throw new HttpsError('not-found', 'That order no longer exists.');
