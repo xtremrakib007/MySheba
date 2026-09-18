@@ -514,3 +514,66 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: true }, async (request) =
   });
   return result;
 });
+
+// Superadmin-only remote session termination used by Admin Web.
+// This clears the server-side active session/device binding and revokes
+// Firebase refresh tokens so a forced logout cannot be bypassed by reusing
+// an existing refresh token.
+exports.adminForceLogout = onCall({ enforceAppCheck: true }, async (request) => {
+  const callerUid = requireAuth(request);
+  const targetUid = String(request.data?.targetUid || '').trim();
+  if (!targetUid || targetUid.length > 128) {
+    throw new HttpsError('invalid-argument', 'A valid target user ID is required.');
+  }
+
+  const db = getFirestore();
+  const callerSnap = await userRef(db, callerUid).get();
+  if (!callerSnap.exists || callerSnap.data()?.role !== 'superadmin' || !isActiveAccount(callerSnap.data())) {
+    throw new HttpsError('permission-denied', 'Only an active superadmin can force logout another account.');
+  }
+  if (targetUid === callerUid) {
+    throw new HttpsError('invalid-argument', 'Use the normal logout option for your own account.');
+  }
+
+  const targetRef = userRef(db, targetUid);
+  let changed = false;
+  let previousDeviceId = null;
+  try {
+    await db.runTransaction(async (tx) => {
+      const targetSnap = await tx.get(targetRef);
+      if (!targetSnap.exists) throw new HttpsError('not-found', 'The target account was not found.');
+      const target = targetSnap.data() || {};
+      if (!isActiveAccount(target)) {
+        throw new HttpsError('failed-precondition', 'The target account is not active.');
+      }
+      previousDeviceId = target.activeDeviceId || null;
+      changed = Boolean(target.activeSessionId || target.activeDeviceId || target.pendingDeviceApproval);
+      tx.update(targetRef, {
+        activeSessionId: null,
+        activeDeviceId: null,
+        pendingDeviceApproval: null,
+        pendingAdminEmailChallenge: FieldValue.delete(),
+      });
+    });
+
+    try {
+      await admin.auth().revokeRefreshTokens(targetUid);
+    } catch (error) {
+      await logServerError('adminForceLogout.revokeRefreshTokens', error, { userId: targetUid });
+      throw new HttpsError('internal', 'The account session could not be fully revoked. Please try again.');
+    }
+
+    await logAudit({
+      action: 'admin_force_logout',
+      targetUid,
+      performedBy: callerUid,
+      performedByRole: 'superadmin',
+      details: { changed, previousDeviceId },
+    });
+    return { ok: true, changed };
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    await logServerError('adminForceLogout', error, { targetUid, performedBy: callerUid });
+    throw new HttpsError('internal', 'Could not force logout this account. Please try again.');
+  }
+});
