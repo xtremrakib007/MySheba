@@ -22,6 +22,7 @@ export async function transferPoints({ to, amount, note, securityPin }) {
   // out after the server committed, a retry of this same operation should
   // reuse the same requestId rather than creating a second transfer.
   const requestId = createRequestId();
+  const session = await getSessionProof();
   const fn = httpsCallable(functions, 'transferPoints');
   try {
     const { data } = await fn({ requestId, toUid: to.uid, amount: amt, note: note || '', securityPin: String(securityPin || '') });
