@@ -3,10 +3,11 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
     function myProfile() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
-    function myRole() { return signedIn() ? myProfile().role : null; }
-    function isStaff() { return myRole() in ['dealer', 'reseller', 'admin', 'superadmin']; }
-    function isAdmin() { return myRole() in ['admin', 'superadmin']; }
-    function isSuperadmin() { return myRole() == 'superadmin'; }
+    function activeProfile() { return signedIn() && myProfile().suspended != true && myProfile().inactive != true && myProfile().disabled != true && myProfile().active != false && myProfile().mergedInto == null; }
+    function myRole() { return activeProfile() ? myProfile().role : null; }
+    function isStaff() { return activeProfile() && myRole() in ['dealer', 'reseller', 'admin', 'superadmin']; }
+    function isAdmin() { return activeProfile() && myRole() in ['admin', 'superadmin']; }
+    function isSuperadmin() { return activeProfile() && myRole() == 'superadmin'; }
     function isDealerTier() { return myRole() == 'dealer'; }
     function isReseller() { return myRole() == 'reseller'; }
     function myDealerScope() { return request.auth.uid; }
