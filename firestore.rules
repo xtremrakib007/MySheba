@@ -107,9 +107,9 @@ service cloud.firestore {
       allow create: if false;
       allow update: if signedIn() && (
         (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['open','in_progress','resolved'])
-        || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['assignedToUid','assignedToName','assignedToRole','updatedAt']) && (
+        || (isSuperadmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['assignedToUid','assignedToName','assignedToRole','updatedAt']) && (
           (request.resource.data.assignedToUid == '' && request.resource.data.assignedToName == '' && request.resource.data.assignedToRole == '')
-          || (request.resource.data.assignedToUid != '' && request.resource.data.assignedToRole in ['admin','dealer','reseller'] && activeStaff(request.resource.data.assignedToUid, request.resource.data.assignedToRole) && request.resource.data.assignedToName == get(/databases/$(database)/documents/users/$(request.resource.data.assignedToUid)).data.name)
+          || (request.resource.data.assignedToUid != '' && request.resource.data.assignedToRole in ['admin','superadmin','dealer','reseller'] && activeStaff(request.resource.data.assignedToUid, request.resource.data.assignedToRole) && request.resource.data.assignedToName == get(/databases/$(database)/documents/users/$(request.resource.data.assignedToUid)).data.name)
         ))
         || (resource.data.get('assignedToUid', '') == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['in_progress','resolved'])
         || (resource.data.get('userId', null) == request.auth.uid && resource.data.status == 'resolved' && request.resource.data.status == 'open' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']))
