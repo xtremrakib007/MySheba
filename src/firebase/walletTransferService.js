@@ -1,8 +1,9 @@
 import { httpsCallable } from 'firebase/functions';
+import * as Crypto from 'expo-crypto';
 import { functions } from './config';
 
 function createRequestId() {
-  return `mswt_${Date.now()}_${Math.random().toString(36).slice(2, 18)}`;
+  return `mswt_${Crypto.randomUUID().replace(/-/g, '')}`;
 }
 
 export async function findWalletRecipient(recipient) {
@@ -15,7 +16,7 @@ export async function findWalletRecipient(recipient) {
   }
 }
 
-export async function walletTransfer({ recipient, amount, note, requestId }) {
+export async function walletTransfer({ recipient, amount, note, securityPin, requestId }) {
   const fn = httpsCallable(functions, 'walletTransfer');
   const id = requestId || createRequestId();
   try {
@@ -23,6 +24,7 @@ export async function walletTransfer({ recipient, amount, note, requestId }) {
       recipient: String(recipient || '').trim(),
       amount: Number(amount),
       note: String(note || '').trim(),
+      securityPin: String(securityPin || ''),
       requestId: id,
     });
     return data;
