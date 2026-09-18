@@ -31,7 +31,8 @@ const chargeWalletFn = httpsCallable(functions, 'chargeWallet');
  */
 export async function ensureWebviewAccess(uid, key) {
   try {
-    const { data } = await chargeWalletFn({ kind: 'webview_access', key });
+    const session = await getSessionProof();
+    const { data } = await chargeWalletFn({ kind: 'webview_access', key, ...session });
     return data;
   } catch (err) {
     throw new Error(err.message || `You need ${WEBVIEW_ACCESS_COST} pts to check this - top up your wallet first.`);
