@@ -8,7 +8,7 @@ const CUSTOMER_SERVICES = [
   { key: 'recharge', icon: '📱', name: 'Recharge', kind: 'service' },
   { key: 'mobilebanking', icon: '🏦', name: 'Mobile Banking', kind: 'service' },
   { key: 'internet', icon: '📡', name: 'Internet', kind: 'service' },
-  { key: 'billpayment', icon: '🧾', name: 'Bill Payment', kind: 'billPayment' },
+  { key: 'billpayment', icon: '🧾', name: 'Bill Payment', kind: 'service' },
   { key: 'remittance', icon: '💸', name: 'Remittance', kind: 'service' },
   { key: 'billpayment', icon: '🧾', name: 'Bill Payment', kind: 'billpayment' },
   { key: 'bus', icon: '🚌', name: 'Bus', kind: 'buspicker' },
