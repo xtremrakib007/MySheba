@@ -35,10 +35,13 @@ export async function maybeSaveReceiver(serviceData, uid) {
       accountNumber: serviceData.receiverAccountNumber || null,
       branch: serviceData.receiverBranch || null,
       routingNumber: serviceData.receiverRoutingNumber || null,
+      bankIdentifier: serviceData.receiverBankIdentifier || serviceData.receiverRoutingNumber || null,
+      bankIdentifierType: serviceData.receiverBankIdentifierType || null,
       pickupNetwork: serviceData.receiverPickupNetwork || null,
       idType: serviceData.receiverIdType || null,
       idNumber: serviceData.receiverIdNumber || null,
       pickupCity: serviceData.receiverPickupCity || null,
+      pickupCityIsOther: serviceData.receiverPickupCityIsOther === true,
       walletProvider: serviceData.receiverWalletProvider || null,
       walletNumber: serviceData.receiverWalletNumber || null,
     });
