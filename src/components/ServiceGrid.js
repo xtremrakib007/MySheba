@@ -93,6 +93,7 @@ export function useServiceAction() {
     if (s.kind === 'walletTransfer') return setScreen('transferPoints');
     if (s.kind === 'kyc') return setScreen('verifyIdentity');
     if (s.kind === 'support') return setScreen('support');
+    if (s.kind === 'businessProfile') return setScreen('businessProfile');
     if (s.kind === 'history') return setScreen('history');
     if (s.kind === 'myaccount') return setScreen('myAccount');
     if (s.kind === 'profile') return setScreen('profile');
