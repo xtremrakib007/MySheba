@@ -5,6 +5,7 @@ import { httpsCallable } from 'firebase/functions';
 import * as Crypto from 'expo-crypto';
 import { db, functions } from './config';
 import { logActivity, logError } from './logService';
+import { getSessionProof } from './deviceSessionService';
 
 const COLLECTION = 'pointTransfers';
 
