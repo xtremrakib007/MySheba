@@ -7,7 +7,7 @@ const deleteFn = httpsCallable(functions, 'deleteApiProvider');
 const getModesFn = httpsCallable(functions, 'getServiceApiSettings');
 const saveModesFn = httpsCallable(functions, 'saveServiceApiSettings');
 
-export const API_SERVICES = ['Recharge', 'Internet', 'Bus', 'Train', 'Flight', 'Mobile Banking', 'Remittance', 'Payment Gateway'];
+export const API_SERVICES = ['Recharge', 'Internet', 'Bill Payment', 'Bus', 'Train', 'Flight', 'Mobile Banking', 'Remittance', 'Payment Gateway'];
 export async function listApiProviders() { const res = await listFn({}); return res.data?.providers || res.data || []; }
 export async function saveApiProvider(provider) { return (await saveFn(provider)).data; }
 export async function deleteApiProvider(id) { return (await deleteFn({ id })).data; }
