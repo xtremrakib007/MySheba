@@ -10,7 +10,6 @@ const CUSTOMER_SERVICES = [
   { key: 'internet', icon: '📡', name: 'Internet', kind: 'service' },
   { key: 'billpayment', icon: '🧾', name: 'Bill Payment', kind: 'service' },
   { key: 'remittance', icon: '💸', name: 'Remittance', kind: 'service' },
-  { key: 'billpayment', icon: '🧾', name: 'Bill Payment', kind: 'billpayment' },
   { key: 'bus', icon: '🚌', name: 'Bus', kind: 'buspicker' },
   { key: 'train', icon: '🚆', name: 'Train', kind: 'webview' },
   { key: 'flight', icon: '✈️', name: 'Flight', kind: 'service' },
