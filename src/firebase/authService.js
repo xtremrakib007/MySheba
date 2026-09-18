@@ -314,6 +314,35 @@ function friendlyAuthError(err) {
   return err && err.message ? err.message : 'Sign in failed. Please try again.';
 }
 
+// Google Sign-In was intentionally retired from the mobile runtime.
+// Keep these exports as a compatibility boundary for any stale UI/context
+// references so they fail cleanly instead of throwing "not a function".
+// No native Google dependency or credential flow is present in this build.
+function googleSignInRetiredError() {
+  const err = new Error(
+    'Google sign-in is no longer available. Please use phone/password or email verification.',
+  );
+  err.code = 'google-signin-retired';
+  return err;
+}
+
+export async function signInWithGoogle() {
+  throw googleSignInRetiredError();
+}
+
+export async function linkGoogleAccount() {
+  throw googleSignInRetiredError();
+}
+
+export async function startGoogleAccountMerge() {
+  throw googleSignInRetiredError();
+}
+
+export async function confirmGoogleAccountMerge() {
+  throw googleSignInRetiredError();
+}
+
+
 export async function resetPassword({ phone, phoneE164, dialCode, email, newPassword, phoneIdToken, emailIdToken }) {
   try {
     const fn = httpsCallable(functions, 'resetPassword');
