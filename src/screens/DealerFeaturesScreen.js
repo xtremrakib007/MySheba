@@ -40,7 +40,7 @@ export default function DealerFeaturesScreen() {
     setDealerTab, setDealerViewingSection,
     featureAccess,
   } = useApp();
-  const tools = FEATURE_DEFS.filter((t) => profile && canAccessFeature(featureAccess, t.key, profile.role));
+  const tools = FEATURE_DEFS.filter((t) => profile && canAccessFeature(featureAccess, t.key, profile.role, profile.uid));
 
   const dashboardBadges = {
     pending: dealerTxs.filter((t) => t.status === 'pending').length || undefined,
