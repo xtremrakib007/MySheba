@@ -33,6 +33,7 @@ exports.ensureUserId = require('./ensureUserId').ensureUserId;
 exports.checkDeviceSession = require('./deviceSessionService').checkDeviceSession;
 exports.confirmDeviceSwitch = require('./deviceSessionService').confirmDeviceSwitch;
 exports.clearActiveSession = require('./deviceSessionService').clearActiveSession;
+exports.adminForceLogout = require('./deviceSessionService').adminForceLogout;
 exports.listTrustedDevices = require('./deviceSessionService').listTrustedDevices;
 exports.revokeTrustedDevice = require('./deviceSessionService').revokeTrustedDevice;
 exports.sendDeviceVerification = require('./deviceVerificationService').sendDeviceVerification;
