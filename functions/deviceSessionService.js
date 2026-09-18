@@ -254,6 +254,16 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: true }, async (request) =
         return { requiresOtp: false, sessionId: id, switchedDevice: Boolean(current.activeDeviceId && current.activeDeviceId !== deviceId) };
       }
 
+      // Staff accounts must not get a password-only first/new-browser login merely
+      // because no activeDeviceId exists yet. A staff browser is trusted only after
+      // the email/SMS verification above (or when it is already the active device).
+      if (isStaffRole(current.role) && current.activeDeviceId !== deviceId) {
+        const email = normalizeEmail(current.email);
+        if (!validEmail(email)) throw new HttpsError('failed-precondition', 'This account has no email for new-device verification. Please contact support.');
+        tx.update(ref, { pendingDeviceApproval: { deviceId, email, requestedAt: FieldValue.serverTimestamp() } });
+        return { requiresOtp: true, reason: 'new_device', email, availableMfaMethods: ['email'] };
+      }
+
       if (!current.activeDeviceId || current.activeDeviceId === deviceId) {
         const id = sessionId();
         tx.update(ref, { activeSessionId: id, activeDeviceId: deviceId, pendingDeviceApproval: null, lastLoginAt: FieldValue.serverTimestamp() });
