@@ -24,6 +24,7 @@ export async function createTransaction(payload, customer) {
   const chargeFnName = CHARGEABLE_SERVICE_FNS[payload.service];
   if (!chargeFnName) throw new Error('Unsupported transaction service.');
   const requestId = payload.requestId || createRequestId(); payload.requestId = requestId;
+  const session = await getSessionProof();
   const fn = httpsCallable(functions, chargeFnName);
   try { const { data } = await fn({ payload, customer, requestId }); logActivity('transaction_submitted', { service: payload.service, amount: payload.amount || 0, cost: data.cost }); return data.id; }
   catch (err) { throw new Error(err.message || 'Could not submit this order right now.'); }
