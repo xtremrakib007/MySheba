@@ -54,6 +54,7 @@ exports.createSelfTopup = onCall({ enforceAppCheck: true }, async (request) => {
       const callerSnap = await tx.get(callerRef);
       if (!callerSnap.exists) throw new HttpsError('not-found', 'Account not found.');
       const caller = callerSnap.data() || {};
+      requireSessionMatch(request, caller);
       if (!active(caller) || !ADMIN_ROLES.includes(caller.role)) throw new HttpsError('permission-denied', 'Only active admin/superadmin accounts can self top-up.');
 
       const currentBalance = validBalance(caller.walletBalance);
