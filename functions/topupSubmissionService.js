@@ -6,6 +6,9 @@ const MAX_AMOUNT = 100000;
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const MONEY_RE = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
 const ALLOWED_ROLES = ['customer', 'dealer', 'reseller'];
+const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
+const DEVICE_ID_RE = /^[A-Za-z0-9-]{16,100}$/;
+function requireSessionMatch(request, user) { const sessionId=request.data?.sessionId, deviceId=request.data?.deviceId; if(typeof sessionId!=='string'||!SESSION_ID_RE.test(sessionId)||typeof deviceId!=='string'||!DEVICE_ID_RE.test(deviceId)) throw new HttpsError('failed-precondition','Your secure session is missing. Please sign in again.'); if(user.activeSessionId!==sessionId||user.activeDeviceId!==deviceId) throw new HttpsError('permission-denied','This device session is no longer active. Please sign in again.'); }
 
 function requireAuth(request) {
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
@@ -58,6 +61,7 @@ exports.submitTopupRequest = onCall({ enforceAppCheck: true }, async request => 
       const userSnap = await tx.get(userRef);
       if (!userSnap.exists) throw new HttpsError('not-found', 'User account not found.');
       const user = userSnap.data() || {};
+      requireSessionMatch(request, user);
       if (user.suspended === true || user.inactive === true || user.disabled === true || user.active === false || user.mergedInto != null) {
         throw new HttpsError('permission-denied', 'Your account is not active.');
       }
