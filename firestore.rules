@@ -39,6 +39,46 @@ service cloud.firestore {
       match /deductions/{deductionId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if false; }
       match /trustedDevices/{deviceId} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow create, update, delete: if false; }
     }
+    match /myDocuments/{id} {
+      allow read: if activeProfile() && resource.data.get('userId', null) == request.auth.uid;
+      allow create: if activeProfile()
+        && request.resource.data.get('userId', null) == request.auth.uid
+        && request.resource.data.keys().hasOnly(['userId','documentType','documentName','documentNumber','issueDate','expiryDate','notes','files','reminderSettings','status','createdAt','updatedAt']);
+      allow update: if activeProfile()
+        && resource.data.get('userId', null) == request.auth.uid
+        && request.resource.data.get('userId', null) == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['documentType','documentName','documentNumber','issueDate','expiryDate','notes','files','reminderSettings','status','updatedAt']);
+      allow delete: if activeProfile() && resource.data.get('userId', null) == request.auth.uid;
+    }
+    match /notes/{id} {
+      allow read: if activeProfile() && resource.data.get('userId', null) == request.auth.uid;
+      allow create: if activeProfile()
+        && request.resource.data.get('userId', null) == request.auth.uid
+        && request.resource.data.keys().hasOnly(['userId','noteType','title','content','personName','amount','transactionDate','dueDate','status','createdAt','updatedAt']);
+      allow update: if activeProfile()
+        && resource.data.get('userId', null) == request.auth.uid
+        && request.resource.data.get('userId', null) == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['noteType','title','content','personName','amount','transactionDate','dueDate','status','updatedAt']);
+      allow delete: if activeProfile() && resource.data.get('userId', null) == request.auth.uid;
+    }
+    match /users/{uid}/payslipSettings/{settingId} {
+      allow read: if activeProfile() && request.auth.uid == uid;
+      allow create, update: if activeProfile()
+        && request.auth.uid == uid
+        && settingId == 'current'
+        && request.resource.data.keys().hasOnly(['employer','updatedAt']);
+      allow delete: if false;
+    }
+    match /users/{uid}/payslips/{payslipId} {
+      allow read: if activeProfile() && request.auth.uid == uid;
+      allow create: if activeProfile()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['employer','employee','payPeriod','paymentDate','earnings','deductions','grossSalary','totalDeductions','netSalary','currency','template','sourceSalaryRecordId','fileReference','savedToSalaryHistory','createdAt','updatedAt']);
+      allow update: if activeProfile()
+        && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['employer','employee','payPeriod','paymentDate','earnings','deductions','grossSalary','totalDeductions','netSalary','currency','template','sourceSalaryRecordId','fileReference','savedToSalaryHistory','updatedAt']);
+      allow delete: if activeProfile() && request.auth.uid == uid;
+    }
     match /securityPins/{uid} { allow read, write: if false; }
     match /userIds/{id} { allow read, write: if false; }
     match /otps/{phone} { allow read, write: if false; }
