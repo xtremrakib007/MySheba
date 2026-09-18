@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const crypto = require('crypto');
 const { checkVelocity, checkAnonymousAdVelocity, getClientIp } = require('./rateLimitService');
 
 const PLACEMENTS = new Set([
@@ -48,12 +49,33 @@ exports.recordAdEvent = onCall({ enforceAppCheck: true }, async (request) => {
   if (!adSnap.exists) return { ok: false };
   const ad = adSnap.data() || {};
   if (ad.status !== 'active') return { ok: false };
-  if (ad.campaignId && campaignId && ad.campaignId !== campaignId) return { ok: false };
+  if (Array.isArray(ad.placements) && !ad.placements.includes(placementId)) return { ok: false };
+  if (ad.campaignId && campaignId !== ad.campaignId) return { ok: false };
+  if (String(ad.adType || 'banner').toLowerCase() !== adType) return { ok: false };
 
-  const ref = db.collection(kind === 'click' ? 'ad_clicks' : 'ad_impressions').doc();
+  const nowMs = Date.now();
+  const startMs = ad.startAt && typeof ad.startAt.toMillis === 'function' ? ad.startAt.toMillis() : null;
+  const endMs = ad.endAt && typeof ad.endAt.toMillis === 'function' ? ad.endAt.toMillis() : null;
+  if (startMs !== null && nowMs < startMs) return { ok: false };
+  if (endMs !== null && nowMs >= endMs) return { ok: false };
+
+  // A client retry can otherwise create a fresh event document every time.
+  // Make the same ad/session/action within one 30-second bucket idempotent.
+  const bucket = Math.floor(nowMs / 30000);
+  const eventKey = crypto.createHash('sha256')
+    .update(`${kind}|${adId}|${placementId}|${feature}|${sessionId}|${bucket}`)
+    .digest('hex');
+  const ref = db.collection(kind === 'click' ? 'ad_clicks' : 'ad_impressions').doc(eventKey);
+  const existing = await ref.get();
+  if (existing.exists) return { ok: true, duplicate: true };
   const payload = { adId, campaignId: campaignId || ad.campaignId || null, placementId, feature, adType, sessionId, createdAt: admin.firestore.FieldValue.serverTimestamp() };
   if (uid) payload.userId = uid;
   if (kind === 'click') payload.clickAction = clickAction;
-  await ref.create(payload);
+  try {
+    await ref.create(payload);
+  } catch (err) {
+    if (err?.code === 6 || err?.code === 'already-exists') return { ok: true, duplicate: true };
+    throw err;
+  }
   return { ok: true };
 });
