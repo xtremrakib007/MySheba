@@ -114,7 +114,7 @@ exports.assignDealer = onCall({ enforceAppCheck: true }, async (request) => {
     const dealer = dealerSnap.data();
     if (order.status !== 'pending') throw new HttpsError('failed-precondition', 'Only pending orders can be assigned.');
     if (!ASSIGNABLE_ROLES.includes(dealer.role)) throw new HttpsError('failed-precondition', 'The selected user is not a dealer.');
-    if (dealer.suspended === true || dealer.inactive === true || dealer.disabled === true || dealer.mergedInto) throw new HttpsError('failed-precondition', 'The selected dealer is not active.');
+    if (dealer.suspended === true || dealer.inactive === true || dealer.disabled === true || dealer.active === false || dealer.mergedInto) throw new HttpsError('failed-precondition', 'The selected dealer is not active.');
     if (dealer.role === 'dealer' && !DEALER_SERVICES.includes(order.service)) throw new HttpsError('failed-precondition', 'This dealer cannot handle this service.');
     tx.update(txRef, { dealerId, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
   });
