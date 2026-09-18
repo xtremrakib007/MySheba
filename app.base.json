@@ -124,6 +124,12 @@
         }
       ],
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow MySheba to access your camera for KYC identity verification and QR scanning."
+        }
+      ],
+      [
         "expo-location",
         {
           "locationWhenInUsePermission": "Allow MySheba to access your location to show nearby listings, properties, and service providers on the map."
