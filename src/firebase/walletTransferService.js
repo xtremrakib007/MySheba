@@ -20,6 +20,7 @@ export async function findWalletRecipient(recipient) {
 export async function walletTransfer({ recipient, amount, note, securityPin, requestId }) {
   const fn = httpsCallable(functions, 'walletTransfer');
   const id = requestId || createRequestId();
+  const session = await getSessionProof();
   try {
     const { data } = await fn({
       recipient: String(recipient || '').trim(),
