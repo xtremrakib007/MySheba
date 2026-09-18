@@ -53,6 +53,10 @@ exports.adminTopUpPoints = onCall({ enforceAppCheck: true }, async request => {
         return { id: op.auditId, credited: false, replay: true };
       }
 
+      const callerTxSnap = await tx.get(db.collection('users').doc(callerUid));
+      if (!callerTxSnap.exists || !activeAccount(callerTxSnap.data()) || !ADMIN_ROLES.includes(callerTxSnap.data().role)) {
+        throw new HttpsError('permission-denied', 'Your admin privileges are no longer active.');
+      }
       const targetSnap = await tx.get(targetRef);
       if (!targetSnap.exists) throw new HttpsError('not-found', 'Target user does not exist.');
 
@@ -86,7 +90,7 @@ exports.adminTopUpPoints = onCall({ enforceAppCheck: true }, async request => {
         note,
         adminUid: callerUid,
         adminName: String(caller.name || caller.displayName || ''),
-        adminRole: String(caller.role),
+        adminRole: String(callerTxSnap.data().role),
         requestId,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
