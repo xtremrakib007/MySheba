@@ -8,6 +8,10 @@ const KEY_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const MAX_TRANSFER = 100000;
 const MAX_NOTE_LENGTH = 500;
 const MONEY_RE = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
+const SECURITY_PIN_RE = /^\d{4,8}$/;
+const MAX_PIN_ATTEMPTS = 5;
+const PIN_LOCKOUT_MS = 15 * 60 * 1000;
+function hashPin(pin, salt) { return require('crypto').scryptSync(pin, salt, 64).toString('hex'); }
 
 function requireAuth(request) {
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
@@ -54,7 +58,8 @@ exports.transferPoints = onCall({ enforceAppCheck: true }, async (request) => {
   const callerUid = requireAuth(request);
   const requestId = requireRequestId(request);
   const db = admin.firestore();
-  const { toUid, amount, note } = request.data || {};
+  const { toUid, amount, note, securityPin } = request.data || {};
+  if (typeof securityPin !== 'string' || !SECURITY_PIN_RE.test(securityPin)) throw new HttpsError('invalid-argument', 'Enter your 4-8 digit security PIN.');
   const amt = parseMoney(amount);
   const cleanNote = typeof note === 'string' ? note.trim() : '';
 
@@ -81,6 +86,7 @@ exports.transferPoints = onCall({ enforceAppCheck: true }, async (request) => {
   const fromRef = db.collection('users').doc(callerUid);
   const toRef = db.collection('users').doc(toUid);
   const transferRef = db.collection('pointTransfers').doc();
+  const pinRef = db.collection('securityPins').doc(callerUid);
 
   try {
     const result = await db.runTransaction(async (tx) => {
@@ -92,6 +98,22 @@ exports.transferPoints = onCall({ enforceAppCheck: true }, async (request) => {
         return { transferId: op.transferId, replay: true };
       }
 
+      const pinSnap = await tx.get(pinRef);
+      if (!pinSnap.exists) throw new HttpsError('failed-precondition', 'Set up your security PIN before transferring points.');
+      const pinData = pinSnap.data() || {};
+      const lockedUntil = pinData.lockedUntil?.toMillis ? pinData.lockedUntil.toMillis() : 0;
+      if (lockedUntil > Date.now()) throw new HttpsError('resource-exhausted', 'Too many security PIN attempts. Try again later.');
+      if (typeof pinData.hash !== 'string' || !/^[0-9a-f]{128}$/i.test(pinData.hash) || typeof pinData.salt !== 'string' || pinData.salt.length < 16) throw new HttpsError('failed-precondition', 'Your security PIN needs to be reset before use.');
+      const actual = Buffer.from(hashPin(securityPin, pinData.salt), 'hex');
+      const expected = Buffer.from(pinData.hash, 'hex');
+      if (actual.length !== expected.length || !require('crypto').timingSafeEqual(actual, expected)) {
+        const attempts = Number.isInteger(pinData.attempts) && pinData.attempts >= 0 ? pinData.attempts + 1 : 1;
+        tx.update(pinRef, attempts >= MAX_PIN_ATTEMPTS
+          ? { attempts: 0, lockedUntil: admin.firestore.Timestamp.fromMillis(Date.now() + PIN_LOCKOUT_MS), updatedAt: admin.firestore.FieldValue.serverTimestamp() }
+          : { attempts, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+        throw new HttpsError('permission-denied', 'Incorrect security PIN.');
+      }
+      tx.update(pinRef, { attempts: 0, lockedUntil: null, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
       const fromSnap = await tx.get(fromRef);
       const toSnap = await tx.get(toRef);
       if (!fromSnap.exists || !toSnap.exists) throw new HttpsError('not-found', 'Account not found.');
