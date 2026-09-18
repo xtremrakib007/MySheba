@@ -28,7 +28,7 @@ export default function ResellerFeaturesScreen() {
   // but a superadmin can grant a reseller access to any of them from
   // Admin Features > Feature Access, same shared list as
   // AdminFeaturesScreen/DealerFeaturesScreen (see featureAccessService.js).
-  const tools = FEATURE_DEFS.filter((t) => profile && canAccessFeature(featureAccess, t.key, profile.role));
+  const tools = FEATURE_DEFS.filter((t) => profile && canAccessFeature(featureAccess, t.key, profile.role, profile.uid));
 
   const dashboardBadges = {
     pending: resellerTxs.filter((t) => !t.dealerId).length || undefined,
