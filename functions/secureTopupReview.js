@@ -94,7 +94,7 @@ exports.rejectTopup = onCall({ enforceAppCheck: true }, async request => {
       const topup = snap.data() || {};
       if (topup.status !== 'pending') throw new HttpsError('failed-precondition', 'That request has already been reviewed.');
       targetUid = String(topup.userId || '').trim() || null;
-      tx.update(ref, { status: 'rejected', rejectReason: reason || 'Rejected by admin.', approvedBy: uid, rejectedBy: uid, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      tx.update(ref, { status: 'rejected', rejectReason: reason || 'Rejected by admin.', rejectedBy: uid, rejectedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
     });
     await logAudit({ action: 'topup_rejected', targetUid, performedBy: uid, performedByRole: caller.role, details: { topupId, reason } });
     return { rejected: true };
