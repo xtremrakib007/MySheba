@@ -207,6 +207,9 @@ exports.confirmDeviceEmailOtp = onCall({ enforceAppCheck: true }, async (request
   }
 
   if (!verified) throw new HttpsError('failed-precondition', 'Verification is required.');
+  if (emailAuthUid && emailAuthUid !== uid) {
+    throw new HttpsError('permission-denied', 'The verified email account does not match the signed-in account.');
+  }
 
   if (!sessionId) {
     sessionId = crypto.randomBytes(24).toString('hex');
@@ -221,9 +224,6 @@ exports.confirmDeviceEmailOtp = onCall({ enforceAppCheck: true }, async (request
   }
 
   try { await admin.auth().revokeRefreshTokens(uid); } catch (err) { console.error('[deviceVerification] revoke tokens failed', err); }
-  if (emailAuthUid && emailAuthUid !== uid) {
-    throw new HttpsError('permission-denied', 'The verified email account does not match the signed-in account.');
-  }
   console.log(`[deviceVerification] device approved via ${verifiedVia}`, { uid, deviceId });
   return { requiresOtp: false, sessionId };
 });
