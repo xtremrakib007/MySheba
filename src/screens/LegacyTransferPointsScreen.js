@@ -32,6 +32,7 @@ export default function LegacyTransferPointsScreen() {
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
+  const [securityPin, setSecurityPin] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -68,12 +69,14 @@ export default function LegacyTransferPointsScreen() {
 
   const onSend = async () => {
     if (!target) return;
+    if (!/^\d{4,8}$/.test(securityPin)) return showAlert('MySheba', 'Enter your 4-8 digit security PIN.');
     setBusy(true);
     try {
       await transferPoints({
         to: { uid: target.id, name: target.name || target.phone || '', role: target.role },
         amount,
         note,
+        securityPin,
       });
       showAlert('MySheba', `${fmt(amount)} sent to ${target.name || target.phone || 'user'}.`);
       setTarget(null);
@@ -127,6 +130,7 @@ export default function LegacyTransferPointsScreen() {
                 <Text style={styles.modalLabel}>Their balance: {fmt(target?.walletBalance)}</Text>
                 <TextInput style={styles.input} placeholder="Amount (MYR)" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" autoFocus />
                 <TextInput style={styles.input} placeholder="Note (optional)" value={note} onChangeText={setNote} />
+                <TextInput style={styles.input} placeholder="Security PIN (4-8 digits)" value={securityPin} onChangeText={setSecurityPin} keyboardType="number-pad" secureTextEntry maxLength={8} />
                 <Text style={styles.modalLabel}>Your balance after: {fmt(myBalance - (Number(amount) || 0) + earningPreview)}</Text>
                 {earningPreview > 0 && <Text style={styles.earningText}>You'll earn {fmt(earningPreview)} ({dealerEarningPercent}%) on this transfer</Text>}
                 <View style={styles.modalActions}>
