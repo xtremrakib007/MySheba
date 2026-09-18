@@ -30,7 +30,11 @@ export default function AppShell() {
 
   const visibleGroups = useMemo(() => navGroups.map((group) => ({
     ...group,
-    items: group.items.filter((item) => !item.superadminOnly || profile?.role === 'superadmin'),
+    items: group.items.filter((item) => {
+      if (item.superadminOnly && profile?.role !== 'superadmin') return false;
+      if (item.allowedRoles && !item.allowedRoles.includes(profile?.role as any)) return false;
+      return true;
+    }),
   })).filter((group) => group.items.length > 0), [profile?.role]);
 
   useEffect(() => { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0'); }, [collapsed]);
