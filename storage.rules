@@ -15,6 +15,30 @@ service firebase.storage {
     }
     function inquiryOwner(inquiryId) { return firestore.get(/databases/(default)/documents/inquiries/$(inquiryId)).data.customerId == request.auth.uid; }
 
+    // Advertisement creatives are uploaded by the Super Admin UI.
+    // Keep the entire ads prefix server-owned by role; deletion is routed through
+    // the hardened Cloud Function rather than allowing client deletes.
+    match /ads/banners/{fileName} {
+      allow read: if activeProfile();
+      allow create, update: if activeProfile() && role() == 'superadmin' && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
+      allow delete: if false;
+    }
+    match /ads/native/{fileName} {
+      allow read: if activeProfile();
+      allow create, update: if activeProfile() && role() == 'superadmin' && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
+      allow delete: if false;
+    }
+    match /ads/interstitial/{fileName} {
+      allow read: if activeProfile();
+      allow create, update: if activeProfile() && role() == 'superadmin' && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
+      allow delete: if false;
+    }
+    match /ads/advertisers/{fileName} {
+      allow read: if activeProfile();
+      allow create, update: if activeProfile() && role() == 'superadmin' && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
+      allow delete: if false;
+    }
+
     match /topup-receipts/{uid}/{fileName} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if signedIn() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*'); allow delete: if false; }
     match /remittance-passports/{uid}/{fileName} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if signedIn() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*'); allow delete: if false; }
 
