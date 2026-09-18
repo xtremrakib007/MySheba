@@ -4,11 +4,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { FEATURE_DEFS, TOGGLEABLE_ROLES, ROLE_LABEL, subscribeFeatureAccess, type FeatureAccessMap } from '../services/toolAccessService';
 import { useEffect, useState } from 'react';
 
-const ROLE_ORDER = ['subdealer', 'dealer', 'reseller', 'admin', 'superadmin'] as const;
+const ROLE_ORDER = ['customer', 'dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin'] as const;
 const ROLE_COLORS: Record<string, string> = {
-  subdealer: 'bg-slate-100 text-slate-700',
+  customer: 'bg-slate-100 text-slate-700',
   dealer: 'bg-blue-50 text-blue-700',
   reseller: 'bg-purple-50 text-purple-700',
+  support: 'bg-cyan-50 text-cyan-700',
+  finance: 'bg-amber-50 text-amber-700',
   admin: 'bg-emerald-50 text-emerald-700',
   superadmin: 'bg-slate-900 text-white',
 };
