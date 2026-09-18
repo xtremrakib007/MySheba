@@ -59,6 +59,8 @@ async function incrementTierPoints(uid, eventId = null) {
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(userRef);
     if (!snap.exists) return;
+    const currentUser = snap.data() || {};
+    if (currentUser.suspended === true || currentUser.inactive === true || currentUser.disabled === true || currentUser.active === false || currentUser.mergedInto != null) return;
     if (eventRef) {
       const eventSnap = await tx.get(eventRef);
       if (eventSnap.exists) return;
