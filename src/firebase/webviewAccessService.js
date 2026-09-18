@@ -15,6 +15,7 @@
 // own even if it tried - the Cloud Function is the only path.
 import { httpsCallable } from 'firebase/functions';
 import { functions } from './config';
+import { getSessionProof } from './deviceSessionService';
 import { WEBVIEW_ACCESS_COST, WEBVIEW_SUBMIT_COST } from '../data/countries';
 
 const chargeWalletFn = httpsCallable(functions, 'chargeWallet');
