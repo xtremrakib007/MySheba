@@ -2,7 +2,7 @@ const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/
 const admin = require('firebase-admin');
 
 const DEALER_SERVICE = 'Mobile Banking';
-const RESELLER_SERVICES = new Set(['Recharge', 'Internet', 'Remittance']);
+const RESELLER_SERVICES = new Set(['Recharge', 'Internet', 'Bill Payment', 'Remittance']);
 const OPERATIONAL_RAW_FIELDS = [
   'phone', 'senderName', 'senderPhone', 'senderCompany', 'senderPassportNo', 'senderPassportExpiry',
   'senderAddress', 'receiverFirstName', 'receiverLastName', 'receiverRelationship', 'receiverPhone',
