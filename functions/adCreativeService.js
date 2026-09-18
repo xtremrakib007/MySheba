@@ -11,6 +11,10 @@ exports.deleteAdCreative = onCall({ enforceAppCheck:true }, async (request) => {
   if(!Array.isArray(storagePaths)||storagePaths.length===0||storagePaths.length>50) throw new HttpsError('invalid-argument','storagePaths must contain 1 to 50 paths.');
   if(storagePaths.some((p)=>!validStoragePath(p))) throw new HttpsError('invalid-argument','Every storage path must be a valid advertisement asset path.');
   const bucket=admin.storage().bucket();
+  // Storage deletion cannot participate in a Firestore transaction. Revalidate the
+  // privileged caller immediately before the destructive operation to minimize
+  // the authorization TOCTOU window.
+  await requireSuperadmin(db,callerUid);
   try { await Promise.all(storagePaths.map((path)=>bucket.file(path).delete({ignoreNotFound:true}))); }
   catch(err) { await logServerError('deleteAdCreative',err,{userId:callerUid}); throw new HttpsError('internal','Could not delete one or more advertisement files.'); }
   return {ok:true,deleted:storagePaths.length};
