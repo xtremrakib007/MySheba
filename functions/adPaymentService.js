@@ -27,15 +27,62 @@ exports.createAdPayment = onCall({ enforceAppCheck:true }, async (request) => {
   if(!/^[A-Z]{3}$/.test(curr)) throw new HttpsError('invalid-argument','currency must be a 3-letter code.');
   if(!method) throw new HttpsError('invalid-argument','paymentMethod is required.');
   const status=paymentStatus||'pending'; if(!VALID_PAYMENT_STATUSES.includes(status)) throw new HttpsError('invalid-argument','Invalid payment status.');
-  const advertiserRef=db.collection('ad_advertisers').doc(advId); const advertiserSnap=await advertiserRef.get();
-  if(!advertiserSnap.exists) throw new HttpsError('not-found','That advertiser does not exist.');
-  let campaignSnap=null, packageSnap=null;
-  let campaignIdClean='', packageIdClean='';
-  if(campaignId){ campaignIdClean=validId(campaignId,'campaignId'); campaignSnap=await db.collection('ad_campaigns').doc(campaignIdClean).get(); if(!campaignSnap.exists) throw new HttpsError('not-found','That campaign does not exist.'); if(campaignSnap.data().advertiserId!==advId) throw new HttpsError('invalid-argument','That campaign does not belong to this advertiser.'); }
-  if(packageId){ packageIdClean=validId(packageId,'packageId'); packageSnap=await db.collection('ad_packages').doc(packageIdClean).get(); if(!packageSnap.exists) throw new HttpsError('not-found','That package does not exist.'); const p=packageSnap.data()||{}; if(p.advertiserId && p.advertiserId!==advId) throw new HttpsError('invalid-argument','That package does not belong to this advertiser.'); if(p.campaignId && p.campaignId!==campaignIdClean) throw new HttpsError('invalid-argument','That package does not belong to this campaign.'); }
-  const paymentData={ advertiserId:advId,campaignId:campaignIdClean,packageId:packageIdClean,amount:numericAmount,currency:curr,paymentStatus:status,paymentMethod:method,transactionReference:cleanText(transactionReference,200),advertiserName:cleanText(advertiserSnap.data().companyName,200),campaignName:campaignSnap?cleanText(campaignSnap.data().name,200):'',packageName:packageSnap?cleanText(packageSnap.data().name,200):'',recordedBy:callerUid,createdAt:admin.firestore.FieldValue.serverTimestamp(),updatedAt:admin.firestore.FieldValue.serverTimestamp() };
-  let paymentRef; try { paymentRef=await db.collection('ad_payments').add(paymentData); } catch(err){ await logServerError('createAdPayment',err,{userId:callerUid}); throw new HttpsError('internal','Could not record this payment.'); }
-  await logAdAudit({action:'create',targetType:'ad_payment',targetId:paymentRef.id,performedBy:callerUid,details:{advertiserId:advId,campaignId:paymentData.campaignId||null,packageId:paymentData.packageId||null,amount:numericAmount,currency:curr,paymentStatus:status,performedByRole:caller.role}});
+
+  const advertiserRef=db.collection('ad_advertisers').doc(advId);
+  const campaignIdClean=campaignId ? validId(campaignId,'campaignId') : '';
+  const packageIdClean=packageId ? validId(packageId,'packageId') : '';
+  const campaignRef=campaignIdClean ? db.collection('ad_campaigns').doc(campaignIdClean) : null;
+  const packageRef=packageIdClean ? db.collection('ad_packages').doc(packageIdClean) : null;
+  const paymentRef=db.collection('ad_payments').doc();
+  let paymentRole='';
+
+  try {
+    await db.runTransaction(async (tx) => {
+      const callerSnap=await tx.get(db.collection('users').doc(callerUid));
+      const currentCaller=callerSnap.exists?callerSnap.data():null;
+      if(!currentCaller||currentCaller.role!=='superadmin'||currentCaller.suspended===true||currentCaller.inactive===true||currentCaller.disabled===true||currentCaller.active===false||currentCaller.mergedInto!=null) {
+        throw new HttpsError('permission-denied','Your account can no longer manage advertisement payments.');
+      }
+
+      const advertiserSnap=await tx.get(advertiserRef);
+      if(!advertiserSnap.exists) throw new HttpsError('not-found','That advertiser does not exist.');
+      const advertiserData=advertiserSnap.data()||{};
+
+      let campaignData=null;
+      if(campaignRef){
+        const campaignSnap=await tx.get(campaignRef);
+        if(!campaignSnap.exists) throw new HttpsError('not-found','That campaign does not exist.');
+        campaignData=campaignSnap.data()||{};
+        if(campaignData.advertiserId!==advId) throw new HttpsError('invalid-argument','That campaign does not belong to this advertiser.');
+      }
+
+      let packageData=null;
+      if(packageRef){
+        const packageSnap=await tx.get(packageRef);
+        if(!packageSnap.exists) throw new HttpsError('not-found','That package does not exist.');
+        packageData=packageSnap.data()||{};
+        if(packageData.advertiserId&&packageData.advertiserId!==advId) throw new HttpsError('invalid-argument','That package does not belong to this advertiser.');
+        if(packageData.campaignId&&packageData.campaignId!==campaignIdClean) throw new HttpsError('invalid-argument','That package does not belong to this campaign.');
+      }
+
+      const paymentData={
+        advertiserId:advId,campaignId:campaignIdClean,packageId:packageIdClean,amount:numericAmount,currency:curr,
+        paymentStatus:status,paymentMethod:method,transactionReference:cleanText(transactionReference,200),
+        advertiserName:cleanText(advertiserData.companyName,200),
+        campaignName:campaignData?cleanText(campaignData.name,200):'',
+        packageName:packageData?cleanText(packageData.name,200):'',
+        recordedBy:callerUid,createdAt:admin.firestore.FieldValue.serverTimestamp(),updatedAt:admin.firestore.FieldValue.serverTimestamp()
+      };
+      tx.create(paymentRef,paymentData);
+      paymentRole=currentCaller.role;
+    });
+  } catch(err) {
+    if(err instanceof HttpsError) throw err;
+    await logServerError('createAdPayment',err,{userId:callerUid});
+    throw new HttpsError('internal','Could not record this payment.');
+  }
+
+  await logAdAudit({action:'create',targetType:'ad_payment',targetId:paymentRef.id,performedBy:callerUid,details:{advertiserId:advId,campaignId:campaignIdClean||null,packageId:packageIdClean||null,amount:numericAmount,currency:curr,paymentStatus:status,performedByRole:paymentRole}});
   return {ok:true,paymentId:paymentRef.id};
 });
 
