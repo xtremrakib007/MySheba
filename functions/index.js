@@ -13,6 +13,16 @@ const chargeGuards = require('./chargeGuards');
 const supportTicketService = require('./supportTicketService');
 const transactionQueue = require('./transactionQueueService');
 exports.manageUser = userManagement.manageUser;
+// Compatibility/production callable exports that are consumed by the mobile
+// client. Keep every client-facing callable reachable from the actual
+// functions entrypoint (secureIndexV2 -> index.js).
+exports.registerCustomer = require('./customerRegistration').registerCustomer;
+exports.createInquiry = require('./inquiryService').createInquiry;
+exports.registerPushToken = require('./pushTokenService').registerPushToken;
+exports.validateActiveSession = require('./validateActiveSessionService').validateActiveSession;
+exports.sendPasswordResetEmailVerification = require('./passwordResetEmail').sendPasswordResetEmailVerification;
+exports.verifyPasswordResetEmailOtp = require('./passwordResetEmail').verifyPasswordResetEmailOtp;
+exports.recordAdEvent = require('./adTrackingCallable').recordAdEvent;
 exports.listManagedUsers = require('./managedUserListService').listManagedUsers;
 exports.searchUsers = require('./userSearch').searchUsers;
 exports.getUserByUid = require('./userSearch').getUserByUid;
