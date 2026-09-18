@@ -40,6 +40,7 @@ exports.createSelfTopup = onCall({ enforceAppCheck: true }, async (request) => {
   const callerRef = db.collection('users').doc(uid);
   const opRef = db.collection('walletOperations').doc(`${uid}_createSelfTopup_${requestId}`);
   const topupRef = db.collection('selfTopups').doc();
+  let callerRole = '';
 
   try {
     const result = await db.runTransaction(async (tx) => {
@@ -55,6 +56,7 @@ exports.createSelfTopup = onCall({ enforceAppCheck: true }, async (request) => {
       if (!callerSnap.exists) throw new HttpsError('not-found', 'Account not found.');
       const caller = callerSnap.data() || {};
       requireSessionMatch(request, caller);
+      callerRole = caller.role;
       if (!active(caller) || !ADMIN_ROLES.includes(caller.role)) throw new HttpsError('permission-denied', 'Only active admin/superadmin accounts can self top-up.');
 
       const currentBalance = validBalance(caller.walletBalance);
@@ -73,7 +75,7 @@ exports.createSelfTopup = onCall({ enforceAppCheck: true }, async (request) => {
         action: 'self_topup_created',
         targetUid: uid,
         performedBy: uid,
-        performedByRole: 'admin/self',
+        performedByRole: callerRole,
         details: { amount, requestId, topupId: result.id },
       });
     }
