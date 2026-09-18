@@ -46,18 +46,39 @@ exports.saveApiProvider = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const data = validate(request.data || {}), id = cleanString(request.data?.id, 100);
+  if (id && !/^[A-Za-z0-9_-]{1,100}$/.test(id)) throw new HttpsError('invalid-argument', 'Provider id is invalid.');
   const ref = id ? db.collection(COLLECTION).doc(id) : db.collection(COLLECTION).doc();
-  const existing = await ref.get();
-  if (existing.exists) { if (data.apiKey === '••••••••') data.apiKey = existing.data().apiKey || ''; if (data.password === '••••••••') data.password = existing.data().password || ''; }
-  await ref.set({ ...data, updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: request.auth.uid }, { merge: true });
+  await db.runTransaction(async (tx) => {
+    const callerSnap = await tx.get(db.collection('users').doc(request.auth.uid));
+    const caller = callerSnap.exists ? callerSnap.data() : null;
+    if (!caller || caller.role !== 'superadmin' || caller.suspended === true || caller.inactive === true || caller.disabled === true || caller.active === false || caller.mergedInto) {
+      throw new HttpsError('permission-denied', 'Your account is no longer active.');
+    }
+    const existing = await tx.get(ref);
+    if (existing.exists) {
+      if (data.apiKey === '••••••••') data.apiKey = existing.data().apiKey || '';
+      if (data.password === '••••••••') data.password = existing.data().password || '';
+    }
+    tx.set(ref, { ...data, updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: request.auth.uid }, { merge: true });
+  });
   return { id: ref.id };
 });
 exports.deleteApiProvider = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const id = cleanString(request.data?.id, 100);
-  if (!id) throw new HttpsError('invalid-argument', 'Provider id is required.');
-  await db.collection(COLLECTION).doc(id).delete();
+  if (!id || !/^[A-Za-z0-9_-]{1,100}$/.test(id)) throw new HttpsError('invalid-argument', 'Provider id is invalid.');
+  const ref = db.collection(COLLECTION).doc(id);
+  await db.runTransaction(async (tx) => {
+    const callerSnap = await tx.get(db.collection('users').doc(request.auth.uid));
+    const caller = callerSnap.exists ? callerSnap.data() : null;
+    if (!caller || caller.role !== 'superadmin' || caller.suspended === true || caller.inactive === true || caller.disabled === true || caller.active === false || caller.mergedInto) {
+      throw new HttpsError('permission-denied', 'Your account is no longer active.');
+    }
+    const existing = await tx.get(ref);
+    if (!existing.exists) throw new HttpsError('not-found', 'Provider not found.');
+    tx.delete(ref);
+  });
   return { ok: true };
 });
 exports.getServiceApiSettings = onCall({ enforceAppCheck: true }, async (request) => {
@@ -75,6 +96,13 @@ exports.saveServiceApiSettings = onCall({ enforceAppCheck: true }, async (reques
     const mode = incoming[service];
     if (mode === 'api' || mode === 'legacy') modes[service] = mode;
   }
-  await db.doc(SETTINGS).set({ modes, updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: request.auth.uid }, { merge: true });
+  await db.runTransaction(async (tx) => {
+    const callerSnap = await tx.get(db.collection('users').doc(request.auth.uid));
+    const caller = callerSnap.exists ? callerSnap.data() : null;
+    if (!caller || caller.role !== 'superadmin' || caller.suspended === true || caller.inactive === true || caller.disabled === true || caller.active === false || caller.mergedInto) {
+      throw new HttpsError('permission-denied', 'Your account is no longer active.');
+    }
+    tx.set(db.doc(SETTINGS), { modes, updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: request.auth.uid }, { merge: true });
+  });
   return { modes };
 });
