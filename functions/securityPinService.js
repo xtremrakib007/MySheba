@@ -49,7 +49,10 @@ exports.setupSecurityPin = onCall({ enforceAppCheck: true }, async (request) => 
     const salt = crypto.randomBytes(16).toString('hex');
     const hash = hashPin(pin, salt);
     await db.runTransaction(async (tx) => {
-      const existing = await tx.get(ref);
+      const [existing, userSnap] = await Promise.all([tx.get(ref), tx.get(userRef)]);
+      if (!userSnap.exists) throw new HttpsError('not-found', 'Your account could not be found.');
+      const userData = userSnap.data() || {};
+      if (userData.mergedInto != null || userData.suspended === true || userData.inactive === true || userData.disabled === true || userData.active === false) throw new HttpsError('permission-denied', 'Your account is not active.');
       if (existing.exists) throw new HttpsError('already-exists', 'A security PIN is already set. Use reset instead.');
       tx.create(ref, { hash, salt, attempts: 0, lockedUntil: null, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
       tx.set(userRef, { securityPinSet: true }, { merge: true });
@@ -129,6 +132,10 @@ exports.resetSecurityPin = onCall({ enforceAppCheck: true }, async (request) => 
   try {
     const salt = crypto.randomBytes(16).toString('hex');
     await db.runTransaction(async (tx) => {
+      const userSnap = await tx.get(userRef);
+      if (!userSnap.exists) throw new HttpsError('not-found', 'Your account could not be found.');
+      const userData = userSnap.data() || {};
+      if (userData.mergedInto != null || userData.suspended === true || userData.inactive === true || userData.disabled === true || userData.active === false) throw new HttpsError('permission-denied', 'Your account is not active.');
       tx.set(ref, { hash: hashPin(pin, salt), salt, attempts: 0, lockedUntil: null, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }, { merge: false });
       tx.set(userRef, { securityPinSet: true }, { merge: true });
     });
