@@ -16,8 +16,7 @@ function createRequestId() {
 
 function mapTransactionDoc(d) {
   const data = d.data();
-  const { pin: _legacyPin, ...safeData } = data;
-  return { id: d.id, ...safeData };
+  return { id: d.id, ...data };
 }
 
 export async function createTransaction(payload, customer) {
