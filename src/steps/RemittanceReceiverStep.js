@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Switch, ActivityIndicator } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
-import { banksByCountry, ewalletsByCountry, cashPickupByCountry, cashPickupCitiesByCountry, RELATIONSHIPS, ID_TYPES } from '../data/remittanceOptions';
+import { banksByCountry, ewalletsByCountry, cashPickupByCountry, RELATIONSHIPS, ID_TYPES } from '../data/remittanceOptions';
 import { FormLabel, FormInput, SearchPicker, MethodCard, TxOptionCard, SummaryCard, OutlineButton, DateField } from '../components/ui';
 import { getSavedReceivers } from '../firebase/receiverService';
 import { countries } from '../data/countries';
@@ -17,7 +17,7 @@ export default function RemittanceReceiverStep({ serviceData, updateServiceData,
 
   const useMyKyc = () => {
     const parts = String(profile?.name || profile?.displayName || '').trim().split(/\s+/).filter(Boolean);
-    updateServiceData({ recipientType:'self', receiverMode:'self', selectedReceiverId:null, receiverFirstName:parts[0] || '', receiverLastName:parts.slice(1).join(' ') || '', receiverPhone:profile?.phone || authUser?.phoneNumber || '', receiverRelationship:'Self', receiverNationality:ownCountry, receiverDateOfBirth:profile?.dateOfBirth || '', receiverAddress:profile?.address || profile?.residentialAddress || '', receiverIdType:profile?.documentType || profile?.idType || '', receiverIdNumber:profile?.documentNumber || profile?.passportNumber || '', receiverBankName:null, receiverAccountNumber:null, receiverBranch:null, receiverRoutingNumber:null, receiverBankIdentifier:null, receiverBankIdentifierType:null, receiverPickupNetwork:null, receiverPickupCity:null, receiverWalletProvider:null, receiverWalletNumber:null });
+    updateServiceData({ recipientType:'self', receiverMode:'self', selectedReceiverId:null, receiverFirstName:parts[0] || '', receiverLastName:parts.slice(1).join(' ') || '', receiverPhone:profile?.phone || authUser?.phoneNumber || '', receiverRelationship:'Self', receiverNationality:ownCountry, receiverDateOfBirth:profile?.dateOfBirth || '', receiverAddress:profile?.address || profile?.residentialAddress || '', receiverIdType:profile?.documentType || profile?.idType || '', receiverIdNumber:profile?.documentNumber || profile?.passportNumber || '', receiverBankName:null, receiverAccountNumber:null, receiverBranch:null, receiverRoutingNumber:null, receiverPickupNetwork:null, receiverPickupCity:null, receiverWalletProvider:null, receiverWalletNumber:null });
   };
 
   useEffect(() => {
@@ -38,17 +38,16 @@ export default function RemittanceReceiverStep({ serviceData, updateServiceData,
     const bankSelected = !!(serviceData.receiverBankName || '').trim();
     const accountEntered = !!(serviceData.receiverAccountNumber || '').trim();
     const branchSelected = !!(serviceData.receiverBranch || '').trim();
-    const bankIdentifierAvailable = !!(serviceData.receiverBankIdentifier || '').trim();
-    const bankIdentifierType = country === 'BD' ? 'Routing Number' : country === 'IN' ? 'IFSC Code' : 'SWIFT / BIC';
+    const routingAvailable = !!(serviceData.receiverRoutingNumber || '').trim();
 
     const selectBank = (value) => {
       const other = value === 'Other / Not Listed';
-      updateServiceData({receiverBankName:other?'':value,receiverBankIsOther:other,receiverAccountNumber:'',receiverBranch:'',receiverBranchIsOther:false,receiverRoutingNumber:'',receiverBankIdentifier:'',receiverBankIdentifierType:bankIdentifierType});
+      updateServiceData({receiverBankName:other?'':value,receiverBankIsOther:other,receiverAccountNumber:'',receiverBranch:'',receiverBranchIsOther:false,receiverRoutingNumber:''});
     };
     const selectBranch = (value) => {
       const other = value === 'Other / Not Listed';
       const branch = !other ? branchOptions.find((b)=>(b.name || b) === value) : null;
-      updateServiceData({receiverBranch:other?'':value,receiverBranchIsOther:other,receiverRoutingNumber:branch?.routing || '',receiverBankIdentifier:branch?.routing || '',receiverBankIdentifierType:bankIdentifierType});
+      updateServiceData({receiverBranch:other?'':value,receiverBranchIsOther:other,receiverRoutingNumber:branch?.routing || ''});
     };
 
     return <View>
@@ -66,26 +65,26 @@ export default function RemittanceReceiverStep({ serviceData, updateServiceData,
         <FormLabel>Bank Details</FormLabel>
         <SearchPicker placeholder="1. Select Bank Name" title="Select Bank Name" value={serviceData.receiverBankName} items={banks.map((b)=>b.name).concat('Other / Not Listed')} onSelect={selectBank}/>
 
-        {bankIsOther && <FormInput placeholder="Enter Bank Name" value={serviceData.receiverBankName||''} onChangeText={(v)=>updateServiceData({receiverBankName:v,receiverBankIsOther:true})}/>} 
+        {bankIsOther && <FormInput placeholder="Enter Bank Name" value={serviceData.receiverBankName||''} onChangeText={(v)=>updateServiceData({receiverBankName:v,receiverBankIsOther:true})}/>}
 
-        {(bankSelected || bankIsOther) && <FormInput placeholder="2. Account Number" keyboardType="number-pad" value={serviceData.receiverAccountNumber||''} onChangeText={(v)=>updateServiceData({receiverAccountNumber:v,receiverBranch:'',receiverBranchIsOther:false,receiverRoutingNumber:''})}/>} 
+        {(bankSelected || bankIsOther) && <FormInput placeholder="2. Account Number" keyboardType="number-pad" value={serviceData.receiverAccountNumber||''} onChangeText={(v)=>updateServiceData({receiverAccountNumber:v,receiverBranch:'',receiverBranchIsOther:false,receiverRoutingNumber:''})}/>}
 
         {((bankSelected || bankIsOther) && accountEntered) && (bankIsOther ? (
           <>
             <FormInput placeholder="3. Enter Branch Name" value={serviceData.receiverBranch||''} onChangeText={(v)=>updateServiceData({receiverBranch:v,receiverBranchIsOther:true,receiverRoutingNumber:''})}/>
-            {branchSelected && <FormInput placeholder={`4. ${bankIdentifierType}`} value={serviceData.receiverBankIdentifier||''} onChangeText={(v)=>updateServiceData({receiverBankIdentifier:v,receiverBankIdentifierType:bankIdentifierType})}/>} 
+            {branchSelected && <FormInput placeholder="4. Routing Number" keyboardType="number-pad" value={serviceData.receiverRoutingNumber||''} onChangeText={(v)=>updateServiceData({receiverRoutingNumber:v})}/>}
           </>
         ) : (
           <>
             <SearchPicker placeholder="3. Select Branch" title="Select Bank Branch" value={serviceData.receiverBranch} items={branchOptions.map((b)=>b.name||b).concat('Other / Not Listed')} onSelect={selectBranch}/>
-            {branchSelected && !branchIsOther && bankIdentifierAvailable && <View style={{padding:12,borderRadius:10,backgroundColor:colors.card,borderWidth:1,borderColor:colors.border,marginBottom:12}}><Text style={{color:colors.textSecondary,fontSize:12}}>4. {bankIdentifierType}</Text><Text style={{color:colors.text,fontSize:15,fontWeight:'700',marginTop:3}}>{serviceData.receiverBankIdentifier}</Text><Text style={{color:colors.textSecondary,fontSize:11,marginTop:3}}>Automatically selected from the branch when available</Text></View>}
-            {branchIsOther && branchSelected && <FormInput placeholder={`4. ${bankIdentifierType}`} value={serviceData.receiverBankIdentifier||''} onChangeText={(v)=>updateServiceData({receiverBankIdentifier:v,receiverBankIdentifierType:bankIdentifierType})}/>} 
-            {branchSelected && !bankIdentifierAvailable && !branchIsOther && <FormInput placeholder={`4. ${bankIdentifierType}`} value={serviceData.receiverBankIdentifier||''} onChangeText={(v)=>updateServiceData({receiverBankIdentifier:v,receiverBankIdentifierType:bankIdentifierType})}/>} 
+            {branchSelected && !branchIsOther && routingAvailable && <View style={{padding:12,borderRadius:10,backgroundColor:colors.card,borderWidth:1,borderColor:colors.border,marginBottom:12}}><Text style={{color:colors.textSecondary,fontSize:12}}>4. Routing Number</Text><Text style={{color:colors.text,fontSize:15,fontWeight:'700',marginTop:3}}>{serviceData.receiverRoutingNumber}</Text><Text style={{color:colors.textSecondary,fontSize:11,marginTop:3}}>Automatically selected from the branch</Text></View>}
+            {branchIsOther && branchSelected && <FormInput placeholder="4. Routing Number" keyboardType="number-pad" value={serviceData.receiverRoutingNumber||''} onChangeText={(v)=>updateServiceData({receiverRoutingNumber:v})}/>}
+            {branchSelected && !routingAvailable && !branchIsOther && <FormInput placeholder="4. Routing Number" keyboardType="number-pad" value={serviceData.receiverRoutingNumber||''} onChangeText={(v)=>updateServiceData({receiverRoutingNumber:v})}/>}
           </>
         ))}
       </>}
 
-      {method === 'cash' && <><SearchPicker placeholder="Pickup Network" title="Select Pickup Network" value={serviceData.receiverPickupNetwork} items={cashPickupByCountry[country]||[]} onSelect={(v)=>updateServiceData({receiverPickupNetwork:v})}/><SearchPicker placeholder="Collection City" title="Select Collection City" value={serviceData.receiverPickupCity} items={cashPickupCitiesByCountry[country]||[]} onSelect={(v)=>updateServiceData({receiverPickupCity:v,receiverPickupCityIsOther:v === 'Other / Not Listed'})}/>{serviceData.receiverPickupCityIsOther && <FormInput placeholder="Enter Collection City" value={serviceData.receiverPickupCity === 'Other / Not Listed' ? '' : (serviceData.receiverPickupCity||'')} onChangeText={(v)=>updateServiceData({receiverPickupCity:v,receiverPickupCityIsOther:true})}/><SearchPicker placeholder="ID Type" title="Select ID Type" value={serviceData.receiverIdType} items={ID_TYPES} searchable={false} onSelect={(v)=>updateServiceData({receiverIdType:v})}/><FormInput placeholder="ID Number" value={serviceData.receiverIdNumber||''} onChangeText={(v)=>updateServiceData({receiverIdNumber:v})}/><FormInput placeholder="Pickup City" value={serviceData.receiverPickupCity||''} onChangeText={(v)=>updateServiceData({receiverPickupCity:v})}/></>}
+      {method === 'cash' && <><SearchPicker placeholder="Pickup Network" title="Select Pickup Network" value={serviceData.receiverPickupNetwork} items={cashPickupByCountry[country]||[]} onSelect={(v)=>updateServiceData({receiverPickupNetwork:v})}/><SearchPicker placeholder="ID Type" title="Select ID Type" value={serviceData.receiverIdType} items={ID_TYPES} searchable={false} onSelect={(v)=>updateServiceData({receiverIdType:v})}/><FormInput placeholder="ID Number" value={serviceData.receiverIdNumber||''} onChangeText={(v)=>updateServiceData({receiverIdNumber:v})}/><FormInput placeholder="Pickup City" value={serviceData.receiverPickupCity||''} onChangeText={(v)=>updateServiceData({receiverPickupCity:v})}/></>}
       {method === 'ewallet' && <><SearchPicker placeholder="eWallet Provider" title="Select eWallet Provider" value={serviceData.receiverWalletProvider} items={ewalletsByCountry[country]||[]} onSelect={(v)=>updateServiceData({receiverWalletProvider:v})}/><FormInput placeholder="Wallet Number / Account ID" keyboardType="phone-pad" value={serviceData.receiverWalletNumber||''} onChangeText={(v)=>updateServiceData({receiverWalletNumber:v})}/></>}
       <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',backgroundColor:colors.card,padding:14,borderRadius:12,marginBottom:14,borderWidth:1,borderColor:colors.border}}><Text style={{fontSize:14,fontWeight:'600',color:colors.text}}>Save as Favorite</Text><Switch value={!!serviceData.saveAsFavorite} onValueChange={(v)=>updateServiceData({saveAsFavorite:v})} trackColor={{false:colors.border,true:colors.primary}} thumbColor={colors.card}/></View>
       <ReceiverPreview serviceData={serviceData}/>
@@ -93,13 +92,67 @@ export default function RemittanceReceiverStep({ serviceData, updateServiceData,
     </View>;
   }
 
-  return <View><FormLabel>Saved Receivers</FormLabel>{loading&&<ActivityIndicator color={colors.primary} style={{marginVertical:20}/>} {!loading&&saved.length===0&&<Text style={{color:colors.textSecondary,textAlign:'center',marginVertical:20}}>No saved receivers yet.</Text>}{!loading&&saved.map((r)=><TxOptionCard key={r.id} title={`${r.firstName||''} ${r.lastName||''}`.trim()} detail={[r.relationship,r.phone,r.bankName,r.pickupNetwork,r.walletProvider].filter(Boolean).join('  •  ')} selected={serviceData.selectedReceiverId===r.id} onPress={()=>updateServiceData({selectedReceiverId:r.id,receiverMode:'saved',recipientType:'other',receiverFirstName:r.firstName,receiverLastName:r.lastName,receiverPhone:r.phone,receiverRelationship:r.relationship,receiverNationality:r.nationality||'',receiverDateOfBirth:r.dateOfBirth||'',receiverAddress:r.address||'',receiverBankName:r.bankName,receiverAccountNumber:r.accountNumber,receiverBranch:r.branch,receiverRoutingNumber:r.routingNumber,receiverPickupNetwork:r.pickupNetwork,receiverIdType:r.idType,receiverIdNumber:r.idNumber,receiverPickupCity:r.pickupCity,receiverPickupCityIsOther:r.pickupCityIsOther === true,receiverWalletProvider:r.walletProvider,receiverWalletNumber:r.walletNumber})}/>)}<OutlineButton label="+ Add a new receiver instead" onPress={()=>updateServiceData({receiverMode:'new',recipientType:'other'})}/><OutlineButton label="← Change recipient type" onPress={()=>updateServiceData({recipientType:null,receiverMode:null})}/></View>;
+  return (
+    <View>
+      <FormLabel>Saved Receivers</FormLabel>
+      {loading && (
+        <ActivityIndicator
+          color={colors.primary}
+          style={{ marginVertical: 20 }}
+        />
+      )}
+      {!loading && saved.length === 0 && (
+        <Text style={{ color: colors.textSecondary, textAlign: 'center', marginVertical: 20 }}>
+          No saved receivers yet.
+        </Text>
+      )}
+      {!loading && saved.map((r) => (
+        <TxOptionCard
+          key={r.id}
+          title={`${r.firstName || ''} ${r.lastName || ''}`.trim()}
+          detail={[r.relationship, r.phone, r.bankName, r.pickupNetwork, r.walletProvider].filter(Boolean).join('  •  ')}
+          selected={serviceData.selectedReceiverId === r.id}
+          onPress={() => updateServiceData({
+            selectedReceiverId: r.id,
+            receiverMode: 'saved',
+            recipientType: 'other',
+            receiverFirstName: r.firstName,
+            receiverLastName: r.lastName,
+            receiverPhone: r.phone,
+            receiverRelationship: r.relationship,
+            receiverNationality: r.nationality || '',
+            receiverDateOfBirth: r.dateOfBirth || '',
+            receiverAddress: r.address || '',
+            receiverBankName: r.bankName,
+            receiverAccountNumber: r.accountNumber,
+            receiverBranch: r.branch,
+            receiverRoutingNumber: r.routingNumber,
+            receiverPickupNetwork: r.pickupNetwork,
+            receiverIdType: r.idType,
+            receiverIdNumber: r.idNumber,
+            receiverPickupCity: r.pickupCity,
+            receiverWalletProvider: r.walletProvider,
+            receiverWalletNumber: r.walletNumber,
+          })}
+        />
+      ))}
+      <OutlineButton
+        label="+ Add a new receiver instead"
+        onPress={() => updateServiceData({ receiverMode: 'new', recipientType: 'other' })}
+      />
+      <OutlineButton
+        label="← Change recipient type"
+        onPress={() => updateServiceData({ recipientType: null, receiverMode: null })}
+      />
+    </View>
+  );
+
 }
 
 function ReceiverPreview({serviceData}) {
   const method=serviceData.method;
   const rows=[{label:'Name',value:`${serviceData.receiverFirstName||''} ${serviceData.receiverLastName||''}`.trim()||'-'},{label:'Relationship',value:serviceData.receiverRelationship||'-'},{label:'Mobile',value:serviceData.receiverPhone||'-'},{label:'Nationality',value:serviceData.receiverNationality||'-'},{label:'Date of Birth',value:serviceData.receiverDateOfBirth||'-'},{label:'Address',value:serviceData.receiverAddress||'-'}];
-  if(method==='deposit') rows.push({label:'Bank',value:serviceData.receiverBankName||'-'},{label:'Account No.',value:serviceData.receiverAccountNumber||'-'},{label:'Branch',value:serviceData.receiverBranch||'-'},{label:serviceData.receiverBankIdentifierType || (serviceData.country === 'BD' ? 'Routing Number' : serviceData.country === 'IN' ? 'IFSC Code' : 'SWIFT / BIC'),value:serviceData.receiverBankIdentifier || serviceData.receiverRoutingNumber || '-'});
+  if(method==='deposit') rows.push({label:'Bank',value:serviceData.receiverBankName||'-'},{label:'Account No.',value:serviceData.receiverAccountNumber||'-'},{label:'Branch',value:serviceData.receiverBranch||'-'},{label:'Routing Number',value:serviceData.receiverRoutingNumber||'-'});
   if(method==='cash') rows.push({label:'Pickup Network',value:serviceData.receiverPickupNetwork||'-'},{label:'ID',value:serviceData.receiverIdType?`${serviceData.receiverIdType} - ${serviceData.receiverIdNumber||''}`:'-'},{label:'Pickup City',value:serviceData.receiverPickupCity||'-'});
   if(method==='ewallet') rows.push({label:'Wallet Provider',value:serviceData.receiverWalletProvider||'-'},{label:'Wallet Number',value:serviceData.receiverWalletNumber||'-'});
   return <SummaryCard title="Recipient Summary" rows={rows}/>;

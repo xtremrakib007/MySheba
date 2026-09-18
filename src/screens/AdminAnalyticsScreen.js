@@ -387,6 +387,7 @@ export default function AdminAnalyticsScreen() {
               </View>
             </Section>
 
+              <Section title="Modules">
               <View style={styles.card}>
                 {modules.map(([key, m], i) => (
                   <React.Fragment key={key}>
