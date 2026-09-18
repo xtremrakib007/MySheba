@@ -45,7 +45,22 @@ exports.updateAdPaymentStatus = onCall({ enforceAppCheck:true }, async (request)
   if(!VALID_PAYMENT_STATUSES.includes(paymentStatus)) throw new HttpsError('invalid-argument','Invalid payment status.');
   const paymentRef=db.collection('ad_payments').doc(id); const paymentSnap=await paymentRef.get(); if(!paymentSnap.exists) throw new HttpsError('not-found','That payment record does not exist.');
   const current=paymentSnap.data()||{}; if(!VALID_PAYMENT_STATUSES.includes(current.paymentStatus)||!PAYMENT_STATUS_TRANSITIONS[current.paymentStatus].includes(paymentStatus)) throw new HttpsError('failed-precondition',`Cannot move a payment from "${current.paymentStatus}" to "${paymentStatus}".`);
-  try { await paymentRef.update({paymentStatus,recordedBy:callerUid,updatedAt:admin.firestore.FieldValue.serverTimestamp()}); } catch(err){ await logServerError('updateAdPaymentStatus',err,{userId:callerUid}); throw new HttpsError('internal','Could not update this payment status.'); }
+  try {
+    await db.runTransaction(async (tx) => {
+      const callerSnap = await tx.get(db.collection('users').doc(callerUid));
+      const currentCaller = callerSnap.exists ? callerSnap.data() : null;
+      if (!currentCaller || currentCaller.role !== 'superadmin' || currentCaller.suspended === true || currentCaller.inactive === true || currentCaller.disabled === true || currentCaller.active === false || currentCaller.mergedInto != null) {
+        throw new HttpsError('permission-denied', 'Your account can no longer manage advertisement payments.');
+      }
+      const freshPayment = await tx.get(paymentRef);
+      if (!freshPayment.exists) throw new HttpsError('not-found','That payment record does not exist.');
+      const fresh = freshPayment.data() || {};
+      if (!VALID_PAYMENT_STATUSES.includes(fresh.paymentStatus) || !PAYMENT_STATUS_TRANSITIONS[fresh.paymentStatus].includes(paymentStatus)) {
+        throw new HttpsError('failed-precondition', `Cannot move a payment from "${fresh.paymentStatus}" to "${paymentStatus}".`);
+      }
+      tx.update(paymentRef,{paymentStatus,recordedBy:callerUid,updatedAt:admin.firestore.FieldValue.serverTimestamp()});
+    });
+  } catch(err) { if (err instanceof HttpsError) throw err; await logServerError('updateAdPaymentStatus',err,{userId:callerUid}); throw new HttpsError('internal','Could not update this payment status.'); }
   await logAdAudit({action:'edit',targetType:'ad_payment',targetId:id,performedBy:callerUid,details:{from:current.paymentStatus,to:paymentStatus,note:cleanText(note,1000),performedByRole:caller.role}});
   return {ok:true};
 });
