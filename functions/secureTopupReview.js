@@ -45,7 +45,10 @@ exports.approveTopup = onCall({ enforceAppCheck: true }, async request => {
   const ref = db.collection('topups').doc(topupId);
   try {
     const out = await db.runTransaction(async tx => {
-      const snap = await tx.get(ref);
+      const [snap, callerTxSnap] = await Promise.all([tx.get(ref), tx.get(db.collection('users').doc(uid))]);
+      if (!callerTxSnap.exists || !activeAccount(callerTxSnap.data())) throw new HttpsError('permission-denied', 'Your account is not active.');
+      const callerTx = callerTxSnap.data() || {};
+      if (!ADMIN_ROLES.includes(callerTx.role)) throw new HttpsError('permission-denied', 'Your account cannot approve top-ups.');
       if (!snap.exists) throw new HttpsError('not-found', 'That top-up request does not exist.');
       const topup = snap.data() || {};
       if (topup.status !== 'pending') throw new HttpsError('failed-precondition', 'That request has already been reviewed.');
