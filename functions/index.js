@@ -50,6 +50,7 @@ exports.submitTopupRequest = require('./topupSubmissionService').submitTopupRequ
 exports.adminTopUpPoints = require('./adminTopUpService').adminTopUpPoints;
 exports.transferPoints = secureTransfer.transferPoints;
 exports.findWalletRecipient = walletTransferService.findWalletRecipient;
+exports.listWalletTransfers = walletTransferService.listWalletTransfers;
 exports.createDiditKycSession = require('./diditKycService').createDiditKycSession;
 exports.chargeWallet = secureWalletCharge.chargeWallet;
 exports.chargeRecharge = chargeGuards.chargeRecharge;
