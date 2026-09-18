@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 
 const DEALER_SERVICES = ['Mobile Banking'];
-const RESELLER_SERVICES = ['Recharge', 'Internet', 'Remittance'];
+const RESELLER_SERVICES = ['Recharge', 'Internet', 'Bill Payment', 'Remittance'];
 const APPROVER_ROLES = ['admin', 'superadmin'];
 const OPERATOR_ROLES = ['dealer', 'reseller'];
 const ASSIGNABLE_ROLES = ['dealer'];
