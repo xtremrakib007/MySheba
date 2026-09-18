@@ -8,6 +8,7 @@ const CUSTOMER_SERVICES = [
   { key: 'recharge', icon: '📱', name: 'Recharge', kind: 'service' },
   { key: 'mobilebanking', icon: '🏦', name: 'Mobile Banking', kind: 'service' },
   { key: 'internet', icon: '📡', name: 'Internet', kind: 'service' },
+  { key: 'billpayment', icon: '🧾', name: 'Bill Payment', kind: 'billPayment' },
   { key: 'remittance', icon: '💸', name: 'Remittance', kind: 'service' },
   { key: 'billpayment', icon: '🧾', name: 'Bill Payment', kind: 'billpayment' },
   { key: 'bus', icon: '🚌', name: 'Bus', kind: 'buspicker' },
@@ -78,6 +79,7 @@ export function useServiceAction() {
     if (s.kind === 'kyc') return setScreen('verifyIdentity');
     if (s.kind === 'support') return setScreen('support');
     if (s.kind === 'businessProfile') return setScreen('businessProfile');
+    if (s.kind === 'billPayment') return setScreen('billPayment');
     if (s.kind === 'billpayment') return setScreen('billPayment');
     if (s.kind === 'history') return setScreen('history');
     if (s.kind === 'myaccount') return setScreen('myAccount');
