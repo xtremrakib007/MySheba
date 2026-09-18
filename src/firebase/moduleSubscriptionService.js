@@ -14,6 +14,7 @@
 // openNotepad/openMyDocuments/openSalary/openSalaryReports.
 import { httpsCallable } from 'firebase/functions';
 import { functions } from './config';
+import { getSessionProof } from './deviceSessionService';
 
 const chargeWalletFn = httpsCallable(functions, 'chargeWallet');
 
