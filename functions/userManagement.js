@@ -177,30 +177,54 @@ exports.manageUser = onCall({ enforceAppCheck: true }, async (request) => {
   }
 
   if (action === 'suspend') {
-    if (callerRole !== 'superadmin') throw new HttpsError('permission-denied', 'Only a superadmin can suspend an account.');
     const { targetUid, suspended } = request.data;
     if (!targetUid || typeof suspended !== 'boolean') throw new HttpsError('invalid-argument', 'targetUid and suspended (true/false) are required.');
     if (targetUid === callerUid) throw new HttpsError('invalid-argument', 'You cannot suspend your own account.');
-    const targetRef = db.collection('users').doc(targetUid); const targetSnap = await targetRef.get();
-    if (!targetSnap.exists) throw new HttpsError('not-found', 'That user does not exist.');
-    if (targetSnap.data().role === 'superadmin') throw new HttpsError('permission-denied', 'A superadmin account cannot be suspended here.');
-    try { await admin.auth().updateUser(targetUid, { disabled: suspended }); } catch (err) { await logServerError('manageUser.suspend', err, { userId: callerUid }); throw new HttpsError('internal', 'Could not update the account.'); }
-    await targetRef.update(suspended ? { suspended: true, suspendedAt: admin.firestore.FieldValue.serverTimestamp(), suspendedBy: callerUid } : { suspended: false, suspendedAt: admin.firestore.FieldValue.delete(), suspendedBy: admin.firestore.FieldValue.delete() });
-    await logAudit({ action: suspended ? 'user_suspended' : 'user_reactivated', targetUid, performedBy: callerUid, performedByRole: callerRole, details: {} });
+    const targetRef = db.collection('users').doc(targetUid);
+    const callerRef = db.collection('users').doc(callerUid);
+    const result = await db.runTransaction(async (tx) => {
+      const [callerSnap, targetSnap] = await Promise.all([tx.get(callerRef), tx.get(targetRef)]);
+      if (!callerSnap.exists || !active(callerSnap.data()) || callerSnap.data().role !== 'superadmin') {
+        throw new HttpsError('permission-denied', 'Your superadmin privileges are no longer active.');
+      }
+      if (!targetSnap.exists) throw new HttpsError('not-found', 'That user does not exist.');
+      const targetData = targetSnap.data();
+      if (targetData.role === 'superadmin') throw new HttpsError('permission-denied', 'A superadmin account cannot be suspended here.');
+      return { role: callerSnap.data().role, targetRole: targetData.role, targetName: targetData.name || null, targetPhone: targetData.phone || null };
+    });
+    try { await admin.auth().updateUser(targetUid, { disabled: suspended }); }
+    catch (err) { await logServerError('manageUser.suspend', err, { userId: callerUid, targetUid }); throw new HttpsError('internal', 'Could not update the account.'); }
+    await targetRef.update(suspended
+      ? { suspended: true, suspendedAt: admin.firestore.FieldValue.serverTimestamp(), suspendedBy: callerUid }
+      : { suspended: false, suspendedAt: admin.firestore.FieldValue.delete(), suspendedBy: admin.firestore.FieldValue.delete() });
+    await logAudit({ action: suspended ? 'user_suspended' : 'user_reactivated', targetUid, performedBy: callerUid, performedByRole: result.role, details: {} });
     return { uid: targetUid, suspended };
   }
 
   if (action === 'delete') {
-    if (callerRole !== 'superadmin') throw new HttpsError('permission-denied', 'Only a superadmin can delete an account.');
     const { targetUid } = request.data;
     if (!targetUid || targetUid === callerUid) throw new HttpsError('invalid-argument', 'A valid target account other than yourself is required.');
-    const targetRef = db.collection('users').doc(targetUid); const targetSnap = await targetRef.get();
-    if (!targetSnap.exists) throw new HttpsError('not-found', 'That user does not exist.');
-    const targetData = targetSnap.data();
-    if (targetData.role === 'superadmin') throw new HttpsError('permission-denied', 'A superadmin account cannot be deleted here.');
-    try { await admin.auth().deleteUser(targetUid); } catch (err) { if (err.code !== 'auth/user-not-found') { await logServerError('manageUser.delete', err, { userId: callerUid }); throw new HttpsError('internal', 'Could not delete the account.'); } }
+    const targetRef = db.collection('users').doc(targetUid);
+    const callerRef = db.collection('users').doc(callerUid);
+    const result = await db.runTransaction(async (tx) => {
+      const [callerSnap, targetSnap] = await Promise.all([tx.get(callerRef), tx.get(targetRef)]);
+      if (!callerSnap.exists || !active(callerSnap.data()) || callerSnap.data().role !== 'superadmin') {
+        throw new HttpsError('permission-denied', 'Your superadmin privileges are no longer active.');
+      }
+      if (!targetSnap.exists) throw new HttpsError('not-found', 'That user does not exist.');
+      const targetData = targetSnap.data();
+      if (targetData.role === 'superadmin') throw new HttpsError('permission-denied', 'A superadmin account cannot be deleted here.');
+      return { role: callerSnap.data().role, targetRole: targetData.role, targetName: targetData.name || null, targetPhone: targetData.phone || null };
+    });
+    try { await admin.auth().deleteUser(targetUid); }
+    catch (err) {
+      if (err.code !== 'auth/user-not-found') {
+        await logServerError('manageUser.delete', err, { userId: callerUid, targetUid });
+        throw new HttpsError('internal', 'Could not delete the account.');
+      }
+    }
     await targetRef.delete();
-    await logAudit({ action: 'user_deleted', targetUid, performedBy: callerUid, performedByRole: callerRole, details: { role: targetData.role, name: targetData.name || null, phone: targetData.phone || null } });
+    await logAudit({ action: 'user_deleted', targetUid, performedBy: callerUid, performedByRole: result.role, details: { role: result.targetRole, name: result.targetName, phone: result.targetPhone } });
     return { uid: targetUid, deleted: true };
   }
 
