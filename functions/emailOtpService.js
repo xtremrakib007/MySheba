@@ -61,7 +61,7 @@ async function verifyEmailVerificationOtp(data){
   if(result.status==='invalid') throw new HttpsError('invalid-argument','Incorrect verification code.');
   return {verificationId:result.verificationId,email};
 }
-exports.sendEmailVerificationOtp=onCall(async r=>sendEmailVerificationOtp(r.data));
-exports.verifyEmailVerificationOtp=onCall(async r=>verifyEmailVerificationOtp(r.data));
+exports.sendEmailVerificationOtp=onCall({ enforceAppCheck: true }, async r=>sendEmailVerificationOtp(r.data));
+exports.verifyEmailVerificationOtp=onCall({ enforceAppCheck: true }, async r=>verifyEmailVerificationOtp(r.data));
 exports.sendEmailVerificationOtpInternal=sendEmailVerificationOtp;
 exports.verifyEmailVerificationOtpInternal=verifyEmailVerificationOtp;
