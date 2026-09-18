@@ -126,6 +126,7 @@ exports.transferPoints = onCall({ enforceAppCheck: true }, async (request) => {
       if (!fromSnap.exists || !toSnap.exists) throw new HttpsError('not-found', 'Account not found.');
       const fromData = fromSnap.data();
       const toData = toSnap.data();
+      requireSessionMatch(request, fromData);
       if (!active(fromData) || !active(toData)) throw new HttpsError('failed-precondition', 'Both accounts must be active.');
       if (fromData.role !== caller.role || toData.role !== recipient.role) throw new HttpsError('failed-precondition', 'Account status changed. Please retry.');
       const fromBalance = validBalance(fromData.walletBalance);
