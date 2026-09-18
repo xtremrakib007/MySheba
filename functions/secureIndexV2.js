@@ -11,7 +11,7 @@ const salaryMutationService = require('./salaryMutationService');
 
 functions.chargeRecharge = guards.chargeRecharge;
 functions.chargeInternetPackage = guards.chargeInternetPackage;
-functions.chargeBillPayment = require('./walletService').chargeBillPayment;
+functions.chargeBillPayment = guards.chargeBillPayment;
 functions.chargeMobileBanking = guards.chargeMobileBanking;
 functions.chargeRemittance = guards.chargeRemittance;
 functions.chargeWallet = secureWalletCharge.chargeWallet;
