@@ -11,6 +11,13 @@ const MONEY_RE = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
 const SECURITY_PIN_RE = /^\d{4,8}$/;
 const MAX_PIN_ATTEMPTS = 5;
 const PIN_LOCKOUT_MS = 15 * 60 * 1000;
+const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
+const DEVICE_ID_RE = /^[A-Za-z0-9-]{16,100}$/;
+function requireSessionMatch(request, user) {
+  const sessionId = request.data?.sessionId, deviceId = request.data?.deviceId;
+  if (typeof sessionId !== 'string' || !SESSION_ID_RE.test(sessionId) || typeof deviceId !== 'string' || !DEVICE_ID_RE.test(deviceId)) throw new HttpsError('failed-precondition', 'Your secure session is missing. Please sign in again.');
+  if (user.activeSessionId !== sessionId || user.activeDeviceId !== deviceId) throw new HttpsError('permission-denied', 'This device session is no longer active. Please sign in again.');
+}
 function hashPin(pin, salt) { return require('crypto').scryptSync(pin, salt, 64).toString('hex'); }
 
 function requireAuth(request) {
