@@ -22,15 +22,12 @@ import AdminSupportScreen from './src/screens/AdminSupportScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import TopUpScreen from './src/screens/TopUpScreen';
 import SuperAdminTopUpScreen from './src/screens/SuperAdminTopUpScreen';
-import ChatScreen from './src/screens/ChatScreen';
-import ChatListScreen from './src/screens/ChatListScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import MyAccountScreen from './src/screens/MyAccountScreen';
 import ReportsScreen from './src/screens/ReportsScreen';
 import UserManagementScreen from './src/screens/UserManagementScreen';
 import TransferPointsScreen from './src/screens/TransferPointsScreen';
-import CallScreen from './src/screens/CallScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import VerifyIdentityScreen from './src/screens/VerifyIdentityScreen';
 import VerificationManagementScreen from './src/screens/VerificationManagementScreen';
@@ -73,7 +70,6 @@ import PayslipDetailsScreen from './src/screens/PayslipDetailsScreen';
 import RatePopup from './src/components/RatePopup';
 import ResultModal from './src/components/ResultModal';
 import Sidebar from './src/components/Sidebar';
-import IncomingCallModal from './src/components/IncomingCallModal';
 import AppAlertHost from './src/components/AppAlertHost';
 import SecurityPinGate from './src/components/SecurityPinGate';
 import AppLockScreen from './src/components/AppLockScreen';
@@ -132,8 +128,7 @@ function Root() {
       {renderedScreen === 'reports' && <ReportsScreen />}
       {renderedScreen === 'userManagement' && <UserManagementScreen />}
       {renderedScreen === 'transferPoints' && <TransferPointsScreen />}
-      {renderedScreen === 'call' && <CallScreen />}
-      {renderedScreen === 'notifications' && <NotificationsScreen />}
+            {renderedScreen === 'notifications' && <NotificationsScreen />}
       {renderedScreen === 'verifyIdentity' && <VerifyIdentityScreen />}
       {renderedScreen === 'verificationManagement' && <VerificationManagementScreen />}
       {renderedScreen === 'adminAnalytics' && <AdminAnalyticsScreen />}
