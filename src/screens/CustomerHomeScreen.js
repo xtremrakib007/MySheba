@@ -65,10 +65,10 @@ export default function CustomerHomeScreen() {
         )}
 
         <View style={styles.quickActions}>
-          <QuickAction icon="💰" label="Top Up" onPress={() => setScreen('topup')} />
-          <QuickAction icon="📋" label="Activity" onPress={() => setScreen('history')} />
-          <QuickAction icon="🎧" label="Support" onPress={() => setScreen('support')} />
-          <QuickAction icon="✨" label="More" onPress={() => setScreen('moreFeatures')} />
+          <QuickAction colors={colors} icon="💰" label="Top Up" onPress={() => setScreen('topup')} />
+          <QuickAction colors={colors} icon="📋" label="Activity" onPress={() => setScreen('history')} />
+          <QuickAction colors={colors} icon="🎧" label="Support" onPress={() => setScreen('support')} />
+          <QuickAction colors={colors} icon="✨" label="More" onPress={() => setScreen('moreFeatures')} />
         </View>
 
         <InfoBar />
@@ -87,9 +87,9 @@ export default function CustomerHomeScreen() {
   );
 }
 
-function QuickAction({ icon, label, onPress }) {
+function QuickAction({ colors, icon, label, onPress }) {
   return (
-    <TouchableOpacity style={stylesQuick.action} onPress={onPress} activeOpacity={0.82} accessibilityRole="button" accessibilityLabel={label}>
+    <TouchableOpacity style={[stylesQuick.action, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={onPress} activeOpacity={0.82} accessibilityRole="button" accessibilityLabel={label}>
       <Text style={stylesQuick.icon}>{icon}</Text>
       <Text style={stylesQuick.label}>{label}</Text>
     </TouchableOpacity>
@@ -97,7 +97,7 @@ function QuickAction({ icon, label, onPress }) {
 }
 
 const stylesQuick = StyleSheet.create({
-  action: { flex: 1, minHeight: 58, marginHorizontal: 3, borderRadius: 14, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E7EB', alignItems: 'center', justifyContent: 'center' },
+  action: { flex: 1, minHeight: 58, marginHorizontal: 3, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   icon: { fontSize: 19, marginBottom: 3 },
   label: { fontSize: 10, fontWeight: '700', color: '#374151' },
 });
