@@ -64,7 +64,14 @@ exports.approveVerification = onCall({ enforceAppCheck: true }, async (request) 
   const reqRef = db.collection('verificationRequests').doc(targetUid);
   const userRef = db.collection('users').doc(targetUid);
   try {
+    let reviewedByRole = '';
     await db.runTransaction(async (tx) => {
+      const callerSnap = await tx.get(db.collection('users').doc(callerUid));
+      const currentCaller = callerSnap.exists ? callerSnap.data() : null;
+      if (!currentCaller || !['admin', 'superadmin'].includes(currentCaller.role) || currentCaller.suspended === true || currentCaller.inactive === true || currentCaller.disabled === true || currentCaller.active === false || currentCaller.mergedInto) {
+        throw new HttpsError('permission-denied', 'Your account can no longer review verification requests.');
+      }
+      reviewedByRole = currentCaller.role;
       const reqSnap = await tx.get(reqRef);
       if (!reqSnap.exists) throw new HttpsError('not-found', 'That verification request does not exist.');
       const reqData = reqSnap.data();
@@ -81,7 +88,7 @@ exports.approveVerification = onCall({ enforceAppCheck: true }, async (request) 
     await logServerError('approveVerification', err, { userId: callerUid, targetUid });
     throw new HttpsError('internal', 'Could not approve this request.');
   }
-  await logAudit({ action: 'verification_approved', targetUid, performedBy: callerUid, performedByRole: caller.role });
+  await logAudit({ action: 'verification_approved', targetUid, performedBy: callerUid, performedByRole: reviewedByRole });
   return { ok: true };
 });
 
@@ -95,8 +102,15 @@ exports.rejectVerification = onCall({ enforceAppCheck: true }, async (request) =
   const userRef = db.collection('users').doc(targetUid);
   const cleanReason = String(reason || '').trim().slice(0, 500);
   if (!cleanReason) throw new HttpsError('invalid-argument', 'A rejection reason is required.');
+  let reviewedByRole = '';
   try {
     await db.runTransaction(async (tx) => {
+      const callerSnap = await tx.get(db.collection('users').doc(callerUid));
+      const currentCaller = callerSnap.exists ? callerSnap.data() : null;
+      if (!currentCaller || !['admin', 'superadmin'].includes(currentCaller.role) || currentCaller.suspended === true || currentCaller.inactive === true || currentCaller.disabled === true || currentCaller.active === false || currentCaller.mergedInto) {
+        throw new HttpsError('permission-denied', 'Your account can no longer review verification requests.');
+      }
+      reviewedByRole = currentCaller.role;
       const reqSnap = await tx.get(reqRef);
       if (!reqSnap.exists) throw new HttpsError('not-found', 'That verification request does not exist.');
       if (reqSnap.data().status !== 'pending') throw new HttpsError('failed-precondition', 'That request has already been reviewed.');
@@ -111,6 +125,6 @@ exports.rejectVerification = onCall({ enforceAppCheck: true }, async (request) =
     await logServerError('rejectVerification', err, { userId: callerUid, targetUid });
     throw new HttpsError('internal', 'Could not reject this request.');
   }
-  await logAudit({ action: 'verification_rejected', targetUid, performedBy: callerUid, performedByRole: caller.role, details: { reason: cleanReason } });
+  await logAudit({ action: 'verification_rejected', targetUid, performedBy: callerUid, performedByRole: reviewedByRole, details: { reason: cleanReason } });
   return { ok: true };
 });
