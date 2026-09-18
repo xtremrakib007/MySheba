@@ -20,7 +20,7 @@ export default function TransferPointsScreen() {
   const balance = Number(profile?.walletBalance || profile?.balance || 0);
   const isCustomer = !profile?.role || profile.role === 'customer';
 
-  const [unlocked, setUnlocked] = useState(false);
+  const unlocked = true;
   const [recipientQuery, setRecipientQuery] = useState('');
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
