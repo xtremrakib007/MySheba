@@ -13,6 +13,7 @@ import RechargeStep, { validateStep as validateRecharge } from '../steps/Recharg
 import MobileBankingStep, { validateStep as validateMobileBanking } from '../steps/MobileBankingSteps';
 import InternetStep, { validateStep as validateInternet } from '../steps/InternetSteps';
 import RemittanceStep, { validateStep as validateRemittance } from '../steps/RemittanceSteps';
+import BillPaymentStep, { validateStep as validateBillPayment } from '../steps/BillPaymentSteps';
 import BusStep from '../steps/BusSteps';
 import TrainStep from '../steps/TrainSteps';
 import FlightStep from '../steps/FlightSteps';
@@ -23,6 +24,7 @@ const SERVICE_TITLES = {
   mobilebanking: 'Mobile Banking',
   internet: 'Internet',
   remittance: 'Remittance',
+  billpayment: 'Bill Payment',
   bus: 'Bus',
   train: 'Train',
   flight: 'Flight',
@@ -33,6 +35,7 @@ const STEP_COMPONENTS = {
   mobilebanking: MobileBankingStep,
   internet: InternetStep,
   remittance: RemittanceStep,
+  billpayment: BillPaymentStep,
   bus: BusStep,
   train: TrainStep,
   flight: FlightStep,
@@ -45,6 +48,7 @@ const VALIDATORS = {
   mobilebanking: validateMobileBanking,
   internet: validateInternet,
   remittance: validateRemittance,
+  billpayment: validateBillPayment,
   bus: validateTravelInquiry,
   train: validateTravelInquiry,
   flight: validateTravelInquiry,
