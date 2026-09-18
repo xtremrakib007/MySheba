@@ -51,7 +51,7 @@ export function subscribeBroadcastTransactions(callback, onError) {
       attach(query(collection(db, QUEUE_COLLECTION), where('service', '==', 'Mobile Banking'), where('status', '==', 'pending'), where('dealerId', '==', uid)), pending, false);
     } else {
       attach(query(collection(db, QUEUE_COLLECTION), where('service', 'in', ['Recharge', 'Internet', 'Bill Payment', 'Remittance']), where('status', '==', 'pending'), where('resellerId', '==', null)), pending);
-      attach(query(collection(db, QUEUE_COLLECTION), where('service', 'in', ['Recharge', 'Internet', 'Remittance']), where('status', '==', 'pending'), where('resellerId', '==', uid)), pending, false);
+      attach(query(collection(db, QUEUE_COLLECTION), where('service', 'in', ['Recharge', 'Internet', 'Bill Payment', 'Remittance']), where('status', '==', 'pending'), where('resellerId', '==', uid)), pending, false);
     }
     attach(query(collection(db, QUEUE_COLLECTION), where('claimedBy', '==', uid)), claimed);
   } catch (err) { if (!stopped) onError?.(err); } })();
