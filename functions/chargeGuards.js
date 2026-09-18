@@ -1,6 +1,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const walletService = require('./walletService');
+const { checkVelocity, getClientIp } = require('./rateLimitService');
 
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 
@@ -97,6 +98,8 @@ function wrap(name) {
       if (recovered) return recovered;
       throw new HttpsError('aborted', 'This order is already being processed. Please wait and check your transaction history.');
     }
+
+    await checkVelocity(db, uid, 'chargeService', { ip: getClientIp(request) });
 
     const fn = walletService[name];
     if (!fn || typeof fn.run !== 'function') {
