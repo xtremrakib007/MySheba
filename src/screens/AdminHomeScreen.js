@@ -27,8 +27,6 @@ import * as bannerService from '../firebase/bannerService';
 import * as announcementService from '../firebase/announcementService';
 import * as topupService from '../firebase/topupService';
 import * as transactionService from '../firebase/transactionService';
-import * as categoryService from '../firebase/categoryService';
-import { MODULE_LABELS } from '../firebase/categoryService';
 import { internetPackagesByOperator, countries } from '../data/countries';
 import CountryModal from '../components/CountryModal';
 import * as homepageConfigService from '../firebase/homepageConfigService';
@@ -44,7 +42,6 @@ const FEATURES = [
   { key: 'rates', icon: '💱', bg: '#F3E5F5', name: 'Rates' },
   { key: 'pricing', icon: '🏷️', bg: '#FFF3E0', name: 'Pricing' },
   { key: 'payments', icon: '💳', bg: '#E1F5FE', name: 'Payments' },
-  { key: 'categories', icon: '🗂️', bg: '#EDE7F6', name: 'Categories' },
   { key: 'support', icon: '☎️', bg: '#E0F2F1', name: 'Support' },
   { key: 'homepage', icon: '🏠', bg: '#E0F7FA', name: 'Homepage' },
   { key: 'banners', icon: '🖼️', bg: '#FFF0F0', name: 'Banners' },
@@ -202,17 +199,6 @@ const SUPPORT_FIELDS = [
 // Meta developer App ID (free to create, no App Review needed) that
 // Instagram/Facebook Story sharing requires for attribution; kept in this
 // same doc purely to avoid a second settings read.
-const SOCIAL_FIELDS = [
-  { key: 'facebook', label: '📘 Facebook Page URL', placeholder: 'https://facebook.com/yourpage' },
-  { key: 'instagram', label: '📷 Instagram URL', placeholder: 'https://instagram.com/yourhandle' },
-  { key: 'tiktok', label: '🎵 TikTok URL', placeholder: 'https://tiktok.com/@yourhandle' },
-  { key: 'linkedin', label: '💼 LinkedIn URL', placeholder: 'https://linkedin.com/company/yourcompany' },
-  { key: 'x', label: '✖️ X (Twitter) URL', placeholder: 'https://x.com/yourhandle' },
-];
-const SOCIAL_TECHNICAL_FIELDS = [
-  { key: 'facebookAppId', label: '🔧 Facebook App ID', placeholder: 'e.g. 1234567890123456' },
-];
-
 // Every operator that has an editable internet package list (see
 // data/countries.js) - flattened + deduped across all countries, so the
 // Pricing tab's operator picker doesn't need to know about countries at all.
@@ -274,7 +260,6 @@ export default function AdminHomeScreen() {
   // Role-Based Pricing (superadmin only): { role, key } for the field
   // currently being edited, or null when the modal's closed.
   const [editRolePrice, setEditRolePrice] = useState(null);
-  const [categoryBusy, setCategoryBusy] = useState(false);
   const [editSupportKey, setEditSupportKey] = useState(null);
   const [editPaymentKey, setEditPaymentKey] = useState(null); // 'jompayBillerId' | 'jompayRefNo' | null
   const [qrModalVisible, setQrModalVisible] = useState(false); // DuitNow QR upload modal
@@ -566,15 +551,6 @@ export default function AdminHomeScreen() {
     }
   };
 
-  // Boolean, not numeric - unlike every other pricing field above, so it
-  // toggles directly on tap instead of going through PromptModal. Treats
-  const toggleGiftEnabled = async () => {
-    try {
-    } catch (e) {
-      showAlert('MySheba', e.message || 'Could not update this setting.');
-    }
-  };
-
   const savePointCost = async (value) => {
     const key = editPointCostKey;
     setEditPointCostKey(null);
@@ -607,53 +583,12 @@ export default function AdminHomeScreen() {
     }
   };
 
-  const saveNewCategory = async (value) => {
-    const module = addCategoryModule;
-    setAddCategoryModule(null);
-    if (!module) return;
-    setCategoryBusy(true);
-    try {
-      await categoryService.addCategory(module, value);
-    } catch (e) {
-      showAlert('MySheba', e.message || 'Could not add this category.');
-    } finally {
-      setCategoryBusy(false);
-    }
-  };
-
-  const confirmRemoveCategory = (module, name) => {
-    showAlert(`Remove "${name}"?`, "It stays on any existing listing that already uses it - this only takes it out of the picker for new ones.", [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          setCategoryBusy(true);
-          try {
-            await categoryService.removeCategory(module, name);
-          } catch (e) {
-            showAlert('MySheba', e.message || 'Could not remove this category.');
-          } finally {
-            setCategoryBusy(false);
-          }
-        },
-      },
-    ]);
-  };
-
   const saveSupportContact = async (value) => {
     const key = editSupportKey;
     setEditSupportKey(null);
     if (!key) return;
     try {
       await supportContactService.updateSupportContact(key, value.trim());
-    } catch (e) {
-      showAlert('MySheba', e.message || 'Could not update this setting.');
-    }
-  };
-
-    if (!key) return;
-    try {
     } catch (e) {
       showAlert('MySheba', e.message || 'Could not update this setting.');
     }
@@ -949,28 +884,6 @@ export default function AdminHomeScreen() {
               </Text>
             </View>
 
-            <View style={styles.card}>
-              <View style={styles.rateRow}>
-                <Text style={{ flex: 1 }}>Gifting Enabled</Text>
-                <TouchableOpacity style={styles.editBtn} onPress={toggleGiftEnabled}>
-                </TouchableOpacity>
-              </View>
-              {GIFT_LIMIT_FIELDS.map((r) => (
-                <View key={r.key} style={styles.rateRow}>
-                  <Text style={{ flex: 1 }}>{r.label}</Text>
-                  <Text style={styles.rateValue}>{pricing[r.key]} pts</Text>
-                  <TouchableOpacity style={styles.editBtn} onPress={() => setEditPointCostKey(r.key)}>
-                    <Text style={styles.editBtnText}>Edit</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-              <Text style={styles.hintText}>
-                Gifting always splits 80/20 (receiver / MySheba service fee) - that split is fixed by design,
-                not editable here. Turning gifting off blocks new gifts immediately (in-progress ones already
-                completed are unaffected); the min/max above bound how many points a single gift can move.
-              </Text>
-            </View>
-
             {profile && profile.role === 'superadmin' && (
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>🎭 Role-Based Pricing</Text>
@@ -1041,41 +954,6 @@ export default function AdminHomeScreen() {
           </View>
         )}
 
-        {adminTab === 'categories' && (
-          <View>
-              return (
-                <View key={module} style={styles.card}>
-                  <Text style={styles.cardTitle}>{MODULE_LABELS[module]}</Text>
-                  {list.map((c) => (
-                    <View key={c} style={styles.rateRow}>
-                      <Text style={{ flex: 1 }}>{c}</Text>
-                      <TouchableOpacity
-                        style={[styles.editBtn, styles.removeCategoryBtn]}
-                        disabled={categoryBusy}
-                        onPress={() => confirmRemoveCategory(module, c)}
-                      >
-                        <Text style={[styles.editBtnText, styles.removeCategoryBtnText]}>Remove</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                  <TouchableOpacity
-                    style={styles.addCategoryBtn}
-                    disabled={categoryBusy}
-                    onPress={() => setAddCategoryModule(module)}
-                  >
-                    <Text style={styles.addCategoryBtnText}>+ Add Category</Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
-            <Text style={styles.hintText}>
-              These lists feed the category picker on Create Listing / List a Service and the filter chips on
-              their browse screens. Removing one only hides it from new listings going forward - anything
-              already posted under it keeps showing that category.
-            </Text>
-          </View>
-        )}
-
         {adminTab === 'support' && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>☎️ Support Contact Numbers</Text>
@@ -1091,36 +969,6 @@ export default function AdminHomeScreen() {
             <Text style={styles.hintText}>
               The customer Support screen shows Call and WhatsApp as "Coming soon" until each number is set here. Email support isn't affected - it's fixed.
             </Text>
-          </View>
-        )}
-
-          <View>
-            <View style={styles.card}>
-              {SOCIAL_FIELDS.map((r) => (
-                <View key={r.key} style={styles.rateRow}>
-                  <Text style={{ flex: 1 }}>{r.label}</Text>
-                    <Text style={styles.editBtnText}>Edit</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-              <Text style={styles.hintText}>
-                Shown as the "Follow Us" row on the customer Support screen - a platform only appears there once its link is set here.
-              </Text>
-            </View>
-
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>🔧 Story Sharing (technical)</Text>
-              {SOCIAL_TECHNICAL_FIELDS.map((r) => (
-                <View key={r.key} style={styles.rateRow}>
-                  <Text style={{ flex: 1 }}>{r.label}</Text>
-                    <Text style={styles.editBtnText}>Edit</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-              <Text style={styles.hintText}>
-                Required for the Facebook/Instagram Story options on a listing's Share sheet to work. Free to create at developers.facebook.com - no app review needed for this. Instagram Stories uses the same App ID as Facebook.
-              </Text>
-            </View>
           </View>
         )}
 
@@ -1496,13 +1344,6 @@ export default function AdminHomeScreen() {
         onCancel={() => setEditPricingKey(null)}
       />
       <PromptModal
-        visible={!!addCategoryModule}
-        title={`New ${addCategoryModule === 'services' ? 'service' : 'Buy & Sell'} category:`}
-        placeholder="e.g. Sporting Goods"
-        onSubmit={saveNewCategory}
-        onCancel={() => setAddCategoryModule(null)}
-      />
-      <PromptModal
         visible={!!editPointCostKey}
         title={
           ACCESS_WINDOW_FIELDS.some((f) => f.key === editPointCostKey) ? 'New value (hours):'
@@ -1544,11 +1385,6 @@ export default function AdminHomeScreen() {
         placeholder={SUPPORT_FIELDS.find((f) => f.key === editSupportKey)?.placeholder}
         onSubmit={saveSupportContact}
         onCancel={() => setEditSupportKey(null)}
-      />
-      <PromptModal
-        title="New value:"
-        placeholder={
-        }
       />
       <PromptModal
         visible={!!editPaymentKey}
