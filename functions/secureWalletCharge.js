@@ -4,6 +4,14 @@ const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { logAudit, logServerError } = require('./logService');
 
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
+const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
+const DEVICE_ID_RE = /^[A-Za-z0-9-]{16,100}$/;
+function requireSessionMatch(request, user) {
+  const sessionId = request.data?.sessionId;
+  const deviceId = request.data?.deviceId;
+  if (typeof sessionId !== 'string' || !SESSION_ID_RE.test(sessionId) || typeof deviceId !== 'string' || !DEVICE_ID_RE.test(deviceId)) throw new HttpsError('failed-precondition', 'Your secure session is missing. Please sign in again.');
+  if (user.activeSessionId !== sessionId || user.activeDeviceId !== deviceId) throw new HttpsError('permission-denied', 'This device session is no longer active. Please sign in again.');
+}
 const MAX_KEY_LENGTH = 200;
 const DEFAULT_PRICING = {
   webviewAccessCost: 2,
