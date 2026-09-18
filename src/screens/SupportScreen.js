@@ -19,14 +19,6 @@ const SUPPORT_EMAIL = 'info.mysheba@gmail.com';
 
 // Us row below once an admin has actually set its URL - same "hide until
 // configured" idea as the Call/WhatsApp support cards above.
-const SOCIAL_PLATFORMS = [
-  { key: 'facebook', icon: '📘', label: 'Facebook' },
-  { key: 'instagram', icon: '📷', label: 'Instagram' },
-  { key: 'tiktok', icon: '🎵', label: 'TikTok' },
-  { key: 'linkedin', icon: '💼', label: 'LinkedIn' },
-  { key: 'x', icon: '✖️', label: 'X' },
-];
-
 const TABS = [
   { key: 'messages', label: 'Messages' },
   { key: 'tickets', label: 'Tickets' },
@@ -167,6 +159,7 @@ export default function SupportScreen() {
   } = useTheme();
 
   const styles = createStyles(colors);
+  const { goBackOrHome, authUser, profile, openChat, supportContact, openHelp, helpPrefill, setHelpPrefill } = useApp();
   const hasPhone = !!supportContact?.phone;
   const hasWhatsapp = !!supportContact?.whatsapp;
 
@@ -417,16 +410,6 @@ export default function SupportScreen() {
           </View>
 
           <Text style={styles.hoursNote}>Support hours: 9:00 AM – 9:00 PM, daily.</Text>
-
-            <View style={styles.followUsBlock}>
-              <Text style={styles.followUsTitle}>Follow Us</Text>
-              <View style={styles.followUsRow}>
-                    <Text style={styles.followUsIcon}>{p.icon}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          )}
 
           <SmartAd placement="HELP_SUPPORT_BOTTOM" feature="help_support" height={100} style={{ marginTop: 12 }} />
         </ScrollView>
