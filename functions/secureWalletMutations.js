@@ -73,7 +73,7 @@ exports.createSelfTopup = onCall({ enforceAppCheck: true }, async (request) => {
         action: 'self_topup_created',
         targetUid: uid,
         performedBy: uid,
-        performedByRole: caller.role,
+        performedByRole: 'admin/self',
         details: { amount, requestId, topupId: result.id },
       });
     }
