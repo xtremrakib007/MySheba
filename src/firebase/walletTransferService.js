@@ -1,6 +1,7 @@
 import { httpsCallable } from 'firebase/functions';
 import * as Crypto from 'expo-crypto';
 import { functions } from './config';
+import { getSessionProof } from './deviceSessionService';
 
 function createRequestId() {
   return `mswt_${Crypto.randomUUID().replace(/-/g, '')}`;
