@@ -28,6 +28,7 @@ export async function walletTransfer({ recipient, amount, note, securityPin, req
       note: String(note || '').trim(),
       securityPin: String(securityPin || ''),
       requestId: id,
+      ...session,
     });
     return data;
   } catch (err) {
