@@ -27,15 +27,10 @@
         "backgroundColor": "#FFFFFF"
       },
       "permissions": [
-        "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA",
-        "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.BLUETOOTH",
         "android.permission.ACCESS_NETWORK_STATE",
         "android.permission.INTERNET",
         "android.permission.POST_NOTIFICATIONS",
-        "android.permission.USE_FULL_SCREEN_INTENT",
-        "android.permission.WAKE_LOCK",
         "android.permission.VIBRATE",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
@@ -66,7 +61,6 @@
     "ios": {
       "infoPlist": {
         "NSCameraUsageDescription": "Allow MySheba to access your camera for KYC identity verification and video calls.",
-        "NSMicrophoneUsageDescription": "Allow MySheba to access your microphone for voice and video calls.",
         "NSLocationWhenInUseUsageDescription": "Allow MySheba to access your location to show nearby listings, properties, and service providers on the map."
       },
       "config": {
@@ -99,12 +93,6 @@
         "expo-contacts",
         {
           "contactsPermission": "Allow MySheba to access your contacts so it can show which of your saved numbers are on MySheba, like WhatsApp does."
-        }
-      ],
-      [
-        "expo-camera",
-        {
-          "cameraPermission": "Allow MySheba to access your camera for KYC identity verification, QR scanning, and video calls."
         }
       ],
       "@react-native-firebase/app",
