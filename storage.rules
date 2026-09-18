@@ -3,9 +3,11 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     function signedIn() { return request.auth != null; }
-    function role() { return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.get('role', 'customer'); }
-    function isAdmin() { return role() in ['admin', 'superadmin']; }
-    function isStaff() { return role() in ['dealer', 'reseller', 'admin', 'superadmin']; }
+    function profile() { return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data; }
+    function activeProfile() { return signedIn() && profile().suspended != true && profile().inactive != true && profile().disabled != true && profile().active != false && profile().mergedInto == null; }
+    function role() { return activeProfile() ? profile().get('role', 'customer') : null; }
+    function isAdmin() { return activeProfile() && role() in ['admin', 'superadmin']; }
+    function isStaff() { return activeProfile() && role() in ['dealer', 'reseller', 'admin', 'superadmin']; }
     function transactionOwner(txId) { return firestore.get(/databases/(default)/documents/transactions/$(txId)).data.customerId == request.auth.uid; }
     function transactionStaff(txId) {
       let tx = firestore.get(/databases/(default)/documents/transactions/$(txId)).data;
