@@ -19,6 +19,16 @@ async function getActor(uid) {
   }
   return { uid, role: p.role || '', name: p.fullName || p.name || p.displayName || p.phone || uid };
 }
+async function assertActorStillActive(tx, uid, allowedRoles) {
+  const snap = await tx.get(admin.firestore().collection('users').doc(uid));
+  if (!snap.exists) throw new HttpsError('permission-denied', 'Your staff profile was not found.');
+  const p = snap.data() || {};
+  if (!allowedRoles.includes(p.role) || p.suspended === true || p.inactive === true || p.disabled === true || p.active === false || p.mergedInto) {
+    throw new HttpsError('permission-denied', 'Your account is no longer authorized for this operation.');
+  }
+  return { uid, role: p.role, name: p.fullName || p.name || p.displayName || p.phone || uid };
+}
+
 function validReceiptUrl(url, txId, role) {
   if (typeof url !== 'string' || url.length > 4096) return false;
   let parsed;
@@ -35,7 +45,7 @@ function validReceiptUrl(url, txId, role) {
     && !objectPath.slice(expectedPrefix.length).split('/').some((part) => part === '..');
 }
 
-function assertOperatorCanHandle(actor, order) {
+function assertOperatorCanHandle(currentActor, order) {
   if (!OPERATOR_ROLES.includes(actor.role)) throw new HttpsError('permission-denied', 'Only a dealer or reseller can accept an approved order.');
   if (actor.role === 'dealer' && !DEALER_SERVICES.includes(order.service)) throw new HttpsError('permission-denied', 'Your dealer account cannot handle this service.');
   if (actor.role === 'reseller' && !RESELLER_SERVICES.includes(order.service)) throw new HttpsError('permission-denied', 'Your reseller account cannot handle this service.');
@@ -45,14 +55,15 @@ function assertOperatorCanHandle(actor, order) {
 
 exports.approveTransaction = onCall({ enforceAppCheck: true }, async (request) => {
   requireAuth(request); const actor = await getActor(request.auth.uid);
-  if (!APPROVER_ROLES.includes(actor.role)) throw new HttpsError('permission-denied', 'Only an admin or superadmin can approve an order.');
+  if (!APPROVER_ROLES.includes(currentActor.role)) throw new HttpsError('permission-denied', 'Only an admin or superadmin can approve an order.');
   const id = String(request.data?.transactionId || ''); if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
   const db = admin.firestore(), ref = db.collection('transactions').doc(id);
   await db.runTransaction(async (tx) => {
+    const currentActor = await assertActorStillActive(tx, actor.uid, APPROVER_ROLES);
     const snap = await tx.get(ref); if (!snap.exists) throw new HttpsError('not-found', 'That order no longer exists.');
     const order = snap.data(); if (order.status !== 'pending') throw new HttpsError('failed-precondition', 'Only pending orders can be approved.');
     if (order.approved === true) throw new HttpsError('already-exists', 'This order is already approved.');
-    tx.update(ref, { approved: true, approvedBy: actor.uid, approvedByName: actor.name, approvedByRole: actor.role, approvedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    tx.update(ref, { approved: true, approvedBy: currentActor.uid, approvedByName: currentActor.name, approvedByRole: currentActor.role, approvedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
   });
   return { ok: true, transactionId: id };
 });
@@ -62,18 +73,19 @@ exports.acceptTransaction = onCall({ enforceAppCheck: true }, async (request) =>
   const id = String(request.data?.transactionId || ''); if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
   const db = admin.firestore(), ref = db.collection('transactions').doc(id);
   await db.runTransaction(async (tx) => {
+    const currentActor = await assertActorStillActive(tx, actor.uid, [...APPROVER_ROLES, ...OPERATOR_ROLES]);
     const snap = await tx.get(ref); if (!snap.exists) throw new HttpsError('not-found', 'That order no longer exists.');
     const order = snap.data();
-    if (APPROVER_ROLES.includes(actor.role)) {
+    if (APPROVER_ROLES.includes(currentActor.role)) {
       if (order.status !== 'pending') throw new HttpsError('failed-precondition', 'Only pending orders can be approved.');
       if (order.approved === true) throw new HttpsError('already-exists', 'This order is already approved.');
-      tx.update(ref, { approved: true, approvedBy: actor.uid, approvedByName: actor.name, approvedByRole: actor.role, approvedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      tx.update(ref, { approved: true, approvedBy: currentActor.uid, approvedByName: currentActor.name, approvedByRole: currentActor.role, approvedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
       return;
     }
-    assertOperatorCanHandle(actor, order);
+    assertOperatorCanHandle(currentActor, order);
     if (order.status !== 'pending' || order.claimedBy) throw new HttpsError('failed-precondition', 'This order was already accepted by another operator.');
     if (order.approved !== true || !order.approvedBy) throw new HttpsError('failed-precondition', 'This order must be approved by an admin or superadmin first.');
-    tx.update(ref, { status: 'processing', claimedBy: actor.uid, claimedByRole: actor.role, claimedByName: actor.name, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    tx.update(ref, { status: 'processing', claimedBy: currentActor.uid, claimedByRole: currentActor.role, claimedByName: currentActor.name, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
   });
   return { ok: true, transactionId: id };
 });
@@ -89,13 +101,14 @@ exports.completeTransaction = onCall({ enforceAppCheck: true }, async (request) 
   if (!validReceiptUrl(receiptUrl, id, actor.role)) throw new HttpsError('invalid-argument', 'The receipt URL must be a valid MySheba receipt upload.');
   const db = admin.firestore(), ref = db.collection('transactions').doc(id);
   await db.runTransaction(async (tx) => {
+    const currentActor = await assertActorStillActive(tx, actor.uid, OPERATOR_ROLES);
     const snap = await tx.get(ref); if (!snap.exists) throw new HttpsError('not-found', 'That order no longer exists.');
     const order = snap.data();
-    if (order.status !== 'processing' || order.claimedBy !== actor.uid) throw new HttpsError('failed-precondition', 'Only the operator who accepted this order can complete it.');
+    if (order.status !== 'processing' || order.claimedBy !== currentActor.uid) throw new HttpsError('failed-precondition', 'Only the operator who accepted this order can complete it.');
     if (order.approved !== true || !order.approvedBy) throw new HttpsError('failed-precondition', 'This order has no valid admin approval.');
     if (typeof order.pin !== 'string' || !/^\d{4}$/.test(order.pin)) throw new HttpsError('failed-precondition', 'This order has no valid collection PIN. Please recreate the order.');
     if (pin !== order.pin) throw new HttpsError('permission-denied', 'Incorrect collection PIN.');
-    tx.update(ref, { status: 'completed', pin: admin.firestore.FieldValue.delete(), receiptUrl, completedBy: actor.uid, completedByName: actor.name, completedByRole: actor.role, completedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    tx.update(ref, { status: 'completed', pin: admin.firestore.FieldValue.delete(), receiptUrl, completedBy: currentActor.uid, completedByName: currentActor.name, completedByRole: currentActor.role, completedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
   });
   return { ok: true, transactionId: id };
 });
@@ -121,7 +134,7 @@ exports.scrubCompletedTransactionPins = onCall({ enforceAppCheck: true }, async 
 exports.assignDealer = onCall({ enforceAppCheck: true }, async (request) => {
   requireAuth(request);
   const actor = await getActor(request.auth.uid);
-  if (!APPROVER_ROLES.includes(actor.role)) throw new HttpsError('permission-denied', 'Only an admin or superadmin can assign a dealer.');
+  if (!APPROVER_ROLES.includes(currentActor.role)) throw new HttpsError('permission-denied', 'Only an admin or superadmin can assign a dealer.');
   const id = String(request.data?.transactionId || '').trim();
   const dealerId = String(request.data?.dealerId || '').trim();
   if (!id || !dealerId) throw new HttpsError('invalid-argument', 'Transaction ID and dealer ID are required.');
@@ -130,6 +143,7 @@ exports.assignDealer = onCall({ enforceAppCheck: true }, async (request) => {
   const txRef = db.collection('transactions').doc(id);
   const dealerRef = db.collection('users').doc(dealerId);
   await db.runTransaction(async (tx) => {
+    const currentActor = await assertActorStillActive(tx, actor.uid, APPROVER_ROLES);
     const [orderSnap, dealerSnap] = await Promise.all([tx.get(txRef), tx.get(dealerRef)]);
     if (!orderSnap.exists) throw new HttpsError('not-found', 'That order no longer exists.');
     if (!dealerSnap.exists) throw new HttpsError('not-found', 'The selected dealer was not found.');
