@@ -38,7 +38,6 @@ import * as bannerService from "../firebase/bannerService";
 import * as announcementService from "../firebase/announcementService";
 import * as topupService from "../firebase/topupService";
 import * as chatService from "../firebase/chatService";
-import * as callService from "../firebase/callService";
 import {
   registerForPushNotificationsAsync,
   addNotificationResponseListener,
@@ -55,16 +54,6 @@ import {
   checkPaymentEntryAccess,
   chargePaymentSuccess,
 } from "../firebase/paymentWebviewService";
-import { withCallSettingsDefaults } from "../data/callSettingsConstants";
-import {
-  cacheCallSettings,
-  cacheCallerRingtones,
-} from "../notifications/callSettingsCache";
-import {
-  setCallerRingtone as saveCallerRingtone,
-  removeCallerRingtone as deleteCallerRingtone,
-  subscribeCallerRingtones,
-} from "../firebase/callerRingtoneService";
 import {
   WEBVIEW_ACCESS_COST,
   WEBVIEW_SUBMIT_COST,
@@ -591,10 +580,6 @@ export function AppProvider({ children }) {
     },
     [setBiometricEnabled],
   );
-
-  // ---- voice / video calls (Agora) ----
-  const [activeCall, setActiveCall] = useState(null); // the call doc currently on-screen (ringing/accepted)
-  const [incomingCall, setIncomingCall] = useState(null); // a 1:1 call ringing FOR me
 
   // ---- service wizard state (mirrors currentService/currentStep/totalSteps/serviceData) ----
   const [currentService, setCurrentService] = useState("");
@@ -1452,61 +1437,6 @@ export function AppProvider({ children }) {
       setAppLocked(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appLockEnabled, authUser?.uid, profile?.securityPinSet]);
-
-  // Listens for a call ringing FOR me no matter what screen I'm on, so the
-  // incoming-call prompt can show up over any screen (see IncomingCallModal).
-  useEffect(() => {
-    if (!authUser) {
-      setIncomingCall(null);
-      return undefined;
-    }
-    const unsub = callService.subscribeIncomingCalls(authUser.uid, (call) => {
-      // Don't re-prompt for a call I'm already on.
-      setIncomingCall(call && call.id !== activeCall?.id ? call : null);
-    });
-    return unsub;
-  }, [authUser, activeCall]);
-
-  /** Starts a call with another user and switches to the call screen.
-   * `caller` is supplied by the call site (e.g. ChatScreen) rather than
-   * built here, so it always reflects the profile the screen has in hand. */
-  const startCall = useCallback(
-    async (caller, callee, type = "video") => {
-      if (!authUser) return;
-      const { callId, channelName } = await callService.startCall(
-        caller,
-        callee,
-        type,
-      );
-      setActiveCall({
-        id: callId,
-        channelName,
-        type,
-        callerUid: caller.uid,
-        callerName: caller.name,
-        calleeUid: callee.uid,
-        calleeName: callee.name,
-      });
-      setScreen("call");
-    },
-    [authUser],
-  );
-
-  /** Accepts the currently-ringing incoming call and switches to the call screen. */
-  const answerIncomingCall = useCallback(async () => {
-    if (!incomingCall) return;
-    await callService.acceptCall(incomingCall.id);
-    setActiveCall(incomingCall);
-    setIncomingCall(null);
-    setScreen("call");
-  }, [incomingCall]);
-
-  /** Declines the currently-ringing incoming call without joining. */
-  const rejectIncomingCall = useCallback(async () => {
-    if (!incomingCall) return;
-    await callService.declineCall(incomingCall.id);
-    setIncomingCall(null);
-  }, [incomingCall]);
 
   /** Opens the Support thread - `chatId` is the customer's uid, `name` is
    * who to show in the header/inbox. `returnTo` (staff only) is which
@@ -2661,13 +2591,6 @@ export function AppProvider({ children }) {
     // private vault unlock (Notepad + My Documents; NOT Transfer Points)
     privateVaultUnlocked,
     setPrivateVaultUnlocked,
-    // voice / video calls
-    activeCall,
-    setActiveCall,
-    incomingCall,
-    startCall,
-    answerIncomingCall,
-    rejectIncomingCall,
     // overlays
     ratePopupVisible,
     setRatePopupVisible,
@@ -2676,14 +2599,6 @@ export function AppProvider({ children }) {
     closeResult,
     goHome,
     setNotifPref,
-    callSettings,
-    updateCallSettings,
-    callerRingtones,
-    updateCallerRingtone,
-    clearCallerRingtone,
-    openRingtonePicker,
-    activeRingtoneContactUid,
-    activeRingtoneContactName,
     changePassword,
     linkGoogleAccount,
     startGoogleAccountMerge,
