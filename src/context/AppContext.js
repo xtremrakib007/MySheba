@@ -82,7 +82,7 @@ const SERVICE_STEPS = {
   recharge: 4,
   mobilebanking: 3,
   internet: 4,
-  billpayment: 4,
+  billpayment: 5,
   remittance: 7,
   bus: 3,
   train: 3,
