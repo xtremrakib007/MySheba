@@ -127,5 +127,6 @@ function wrap(name) {
 
 exports.chargeRecharge = wrap('chargeRecharge');
 exports.chargeInternetPackage = wrap('chargeInternetPackage');
+exports.chargeBillPayment = wrap('chargeBillPayment');
 exports.chargeMobileBanking = wrap('chargeMobileBanking');
 exports.chargeRemittance = wrap('chargeRemittance');
