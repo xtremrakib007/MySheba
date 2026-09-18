@@ -120,15 +120,13 @@ function Root() {
       {renderedScreen === 'history' && <HistoryScreen />}
       {renderedScreen === 'topup' && <TopUpScreen />}
       {renderedScreen === 'superAdminTopup' && <SuperAdminTopUpScreen />}
-      {renderedScreen === 'chat' && <ChatScreen />}
-      {renderedScreen === 'chatList' && <ChatListScreen />}
       {renderedScreen === 'settings' && <SettingsScreen />}
       {renderedScreen === 'profile' && <ProfileScreen />}
       {renderedScreen === 'myAccount' && <MyAccountScreen />}
       {renderedScreen === 'reports' && <ReportsScreen />}
       {renderedScreen === 'userManagement' && <UserManagementScreen />}
       {renderedScreen === 'transferPoints' && <TransferPointsScreen />}
-            {renderedScreen === 'notifications' && <NotificationsScreen />}
+      {renderedScreen === 'notifications' && <NotificationsScreen />}
       {renderedScreen === 'verifyIdentity' && <VerifyIdentityScreen />}
       {renderedScreen === 'verificationManagement' && <VerificationManagementScreen />}
       {renderedScreen === 'adminAnalytics' && <AdminAnalyticsScreen />}
@@ -168,7 +166,7 @@ function Root() {
       {renderedScreen === 'payslipHistory' && <PayslipHistoryScreen />}
       {renderedScreen === 'payslipDetails' && <PayslipDetailsScreen />}
     </View>
-    <RatePopup /><ResultModal /><Sidebar /><IncomingCallModal /><AppAlertHost /><SecurityPinGate /><AppLockScreen /><BiometricOptInPrompt />
+    <RatePopup /><ResultModal /><Sidebar /><AppAlertHost /><SecurityPinGate /><AppLockScreen /><BiometricOptInPrompt />
   </SafeAreaView>;
 }
 
