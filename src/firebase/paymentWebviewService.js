@@ -58,7 +58,8 @@ export async function checkPaymentEntryAccess(uid, cost = PAYMENT_SUCCESS_COST) 
 export async function chargePaymentSuccess(uid, key, cost = PAYMENT_SUCCESS_COST) {
   const fn = httpsCallable(functions, 'chargeWallet');
   try {
-    const { data } = await fn({ kind: 'payment_success', key });
+    const session = await getSessionProof();
+    const { data } = await fn({ kind: 'payment_success', key, ...session });
     return data;
   } catch (err) {
     throw new Error(err.message || `You need ${cost} pts to confirm this payment - top up your wallet first.`);
