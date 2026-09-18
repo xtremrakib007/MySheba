@@ -13,6 +13,7 @@ export interface NavItem {
   icon: LucideIcon;
   superadminOnly?: boolean;
   enabled: boolean;
+  allowedRoles?: Array<'admin' | 'superadmin' | 'support' | 'finance'>;
 }
 
 export interface NavGroup {
@@ -32,7 +33,7 @@ export const navGroups: NavGroup[] = [
     { label: 'Transactions', path: '/transactions', icon: Receipt, enabled: true },
     { label: 'User Operations', path: '/users', icon: Users, enabled: true },
     { label: 'KYC Operations', path: '/kyc-operations', icon: ClipboardList, enabled: true },
-    { label: 'Support Operations', path: '/support-operations', icon: Headphones, enabled: true },
+    { label: 'Support Operations', path: '/support-operations', icon: Headphones, allowedRoles: ['admin','superadmin','support'], enabled: true },
     { label: 'Service Operations', path: '/service-operations', icon: Workflow, enabled: true },
     { label: 'Inquiries', path: '/inquiries', icon: Plane, enabled: true },
   ] },
@@ -47,21 +48,21 @@ export const navGroups: NavGroup[] = [
     { label: 'Security Center', path: '/security', icon: ShieldCheck, enabled: true },
   ] },
   { label: 'Finance & Risk', accent: 'danger', items: [
-    { label: 'Financial Control', path: '/financial', icon: Banknote, enabled: true },
-    { label: 'Wallet Settlement', path: '/wallet-settlement', icon: Wallet, enabled: true },
-    { label: 'Fraud & Risk', path: '/fraud-risk', icon: ShieldAlert, enabled: true },
+    { label: 'Financial Control', path: '/financial', icon: Banknote, allowedRoles: ['admin','superadmin','finance'], enabled: true },
+    { label: 'Wallet Settlement', path: '/wallet-settlement', icon: Wallet, allowedRoles: ['admin','superadmin','finance'], enabled: true },
+    { label: 'Fraud & Risk', path: '/fraud-risk', icon: ShieldAlert, allowedRoles: ['admin','superadmin','finance'], enabled: true },
     { label: 'Financial Risk Controls', path: '/financial-risk', icon: Lock, superadminOnly: true, enabled: true },
   ] },
   { label: 'Support & Communications', accent: 'danger', items: [
-    { label: 'Support Tickets', path: '/support', icon: LifeBuoy, enabled: true },
-    { label: 'Support Messages', path: '/support-messages', icon: MessageCircle, enabled: true },
+    { label: 'Support Tickets', path: '/support', icon: LifeBuoy, allowedRoles: ['admin','superadmin','support'], enabled: true },
+    { label: 'Support Messages', path: '/support-messages', icon: MessageCircle, allowedRoles: ['admin','superadmin','support'], enabled: true },
     { label: 'Announcements', path: '/announcements', icon: BellRing, enabled: true },
     { label: 'Communications Center', path: '/communications', icon: Megaphone, enabled: true },
     { label: 'Notification Delivery', path: '/notification-delivery', icon: Activity, enabled: true },
   ] },
   { label: 'Analytics & Reports', accent: 'primary', items: [
-    { label: 'Reports', path: '/reports', icon: BarChart3, enabled: true },
-    { label: 'Analytics', path: '/analytics', icon: LineChart, enabled: true },
+    { label: 'Reports', path: '/reports', icon: BarChart3, allowedRoles: ['admin','superadmin','finance','support'], enabled: true },
+    { label: 'Analytics', path: '/analytics', icon: LineChart, allowedRoles: ['admin','superadmin','finance'], enabled: true },
     { label: 'Growth Center', path: '/growth', icon: TrendingUp, enabled: true },
   ] },
   { label: 'Platform Configuration', accent: 'success', items: [
