@@ -1,7 +1,7 @@
 const admin = require('firebase-admin');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 
-const ALLOWED_SERVICES = ['Recharge', 'Internet', 'Mobile Banking', 'Remittance'];
+const ALLOWED_SERVICES = ['Recharge', 'Internet', 'Bill Payment', 'Mobile Banking', 'Remittance'];
 const SERVICE_ALIASES = {
   recharge: 'Recharge',
   internet: 'Internet',
@@ -47,7 +47,7 @@ function canReject(actor, tx) {
       (tx.dealerId === actor.uid || tx.assignedTo === actor.uid || tx.claimedBy === actor.uid);
   }
   if (actor.role === 'reseller') {
-    return ['Recharge', 'Internet', 'Remittance'].includes(tx.service) &&
+    return ['Recharge', 'Internet', 'Bill Payment', 'Remittance'].includes(tx.service) &&
       (tx.resellerId === actor.uid || tx.assignedTo === actor.uid || tx.claimedBy === actor.uid);
   }
   return false;
