@@ -31,7 +31,7 @@ exports.updateAdSettings = onCall({ enforceAppCheck: true }, async (request) => 
   const changes = pickValidBooleans((request.data || {}).changes, VALID_SETTINGS_FIELDS);
   if (!changes) throw new HttpsError('invalid-argument', 'No valid settings changes were provided.');
   const ref = db.collection(AD_SETTINGS_COLLECTION).doc(AD_SETTINGS_DOC_ID);
-  try { await ref.set({ ...changes, updatedBy: callerUid, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true }); } catch (err) { await logServerError('updateAdSettings', err, { userId: callerUid }); throw new HttpsError('internal', 'Could not update advertisement Global Controls.'); }
+  try { await db.runTransaction(async (tx) => { const callerSnap = await tx.get(db.collection('users').doc(callerUid)); const currentCaller = callerSnap.exists ? callerSnap.data() : null; if (!currentCaller || currentCaller.role !== 'superadmin' || currentCaller.suspended === true || currentCaller.inactive === true || currentCaller.disabled === true || currentCaller.active === false || currentCaller.mergedInto) throw new HttpsError('permission-denied','Your account can no longer manage advertisement controls.'); tx.set(ref, { ...changes, updatedBy: callerUid, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true }); }); } catch (err) { if (err instanceof HttpsError) throw err; await logServerError('updateAdSettings', err, { userId: callerUid }); throw new HttpsError('internal', 'Could not update advertisement Global Controls.'); }
   await logAdAudit({ action:'settings_change', targetType:'ad_settings', targetId:AD_SETTINGS_DOC_ID, performedBy:callerUid, details:{changes, performedByRole:caller.role} });
   return { ok:true };
 });
@@ -58,9 +58,7 @@ exports.bulkUpdateAdFeatureControls = onCall({ enforceAppCheck: true }, async (r
   const changes = pickValidBooleans((request.data || {}).changes, VALID_FEATURE_CONTROL_FIELDS);
   if (!changes) throw new HttpsError('invalid-argument', 'No valid control changes were provided.');
   try {
-    const batch = db.batch();
-    uniqueIds.forEach((featureId) => batch.set(db.collection(AD_FEATURE_CONTROLS_COLLECTION).doc(featureId), {featureId,...changes,updatedBy:callerUid,updatedAt:admin.firestore.FieldValue.serverTimestamp()}, {merge:true}));
-    await batch.commit();
+    await db.runTransaction(async (tx) => { const callerSnap = await tx.get(db.collection('users').doc(callerUid)); const currentCaller = callerSnap.exists ? callerSnap.data() : null; if (!currentCaller || currentCaller.role !== 'superadmin' || currentCaller.suspended === true || currentCaller.inactive === true || currentCaller.disabled === true || currentCaller.active === false || currentCaller.mergedInto) throw new HttpsError('permission-denied','Your account can no longer manage advertisement controls.'); uniqueIds.forEach((featureId) => tx.set(db.collection(AD_FEATURE_CONTROLS_COLLECTION).doc(featureId), {featureId,...changes,updatedBy:callerUid,updatedAt:admin.firestore.FieldValue.serverTimestamp()}, {merge:true})); });
   } catch (err) { await logServerError('bulkUpdateAdFeatureControls', err, {userId:callerUid}); throw new HttpsError('internal', 'Could not apply this bulk advertisement control change.'); }
   await logAdAudit({ action:'settings_change', targetType:'ad_feature_control', targetId:'bulk', performedBy:callerUid, details:{changes,featureIds:uniqueIds,performedByRole:caller.role} });
   return {ok:true};
