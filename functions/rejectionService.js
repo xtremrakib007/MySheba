@@ -48,7 +48,7 @@ function canReject(actor, tx) {
   }
   if (actor.role === 'reseller') {
     return ['Recharge', 'Internet', 'Remittance'].includes(tx.service) &&
-      (tx.resellerId === actor.uid || tx.dealerId === actor.uid || tx.assignedTo === actor.uid || tx.claimedBy === actor.uid);
+      (tx.resellerId === actor.uid || tx.assignedTo === actor.uid || tx.claimedBy === actor.uid);
   }
   return false;
 }
