@@ -45,7 +45,7 @@ function validReceiptUrl(url, txId, role) {
     && !objectPath.slice(expectedPrefix.length).split('/').some((part) => part === '..');
 }
 
-function assertOperatorCanHandle(currentActor, order) {
+function assertOperatorCanHandle(actor, order) {
   if (!OPERATOR_ROLES.includes(actor.role)) throw new HttpsError('permission-denied', 'Only a dealer or reseller can accept an approved order.');
   if (actor.role === 'dealer' && !DEALER_SERVICES.includes(order.service)) throw new HttpsError('permission-denied', 'Your dealer account cannot handle this service.');
   if (actor.role === 'reseller' && !RESELLER_SERVICES.includes(order.service)) throw new HttpsError('permission-denied', 'Your reseller account cannot handle this service.');
@@ -55,7 +55,7 @@ function assertOperatorCanHandle(currentActor, order) {
 
 exports.approveTransaction = onCall({ enforceAppCheck: true }, async (request) => {
   requireAuth(request); const actor = await getActor(request.auth.uid);
-  if (!APPROVER_ROLES.includes(currentActor.role)) throw new HttpsError('permission-denied', 'Only an admin or superadmin can approve an order.');
+  if (!APPROVER_ROLES.includes(actor.role)) throw new HttpsError('permission-denied', 'Only an admin or superadmin can approve an order.');
   const id = String(request.data?.transactionId || ''); if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
   const db = admin.firestore(), ref = db.collection('transactions').doc(id);
   await db.runTransaction(async (tx) => {
@@ -134,7 +134,7 @@ exports.scrubCompletedTransactionPins = onCall({ enforceAppCheck: true }, async 
 exports.assignDealer = onCall({ enforceAppCheck: true }, async (request) => {
   requireAuth(request);
   const actor = await getActor(request.auth.uid);
-  if (!APPROVER_ROLES.includes(currentActor.role)) throw new HttpsError('permission-denied', 'Only an admin or superadmin can assign a dealer.');
+  if (!APPROVER_ROLES.includes(actor.role)) throw new HttpsError('permission-denied', 'Only an admin or superadmin can assign a dealer.');
   const id = String(request.data?.transactionId || '').trim();
   const dealerId = String(request.data?.dealerId || '').trim();
   if (!id || !dealerId) throw new HttpsError('invalid-argument', 'Transaction ID and dealer ID are required.');
