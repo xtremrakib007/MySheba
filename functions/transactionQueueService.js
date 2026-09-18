@@ -9,6 +9,7 @@ const OPERATIONAL_RAW_FIELDS = [
   'receiverBankName', 'receiverAccountNumber', 'receiverBranch', 'receiverRoutingNumber',
   'receiverPickupNetwork', 'receiverIdType', 'receiverIdNumber', 'receiverPickupCity',
   'receiverWalletProvider', 'receiverWalletNumber', 'country', 'method',
+  'provider', 'category', 'accountNumber',
 ];
 
 function queueRole(service) {
