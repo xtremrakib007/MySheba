@@ -22,6 +22,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './config';
 import { PAYMENT_SUCCESS_COST } from '../data/countries';
+import { getSessionProof } from './deviceSessionService';
 
 /**
  * Read-only gate: throws (with a message safe to show the user) if `uid`'s
