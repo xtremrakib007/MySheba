@@ -2,16 +2,17 @@
 // their permitted scope. The actual balance move is server-side.
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import * as Crypto from 'expo-crypto';
 import { db, functions } from './config';
 import { logActivity, logError } from './logService';
 
 const COLLECTION = 'pointTransfers';
 
 function createRequestId() {
-  return `pt_${Date.now()}_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}`;
+  return `pt_${Crypto.randomUUID().replace(/-/g, '')}`;
 }
 
-export async function transferPoints({ to, amount, note }) {
+export async function transferPoints({ to, amount, note, securityPin }) {
   if (!to?.uid) throw new Error('Missing recipient.');
   const amt = Number(amount);
   if (!Number.isFinite(amt) || amt <= 0) throw new Error('Enter a valid amount.');
@@ -22,7 +23,7 @@ export async function transferPoints({ to, amount, note }) {
   const requestId = createRequestId();
   const fn = httpsCallable(functions, 'transferPoints');
   try {
-    const { data } = await fn({ requestId, toUid: to.uid, amount: amt, note: note || '' });
+    const { data } = await fn({ requestId, toUid: to.uid, amount: amt, note: note || '', securityPin: String(securityPin || '') });
     logActivity('points_transferred', { toUid: to.uid, amount: amt });
     return data;
   } catch (err) {
