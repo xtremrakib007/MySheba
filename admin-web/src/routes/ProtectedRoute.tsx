@@ -9,6 +9,10 @@ const SUPERADMIN_ONLY_PATHS = new Set([
   '/activity-center',
   '/governance',
 ]);
+const ROLE_PATHS: Record<string, Set<string>> = {
+  support: new Set(['/support-operations', '/support', '/support-messages', '/reports']),
+  finance: new Set(['/financial', '/wallet-settlement', '/fraud-risk', '/reports', '/analytics']),
+};
 
 export default function ProtectedRoute() {
   const { profile, loading } = useAuth();
@@ -26,9 +30,8 @@ export default function ProtectedRoute() {
     return <Navigate to="/login" replace />;
   }
 
-  if (SUPERADMIN_ONLY_PATHS.has(location.pathname) && profile.role !== 'superadmin') {
-    return <Navigate to="/" replace />;
-  }
-
+  if (SUPERADMIN_ONLY_PATHS.has(location.pathname) && profile.role !== 'superadmin') return <Navigate to="/" replace />;
+  const allowed = ROLE_PATHS[profile.role];
+  if (allowed && !allowed.has(location.pathname) && location.pathname !== '/') return <Navigate to="/" replace />;
   return <AppShell />;
 }
