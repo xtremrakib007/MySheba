@@ -1,6 +1,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
+const { logAudit, logServerError } = require('./logService');
 
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const ADMIN_ROLES = ['admin', 'superadmin'];
@@ -59,9 +60,19 @@ exports.createSelfTopup = onCall({ enforceAppCheck: true }, async (request) => {
       tx.set(opRef, { uid, type: 'createSelfTopup', requestId, amount, topupId: topupRef.id, status: 'completed', createdAt: now, updatedAt: now });
       return { id: topupRef.id, replay: false };
     });
+    if (!result.replay) {
+      await logAudit({
+        action: 'self_topup_created',
+        targetUid: uid,
+        performedBy: uid,
+        performedByRole: 'admin',
+        details: { amount, requestId, topupId: result.id },
+      });
+    }
     return result;
   } catch (error) {
     if (error instanceof HttpsError) throw error;
+    await logServerError('createSelfTopup', error, { userId: uid, requestId });
     throw new HttpsError('internal', 'Could not complete the self top-up.');
   }
 });
