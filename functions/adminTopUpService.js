@@ -61,7 +61,11 @@ exports.adminTopUpPoints = onCall({ enforceAppCheck: true }, async request => {
       }
 
       const callerTxSnap = await tx.get(db.collection('users').doc(callerUid));
-      if (!callerTxSnap.exists || !activeAccount(callerTxSnap.data()) || !ADMIN_ROLES.includes(callerTxSnap.data().role)) {
+      if (!callerTxSnap.exists) {
+        throw new HttpsError('permission-denied', 'Your admin privileges are no longer active.');
+      }
+      requireSessionMatch(request, callerTxSnap.data());
+      if (!activeAccount(callerTxSnap.data()) || !ADMIN_ROLES.includes(callerTxSnap.data().role)) {
         throw new HttpsError('permission-denied', 'Your admin privileges are no longer active.');
       }
       const targetSnap = await tx.get(targetRef);
