@@ -24,12 +24,12 @@ export const USER_FEATURE_OVERRIDES_KEY = 'userOverrides';
 // ADMIN_TOOL_DEFS/DEALER_TOOL_DEFS `roles` arrays) - a superadmin only
 // needs to touch Feature Access if they want to deviate from these.
 export const FEATURE_DEFS = [
-  { key: 'userManagement', icon: '🧑‍💼', bg: '#E3F2FD', name: 'User Mgmt', defaultRoles: ['dealer', 'admin', 'superadmin'] },
-  { key: 'transferPoints', icon: '💸', bg: '#E8F5E9', name: 'Transfer Pts', defaultRoles: ['dealer', 'admin', 'superadmin'] },
-  { key: 'chatReports', icon: '🚩', bg: '#FFEBEE', name: 'Chat Reports', defaultRoles: ['admin', 'superadmin'] },
+  { key: 'userManagement', icon: '🧑‍💼', bg: '#E3F2FD', name: 'User Mgmt', defaultRoles: ['admin', 'superadmin'] },
+  { key: 'transferPoints', icon: '💸', bg: '#E8F5E9', name: 'Transfer Pts', defaultRoles: ['admin', 'superadmin'] },
+  { key: 'chatReports', icon: '🚩', bg: '#FFEBEE', name: 'Chat Reports', defaultRoles: ['admin', 'superadmin', 'support'] },
   { key: 'verificationManagement', icon: '🪪', bg: '#E0F7FA', name: 'Verify Requests', defaultRoles: ['admin', 'superadmin'] },
   { key: 'adminBusinessManagement', icon: '🏢', bg: '#F3E5F5', name: 'Business Profiles', defaultRoles: ['admin', 'superadmin'] },
-  { key: 'adminAnalytics', icon: '📊', bg: '#FFF3E0', name: 'Analytics', defaultRoles: ['admin', 'superadmin'] },
+  { key: 'adminAnalytics', icon: '📊', bg: '#FFF3E0', name: 'Analytics', defaultRoles: ['admin', 'superadmin', 'finance'] },
 ];
 
 // Roles a superadmin can check/uncheck per feature on the Feature Access
@@ -37,9 +37,9 @@ export const FEATURE_DEFS = [
 // something that should be toggleable off by accident. customer is left
 // out too - customer features are a separate grid (ServiceGrid) that this
 // screen never touches.
-export const TOGGLEABLE_ROLES = ['dealer', 'reseller', 'admin'];
+export const TOGGLEABLE_ROLES = ['dealer', 'reseller', 'support', 'finance', 'admin'];
 
-export const ROLE_LABEL = { dealer: 'Dealer', reseller: 'Reseller', admin: 'Admin' };
+export const ROLE_LABEL = { dealer: 'Dealer', reseller: 'Reseller', support: 'Support Agent', finance: 'Finance', admin: 'Admin' };
 
 function defaultAccessFor(key) {
   const def = FEATURE_DEFS.find((f) => f.key === key);
@@ -52,10 +52,11 @@ export const DEFAULT_FEATURE_ACCESS = FEATURE_DEFS.reduce((acc, f) => {
 }, {});
 
 function mergeWithDefaults(data) {
-  const merged = { ...DEFAULT_FEATURE_ACCESS };
+  const merged = { ...DEFAULT_FEATURE_ACCESS, [USER_FEATURE_OVERRIDES_KEY]: {} };
   FEATURE_DEFS.forEach((f) => {
     if (data && Array.isArray(data[f.key])) merged[f.key] = data[f.key];
   });
+  if (data?.[USER_FEATURE_OVERRIDES_KEY] && typeof data[USER_FEATURE_OVERRIDES_KEY] === 'object') merged[USER_FEATURE_OVERRIDES_KEY] = data[USER_FEATURE_OVERRIDES_KEY];
   return merged;
 }
 
