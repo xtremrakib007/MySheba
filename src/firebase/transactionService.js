@@ -4,6 +4,7 @@ import { httpsCallable } from 'firebase/functions';
 import * as Crypto from 'expo-crypto';
 import { db, functions, auth } from './config';
 import { logActivity } from './logService';
+import { getSessionProof } from './deviceSessionService';
 
 const COLLECTION = 'transactions';
 const QUEUE_COLLECTION = 'transactionQueue';
