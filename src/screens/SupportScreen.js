@@ -318,9 +318,6 @@ export default function SupportScreen() {
     openLink(`mailto:${SUPPORT_EMAIL}?subject=${emailSubject}&body=${body}`, 'your email app');
   };
 
-    if (!url) return;
-    openLink(url, platform.label);
-  };
 
   // Swipe left/right across the tab content to move between Messages /
   // Tickets, same as tapping the segmented bar. Only claims the gesture
