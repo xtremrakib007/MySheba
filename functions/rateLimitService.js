@@ -14,6 +14,7 @@ const DEFAULT_LIMITS = {
   kyc_submit: { max: 3, windowMinutes: 60 },
   findWalletRecipient: { max: 60, windowMinutes: 60 },
   support_ticket_create: { max: 8, windowMinutes: 60 },
+  chargeService: { max: 30, windowMinutes: 10 },
 };
 
 const DEFAULT_OTP_LIMITS = {
