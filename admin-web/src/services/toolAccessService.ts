@@ -12,12 +12,12 @@ import { db } from '../firebase/config';
 const DOC_REF = doc(db, 'settings', 'featureAccess');
 
 export const FEATURE_DEFS = [
-  { key: 'userManagement', icon: '🧑‍💼', name: 'User Mgmt', defaultRoles: ['dealer', 'admin', 'superadmin'] },
-  { key: 'transferPoints', icon: '💸', name: 'Transfer Pts', defaultRoles: ['dealer', 'subdealer', 'admin', 'superadmin'] },
-  { key: 'chatReports', icon: '🚩', name: 'Chat Reports', defaultRoles: ['admin', 'superadmin'] },
+  { key: 'userManagement', icon: '🧑‍💼', name: 'User Mgmt', defaultRoles: ['admin', 'superadmin'] },
+  { key: 'transferPoints', icon: '💸', name: 'Transfer Pts', defaultRoles: ['admin', 'superadmin'] },
+  { key: 'chatReports', icon: '🚩', name: 'Chat Reports', defaultRoles: ['admin', 'superadmin', 'support'] },
   { key: 'verificationManagement', icon: '🪪', name: 'Verify Requests', defaultRoles: ['admin', 'superadmin'] },
   { key: 'adminBusinessManagement', icon: '🏢', name: 'Business Profiles', defaultRoles: ['admin', 'superadmin'] },
-  { key: 'adminAnalytics', icon: '📊', name: 'Analytics', defaultRoles: ['admin', 'superadmin'] },
+  { key: 'adminAnalytics', icon: '📊', name: 'Analytics', defaultRoles: ['admin', 'superadmin', 'finance'] },
 ] as const;
 
 export type FeatureKey = (typeof FEATURE_DEFS)[number]['key'];
@@ -25,14 +25,17 @@ export type FeatureKey = (typeof FEATURE_DEFS)[number]['key'];
 // superadmin excluded on purpose (always has full access, never
 // toggleable off by accident); customer excluded (separate grid this
 // screen never touches).
-export const TOGGLEABLE_ROLES = ['subdealer', 'dealer', 'reseller', 'admin'] as const;
+export const TOGGLEABLE_ROLES = ['dealer', 'reseller', 'support', 'finance', 'admin'] as const;
 export type ToggleableRole = (typeof TOGGLEABLE_ROLES)[number];
 
-export const ROLE_LABEL: Record<ToggleableRole, string> = {
-  subdealer: 'Sub Dealer',
+export const ROLE_LABEL: Record<ToggleableRole | 'customer' | 'superadmin', string> = {
+  customer: 'Customer',
   dealer: 'Dealer',
   reseller: 'Reseller',
+  support: 'Support Agent',
+  finance: 'Finance',
   admin: 'Admin',
+  superadmin: 'Super Admin',
 };
 
 export type FeatureAccessMap = Record<FeatureKey, string[]>;
