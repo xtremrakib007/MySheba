@@ -5,8 +5,8 @@ const { logAudit, logServerError } = require('./logService');
 
 const MAX_SUBJECT = 200;
 const MAX_MESSAGE = 5000;
-const ALLOWED_ROLES = ['customer', 'dealer', 'reseller', 'admin', 'superadmin'];
-const ASSIGNABLE_ROLES = ['admin', 'superadmin', 'dealer', 'reseller'];
+const ALLOWED_ROLES = ['customer', 'dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin'];
+const ASSIGNABLE_ROLES = ['admin', 'superadmin', 'support'];
 
 function activeProfile(profile) {
   return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && profile.active !== false && !profile.mergedInto;
