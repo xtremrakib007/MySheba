@@ -64,14 +64,23 @@ exports.manageUser = onCall({ enforceAppCheck: true }, async (request) => {
     const { targetUid, newRole } = request.data;
     if (!targetUid || !newRole) throw new HttpsError('invalid-argument', 'targetUid and newRole are required.');
     if (!perms.canUpgradeTo.includes(newRole)) throw new HttpsError('permission-denied', `A ${callerRole} cannot upgrade a user to ${newRole}.`);
-    const targetRef = db.collection('users').doc(targetUid); const targetSnap = await targetRef.get();
-    if (!targetSnap.exists) throw new HttpsError('not-found', 'That user does not exist.');
-    const targetData = targetSnap.data();
-    if (targetData.role !== 'customer') throw new HttpsError('permission-denied', 'Role upgrades are only allowed from customer accounts.');
-    if (callerRole === 'dealer' && targetData.dealerId !== callerUid) throw new HttpsError('permission-denied', 'You can only upgrade your own customers.');
-    await targetRef.update({ role: newRole });
-    await logAudit({ action: 'role_changed', targetUid, performedBy: callerUid, performedByRole: callerRole, details: { from: 'customer', to: newRole } });
-    return { uid: targetUid, role: newRole };
+    const targetRef = db.collection('users').doc(targetUid);
+    const callerRef = db.collection('users').doc(callerUid);
+    const result = await db.runTransaction(async (tx) => {
+      const [callerSnap, targetSnap] = await Promise.all([tx.get(callerRef), tx.get(targetRef)]);
+      if (!callerSnap.exists || !active(callerSnap.data())) throw new HttpsError('permission-denied', 'Your account is not active.');
+      const currentRole = callerSnap.data().role;
+      const currentPerms = ROLE_PERMISSIONS[currentRole];
+      if (!currentPerms || !currentPerms.canUpgradeTo.includes(newRole)) throw new HttpsError('permission-denied', 'You are no longer authorized to change this role.');
+      if (!targetSnap.exists) throw new HttpsError('not-found', 'That user does not exist.');
+      const targetData = targetSnap.data();
+      if (targetData.role !== 'customer') throw new HttpsError('permission-denied', 'Role upgrades are only allowed from customer accounts.');
+      if (currentRole === 'dealer' && targetData.dealerId !== callerUid) throw new HttpsError('permission-denied', 'You can only upgrade your own customers.');
+      tx.update(targetRef, { role: newRole });
+      return { from: 'customer', role: newRole, performedByRole: currentRole };
+    });
+    await logAudit({ action: 'role_changed', targetUid, performedBy: callerUid, performedByRole: result.performedByRole, details: { from: result.from, to: result.role } });
+    return { uid: targetUid, role: result.role };
   }
 
   if (action === 'setDealer') {
