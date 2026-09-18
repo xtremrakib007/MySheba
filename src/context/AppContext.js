@@ -192,7 +192,7 @@ export function AppProvider({ children }) {
   // No more manual role picker - `screen` starts on 'login' and, once
   // signed in, the account's Firestore `role` field (in `profile.role`)
   // decides which home screen to land on. See the bootstrap effect below.
-  const [screen, setScreen] = useState("login"); // login | register | forgotPassword | customerHome | service | dealerHome | resellerHome | adminHome | webview | buspicker | support | history | topup | chat | chatList | settings | profile | myAccount | reports | notifications | marketplaceHome | marketplaceCreateListing | marketplaceMyListings | marketplaceMyReviews | marketplaceListingDetail | marketplaceModeration | verifyIdentity | verificationManagement | adminAnalytics | myDocuments | documentType | addDocument | documentDetails | documentViewer | moreFeatures | adminFeatures | apiProviderManagement | dealerFeatures | resellerFeatures | featureAccess | tierPromotions | adFeatureControls | bannerManagement | salaryReports | notepad | addNote | noteDetail | help | friendsList | callSettings | ringtonePicker
+  const [screen, setScreen] = useState("login"); // login | register | forgotPassword | customerHome | service | dealerHome | resellerHome | adminHome | webview | buspicker | support | history | topup | chat | chatList | settings | profile | myAccount | reports | notifications | marketplaceHome | marketplaceCreateListing | marketplaceMyListings | marketplaceMyReviews | marketplaceListingDetail | marketplaceModeration | verifyIdentity | verificationManagement | adminAnalytics | myDocuments | documentType | addDocument | documentDetails | documentViewer | moreFeatures | adminFeatures | apiProviderManagement | dealerFeatures | resellerFeatures | featureAccess | tierPromotions | adFeatureControls | bannerManagement | salaryReports | notepad | addNote | noteDetail | help | friendsList
 
   // ---- back-button navigation history ----
   // Tracks prior screens so the Android hardware back button can step
@@ -266,25 +266,6 @@ export function AppProvider({ children }) {
   // "Messages" tab inside Support Tickets (adminSupport); defaults to
   // 'chatList' to match the existing behavior for every other entry point.
   const [activeChatReturnTo, setActiveChatReturnTo] = useState("chatList");
-
-  // ---- 1-to-1 call ringtone selection ----
-  const [activeRingtoneContactUid, setActiveRingtoneContactUid] =
-    useState(null);
-  const [activeRingtoneContactName, setActiveRingtoneContactName] =
-    useState("");
-
-  /** Opens the Support thread - `chatId` is the customer's uid, `name` is
-   * who to show in the header/inbox. `returnTo` (staff only) is which
-   * screen the back button should land on - defaults to the Chats inbox
-   * ('chatList') to match every existing caller; AdminSupportScreen's
-   * "Messages" tab passes 'adminSupport' so back returns there instead. */
-  const openChat = useCallback((chatId, name, returnTo) => {
-    setActiveChatId(chatId);
-
-    setActiveChatName(name || "");
-    setActiveChatReturnTo(returnTo || "chatList");
-    setScreen("chat");
-  }, []);
 
   // ---- My Documents (private per-user document vault - passport, visa,
   // work permit, etc.) ---- Screens call documentService.js directly
@@ -1488,10 +1469,6 @@ export function AppProvider({ children }) {
           const isSuperadmin = profile && profile.role === "superadmin";
           setScreen(isSuperadmin ? "adminSupport" : "support");
         }
-        // 'call' notifications need no explicit navigation here - the
-        // system-wide incoming-call listener above already surfaces
-        // IncomingCallModal over whatever screen is active as soon as the
-        // app opens, as long as the call is still ringing.
       } catch (e) {
         // Non-fatal - worst case the user lands on their home screen
         // instead of the exact thread and can navigate there manually.
