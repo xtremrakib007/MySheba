@@ -98,10 +98,10 @@ exports.completeTransaction = onCall({ enforceAppCheck: true }, async (request) 
   if (!/^\d{4}$/.test(pin)) throw new HttpsError('invalid-argument', 'A 4-digit collection PIN is required.');
   if (!receiptUrl) throw new HttpsError('invalid-argument', 'The transfer receipt is required before completion.');
   await checkVelocity(admin.firestore(), actor.uid, 'transactionComplete', { ip: getClientIp(request) });
-  if (!validReceiptUrl(receiptUrl, id, actor.role)) throw new HttpsError('invalid-argument', 'The receipt URL must be a valid MySheba receipt upload.');
   const db = admin.firestore(), ref = db.collection('transactions').doc(id);
   await db.runTransaction(async (tx) => {
     const currentActor = await assertActorStillActive(tx, actor.uid, OPERATOR_ROLES);
+    if (!validReceiptUrl(receiptUrl, id, currentActor.role)) throw new HttpsError('invalid-argument', 'The receipt URL must be a valid MySheba receipt upload.');
     const snap = await tx.get(ref); if (!snap.exists) throw new HttpsError('not-found', 'That order no longer exists.');
     const order = snap.data();
     if (order.status !== 'processing' || order.claimedBy !== currentActor.uid) throw new HttpsError('failed-precondition', 'Only the operator who accepted this order can complete it.');
@@ -116,19 +116,27 @@ exports.completeTransaction = onCall({ enforceAppCheck: true }, async (request) 
 
 
 exports.scrubCompletedTransactionPins = onCall({ enforceAppCheck: true }, async (request) => {
-  requireAuth(request); const actor = await getActor(request.auth.uid);
-  if (actor.role !== 'superadmin') throw new HttpsError('permission-denied', 'Only a superadmin can scrub legacy collection PINs.');
+  requireAuth(request);
+  const uid = request.auth.uid;
   const db = admin.firestore();
   const snap = await db.collection('transactions').where('status', '==', 'completed').get();
-  let batch = db.batch(), count = 0, batches = 0;
-  for (const docSnap of snap.docs) {
-    if (!Object.prototype.hasOwnProperty.call(docSnap.data(), 'pin')) continue;
-    batch.update(docSnap.ref, { pin: admin.firestore.FieldValue.delete() });
-    count += 1;
-    if (count % 450 === 0) { await batch.commit(); batches += 1; batch = db.batch(); }
+  const docs = snap.docs.filter((docSnap) => Object.prototype.hasOwnProperty.call(docSnap.data(), 'pin'));
+  let scrubbed = 0, batches = 0;
+  for (let i = 0; i < docs.length; i += 400) {
+    const chunk = docs.slice(i, i + 400);
+    await db.runTransaction(async (tx) => {
+      await assertActorStillActive(tx, uid, ['superadmin']);
+      for (const docSnap of chunk) {
+        const current = await tx.get(docSnap.ref);
+        const data = current.exists ? (current.data() || {}) : {};
+        if (data.status !== 'completed' || !Object.prototype.hasOwnProperty.call(data, 'pin')) continue;
+        tx.update(docSnap.ref, { pin: admin.firestore.FieldValue.delete() });
+        scrubbed += 1;
+      }
+    });
+    batches += 1;
   }
-  if (count % 450 !== 0) { await batch.commit(); batches += 1; }
-  return { ok: true, scrubbed: count, batches };
+  return { ok: true, scrubbed, batches };
 });
 
 exports.assignDealer = onCall({ enforceAppCheck: true }, async (request) => {
