@@ -82,6 +82,7 @@ const SERVICE_STEPS = {
   recharge: 4,
   mobilebanking: 3,
   internet: 4,
+  billpayment: 4,
   remittance: 7,
   bus: 3,
   train: 3,
@@ -96,6 +97,7 @@ const DEALER_LABELS = {
   recharge: "Recharge",
   mobilebanking: "Mobile Banking",
   internet: "Internet",
+  billpayment: "Bill Payment",
   remittance: "Remittance",
 };
 
@@ -146,6 +148,15 @@ function buildTransactionPayload(service, serviceData, pricing, rates) {
     return {
       service: DEALER_LABELS.internet,
       details: `${serviceData.operator || ""} - ${serviceData.package || ""} (${serviceData.currency || "MYR"} ${rawAmount})`,
+      amount,
+      total: amount,
+    };
+  }
+  if (service === "billpayment") {
+    const amount = Number(serviceData.amount) || 0;
+    return {
+      service: DEALER_LABELS.billpayment,
+      details: `${serviceData.provider || ""} - ${serviceData.category || ""} (${serviceData.accountNumber || ""})`,
       amount,
       total: amount,
     };
@@ -297,8 +308,7 @@ export function AppProvider({ children }) {
   }, []);
   const openDocumentViewer = useCallback((documentId) => {
     setActiveDocumentId(documentId);
-    setScreen("documentViewer");
-  }, []);
+    setScreen("documentViewer");  }, []);
 
   // ---- Notepad (private per-user notes, plus Credit/Debit/Loan "money
   // notes" for tracking who owes what) ---- Screens call notepadService.js
@@ -598,7 +608,6 @@ export function AppProvider({ children }) {
   // cost/profit % - admin-editable from Admin > Pricing (see
   // settingsService.js). ----
   const [pricing, setPricing] = useState(settingsService.DEFAULT_PRICING);
-
   // ---- feature access: which roles can open each admin/dealer/reseller
   // management tool - superadmin-editable from Superadmin > Feature Access
   // (see featureAccessService.js). Customer features (ServiceGrid) aren't
@@ -897,8 +906,7 @@ export function AppProvider({ children }) {
           //      saved locally after its own last successful
           //      login/verification) -> sign out immediately.
           // Wrapped in try/catch and fails open into the normal routing
-          // below on any error - a device-check hiccup shouldn't brick
-          // login for everyone, it just skips this extra hardening once.
+          // below on any error - a device-check hiccup shouldn't brick          // login for everyone, it just skips this extra hardening once.
           (async () => {
             if (!p) {
               setProfile(null);
@@ -1197,8 +1205,7 @@ export function AppProvider({ children }) {
     const unsub = bannerService.subscribeBanners(
       (list) => setBanners(list),
       logListenerError("banners"),
-    );
-    return unsub;
+    );    return unsub;
   }, [authUser]);
 
   // ---- live broadcast transactions. Admin/superadmin see the same full
@@ -1497,8 +1504,7 @@ export function AppProvider({ children }) {
 
   const closeResult = useCallback(() => {
     setResultModal({
-      visible: false,
-      kind: null,
+      visible: false,      kind: null,
       txId: "",
       service: "",
       details: "",
@@ -1797,8 +1803,7 @@ export function AppProvider({ children }) {
           uid: p.uid,
           email: p.pendingDeviceApproval.email,
           phone: p.pendingDeviceApproval.phone,
-          reason: p.pendingDeviceApproval.reason,
-          availableMfaMethods: p.pendingDeviceApproval.availableMfaMethods,
+          reason: p.pendingDeviceApproval.reason,          availableMfaMethods: p.pendingDeviceApproval.availableMfaMethods,
         });
         setScreen("deviceVerify");
         return true;
@@ -2097,8 +2102,7 @@ export function AppProvider({ children }) {
     [authUser, webViewBusy, profile, pointCosts],
   );
 
-  // Shows the Bus screen's 3-option grid (redBus / Bus Online Ticket /
-  // Easybook) instead of opening a WebView directly - each card then
+  // Shows the Bus screen's 3-option grid (redBus / Bus Online Ticket /  // Easybook) instead of opening a WebView directly - each card then
   // calls openWebView with its own key ('bus-redbus' |
   // 'bus-busonlineticket' | 'bus-easybook'), which re-runs the same
   // insufficient-points gate above.
@@ -2397,8 +2401,7 @@ export function AppProvider({ children }) {
     handleDeepLink,
     activeAdvertiserId,
     openAdvertiserManagement,
-    openAdvertiserDetail,
-    // accommodation
+    openAdvertiserDetail,    // accommodation
     activePropertyId,
     openAccommodation,
     openPropertyDetail,
