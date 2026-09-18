@@ -69,7 +69,7 @@ export default function AdminFeaturesScreen() {
 
   const allow = (items) => items.filter((item) => {
     const always = ['all','pending','inquiries','topups','support','rates','pricing','payments','categories','banners','announcements'];
-    return always.includes(item.key) || canAccessFeature(featureAccess, item.key, profile?.role);
+    return always.includes(item.key) || canAccessFeature(featureAccess, item.key, profile?.role, profile?.uid);
   });
   const badges = {
     pending: dealerTxs.filter((t) => t.status === 'pending').length || undefined,
