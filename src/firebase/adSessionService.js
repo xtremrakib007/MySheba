@@ -21,14 +21,11 @@
 // by design, same as most mobile ad SDKs treat "session" for impression
 // grouping.
 
+import { randomUUID } from 'expo-crypto';
+
 function generateId() {
-  // Same RFC4122-ish v4 generator as deviceSessionService.getDeviceId -
-  // good enough for a non-cryptographic, purely-grouping analytics id.
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
+  // Use the platform-backed UUID generator instead of Math.random().
+  return randomUUID();
 }
 
 // Module-scoped, not exported directly - one id for the lifetime of this
