@@ -33,6 +33,12 @@ export async function getLocalSessionId() {
   return AsyncStorage.getItem(LOCAL_SESSION_ID_KEY);
 }
 
+export async function getSessionProof() {
+  const [sessionId, deviceId] = await Promise.all([getLocalSessionId(), getDeviceId()]);
+  if (!sessionId || !deviceId) throw new Error('Your secure session is missing. Please sign in again.');
+  return { sessionId, deviceId };
+}
+
 export async function setLocalSessionId(sessionId) {
   if (!sessionId) return;
   await AsyncStorage.setItem(LOCAL_SESSION_ID_KEY, sessionId);
