@@ -72,26 +72,27 @@ exports.registerWithDealerCode = onCall({ enforceAppCheck: true }, async (reques
   }
 
   const db = admin.firestore();
-  const lockKey = crypto.createHash('sha256').update(`${normalizedEmail}|${verifiedPhoneE164}`).digest('hex');
-  const lockRef = db.collection('registrationLocks').doc(lockKey);
-  let lockAcquired = false;
+  // Lock email and phone identities independently. A combined email+phone lock
+  // does not prevent two concurrent registrations from reusing the same email
+  // with different phone numbers.
+  const emailLockRef = db.collection('registrationIdentityLocks').doc('email_' + crypto.createHash('sha256').update(normalizedEmail).digest('hex'));
+  const phoneLockRef = db.collection('registrationIdentityLocks').doc('phone_' + crypto.createHash('sha256').update(verifiedPhoneE164).digest('hex'));
+  let locksAcquired = false;
 
   try {
     await db.runTransaction(async (tx) => {
-      const snap = await tx.get(lockRef);
-      const expiresAtMs = snap.exists ? snap.data()?.expiresAt?.toMillis?.() : 0;
-      if (snap.exists && expiresAtMs > Date.now()) {
-        throw new HttpsError('resource-exhausted', 'Registration is already being processed. Please wait a few seconds and try again.');
+      const [emailLockSnap, phoneLockSnap] = await Promise.all([tx.get(emailLockRef), tx.get(phoneLockRef)]);
+      const now = Date.now();
+      const emailExpiresAtMs = emailLockSnap.exists ? emailLockSnap.data()?.expiresAt?.toMillis?.() : 0;
+      const phoneExpiresAtMs = phoneLockSnap.exists ? phoneLockSnap.data()?.expiresAt?.toMillis?.() : 0;
+      if ((emailLockSnap.exists && emailExpiresAtMs > now) || (phoneLockSnap.exists && phoneExpiresAtMs > now)) {
+        throw new HttpsError('resource-exhausted', 'Registration is already being processed. Please wait a few seconds.');
       }
-      tx.set(lockRef, {
-        email: normalizedEmail,
-        phoneE164: verifiedPhoneE164,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + REGISTRATION_LOCK_MS),
-      });
+      const expiresAt = admin.firestore.Timestamp.fromMillis(now + REGISTRATION_LOCK_MS);
+      tx.set(emailLockRef, { type: 'email', createdAt: admin.firestore.FieldValue.serverTimestamp(), expiresAt });
+      tx.set(phoneLockRef, { type: 'phone', createdAt: admin.firestore.FieldValue.serverTimestamp(), expiresAt });
     });
-    lockAcquired = true;
-
+    locksAcquired = true;
     const emailSnap = await db.collection('users').where('email', '==', normalizedEmail).limit(1).get();
     if (!emailSnap.empty) throw new HttpsError('already-exists', 'This email address is already registered to another account.');
 
@@ -153,6 +154,6 @@ exports.registerWithDealerCode = onCall({ enforceAppCheck: true }, async (reques
     });
     return { uid: userRecord.uid, role: 'customer', verification: verifiedBy };
   } finally {
-    if (lockAcquired) await lockRef.delete().catch(() => {});
+    if (locksAcquired) await Promise.all([emailLockRef.delete().catch(() => {}), phoneLockRef.delete().catch(() => {})]);
   }
 });
