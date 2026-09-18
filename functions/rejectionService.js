@@ -66,6 +66,13 @@ exports.rejectTransaction = onCall({ enforceAppCheck: true }, async request => {
   let result;
 
   await db.runTransaction(async t => {
+    const actorSnap = await t.get(db.collection('users').doc(uid));
+    if (!actorSnap.exists) throw new HttpsError('permission-denied', 'Your staff profile was not found.');
+    const currentActor = { uid, ...(actorSnap.data() || {}) };
+    if (!STAFF_ROLES.includes(currentActor.role) || !activeAccount(currentActor)) {
+      throw new HttpsError('permission-denied', 'Your staff account is no longer active.');
+    }
+
     const snap = await t.get(ref);
     if (!snap.exists) throw new HttpsError('not-found', 'Transaction not found.');
     const tx = snap.data() || {};
@@ -80,7 +87,7 @@ exports.rejectTransaction = onCall({ enforceAppCheck: true }, async request => {
       return;
     }
 
-    if (!canReject(actor, { ...tx, service })) {
+    if (!canReject(currentActor, { ...tx, service })) {
       throw new HttpsError('permission-denied', 'You are not authorized to reject this transaction.');
     }
 
@@ -93,7 +100,7 @@ exports.rejectTransaction = onCall({ enforceAppCheck: true }, async request => {
       rejected: true,
       rejectReason: reason,
       rejectedBy: uid,
-      rejectedByRole: actor.role,
+      rejectedByRole: currentActor.role,
       rejectedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
