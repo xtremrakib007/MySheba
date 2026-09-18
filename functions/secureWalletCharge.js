@@ -87,6 +87,7 @@ exports.chargeWallet = onCall({ enforceAppCheck: true }, async (request) => {
       ]);
       if (!userSnap.exists) throw new HttpsError('not-found', 'Account not found.');
       const user = userSnap.data() || {};
+      requireSessionMatch(request, user);
       if (user.suspended === true || user.inactive === true || user.disabled === true || user.active === false || user.mergedInto != null) {
         throw new HttpsError('permission-denied', 'Your account is not active.');
       }
