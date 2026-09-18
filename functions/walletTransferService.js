@@ -9,6 +9,9 @@ const MAX_TRANSFER_MYR = 10000;
 const MIN_TRANSFER_MYR = 0.01;
 const MAX_RECIPIENT_QUERY = 80;
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
+const SECURITY_PIN_RE = /^\d{4,8}$/;
+const SECURITY_PIN_MAX_ATTEMPTS = 5;
+const SECURITY_PIN_LOCKOUT_MS = 15 * 60 * 1000;
 const MONEY_RE = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
 
 function requireAuth(request) { if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.'); return request.auth.uid; }
@@ -32,6 +35,19 @@ function parseMoneyCents(value) {
 }
 function cents(value) { const n = Number(value || 0); return Number.isFinite(n) ? Math.round(n * 100) : NaN; }
 function myrFromCents(value) { return value / 100; }
+function hashSecurityPin(pin, salt) {
+  if (typeof salt !== 'string' || salt.length < 16) throw new Error('Invalid security PIN salt.');
+  return require('crypto').scryptSync(pin, salt, 64).toString('hex');
+}
+function verifySecurityPinData(data, pin) {
+  if (!data || typeof data.hash !== 'string' || !/^[0-9a-f]{128}$/i.test(data.hash) || typeof data.salt !== 'string' || data.salt.length < 16) return { state: 'invalid' };
+  const lockedUntil = data.lockedUntil?.toMillis ? data.lockedUntil.toMillis() : 0;
+  if (lockedUntil > Date.now()) return { state: 'locked', minutesLeft: Math.ceil((lockedUntil - Date.now()) / 60000) };
+  const actual = Buffer.from(hashSecurityPin(pin, data.salt), 'hex');
+  const expected = Buffer.from(data.hash, 'hex');
+  if (actual.length !== expected.length || !require('crypto').timingSafeEqual(actual, expected)) return { state: 'wrong' };
+  return { state: 'valid' };
+}
 function isKycApproved(profile) { return profile?.verified === true || profile?.verificationStatus === 'approved'; }
 async function getProfile(db, uid) { const snap = await db.collection('users').doc(uid).get(); if (!snap.exists) return null; return { id: snap.id, ...snap.data() }; }
 async function resolveRecipient(db, query, senderUid) {
@@ -77,16 +93,36 @@ exports.walletTransfer = onCall({ enforceAppCheck: true }, async (request) => {
   if (!active(sender)) throw new HttpsError('permission-denied', 'Your account is not active.');
   if (sender.role !== 'customer') throw new HttpsError('permission-denied', 'Wallet-to-wallet transfers are for customer wallets.');
   if (!isKycApproved(sender)) throw new HttpsError('failed-precondition', 'Complete KYC before using wallet transfers.');
+  const securityPin = request.data?.securityPin;
+  if (typeof securityPin !== 'string' || !SECURITY_PIN_RE.test(securityPin)) throw new HttpsError('invalid-argument', 'Enter your 4-8 digit security PIN.');
   const amountCents = parseMoneyCents(request.data?.amount);
   if (amountCents < Math.round(MIN_TRANSFER_MYR * 100) || amountCents > Math.round(MAX_TRANSFER_MYR * 100)) throw new HttpsError('invalid-argument', 'Enter a valid MYR transfer amount.');
   const recipient = await resolveRecipient(db, request.data?.recipient, senderUid), recipientUid = recipient.id, note = String(request.data?.note || '').trim().slice(0, 120), ip = getClientIp(request);
   await checkVelocity(db, senderUid, 'walletTransfer', { ip });
-  const transferRef = db.collection('walletTransfers').doc(`${senderUid}_${requestId}`), senderRef = db.collection('users').doc(senderUid), recipientRef = db.collection('users').doc(recipientUid), senderLedgerRef = db.collection('walletLedger').doc(), recipientLedgerRef = db.collection('walletLedger').doc();
+  const transferRef = db.collection('walletTransfers').doc(`${senderUid}_${requestId}`), pinRef = db.collection('securityPins').doc(senderUid), senderRef = db.collection('users').doc(senderUid), recipientRef = db.collection('users').doc(recipientUid), senderLedgerRef = db.collection('walletLedger').doc(), recipientLedgerRef = db.collection('walletLedger').doc();
   let replay = false;
+  let pinValid = true;
   try {
     await db.runTransaction(async tx => {
       const existingTransferSnap = await tx.get(transferRef);
       if (existingTransferSnap.exists) { const existing = existingTransferSnap.data() || {}; if (existing.fromUid !== senderUid || existing.toUid !== recipientUid || Number(existing.amountMinor) !== amountCents || existing.requestId !== requestId) throw new HttpsError('already-exists', 'That request ID was already used for a different transfer.'); replay = true; return; }
+      const pinSnap = await tx.get(pinRef);
+      if (!pinSnap.exists) throw new HttpsError('failed-precondition', 'Set up your security PIN before making wallet transfers.');
+      const pinData = pinSnap.data() || {};
+      const pinCheck = verifySecurityPinData(pinData, securityPin);
+      if (pinCheck.state === 'locked') throw new HttpsError('resource-exhausted', `Too many PIN attempts. Try again in ${pinCheck.minutesLeft} minute${pinCheck.minutesLeft === 1 ? '' : 's'}.`);
+      if (pinCheck.state === 'invalid') throw new HttpsError('failed-precondition', 'Your security PIN needs to be reset before it can be used.');
+      if (pinCheck.state === 'wrong') {
+        const attempts = Number.isInteger(pinData.attempts) && pinData.attempts >= 0 ? pinData.attempts + 1 : 1;
+        if (attempts >= SECURITY_PIN_MAX_ATTEMPTS) {
+          tx.update(pinRef, { attempts: 0, lockedUntil: admin.firestore.Timestamp.fromMillis(Date.now() + SECURITY_PIN_LOCKOUT_MS), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+        } else {
+          tx.update(pinRef, { attempts, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+        }
+        pinValid = false;
+        return { pinValid: false, locked: attempts >= SECURITY_PIN_MAX_ATTEMPTS };
+      }
+      tx.update(pinRef, { attempts: 0, lockedUntil: null, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
       const senderSnap = await tx.get(senderRef), recipientSnap = await tx.get(recipientRef);
       if (!senderSnap.exists || !recipientSnap.exists) throw new HttpsError('not-found', 'Wallet account not found.');
       const senderData = senderSnap.data(), recipientData = recipientSnap.data();
@@ -104,6 +140,7 @@ exports.walletTransfer = onCall({ enforceAppCheck: true }, async (request) => {
       tx.set(senderLedgerRef, { uid: senderUid, type: 'wallet_transfer_debit', direction: 'debit', currency: 'MYR', amount: myrFromCents(amountCents), amountMinor: amountCents, transferId: transferRef.id, counterpartyUid: recipientUid, balanceAfter: myrFromCents(senderAfter), note, createdAt: now });
       tx.set(recipientLedgerRef, { uid: recipientUid, type: 'wallet_transfer_credit', direction: 'credit', currency: 'MYR', amount: myrFromCents(amountCents), amountMinor: amountCents, transferId: transferRef.id, counterpartyUid: senderUid, balanceAfter: myrFromCents(recipientAfter), note, createdAt: now });
     });
+    if (!pinValid) throw new HttpsError('permission-denied', 'Incorrect security PIN.');
     if (replay) return { transferId: transferRef.id, amount: myrFromCents(amountCents), currency: 'MYR', recipient: { uid: recipientUid, name: recipient.name || recipient.displayName || 'MySheba Customer' }, replay: true };
     await logAudit({ action: 'wallet_transfer', targetUid: recipientUid, performedBy: senderUid, performedByRole: 'customer', details: { transferId: transferRef.id, amount: myrFromCents(amountCents), currency: 'MYR', ip } });
     await checkIpAnomaly(db, senderUid, ip, { action: 'walletTransfer', role: 'customer' });
