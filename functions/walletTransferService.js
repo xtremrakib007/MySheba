@@ -133,6 +133,7 @@ exports.walletTransfer = onCall({ enforceAppCheck: true }, async (request) => {
       const senderSnap = await tx.get(senderRef), recipientSnap = await tx.get(recipientRef);
       if (!senderSnap.exists || !recipientSnap.exists) throw new HttpsError('not-found', 'Wallet account not found.');
       const senderData = senderSnap.data(), recipientData = recipientSnap.data();
+      requireSessionMatch(request, senderData);
       if (!active(senderData) || !active(recipientData)) throw new HttpsError('failed-precondition', 'Both customer accounts must be active.');
       if (senderData.role !== 'customer' || recipientData.role !== 'customer') throw new HttpsError('permission-denied', 'Only customer wallets can use this transfer.');
       if (!isKycApproved(senderData) || !isKycApproved(recipientData)) throw new HttpsError('failed-precondition', 'Both customer wallets must complete KYC.');
