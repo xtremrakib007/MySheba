@@ -32,7 +32,8 @@ export const MODULE_KEYS = { notepad: 'notepad', myDocuments: 'myDocuments', sal
  */
 export async function ensureModuleSubscription(uid, key) {
   try {
-    const { data } = await chargeWalletFn({ kind: 'module_subscription', key });
+    const session = await getSessionProof();
+    const { data } = await chargeWalletFn({ kind: 'module_subscription', key, ...session });
     return data;
   } catch (err) {
     throw new Error(err.message || 'Could not start this subscription - top up your wallet first.');
