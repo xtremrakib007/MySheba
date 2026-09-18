@@ -96,64 +96,6 @@ exports.completeTransaction = onCall({ enforceAppCheck: true }, async (request) 
 });
 
 
-exports.rejectTransaction = onCall({ enforceAppCheck: true }, async (request) => {
-  requireAuth(request);
-  const actor = await getActor(request.auth.uid);
-
-  const id = String(request.data?.transactionId || '').trim();
-  const reason = String(request.data?.reason || '').trim();
-  if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
-  if (!reason) throw new HttpsError('invalid-argument', 'A rejection reason is required.');
-  if (reason.length > 500) throw new HttpsError('invalid-argument', 'The rejection reason is too long.');
-
-  const db = admin.firestore();
-  const ref = db.collection('transactions').doc(id);
-
-  await db.runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
-    if (!snap.exists) throw new HttpsError('not-found', 'That order no longer exists.');
-    const order = snap.data();
-
-    if (APPROVER_ROLES.includes(actor.role)) {
-      if (order.status !== 'pending') {
-        throw new HttpsError('failed-precondition', 'Only pending orders can be rejected.');
-      }
-      tx.update(ref, {
-        status: 'rejected',
-        rejected: true,
-        rejectReason: reason,
-        rejectedBy: actor.uid,
-        rejectedByName: actor.name,
-        rejectedByRole: actor.role,
-        rejectedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      return;
-    }
-
-    assertOperatorCanHandle(actor, order);
-    if (order.status !== 'pending') {
-      throw new HttpsError('failed-precondition', 'Only pending orders can be rejected.');
-    }
-    if (order.rejectedBy && order.rejectedBy[actor.uid]) {
-      throw new HttpsError('already-exists', 'You have already rejected this order.');
-    }
-
-    tx.set(ref, {
-      rejectedBy: {
-        [actor.uid]: {
-          reason,
-          name: actor.name,
-          role: actor.role,
-          at: admin.firestore.FieldValue.serverTimestamp(),
-        },
-      },
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
-  });
-
-  return { ok: true, transactionId: id };
-});
 
 exports.scrubCompletedTransactionPins = onCall({ enforceAppCheck: true }, async (request) => {
   requireAuth(request); const actor = await getActor(request.auth.uid);
