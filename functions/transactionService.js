@@ -124,16 +124,19 @@ exports.scrubCompletedTransactionPins = onCall({ enforceAppCheck: true }, async 
   let scrubbed = 0, batches = 0;
   for (let i = 0; i < docs.length; i += 400) {
     const chunk = docs.slice(i, i + 400);
-    await db.runTransaction(async (tx) => {
+    const chunkScrubbed = await db.runTransaction(async (tx) => {
       await assertActorStillActive(tx, uid, ['superadmin']);
+      let count = 0;
       for (const docSnap of chunk) {
         const current = await tx.get(docSnap.ref);
         const data = current.exists ? (current.data() || {}) : {};
         if (data.status !== 'completed' || !Object.prototype.hasOwnProperty.call(data, 'pin')) continue;
         tx.update(docSnap.ref, { pin: admin.firestore.FieldValue.delete() });
-        scrubbed += 1;
+        count += 1;
       }
+      return count;
     });
+    scrubbed += chunkScrubbed;
     batches += 1;
   }
   return { ok: true, scrubbed, batches };
