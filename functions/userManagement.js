@@ -84,57 +84,96 @@ exports.manageUser = onCall({ enforceAppCheck: true }, async (request) => {
   }
 
   if (action === 'setDealer') {
-    if (!['admin', 'superadmin'].includes(callerRole)) throw new HttpsError('permission-denied', 'Only an admin can assign a customer to a dealer.');
     const { targetUid, dealerId } = request.data;
     if (!targetUid || !dealerId) throw new HttpsError('invalid-argument', 'targetUid and dealerId are required.');
-    const { ref: targetRef } = await getCustomerTarget(db, targetUid);
-    const dealerSnap = await db.collection('users').doc(dealerId).get();
-    assertActiveAssignment(dealerSnap.exists ? dealerSnap.data() : null, 'dealer', 'dealer');
-    const previousDealerId = (await targetRef.get()).data().dealerId || null;
-    await targetRef.update({ dealerId });
-    await logAudit({ action: 'dealer_reassigned', targetUid, performedBy: callerUid, performedByRole: callerRole, details: { from: previousDealerId, to: dealerId } });
+    const targetRef = db.collection('users').doc(targetUid);
+    const dealerRef = db.collection('users').doc(dealerId);
+    const callerRef = db.collection('users').doc(callerUid);
+    const result = await db.runTransaction(async (tx) => {
+      const [callerSnap, targetSnap, dealerSnap] = await Promise.all([tx.get(callerRef), tx.get(targetRef), tx.get(dealerRef)]);
+      if (!callerSnap.exists || !active(callerSnap.data()) || !['admin', 'superadmin'].includes(callerSnap.data().role)) {
+        throw new HttpsError('permission-denied', 'Your admin privileges are no longer active.');
+      }
+      if (!targetSnap.exists) throw new HttpsError('not-found', 'That user does not exist.');
+      if (targetSnap.data().role !== 'customer') throw new HttpsError('invalid-argument', 'Only a customer account can be changed here.');
+      if (!dealerSnap.exists || dealerSnap.data().role !== 'dealer') throw new HttpsError('invalid-argument', 'That dealer was not found.');
+      if (!active(dealerSnap.data())) throw new HttpsError('failed-precondition', 'That dealer is not active.');
+      const previousDealerId = targetSnap.data().dealerId || null;
+      tx.update(targetRef, { dealerId });
+      return { previousDealerId, role: callerSnap.data().role };
+    });
+    await logAudit({ action: 'dealer_reassigned', targetUid, performedBy: callerUid, performedByRole: result.role, details: { from: result.previousDealerId, to: dealerId } });
     return { uid: targetUid, dealerId };
   }
 
   if (action === 'setReseller') {
-    if (!['admin', 'superadmin'].includes(callerRole)) throw new HttpsError('permission-denied', 'Only an admin can assign a customer to a reseller.');
     const { targetUid, resellerId } = request.data;
     if (!targetUid || !resellerId) throw new HttpsError('invalid-argument', 'targetUid and resellerId are required.');
-    const { ref: targetRef } = await getCustomerTarget(db, targetUid);
-    const resellerSnap = await db.collection('users').doc(resellerId).get();
-    assertActiveAssignment(resellerSnap.exists ? resellerSnap.data() : null, 'reseller', 'reseller');
-    const previousResellerId = (await targetRef.get()).data().resellerId || null;
-    await targetRef.update({ resellerId });
-    await logAudit({ action: 'reseller_reassigned', targetUid, performedBy: callerUid, performedByRole: callerRole, details: { from: previousResellerId, to: resellerId } });
+    const targetRef = db.collection('users').doc(targetUid);
+    const resellerRef = db.collection('users').doc(resellerId);
+    const callerRef = db.collection('users').doc(callerUid);
+    const result = await db.runTransaction(async (tx) => {
+      const [callerSnap, targetSnap, resellerSnap] = await Promise.all([tx.get(callerRef), tx.get(targetRef), tx.get(resellerRef)]);
+      if (!callerSnap.exists || !active(callerSnap.data()) || !['admin', 'superadmin'].includes(callerSnap.data().role)) {
+        throw new HttpsError('permission-denied', 'Your admin privileges are no longer active.');
+      }
+      if (!targetSnap.exists) throw new HttpsError('not-found', 'That user does not exist.');
+      if (targetSnap.data().role !== 'customer') throw new HttpsError('invalid-argument', 'Only a customer account can be changed here.');
+      if (!resellerSnap.exists || resellerSnap.data().role !== 'reseller') throw new HttpsError('invalid-argument', 'That reseller was not found.');
+      if (!active(resellerSnap.data())) throw new HttpsError('failed-precondition', 'That reseller is not active.');
+      const previousResellerId = targetSnap.data().resellerId || null;
+      tx.update(targetRef, { resellerId });
+      return { previousResellerId, role: callerSnap.data().role };
+    });
+    await logAudit({ action: 'reseller_reassigned', targetUid, performedBy: callerUid, performedByRole: result.role, details: { from: result.previousResellerId, to: resellerId } });
     return { uid: targetUid, resellerId };
   }
 
   if (action === 'downgradeRole') {
-    const downgrades = DOWNGRADE_PERMISSIONS[callerRole]; const { targetUid } = request.data;
-    if (!targetUid || !downgrades) throw new HttpsError('permission-denied', 'You cannot downgrade users.');
-    const targetRef = db.collection('users').doc(targetUid); const targetSnap = await targetRef.get();
-    if (!targetSnap.exists) throw new HttpsError('not-found', 'That user does not exist.');
-    const previousRole = targetSnap.data().role; const newRole = downgrades[previousRole];
-    if (!newRole) throw new HttpsError('permission-denied', `A ${callerRole} cannot downgrade a ${previousRole}.`);
-    if (callerRole === 'dealer' && previousRole === 'dealer' && targetSnap.data().dealerId !== callerUid) throw new HttpsError('permission-denied', 'You can only downgrade your own dealers.');
-    await targetRef.update({ role: newRole });
-    await logAudit({ action: 'role_downgraded', targetUid, performedBy: callerUid, performedByRole: callerRole, details: { from: previousRole, to: newRole } });
-    return { uid: targetUid, role: newRole };
+    const { targetUid } = request.data;
+    if (!targetUid) throw new HttpsError('invalid-argument', 'targetUid is required.');
+    const targetRef = db.collection('users').doc(targetUid);
+    const callerRef = db.collection('users').doc(callerUid);
+    const result = await db.runTransaction(async (tx) => {
+      const [callerSnap, targetSnap] = await Promise.all([tx.get(callerRef), tx.get(targetRef)]);
+      if (!callerSnap.exists || !active(callerSnap.data())) throw new HttpsError('permission-denied', 'Your account is not active.');
+      const currentRole = callerSnap.data().role;
+      const downgrades = DOWNGRADE_PERMISSIONS[currentRole];
+      if (!downgrades) throw new HttpsError('permission-denied', 'You cannot downgrade users.');
+      if (!targetSnap.exists) throw new HttpsError('not-found', 'That user does not exist.');
+      const target = targetSnap.data();
+      const previousRole = target.role;
+      const newRole = downgrades[previousRole];
+      if (!newRole) throw new HttpsError('permission-denied', `A ${currentRole} cannot downgrade a ${previousRole}.`);
+      if (currentRole === 'dealer' && previousRole === 'dealer' && target.dealerId !== callerUid) throw new HttpsError('permission-denied', 'You can only downgrade your own dealers.');
+      tx.update(targetRef, { role: newRole });
+      return { previousRole, newRole, role: currentRole };
+    });
+    await logAudit({ action: 'role_downgraded', targetUid, performedBy: callerUid, performedByRole: result.role, details: { from: result.previousRole, to: result.newRole } });
+    return { uid: targetUid, role: result.newRole };
   }
 
   if (action === 'setFeatures') {
-    if (!['admin', 'superadmin'].includes(callerRole)) throw new HttpsError('permission-denied', 'Only admins can change feature access.');
     const { targetUid, features } = request.data;
     if (!targetUid || !features || typeof features !== 'object' || Array.isArray(features)) throw new HttpsError('invalid-argument', 'targetUid and features are required.');
-    const targetRef = db.collection('users').doc(targetUid); const targetSnap = await targetRef.get();
-    if (!targetSnap.exists) throw new HttpsError('not-found', 'That user does not exist.');
-    const targetRole = targetSnap.data().role;
-    if (targetRole === 'superadmin' || (callerRole === 'admin' && targetRole === 'admin')) throw new HttpsError('permission-denied', 'You cannot change feature access for this account.');
-    const cleanFeatures = {};
-    for (const key of ['mobileBanking', 'recharge', 'remittance', 'travel', 'ticketReseller']) if (Object.prototype.hasOwnProperty.call(features, key)) cleanFeatures[key] = Boolean(features[key]);
-    await targetRef.update({ features: cleanFeatures });
-    await logAudit({ action: 'user_features_changed', targetUid, performedBy: callerUid, performedByRole: callerRole, details: { features: cleanFeatures } });
-    return { uid: targetUid, features: cleanFeatures };
+    const targetRef = db.collection('users').doc(targetUid);
+    const callerRef = db.collection('users').doc(callerUid);
+    const result = await db.runTransaction(async (tx) => {
+      const [callerSnap, targetSnap] = await Promise.all([tx.get(callerRef), tx.get(targetRef)]);
+      if (!callerSnap.exists || !active(callerSnap.data()) || !['admin', 'superadmin'].includes(callerSnap.data().role)) {
+        throw new HttpsError('permission-denied', 'Your admin privileges are no longer active.');
+      }
+      if (!targetSnap.exists) throw new HttpsError('not-found', 'That user does not exist.');
+      const callerRoleNow = callerSnap.data().role;
+      const targetRole = targetSnap.data().role;
+      if (targetRole === 'superadmin' || (callerRoleNow === 'admin' && targetRole === 'admin')) throw new HttpsError('permission-denied', 'You cannot change feature access for this account.');
+      const cleanFeatures = {};
+      for (const key of ['mobileBanking', 'recharge', 'remittance', 'travel', 'ticketReseller']) if (Object.prototype.hasOwnProperty.call(features, key)) cleanFeatures[key] = Boolean(features[key]);
+      tx.update(targetRef, { features: cleanFeatures });
+      return { cleanFeatures, role: callerRoleNow };
+    });
+    await logAudit({ action: 'user_features_changed', targetUid, performedBy: callerUid, performedByRole: result.role, details: { features: result.cleanFeatures } });
+    return { uid: targetUid, features: result.cleanFeatures };
   }
 
   if (action === 'suspend') {
