@@ -25,7 +25,7 @@ export async function transferPoints({ to, amount, note, securityPin }) {
   const session = await getSessionProof();
   const fn = httpsCallable(functions, 'transferPoints');
   try {
-    const { data } = await fn({ requestId, toUid: to.uid, amount: amt, note: note || '', securityPin: String(securityPin || '') });
+    const { data } = await fn({ requestId, toUid: to.uid, amount: amt, note: note || '', securityPin: String(securityPin || ''), ...session });
     logActivity('points_transferred', { toUid: to.uid, amount: amt });
     return data;
   } catch (err) {
