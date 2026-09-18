@@ -54,6 +54,7 @@ exports.createDiditKycSession = require('./diditKycService').createDiditKycSessi
 exports.chargeWallet = secureWalletCharge.chargeWallet;
 exports.chargeRecharge = chargeGuards.chargeRecharge;
 exports.chargeInternetPackage = chargeGuards.chargeInternetPackage;
+exports.chargeBillPayment = require('./walletService').chargeBillPayment;
 exports.chargeMobileBanking = chargeGuards.chargeMobileBanking;
 exports.chargeRemittance = chargeGuards.chargeRemittance;
 exports.approveVerification = require('./verificationService').approveVerification;
