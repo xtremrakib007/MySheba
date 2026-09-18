@@ -112,9 +112,32 @@ exports.finalizeKycFaceTemplate = async (tx, db, uid) => {
     throw new HttpsError('failed-precondition', 'A validated face template is required before approval.');
   }
   const data = pending.data();
+  const embedding = cleanEmbedding(data.embedding);
+
+  // Re-check inside the same approval transaction. The earlier submission-time
+  // check only compared against templates that were already verified; without
+  // this second check, two pending applicants could both pass that check and
+  // later be approved with the same biometric identity.
+  const verifiedSnap = await tx.get(db.collection(VERIFIED));
+  let best = null;
+  verifiedSnap.forEach((doc) => {
+    if (doc.id === uid) return;
+    const candidate = doc.data()?.embedding;
+    if (!Array.isArray(candidate) || candidate.length !== DIMENSIONS) return;
+    try {
+      const score = cosine(embedding, cleanEmbedding(candidate));
+      if (!best || score > best.score) best = { uid: doc.id, score };
+    } catch (_) {
+      // Ignore malformed legacy templates.
+    }
+  });
+  if (best && best.score >= DUPLICATE_THRESHOLD) {
+    throw new HttpsError('failed-precondition', 'This identity matches an existing verified account and cannot be approved.');
+  }
+
   tx.set(templateRef, {
     uid,
-    embedding: data.embedding,
+    embedding,
     model: data.model || 'mobilefacenet-512',
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
