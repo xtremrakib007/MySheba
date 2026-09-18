@@ -32,6 +32,9 @@ exports.listManagedUsers = onCall({ enforceAppCheck: true }, async (request) => 
   const callerSnap = await callerRef.get();
   if (!callerSnap.exists) throw new HttpsError('not-found', 'Your account was not found.');
   const caller = callerSnap.data() || {};
+  // A disabled/suspended/inactive staff account must not retain access through
+  // this callable merely because its role field is still dealer/reseller.
+  if (!isActive(caller)) throw new HttpsError('permission-denied', 'Your account is not active.');
   if (!ALLOWED_ROLES.has(caller.role)) throw new HttpsError('permission-denied', 'This account cannot access a managed user list.');
 
   const field = caller.role === 'dealer' ? 'dealerId' : 'resellerId';
