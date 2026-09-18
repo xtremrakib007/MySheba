@@ -153,7 +153,10 @@ function buildTransactionPayload(service, serviceData, pricing, rates) {
     };
   }
   if (service === "billpayment") {
-    const amount = Number(serviceData.amount) || 0;
+    const rawAmount = Number(serviceData.amount) || 0;
+    // Convert the selected country's bill amount to MySheba points before
+    // sending it. The server independently recomputes this value.
+    const amount = amountToPoints(rawAmount, serviceData.country, rates);
     return {
       service: DEALER_LABELS.billpayment,
       details: `${serviceData.provider || ""} - ${serviceData.category || ""} (${serviceData.accountNumber || ""})`,
