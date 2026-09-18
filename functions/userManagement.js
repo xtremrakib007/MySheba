@@ -43,7 +43,19 @@ exports.manageUser = onCall({ enforceAppCheck: true }, async (request) => {
     const newProfile = { uid: userRecord.uid, userId: await assignUniqueUserId(db, userRecord.uid), name: name.trim(), phone: normalizePhone(phone), role, walletBalance: 0, notifPrefs: { pushEnabled: true, emailEnabled: true, rateAlerts: false }, createdBy: callerUid, createdAt: admin.firestore.FieldValue.serverTimestamp() };
     if (dealerId) newProfile.dealerId = dealerId;
     if (resellerId) newProfile.resellerId = resellerId;
-    await db.collection('users').doc(userRecord.uid).set(newProfile);
+    try {
+      await db.collection('users').doc(userRecord.uid).set(newProfile);
+    } catch (err) {
+      // Do not leave an Auth account without its Firestore profile. If the
+      // profile write fails, roll back the newly-created identity.
+      try {
+        await admin.auth().deleteUser(userRecord.uid);
+      } catch (rollbackErr) {
+        await logServerError('manageUser.create.rollback', rollbackErr, { userId: callerUid, targetUid: userRecord.uid });
+      }
+      await logServerError('manageUser.create.profileWrite', err, { userId: callerUid, targetUid: userRecord.uid });
+      throw new HttpsError('internal', 'Could not create the account.');
+    }
     await logAudit({ action: 'account_created', targetUid: userRecord.uid, performedBy: callerUid, performedByRole: callerRole, details: { role, dealerId, resellerId } });
     return { uid: userRecord.uid, userId: newProfile.userId, name: name.trim(), phone: normalizePhone(phone), role, dealerId, resellerId };
   }
