@@ -122,8 +122,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           role,
         };
 
-        // Device trust is an optional extra security layer. If the device-auth
-        // function is unavailable, a valid admin account can still enter.
+        // Device verification is mandatory for the admin web console. Do not
+        // fall back to password-only access if the verification service fails.
         try {
           const deviceId = getOrCreateDeviceId();
           const trusted = await isDeviceTrusted(user.uid, deviceId);
@@ -140,18 +140,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setOtpMethod(method);
             setOtpDestination(maskedDestination);
           } catch (err) {
-            console.warn('Device verification OTP unavailable; allowing authenticated admin login:', err);
-            setOtpError(null);
-            setDeviceVerificationRequired(false);
-            setProfile(adminProfile);
-            pendingProfileRef.current = null;
+            console.error('Device verification OTP unavailable:', err);
+            setProfile(null);
+            setAccessDenied(true);
+            await firebaseSignOut(auth).catch(() => undefined);
           }
         } catch (err) {
-          console.warn('Device trust check unavailable; allowing authenticated admin login:', err);
-          setOtpError(null);
-          setDeviceVerificationRequired(false);
-          setProfile(adminProfile);
-          pendingProfileRef.current = null;
+          console.error('Device trust check unavailable:', err);
+          setProfile(null);
+          setAccessDenied(true);
+          await firebaseSignOut(auth).catch(() => undefined);
         }
       } catch (err) {
         console.error('Failed to load admin profile:', err);
