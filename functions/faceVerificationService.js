@@ -79,24 +79,32 @@ exports.verifyKycFace = onCall({ enforceAppCheck: true }, async (request) => {
   });
 
   if (best && best.score >= DUPLICATE_THRESHOLD) {
-    await db.collection(PENDING).doc(uid).set({
-      uid,
-      status: 'duplicate',
-      duplicateOf: best.uid,
-      similarity: best.score,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
+    await db.runTransaction(async (tx) => {
+      const userSnap = await tx.get(db.collection('users').doc(uid));
+      if (!userSnap.exists || !activeProfile(userSnap.data())) throw new HttpsError('permission-denied', 'Your account is not active.');
+      tx.set(db.collection(PENDING).doc(uid), {
+        uid,
+        status: 'duplicate',
+        duplicateOf: best.uid,
+        similarity: best.score,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    });
     return { ok: false, duplicate: true, similarity: best.score };
   }
 
-  await db.collection(PENDING).doc(uid).set({
-    uid,
-    status: 'pending',
-    embedding,
-    model: 'mobilefacenet-512',
-    livenessPassed: true,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  }, { merge: true });
+  await db.runTransaction(async (tx) => {
+    const userSnap = await tx.get(db.collection('users').doc(uid));
+    if (!userSnap.exists || !activeProfile(userSnap.data())) throw new HttpsError('permission-denied', 'Your account is not active.');
+    tx.set(db.collection(PENDING).doc(uid), {
+      uid,
+      status: 'pending',
+      embedding,
+      model: 'mobilefacenet-512',
+      livenessPassed: true,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
 
   return { ok: true, duplicate: false, similarity: best?.score || 0 };
 });
