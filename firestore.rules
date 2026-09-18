@@ -13,6 +13,21 @@ service cloud.firestore {
     function myDealerScope() { return request.auth.uid; }
     function canHandleTransaction(s) { return isAdmin() || (isDealerTier() && s == 'Mobile Banking') || (isReseller() && s in ['Recharge', 'Internet', 'Remittance']); }
     function activeStaff(uid, expectedRole) { let p = get(/databases/$(database)/documents/users/$(uid)).data; return p.role == expectedRole && p.suspended != true && p.inactive != true && p.disabled != true && p.active != false && p.mergedInto == null; }
+    // Advertisement configuration is managed only by the Super Admin UI.
+    // Raw tracking/payment/analytics records are server-owned; clients never write them.
+    match /advertisements/{id} { allow read, create, update, delete: if isSuperadmin(); }
+    match /ad_campaigns/{id} { allow read, create, update, delete: if isSuperadmin(); }
+    match /ad_advertisers/{id} { allow read, create, update, delete: if isSuperadmin(); }
+    match /ad_placements/{id} { allow read, create, update, delete: if isSuperadmin(); }
+    match /ad_packages/{id} { allow read, create, update, delete: if isSuperadmin(); }
+    match /ad_impressions/{id} { allow read: if isSuperadmin(); allow create, update, delete: if false; }
+    match /ad_clicks/{id} { allow read: if isSuperadmin(); allow create, update, delete: if false; }
+    match /ad_reports/{id} { allow read: if isSuperadmin(); allow write: if false; }
+    match /ad_payments/{id} { allow read: if isSuperadmin(); allow write: if false; }
+    match /ad_daily_stats/{id} { allow read: if isSuperadmin(); allow write: if false; }
+    match /ad_audit_logs/{id} { allow read: if isSuperadmin(); allow write: if false; }
+    match /ad_settings/{id} { allow read, create, update, delete: if isSuperadmin(); }
+    match /ad_feature_controls/{id} { allow read, create, update, delete: if isSuperadmin(); }
     match /rates/current { allow read: if activeProfile(); allow create: if isSuperadmin(); allow update: if isSuperadmin() || (myRole() == 'admin' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mobileBanking','remittanceFee','remittanceBD_ACC','remittanceBD_CASH','remittanceNP','remittancePK','remittancePH','remittanceLK','remittanceIN','remittanceID','remittanceMM','BD_ACC','BD_CASH','NP','PK','PH','LK','IN','ID','MM','updatedAt'])); allow delete: if false; }
     match /internetPricing/{operator} { allow read: if activeProfile(); allow create, update: if isAdmin(); allow delete: if false; }
     match /settings/pricing { allow read: if activeProfile(); allow create, update: if isAdmin() && request.resource.data.keys().hasOnly(['dealerEarningPercent','rechargeCostPercent','rechargeProfitPercent','rechargePointCostPerUnit','internetPointCostPerUnit','webviewAccessCost','webviewSubmitCost','paymentSuccessCost','notepadCost','myDocumentsCost','salaryOtCost','moduleSubscriptionDays','webviewAccessWindowHours','listingBoostCost','listingBoostDurationDays','rolePricing','updatedAt']); allow delete: if false; }
