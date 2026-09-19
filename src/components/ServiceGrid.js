@@ -101,7 +101,8 @@ export default function ServiceGrid() {
   const handlePress = useServiceAction(); const role = profile?.role || 'customer';
   const isStaff = ['dealer', 'reseller', 'admin', 'superadmin'].includes(role);
   const allServices = isStaff ? (STAFF_SERVICES[role] || STAFF_SERVICES.admin) : CUSTOMER_SERVICES;
-  const services = allServices.filter((service) => gridManagementService.isGridActive(gridManagement, service.key));
+  const gridKeyFor = (service) => ({ buspicker: 'bus', webview: service.key, adminFeatures: 'adminFeatures', dealerFeatures: 'dealerFeatures', resellerFeatures: 'resellerFeatures', adminTopup: 'topup' }[service.kind] || service.key);
+  const services = allServices.filter((service) => gridManagementService.isGridActive(gridManagement, gridKeyFor(service)));
   return <View><View style={styles.sectionHead}><Text style={[styles.sectionTitle, { color: colors.text || '#222' }]}>{isStaff ? 'Management Dashboard' : 'Quick Services'}</Text><Text style={[styles.sectionSubtitle, { color: colors.muted || '#6B7280' }]}>{isStaff ? 'Manage transactions, accounts and operations' : 'Money, remittance and travel'}</Text></View><View style={styles.gridCanvas}><View style={styles.grid}>{services.map((service) => <Tile key={service.key} s={service} disabled={service.kind === 'webview' && !!webViewBusy} onPress={() => handlePress(service)} />)}</View></View></View>;
 }
 
