@@ -10,6 +10,20 @@ const SERVICE_ALIASES = {
   remittance: 'Remittance'
 };
 const STAFF_ROLES = ['dealer', 'reseller', 'admin', 'superadmin'];
+const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
+const DEVICE_ID_RE = /^[A-Za-z0-9-]{16,100}$/;
+
+function requireSessionMatch(request, account) {
+  const sessionId = request.data?.sessionId;
+  const deviceId = request.data?.deviceId;
+  if (typeof sessionId !== 'string' || !SESSION_ID_RE.test(sessionId) ||
+      typeof deviceId !== 'string' || !DEVICE_ID_RE.test(deviceId)) {
+    throw new HttpsError('failed-precondition', 'Your secure session is missing. Please sign in again.');
+  }
+  if (account.activeSessionId !== sessionId || account.activeDeviceId !== deviceId) {
+    throw new HttpsError('permission-denied', 'This device session is no longer active. Please sign in again.');
+  }
+}
 
 function requireAuth(request) {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
@@ -56,6 +70,7 @@ function canReject(actor, tx) {
 exports.rejectTransaction = onCall({ enforceAppCheck: true }, async request => {
   const uid = requireAuth(request);
   const actor = await getActor(uid);
+  requireSessionMatch(request, actor);
   const id = String(request.data?.transactionId || '').trim();
   const reason = String(request.data?.reason || '').trim().slice(0, 500);
   if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
@@ -72,6 +87,7 @@ exports.rejectTransaction = onCall({ enforceAppCheck: true }, async request => {
     if (!STAFF_ROLES.includes(currentActor.role) || !activeAccount(currentActor)) {
       throw new HttpsError('permission-denied', 'Your staff account is no longer active.');
     }
+    requireSessionMatch(request, currentActor);
 
     const snap = await t.get(ref);
     if (!snap.exists) throw new HttpsError('not-found', 'Transaction not found.');
@@ -80,6 +96,10 @@ exports.rejectTransaction = onCall({ enforceAppCheck: true }, async request => {
 
     if (!ALLOWED_SERVICES.includes(service)) {
       throw new HttpsError('failed-precondition', 'This transaction type cannot be rejected here.');
+    }
+
+    if (!canReject(currentActor, { ...tx, service })) {
+      throw new HttpsError('permission-denied', 'You are not authorized to reject this transaction.');
     }
 
     if (tx.rejected === true || tx.status === 'rejected') {
