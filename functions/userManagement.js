@@ -192,11 +192,23 @@ exports.manageUser = onCall({ enforceAppCheck: true }, async (request) => {
       if (targetData.role === 'superadmin') throw new HttpsError('permission-denied', 'A superadmin account cannot be suspended here.');
       return { role: callerSnap.data().role, targetRole: targetData.role, targetName: targetData.name || null, targetPhone: targetData.phone || null };
     });
-    try { await admin.auth().updateUser(targetUid, { disabled: suspended }); }
+    let authUpdated = false;
+    try { await admin.auth().updateUser(targetUid, { disabled: suspended }); authUpdated = true; }
     catch (err) { await logServerError('manageUser.suspend', err, { userId: callerUid, targetUid }); throw new HttpsError('internal', 'Could not update the account.'); }
-    await targetRef.update(suspended
-      ? { suspended: true, suspendedAt: admin.firestore.FieldValue.serverTimestamp(), suspendedBy: callerUid }
-      : { suspended: false, suspendedAt: admin.firestore.FieldValue.delete(), suspendedBy: admin.firestore.FieldValue.delete() });
+    try {
+      await targetRef.update(suspended
+        ? { suspended: true, suspendedAt: admin.firestore.FieldValue.serverTimestamp(), suspendedBy: callerUid, activeSessionId: null, activeDeviceId: null }
+        : { suspended: false, suspendedAt: admin.firestore.FieldValue.delete(), suspendedBy: admin.firestore.FieldValue.delete() });
+    } catch (err) {
+      if (authUpdated) {
+        try { await admin.auth().updateUser(targetUid, { disabled: !suspended }); }
+        catch (rollbackErr) { await logServerError('manageUser.suspend.rollback', rollbackErr, { userId: callerUid, targetUid }); }
+      }
+      await logServerError('manageUser.suspend.profileWrite', err, { userId: callerUid, targetUid });
+      throw new HttpsError('internal', 'Could not update the account.');
+    }
+    try { await admin.auth().revokeRefreshTokens(targetUid); }
+    catch (err) { await logServerError('manageUser.suspend.revokeRefreshTokens', err, { userId: callerUid, targetUid }); }
     await logAudit({ action: suspended ? 'user_suspended' : 'user_reactivated', targetUid, performedBy: callerUid, performedByRole: result.role, details: {} });
     return { uid: targetUid, suspended };
   }
