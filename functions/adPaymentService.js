@@ -11,7 +11,6 @@ const ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 function requireAuth(request) { if (!request.auth?.uid) throw new HttpsError('unauthenticated','You must be signed in.'); return request.auth.uid; }
 async function requireSuperadmin(db, uid) { const snap=await db.collection('users').doc(uid).get(); const caller=snap.exists?snap.data():null; if(!caller||caller.role!=='superadmin') throw new HttpsError('permission-denied','Only a Super Admin can manage advertisement payments.'); if(caller.suspended===true||caller.inactive===true||caller.disabled===true||caller.active===false||caller.mergedInto!=null) throw new HttpsError('permission-denied','Your account is not active.'); return caller; }
 function validId(v,label) { if(typeof v!=='string'||!ID_RE.test(v)) throw new HttpsError('invalid-argument',`${label} is invalid.`); return v; }
-function isNonEmptyString(v) { return typeof v==='string' && v.trim().length>0; }
 function cleanText(v,max) { if(typeof v!=='string') return ''; return v.trim().slice(0,max); }
 function validMoney(v) {
   if (typeof v === 'number') { if (!Number.isFinite(v) || v <= 0 || v > MAX_AMOUNT) throw new HttpsError('invalid-argument','amount must be a valid positive amount with at most 2 decimal places.'); const cents = Math.round(v * 100); if (!Number.isSafeInteger(cents) || Math.abs(v * 100 - cents) > Number.EPSILON * Math.max(1, Math.abs(v * 100))) throw new HttpsError('invalid-argument','amount must be a valid positive amount with at most 2 decimal places.'); return v; }
@@ -61,6 +60,7 @@ exports.createAdPayment = onCall({ enforceAppCheck:true }, async (request) => {
         const packageSnap=await tx.get(packageRef);
         if(!packageSnap.exists) throw new HttpsError('not-found','That package does not exist.');
         packageData=packageSnap.data()||{};
+        if(packageData.active === false) throw new HttpsError('failed-precondition','That advertisement package is no longer active.');
         if(packageData.advertiserId&&packageData.advertiserId!==advId) throw new HttpsError('invalid-argument','That package does not belong to this advertiser.');
         if(packageData.campaignId&&packageData.campaignId!==campaignIdClean) throw new HttpsError('invalid-argument','That package does not belong to this campaign.');
       }
