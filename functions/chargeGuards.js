@@ -111,7 +111,21 @@ function wrap(name) {
       }
       const recovered = await recoverCompleted(db, uid, requestId, guardRef, SERVICE_BY_CALLABLE[name]);
       if (recovered) return recovered;
-      throw new HttpsError('aborted', 'This order is already being processed. Please wait and check your transaction history.');
+
+      // A committed transaction can exist while the first invocation was
+      // interrupted before the configured provider call completed. Resume
+      // through the idempotent wallet service instead of treating it as done.
+      const fn = walletService[name];
+      if (!fn || typeof fn.run !== 'function') throw new HttpsError('internal', 'Charge service is unavailable.');
+      const safeRequest = await sanitizeRequest(request, requestId);
+      const result = await fn.run(safeRequest);
+      await guardRef.set({
+        status: 'completed',
+        transactionId: result?.id || null,
+        cost: result?.cost == null ? 0 : Number(result.cost),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      return result;
     }
 
     try {
