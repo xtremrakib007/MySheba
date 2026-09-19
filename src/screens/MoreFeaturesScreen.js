@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-nati
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import { useServiceAction, Tile } from '../components/ServiceGrid';
+import * as gridManagementService from '../firebase/gridManagementService';
 
 const SECONDARY_SERVICES = [
   { key: 'fomema', icon: '🏥', name: 'FOMEMA', kind: 'webview' },
@@ -46,8 +47,9 @@ function Section({ title, subtitle, items, onPress }) {
 
 export default function MoreFeaturesScreen() {
   const { colors } = useTheme();
-  const { goBackOrHome, profile } = useApp();
+  const { goBackOrHome, profile, gridManagement } = useApp();
   const handlePress = useServiceAction();
+  const visible = (items) => items.filter((item) => gridManagementService.isGridActive(gridManagement, item.key));
   const isCustomer = !profile?.role || profile.role === 'customer';
 
   return (
@@ -61,11 +63,11 @@ export default function MoreFeaturesScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         {isCustomer ? (
           <>
-            <Section title="More Services" subtitle="Government and Malaysia services" items={SECONDARY_SERVICES} onPress={handlePress} />
-            <Section title="Personal" subtitle="Your account, documents and activity" items={PERSONAL_FEATURES} onPress={handlePress} />
+            <Section title="More Services" subtitle="Government and Malaysia services" items={visible(SECONDARY_SERVICES)} onPress={handlePress} />
+            <Section title="Personal" subtitle="Your account, documents and activity" items={visible(PERSONAL_FEATURES)} onPress={handlePress} />
           </>
         ) : (
-          <Section title="Account & Operations" subtitle="Manage your account and operational features" items={STAFF_FEATURES} onPress={handlePress} />
+          <Section title="Account & Operations" subtitle="Manage your account and operational features" items={visible(STAFF_FEATURES)} onPress={handlePress} />
         )}
       </ScrollView>
     </View>
