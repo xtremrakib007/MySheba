@@ -4,6 +4,13 @@ const walletService = require('./walletService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
+const SERVICE_BY_CALLABLE = {
+  chargeRecharge: 'Recharge',
+  chargeInternetPackage: 'Internet',
+  chargeBillPayment: 'Bill Payment',
+  chargeMobileBanking: 'Mobile Banking',
+  chargeRemittance: 'Remittance',
+};
 
 function requireAuth(request) {
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
@@ -21,14 +28,17 @@ function getRequestId(request) {
 async function recoverCompleted(db, uid, requestId, guardRef, expectedService) {
   const recovered = await db.collection('transactions')
     .where('customerId', '==', uid)
-     .where('raw.requestId', '==', requestId)
+    .where('raw.requestId', '==', requestId)
     .where('service', '==', expectedService)
-    .where('status', '==', 'pending')
     .limit(1)
     .get();
   if (recovered.empty) return null;
   const txDoc = recovered.docs[0];
   const txData = txDoc.data() || {};
+  if (txData.status === 'unknown') {
+    throw new HttpsError('unavailable', 'The API request outcome is uncertain. Check the provider before retrying.');
+  }
+  if (txData.status !== 'pending') return null;
   const rawCost = txData.pointsCharged ?? txData.cost;
   const cost = Number(rawCost);
   if (!Number.isFinite(cost) || cost < 0 || !Number.isSafeInteger(Math.round(cost * 100))) return null;
@@ -99,7 +109,7 @@ function wrap(name) {
         if (!Number.isFinite(replayCost) || replayCost < 0 || !Number.isSafeInteger(Math.round(replayCost * 100))) throw new HttpsError('failed-precondition', 'The stored charge result is invalid.');
         return { id: existing.transactionId, cost: replayCost, replay: true };
       }
-      const recovered = await recoverCompleted(db, uid, requestId, guardRef, name);
+      const recovered = await recoverCompleted(db, uid, requestId, guardRef, SERVICE_BY_CALLABLE[name]);
       if (recovered) return recovered;
       throw new HttpsError('aborted', 'This order is already being processed. Please wait and check your transaction history.');
     }
@@ -122,9 +132,9 @@ function wrap(name) {
       });
       return result;
     } catch (err) {
-      const recovered = await recoverCompleted(db, uid, requestId, guardRef, name).catch(() => null);
+      const recovered = await recoverCompleted(db, uid, requestId, guardRef, SERVICE_BY_CALLABLE[name]).catch((err) => { if (err?.code === 'unavailable') throw err; return null; });
       if (recovered) return recovered;
-      await guardRef.delete().catch(() => {});
+      if (err?.code !== 'unavailable') await guardRef.delete().catch(() => {});
       throw err;
     }
   });
