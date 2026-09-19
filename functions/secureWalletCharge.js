@@ -92,7 +92,7 @@ exports.chargeWallet = onCall({ enforceAppCheck: true }, async (request) => {
         throw new HttpsError('permission-denied', 'Your account is not active.');
       }
       const pricing = { ...DEFAULT_PRICING, ...(pricingSnap.exists ? pricingSnap.data() : {}) };
-      const balance = finiteNonNegative(user.walletBalance || 0, 'Wallet balance');
+      const balance = finiteNonNegative(user.walletBalance == null ? 0 : user.walletBalance, 'Wallet balance');
 
       let cost;
       let resultData;
