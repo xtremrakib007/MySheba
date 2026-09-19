@@ -36,17 +36,15 @@ exports.createAdPayment = onCall({ enforceAppCheck:true }, async (request) => {
   let paymentRole='';
 
   try {
-    fromStatus=await db.runTransaction(async (tx) => {
+    await db.runTransaction(async (tx) => {
       const callerSnap=await tx.get(db.collection('users').doc(callerUid));
       const currentCaller=callerSnap.exists?callerSnap.data():null;
       if(!currentCaller||currentCaller.role!=='superadmin'||currentCaller.suspended===true||currentCaller.inactive===true||currentCaller.disabled===true||currentCaller.active===false||currentCaller.mergedInto!=null) {
         throw new HttpsError('permission-denied','Your account can no longer manage advertisement payments.');
       }
-
       const advertiserSnap=await tx.get(advertiserRef);
       if(!advertiserSnap.exists) throw new HttpsError('not-found','That advertiser does not exist.');
       const advertiserData=advertiserSnap.data()||{};
-
       let campaignData=null;
       if(campaignRef){
         const campaignSnap=await tx.get(campaignRef);
@@ -54,7 +52,6 @@ exports.createAdPayment = onCall({ enforceAppCheck:true }, async (request) => {
         campaignData=campaignSnap.data()||{};
         if(campaignData.advertiserId!==advId) throw new HttpsError('invalid-argument','That campaign does not belong to this advertiser.');
       }
-
       let packageData=null;
       if(packageRef){
         const packageSnap=await tx.get(packageRef);
@@ -67,7 +64,6 @@ exports.createAdPayment = onCall({ enforceAppCheck:true }, async (request) => {
         const packageCurrency=cleanText(packageData.currency,12).toUpperCase();
         if(!Number.isFinite(packagePrice)||packagePrice<=0||packagePrice>MAX_AMOUNT||!Number.isSafeInteger(Math.round(packagePrice*100))||Math.abs(packagePrice*100-Math.round(packagePrice*100))>Number.EPSILON*Math.max(1,Math.abs(packagePrice*100))||!/^[A-Z]{3}$/.test(packageCurrency)) throw new HttpsError('failed-precondition','That advertisement package has an invalid price or currency.');
       }
-
       const paymentData={
         advertiserId:advId,campaignId:campaignIdClean,packageId:packageIdClean,amount:numericAmount,currency:curr,
         paymentStatus:status,paymentMethod:method,transactionReference:cleanText(transactionReference,200),
