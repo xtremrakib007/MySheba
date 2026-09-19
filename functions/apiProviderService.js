@@ -56,36 +56,52 @@ function providerAuth(p) {
 async function executeConfiguredApi(service, payload, customer, requestId) {
   const db = admin.firestore();
   const snap = await db.collection(COLLECTION).where('service','==',service).where('active','==',true).get();
-  const providers = snap.docs.map(d => ({id:d.id,...d.data()})).sort((a,b)=>Number(b.priority||0)-Number(a.priority||0));
+  const providers = snap.docs.map(d => ({ id:d.id, ...d.data() })).sort((x,y)=>Number(y.priority||0)-Number(x.priority||0));
   if (!providers.length) throw new HttpsError('failed-precondition', `No active API provider is configured for ${service}.`);
+  const provider = providers[0];
+  const executionRef = db.collection('apiExecutions').doc(`${service}_${requestId}`);
+  const existing = await executionRef.get();
+  if (existing.exists) {
+    const state = existing.data() || {};
+    if (state.status === 'completed') return state.result || {};
+    if (state.status === 'unknown') throw new HttpsError('unavailable','The API request outcome is uncertain. Check the provider before retrying.');
+    if (state.status === 'processing') throw new HttpsError('aborted','This API request is already being processed.');
+    if (state.status === 'failed') throw new HttpsError('failed-precondition',state.message || 'The provider rejected this request.');
+  }
+  await db.runTransaction(async tx => {
+    const s = await tx.get(executionRef);
+    if (!s.exists) tx.create(executionRef,{service,requestId,providerId:provider.id,status:'processing',createdAt:admin.firestore.FieldValue.serverTimestamp(),updatedAt:admin.firestore.FieldValue.serverTimestamp()});
+  });
   const raw = payload?.raw || {};
-  const vars = { requestId, uid: customer?.uid || '', phone: customer?.phone || '', amount: payload?.amount ?? raw.amount ?? '', total: payload?.total ?? raw.total ?? '', service, country: raw.country || '', operator: raw.operator || '', packageCode: raw.packageCode || '', details: payload?.details || '' };
+  const vars = { requestId, uid:customer?.uid||'', phone:customer?.phone||'', amount:payload?.amount??raw.amount??'', total:payload?.total??raw.total??'', service, country:raw.country||'', operator:raw.operator||'', packageCode:raw.packageCode||'', details:payload?.details||'' };
   try {
-      const p = provider;
-      let base; try { base = new URL(p.baseUrl); } catch { throw new Error('Provider URL is invalid.'); }
-      if (base.protocol !== 'https:' || isIpLiteral(base.hostname) || BLOCKED_HOSTS.test(base.hostname)) throw new Error('Provider URL is not allowed.');
-      const url = new URL(String(p.endpointPath || '/'), base);
-      for (const [k,v] of Object.entries(render(asObject(p.queryTemplate), vars))) if (v !== '' && v != null) url.searchParams.set(k,String(v));
-      const method = String(p.method || 'POST').toUpperCase();
-      const headers = { accept:'application/json', ...(render(asObject(p.headers), vars)), ...providerAuth(p) };
-      let body;
-      if (method !== 'GET') { headers['content-type'] = headers['content-type'] || 'application/json'; body = JSON.stringify(render(asObject(p.requestTemplate), vars)); }
-      const ctl = new AbortController(); const timer = setTimeout(()=>ctl.abort(), Math.max(3000,Math.min(60000,Number(p.timeoutMs)||15000)));
-      let response; try { response = await fetch(url,{method,headers,body,signal:ctl.signal}); } finally { clearTimeout(timer); }
-      const text = await response.text(); if (Buffer.byteLength(text,'utf8') > 1000000) throw new Error('Provider response is too large.');
-      let data={}; try { data=text ? JSON.parse(text) : {}; } catch { data={raw:text.slice(0,5000)}; }
-      if (!response.ok) throw new Error(`Provider HTTP ${response.status}`);
-      const success = p.responseSuccessPath ? getPath(data,p.responseSuccessPath) : true;
-      if (success === false || (p.responseSuccessValue && String(success)!==String(p.responseSuccessValue))) throw new Error(p.responseMessagePath ? String(getPath(data,p.responseMessagePath)||'Provider rejected the request.') : 'Provider rejected the request.');
-      const result = { providerId:p.id, providerName:p.name, responseId:p.responseIdPath ? getPath(data,p.responseIdPath) : null, message:p.responseMessagePath ? getPath(data,p.responseMessagePath) : null };
-      await executionRef.set({ status: 'completed', result, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-      return result;
-    } catch(e) {
-      const message = String(e?.message || 'Provider execution failed').slice(0, 500);
-      const definitive = /^Provider HTTP 4\\d{2}$/.test(message) || message.includes('Provider rejected the request');
-      await executionRef.set({ status: definitive ? 'failed' : 'unknown', message, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-      throw definitive ? new HttpsError('failed-precondition', message) : new HttpsError('unavailable', message);
-    }
+    let base; try { base = new URL(provider.baseUrl); } catch { throw new Error('Provider URL is invalid.'); }
+    if (base.protocol !== 'https:' || isIpLiteral(base.hostname) || BLOCKED_HOSTS.test(base.hostname)) throw new Error('Provider URL is not allowed.');
+    const endpointPath = String(provider.endpointPath || '/');
+    if (/^https?:\\/\\//i.test(endpointPath) || endpointPath.startsWith('//')) throw new Error('Endpoint path must be relative to the provider base URL.');
+    const url = new URL(endpointPath,base);
+    for (const [k,v] of Object.entries(render(asObject(provider.queryTemplate),vars))) if(v!==''&&v!=null) url.searchParams.set(k,String(v));
+    const method = String(provider.method||'POST').toUpperCase();
+    const headers = { accept:'application/json', ...render(asObject(provider.headers),vars), ...providerAuth(provider) };
+    let body;
+    if(method!=='GET'){ headers['content-type']=headers['content-type']||'application/json'; body=JSON.stringify(render(asObject(provider.requestTemplate),vars)); }
+    const ctl=new AbortController(), timer=setTimeout(()=>ctl.abort(),Math.max(3000,Math.min(60000,Number(provider.timeoutMs)||15000)));
+    let response; try { response=await fetch(url,{method,headers,body,signal:ctl.signal}); } finally { clearTimeout(timer); }
+    const responseText=await response.text();
+    if(Buffer.byteLength(responseText,'utf8')>1000000) throw new Error('Provider response is too large.');
+    let data={}; try { data=responseText?JSON.parse(responseText):{}; } catch { data={raw:responseText.slice(0,5000)}; }
+    if(!response.ok) throw new Error(`Provider HTTP ${response.status}`);
+    const success=provider.responseSuccessPath?getPath(data,provider.responseSuccessPath):true;
+    if(success===false || (provider.responseSuccessValue && String(success)!==String(provider.responseSuccessValue))) throw new Error(provider.responseMessagePath?String(getPath(data,provider.responseMessagePath)||'Provider rejected the request.'):'Provider rejected the request.');
+    const result={providerId:provider.id,providerName:provider.name,responseId:provider.responseIdPath?getPath(data,provider.responseIdPath):null,message:provider.responseMessagePath?getPath(data,provider.responseMessagePath):null};
+    await executionRef.set({status:'completed',result,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
+    return result;
+  } catch(e) {
+    const message=String(e?.message||'Provider execution failed').slice(0,500);
+    const definitive=/^Provider HTTP 4\\d{2}$/.test(message)||message.includes('Provider rejected the request');
+    await executionRef.set({status:definitive?'failed':'unknown',message,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
+    throw definitive?new HttpsError('failed-precondition',message):new HttpsError('unavailable',message);
+  }
 }
 exports.executeConfiguredApi = executeConfiguredApi;
 
