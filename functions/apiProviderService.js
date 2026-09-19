@@ -39,6 +39,7 @@ function validate(data) {
   return { service, name, baseUrl, endpointPath: cleanString(data.endpointPath, 500) || '/', method, authType, apiKey: cleanString(data.apiKey, 1000), username: cleanString(data.username, 200), password: cleanString(data.password, 1000), active: data.active !== false, priority: Math.max(0, Math.min(9999, Number(data.priority) || 0)), timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)), notes: cleanString(data.notes, 1000), headers: data.headers || {}, queryTemplate: data.queryTemplate || {}, requestTemplate: data.requestTemplate || {}, responseSuccessPath: cleanString(data.responseSuccessPath, 200), responseSuccessValue: cleanString(data.responseSuccessValue, 200), responseIdPath: cleanString(data.responseIdPath, 200), responseMessagePath: cleanString(data.responseMessagePath, 200) };
 }
 
+function asObject(value) { if (value && typeof value === 'object' && !Array.isArray(value)) return value; if (typeof value !== 'string') return {}; try { const x = JSON.parse(value); return x && typeof x === 'object' && !Array.isArray(x) ? x : {}; } catch { return {}; } }
 function getPath(obj, path) { return path ? path.split('.').reduce((v,k) => v == null ? undefined : v[k], obj) : undefined; }
 function render(v, vars) {
   if (typeof v === 'string') return v.replace(/\\{\\{\\s*([A-Za-z0-9_]+)\\s*\\}\\}/g, (_, k) => vars[k] == null ? '' : String(vars[k]));
@@ -65,11 +66,11 @@ async function executeConfiguredApi(service, payload, customer, requestId) {
       let base; try { base = new URL(p.baseUrl); } catch { throw new Error('Provider URL is invalid.'); }
       if (base.protocol !== 'https:' || isIpLiteral(base.hostname) || BLOCKED_HOSTS.test(base.hostname)) throw new Error('Provider URL is not allowed.');
       const url = new URL(String(p.endpointPath || '/'), base);
-      for (const [k,v] of Object.entries(render(p.queryTemplate || {}, vars))) if (v !== '' && v != null) url.searchParams.set(k,String(v));
+      for (const [k,v] of Object.entries(render(asObject(p.queryTemplate), vars))) if (v !== '' && v != null) url.searchParams.set(k,String(v));
       const method = String(p.method || 'POST').toUpperCase();
-      const headers = { accept:'application/json', ...(render(p.headers || {}, vars)), ...providerAuth(p) };
+      const headers = { accept:'application/json', ...(render(asObject(p.headers), vars)), ...providerAuth(p) };
       let body;
-      if (method !== 'GET') { headers['content-type'] = headers['content-type'] || 'application/json'; body = JSON.stringify(render(p.requestTemplate || {}, vars)); }
+      if (method !== 'GET') { headers['content-type'] = headers['content-type'] || 'application/json'; body = JSON.stringify(render(asObject(p.requestTemplate), vars)); }
       const ctl = new AbortController(); const timer = setTimeout(()=>ctl.abort(), Math.max(3000,Math.min(60000,Number(p.timeoutMs)||15000)));
       let response; try { response = await fetch(url,{method,headers,body,signal:ctl.signal}); } finally { clearTimeout(timer); }
       const text = await response.text(); if (Buffer.byteLength(text,'utf8') > 1000000) throw new Error('Provider response is too large.');
