@@ -79,7 +79,7 @@ exports.adminTopUpPoints = onCall({ enforceAppCheck: true }, async request => {
         throw new HttpsError('failed-precondition', 'The target account is not active.');
       }
 
-      const currentBalance = Number(target.walletBalance || 0);
+      const currentBalance = target.walletBalance == null ? 0 : Number(target.walletBalance);
       const currentBalanceCents = Math.round(currentBalance * 100);
       if (!Number.isFinite(currentBalance) || currentBalance < 0 || !Number.isSafeInteger(currentBalanceCents) || Math.abs(currentBalance * 100 - currentBalanceCents) > 1e-9) {
         throw new HttpsError('failed-precondition', 'Target wallet balance is invalid.');
