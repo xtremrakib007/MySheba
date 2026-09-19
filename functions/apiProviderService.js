@@ -1,6 +1,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const dns = require('dns').promises;
+const crypto = require('crypto');
 
 const COLLECTION = 'api_providers';
 const SETTINGS = 'api_settings/service_modes';
@@ -78,7 +79,8 @@ async function executeConfiguredApi(service, payload, customer, requestId) {
   const providers = snap.docs.map(d => ({ id:d.id, ...d.data() })).sort((x,y)=>Number(y.priority||0)-Number(x.priority||0));
   if (!providers.length) throw new HttpsError('failed-precondition', `No active API provider is configured for ${service}.`);
   const provider = providers[0];
-  const executionRef = db.collection('apiExecutions').doc(`${service}_${requestId}`);
+  const executionKey = crypto.createHash('sha256').update(`${service}|${customer?.uid || ''}|${requestId}`).digest('hex');
+  const executionRef = db.collection('apiExecutions').doc(executionKey);
   // Atomically claim this request before making any external side effect.
   // A read-then-create sequence is race-prone: two concurrent invocations can
   // both observe a missing document and both call the provider.
