@@ -9,7 +9,11 @@ export const GRID_DEFS = [
   ['topup','Top-Up'],['history','Transactions'],['support','Support'],['myAccount','My Account'],['profile','Profile'],
   ['dealerFeatures','Dealer Features'],['resellerFeatures','Reseller Features'],['adminFeatures','Admin Features'],
   ['moreFeaturesTile','More Services'],['walletTransfer','Wallet Transfer'],['myDocuments','My Documents'],
-  ['salary','Salary & OT'],['kyc','Profile & KYC'],['businessProfile','My Business']
+  ['salary','Salary & OT'],['kyc','Profile & KYC'],['businessProfile','My Business'],
+  ['fomema','FOMEMA'],['visa','Visa Malaysia'],['mydigital','Malaysia Arrival Card'],['passport','Passport'],
+  ['adminAnalytics','Analytics'],['inquiries','Inquiries'],['pending','Pending'],['topups','Top-Ups'],
+  ['rates','Rates'],['pricing','Pricing'],['payments','Payments'],['transferPoints','Transfers'],['categories','Categories'],
+  ['userManagement','Users'],['verificationManagement','KYC Verification'],['featureAccess','Feature Access'],['banners','Banners'],['announcements','Announcements']
 ].map(([key,name]) => ({ key, name }));
 
 export const DEFAULT_GRID_MANAGEMENT = Object.fromEntries(GRID_DEFS.map(({key}) => [key, true]));
