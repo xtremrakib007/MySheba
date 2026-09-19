@@ -18,17 +18,20 @@ function getRequestId(request) {
   return requestId;
 }
 
-async function recoverCompleted(db, uid, requestId, guardRef) {
+async function recoverCompleted(db, uid, requestId, guardRef, expectedService) {
   const recovered = await db.collection('transactions')
     .where('customerId', '==', uid)
-    .where('raw.requestId', '==', requestId)
+     .where('raw.requestId', '==', requestId)
+    .where('service', '==', expectedService)
+    .where('status', '==', 'pending')
     .limit(1)
     .get();
   if (recovered.empty) return null;
   const txDoc = recovered.docs[0];
   const txData = txDoc.data() || {};
-  const cost = Number(txData.pointsCharged ?? txData.cost ?? 0);
-  if (!Number.isFinite(cost) || cost < 0) return null;
+  const rawCost = txData.pointsCharged ?? txData.cost;
+  const cost = Number(rawCost);
+  if (!Number.isFinite(cost) || cost < 0 || !Number.isSafeInteger(Math.round(cost * 100))) return null;
   await guardRef.set({
     status: 'completed', transactionId: txDoc.id, cost,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -48,7 +51,7 @@ async function sanitizeRequest(request, requestId) {
   if (profile.role !== 'customer') {
     throw new HttpsError('permission-denied', 'Only customer accounts can submit service orders.');
   }
-  const balance = Number(profile.walletBalance || 0);
+  const balance = profile.walletBalance == null ? 0 : Number(profile.walletBalance);
   if (!Number.isFinite(balance) || balance < 0 || !Number.isSafeInteger(Math.round(balance * 100))) {
     throw new HttpsError('failed-precondition', 'Wallet balance is invalid.');
   }
@@ -94,7 +97,7 @@ function wrap(name) {
       if (existing.status === 'completed' && existing.transactionId) {
         return { id: existing.transactionId, cost: existing.cost || 0, replay: true };
       }
-      const recovered = await recoverCompleted(db, uid, requestId, guardRef);
+      const recovered = await recoverCompleted(db, uid, requestId, guardRef, name);
       if (recovered) return recovered;
       throw new HttpsError('aborted', 'This order is already being processed. Please wait and check your transaction history.');
     }
@@ -112,7 +115,7 @@ function wrap(name) {
       const result = await fn.run(safeRequest);
       await guardRef.update({
         status: 'completed', transactionId: result?.id || null,
-        cost: Number(result?.cost || 0),
+        cost: result?.cost == null ? 0 : Number(result.cost),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       return result;
