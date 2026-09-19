@@ -73,7 +73,7 @@ async function executeConfiguredApi(service, payload, customer, requestId) {
     if (!s.exists) tx.create(executionRef,{service,requestId,providerId:provider.id,status:'processing',createdAt:admin.firestore.FieldValue.serverTimestamp(),updatedAt:admin.firestore.FieldValue.serverTimestamp()});
   });
   const raw = payload?.raw || {};
-  const vars = { requestId, uid:customer?.uid||'', phone:customer?.phone||'', amount:payload?.amount??raw.amount??'', total:payload?.total??raw.total??'', service, country:raw.country||'', operator:raw.operator||'', packageCode:raw.packageCode||'', details:payload?.details||'' };
+  const vars = { requestId, uid:customer?.uid||'', phone:customer?.phone||'', amount:payload?.amount??raw.amount??'', total:payload?.total??raw.total??'', service, country:raw.country||'', operator:raw.operator||'', packageCode:raw.packageCode||'', details:payload?.details||'', ...Object.fromEntries(Object.entries(raw).filter(([k,v]) => !['requestId'].includes(k) && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')).slice(0,100)) };
   try {
     let base; try { base = new URL(provider.baseUrl); } catch { throw new Error('Provider URL is invalid.'); }
     if (base.protocol !== 'https:' || isIpLiteral(base.hostname) || BLOCKED_HOSTS.test(base.hostname)) throw new Error('Provider URL is not allowed.');
