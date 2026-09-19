@@ -5,6 +5,7 @@ const COLLECTION = 'api_providers';
 const SETTINGS = 'api_settings/service_modes';
 const ALLOWED_SERVICES = ['Recharge', 'Internet', 'Bill Payment', 'Bus', 'Train', 'Flight', 'Mobile Banking', 'Remittance', 'Payment Gateway', 'Entertainment'];
 const ALLOWED_AUTH = ['none', 'apiKey', 'bearer', 'basic'];
+const ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH'];
 const DEFAULT_MODES = Object.fromEntries(ALLOWED_SERVICES.map((service) => [service, 'legacy']));
 
 function assertSuperadmin(db, request) {
@@ -29,12 +30,59 @@ function validateBaseUrl(baseUrl) {
 function validate(data) {
   const service = cleanString(data.service, 40), name = cleanString(data.name, 100), baseUrl = cleanString(data.baseUrl, 500);
   const authType = cleanString(data.authType, 20) || 'none';
+  const method = cleanString(data.method, 10).toUpperCase() || 'POST';
   if (!ALLOWED_SERVICES.includes(service)) throw new HttpsError('invalid-argument', 'Invalid service.');
   if (!name) throw new HttpsError('invalid-argument', 'API provider name is required.');
   validateBaseUrl(baseUrl);
   if (!ALLOWED_AUTH.includes(authType)) throw new HttpsError('invalid-argument', 'Invalid authentication type.');
-  return { service, name, baseUrl, authType, apiKey: cleanString(data.apiKey, 1000), username: cleanString(data.username, 200), password: cleanString(data.password, 1000), active: data.active !== false, priority: Math.max(0, Math.min(9999, Number(data.priority) || 0)), timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)), notes: cleanString(data.notes, 1000) };
+  if (!ALLOWED_METHODS.includes(method)) throw new HttpsError('invalid-argument', 'Invalid HTTP method.');
+  return { service, name, baseUrl, endpointPath: cleanString(data.endpointPath, 500) || '/', method, authType, apiKey: cleanString(data.apiKey, 1000), username: cleanString(data.username, 200), password: cleanString(data.password, 1000), active: data.active !== false, priority: Math.max(0, Math.min(9999, Number(data.priority) || 0)), timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)), notes: cleanString(data.notes, 1000), headers: data.headers || {}, queryTemplate: data.queryTemplate || {}, requestTemplate: data.requestTemplate || {}, responseSuccessPath: cleanString(data.responseSuccessPath, 200), responseSuccessValue: cleanString(data.responseSuccessValue, 200), responseIdPath: cleanString(data.responseIdPath, 200), responseMessagePath: cleanString(data.responseMessagePath, 200) };
 }
+
+function getPath(obj, path) { return path ? path.split('.').reduce((v,k) => v == null ? undefined : v[k], obj) : undefined; }
+function render(v, vars) {
+  if (typeof v === 'string') return v.replace(/\\{\\{\\s*([A-Za-z0-9_]+)\\s*\\}\\}/g, (_, k) => vars[k] == null ? '' : String(vars[k]));
+  if (Array.isArray(v)) return v.map(x => render(x, vars));
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k,x]) => [k, render(x, vars)]));
+  return v;
+}
+function providerAuth(p) {
+  if (p.authType === 'apiKey' && p.apiKey) return { 'x-api-key': p.apiKey };
+  if (p.authType === 'bearer' && p.apiKey) return { authorization: `Bearer ${p.apiKey}` };
+  if (p.authType === 'basic' && p.username) return { authorization: `Basic ${Buffer.from(`${p.username}:${p.password || ''}`).toString('base64')}` };
+  return {};
+}
+async function executeConfiguredApi(service, payload, customer, requestId) {
+  const db = admin.firestore();
+  const snap = await db.collection(COLLECTION).where('service','==',service).where('active','==',true).get();
+  const providers = snap.docs.map(d => ({id:d.id,...d.data()})).sort((a,b)=>Number(b.priority||0)-Number(a.priority||0));
+  if (!providers.length) throw new HttpsError('failed-precondition', `No active API provider is configured for ${service}.`);
+  const raw = payload?.raw || {};
+  const vars = { requestId, uid: customer?.uid || '', phone: customer?.phone || '', amount: payload?.amount ?? raw.amount ?? '', total: payload?.total ?? raw.total ?? '', service, country: raw.country || '', operator: raw.operator || '', packageCode: raw.packageCode || '', details: payload?.details || '' };
+  let last;
+  for (const p of providers) {
+    try {
+      let base; try { base = new URL(p.baseUrl); } catch { throw new Error('Provider URL is invalid.'); }
+      if (base.protocol !== 'https:' || isIpLiteral(base.hostname) || BLOCKED_HOSTS.test(base.hostname)) throw new Error('Provider URL is not allowed.');
+      const url = new URL(String(p.endpointPath || '/'), base);
+      for (const [k,v] of Object.entries(render(p.queryTemplate || {}, vars))) if (v !== '' && v != null) url.searchParams.set(k,String(v));
+      const method = String(p.method || 'POST').toUpperCase();
+      const headers = { accept:'application/json', ...(render(p.headers || {}, vars)), ...providerAuth(p) };
+      let body;
+      if (method !== 'GET') { headers['content-type'] = headers['content-type'] || 'application/json'; body = JSON.stringify(render(p.requestTemplate || {}, vars)); }
+      const ctl = new AbortController(); const timer = setTimeout(()=>ctl.abort(), Math.max(3000,Math.min(60000,Number(p.timeoutMs)||15000)));
+      let response; try { response = await fetch(url,{method,headers,body,signal:ctl.signal}); } finally { clearTimeout(timer); }
+      const text = await response.text(); if (Buffer.byteLength(text,'utf8') > 1000000) throw new Error('Provider response is too large.');
+      let data={}; try { data=text ? JSON.parse(text) : {}; } catch { data={raw:text.slice(0,5000)}; }
+      if (!response.ok) throw new Error(`Provider HTTP ${response.status}`);
+      const success = p.responseSuccessPath ? getPath(data,p.responseSuccessPath) : true;
+      if (success === false || (p.responseSuccessValue && String(success)!==String(p.responseSuccessValue))) throw new Error(p.responseMessagePath ? String(getPath(data,p.responseMessagePath)||'Provider rejected the request.') : 'Provider rejected the request.');
+      return { providerId:p.id, providerName:p.name, responseId:p.responseIdPath ? getPath(data,p.responseIdPath) : null, message:p.responseMessagePath ? getPath(data,p.responseMessagePath) : null, response:data };
+    } catch(e) { last=e; }
+  }
+  throw new HttpsError('unavailable', last?.message || `All configured ${service} APIs failed.`);
+}
+exports.executeConfiguredApi = executeConfiguredApi;
 
 exports.listApiProviders = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
