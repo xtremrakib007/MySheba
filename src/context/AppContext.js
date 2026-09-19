@@ -207,7 +207,7 @@ export function AppProvider({ children }) {
   // No more manual role picker - `screen` starts on 'login' and, once
   // signed in, the account's Firestore `role` field (in `profile.role`)
   // decides which home screen to land on. See the bootstrap effect below.
-  const [screen, setScreen] = useState("login"); // login | register | forgotPassword | customerHome | service | dealerHome | resellerHome | adminHome | webview | buspicker | support | history | topup | chat | chatList | settings | profile | myAccount | reports | notifications | marketplaceHome | marketplaceCreateListing | marketplaceMyListings | marketplaceMyReviews | marketplaceListingDetail | marketplaceModeration | verifyIdentity | verificationManagement | adminAnalytics | myDocuments | documentType | addDocument | documentDetails | documentViewer | moreFeatures | adminFeatures | apiProviderManagement | dealerFeatures | resellerFeatures | featureAccess | tierPromotions | adFeatureControls | bannerManagement | salaryReports | notepad | addNote | noteDetail | help | friendsList
+  const [screen, setScreenState] = useState("login"); // login | register | forgotPassword | customerHome | service | dealerHome | resellerHome | adminHome | webview | buspicker | support | history | topup | chat | chatList | settings | profile | myAccount | reports | notifications | marketplaceHome | marketplaceCreateListing | marketplaceMyListings | marketplaceMyReviews | marketplaceListingDetail | marketplaceModeration | verifyIdentity | verificationManagement | adminAnalytics | myDocuments | documentType | addDocument | documentDetails | documentViewer | moreFeatures | adminFeatures | apiProviderManagement | dealerFeatures | resellerFeatures | featureAccess | tierPromotions | adFeatureControls | bannerManagement | salaryReports | notepad | addNote | noteDetail | help | friendsList
 
   // ---- back-button navigation history ----
   // Tracks prior screens so the Android hardware back button can step
@@ -627,6 +627,41 @@ export function AppProvider({ children }) {
     featureAccessService.DEFAULT_FEATURE_ACCESS,
   );
   const [gridManagement, setGridManagement] = useState(gridManagementService.DEFAULT_GRID_MANAGEMENT);
+
+  // Global grid guard: screen navigation must honor the same Superadmin
+  // runtime grid switches as the home tiles. This prevents direct/internal
+  // navigation from bypassing a disabled feature.
+  const SCREEN_GRID_KEYS = {
+    service: null,
+    topup: 'topup', history: 'history', support: 'support',
+    profile: 'profile', myAccount: 'myAccount', verifyIdentity: 'kyc',
+    myDocuments: 'myDocuments', salaryDashboard: 'salary', salarySettings: 'salary',
+    salaryCalculator: 'salary', salaryWorkLog: 'salary', salaryReports: 'salary',
+    salaryMonthlySummary: 'salary', salaryHistory: 'salary', createPayslip: 'salary',
+    payslipHistory: 'salary', payslipDetails: 'salary',
+    transferPoints: 'walletTransfer', businessProfile: 'businessProfile',
+    dealerFeatures: 'dealerFeatures', resellerFeatures: 'resellerFeatures',
+    adminFeatures: 'adminFeatures', moreFeatures: 'moreFeaturesTile',
+    adminAnalytics: 'adminAnalytics', userManagement: 'userManagement',
+    verificationManagement: 'verificationManagement', featureAccess: 'featureAccess',
+    apiProviderManagement: 'featureAccess', bannerManagement: 'banners',
+    gridManagement: 'featureAccess'
+  };
+  const setScreen = useCallback((nextScreen) => {
+    const gridKey = SCREEN_GRID_KEYS[nextScreen];
+    if (gridKey && !gridManagementService.isGridActive(gridManagement, gridKey)) {
+      showAlert('MySheba', 'This feature is currently unavailable.');
+      return;
+    }
+    setScreenState(nextScreen);
+  }, [gridManagement]);
+
+  useEffect(() => {
+    const gridKey = SCREEN_GRID_KEYS[screen];
+    if (gridKey && !gridManagementService.isGridActive(gridManagement, gridKey)) {
+      setScreenState(profile?.role === 'admin' || profile?.role === 'superadmin' ? 'adminHome' : 'customerHome');
+    }
+  }, [screen, gridManagement, profile?.role]);
 
   // PHASE 4 - Global/per-feature advertisement controls (ad_settings/general,
   // ad_feature_controls/{featureId}), subscribed once here rather than once
