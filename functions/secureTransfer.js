@@ -86,7 +86,8 @@ exports.transferPoints = onCall({ enforceAppCheck: true }, async (request) => {
   const pricingSnap = await db.collection('settings').doc('pricing').get();
   const pricing = { dealerEarningPercent: 1.5, ...(pricingSnap.exists ? pricingSnap.data() : {}) };
   const isDealerToCustomer = caller.role === 'dealer' && recipient.role === 'customer';
-  const earningPercent = isDealerToCustomer ? Number(pricing.dealerEarningPercent) || 0 : 0;
+  const rawEarningPercent = pricing.dealerEarningPercent;
+  const earningPercent = isDealerToCustomer ? Number(rawEarningPercent) : 0;
   if (isDealerToCustomer && (!Number.isFinite(earningPercent) || earningPercent < 0 || earningPercent > 100)) {
     throw new HttpsError('failed-precondition', 'Dealer earning configuration is invalid. Please contact an administrator.');
   }
