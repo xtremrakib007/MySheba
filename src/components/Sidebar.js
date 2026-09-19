@@ -46,8 +46,7 @@ const ADMIN_GROUPS = [
     { key: 'pricing', icon: '🏷️', label: 'Pricing' },
     { key: 'payments', icon: '💳', label: 'Payments' },
     { key: 'transferPoints', icon: '↔️', label: 'Transfer Points' },
-    { key: 'categories', icon: '🗂️', label: 'Categories' },
-  ] },
+      ] },
   { title: 'Users & Verification', icon: '👥', color: 'secondary', items: [
     { key: 'userManagement', icon: '👥', label: 'User Management' },
     { key: 'verificationManagement', icon: '🪪', label: 'KYC Verification' },
@@ -94,7 +93,7 @@ function roleGroups(role) {
 export default function Sidebar() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { sidebarVisible, closeSidebar, setScreen, screen, profile, logout } = useApp();
+  const { sidebarVisible, closeSidebar, setScreen, screen, profile, logout, gridManagement } = useApp();
   const translateX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const [collapsed, setCollapsed] = useState({});
@@ -118,7 +117,11 @@ export default function Sidebar() {
 
   if (!sidebarVisible) return null;
 
-  const goTo = (key) => { setScreen(key); closeSidebar(); };
+  const goTo = (key) => {
+    const always = ['adminHome','adminFeatures','gridManagement'];
+    if (!always.includes(key) && gridManagement?.[key] === false) { showAlert('MySheba', 'This feature is currently unavailable.'); return; }
+    setScreen(key); closeSidebar();
+  };
   const toggleGroup = (title) => setCollapsed((prev) => ({ ...prev, [title]: !prev[title] }));
   const onLogout = () => {
     closeSidebar();
