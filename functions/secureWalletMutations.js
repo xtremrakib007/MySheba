@@ -44,6 +44,14 @@ exports.createSelfTopup = onCall({ enforceAppCheck: true }, async (request) => {
 
   try {
     const result = await db.runTransaction(async (tx) => {
+      // Revalidate the live caller before returning an idempotent replay.
+      const callerSnap = await tx.get(callerRef);
+      if (!callerSnap.exists) throw new HttpsError('not-found', 'Account not found.');
+      const caller = callerSnap.data() || {};
+      requireSessionMatch(request, caller);
+      callerRole = caller.role;
+      if (!active(caller) || !ADMIN_ROLES.includes(caller.role)) throw new HttpsError('permission-denied', 'Only active admin/superadmin accounts can self top-up.');
+
       const opSnap = await tx.get(opRef);
       if (opSnap.exists) {
         const op = opSnap.data() || {};
@@ -51,13 +59,6 @@ exports.createSelfTopup = onCall({ enforceAppCheck: true }, async (request) => {
         if (Number(op.amount) !== amount) throw new HttpsError('failed-precondition', 'That request ID does not match this top-up.');
         return { id: op.topupId, replay: true };
       }
-
-      const callerSnap = await tx.get(callerRef);
-      if (!callerSnap.exists) throw new HttpsError('not-found', 'Account not found.');
-      const caller = callerSnap.data() || {};
-      requireSessionMatch(request, caller);
-      callerRole = caller.role;
-      if (!active(caller) || !ADMIN_ROLES.includes(caller.role)) throw new HttpsError('permission-denied', 'Only active admin/superadmin accounts can self top-up.');
 
       const currentBalance = validBalance(caller.walletBalance);
       if (currentBalance === null) throw new HttpsError('failed-precondition', 'Wallet balance is invalid.');
