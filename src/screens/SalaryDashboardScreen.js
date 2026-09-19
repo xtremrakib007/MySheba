@@ -13,6 +13,7 @@ import { subscribeRecurringDeductions } from '../firebase/deductionService';
 import { listWorkLogEntriesInRange, dateKey } from '../firebase/workLogService';
 import { calculateBasicPay, calculateOTForPeriod, deriveHourlyRate, calculateTakeHomePay, sumLineItems } from '../utils/salaryCalculationService';
 import { OT_CALCULATION_METHODS, CURRENCY } from '../data/salaryConstants';
+import * as gridManagementService from '../firebase/gridManagementService';
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
