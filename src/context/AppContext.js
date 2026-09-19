@@ -628,9 +628,10 @@ export function AppProvider({ children }) {
   );
   const [gridManagement, setGridManagement] = useState(gridManagementService.DEFAULT_GRID_MANAGEMENT);
 
-  // Global grid guard: screen navigation must honor the same Superadmin
-  // runtime grid switches as the home tiles. This prevents direct/internal
-  // navigation from bypassing a disabled feature.
+  // Central navigation boundary. UI hiding is not a security boundary:
+  // every internal setScreen() call (notifications, deep links, callbacks,
+  // and manually triggered handlers) must pass role + live grid checks here.
+  // Backend/Firebase rules remain the final authority for data mutations.
   const SCREEN_GRID_KEYS = {
     service: null,
     buspicker: 'bus',
@@ -646,25 +647,89 @@ export function AppProvider({ children }) {
     adminAnalytics: 'adminAnalytics', userManagement: 'userManagement',
     verificationManagement: 'verificationManagement', featureAccess: 'featureAccess',
     apiProviderManagement: 'apiManagement', bannerManagement: 'banners',
-    gridManagement: 'featureAccess'
+    gridManagement: null
   };
+
+  // Screens whose UI exposes administrative or role-specific operations.
+  // Keep this list centralized so a hidden menu item cannot be bypassed by
+  // calling setScreen('...') directly.
+  const SCREEN_ROLES = {
+    customerHome: ['customer'],
+    dealerHome: ['dealer'],
+    resellerHome: ['reseller'],
+    adminHome: ['admin', 'superadmin'],
+    adminFeatures: ['admin', 'superadmin'],
+    adminAnalytics: ['admin', 'superadmin'],
+    userManagement: ['admin', 'superadmin'],
+    verificationManagement: ['admin', 'superadmin'],
+    adminBusinessManagement: ['admin', 'superadmin'],
+    adminSupport: ['admin', 'superadmin'],
+    all: ['admin', 'superadmin'],
+    pending: ['admin', 'superadmin'],
+    inquiries: ['admin', 'superadmin'],
+    topups: ['admin', 'superadmin'],
+    rates: ['admin', 'superadmin'],
+    pricing: ['admin', 'superadmin'],
+    payments: ['admin', 'superadmin'],
+    featureAccess: ['admin', 'superadmin'],
+    apiProviderManagement: ['superadmin'],
+    gridManagement: ['superadmin'],
+    adFeatureControls: ['superadmin'],
+    adAnalytics: ['superadmin'],
+    advertiserManagement: ['superadmin'],
+    advertiserDetail: ['superadmin'],
+    adPackagesManagement: ['superadmin'],
+    adPaymentsManagement: ['superadmin'],
+    trustedDevices: ['superadmin'],
+    tierPromotions: ['superadmin'],
+    superAdminTopup: ['superadmin'],
+    dealerFeatures: ['dealer'],
+    resellerFeatures: ['reseller'],
+    chatList: ['admin', 'superadmin', 'dealer', 'reseller']
+  };
+
+  const getHomeForRole = useCallback((role) => {
+    if (role === 'dealer') return 'dealerHome';
+    if (role === 'reseller') return 'resellerHome';
+    if (role === 'admin' || role === 'superadmin') return 'adminHome';
+    return 'customerHome';
+  }, []);
+
   const setScreen = useCallback((nextScreen) => {
+    const role = profile?.role;
+    const allowedRoles = SCREEN_ROLES[nextScreen];
+
+    // Pre-auth routes are intentionally unrestricted; protected routes are
+    // denied until a verified profile/role exists.
+    if (allowedRoles) {
+      if (!role || !allowedRoles.includes(role)) {
+        if (authUser) showAlert('MySheba', 'You do not have access to this feature.');
+        return;
+      }
+    }
+
     const gridKey = SCREEN_GRID_KEYS[nextScreen];
-    const isSuperadminGridManager = nextScreen === 'gridManagement' && (profile?.role === 'superadmin');
+    const isSuperadminGridManager = nextScreen === 'gridManagement' && role === 'superadmin';
     if (gridKey && !isSuperadminGridManager && !gridManagementService.isGridActive(gridManagement, gridKey)) {
       showAlert('MySheba', 'This feature is currently unavailable.');
       return;
     }
     setScreenState(nextScreen);
-  }, [gridManagement, profile?.role]);
+  }, [authUser, gridManagement, profile?.role]);
 
   useEffect(() => {
+    const role = profile?.role;
+    const allowedRoles = SCREEN_ROLES[screen];
     const gridKey = SCREEN_GRID_KEYS[screen];
-    const isSuperadminGridManager = screen === 'gridManagement' && profile?.role === 'superadmin';
-    if (gridKey && !isSuperadminGridManager && !gridManagementService.isGridActive(gridManagement, gridKey)) {
-      setScreenState(profile?.role === 'admin' || profile?.role === 'superadmin' ? 'adminHome' : 'customerHome');
+    const roleDenied = allowedRoles && (!role || !allowedRoles.includes(role));
+    const gridDenied = gridKey && !(
+      screen === 'gridManagement' && role === 'superadmin'
+    ) && !gridManagementService.isGridActive(gridManagement, gridKey);
+
+    if (roleDenied || gridDenied) {
+      setScreenState(role ? getHomeForRole(role) : 'login');
     }
-  }, [screen, gridManagement, profile?.role]);
+  }, [screen, gridManagement, profile?.role, getHomeForRole]);
 
   // PHASE 4 - Global/per-feature advertisement controls (ad_settings/general,
   // ad_feature_controls/{featureId}), subscribed once here rather than once
