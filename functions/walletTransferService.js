@@ -40,7 +40,7 @@ function parseMoneyCents(value) {
   if (!Number.isSafeInteger(amountCents)) throw new HttpsError('invalid-argument', 'Transfer amount is too large.');
   return amountCents;
 }
-function cents(value) { const n = Number(value || 0); return Number.isFinite(n) ? Math.round(n * 100) : NaN; }
+function cents(value) { const n = value == null ? 0 : Number(value); return Number.isFinite(n) ? Math.round(n * 100) : NaN; }
 function myrFromCents(value) { return value / 100; }
 function hashSecurityPin(pin, salt) {
   if (typeof salt !== 'string' || salt.length < 16) throw new Error('Invalid security PIN salt.');
