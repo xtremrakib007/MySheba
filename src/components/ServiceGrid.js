@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import { useLanguage } from '../i18n/LanguageContext';
+import * as gridManagementService from '../firebase/gridManagementService';
 
 const CUSTOMER_SERVICES = [
   { key: 'recharge', icon: '📱', name: 'Recharge', kind: 'service' },
@@ -13,6 +14,7 @@ const CUSTOMER_SERVICES = [
   { key: 'bus', icon: '🚌', name: 'Bus', kind: 'buspicker' },
   { key: 'train', icon: '🚆', name: 'Train', kind: 'webview' },
   { key: 'flight', icon: '✈️', name: 'Flight', kind: 'service' },
+  { key: 'entertainment', icon: '🎮', name: 'Entertainment', kind: 'service' },
   { key: 'moreFeaturesTile', icon: '✨', name: 'More Services', kind: 'moreFeaturesLink' },
 ];
 
@@ -95,10 +97,11 @@ export function useServiceAction() {
 export const PRIMARY_SERVICES = CUSTOMER_SERVICES;
 
 export default function ServiceGrid() {
-  const { colors } = useTheme(); const { webViewBusy, profile } = useApp();
+  const { colors } = useTheme(); const { webViewBusy, profile, gridManagement } = useApp();
   const handlePress = useServiceAction(); const role = profile?.role || 'customer';
   const isStaff = ['dealer', 'reseller', 'admin', 'superadmin'].includes(role);
-  const services = isStaff ? (STAFF_SERVICES[role] || STAFF_SERVICES.admin) : CUSTOMER_SERVICES;
+  const allServices = isStaff ? (STAFF_SERVICES[role] || STAFF_SERVICES.admin) : CUSTOMER_SERVICES;
+  const services = allServices.filter((service) => gridManagementService.isGridActive(gridManagement, service.key));
   return <View><View style={styles.sectionHead}><Text style={[styles.sectionTitle, { color: colors.text || '#222' }]}>{isStaff ? 'Management Dashboard' : 'Quick Services'}</Text><Text style={[styles.sectionSubtitle, { color: colors.muted || '#6B7280' }]}>{isStaff ? 'Manage transactions, accounts and operations' : 'Money, remittance and travel'}</Text></View><View style={styles.gridCanvas}><View style={styles.grid}>{services.map((service) => <Tile key={service.key} s={service} disabled={service.kind === 'webview' && !!webViewBusy} onPress={() => handlePress(service)} />)}</View></View></View>;
 }
 
