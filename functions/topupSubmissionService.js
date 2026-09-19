@@ -63,12 +63,23 @@ exports.submitTopupRequest = onCall({ enforceAppCheck: true }, async request => 
   const refNo = String(data.refNo || '').trim().slice(0, 120);
   const receiptUrl = String(data.receiptUrl || '').trim().slice(0, 2048);
   if (!receiptUrl) throw new HttpsError('invalid-argument', 'A payment receipt is required.');
-  await validateReceiptUrl(receiptUrl, uid);
 
   await checkVelocity(db, uid, 'submitTopupRequest', { ip: getClientIp(request) });
 
   const userRef = db.collection('users').doc(uid);
   const operationRef = db.collection('topupSubmissionOperations').doc(`${uid}_${requestId}`);
+  // Fast-path an existing request before validating the upload again. A retry of
+  // an already-created request must remain idempotent even if its signed receipt
+  // URL has since expired or the client no longer has the upload cached.
+  const existingOperation = await operationRef.get();
+  if (existingOperation.exists) {
+    const op = existingOperation.data() || {};
+    if (op.uid !== uid || op.requestId !== requestId || Number(op.amount) !== amount) {
+      throw new HttpsError('already-exists', 'That request ID is already used for another top-up.');
+    }
+    return { id: op.topupId, replay: true };
+  }
+  await validateReceiptUrl(receiptUrl, uid);
   try {
     const result = await db.runTransaction(async tx => {
       // Revalidate the live account/session before returning an idempotent replay.
