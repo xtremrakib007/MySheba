@@ -30,7 +30,6 @@ const FINANCE = [
   { key: 'pricing', icon: '🏷️', bg: '#FFF3E0', name: 'Pricing' },
   { key: 'payments', icon: '💳', bg: '#E1F5FE', name: 'Payments' },
   { key: 'transferPoints', icon: '↔️', bg: '#E8F5E9', name: 'Transfers' },
-  { key: 'categories', icon: '🗂️', bg: '#EDE7F6', name: 'Categories' },
 ];
 const USERS = [
   { key: 'userManagement', icon: '👥', bg: '#E3F2FD', name: 'Users' },
@@ -41,6 +40,7 @@ const SYSTEM = [
   { key: 'gridManagement', icon: '🧩', bg: '#E0F7FA', name: 'Grid Management' },
   { key: 'banners', icon: '🖼️', bg: '#FFF0F0', name: 'Banners' },
   { key: 'announcements', icon: '📣', bg: '#E0F7FA', name: 'Announcements' },
+  { key: 'apiManagement', icon: '🔌', bg: '#E0F7FA', name: 'API Management' },
 ];
 
 const MOBILE_RATE_FIELDS = [{ key: 'mobileBanking', label: 'Mobile Banking — 1 MYR = BDT' }];
@@ -73,7 +73,7 @@ export default function AdminFeaturesScreen() {
     const gridKey = item.key === 'all' ? 'history' : item.key;
     if (gridKey === 'gridManagement') return isSuperadmin;
     if (!gridManagementService.isGridActive(gridManagement, gridKey)) return false;
-    const always = ['all','pending','inquiries','topups','support','rates','pricing','payments','categories','banners','announcements'];
+    const always = ['all','pending','inquiries','topups','support','rates','pricing','payments','banners','announcements'];
     return always.includes(item.key) || canAccessFeature(featureAccess, item.key, profile?.role, profile?.uid);
   });
   const badges = {
