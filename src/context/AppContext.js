@@ -649,16 +649,18 @@ export function AppProvider({ children }) {
   };
   const setScreen = useCallback((nextScreen) => {
     const gridKey = SCREEN_GRID_KEYS[nextScreen];
-    if (gridKey && !gridManagementService.isGridActive(gridManagement, gridKey)) {
+    const isSuperadminGridManager = nextScreen === 'gridManagement' && (profile?.role === 'superadmin');
+    if (gridKey && !isSuperadminGridManager && !gridManagementService.isGridActive(gridManagement, gridKey)) {
       showAlert('MySheba', 'This feature is currently unavailable.');
       return;
     }
     setScreenState(nextScreen);
-  }, [gridManagement]);
+  }, [gridManagement, profile?.role]);
 
   useEffect(() => {
     const gridKey = SCREEN_GRID_KEYS[screen];
-    if (gridKey && !gridManagementService.isGridActive(gridManagement, gridKey)) {
+    const isSuperadminGridManager = screen === 'gridManagement' && profile?.role === 'superadmin';
+    if (gridKey && !isSuperadminGridManager && !gridManagementService.isGridActive(gridManagement, gridKey)) {
       setScreenState(profile?.role === 'admin' || profile?.role === 'superadmin' ? 'adminHome' : 'customerHome');
     }
   }, [screen, gridManagement, profile?.role]);
