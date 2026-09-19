@@ -81,8 +81,11 @@ exports.approveTopup = onCall({ enforceAppCheck: true }, async request => {
       const balance = validBalance(user.walletBalance);
       if (points === null) throw new HttpsError('failed-precondition', 'Top-up amount is invalid.');
       if (balance === null) throw new HttpsError('failed-precondition', 'User wallet balance is invalid.');
-      const newBalance = balance + points;
-      if (!Number.isSafeInteger(Math.round(newBalance * 100))) throw new HttpsError('failed-precondition', 'Wallet balance is too large.');
+      const balanceCents = Math.round(balance * 100);
+      const pointsCents = Math.round(points * 100);
+      const newBalanceCents = balanceCents + pointsCents;
+      if (!Number.isSafeInteger(newBalanceCents)) throw new HttpsError('failed-precondition', 'Wallet balance is too large.');
+      const newBalance = newBalanceCents / 100;
       tx.update(userRef, { walletBalance: newBalance });
       tx.update(ref, { status: 'approved', approvedBy: uid, approvedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp(), creditedPoints: points });
       return { userId, points };
