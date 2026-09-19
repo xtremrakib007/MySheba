@@ -47,7 +47,21 @@ function validateBaseUrl(baseUrl) {
   if (BLOCKED_HOSTS.test(host)) throw new HttpsError('invalid-argument', 'Base URL host is not allowed.');
   if (isIpLiteral(host)) throw new HttpsError('invalid-argument', 'Base URL must use a domain name, not a raw IP address.');
 }
-function validateTemplate(value, label, maxBytes = 20000) {\n  const obj = asObject(value);\n  const json = JSON.stringify(obj);\n  if (json.length > maxBytes) throw new HttpsError('invalid-argument', `${label} is too large.`);\n  return obj;\n}\nfunction validateHeaders(value) {\n  const headers = validateTemplate(value, 'Headers', 12000);\n  for (const key of Object.keys(headers)) {\n    if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,100}$/.test(key)) throw new HttpsError('invalid-argument', 'Invalid API header name.');\n    if (/^(host|content-length|connection|transfer-encoding|proxy-)/i.test(key)) throw new HttpsError('invalid-argument', 'This API header is not allowed.');\n    const v = headers[key];\n    if (!(typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')) throw new HttpsError('invalid-argument', 'API header values must be scalar.');\n  }\n  return headers;\n}\nfunction validate(data) {
+function validateTemplate(value, label, maxBytes = 20000) {
+  const obj = asObject(value);
+  const json = JSON.stringify(obj);\n  if (json.length > maxBytes) throw new HttpsError('invalid-argument', `${label} is too large.`);
+  return obj;
+}\nfunction validateHeaders(value) {
+  const headers = validateTemplate(value, 'Headers', 12000);
+  for (const key of Object.keys(headers)) {
+    if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,100}$/.test(key)) throw new HttpsError('invalid-argument', 'Invalid API header name.');
+    if (/^(host|content-length|connection|transfer-encoding|proxy-)/i.test(key)) throw new HttpsError('invalid-argument', 'This API header is not allowed.');
+    const v = headers[key];
+    if (!(typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')) throw new HttpsError('invalid-argument', 'API header values must be scalar.');
+  }
+  return headers;
+}
+function validate(data) {
   const service = cleanString(data.service, 40), name = cleanString(data.name, 100), baseUrl = cleanString(data.baseUrl, 500);
   const authType = cleanString(data.authType, 20) || 'none';
   const method = cleanString(data.method, 10).toUpperCase() || 'POST';
