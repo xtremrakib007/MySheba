@@ -141,6 +141,14 @@ exports.scrubCompletedTransactionPins = onCall({ enforceAppCheck: true }, async 
   requireAuth(request);
   const uid = request.auth.uid;
   const db = admin.firestore();
+  // Authorize before the collection-wide read so unauthorized callers cannot trigger
+  // an expensive scan of completed transactions.
+  const actorSnap = await db.collection('users').doc(uid).get();
+  if (!actorSnap.exists) throw new HttpsError('permission-denied', 'Your staff profile was not found.');
+  const actorProfile = actorSnap.data() || {};
+  if (actorProfile.role !== 'superadmin' || actorProfile.suspended === true || actorProfile.inactive === true || actorProfile.disabled === true || actorProfile.active === false || actorProfile.mergedInto) {
+    throw new HttpsError('permission-denied', 'Only an active superadmin can scrub completed transaction PINs.');
+  }
   const snap = await db.collection('transactions').where('status', '==', 'completed').get();
   const docs = snap.docs.filter((docSnap) => Object.prototype.hasOwnProperty.call(docSnap.data(), 'pin'));
   let scrubbed = 0, batches = 0;
