@@ -45,7 +45,7 @@ function canTransferTo(role, caller, recipient) {
   return false;
 }
 function validBalance(value) {
-  const n = Number(value || 0);
+  const n = value == null ? 0 : Number(value);
   if (!Number.isFinite(n) || n < 0 || !Number.isSafeInteger(Math.round(n * 100))) return null;
   return n;
 }
