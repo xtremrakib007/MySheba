@@ -37,6 +37,7 @@ const USERS = [
 ];
 const SYSTEM = [
   { key: 'featureAccess', icon: '🔐', bg: '#EDE7F6', name: 'Feature Access' },
+  { key: 'gridManagement', icon: '🧩', bg: '#E0F7FA', name: 'Grid Management' },
   { key: 'banners', icon: '🖼️', bg: '#FFF0F0', name: 'Banners' },
   { key: 'announcements', icon: '📣', bg: '#E0F7FA', name: 'Announcements' },
 ];
@@ -68,7 +69,7 @@ export default function AdminFeaturesScreen() {
   const isSuperadmin = profile?.role === 'superadmin';
 
   const allow = (items) => items.filter((item) => {
-    const always = ['all','pending','inquiries','topups','support','rates','pricing','payments','categories','banners','announcements'];
+    const always = ['all','pending','inquiries','topups','support','rates','pricing','payments','categories','banners','announcements','gridManagement'];
     return always.includes(item.key) || canAccessFeature(featureAccess, item.key, profile?.role, profile?.uid);
   });
   const badges = {
@@ -78,6 +79,7 @@ export default function AdminFeaturesScreen() {
   };
   const openItem = (key) => {
     if (key === 'rates') { setRateView(true); return; }
+    if (key === 'gridManagement') { setScreen('gridManagement'); return; }
     setAdminTab(key); setAdminViewingSection(true); setScreen('adminHome');
   };
   const itemsForSection = () => {
