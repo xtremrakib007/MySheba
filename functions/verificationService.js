@@ -34,6 +34,23 @@ function validStorageUrl(url, uid) {
   return !!fileName && !fileName.includes('\\0') && !fileName.split('/').some((part) => part === '..');
 }
 
+async function assertVerificationObject(url, uid) {
+  if (!validStorageUrl(url, uid)) throw new HttpsError('failed-precondition', 'The identity document upload is invalid.');
+  const bucket = admin.storage().bucket();
+  let objectPath;
+  try {
+    const parsed = new URL(url);
+    objectPath = decodeURIComponent(parsed.pathname.slice(("/v0/b/" + bucket.name + "/o/").length));
+    if (!objectPath || objectPath.includes('\\\\') || objectPath.split('/').some((part) => part === '..')) throw new Error('invalid path');
+    const [metadata] = await bucket.file(objectPath).getMetadata();
+    const size = Number(metadata?.size);
+    const contentType = String(metadata?.contentType || '');
+    if (!Number.isFinite(size) || size <= 0 || size >= 10 * 1024 * 1024 || !contentType.startsWith('image/')) throw new Error('invalid metadata');
+  } catch (_) {
+    throw new HttpsError('failed-precondition', 'The uploaded identity document could not be verified.');
+  }
+}
+
 function validateRequestData(data, uid) {
   const documentTypes = ['Passport', 'MyKad / National ID', 'Work Permit / ID', "Driver's License"];
   const genders = ['Male', 'Female', 'Other'];
@@ -64,6 +81,14 @@ exports.approveVerification = onCall({ enforceAppCheck: true }, async (request) 
   const reqRef = db.collection('verificationRequests').doc(targetUid);
   const userRef = db.collection('users').doc(targetUid);
   try {
+    const requestSnap = await reqRef.get();
+    if (!requestSnap.exists) throw new HttpsError('not-found', 'That verification request does not exist.');
+    const requestData = requestSnap.data();
+    validateRequestData(requestData, targetUid);
+    const urls = [requestData.frontDocumentUrl, requestData.documentUrl, requestData.selfieUrl];
+    if (requestData.documentType !== 'Passport') urls.push(requestData.backDocumentUrl);
+    for (const url of urls) await assertVerificationObject(url, targetUid);
+
     let reviewedByRole = '';
     await db.runTransaction(async (tx) => {
       const callerSnap = await tx.get(db.collection('users').doc(callerUid));
