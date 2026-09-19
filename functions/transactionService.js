@@ -45,6 +45,27 @@ function validReceiptUrl(url, txId, role) {
     && !objectPath.slice(expectedPrefix.length).split('/').some((part) => part === '..');
 }
 
+async function assertReceiptObject(url, txId, role) {
+  if (!validReceiptUrl(url, txId, role)) throw new HttpsError('invalid-argument', 'The receipt URL must be a valid MySheba receipt upload.');
+  let parsed;
+  try { parsed = new URL(url); } catch (_) { throw new HttpsError('invalid-argument', 'Invalid receipt URL.'); }
+  let objectPath;
+  try {
+    const bucket = admin.storage().bucket();
+    const prefix = `/v0/b/${bucket.name}/o/`;
+    objectPath = decodeURIComponent(parsed.pathname.slice(prefix.length));
+    if (!objectPath || objectPath.includes('\\\\') || objectPath.split('/').some((part) => part === '..')) throw new Error('invalid path');
+    const [metadata] = await bucket.file(objectPath).getMetadata();
+    const size = Number(metadata?.size);
+    const contentType = String(metadata?.contentType || '');
+    if (!Number.isFinite(size) || size <= 0 || size >= 10 * 1024 * 1024 || !contentType.startsWith('image/')) {
+      throw new Error('invalid metadata');
+    }
+  } catch (_) {
+    throw new HttpsError('failed-precondition', 'The uploaded receipt could not be verified.');
+  }
+}
+
 function assertOperatorCanHandle(actor, order) {
   if (!OPERATOR_ROLES.includes(actor.role)) throw new HttpsError('permission-denied', 'Only a dealer or reseller can accept an approved order.');
   if (actor.role === 'dealer' && !DEALER_SERVICES.includes(order.service)) throw new HttpsError('permission-denied', 'Your dealer account cannot handle this service.');
@@ -98,6 +119,7 @@ exports.completeTransaction = onCall({ enforceAppCheck: true }, async (request) 
   if (!/^\d{4}$/.test(pin)) throw new HttpsError('invalid-argument', 'A 4-digit collection PIN is required.');
   if (!receiptUrl) throw new HttpsError('invalid-argument', 'The transfer receipt is required before completion.');
   await checkVelocity(admin.firestore(), actor.uid, 'transactionComplete', { ip: getClientIp(request) });
+  await assertReceiptObject(receiptUrl, id, actor.role);
   const db = admin.firestore(), ref = db.collection('transactions').doc(id);
   await db.runTransaction(async (tx) => {
     const currentActor = await assertActorStillActive(tx, actor.uid, OPERATOR_ROLES);
