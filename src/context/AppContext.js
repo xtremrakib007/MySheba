@@ -645,7 +645,7 @@ export function AppProvider({ children }) {
     adminFeatures: 'adminFeatures', moreFeatures: 'moreFeaturesTile',
     adminAnalytics: 'adminAnalytics', userManagement: 'userManagement',
     verificationManagement: 'verificationManagement', featureAccess: 'featureAccess',
-    apiProviderManagement: 'featureAccess', bannerManagement: 'banners',
+    apiProviderManagement: 'apiManagement', bannerManagement: 'banners',
     gridManagement: 'featureAccess'
   };
   const setScreen = useCallback((nextScreen) => {
