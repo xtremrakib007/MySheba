@@ -68,9 +68,16 @@ exports.submitTopupRequest = onCall({ enforceAppCheck: true }, async request => 
 
   const userRef = db.collection('users').doc(uid);
   const operationRef = db.collection('topupSubmissionOperations').doc(`${uid}_${requestId}`);
-  // Fast-path an existing request before validating the upload again. A retry of
-  // an already-created request must remain idempotent even if its signed receipt
-  // URL has since expired or the client no longer has the upload cached.
+  // Fast-path an existing request before validating the upload again. Replays
+  // still require a live account/session; only the receipt revalidation is skipped.
+  const existingUserSnap = await userRef.get();
+  if (!existingUserSnap.exists) throw new HttpsError('not-found', 'User account not found.');
+  const existingUser = existingUserSnap.data() || {};
+  requireSessionMatch(request, existingUser);
+  if (existingUser.suspended === true || existingUser.inactive === true || existingUser.disabled === true || existingUser.active === false || existingUser.mergedInto != null) {
+    throw new HttpsError('permission-denied', 'Your account is not active.');
+  }
+  if (!ALLOWED_ROLES.includes(existingUser.role)) throw new HttpsError('permission-denied', 'This account cannot submit wallet top-ups.');
   const existingOperation = await operationRef.get();
   if (existingOperation.exists) {
     const op = existingOperation.data() || {};
