@@ -62,8 +62,11 @@ exports.createSelfTopup = onCall({ enforceAppCheck: true }, async (request) => {
 
       const currentBalance = validBalance(caller.walletBalance);
       if (currentBalance === null) throw new HttpsError('failed-precondition', 'Wallet balance is invalid.');
-      const newBalance = currentBalance + amount;
-      if (!Number.isSafeInteger(Math.round(newBalance * 100))) throw new HttpsError('failed-precondition', 'Wallet balance is too large.');
+      const currentBalanceCents = Math.round(currentBalance * 100);
+      const amountCents = Math.round(amount * 100);
+      const newBalanceCents = currentBalanceCents + amountCents;
+      if (!Number.isSafeInteger(newBalanceCents)) throw new HttpsError('failed-precondition', 'Wallet balance is too large.');
+      const newBalance = newBalanceCents / 100;
 
       const now = admin.firestore.FieldValue.serverTimestamp();
       tx.update(callerRef, { walletBalance: newBalance });
