@@ -71,6 +71,16 @@ exports.submitTopupRequest = onCall({ enforceAppCheck: true }, async request => 
   const operationRef = db.collection('topupSubmissionOperations').doc(`${uid}_${requestId}`);
   try {
     const result = await db.runTransaction(async tx => {
+      // Revalidate the live account/session before returning an idempotent replay.
+      const userSnap = await tx.get(userRef);
+      if (!userSnap.exists) throw new HttpsError('not-found', 'User account not found.');
+      const liveUser = userSnap.data() || {};
+      requireSessionMatch(request, liveUser);
+      if (liveUser.suspended === true || liveUser.inactive === true || liveUser.disabled === true || liveUser.active === false || liveUser.mergedInto != null) {
+        throw new HttpsError('permission-denied', 'Your account is not active.');
+      }
+      if (!ALLOWED_ROLES.includes(liveUser.role)) throw new HttpsError('permission-denied', 'This account cannot submit wallet top-ups.');
+
       const opSnap = await tx.get(operationRef);
       if (opSnap.exists) {
         const op = opSnap.data() || {};
@@ -80,10 +90,7 @@ exports.submitTopupRequest = onCall({ enforceAppCheck: true }, async request => 
         return { id: op.topupId, replay: true };
       }
 
-      const userSnap = await tx.get(userRef);
-      if (!userSnap.exists) throw new HttpsError('not-found', 'User account not found.');
-      const user = userSnap.data() || {};
-      requireSessionMatch(request, user);
+      const user = liveUser;
       if (user.suspended === true || user.inactive === true || user.disabled === true || user.active === false || user.mergedInto != null) {
         throw new HttpsError('permission-denied', 'Your account is not active.');
       }
