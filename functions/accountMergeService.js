@@ -66,6 +66,7 @@ exports.confirmAccountMerge = onCall({ enforceAppCheck: true }, async (request) 
   if (!/^\d{6}$/.test(code)) throw new HttpsError('invalid-argument', 'Please enter the 6-digit code we sent.');
   const ip = getClientIp(request); await checkVelocity(db, callerUid, 'account_merge_confirm', { ip });
   const otpRef = db.collection('mergeOtps').doc(callerUid); const callerRef = db.collection('users').doc(callerUid);
+  const callerMergeLedgerRef = db.collection('walletLedger').doc(); const targetMergeLedgerRef = db.collection('walletLedger').doc();
   let targetUid; let targetEmail; let mergedWalletBalance = 0; let transferredGoogleProvider = null; let providerTransferred = false; let targetProviderUnlinked = false; let targetDisabled = false; let mergeCommitted = false;
 
   await db.runTransaction(async (tx) => {
@@ -106,10 +107,18 @@ exports.confirmAccountMerge = onCall({ enforceAppCheck: true }, async (request) 
       if (!callerSnap.exists || !targetSnap.exists) throw new HttpsError('not-found', 'One of the accounts no longer exists.');
       const callerData = callerSnap.data() || {}; const targetData = targetSnap.data() || {};
       if (!activeAccount(callerData) || !activeAccount(targetData) || callerData.role !== 'customer' || targetData.role !== 'customer') throw new HttpsError('failed-precondition', 'One of the accounts is no longer active. Please start again.');
-      const callerBalance = walletBalance(callerData); const targetBalance = walletBalance(targetData); mergedWalletBalance = callerBalance + targetBalance;
-      if (!Number.isSafeInteger(Math.round(mergedWalletBalance * 100))) throw new HttpsError('failed-precondition', 'The combined wallet balance is too large.');
+      const callerBalance = walletBalance(callerData); const targetBalance = walletBalance(targetData);
+      const callerBalanceCents = Math.round(callerBalance * 100); const targetBalanceCents = Math.round(targetBalance * 100);
+      const mergedBalanceCents = callerBalanceCents + targetBalanceCents;
+      if (!Number.isSafeInteger(mergedBalanceCents)) throw new HttpsError('failed-precondition', 'The combined wallet balance is too large.');
+      mergedWalletBalance = mergedBalanceCents / 100;
+      const now = admin.firestore.FieldValue.serverTimestamp();
       tx.update(callerRef, { walletBalance: mergedWalletBalance, googleLinked: true });
-      tx.update(targetRef, { walletBalance: 0, mergedInto: callerUid, active: false, mergedAt: admin.firestore.FieldValue.serverTimestamp() });
+      tx.update(targetRef, { walletBalance: 0, mergedInto: callerUid, active: false, mergedAt: now });
+      if (targetBalanceCents > 0) {
+        tx.set(targetMergeLedgerRef, { uid: targetUid, type: 'account_merge_debit', direction: 'debit', currency: 'MYR', amount: targetBalance, amountMinor: targetBalanceCents, transferId: `account_merge_${callerUid}_${targetUid}`, counterpartyUid: callerUid, balanceAfter: 0, createdAt: now });
+        tx.set(callerMergeLedgerRef, { uid: callerUid, type: 'account_merge_credit', direction: 'credit', currency: 'MYR', amount: targetBalance, amountMinor: targetBalanceCents, transferId: `account_merge_${callerUid}_${targetUid}`, counterpartyUid: targetUid, balanceAfter: mergedWalletBalance, createdAt: now });
+      }
       tx.delete(db.collection('biometricTemplates').doc(targetUid));
       tx.delete(db.collection('pendingBiometricTemplates').doc(targetUid));
       tx.delete(otpRef);
