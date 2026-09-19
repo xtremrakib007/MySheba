@@ -36,7 +36,7 @@ exports.createAdPayment = onCall({ enforceAppCheck:true }, async (request) => {
   let paymentRole='';
 
   try {
-    await db.runTransaction(async (tx) => {
+    fromStatus=await db.runTransaction(async (tx) => {
       const callerSnap=await tx.get(db.collection('users').doc(callerUid));
       const currentCaller=callerSnap.exists?callerSnap.data():null;
       if(!currentCaller||currentCaller.role!=='superadmin'||currentCaller.suspended===true||currentCaller.inactive===true||currentCaller.disabled===true||currentCaller.active===false||currentCaller.mergedInto!=null) {
@@ -63,6 +63,9 @@ exports.createAdPayment = onCall({ enforceAppCheck:true }, async (request) => {
         if(packageData.active === false) throw new HttpsError('failed-precondition','That advertisement package is no longer active.');
         if(packageData.advertiserId&&packageData.advertiserId!==advId) throw new HttpsError('invalid-argument','That package does not belong to this advertiser.');
         if(packageData.campaignId&&packageData.campaignId!==campaignIdClean) throw new HttpsError('invalid-argument','That package does not belong to this campaign.');
+        const packagePrice=Number(packageData.price);
+        const packageCurrency=cleanText(packageData.currency,12).toUpperCase();
+        if(!Number.isFinite(packagePrice)||packagePrice<=0||packagePrice>MAX_AMOUNT||!Number.isSafeInteger(Math.round(packagePrice*100))||Math.abs(packagePrice*100-Math.round(packagePrice*100))>Number.EPSILON*Math.max(1,Math.abs(packagePrice*100))||!/^[A-Z]{3}$/.test(packageCurrency)) throw new HttpsError('failed-precondition','That advertisement package has an invalid price or currency.');
       }
 
       const paymentData={
@@ -90,7 +93,7 @@ exports.updateAdPaymentStatus = onCall({ enforceAppCheck:true }, async (request)
   const callerUid=requireAuth(request); const db=admin.firestore(); const caller=await requireSuperadmin(db,callerUid);
   const {paymentId,paymentStatus,note}=request.data||{}; const id=validId(paymentId,'paymentId');
   if(!VALID_PAYMENT_STATUSES.includes(paymentStatus)) throw new HttpsError('invalid-argument','Invalid payment status.');
-  const paymentRef=db.collection('ad_payments').doc(id); const paymentSnap=await paymentRef.get(); if(!paymentSnap.exists) throw new HttpsError('not-found','That payment record does not exist.');
+  const paymentRef=db.collection('ad_payments').doc(id); let fromStatus=''; const paymentSnap=await paymentRef.get(); if(!paymentSnap.exists) throw new HttpsError('not-found','That payment record does not exist.');
   const current=paymentSnap.data()||{}; if(!VALID_PAYMENT_STATUSES.includes(current.paymentStatus)||!PAYMENT_STATUS_TRANSITIONS[current.paymentStatus].includes(paymentStatus)) throw new HttpsError('failed-precondition',`Cannot move a payment from "${current.paymentStatus}" to "${paymentStatus}".`);
   try {
     await db.runTransaction(async (tx) => {
@@ -105,9 +108,11 @@ exports.updateAdPaymentStatus = onCall({ enforceAppCheck:true }, async (request)
       if (!VALID_PAYMENT_STATUSES.includes(fresh.paymentStatus) || !PAYMENT_STATUS_TRANSITIONS[fresh.paymentStatus].includes(paymentStatus)) {
         throw new HttpsError('failed-precondition', `Cannot move a payment from "${fresh.paymentStatus}" to "${paymentStatus}".`);
       }
+      fromStatus=fresh.paymentStatus;
       tx.update(paymentRef,{paymentStatus,recordedBy:callerUid,updatedAt:admin.firestore.FieldValue.serverTimestamp()});
+      return fresh.paymentStatus;
     });
   } catch(err) { if (err instanceof HttpsError) throw err; await logServerError('updateAdPaymentStatus',err,{userId:callerUid}); throw new HttpsError('internal','Could not update this payment status.'); }
-  await logAdAudit({action:'edit',targetType:'ad_payment',targetId:id,performedBy:callerUid,details:{from:current.paymentStatus,to:paymentStatus,note:cleanText(note,1000),performedByRole:caller.role}});
+  await logAdAudit({action:'edit',targetType:'ad_payment',targetId:id,performedBy:callerUid,details:{from:fromStatus,to:paymentStatus,note:cleanText(note,1000),performedByRole:caller.role}});
   return {ok:true};
 });
