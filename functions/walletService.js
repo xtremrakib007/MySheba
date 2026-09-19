@@ -37,6 +37,28 @@ const result=await db.runTransaction(async tx=>{const u=await tx.get(uref);if(!u
       const api = await executeConfiguredApi(serviceLabel, payload, customer, requestId);
       await txref.update({ apiExecution: { status: 'accepted', providerId: api.providerId, providerName: api.providerName, responseId: api.responseId || null, message: api.message || null, updatedAt: admin.firestore.FieldValue.serverTimestamp() } });
     } catch (e) {
+      const errorCode = String(e?.code || '');
+      const ambiguousProviderOutcome = errorCode === 'unavailable';
+
+      // An unavailable/unknown provider result may mean the external API
+      // accepted the transaction but the response was lost. Never refund
+      // automatically: doing so could let a retry create a duplicate real
+      // transaction. Unknown transactions are also removed from the dealer/
+      // reseller queue by transactionQueueService.
+      if (ambiguousProviderOutcome) {
+        await txref.update({
+          status: 'unknown',
+          apiExecution: {
+            status: 'unknown',
+            error: String(e?.message || 'Provider outcome is uncertain').slice(0, 500),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        throw e;
+      }
+
+      // Definitive failures refund this invocation's charge exactly once.
       await db.runTransaction(async tx => {
         const [u, t] = await Promise.all([tx.get(uref), tx.get(txref)]);
         if (!t.exists || t.data().status !== 'pending' || t.data().apiRefunded === true) return;
@@ -46,6 +68,7 @@ const result=await db.runTransaction(async tx=>{const u=await tx.get(uref);if(!u
         tx.update(txref, { status: 'failed', apiRefunded: true, apiError: String(e?.message || 'Provider execution failed').slice(0, 500), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
       });
       throw e;
+
     }
   }
   return{id:txref.id,cost:result.cost,collectionPin};}
