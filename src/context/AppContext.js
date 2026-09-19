@@ -633,6 +633,7 @@ export function AppProvider({ children }) {
   // navigation from bypassing a disabled feature.
   const SCREEN_GRID_KEYS = {
     service: null,
+    buspicker: 'bus',
     topup: 'topup', history: 'history', support: 'support',
     profile: 'profile', myAccount: 'myAccount', verifyIdentity: 'kyc',
     myDocuments: 'myDocuments', salaryDashboard: 'salary', salarySettings: 'salary',
@@ -2088,6 +2089,10 @@ export function AppProvider({ children }) {
   const [webViewPaymentCharged, setWebViewPaymentCharged] = useState(false);
   const openWebView = useCallback(
     async (key) => {
+      if (!gridManagementService.isGridActive(gridManagement, key)) {
+        showAlert('MySheba', 'This feature is currently unavailable.');
+        return;
+      }
       const cost = pointCosts[key];
       if (!cost || !authUser?.uid) {
         setWebViewKey(key);
@@ -2152,7 +2157,7 @@ export function AppProvider({ children }) {
         ],
       );
     },
-    [authUser, webViewBusy, profile, pointCosts],
+    [authUser, webViewBusy, profile, pointCosts, gridManagement],
   );
 
   // Shows the Bus screen's 3-option grid (redBus / Bus Online Ticket /  // Easybook) instead of opening a WebView directly - each card then
