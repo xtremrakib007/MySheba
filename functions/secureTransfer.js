@@ -100,6 +100,18 @@ exports.transferPoints = onCall({ enforceAppCheck: true }, async (request) => {
   const pinRef = db.collection('securityPins').doc(callerUid);
 
   try {
+    // Check an already-completed request before consuming another PIN attempt.
+    // This keeps retries idempotent and prevents a valid replay from locking the PIN.
+    const existingOp = await opRef.get();
+    if (existingOp.exists) {
+      const op = existingOp.data() || {};
+      if (op.type !== 'transferPoints' || op.uid !== callerUid || op.toUid !== toUid || Number(op.amount) !== amt || op.requestId !== requestId) {
+        throw new HttpsError('failed-precondition', 'That request ID is already in use.');
+      }
+      if (op.transferId) return { transferId: op.transferId, replay: true };
+      throw new HttpsError('aborted', 'This transfer is still being processed. Please retry shortly.');
+    }
+
     const pinResult = await db.runTransaction(async (tx) => {
       const pinSnap = await tx.get(pinRef);
       if (!pinSnap.exists) return { valid: false, code: 'missing' };
@@ -154,7 +166,7 @@ exports.transferPoints = onCall({ enforceAppCheck: true }, async (request) => {
       tx.update(fromRef, { walletBalance: resultingSenderBalance });
       tx.update(toRef, { walletBalance: resultingRecipientBalance });
       tx.set(transferRef, { fromUid: callerUid, fromName: caller.name || '', fromRole: caller.role || '', toUid, toName: recipient.name || '', toRole: recipient.role || '', amount: amt, note: cleanNote, participants: [callerUid, toUid], dealerId: dealerScope, dealerEarningPercent: earningPercent || null, dealerEarning: earning || null, requestId, createdAt: admin.firestore.FieldValue.serverTimestamp() });
-      tx.set(opRef, { type: 'transferPoints', uid: callerUid, toUid, amount: amt, transferId: transferRef.id, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+      tx.set(opRef, { type: 'transferPoints', uid: callerUid, requestId, toUid, amount: amt, transferId: transferRef.id, status: 'completed', createdAt: admin.firestore.FieldValue.serverTimestamp() });
       return { transferId: transferRef.id, replay: false };
     });
 
