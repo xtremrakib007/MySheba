@@ -14,6 +14,7 @@ import MobileBankingStep, { validateStep as validateMobileBanking } from '../ste
 import InternetStep, { validateStep as validateInternet } from '../steps/InternetSteps';
 import RemittanceStep, { validateStep as validateRemittance } from '../steps/RemittanceSteps';
 import BillPaymentStep, { validateStep as validateBillPayment } from '../steps/BillPaymentSteps';
+import EntertainmentStep, { validateStep as validateEntertainment } from '../steps/EntertainmentSteps';
 import BusStep from '../steps/BusSteps';
 import TrainStep from '../steps/TrainSteps';
 import FlightStep from '../steps/FlightSteps';
@@ -25,6 +26,7 @@ const SERVICE_TITLES = {
   internet: 'Internet',
   remittance: 'Remittance',
   billpayment: 'Bill Payment',
+  entertainment: 'Entertainment',
   bus: 'Bus',
   train: 'Train',
   flight: 'Flight',
@@ -36,6 +38,7 @@ const STEP_COMPONENTS = {
   internet: InternetStep,
   remittance: RemittanceStep,
   billpayment: BillPaymentStep,
+  entertainment: EntertainmentStep,
   bus: BusStep,
   train: TrainStep,
   flight: FlightStep,
@@ -49,6 +52,7 @@ const VALIDATORS = {
   internet: validateInternet,
   remittance: validateRemittance,
   billpayment: validateBillPayment,
+  entertainment: validateEntertainment,
   bus: validateTravelInquiry,
   train: validateTravelInquiry,
   flight: validateTravelInquiry,
@@ -68,6 +72,7 @@ const AD_SLOTS = {
   internet: { feature: 'internet_package', top: 'INTERNET_TOP', bottom: 'INTERNET_BOTTOM' },
   remittance: { feature: 'remittance', top: 'REMITTANCE_TOP', bottom: 'REMITTANCE_BOTTOM' },
   flight: { feature: 'air_ticket', top: 'FLIGHT_TOP', bottom: 'FLIGHT_BOTTOM' },
+  entertainment: { feature: 'entertainment', top: 'ENTERTAINMENT_TOP', bottom: 'ENTERTAINMENT_BOTTOM' },
 };
 
 export default function ServiceScreen() {
