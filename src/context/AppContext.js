@@ -2005,11 +2005,15 @@ export function AppProvider({ children }) {
   }, []);
 
   const startService = useCallback((service) => {
+    if (!gridManagementService.isGridActive(gridManagement, service)) {
+      showAlert("MySheba", "This feature is currently unavailable.");
+      return;
+    }
     setCurrentService(service);
     setCurrentStep(0);
     setServiceData({});
     setScreen("service");
-  }, []);
+  }, [gridManagement, showAlert]);
 
   // Every "point deduct" webview (FOMEMA/Visa, MY Digital/Passport, Bus
   // redBus/Bus Online Ticket/Easybook, MY e-SIM) is gated right here, at the door, before
