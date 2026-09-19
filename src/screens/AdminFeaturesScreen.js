@@ -84,6 +84,7 @@ export default function AdminFeaturesScreen() {
   const openItem = (key) => {
     if (key === 'rates') { setRateView(true); return; }
     if (key === 'gridManagement') { setScreen('gridManagement'); return; }
+    if (key === 'apiManagement') { setScreen('apiProviderManagement'); return; }
     setAdminTab(key); setAdminViewingSection(true); setScreen('adminHome');
   };
   const itemsForSection = () => {
