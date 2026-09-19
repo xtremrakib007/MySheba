@@ -111,6 +111,15 @@ exports.walletTransfer = onCall({ enforceAppCheck: true }, async (request) => {
   let pinValid = true;
   try {
     await db.runTransaction(async tx => {
+      // Validate the live sender session before returning an idempotent replay.
+      const senderSnap = await tx.get(senderRef);
+      if (!senderSnap.exists) throw new HttpsError('not-found', 'Wallet account not found.');
+      const liveSender = senderSnap.data() || {};
+      requireSessionMatch(request, liveSender);
+      if (!active(liveSender) || liveSender.role !== 'customer' || !isKycApproved(liveSender)) {
+        throw new HttpsError('permission-denied', 'Your wallet account is not eligible for this transfer.');
+      }
+
       const existingTransferSnap = await tx.get(transferRef);
       if (existingTransferSnap.exists) { const existing = existingTransferSnap.data() || {}; if (existing.fromUid !== senderUid || existing.toUid !== recipientUid || Number(existing.amountMinor) !== amountCents || existing.requestId !== requestId) throw new HttpsError('already-exists', 'That request ID was already used for a different transfer.'); replay = true; return; }
       const pinSnap = await tx.get(pinRef);
