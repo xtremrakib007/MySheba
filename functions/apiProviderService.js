@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const dns = require('dns').promises;
 
 const COLLECTION = 'api_providers';
 const SETTINGS = 'api_settings/service_modes';
@@ -19,6 +20,24 @@ function assertSuperadmin(db, request) {
 function cleanString(v, max = 500) { return typeof v === 'string' ? v.trim().slice(0, max) : ''; }
 const BLOCKED_HOSTS = /^(localhost|.*\.local|.*\.internal)$/i;
 function isIpLiteral(host) { if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return true; if (host.includes(':')) return true; return false; }
+function isPrivateIp(ip) {
+  const s = String(ip || '').toLowerCase();
+  if (s === '::1' || s === '::' || s.startsWith('fc') || s.startsWith('fd') || s.startsWith('fe80:')) return true;
+  const m = s.match(/^(\\d+)\\.(\\d+)\\.(\\d+)\\.(\\d+)$/);
+  if (!m) return false;
+  const [a,b,c,d] = m.slice(1).map(Number);
+  return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) ||
+    (a === 100 && b >= 64 && b <= 127) || (a === 198 && (b === 18 || b === 19)) ||
+    (a === 192 && b === 0 && c === 0);
+}
+async function assertPublicHostname(hostname) {
+  if (!hostname || isIpLiteral(hostname) || BLOCKED_HOSTS.test(hostname)) throw new Error('Provider URL host is not allowed.');
+  let addresses;
+  try { addresses = await dns.lookup(hostname, { all: true, verbatim: true }); }
+  catch { throw new Error('Provider hostname could not be resolved.'); }
+  if (!addresses.length || addresses.some(a => isPrivateIp(a.address))) throw new Error('Provider hostname resolves to a private or reserved address.');
+}
 function validateBaseUrl(baseUrl) {
   let parsed;
   try { parsed = new URL(baseUrl); } catch { throw new HttpsError('invalid-argument', 'Base URL is not a valid URL.'); }
@@ -76,7 +95,8 @@ async function executeConfiguredApi(service, payload, customer, requestId) {
   const vars = { requestId, uid:customer?.uid||'', phone:customer?.phone||'', amount:payload?.amount??raw.amount??'', total:payload?.total??raw.total??'', service, country:raw.country||'', operator:raw.operator||'', packageCode:raw.packageCode||'', details:payload?.details||'', ...Object.fromEntries(Object.entries(raw).filter(([k,v]) => !['requestId'].includes(k) && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')).slice(0,100)) };
   try {
     let base; try { base = new URL(provider.baseUrl); } catch { throw new Error('Provider URL is invalid.'); }
-    if (base.protocol !== 'https:' || isIpLiteral(base.hostname) || BLOCKED_HOSTS.test(base.hostname)) throw new Error('Provider URL is not allowed.');
+    if (base.protocol !== 'https:') throw new Error('Provider URL is not allowed.');
+    await assertPublicHostname(base.hostname);
     const endpointPath = String(provider.endpointPath || '/');
     if (/^https?:\\/\\//i.test(endpointPath) || endpointPath.startsWith('//')) throw new Error('Endpoint path must be relative to the provider base URL.');
     const url = new URL(endpointPath,base);
