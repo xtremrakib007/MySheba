@@ -139,7 +139,7 @@ exports.walletTransfer = onCall({ enforceAppCheck: true }, async (request) => {
         return { pinValid: false, locked: attempts >= SECURITY_PIN_MAX_ATTEMPTS };
       }
       tx.update(pinRef, { attempts: 0, lockedUntil: null, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-      const senderSnap = await tx.get(senderRef), recipientSnap = await tx.get(recipientRef);
+      const recipientSnap = await tx.get(recipientRef);
       if (!senderSnap.exists || !recipientSnap.exists) throw new HttpsError('not-found', 'Wallet account not found.');
       const senderData = senderSnap.data(), recipientData = recipientSnap.data();
       requireSessionMatch(request, senderData);

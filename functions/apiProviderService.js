@@ -49,9 +49,11 @@ function validateBaseUrl(baseUrl) {
 }
 function validateTemplate(value, label, maxBytes = 20000) {
   const obj = asObject(value);
-  const json = JSON.stringify(obj);\n  if (json.length > maxBytes) throw new HttpsError('invalid-argument', `${label} is too large.`);
+  const json = JSON.stringify(obj);
+  if (json.length > maxBytes) throw new HttpsError('invalid-argument', `${label} is too large.`);
   return obj;
-}\nfunction validateHeaders(value) {
+}
+function validateHeaders(value) {
   const headers = validateTemplate(value, 'Headers', 12000);
   for (const key of Object.keys(headers)) {
     if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,100}$/.test(key)) throw new HttpsError('invalid-argument', 'Invalid API header name.');
@@ -126,7 +128,7 @@ async function executeConfiguredApi(service, payload, customer, requestId) {
     if (base.protocol !== 'https:') throw new Error('Provider URL is not allowed.');
     await assertPublicHostname(base.hostname);
     const endpointPath = String(provider.endpointPath || '/');
-    if (/^https?:\\/\\//i.test(endpointPath) || endpointPath.startsWith('//')) throw new Error('Endpoint path must be relative to the provider base URL.');
+    if (/^https?:\/\//i.test(endpointPath) || endpointPath.startsWith('//')) throw new Error('Endpoint path must be relative to the provider base URL.');
     const url = new URL(endpointPath,base);
     for (const [k,v] of Object.entries(render(asObject(provider.queryTemplate),vars))) if(v!==''&&v!=null) url.searchParams.set(k,String(v));
     const method = String(provider.method||'POST').toUpperCase();
