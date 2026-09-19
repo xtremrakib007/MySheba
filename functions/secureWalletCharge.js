@@ -72,6 +72,15 @@ exports.chargeWallet = onCall({ enforceAppCheck: true }, async (request) => {
   const opRef = db.collection('walletOperations').doc(`${uid}_chargeWallet_${rid}`);
   try {
     const result = await db.runTransaction(async (tx) => {
+      // Revalidate the current account/session before returning any idempotent result.
+      const userSnap = await tx.get(userRef);
+      if (!userSnap.exists) throw new HttpsError('not-found', 'Account not found.');
+      const liveUser = userSnap.data() || {};
+      requireSessionMatch(request, liveUser);
+      if (liveUser.suspended === true || liveUser.inactive === true || liveUser.disabled === true || liveUser.active === false || liveUser.mergedInto != null) {
+        throw new HttpsError('permission-denied', 'Your account is not active.');
+      }
+
       const opSnap = await tx.get(opRef);
       if (opSnap.exists) {
         const op = opSnap.data() || {};
@@ -81,10 +90,7 @@ exports.chargeWallet = onCall({ enforceAppCheck: true }, async (request) => {
         return { ...(op.result || {}), replay: true };
       }
 
-      const [userSnap, pricingSnap] = await Promise.all([
-        tx.get(userRef),
-        tx.get(db.collection('settings').doc('pricing')),
-      ]);
+      const pricingSnap = await tx.get(db.collection('settings').doc('pricing'));
       if (!userSnap.exists) throw new HttpsError('not-found', 'Account not found.');
       const user = userSnap.data() || {};
       requireSessionMatch(request, user);
