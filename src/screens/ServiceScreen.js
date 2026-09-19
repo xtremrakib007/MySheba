@@ -86,6 +86,7 @@ export default function ServiceScreen() {
 
   const StepComponent = STEP_COMPONENTS[currentService];
   const title = SERVICE_TITLES[currentService] || 'Service';
+  const isEntertainment = currentService === 'entertainment';
   const isLast = currentStep === totalSteps - 1;
   const adSlot = AD_SLOTS[currentService];
 
@@ -119,7 +120,7 @@ export default function ServiceScreen() {
         <Text style={styles.headerTitle}>{title}</Text>
       </LinearGradient>
 
-      <StepBar totalSteps={totalSteps} currentStep={currentStep} />
+      {!isEntertainment && <StepBar totalSteps={totalSteps} currentStep={currentStep} />}
 
       <ScrollView style={styles.content} contentContainerStyle={{ padding: 16 }}>
         {adSlot && <SmartAd placement={adSlot.top} feature={adSlot.feature} height={100} style={{ marginBottom: 12 }} />}
@@ -127,7 +128,7 @@ export default function ServiceScreen() {
         {adSlot && <SmartAd placement={adSlot.bottom} feature={adSlot.feature} height={100} style={{ marginTop: 12 }} />}
       </ScrollView>
 
-      <View style={styles.navBar}>
+      {!isEntertainment && <View style={styles.navBar}>
         <View style={styles.btnGroup}>
           {currentStep > 0 && <OutlineButton label="← Back" onPress={prevStep} />}
           <PrimaryButton
@@ -136,7 +137,7 @@ export default function ServiceScreen() {
             disabled={isLast && submitting}
           />
         </View>
-      </View>
+      </View>}
     </View>
   );
 }
