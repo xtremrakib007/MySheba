@@ -54,7 +54,7 @@ async function assertReceiptObject(url, txId, role) {
     const bucket = admin.storage().bucket();
     const prefix = `/v0/b/${bucket.name}/o/`;
     objectPath = decodeURIComponent(parsed.pathname.slice(prefix.length));
-    if (!objectPath || objectPath.includes('\\\\') || objectPath.split('/').some((part) => part === '..')) throw new Error('invalid path');
+    if (!objectPath || objectPath.includes('\\') || objectPath.split('/').some((part) => part === '..')) throw new Error('invalid path');
     const [metadata] = await bucket.file(objectPath).getMetadata();
     const size = Number(metadata?.size);
     const contentType = String(metadata?.contentType || '');
