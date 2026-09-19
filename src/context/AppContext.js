@@ -281,6 +281,20 @@ export function AppProvider({ children }) {
   // 'chatList' to match the existing behavior for every other entry point.
   const [activeChatReturnTo, setActiveChatReturnTo] = useState("chatList");
 
+  // ---- Advertiser management ----
+  // These screens remain in App.js and need only their selected advertiser id.
+  const [activeAdvertiserId, setActiveAdvertiserId] = useState(null);
+  const openAdvertiserManagement = useCallback(() => setScreen("advertiserManagement"), []);
+  const openAdvertiserDetail = useCallback((advertiserId) => {
+    if (!advertiserId) return;
+    setActiveAdvertiserId(advertiserId);
+    setScreen("advertiserDetail");
+  }, []);
+
+  // Listing/marketplace deep-link screens were removed from App.js. Keep the
+  // listener callback safe and inert rather than referencing deleted state.
+  const handleDeepLink = useCallback(() => {}, []);
+
   // ---- My Documents (private per-user document vault - passport, visa,
   // work permit, etc.) ---- Screens call documentService.js directly
   // (same pattern as marketplace/accommodation/etc. above); context only
@@ -2512,35 +2526,11 @@ export function AppProvider({ children }) {
     chatUnreadCount,
     activeChatReturnTo,
     openChat,
-    // direct chat
-    // marketplace
-    activeListingId,
-    openMarketplace,
-    openListingDetail,
-    handleDeepLink,
+    // advertiser management
     activeAdvertiserId,
     openAdvertiserManagement,
-    openAdvertiserDetail,    // accommodation
-    activePropertyId,
-    openAccommodation,
-    openPropertyDetail,
-    // room sharing
-    activeRoommateRequestId,
-    openRoomSharing,
-    openRoommateRequestDetail,
-    // local services
-    activeProviderId,
-    openServiceProvidersHome,
-    openServiceProviderDetail,
-    // community
-    activeCommunityPostId,
-    openCommunity,
-    openCommunityPostDetail,
-    activeSocialPostId,
-    openSocialFeed,
-    openCreateSocialPost,
-    openSocialPostDetail,
-    openMarketplaceSearch,
+    openAdvertiserDetail,
+    handleDeepLink,
     // my documents
     activeDocumentId,
     activeDocumentType,
