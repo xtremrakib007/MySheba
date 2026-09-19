@@ -26,6 +26,7 @@ import * as transactionService from "../firebase/transactionService";
 import * as ratesService from "../firebase/ratesService";
 import * as settingsService from "../firebase/settingsService";
 import * as featureAccessService from "../firebase/featureAccessService";
+import * as gridManagementService from "../firebase/gridManagementService";
 import * as adControlsService from "../firebase/adControlsService";
 import * as homepageConfigService from "../firebase/homepageConfigService";
 import * as adService from "../firebase/adService";
@@ -611,13 +612,21 @@ export function AppProvider({ children }) {
   // cost/profit % - admin-editable from Admin > Pricing (see
   // settingsService.js). ----
   const [pricing, setPricing] = useState(settingsService.DEFAULT_PRICING);
-  // ---- feature access: which roles can open each admin/dealer/reseller
+  useEffect(() => {
+    if (!authUser || !profile) return undefined;
+    return gridManagementService.subscribeGridManagement(
+      setGridManagement,
+      logListenerError('gridManagement')
+    );
+  }, [authUser, profile]);
+
   // management tool - superadmin-editable from Superadmin > Feature Access
   // (see featureAccessService.js). Customer features (ServiceGrid) aren't
   // part of this - those stay identical for every role. ----
   const [featureAccess, setFeatureAccess] = useState(
     featureAccessService.DEFAULT_FEATURE_ACCESS,
   );
+  const [gridManagement, setGridManagement] = useState(gridManagementService.DEFAULT_GRID_MANAGEMENT);
 
   // PHASE 4 - Global/per-feature advertisement controls (ad_settings/general,
   // ad_feature_controls/{featureId}), subscribed once here rather than once
@@ -2364,6 +2373,7 @@ export function AppProvider({ children }) {
     pointCosts,
     accessWindowHours,
     featureAccess,
+    gridManagement,
     marketplaceCategories,
     serviceCategories,
     supportContact,
