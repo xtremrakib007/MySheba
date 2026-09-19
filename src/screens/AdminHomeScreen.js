@@ -32,6 +32,7 @@ import CountryModal from '../components/CountryModal';
 import * as homepageConfigService from '../firebase/homepageConfigService';
 import { getHomepageModules } from '../firebase/homepageConfigService';
 import { getMergedPackages } from '../utils/internetPackages';
+import * as gridManagementService from '../firebase/gridManagementService';
 
 const FEATURES = [
   { key: 'all', icon: '📋', bg: '#E3F2FD', name: 'All Tx' },
@@ -460,7 +461,7 @@ export default function AdminHomeScreen() {
     inquiries: inquiries.filter((i) => (i.status || 'new') === 'new').length || undefined,
     topups: topups.filter((t) => t.status === 'pending').length || undefined,
   };
-  const features = FEATURES.map((f) => ({ ...f, badge: featureBadges[f.key] }));
+  const features = FEATURES.filter((f) => gridManagementService.isGridActive(gridManagement, f.key === 'all' ? 'history' : f.key)).map((f) => ({ ...f, badge: featureBadges[f.key] }));
   // Section header (icon + name) for whichever Dashboard tile the user
   // opened from AdminFeaturesScreen - the grid itself now lives there.
   const activeFeature = features.find((f) => f.key === adminTab);
