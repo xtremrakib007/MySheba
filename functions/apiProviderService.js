@@ -79,18 +79,30 @@ async function executeConfiguredApi(service, payload, customer, requestId) {
   if (!providers.length) throw new HttpsError('failed-precondition', `No active API provider is configured for ${service}.`);
   const provider = providers[0];
   const executionRef = db.collection('apiExecutions').doc(`${service}_${requestId}`);
-  const existing = await executionRef.get();
-  if (existing.exists) {
-    const state = existing.data() || {};
+  // Atomically claim this request before making any external side effect.
+  // A read-then-create sequence is race-prone: two concurrent invocations can
+  // both observe a missing document and both call the provider.
+  const claim = await db.runTransaction(async tx => {
+    const s = await tx.get(executionRef);
+    if (s.exists) return { owned: false, state: s.data() || {} };
+    tx.create(executionRef, {
+      service,
+      requestId,
+      providerId: provider.id,
+      status: 'processing',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    return { owned: true, state: null };
+  });
+  if (!claim.owned) {
+    const state = claim.state || {};
     if (state.status === 'completed') return state.result || {};
     if (state.status === 'unknown') throw new HttpsError('unavailable','The API request outcome is uncertain. Check the provider before retrying.');
     if (state.status === 'processing') throw new HttpsError('aborted','This API request is already being processed.');
     if (state.status === 'failed') throw new HttpsError('failed-precondition',state.message || 'The provider rejected this request.');
+    throw new HttpsError('aborted','This API request is already being processed.');
   }
-  await db.runTransaction(async tx => {
-    const s = await tx.get(executionRef);
-    if (!s.exists) tx.create(executionRef,{service,requestId,providerId:provider.id,status:'processing',createdAt:admin.firestore.FieldValue.serverTimestamp(),updatedAt:admin.firestore.FieldValue.serverTimestamp()});
-  });
   const raw = payload?.raw || {};
   const vars = { requestId, uid:customer?.uid||'', phone:customer?.phone||'', amount:payload?.amount??raw.amount??'', total:payload?.total??raw.total??'', service, country:raw.country||'', operator:raw.operator||'', packageCode:raw.packageCode||'', details:payload?.details||'', ...Object.fromEntries(Object.entries(raw).filter(([k,v]) => !['requestId'].includes(k) && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')).slice(0,100)) };
   try {
