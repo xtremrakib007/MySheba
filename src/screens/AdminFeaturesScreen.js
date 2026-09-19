@@ -7,7 +7,8 @@ import HeaderDecor from '../components/HeaderDecor';
 import FeatureGrid from '../components/FeatureGrid';
 import PromptModal from '../components/PromptModal';
 import * as ratesService from '../firebase/ratesService';
-import { FEATURE_DEFS, canAccessFeature } from '../firebase/featureAccessService';
+import { canAccessFeature } from '../firebase/featureAccessService';
+import * as gridManagementService from '../firebase/gridManagementService';
 
 const CATEGORIES = [
   { key: 'operations', icon: '⚙️', bg: '#E3F2FD', name: 'Operations' },
@@ -62,14 +63,17 @@ const RECHARGE_RATE_FIELDS = [
 export default function AdminFeaturesScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { profile, goBackOrHome, setScreen, openSidebar, dealerTxs, inquiries, topups, setAdminTab, setAdminViewingSection, featureAccess, rates } = useApp();
+  const { profile, goBackOrHome, setScreen, openSidebar, dealerTxs, inquiries, topups, setAdminTab, setAdminViewingSection, featureAccess, rates, gridManagement } = useApp();
   const [section, setSection] = useState(null);
   const [rateView, setRateView] = useState(false);
   const [editRateKey, setEditRateKey] = useState(null);
   const isSuperadmin = profile?.role === 'superadmin';
 
   const allow = (items) => items.filter((item) => {
-    const always = ['all','pending','inquiries','topups','support','rates','pricing','payments','categories','banners','announcements','gridManagement'];
+    const gridKey = item.key === 'all' ? 'history' : item.key;
+    if (gridKey === 'gridManagement') return isSuperadmin;
+    if (!gridManagementService.isGridActive(gridManagement, gridKey)) return false;
+    const always = ['all','pending','inquiries','topups','support','rates','pricing','payments','categories','banners','announcements'];
     return always.includes(item.key) || canAccessFeature(featureAccess, item.key, profile?.role, profile?.uid);
   });
   const badges = {
