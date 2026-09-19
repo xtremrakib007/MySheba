@@ -91,7 +91,9 @@ exports.transferPoints = onCall({ enforceAppCheck: true }, async (request) => {
   if (isDealerToCustomer && (!Number.isFinite(earningPercent) || earningPercent < 0 || earningPercent > 100)) {
     throw new HttpsError('failed-precondition', 'Dealer earning configuration is invalid. Please contact an administrator.');
   }
-  const earning = Math.round(amt * (earningPercent / 100) * 100) / 100;
+  const amountCents = Math.round(amt * 100);
+  const earningCents = isDealerToCustomer ? Math.round(amountCents * (earningPercent / 100)) : 0;
+  const earning = earningCents / 100;
 
   const opRef = db.collection('walletOperations').doc(`${callerUid}_${requestId}`);
   const fromRef = db.collection('users').doc(callerUid);
@@ -159,9 +161,13 @@ exports.transferPoints = onCall({ enforceAppCheck: true }, async (request) => {
       const toBalance = validBalance(toData.walletBalance);
       if (fromBalance === null || toBalance === null) throw new HttpsError('failed-precondition', 'One of the account wallet balances is invalid.');
       if (fromBalance < amt) throw new HttpsError('failed-precondition', 'Insufficient balance.');
-      const resultingSenderBalance = fromBalance - amt + earning;
-      const resultingRecipientBalance = toBalance + amt;
-      if (!Number.isSafeInteger(Math.round(resultingSenderBalance * 100)) || !Number.isSafeInteger(Math.round(resultingRecipientBalance * 100))) throw new HttpsError('failed-precondition', 'The transfer would create an invalid wallet balance.');
+      const fromBalanceCents = Math.round(fromBalance * 100);
+      const toBalanceCents = Math.round(toBalance * 100);
+      const resultingSenderBalanceCents = fromBalanceCents - amountCents + earningCents;
+      const resultingRecipientBalanceCents = toBalanceCents + amountCents;
+      if (!Number.isSafeInteger(resultingSenderBalanceCents) || resultingSenderBalanceCents < 0 || !Number.isSafeInteger(resultingRecipientBalanceCents)) throw new HttpsError('failed-precondition', 'The transfer would create an invalid wallet balance.');
+      const resultingSenderBalance = resultingSenderBalanceCents / 100;
+      const resultingRecipientBalance = resultingRecipientBalanceCents / 100;
       const dealerScope = caller.role === 'dealer' ? callerUid : caller.dealerId || null;
       tx.update(fromRef, { walletBalance: resultingSenderBalance });
       tx.update(toRef, { walletBalance: resultingRecipientBalance });
