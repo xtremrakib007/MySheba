@@ -95,7 +95,9 @@ function wrap(name) {
     if (existing) {
       if (existing.callable !== name) throw new HttpsError('already-exists', 'This request ID was already used for another operation.');
       if (existing.status === 'completed' && existing.transactionId) {
-        return { id: existing.transactionId, cost: existing.cost || 0, replay: true };
+        const replayCost = existing.cost == null ? 0 : Number(existing.cost);
+        if (!Number.isFinite(replayCost) || replayCost < 0 || !Number.isSafeInteger(Math.round(replayCost * 100))) throw new HttpsError('failed-precondition', 'The stored charge result is invalid.');
+        return { id: existing.transactionId, cost: replayCost, replay: true };
       }
       const recovered = await recoverCompleted(db, uid, requestId, guardRef, name);
       if (recovered) return recovered;
@@ -120,7 +122,7 @@ function wrap(name) {
       });
       return result;
     } catch (err) {
-      const recovered = await recoverCompleted(db, uid, requestId, guardRef).catch(() => null);
+      const recovered = await recoverCompleted(db, uid, requestId, guardRef, name).catch(() => null);
       if (recovered) return recovered;
       await guardRef.delete().catch(() => {});
       throw err;
