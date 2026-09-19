@@ -60,9 +60,8 @@ async function executeConfiguredApi(service, payload, customer, requestId) {
   if (!providers.length) throw new HttpsError('failed-precondition', `No active API provider is configured for ${service}.`);
   const raw = payload?.raw || {};
   const vars = { requestId, uid: customer?.uid || '', phone: customer?.phone || '', amount: payload?.amount ?? raw.amount ?? '', total: payload?.total ?? raw.total ?? '', service, country: raw.country || '', operator: raw.operator || '', packageCode: raw.packageCode || '', details: payload?.details || '' };
-  let last;
-  for (const p of providers) {
-    try {
+  try {
+      const p = provider;
       let base; try { base = new URL(p.baseUrl); } catch { throw new Error('Provider URL is invalid.'); }
       if (base.protocol !== 'https:' || isIpLiteral(base.hostname) || BLOCKED_HOSTS.test(base.hostname)) throw new Error('Provider URL is not allowed.');
       const url = new URL(String(p.endpointPath || '/'), base);
@@ -78,10 +77,15 @@ async function executeConfiguredApi(service, payload, customer, requestId) {
       if (!response.ok) throw new Error(`Provider HTTP ${response.status}`);
       const success = p.responseSuccessPath ? getPath(data,p.responseSuccessPath) : true;
       if (success === false || (p.responseSuccessValue && String(success)!==String(p.responseSuccessValue))) throw new Error(p.responseMessagePath ? String(getPath(data,p.responseMessagePath)||'Provider rejected the request.') : 'Provider rejected the request.');
-      return { providerId:p.id, providerName:p.name, responseId:p.responseIdPath ? getPath(data,p.responseIdPath) : null, message:p.responseMessagePath ? getPath(data,p.responseMessagePath) : null, response:data };
-    } catch(e) { last=e; }
-  }
-  throw new HttpsError('unavailable', last?.message || `All configured ${service} APIs failed.`);
+      const result = { providerId:p.id, providerName:p.name, responseId:p.responseIdPath ? getPath(data,p.responseIdPath) : null, message:p.responseMessagePath ? getPath(data,p.responseMessagePath) : null };
+      await executionRef.set({ status: 'completed', result, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      return result;
+    } catch(e) {
+      const message = String(e?.message || 'Provider execution failed').slice(0, 500);
+      const definitive = /^Provider HTTP 4\\d{2}$/.test(message) || message.includes('Provider rejected the request');
+      await executionRef.set({ status: definitive ? 'failed' : 'unknown', message, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      throw definitive ? new HttpsError('failed-precondition', message) : new HttpsError('unavailable', message);
+    }
 }
 exports.executeConfiguredApi = executeConfiguredApi;
 
