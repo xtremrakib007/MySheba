@@ -6,6 +6,7 @@ import { useTheme } from "../theme/ThemeContext";
 import HeaderDecor from '../components/HeaderDecor';
 import FeatureGrid from '../components/FeatureGrid';
 import { FEATURE_DEFS, canAccessFeature } from '../firebase/featureAccessService';
+import * as gridManagementService from '../firebase/gridManagementService';
 
 // Reseller-only dashboard tiles, same pattern as DealerFeaturesScreen -
 // reached through the "Reseller Features" tile on ResellerHomeScreen.
@@ -22,18 +23,19 @@ export default function ResellerFeaturesScreen() {
     resellerTxs,
     setResellerTab, setResellerViewingSection,
     featureAccess,
+    gridManagement,
   } = useApp();
 
   // Reseller gets none of these tools by default (unchanged behavior) -
   // but a superadmin can grant a reseller access to any of them from
   // Admin Features > Feature Access, same shared list as
   // AdminFeaturesScreen/DealerFeaturesScreen (see featureAccessService.js).
-  const tools = FEATURE_DEFS.filter((t) => profile && canAccessFeature(featureAccess, t.key, profile.role, profile.uid));
+  const tools = FEATURE_DEFS.filter((t) => profile && gridManagementService.isGridActive(gridManagement, t.key) && canAccessFeature(featureAccess, t.key, profile.role, profile.uid));
 
   const dashboardBadges = {
     pending: resellerTxs.filter((t) => !t.dealerId).length || undefined,
   };
-  const dashboardTools = DASHBOARD_TOOL_DEFS.map((t) => ({ ...t, badge: dashboardBadges[t.key] }));
+  const dashboardTools = DASHBOARD_TOOL_DEFS.filter((t) => gridManagementService.isGridActive(gridManagement, t.key === 'sent' ? 'history' : t.key)).map((t) => ({ ...t, badge: dashboardBadges[t.key] }));
 
   const openDashboardTile = (key) => {
     setResellerTab(key);
