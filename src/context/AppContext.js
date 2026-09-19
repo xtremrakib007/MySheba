@@ -702,7 +702,15 @@ export function AppProvider({ children }) {
     // Pre-auth routes are intentionally unrestricted; protected routes are
     // denied until a verified profile/role exists.
     if (allowedRoles) {
-      if (!role || !allowedRoles.includes(role)) {
+      // Auth flows call setProfile(p) and setScreen(home) in the same
+      // callback, so React may not have committed the new profile role yet.
+      // Allow only a role-specific home during that tiny transition; the
+      // effect below re-checks it immediately after the profile commits.
+      const rolePendingHome =
+        !role &&
+        !!authUser &&
+        ['customerHome', 'dealerHome', 'resellerHome', 'adminHome'].includes(nextScreen);
+      if (!rolePendingHome && (!role || !allowedRoles.includes(role))) {
         if (authUser) showAlert('MySheba', 'You do not have access to this feature.');
         return;
       }
