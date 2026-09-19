@@ -51,6 +51,17 @@ exports.adminTopUpPoints = onCall({ enforceAppCheck: true }, async request => {
 
   try {
     const result = await db.runTransaction(async tx => {
+      // Revalidate the caller's live role/session before exposing even an idempotent replay.
+      const callerTxSnap = await tx.get(db.collection('users').doc(callerUid));
+      if (!callerTxSnap.exists) {
+        throw new HttpsError('permission-denied', 'Your admin privileges are no longer active.');
+      }
+      const callerTx = callerTxSnap.data() || {};
+      requireSessionMatch(request, callerTx);
+      if (!activeAccount(callerTx) || !ADMIN_ROLES.includes(callerTx.role)) {
+        throw new HttpsError('permission-denied', 'Your admin privileges are no longer active.');
+      }
+
       const opSnap = await tx.get(operationRef);
       if (opSnap.exists) {
         const op = opSnap.data() || {};
@@ -60,14 +71,6 @@ exports.adminTopUpPoints = onCall({ enforceAppCheck: true }, async request => {
         return { id: op.auditId, credited: false, replay: true };
       }
 
-      const callerTxSnap = await tx.get(db.collection('users').doc(callerUid));
-      if (!callerTxSnap.exists) {
-        throw new HttpsError('permission-denied', 'Your admin privileges are no longer active.');
-      }
-      requireSessionMatch(request, callerTxSnap.data());
-      if (!activeAccount(callerTxSnap.data()) || !ADMIN_ROLES.includes(callerTxSnap.data().role)) {
-        throw new HttpsError('permission-denied', 'Your admin privileges are no longer active.');
-      }
       const targetSnap = await tx.get(targetRef);
       if (!targetSnap.exists) throw new HttpsError('not-found', 'Target user does not exist.');
 
