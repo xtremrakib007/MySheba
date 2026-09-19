@@ -29,7 +29,9 @@ function validMoney(value) {
 }
 
 function validBalance(value) {
-  const n = Number(value ?? 0);
+  const raw = value;
+  const n = raw == null ? 0 : Number(raw);
+  if (raw != null && typeof raw === 'string' && !MONEY_RE.test(raw)) return null;
   if (!Number.isFinite(n) || n < 0 || !Number.isSafeInteger(Math.round(n * 100))) return null;
   return n;
 }
