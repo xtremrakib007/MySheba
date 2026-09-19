@@ -6,6 +6,19 @@ const ADMIN_ROLES = ['admin', 'superadmin'];
 const ALLOWED_RECIPIENT_ROLES = ['customer', 'dealer', 'reseller'];
 const MAX_AMOUNT = 100000;
 const MONEY_RE = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
+const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
+const DEVICE_ID_RE = /^[A-Za-z0-9-]{16,100}$/;
+
+function requireSessionMatch(request, profile) {
+  const sessionId = request.data?.sessionId;
+  const deviceId = request.data?.deviceId;
+  if (typeof sessionId !== 'string' || !SESSION_ID_RE.test(sessionId) || typeof deviceId !== 'string' || !DEVICE_ID_RE.test(deviceId)) {
+    throw new HttpsError('failed-precondition', 'Your secure session is missing. Please sign in again.');
+  }
+  if (profile.activeSessionId !== sessionId || profile.activeDeviceId !== deviceId) {
+    throw new HttpsError('permission-denied', 'This device session is no longer active. Please sign in again.');
+  }
+}
 
 function requireAdmin(request) {
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
@@ -42,6 +55,7 @@ exports.approveTopup = onCall({ enforceAppCheck: true }, async request => {
   const callerSnap = await db.collection('users').doc(uid).get();
   const caller = callerSnap.exists ? callerSnap.data() : null;
   if (!caller || !activeAccount(caller) || !ADMIN_ROLES.includes(caller.role)) throw new HttpsError('permission-denied', 'Your account cannot approve top-ups.');
+  requireSessionMatch(request, caller);
   const topupId = String(request.data?.topupId || request.data?.id || '').trim();
   if (!topupId) throw new HttpsError('invalid-argument', 'topupId is required.');
   const ref = db.collection('topups').doc(topupId);
@@ -51,6 +65,7 @@ exports.approveTopup = onCall({ enforceAppCheck: true }, async request => {
       if (!callerTxSnap.exists || !activeAccount(callerTxSnap.data())) throw new HttpsError('permission-denied', 'Your account is not active.');
       const callerTx = callerTxSnap.data() || {};
       if (!ADMIN_ROLES.includes(callerTx.role)) throw new HttpsError('permission-denied', 'Your account cannot approve top-ups.');
+      requireSessionMatch(request, callerTx);
       if (!snap.exists) throw new HttpsError('not-found', 'That top-up request does not exist.');
       const topup = snap.data() || {};
       if (topup.status !== 'pending') throw new HttpsError('failed-precondition', 'That request has already been reviewed.');
@@ -87,6 +102,7 @@ exports.rejectTopup = onCall({ enforceAppCheck: true }, async request => {
   const callerSnap = await db.collection('users').doc(uid).get();
   const caller = callerSnap.exists ? callerSnap.data() : null;
   if (!caller || !activeAccount(caller) || !ADMIN_ROLES.includes(caller.role)) throw new HttpsError('permission-denied', 'Your account cannot reject top-ups.');
+  requireSessionMatch(request, caller);
   const topupId = String(request.data?.topupId || '').trim();
   const reason = String(request.data?.reason || '').trim().slice(0, 500);
   if (!topupId) throw new HttpsError('invalid-argument', 'topupId is required.');
@@ -98,6 +114,7 @@ exports.rejectTopup = onCall({ enforceAppCheck: true }, async request => {
       if (!callerTxSnap.exists || !activeAccount(callerTxSnap.data())) throw new HttpsError('permission-denied', 'Your account is not active.');
       const callerTx = callerTxSnap.data() || {};
       if (!ADMIN_ROLES.includes(callerTx.role)) throw new HttpsError('permission-denied', 'Your account cannot reject top-ups.');
+      requireSessionMatch(request, callerTx);
       if (!snap.exists) throw new HttpsError('not-found', 'That top-up request does not exist.');
       const topup = snap.data() || {};
       if (topup.status !== 'pending') throw new HttpsError('failed-precondition', 'That request has already been reviewed.');
