@@ -68,9 +68,9 @@ export function Tile({ s, onPress, disabled }) {
 }
 
 export function useServiceAction() {
-  const { startService, openWebView, openBusPicker, openSalary, openMyDocuments, setScreen } = useApp();
+  const { startService, openWebView, openBusPicker, openSalary, openMyDocuments, setScreen, gridManagement } = useApp();
   return (s) => {
-    if (!s) return;
+    if (!s || !gridManagementService.isGridActive(gridManagement, s.key)) return;
     if (s.kind === 'webview') return openWebView(s.key);
     if (s.kind === 'buspicker') return openBusPicker();
     if (s.kind === 'salary') return openSalary();
