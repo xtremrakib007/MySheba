@@ -96,6 +96,33 @@ exports.transferPoints = onCall({ enforceAppCheck: true }, async (request) => {
   const pinRef = db.collection('securityPins').doc(callerUid);
 
   try {
+    const pinResult = await db.runTransaction(async (tx) => {
+      const pinSnap = await tx.get(pinRef);
+      if (!pinSnap.exists) return { valid: false, code: 'missing' };
+      const pinData = pinSnap.data() || {};
+      const lockedUntil = pinData.lockedUntil?.toMillis ? pinData.lockedUntil.toMillis() : 0;
+      if (lockedUntil > Date.now()) return { valid: false, code: 'locked' };
+      if (typeof pinData.hash !== 'string' || !/^[0-9a-f]{128}$/i.test(pinData.hash) || typeof pinData.salt !== 'string' || pinData.salt.length < 16) return { valid: false, code: 'invalid' };
+      const actual = Buffer.from(hashPin(securityPin, pinData.salt), 'hex');
+      const expected = Buffer.from(pinData.hash, 'hex');
+      if (actual.length !== expected.length || !require('crypto').timingSafeEqual(actual, expected)) {
+        const attempts = Number.isInteger(pinData.attempts) && pinData.attempts >= 0 ? pinData.attempts + 1 : 1;
+        tx.update(pinRef, attempts >= MAX_PIN_ATTEMPTS
+          ? { attempts: 0, lockedUntil: admin.firestore.Timestamp.fromMillis(Date.now() + PIN_LOCKOUT_MS), updatedAt: admin.firestore.FieldValue.serverTimestamp() }
+          : { attempts, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+        return { valid: false, code: attempts >= MAX_PIN_ATTEMPTS ? 'locked' : 'incorrect' };
+      }
+      tx.update(pinRef, { attempts: 0, lockedUntil: null, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      return { valid: true };
+    });
+
+    if (!pinResult.valid) {
+      if (pinResult.code === 'missing') throw new HttpsError('failed-precondition', 'Set up your security PIN before transferring points.');
+      if (pinResult.code === 'locked') throw new HttpsError('resource-exhausted', 'Too many security PIN attempts. Try again later.');
+      if (pinResult.code === 'invalid') throw new HttpsError('failed-precondition', 'Your security PIN needs to be reset before use.');
+      throw new HttpsError('permission-denied', 'Incorrect security PIN.');
+    }
+
     const result = await db.runTransaction(async (tx) => {
       const opSnap = await tx.get(opRef);
       if (opSnap.exists) {
@@ -104,23 +131,6 @@ exports.transferPoints = onCall({ enforceAppCheck: true }, async (request) => {
         if (op.toUid !== toUid || Number(op.amount) !== amt) throw new HttpsError('failed-precondition', 'That request ID does not match this transfer.');
         return { transferId: op.transferId, replay: true };
       }
-
-      const pinSnap = await tx.get(pinRef);
-      if (!pinSnap.exists) throw new HttpsError('failed-precondition', 'Set up your security PIN before transferring points.');
-      const pinData = pinSnap.data() || {};
-      const lockedUntil = pinData.lockedUntil?.toMillis ? pinData.lockedUntil.toMillis() : 0;
-      if (lockedUntil > Date.now()) throw new HttpsError('resource-exhausted', 'Too many security PIN attempts. Try again later.');
-      if (typeof pinData.hash !== 'string' || !/^[0-9a-f]{128}$/i.test(pinData.hash) || typeof pinData.salt !== 'string' || pinData.salt.length < 16) throw new HttpsError('failed-precondition', 'Your security PIN needs to be reset before use.');
-      const actual = Buffer.from(hashPin(securityPin, pinData.salt), 'hex');
-      const expected = Buffer.from(pinData.hash, 'hex');
-      if (actual.length !== expected.length || !require('crypto').timingSafeEqual(actual, expected)) {
-        const attempts = Number.isInteger(pinData.attempts) && pinData.attempts >= 0 ? pinData.attempts + 1 : 1;
-        tx.update(pinRef, attempts >= MAX_PIN_ATTEMPTS
-          ? { attempts: 0, lockedUntil: admin.firestore.Timestamp.fromMillis(Date.now() + PIN_LOCKOUT_MS), updatedAt: admin.firestore.FieldValue.serverTimestamp() }
-          : { attempts, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-        throw new HttpsError('permission-denied', 'Incorrect security PIN.');
-      }
-      tx.update(pinRef, { attempts: 0, lockedUntil: null, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
       const fromSnap = await tx.get(fromRef);
       const toSnap = await tx.get(toRef);
       if (!fromSnap.exists || !toSnap.exists) throw new HttpsError('not-found', 'Account not found.');
@@ -137,7 +147,6 @@ exports.transferPoints = onCall({ enforceAppCheck: true }, async (request) => {
       const resultingRecipientBalance = toBalance + amt;
       if (!Number.isSafeInteger(Math.round(resultingSenderBalance * 100)) || !Number.isSafeInteger(Math.round(resultingRecipientBalance * 100))) throw new HttpsError('failed-precondition', 'The transfer would create an invalid wallet balance.');
       const dealerScope = caller.role === 'dealer' ? callerUid : caller.dealerId || null;
-
       tx.update(fromRef, { walletBalance: resultingSenderBalance });
       tx.update(toRef, { walletBalance: resultingRecipientBalance });
       tx.set(transferRef, { fromUid: callerUid, fromName: caller.name || '', fromRole: caller.role || '', toUid, toName: recipient.name || '', toRole: recipient.role || '', amount: amt, note: cleanNote, participants: [callerUid, toUid], dealerId: dealerScope, dealerEarningPercent: earningPercent || null, dealerEarning: earning || null, requestId, createdAt: admin.firestore.FieldValue.serverTimestamp() });
