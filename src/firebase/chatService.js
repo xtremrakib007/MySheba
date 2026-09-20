@@ -29,6 +29,7 @@ import {
   serverTimestamp,
   increment,
   limitToLast,
+  limit,
 } from 'firebase/firestore';
 import { db } from './config';
 
@@ -149,7 +150,7 @@ export function subscribeChatMeta(chatId, callback, onError) {
 
 /** Live list of every customer support thread, most recently active first - used by the staff Chats inbox. */
 export function subscribeAllChats(callback, onError) {
-  const q = query(collection(db, COLLECTION), orderBy('lastMessageAt', 'desc'));
+  const q = query(collection(db, COLLECTION), orderBy('lastMessageAt', 'desc'), limit(100));
   return onSnapshot(
     q,
     (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
@@ -168,7 +169,7 @@ export async function markChatRead(chatId, role) {
 export function subscribeAssignableStaff(callback, onError) {
   const q = query(
     collection(db, 'users'),
-    where('role', 'in', ['admin', 'superadmin', 'dealer'])
+    where('role', 'in', ['admin', 'superadmin', 'dealer']), limit(100)
   );
   return onSnapshot(
     q,
