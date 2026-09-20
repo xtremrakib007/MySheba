@@ -1357,13 +1357,6 @@ export function AppProvider({ children }) {
   }, [screen, profile, authUser]);
 
   // ---- admin push announcement history, only needed on the Admin
-  // dashboard (Admin > Announcements), and only for admin/superadmin -
-  // scoped to that screen just to avoid an always-on listener nobody but
-  // admin looks at. (Every signed-in user - not just admin - can read this
-  // collection per firestore.rules; see the separate listener below that
-  // powers the customer-facing notification bell.) ----
-  useEffect(() => {
-    const role = profile && profile.role;
   // ---- notification bell feed: any signed-in user (not just admin) reads
   // the same announcement log and filters it client-side to what's actually
   // addressed to them ('all' or their own role) - see firestore.rules,
