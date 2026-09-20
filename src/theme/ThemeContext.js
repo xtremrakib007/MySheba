@@ -4,9 +4,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getPalette, accentThemes, accentList, DEFAULT_ACCENT, gridStyles, gridStyleList, DEFAULT_GRID_STYLE } from './theme';
 
 const STORAGE_KEY = 'mysheba.themeMode';
-const ACCENT_STORAGE_KEY = 'mysheba.themeAccent';
-const GRID_STYLE_STORAGE_KEY = 'mysheba.gridStyle';
-const ICON_STYLE_STORAGE_KEY = 'mysheba.iconStyle';
 
 // Ten selectable icon presentations. They only change service iconography;
 // country flags, operator logos and mobile-banking/provider branding are never replaced.
@@ -42,24 +39,18 @@ const ThemeContext = createContext({
 export function ThemeProvider({ children }) {
   const [mode, setModeState] = useState('system');
   const [systemScheme, setSystemScheme] = useState(initialSystemScheme);
-  const [accent, setAccentState] = useState(DEFAULT_ACCENT);
-  const [gridStyle, setGridStyleState] = useState(DEFAULT_GRID_STYLE);
-  const [iconStyle, setIconStyleState] = useState(DEFAULT_ICON_STYLE);
+  const [accent] = useState(DEFAULT_ACCENT);
+  const [gridStyle] = useState(DEFAULT_GRID_STYLE);
+  const [iconStyle] = useState(DEFAULT_ICON_STYLE);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     Promise.all([
       AsyncStorage.getItem(STORAGE_KEY),
-      AsyncStorage.getItem(ACCENT_STORAGE_KEY),
-      AsyncStorage.getItem(GRID_STYLE_STORAGE_KEY),
-      AsyncStorage.getItem(ICON_STYLE_STORAGE_KEY),
-    ]).then(([savedMode, savedAccent, savedGridStyle, savedIconStyle]) => {
+    ]).then(([savedMode]) => {
       if (cancelled) return;
       if (savedMode === 'light' || savedMode === 'dark' || savedMode === 'system') setModeState(savedMode);
-      if (savedAccent && accentThemes[savedAccent]) setAccentState(savedAccent);
-      if (savedGridStyle && gridStyles[savedGridStyle]) setGridStyleState(savedGridStyle);
-      if (savedIconStyle && iconStyles[savedIconStyle]) setIconStyleState(savedIconStyle);
       setLoaded(true);
     }).catch(() => setLoaded(true));
     return () => { cancelled = true; };
@@ -79,18 +70,10 @@ export function ThemeProvider({ children }) {
       return next;
     });
   }, []);
-  const setAccent = useCallback((next) => {
-    if (!accentThemes[next]) return;
-    setAccentState(next); AsyncStorage.setItem(ACCENT_STORAGE_KEY, next).catch(() => {});
-  }, []);
-  const setGridStyle = useCallback((next) => {
-    if (!gridStyles[next]) return;
-    setGridStyleState(next); AsyncStorage.setItem(GRID_STYLE_STORAGE_KEY, next).catch(() => {});
-  }, []);
-  const setIconStyle = useCallback((next) => {
-    if (!iconStyles[next]) return;
-    setIconStyleState(next); AsyncStorage.setItem(ICON_STYLE_STORAGE_KEY, next).catch(() => {});
-  }, []);
+  // Product-controlled visual identity: theme color, grid, and icon style are not user-configurable.
+  const setAccent = useCallback(() => {}, []);
+  const setGridStyle = useCallback(() => {}, []);
+  const setIconStyle = useCallback(() => {}, []);
 
   const value = useMemo(() => {
     const resolvedMode = mode === 'system' ? systemScheme : mode;
