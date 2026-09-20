@@ -12,6 +12,7 @@ import {
   query,
   where,
   orderBy,
+  limit,
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './config';
@@ -44,7 +45,7 @@ export async function createInquiry(type, payload, customer) {
 
 /** Live list of all inquiries, newest first - used by the Admin panel. */
 export function subscribeInquiries(callback, onError) {
-  const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'));
+  const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'), limit(100));
   return onSnapshot(
     q,
     (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
@@ -58,7 +59,7 @@ export function subscribeInquiries(callback, onError) {
  * as subscribeMyTransactions above.
  */
 export function subscribeMyInquiries(uid, callback, onError) {
-  const q = query(collection(db, COLLECTION), where('customerId', '==', uid));
+  const q = query(collection(db, COLLECTION), where('customerId', '==', uid), limit(100));
   return onSnapshot(
     q,
     (snap) => {
