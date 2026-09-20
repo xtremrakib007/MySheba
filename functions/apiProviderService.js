@@ -91,7 +91,7 @@ async function ensureSecret(secretName) {
     await secretManagerRequest(encodeURI(secretResource(secretName)));
   } catch (err) {
     if (err.code !== 5) throw err; // NOT_FOUND
-    await secretManagerRequest(`${encodeURIComponent(parent)}/secrets?secretId=${encodeURIComponent(secretName)}`, { method: 'POST', body: JSON.stringify({ replication: { automatic: {} } }) });
+    await secretManagerRequest(`${encodeURI(parent)}/secrets?secretId=${encodeURIComponent(secretName)}`, { method: 'POST', body: JSON.stringify({ replication: { automatic: {} } }) });
   }
 }
 async function putSecret(secretName, value) {
