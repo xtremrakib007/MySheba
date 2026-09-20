@@ -53,7 +53,7 @@
     },
     "ios": {
       "infoPlist": {
-        "NSCameraUsageDescription": "Allow MySheba to access your camera for KYC identity verification and video calls.",
+        "NSCameraUsageDescription": "Allow MySheba to access your camera for KYC identity verification and video calls."
       },
     },
     "notification": {
@@ -137,7 +137,6 @@
       "eas": {
         "projectId": "5f0bbeb3-e2d9-4a46-af9f-66379fada1c8"
       },
-      "googleMapsApiKey": "GOOGLE_MAPS_API_KEY_PLACEHOLDER",
       "admobAndroidBannerId": "ca-app-pub-5028998697615030/9556346804",
       "admobIosBannerId": "",
       "admobAndroidInterstitialId": "ca-app-pub-5028998697615030/4687163508"
