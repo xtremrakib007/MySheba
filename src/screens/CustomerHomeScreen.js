@@ -7,6 +7,7 @@ import BannerSlider from '../components/BannerSlider';
 import ServiceGrid from '../components/ServiceGrid';
 import HeaderDecor from '../components/HeaderDecor';
 import InfoBar from '../components/InfoBar';
+import RoyalIcon from '../components/RoyalIcon';
 
 export default function CustomerHomeScreen() {
   const { colors, brandGradient } = useTheme();
@@ -22,7 +23,7 @@ export default function CustomerHomeScreen() {
         <HeaderDecor />
         <View style={styles.logoArea}>
           <TouchableOpacity style={styles.menuBtn} onPress={openSidebar} accessibilityRole="button" accessibilityLabel="Open menu">
-            <Text style={styles.menuIcon}>☰</Text>
+            <RoyalIcon name="more" size={24} color="#FFFFFF" />
           </TouchableOpacity>
           <View style={styles.logoBox}><Image source={require('../../assets/icon.png')} style={styles.logoImage} resizeMode="cover" /></View>
           <View>
@@ -32,7 +33,7 @@ export default function CustomerHomeScreen() {
         </View>
         <View style={styles.headerRight}>
           <TouchableOpacity style={styles.bellBtn} onPress={() => setScreen('notifications')} accessibilityRole="button" accessibilityLabel="Notifications">
-            <Text style={styles.bell}>🔔</Text>
+            <RoyalIcon name="support" size={22} color="#FFFFFF" />
             {hasUnreadNotifications && <View style={styles.bellDot} />}
           </TouchableOpacity>
         </View>
@@ -51,7 +52,7 @@ export default function CustomerHomeScreen() {
 
         {!kycVerified && (
           <View style={styles.kycCard}>
-            <View style={styles.kycIcon}><Text>!</Text></View>
+            <View style={styles.kycIcon}><RoyalIcon name="kyc" size={28} /></View>
             <View style={styles.kycCopy}><Text style={styles.kycTitle}>Complete your KYC</Text><Text style={styles.kycText}>Verify your identity to unlock all finance services.</Text></View>
             <TouchableOpacity onPress={() => setScreen('verifyIdentity')} accessibilityRole="button"><Text style={styles.kycAction}>Verify</Text></TouchableOpacity>
           </View>
@@ -59,16 +60,16 @@ export default function CustomerHomeScreen() {
 
         {kycVerified && (
           <View style={styles.verifiedCard}>
-            <View style={styles.verifiedIcon}><Text>✓</Text></View>
+            <View style={styles.verifiedIcon}><RoyalIcon name="kyc" size={28} /></View>
             <View style={styles.kycCopy}><Text style={styles.kycTitle}>Identity verified</Text><Text style={styles.kycText}>Your account is ready for finance services.</Text></View>
           </View>
         )}
 
         <View style={styles.quickActions}>
-          <QuickAction colors={colors} icon="💰" label="Top Up" onPress={() => setScreen('topup')} />
-          <QuickAction colors={colors} icon="📋" label="Activity" onPress={() => setScreen('history')} />
-          <QuickAction colors={colors} icon="🎧" label="Support" onPress={() => setScreen('support')} />
-          <QuickAction colors={colors} icon="✨" label="More" onPress={() => setScreen('moreFeatures')} />
+          <QuickAction colors={colors} icon="topup" label="Top Up" onPress={() => setScreen('topup')} />
+          <QuickAction colors={colors} icon="history" label="Activity" onPress={() => setScreen('history')} />
+          <QuickAction colors={colors} icon="support" label="Support" onPress={() => setScreen('support')} />
+          <QuickAction colors={colors} icon="more" label="More" onPress={() => setScreen('moreFeatures')} />
         </View>
 
         <InfoBar />
@@ -80,7 +81,7 @@ export default function CustomerHomeScreen() {
             <Text style={styles.activityTitle}>Recent activity</Text>
             <Text style={styles.activityText}>View your complete payment and service history</Text>
           </View>
-          <Text style={styles.activityArrow}>›</Text>
+          <RoyalIcon name="more" size={22} color="#0E9E8C" />
         </TouchableOpacity>
       </ScrollView>
     </View>
@@ -90,7 +91,7 @@ export default function CustomerHomeScreen() {
 function QuickAction({ colors, icon, label, onPress }) {
   return (
     <TouchableOpacity style={[stylesQuick.action, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={onPress} activeOpacity={0.82} accessibilityRole="button" accessibilityLabel={label}>
-      <Text style={stylesQuick.icon}>{icon}</Text>
+      <RoyalIcon name={icon} size={30} />
       <Text style={stylesQuick.label}>{label}</Text>
     </TouchableOpacity>
   );
