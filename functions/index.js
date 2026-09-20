@@ -71,7 +71,6 @@ exports.chargeMobileBanking = chargeGuards.chargeMobileBanking;
 exports.chargeRemittance = chargeGuards.chargeRemittance;
 exports.approveVerification = require('./verificationService').approveVerification;
 exports.rejectVerification = require('./verificationService').rejectVerification;
-exports.setBusinessProfileStatus = require('./businessProfileService').setBusinessProfileStatus;
 exports.setupSecurityPin = require('./securityPinService').setupSecurityPin;
 exports.verifySecurityPin = require('./securityPinService').verifySecurityPin;
 exports.resetSecurityPin = require('./securityPinService').resetSecurityPin;
