@@ -2,24 +2,23 @@
 // Global contract: light = white surfaces/black foreground; dark = deep charcoal surfaces/white foreground.
 // Contrast is intentionally strong so text, cards, controls and grid boundaries remain visible on small screens.
 export const lightColors = {
-  primary: '#00A99D', primaryDark: '#00897B', secondary: '#1A73E8',
-  navy: '#000000', scrim: '#000000', success: '#2E7D32', warning: '#8A5700', error: '#C62828',
-  bg: '#FFFFFF', card: '#FFFFFF', surface: '#FFFFFF', surfaceElevated: '#FFFFFF',
-  text: '#000000', textSecondary: '#374151', onPrimary: '#FFFFFF',
-  border: '#CBD5E1', divider: '#CBD5E1', placeholder: '#64748B',
-  inputBg: '#F8FAFC', disabledBg: '#F1F5F9', disabledText: '#64748B',
+  primary: '#0B8A94', primaryDark: '#0A5C78', secondary: '#1481B5',
+  navy: '#0A5C78', scrim: '#000000', success: '#14895A', warning: '#8A5700', error: '#C62828',
+  bg: '#F2FAF7', card: '#FCFFFE', surface: '#EAF7F2', surfaceElevated: '#FFFFFF',
+  text: '#0F2E33', textSecondary: '#476A6B', onPrimary: '#FFFFFF',
+  border: '#BFE6DA', divider: '#D5EFE7', placeholder: '#5A7A7A',
+  inputBg: '#F5FCFA', disabledBg: '#EAF7F2', disabledText: '#5A7A7A',
+  tileBg: '#F8FDFB', tileBorder: '#8ADBC3', canvasBg: '#E3F4EE',
 };
 
 export const darkColors = {
-  primary: '#26D0C4', primaryDark: '#00A99D', secondary: '#5B9DF9',
-  navy: '#FFFFFF', scrim: '#000000', success: '#66D07A', warning: '#FFD166', error: '#FF6B6B',
-  // Do not use pure black for every surface: many components use elevation,
-  // borders and cards to communicate hierarchy. Distinct dark surfaces keep
-  // those components visible while preserving a true dark-mode appearance.
-  bg: '#070B12', card: '#0F1724', surface: '#111B2A', surfaceElevated: '#172235',
-  text: '#FFFFFF', textSecondary: '#D7DEE8', onPrimary: '#061312',
-  border: '#334155', divider: '#263548', placeholder: '#AAB6C5',
-  inputBg: '#111B2A', disabledBg: '#1B2636', disabledText: '#9AA7B8',
+  primary: '#26C6C0', primaryDark: '#12909A', secondary: '#4DB3E6',
+  navy: '#E4FBF3', scrim: '#000000', success: '#5FD08F', warning: '#FFD166', error: '#FF6B6B',
+  bg: '#061719', card: '#0B2226', surface: '#0E2A2E', surfaceElevated: '#123338',
+  text: '#E8FBF5', textSecondary: '#B8D6D0', onPrimary: '#04211C',
+  border: '#245A58', divider: '#1B4644', placeholder: '#8DB0AA',
+  inputBg: '#0E2A2E', disabledBg: '#123338', disabledText: '#8DB0AA',
+  tileBg: '#123338', tileBorder: '#2E7F72', canvasBg: '#0A1F22',
 };
 
 export const colors = lightColors;
@@ -27,7 +26,7 @@ export const colors = lightColors;
 // Theme swatches stay vivid, while the light-mode primary values are chosen
 // to remain readable when used directly as text, labels or icons on white.
 export const accentThemes = {
-  teal: { label: 'Teal', swatch: '#00A99D', light: { primary: '#00A99D', primaryDark: '#00897B', secondary: '#1A73E8' }, dark: { primary: '#26D0C4', primaryDark: '#00A99D', secondary: '#5B9DF9' } },
+  teal: { label: 'Teal', swatch: '#0B8A94', light: { primary: '#0B8A94', primaryDark: '#0A5C78', secondary: '#1481B5' }, dark: { primary: '#26C6C0', primaryDark: '#12909A', secondary: '#4DB3E6' } },
   blue: { label: 'Ocean Blue', swatch: '#1A73E8', light: { primary: '#1A73E8', primaryDark: '#0F56B3', secondary: '#00A99D' }, dark: { primary: '#5B9DF9', primaryDark: '#1A73E8', secondary: '#26D0C4' } },
   purple: { label: 'Royal Purple', swatch: '#7C4DFF', light: { primary: '#5E35B1', primaryDark: '#4527A0', secondary: '#1976D2' }, dark: { primary: '#B39DFF', primaryDark: '#8E6CFF', secondary: '#5B9DF9' } },
   rose: { label: 'Rose', swatch: '#F5576C', light: { primary: '#C62839', primaryDark: '#9E1B2B', secondary: '#AD1457' }, dark: { primary: '#FF8A9B', primaryDark: '#F5576C', secondary: '#F0A9FF' } },
@@ -57,7 +56,7 @@ export const gridStyles = {
 export const gridStyleList = Object.keys(gridStyles);
 export const DEFAULT_GRID_STYLE = 'bordered';
 export const gradients = { purple: ['#667eea', '#764ba2'], pink: ['#f093fb', '#f5576c'], blue: ['#4facfe', '#00f2fe'], orange: ['#fa8231', '#f7b731'], green: ['#20bf6b', '#0fb9b1'] };
-export const brandGradient = [lightColors.primary, lightColors.secondary];
+export const brandGradient = ['#1481B5', '#12A9A6', '#25D48F'];
 export function getPalette(mode, accent) {
   const base = mode === 'dark' ? darkColors : lightColors;
   const theme = accentThemes[accent] || accentThemes[DEFAULT_ACCENT];
@@ -65,4 +64,4 @@ export function getPalette(mode, accent) {
   return { ...base, ...accentColors };
 }
 export const spacing = { xs: 4, sm: 8, md: 14, lg: 20, xl: 28 };
-export const radius = { sm: 8, md: 12, lg: 14, xl: 20, pill: 999 };
+export const radius = { sm: 8, md: 12, lg: 16, xl: 22, pill: 999 };
