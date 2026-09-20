@@ -22,7 +22,11 @@ function cleanString(v, max = 500) { return typeof v === 'string' ? v.trim().sli
 const BLOCKED_HOSTS = /^(localhost|.*\.local|.*\.internal)$/i;
 function isIpLiteral(host) { if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return true; if (host.includes(':')) return true; return false; }
 function isPrivateIp(ip) {
-  const s = String(ip || '').toLowerCase();
+  let s = String(ip || '').trim().toLowerCase();
+  // DNS may return IPv4-mapped IPv6 (for example ::ffff:127.0.0.1).
+  // Normalize that form before applying the IPv4 private/reserved checks.
+  const mapped = s.match(/^::ffff:(\\d+\\.\\d+\\.\\d+\\.\\d+)$/i);
+  if (mapped) s = mapped[1];
   if (s === '::1' || s === '::' || s.startsWith('fc') || s.startsWith('fd') || s.startsWith('fe80:')) return true;
   const m = s.match(/^(\\d+)\\.(\\d+)\\.(\\d+)\\.(\\d+)$/);
   if (!m) return false;
