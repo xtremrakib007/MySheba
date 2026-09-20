@@ -102,10 +102,7 @@ export default function PricingPage() {
           <FieldRow label="My Documents (pts/month)" value={pricing.myDocumentsCost} suffix=" pts" onSave={(v) => save('myDocumentsCost', v)} />
           <FieldRow label="Salary & OT (pts/month)" value={pricing.salaryOtCost} suffix=" pts" onSave={(v) => save('salaryOtCost', v)} />
           <FieldRow label="Subscription Cycle Length (days)" value={pricing.moduleSubscriptionDays} suffix=" days" onSave={(v) => save('moduleSubscriptionDays', v)} />
-        </Section>
-          <FieldRow label="Boost Duration (days)" value={pricing.listingBoostDurationDays} suffix=" days" onSave={(v) => save('listingBoostDurationDays', v)} />
-        </Section>
-        {isSuperadmin ? <Section title="Role-Based Pricing (superadmin only)">{ROLE_PRICE_KEYS.map((key) => <RolePriceRow key={key} priceKey={key} pricing={pricing} onSave={saveRolePrice} />)}</Section> : <div className="rounded-2xl border border-dashed border-[var(--color-line)] bg-[var(--color-card)] p-5 text-sm text-[var(--color-ink-soft)]">Role-Based Pricing is visible to superadmin accounts only.</div>}
+        </Section>\n        {isSuperadmin ? <Section title="Role-Based Pricing (superadmin only)">{ROLE_PRICE_KEYS.map((key) => <RolePriceRow key={key} priceKey={key} pricing={pricing} onSave={saveRolePrice} />)}</Section> : <div className="rounded-2xl border border-dashed border-[var(--color-line)] bg-[var(--color-card)] p-5 text-sm text-[var(--color-ink-soft)]">Role-Based Pricing is visible to superadmin accounts only.</div>}
       </div>
     </div>
   );
