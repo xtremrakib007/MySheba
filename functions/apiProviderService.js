@@ -82,7 +82,7 @@ function validate(data) {
 function asObject(value) { if (value && typeof value === 'object' && !Array.isArray(value)) return value; if (typeof value !== 'string') return {}; try { const x = JSON.parse(value); return x && typeof x === 'object' && !Array.isArray(x) ? x : {}; } catch { return {}; } }
 function getPath(obj, path) { return path ? path.split('.').reduce((v,k) => v == null ? undefined : v[k], obj) : undefined; }
 function render(v, vars) {
-  if (typeof v === 'string') return v.replace(/\{\{\\s*([A-Za-z0-9_]+)\\s*\}\}/g, (_, k) => vars[k] == null ? '' : String(vars[k]));
+  if (typeof v === 'string') return v.replace(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g, (_, k) => vars[k] == null ? '' : String(vars[k]));
   if (Array.isArray(v)) return v.map(x => render(x, vars));
   if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k,x]) => [k, render(x, vars)]));
   return v;
