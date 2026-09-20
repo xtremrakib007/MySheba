@@ -1364,16 +1364,6 @@ export function AppProvider({ children }) {
   // powers the customer-facing notification bell.) ----
   useEffect(() => {
     const role = profile && profile.role;
-    const needsAnnouncements =
-      screen === "adminHome" && (role === "admin" || role === "superadmin");
-    if (!needsAnnouncements) return undefined;
-    const unsub = announcementService.subscribeAnnouncements(
-      (list) => setAnnouncements(list),
-      logListenerError("announcements"),
-    );
-    return unsub;
-  }, [screen, profile]);
-
   // ---- notification bell feed: any signed-in user (not just admin) reads
   // the same announcement log and filters it client-side to what's actually
   // addressed to them ('all' or their own role) - see firestore.rules,
@@ -1384,7 +1374,12 @@ export function AppProvider({ children }) {
       return undefined;
     }
     const unsub = announcementService.subscribeAnnouncements(
-      (list) => setRawAnnouncements(list),
+      (list) => {
+        setRawAnnouncements(list);
+        if (profile && (profile.role === "admin" || profile.role === "superadmin") && screen === "adminHome") {
+          setAnnouncements(list);
+        }
+      },
       logListenerError("myAnnouncements"),
     );
     return unsub;
