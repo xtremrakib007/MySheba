@@ -30,7 +30,6 @@ import FinancialControlPage from './pages/FinancialControlPage';
 import InquiriesPage from './pages/InquiriesPage';
 import AnnouncementsPage from './pages/AnnouncementsPage';
 import TransferPointsPage from './pages/TransferPointsPage';
-import BusinessProfilesPage from './pages/BusinessProfilesPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import ToolAccessPage from './pages/ToolAccessPage';
 import RolePermissionsPage from './pages/RolePermissionsPage';
