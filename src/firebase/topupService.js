@@ -1,5 +1,5 @@
 // Point top-up service.
-import { collection, onSnapshot, query, where, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, orderBy, limit } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
 import * as Crypto from 'expo-crypto';
@@ -32,14 +32,14 @@ export async function createTopupRequest(payload, requestId = createRequestId('t
 }
 
 export function subscribeTopups(callback, onError) {
-  const q = query(collection(db, 'topups'), orderBy('createdAt', 'desc'));
+  const q = query(collection(db, 'topups'), orderBy('createdAt', 'desc'), limit(100));
   return onSnapshot(q, snap => callback(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onError);
 }
 export function subscribeMyTopups(uid, callback, onError) {
-  const q = query(collection(db, 'topups'), where('userId', '==', uid));
+  const q = query(collection(db, 'topups'), where('userId', '==', uid), limit(100));
   return onSnapshot(q, snap => { const list = snap.docs.map(d => ({ id: d.id, ...d.data() })); list.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)); callback(list); }, onError);
 }
 export async function approveTopup(topup) { try { await httpsCallable(functions, 'approveTopup')({ topupId: topup.id }); logActivity('topup_approved', { topupId: topup.id }); } catch (e) { logError('topupService.approveTopup', e); throw e; } }
 export async function rejectTopup(id, reason) { try { await httpsCallable(functions, 'rejectTopup')({ topupId: id, reason }); logActivity('topup_rejected', { topupId: id }); } catch (e) { logError('topupService.rejectTopup', e); throw e; } }
 export async function createSelfTopup(payload, requestId = createRequestId('selftopup')) { const session = await getSessionProof(); const { data } = await httpsCallable(functions, 'createSelfTopup')({ ...payload, requestId, ...session }); return data?.id; }
-export function subscribeMySelfTopups(uid, callback, onError) { const q = query(collection(db, 'selfTopups'), where('userId', '==', uid)); return onSnapshot(q, snap => { const list = snap.docs.map(d => ({ id: d.id, ...d.data() })); list.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)); callback(list); }, onError); }
+export function subscribeMySelfTopups(uid, callback, onError) { const q = query(collection(db, 'selfTopups'), where('userId', '==', uid), limit(100)); return onSnapshot(q, snap => { const list = snap.docs.map(d => ({ id: d.id, ...d.data() })); list.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)); callback(list); }, onError); }
