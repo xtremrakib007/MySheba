@@ -4,31 +4,32 @@ import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import { useLanguage } from '../i18n/LanguageContext';
 import * as gridManagementService from '../firebase/gridManagementService';
+import RoyalIcon from './RoyalIcon';
 
 const CUSTOMER_SERVICES = [
-  { key: 'recharge', icon: '📱', name: 'Recharge', kind: 'service' },
-  { key: 'mobilebanking', icon: '🏦', name: 'Mobile Banking', kind: 'service' },
-  { key: 'internet', icon: '📡', name: 'Internet', kind: 'service' },
-  { key: 'billpayment', icon: '🧾', name: 'Bill Payment', kind: 'service' },
-  { key: 'remittance', icon: '💸', name: 'Remittance', kind: 'service' },
-  { key: 'bus', icon: '🚌', name: 'Bus', kind: 'buspicker' },
-  { key: 'train', icon: '🚆', name: 'Train', kind: 'webview' },
-  { key: 'flight', icon: '✈️', name: 'Flight', kind: 'service' },
-  { key: 'entertainment', icon: '🎮', name: 'Entertainment', kind: 'service' },
-  { key: 'moreFeaturesTile', icon: '✨', name: 'More Services', kind: 'moreFeaturesLink' },
+  { key: 'recharge', icon: 'recharge', name: 'Recharge', kind: 'service' },
+  { key: 'mobilebanking', icon: 'mobilebanking', name: 'Mobile Banking', kind: 'service' },
+  { key: 'internet', icon: 'internet', name: 'Internet', kind: 'service' },
+  { key: 'billpayment', icon: 'billpayment', name: 'Bill Payment', kind: 'service' },
+  { key: 'remittance', icon: 'remittance', name: 'Remittance', kind: 'service' },
+  { key: 'bus', icon: 'bus', name: 'Bus', kind: 'buspicker' },
+  { key: 'train', icon: 'train', name: 'Train', kind: 'webview' },
+  { key: 'flight', icon: 'flight', name: 'Flight', kind: 'service' },
+  { key: 'entertainment', icon: 'entertainment', name: 'Entertainment', kind: 'service' },
+  { key: 'moreFeaturesTile', icon: 'more', name: 'More Services', kind: 'moreFeaturesLink' },
 ];
 
 const STAFF_SERVICES = {
   dealer: [
-    { key: 'dealerFeatures', icon: '🛠️', name: 'Dealer Features', kind: 'dealerFeatures' },
-    { key: 'topup', icon: '💰', name: 'Top-Up', kind: 'topup' },
-    { key: 'history', icon: '📋', name: 'Transactions', kind: 'history' },
-    { key: 'support', icon: '🎧', name: 'Support', kind: 'support' },
-    { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount' },
-    { key: 'profile', icon: '🪪', name: 'Profile', kind: 'profile' },
+    { key: 'dealerFeatures', icon: 'more', name: 'Dealer Features', kind: 'dealerFeatures' },
+    { key: 'topup', icon: 'topup', name: 'Top-Up', kind: 'topup' },
+    { key: 'history', icon: 'history', name: 'Transactions', kind: 'history' },
+    { key: 'support', icon: 'support', name: 'Support', kind: 'support' },
+    { key: 'myAccount', icon: 'account', name: 'My Account', kind: 'myaccount' },
+    { key: 'profile', icon: 'profile', name: 'Profile', kind: 'profile' },
   ],
   reseller: [
-    { key: 'resellerFeatures', icon: '🛠️', name: 'Reseller Features', kind: 'resellerFeatures' },
+    { key: 'resellerFeatures', icon: 'more', name: 'Reseller Features', kind: 'resellerFeatures' },
     { key: 'topup', icon: '💰', name: 'Top-Up', kind: 'topup' },
     { key: 'history', icon: '📋', name: 'Transactions', kind: 'history' },
     { key: 'support', icon: '🎧', name: 'Support', kind: 'support' },
@@ -36,7 +37,7 @@ const STAFF_SERVICES = {
     { key: 'profile', icon: '🪪', name: 'Profile', kind: 'profile' },
   ],
   admin: [
-    { key: 'adminFeatures', icon: '🛠️', name: 'Admin Features', kind: 'adminFeatures' },
+    { key: 'adminFeatures', icon: 'more', name: 'Admin Features', kind: 'adminFeatures' },
     { key: 'topup', icon: '💰', name: 'Top-Ups', kind: 'adminTopup' },
     { key: 'history', icon: '📋', name: 'Transactions', kind: 'history' },
     { key: 'support', icon: '🎧', name: 'Support', kind: 'support' },
@@ -60,9 +61,9 @@ export function Tile({ s, onPress, disabled }) {
   const safeKey = asSafeText(s?.key, 'service');
   const translated = typeof t === 'function' ? t(`service.${safeKey}`, s?.name) : null;
   const label = asSafeText(translated, asSafeText(s?.name, safeKey));
-  const icon = asSafeText(s?.icon, '•'); const accent = asSafeText(s?.accent, colors.primary || '#1A73E8');
+  const icon = asSafeText(s?.icon, 'more'); const accent = asSafeText(s?.accent, colors.primary || '#1A73E8');
   return <TouchableOpacity style={[styles.item, { borderColor: colors.tileBorder || `${accent}45`, backgroundColor: colors.tileBg || colors.card }, disabled && styles.itemDisabled]} activeOpacity={0.82} disabled={!!disabled} onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
-    <View style={[styles.iconWrap, { backgroundColor: `${accent}18` }]}><Text style={[styles.iconText, { color: accent }]}>{icon}</Text></View>
+    <View style={[styles.iconWrap, { backgroundColor: `${accent}18` }]}><RoyalIcon name={icon} size={52} /></View>
     <Text style={[styles.name, { color: colors.text || '#222' }]} numberOfLines={2}>{label}</Text>
   </TouchableOpacity>;
 }
