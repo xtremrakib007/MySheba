@@ -1,5 +1,5 @@
 // Dealer/reseller queue: approve -> accept as Operator -> complete.
-import { collection, doc, onSnapshot, query, where, getDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, where, getDoc, limit } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import * as Crypto from 'expo-crypto';
 import { db, functions, auth } from './config';
@@ -44,21 +44,21 @@ export function subscribeBroadcastTransactions(callback, onError) {
     const uid = auth.currentUser?.uid; if (!uid) return;
     const profileSnap = await getDoc(doc(db, 'users', uid)); if (stopped) return;
     const role = profileSnap.exists() ? profileSnap.data()?.role : null;
-    if (role === 'admin' || role === 'superadmin') { attach(query(collection(db, COLLECTION), where('status', 'in', ['pending', 'processing', 'completed', 'rejected'])), pending); return; }
+    if (role === 'admin' || role === 'superadmin') { attach(query(collection(db, COLLECTION), where('status', 'in', ['pending', 'processing', 'completed', 'rejected']), limit(100)), pending); return; }
     if (role !== 'dealer' && role !== 'reseller') return;
     if (role === 'dealer') {
-      attach(query(collection(db, QUEUE_COLLECTION), where('service', '==', 'Mobile Banking'), where('status', '==', 'pending'), where('dealerId', '==', null)), pending);
-      attach(query(collection(db, QUEUE_COLLECTION), where('service', '==', 'Mobile Banking'), where('status', '==', 'pending'), where('dealerId', '==', uid)), pending, false);
+      attach(query(collection(db, QUEUE_COLLECTION), where('service', '==', 'Mobile Banking'), where('status', '==', 'pending'), where('dealerId', '==', null), limit(100)), pending);
+      attach(query(collection(db, QUEUE_COLLECTION), where('service', '==', 'Mobile Banking'), where('status', '==', 'pending'), where('dealerId', '==', uid), limit(100)), pending, false);
     } else {
-      attach(query(collection(db, QUEUE_COLLECTION), where('service', 'in', ['Recharge', 'Internet', 'Bill Payment', 'Remittance']), where('status', '==', 'pending'), where('resellerId', '==', null)), pending);
-      attach(query(collection(db, QUEUE_COLLECTION), where('service', 'in', ['Recharge', 'Internet', 'Bill Payment', 'Remittance']), where('status', '==', 'pending'), where('resellerId', '==', uid)), pending, false);
+      attach(query(collection(db, QUEUE_COLLECTION), where('service', 'in', ['Recharge', 'Internet', 'Bill Payment', 'Remittance']), where('status', '==', 'pending'), where('resellerId', '==', null), limit(100)), pending);
+      attach(query(collection(db, QUEUE_COLLECTION), where('service', 'in', ['Recharge', 'Internet', 'Bill Payment', 'Remittance']), where('status', '==', 'pending'), where('resellerId', '==', uid), limit(100)), pending, false);
     }
-    attach(query(collection(db, QUEUE_COLLECTION), where('claimedBy', '==', uid)), claimed);
+    attach(query(collection(db, QUEUE_COLLECTION), where('claimedBy', '==', uid), limit(100)), claimed);
   } catch (err) { if (!stopped) onError?.(err); } })();
   return () => { stopped = true; unsubs.splice(0).forEach((unsub) => unsub()); };
 }
 
-export function subscribeMyTransactions(uid, callback, onError) { const q = query(collection(db, COLLECTION), where('customerId', '==', uid)); return onSnapshot(q, (snap) => { const list = snap.docs.map(mapTransactionDoc); list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)); callback(list); }, onError); }
+export function subscribeMyTransactions(uid, callback, onError) { const q = query(collection(db, COLLECTION), where('customerId', '==', uid), limit(100)); return onSnapshot(q, (snap) => { const list = snap.docs.map(mapTransactionDoc); list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)); callback(list); }, onError); }
 export async function approveTransaction(id) { try { await httpsCallable(functions, 'approveTransaction')({ transactionId: id }); } catch (err) { throw new Error(err.message || 'Could not approve this order.'); } }
 export async function acceptTransaction(id) { try { await httpsCallable(functions, 'acceptTransaction')({ transactionId: id }); } catch (err) { throw new Error(err.message || 'Could not accept this order.'); } }
 export async function rejectTransaction(id, reason, service) { if (!['Recharge', 'Internet', 'Bill Payment', 'Mobile Banking', 'Remittance'].includes(service)) throw new Error('This order type does not support rejection.'); try { return (await httpsCallable(functions, 'rejectTransaction')({ transactionId: id, reason: reason || '' })).data; } catch (err) { throw new Error(err.message || 'Could not reject this order right now.'); } }
