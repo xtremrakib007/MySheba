@@ -25,10 +25,10 @@ function isPrivateIp(ip) {
   let s = String(ip || '').trim().toLowerCase();
   // DNS may return IPv4-mapped IPv6 (for example ::ffff:127.0.0.1).
   // Normalize that form before applying the IPv4 private/reserved checks.
-  const mapped = s.match(/^::ffff:(\\d+\\.\\d+\\.\\d+\\.\\d+)$/i);
+  const mapped = s.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
   if (mapped) s = mapped[1];
   if (s === '::1' || s === '::' || s.startsWith('fc') || s.startsWith('fd') || s.startsWith('fe80:')) return true;
-  const m = s.match(/^(\\d+)\\.(\\d+)\\.(\\d+)\\.(\\d+)$/);
+  const m = s.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
   if (!m) return false;
   const [a,b,c,d] = m.slice(1).map(Number);
   return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) ||
@@ -82,7 +82,7 @@ function validate(data) {
 function asObject(value) { if (value && typeof value === 'object' && !Array.isArray(value)) return value; if (typeof value !== 'string') return {}; try { const x = JSON.parse(value); return x && typeof x === 'object' && !Array.isArray(x) ? x : {}; } catch { return {}; } }
 function getPath(obj, path) { return path ? path.split('.').reduce((v,k) => v == null ? undefined : v[k], obj) : undefined; }
 function render(v, vars) {
-  if (typeof v === 'string') return v.replace(/\\{\\{\\s*([A-Za-z0-9_]+)\\s*\\}\\}/g, (_, k) => vars[k] == null ? '' : String(vars[k]));
+  if (typeof v === 'string') return v.replace(/\{\{\\s*([A-Za-z0-9_]+)\\s*\}\}/g, (_, k) => vars[k] == null ? '' : String(vars[k]));
   if (Array.isArray(v)) return v.map(x => render(x, vars));
   if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k,x]) => [k, render(x, vars)]));
   return v;
@@ -152,7 +152,7 @@ async function executeConfiguredApi(service, payload, customer, requestId) {
     return result;
   } catch(e) {
     const message=String(e?.message||'Provider execution failed').slice(0,500);
-    const definitive=/^Provider HTTP 4\\d{2}$/.test(message)||message.includes('Provider rejected the request');
+    const definitive=/^Provider HTTP 4\d{2}$/.test(message)||message.includes('Provider rejected the request');
     await executionRef.set({status:definitive?'failed':'unknown',message,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
     throw definitive?new HttpsError('failed-precondition',message):new HttpsError('unavailable',message);
   }
