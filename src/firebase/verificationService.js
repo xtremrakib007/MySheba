@@ -1,6 +1,6 @@
 // Customer identity verification service.
 // Phone verification happens at registration; this service handles the separate KYC review request.
-import { doc, onSnapshot, collection, query, where, orderBy } from 'firebase/firestore';
+import { doc, onSnapshot, collection, query, where, orderBy, limit } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './config';
 
@@ -55,7 +55,7 @@ export function subscribeMyVerificationRequest(uid, callback, onError) {
 }
 
 export function subscribePendingVerifications(callback, onError) {
-  const q = query(collection(db, REQUESTS), where('status', '==', 'pending'), orderBy('submittedAt', 'asc'));
+  const q = query(collection(db, REQUESTS), where('status', '==', 'pending'), orderBy('submittedAt', 'asc'), limit(100));
   return onSnapshot(q, (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), onError);
 }
 
