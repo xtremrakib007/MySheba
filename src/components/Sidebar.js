@@ -8,6 +8,7 @@ import HeaderDecor from './HeaderDecor';
 import VerifiedBadge from './VerifiedBadge';
 import Constants from 'expo-constants';
 import { showAlert } from '../utils/appAlert';
+import RoyalIcon from './RoyalIcon';
 
 const APP_VERSION = (Constants.expoConfig?.version || '1.0.0').split('.').slice(0, 3).join('.');
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -15,71 +16,71 @@ const DRAWER_WIDTH = Math.min(360, SCREEN_WIDTH * 0.9);
 const ROLE_LABEL = { customer: 'Customer', dealer: 'Dealer', reseller: 'Reseller', admin: 'Admin', superadmin: 'Super Admin' };
 
 const COMMON_GROUPS = [
-  { title: 'Account', icon: '👤', color: 'secondary', items: [
-    { key: 'profile', icon: '👤', label: 'Profile' },
-    { key: 'myAccount', icon: '🧾', label: 'My Account' },
-    { key: 'settings', icon: '⚙️', label: 'Settings' },
+  { title: 'Account', icon: 'profile', color: 'secondary', items: [
+    { key: 'profile', icon: 'profile', label: 'Profile' },
+    { key: 'myAccount', icon: 'profile', label: 'My Account' },
+    { key: 'settings', icon: 'settings', label: 'Settings' },
   ] },
-  { title: 'Work & Documents', icon: '📁', color: 'primary', items: [
-    { key: 'salaryDashboard', icon: '💰', label: 'Salary & OT' },
-    { key: 'reports', icon: '📊', label: 'Reports' },
-    { key: 'myDocuments', icon: '📁', label: 'My Documents' },
+  { title: 'Work & Documents', icon: 'profile', color: 'primary', items: [
+    { key: 'salaryDashboard', icon: 'topup', label: 'Salary & OT' },
+    { key: 'reports', icon: 'history', label: 'Reports' },
+    { key: 'myDocuments', icon: 'profile', label: 'My Documents' },
   ] },
 ];
 
 const ADMIN_GROUPS = [
-  { title: 'Admin Overview', icon: '🏠', color: 'primary', items: [
-    { key: 'adminHome', icon: '🏠', label: 'Control Center', featured: true },
-    { key: 'adminAnalytics', icon: '📈', label: 'Analytics' },
-    { key: 'reports', icon: '📊', label: 'Reports' },
+  { title: 'Admin Overview', icon: 'home', color: 'primary', items: [
+    { key: 'adminHome', icon: 'home', label: 'Control Center', featured: true },
+    { key: 'adminAnalytics', icon: 'history', label: 'Analytics' },
+    { key: 'reports', icon: 'history', label: 'Reports' },
   ] },
-  { title: 'Operations', icon: '⚙️', color: 'secondary', items: [
-    { key: 'all', icon: '📋', label: 'Transactions' },
-    { key: 'pending', icon: '⏳', label: 'Pending' },
-    { key: 'inquiries', icon: '📝', label: 'Inquiries' },
-    { key: 'topups', icon: '💳', label: 'Top-Ups' },
-    { key: 'support', icon: '🎧', label: 'Support' },
-    { key: 'chatList', icon: '💬', label: 'Chats' },
+  { title: 'Operations', icon: 'settings', color: 'secondary', items: [
+    { key: 'all', icon: 'history', label: 'Transactions' },
+    { key: 'pending', icon: 'history', label: 'Pending' },
+    { key: 'inquiries', icon: 'profile', label: 'Inquiries' },
+    { key: 'topups', icon: 'topup', label: 'Top-Ups' },
+    { key: 'support', icon: 'support', label: 'Support' },
+    { key: 'chatList', icon: 'support', label: 'Chats' },
   ] },
-  { title: 'Finance & Pricing', icon: '💰', color: 'primary', items: [
-    { key: 'rates', icon: '💱', label: 'Rates' },
-    { key: 'pricing', icon: '🏷️', label: 'Pricing' },
-    { key: 'payments', icon: '💳', label: 'Payments' },
-    { key: 'transferPoints', icon: '↔️', label: 'Transfer Points' },
+  { title: 'Finance & Pricing', icon: 'topup', color: 'primary', items: [
+    { key: 'rates', icon: 'remittance', label: 'Rates' },
+    { key: 'pricing', icon: 'billpayment', label: 'Pricing' },
+    { key: 'payments', icon: 'topup', label: 'Payments' },
+    { key: 'transferPoints', icon: 'remittance', label: 'Transfer Points' },
       ] },
-  { title: 'Users & Verification', icon: '👥', color: 'secondary', items: [
-    { key: 'userManagement', icon: '👥', label: 'User Management' },
-    { key: 'verificationManagement', icon: '🪪', label: 'KYC Verification' },
+  { title: 'Users & Verification', icon: 'profile', color: 'secondary', items: [
+    { key: 'userManagement', icon: 'profile', label: 'User Management' },
+    { key: 'verificationManagement', icon: 'kyc', label: 'KYC Verification' },
   ] },
-  { title: 'Platform', icon: '🧩', color: 'primary', items: [
-    { key: 'featureAccess', icon: '🔐', label: 'Feature Access' },
-    { key: 'banners', icon: '🖼️', label: 'Banners' },
-    { key: 'announcements', icon: '📣', label: 'Announcements' },
-    { key: 'adFeatureControls', icon: '📢', label: 'Ad Controls' },
+  { title: 'Platform', icon: 'more', color: 'primary', items: [
+    { key: 'featureAccess', icon: 'kyc', label: 'Feature Access' },
+    { key: 'banners', icon: 'more', label: 'Banners' },
+    { key: 'announcements', icon: 'support', label: 'Announcements' },
+    { key: 'adFeatureControls', icon: 'more', label: 'Ad Controls' },
   ] },
 ];
 
 const SUPERADMIN_GROUPS = [
-  { title: 'Superadmin Governance', icon: '🛡️', color: 'secondary', items: [
-    { key: 'adminFeatures', icon: '🛡️', label: 'System Control', featured: true },
-    { key: 'trustedDevices', icon: '📱', label: 'Trusted Devices' },
-    { key: 'featureAccess', icon: '🔐', label: 'Tool Access' },
-    { key: 'apiProviderManagement', icon: '🔌', label: 'API Providers' },
-    { key: 'tierPromotions', icon: '🎁', label: 'Tier Promotions' },
-    { key: 'superAdminTopup', icon: '💎', label: 'Point Top-Up' },
+  { title: 'Superadmin Governance', icon: 'kyc', color: 'secondary', items: [
+    { key: 'adminFeatures', icon: 'kyc', label: 'System Control', featured: true },
+    { key: 'trustedDevices', icon: 'recharge', label: 'Trusted Devices' },
+    { key: 'featureAccess', icon: 'kyc', label: 'Tool Access' },
+    { key: 'apiProviderManagement', icon: 'internet', label: 'API Providers' },
+    { key: 'tierPromotions', icon: 'more', label: 'Tier Promotions' },
+    { key: 'superAdminTopup', icon: 'topup', label: 'Point Top-Up' },
   ] },
-  { title: 'Risk & Moderation', icon: '🚨', color: 'primary', items: [
-    { key: 'verificationManagement', icon: '🪪', label: 'Verification Queue' },
+  { title: 'Risk & Moderation', icon: 'kyc', color: 'primary', items: [
+    { key: 'verificationManagement', icon: 'kyc', label: 'Verification Queue' },
   ] },
-  { title: 'Advertising', icon: '📢', color: 'secondary', items: [
-    { key: 'adAnalytics', icon: '📊', label: 'Ad Analytics' },
-    { key: 'advertiserManagement', icon: '👤', label: 'Advertisers' },
-    { key: 'adPackagesManagement', icon: '📦', label: 'Ad Packages' },
-    { key: 'adPaymentsManagement', icon: '💳', label: 'Ad Payments' },
+  { title: 'Advertising', icon: 'more', color: 'secondary', items: [
+    { key: 'adAnalytics', icon: 'history', label: 'Ad Analytics' },
+    { key: 'advertiserManagement', icon: 'profile', label: 'Advertisers' },
+    { key: 'adPackagesManagement', icon: 'more', label: 'Ad Packages' },
+    { key: 'adPaymentsManagement', icon: 'topup', label: 'Ad Payments' },
   ] },
-  { title: 'Staff & Salary', icon: '💼', color: 'primary', items: [
-    { key: 'salarySettings', icon: '⚙️', label: 'Salary Settings' },
-    { key: 'salaryReports', icon: '📑', label: 'Salary Reports' },
+  { title: 'Staff & Salary', icon: 'profile', color: 'primary', items: [
+    { key: 'salarySettings', icon: 'settings', label: 'Salary Settings' },
+    { key: 'salaryReports', icon: 'history', label: 'Salary Reports' },
   ] },
 ];
 
@@ -154,7 +155,7 @@ export default function Sidebar() {
               </View>
             </View>
             <View style={styles.roleRow}>
-              <View style={styles.rolePill}><Text style={styles.rolePillIcon}>{isSuperadmin ? '🛡️' : isAdmin ? '⚡' : '👤'}</Text><Text style={styles.rolePillText}>{roleLabel}</Text></View>
+              <View style={styles.rolePill}><RoyalIcon name={isSuperadmin ? 'kyc' : isAdmin ? 'topup' : 'profile'} size={16} color="#FFFFFF" /><Text style={styles.rolePillText}>{roleLabel}</Text></View>
               {isSuperadmin && <View style={styles.securePill}><Text style={styles.secureText}>SECURE CONSOLE</Text></View>}
             </View>
           </LinearGradient>
@@ -167,7 +168,7 @@ export default function Sidebar() {
                 <Text style={styles.consoleSub}>{isSuperadmin ? 'Full platform control & governance' : 'Operations & management'}</Text>
               </View>
               <TouchableOpacity style={styles.homeShortcut} onPress={() => goTo('adminHome')}>
-                <Text style={styles.homeShortcutText}>⌂</Text>
+                <RoyalIcon name="home" size={21} color={colors.primary} />
               </TouchableOpacity>
             </View>
           )}
@@ -178,7 +179,7 @@ export default function Sidebar() {
               return (
                 <View key={group.title} style={styles.groupBlock}>
                   <TouchableOpacity style={[styles.groupHeader, { borderColor: colors[group.color] }]} onPress={() => toggleGroup(group.title)} activeOpacity={0.8}>
-                    <View style={[styles.groupIconBox, { backgroundColor: colors[group.color] }]}><Text style={styles.groupIcon}>{group.icon}</Text></View>
+                    <View style={[styles.groupIconBox, { backgroundColor: colors[group.color] }]}><RoyalIcon name={group.icon} size={20} /></View>
                     <Text style={styles.groupHeaderText}>{group.title}</Text>
                     <View style={styles.groupLine} />
                     <Text style={styles.chevron}>{isCollapsed ? '›' : '⌄'}</Text>
@@ -190,7 +191,7 @@ export default function Sidebar() {
                         const active = screen === item.key;
                         return (
                           <TouchableOpacity key={`${group.title}-${item.key}`} style={[styles.gridItem, item.featured && styles.featuredItem, active && styles.gridItemActive]} onPress={() => goTo(item.key)} activeOpacity={0.78}>
-                            <View style={[styles.itemIconBox, active && styles.itemIconBoxActive]}><Text style={styles.gridIcon}>{item.icon}</Text></View>
+                            <View style={[styles.itemIconBox, active && styles.itemIconBoxActive]}><RoyalIcon name={item.icon} size={24} /></View>
                             <Text style={[styles.gridLabel, active && styles.gridLabelActive]} numberOfLines={2}>{item.label}</Text>
                             {active && <View style={styles.activeMark} />}
                           </TouchableOpacity>
@@ -205,7 +206,7 @@ export default function Sidebar() {
 
             {isAdmin && (
               <View style={styles.protectedCard}>
-                <View style={styles.protectedIcon}><Text>🔒</Text></View>
+                <View style={styles.protectedIcon}><Text>kyc</Text></View>
                 <View style={styles.protectedCopy}><Text style={styles.protectedTitle}>Protected access</Text><Text style={styles.protectedText}>Role and feature permissions remain enforced by the destination screens and backend rules.</Text></View>
               </View>
             )}
@@ -218,7 +219,7 @@ export default function Sidebar() {
             </View>
             <Text style={styles.brandVersion}>v{APP_VERSION}</Text>
           </View>
-          <View style={styles.footer}><TouchableOpacity style={styles.logoutRow} onPress={onLogout} activeOpacity={0.8}><View style={styles.logoutIcon}><Text>🚪</Text></View><Text style={styles.logoutLabel}>Logout</Text><Text style={styles.logoutArrow}>→</Text></TouchableOpacity></View>
+          <View style={styles.footer}><TouchableOpacity style={styles.logoutRow} onPress={onLogout} activeOpacity={0.8}><View style={styles.logoutIcon}><Text>profile</Text></View><Text style={styles.logoutLabel}>Logout</Text><Text style={styles.logoutArrow}>→</Text></TouchableOpacity></View>
         </Animated.View>
       </View>
     </Modal>
