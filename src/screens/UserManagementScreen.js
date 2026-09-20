@@ -6,8 +6,6 @@ import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
 import { useTheme } from "../theme/ThemeContext";
 import HeaderDecor from '../components/HeaderDecor';
-import BusinessBadge from '../components/BusinessBadge';
-import { subscribeAllBusinessProfiles } from '../firebase/businessProfileService';
 import {
   ROLE_PERMISSIONS,
   DOWNGRADE_PERMISSIONS,
@@ -133,20 +131,6 @@ export default function UserManagementScreen() {
     const unsub = subscribeManageableUsers(myRole, dealerScope, setUsers, () => {});
     return unsub;
   }, [myRole, dealerScope, isAdminTier]);
-
-  // "🏢 Business" indicator next to a user's name below - so an admin
-  // moderating doesn't have to jump to the Business Profiles screen just
-  // to check. Small collection (one doc per business, not per user), same
-  // "just read the whole thing" choice subscribeAllBusinessProfiles itself
-  // already makes for the Business Profiles admin screen.
-  const [businessUids, setBusinessUids] = useState(new Set());
-  useEffect(() => {
-    const unsub = subscribeAllBusinessProfiles(
-      (list) => setBusinessUids(new Set(list.filter((b) => b.isBusinessProfile).map((b) => b.uid))),
-      () => {}
-    );
-    return unsub;
-  }, []);
 
   // Customers who self-registered without a dealer code - only admin/superadmin
   // can pick one up and assign a dealer (see assignDealer / manageUser's
@@ -348,7 +332,6 @@ export default function UserManagementScreen() {
           <Text style={styles.userName}>{u.name || '—'}</Text>
           <Text style={styles.userPhone}>{u.phone || '—'}{u.userId ? ` · ID ${u.userId}` : ''}</Text>
           <View style={{ flexDirection: 'row', gap: 6, marginTop: 2 }}>
-            <BusinessBadge isBusiness={businessUids.has(u.id)} size="sm" />
             {u.suspended && (
               <View style={styles.suspendedBadge}>
                 <Text style={styles.suspendedBadgeText}>Suspended</Text>
