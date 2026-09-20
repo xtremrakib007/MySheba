@@ -9,6 +9,10 @@ import { useLanguage, LANGUAGES } from '../i18n/LanguageContext';
 import HeaderDecor from '../components/HeaderDecor';
 import ChangePasswordModal from '../components/ChangePasswordModal';
 import ResetSecurityPinModal from '../components/ResetSecurityPinModal';
+import ThemeColorModal from '../components/ThemeColorModal';
+import DisplayModeModal from '../components/DisplayModeModal';
+import GridStyleModal from '../components/GridStyleModal';
+import IconStyleModal from '../components/IconStyleModal';
 import LanguageModal from '../components/LanguageModal';
 
 function ToggleRow({ icon, label, sub, value, onValueChange }) {
@@ -21,12 +25,12 @@ function LinkRow({ icon, label, sub, onPress }) {
 }
 
 export default function SettingsScreen() {
-  const { colors, brandGradient } = useTheme();
+  const { colors, brandGradient, isDark, mode, isSystemMode, setMode, accent, accentThemes, setAccent, gridStyle, gridStyles, setGridStyle, iconStyle, iconStyles, setIconStyle } = useTheme();
   const styles = createStyles(colors); const { language, t } = useLanguage();
   const { goBackOrHome, logout, profile, setNotifPref, changePassword, resetSecurityPin, setScreen, appLockEnabled, setAppLockEnabled } = useApp();
   const prefs = profile?.notifPrefs || {};
   const [pushEnabled, setPushEnabledState] = useState(prefs.pushEnabled !== false); const [emailEnabled, setEmailEnabledState] = useState(prefs.emailEnabled !== false); const [rateAlerts, setRateAlertsState] = useState(!!prefs.rateAlerts);
-  const [pwModalVisible, setPwModalVisible] = useState(false); const [pinModalVisible, setPinModalVisible] = useState(false); const [languageModalVisible, setLanguageModalVisible] = useState(false);
+  const [pwModalVisible, setPwModalVisible] = useState(false); const [pinModalVisible, setPinModalVisible] = useState(false); const [themeModalVisible, setThemeModalVisible] = useState(false); const [displayModalVisible, setDisplayModalVisible] = useState(false); const [gridStyleModalVisible, setGridStyleModalVisible] = useState(false); const [iconStyleModalVisible, setIconStyleModalVisible] = useState(false); const [languageModalVisible, setLanguageModalVisible] = useState(false);
   useEffect(() => { if (!profile?.notifPrefs) return; setPushEnabledState(profile.notifPrefs.pushEnabled !== false); setEmailEnabledState(profile.notifPrefs.emailEnabled !== false); setRateAlertsState(!!profile.notifPrefs.rateAlerts); }, [profile?.notifPrefs]);
   const onTogglePush = (value) => { setPushEnabledState(value); setNotifPref('pushEnabled', value); }; const onToggleEmail = (value) => { setEmailEnabledState(value); setNotifPref('emailEnabled', value); }; const onToggleRateAlerts = (value) => { setRateAlertsState(value); setNotifPref('rateAlerts', value); };
   const onToggleAppLock = (value) => { setAppLockEnabled(value).catch(() => {}); };
@@ -41,6 +45,10 @@ export default function SettingsScreen() {
         <ToggleRow icon="💱" label={t('settings.rateAlerts')} sub={t('settings.rateAlertsSub')} value={rateAlerts} onValueChange={onToggleRateAlerts} />
       </View>
       <Text style={styles.sectionTitle}>{t('settings.sectionGeneral')}</Text><View style={styles.card}>
+        <LinkRow icon="🌙" label={t('settings.displayMode')} sub={isSystemMode ? `System Default (${isDark ? 'Dark' : 'Light'})` : (isDark ? 'Dark' : 'Light')} onPress={() => setDisplayModalVisible(true)} /><View style={styles.divider} />
+        <LinkRow icon="🎨" label={t('settings.themeColor')} sub={accentThemes[accent]?.label || 'Teal'} onPress={() => setThemeModalVisible(true)} /><View style={styles.divider} />
+        <LinkRow icon="🔲" label={t('settings.gridStyle')} sub={gridStyles[gridStyle]?.label || 'Bordered Cards'} onPress={() => setGridStyleModalVisible(true)} /><View style={styles.divider} />
+        <LinkRow icon="✨" label="Service Icon Style" sub={iconStyles[iconStyle]?.label || 'Classic'} onPress={() => setIconStyleModalVisible(true)} /><View style={styles.divider} />
         <LinkRow icon="🌐" label={t('settings.language')} sub={LANGUAGES[language]?.label || 'English'} onPress={() => setLanguageModalVisible(true)} /><View style={styles.divider} />
         <LinkRow icon="🔒" label={t('settings.changePassword')} onPress={() => setPwModalVisible(true)} />
         <View style={styles.divider} /><LinkRow icon="🔢" label={profile?.securityPinSet ? t('settings.changeSecurityPin') : t('settings.setUpSecurityPin')} sub={t('settings.securityPinSub')} onPress={() => setPinModalVisible(true)} /><View style={styles.divider} />
@@ -49,6 +57,10 @@ export default function SettingsScreen() {
       </View>
       <TouchableOpacity style={styles.logoutBtn} onPress={() => showAlert('Log Out', 'Are you sure you want to log out?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Log Out', style: 'destructive', onPress: logout }])}><Text style={styles.logoutText}>{t('settings.logout')}</Text></TouchableOpacity>
     </ScrollView>
+    <ThemeColorModal visible={themeModalVisible} selected={accent} onSelect={(key) => { setAccent(key); setThemeModalVisible(false); }} onClose={() => setThemeModalVisible(false)} />
+    <DisplayModeModal visible={displayModalVisible} selected={mode} onSelect={(key) => { setMode(key); setDisplayModalVisible(false); }} onClose={() => setDisplayModalVisible(false)} />
+    <GridStyleModal visible={gridStyleModalVisible} selected={gridStyle} onSelect={(key) => { setGridStyle(key); setGridStyleModalVisible(false); }} onClose={() => setGridStyleModalVisible(false)} />
+    <IconStyleModal visible={iconStyleModalVisible} selected={iconStyle} onSelect={(key) => { setIconStyle(key); setIconStyleModalVisible(false); }} onClose={() => setIconStyleModalVisible(false)} />
     <ChangePasswordModal visible={pwModalVisible} onSubmit={submitPasswordChange} onCancel={() => setPwModalVisible(false)} />
     <ResetSecurityPinModal visible={pinModalVisible} hasExistingPin={!!profile?.securityPinSet} onSubmit={submitPinReset} onCancel={() => setPinModalVisible(false)} />
     <LanguageModal visible={languageModalVisible} onClose={() => setLanguageModalVisible(false)} />
