@@ -363,20 +363,6 @@ export function AppProvider({ children }) {
     setScreen("support");
   }, []);
 
-  // ---- Business Profile (PRD section 15 Monetization Plan - "Business
-  // profile") ---- Screens call businessProfileService.js directly, so all
-  // that lives here is which uid's business page to show - same "just the
-  // navigation state" pattern as activeListingId/activePropertyId/
-  // activeProviderId above. Opened either from a listing/property/
-  // service's seller/owner/provider row (view someone else's), or from My
-  // Account (view/edit your own).
-  const [activeBusinessProfileUid, setActiveBusinessProfileUid] =
-    useState(null);
-  const openBusinessProfile = useCallback((uid) => {
-    setActiveBusinessProfileUid(uid);
-    setScreen("businessProfile");
-  }, []);
-
   // ---- Contact Profile ---- read-only view of the other person in a 1:1
   // direct chat - opened by tapping their name in ChatScreen's header (see
   // ChatScreen's headerTitleRow). Same "just the navigation state" pattern
@@ -2551,9 +2537,6 @@ export function AppProvider({ children }) {
     setHelpPrefill,
     openHelp,
     openSupportWithPrefill,
-    // business profile
-    activeBusinessProfileUid,
-    openBusinessProfile,
     activeContactProfileUid,
     openContactProfile,
     // salary & OT
