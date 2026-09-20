@@ -76,6 +76,7 @@ exports.updateAdPaymentStatus = require('./adPaymentService').updateAdPaymentSta
 exports.listApiProviders = require('./apiProviderService').listApiProviders;
 exports.saveApiProvider = require('./apiProviderService').saveApiProvider;
 exports.deleteApiProvider = require('./apiProviderService').deleteApiProvider;
+exports.migrateApiProviderSecrets = require('./apiProviderService').migrateApiProviderSecrets;
 exports.getServiceApiSettings = require('./apiProviderService').getServiceApiSettings;
 exports.saveServiceApiSettings = require('./apiProviderService').saveServiceApiSettings;
 
