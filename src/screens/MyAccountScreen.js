@@ -60,6 +60,33 @@ export default function MyAccountScreen() {
         <Text style={styles.sectionTitle}>Account Details</Text>
         <View style={styles.card}>
           <Row label="Name" value={profile ? profile.name : '—'} verified={!!profile?.verified} />
+          <View style={styles.divider} />
+          <Row label="Phone Number" value={profile ? profile.phone : '—'} />
+          <View style={styles.divider} />
+          <Row label="Account Type" value={profile ? (ROLE_LABEL[profile.role] || profile.role) : '—'} />
+          <View style={styles.divider} />
+          <Row label="Member Since" value={formatMemberSince(profile ? profile.createdAt : null)} />
+        </View>
+
+        <Text style={styles.sectionTitle}>Quick Links</Text>
+        <View style={styles.card}>
+          <TouchableOpacity style={styles.linkRow} onPress={() => setScreen('history')}>
+            <Text style={styles.linkIcon}>📋</Text>
+            <Text style={styles.linkLabel}>Order & Transaction History</Text>
+            <Text style={styles.chevron}>›</Text>
+          </TouchableOpacity>
+          <View style={styles.divider} />
+          <TouchableOpacity style={styles.linkRow} onPress={() => setScreen('reports')}>
+            <Text style={styles.linkIcon}>📊</Text>
+            <Text style={styles.linkLabel}>Reports</Text>
+            <Text style={styles.chevron}>›</Text>
+          </TouchableOpacity>
+          <View style={styles.divider} />
+          <TouchableOpacity style={styles.linkRow} onPress={() => setScreen('verifyIdentity')}>
+            <Text style={styles.linkIcon}>🪪</Text>
+            <Text style={styles.linkLabel}>{profile?.verified ? 'Verified ✓' : 'Get Verified'}</Text>
+            <Text style={styles.chevron}>›</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </View>
