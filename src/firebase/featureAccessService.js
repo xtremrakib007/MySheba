@@ -28,7 +28,6 @@ export const FEATURE_DEFS = [
   { key: 'transferPoints', icon: '💸', bg: '#E8F5E9', name: 'Transfer Pts', defaultRoles: ['admin', 'superadmin'] },
   { key: 'chatReports', icon: '🚩', bg: '#FFEBEE', name: 'Chat Reports', defaultRoles: ['admin', 'superadmin', 'support'] },
   { key: 'verificationManagement', icon: '🪪', bg: '#E0F7FA', name: 'Verify Requests', defaultRoles: ['admin', 'superadmin'] },
-  { key: 'adminBusinessManagement', icon: '🏢', bg: '#F3E5F5', name: 'Business Profiles', defaultRoles: ['admin', 'superadmin'] },
   { key: 'adminAnalytics', icon: '📊', bg: '#FFF3E0', name: 'Analytics', defaultRoles: ['admin', 'superadmin', 'finance'] },
 ];
 
