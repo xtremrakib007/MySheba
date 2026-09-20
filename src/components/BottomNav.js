@@ -5,11 +5,11 @@ import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 
 const TABS = [
-  { key: 'account', icon: '👤', label: 'Account', colors: ['#4facfe', '#00A99D'] },
-  { key: 'topup', icon: '💰', label: 'Top-Up', colors: ['#00A99D', '#00C9B7'] },
-  { key: 'home', icon: '⌂', label: 'Home', colors: ['#00A99D', '#1A73E8'] },
-  { key: 'history', icon: '📋', label: 'History', colors: ['#667eea', '#764ba2'] },
-  { key: 'support', icon: '🎧', label: 'Support', colors: ['#1A73E8', '#4facfe'] },
+  { key: 'account', icon: '👤', label: 'Account', colors: ['#1481B5', '#12A9A6'] },
+  { key: 'topup', icon: '💰', label: 'Top-Up', colors: ['#19C39B', '#0E9E8C'] },
+  { key: 'home', icon: '⌂', label: 'Home', colors: ['#A6F5D2', '#19C39B', '#0E9E8C'] },
+  { key: 'history', icon: '📋', label: 'History', colors: ['#0F6FA8', '#0FA0A0'] },
+  { key: 'support', icon: '🎧', label: 'Support', colors: ['#1481B5', '#25D48F'] },
 ];
 
 function screenForRole(key, role) {
@@ -63,14 +63,14 @@ export default function BottomNav() {
 
 function createStyles(colors) {
   return StyleSheet.create({
-    nav: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 6, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border },
+    nav: { flexDirection: 'row', justifyContent: 'space-around', paddingTop: 6, paddingBottom: 18, backgroundColor: colors.card, borderTopWidth: 1.5, borderTopColor: colors.accentLine || colors.border },
     btn: { alignItems: 'center', paddingVertical: 4, paddingHorizontal: 6, flex: 1 },
     btnHome: { marginTop: -12 },
-    iconCircle: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', marginBottom: 2, backgroundColor: colors.surface },
-    iconCircleHome: { width: 50, height: 50, borderRadius: 25, borderWidth: 3, borderColor: colors.card, elevation: 5 },
+    iconCircle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 2, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.tileBorder || colors.border },
+    iconCircleHome: { width: 66, height: 66, borderRadius: 33, borderWidth: 3, borderColor: colors.card, elevation: 5 },
     icon: { fontSize: 18, color: colors.placeholder },
     iconActive: { fontSize: 18 },
-    iconHomeText: { fontSize: 25 },
+    iconHomeText: { fontSize: 30 },
     label: { fontSize: 10, color: colors.textSecondary, fontWeight: '500' },
   });
 }
