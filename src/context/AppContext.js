@@ -1376,7 +1376,7 @@ export function AppProvider({ children }) {
       logListenerError("myAnnouncements"),
     );
     return unsub;
-  }, [authUser]);
+  }, [authUser, profile, screen]);
 
   const myNotifications = useMemo(() => {
     const role = profile && profile.role;
