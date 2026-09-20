@@ -1,6 +1,6 @@
 // Point (wallet balance) transfers - lets staff send points to accounts in
 // their permitted scope. The actual balance move is server-side.
-import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, limit } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import * as Crypto from 'expo-crypto';
 import { db, functions } from './config';
@@ -35,7 +35,7 @@ export async function transferPoints({ to, amount, note, securityPin }) {
 }
 
 export function subscribeMyTransfers(uid, onUpdate, onError) {
-  const q = query(collection(db, COLLECTION), where('participants', 'array-contains', uid));
+  const q = query(collection(db, COLLECTION), where('participants', 'array-contains', uid), limit(100));
   return onSnapshot(q, (snap) => {
     const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
@@ -44,7 +44,7 @@ export function subscribeMyTransfers(uid, onUpdate, onError) {
 }
 
 export function subscribePoolTransfers(dealerScope, onUpdate, onError) {
-  const q = query(collection(db, COLLECTION), where('dealerId', '==', dealerScope));
+  const q = query(collection(db, COLLECTION), where('dealerId', '==', dealerScope), limit(100));
   return onSnapshot(q, (snap) => {
     const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
@@ -53,6 +53,6 @@ export function subscribePoolTransfers(dealerScope, onUpdate, onError) {
 }
 
 export function subscribeAllTransfers(onUpdate, onError) {
-  const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'));
+  const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'), limit(100));
   return onSnapshot(q, (snap) => onUpdate(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), onError);
 }
