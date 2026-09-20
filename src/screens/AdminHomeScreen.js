@@ -135,14 +135,7 @@ const ACCESS_WINDOW_FIELDS = [
   { key: 'webviewAccessWindowHours', label: '⏱️ FOMEMA / Visa Free Access Window (hours)' },
 ];
 
-// PRD section 15) - actually charged in the boostListing Cloud Function
-// (functions/walletService.js). listingBoostCost reuses the pts editor,
-// listingBoostDurationDays gets its own "days" unit below.
-const BOOST_COST_FIELDS = [
-];
-const BOOST_DURATION_FIELDS = [
-  { key: 'listingBoostDurationDays', label: '📅 Boost Duration (days)' },
-];
+const BOOST_COST_FIELDS = [];
 
 // Recharge / Internet Package points multiplier - unlike every other
 // entry above, this isn't a flat pts price; it's what a role's own
@@ -859,32 +852,6 @@ export default function AdminHomeScreen() {
                 price to 0 to keep that module free.
               </Text>
             </View>
-
-            <View style={styles.card}>
-              {BOOST_COST_FIELDS.map((r) => (
-                <View key={r.key} style={styles.rateRow}>
-                  <Text style={{ flex: 1 }}>{r.label}</Text>
-                  <Text style={styles.rateValue}>{pricing[r.key]} pts</Text>
-                  <TouchableOpacity style={styles.editBtn} onPress={() => setEditPointCostKey(r.key)}>
-                    <Text style={styles.editBtnText}>Edit</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-              {BOOST_DURATION_FIELDS.map((r) => (
-                <View key={r.key} style={styles.rateRow}>
-                  <Text style={{ flex: 1 }}>{r.label}</Text>
-                  <Text style={styles.rateValue}>{pricing[r.key]} days</Text>
-                  <TouchableOpacity style={styles.editBtn} onPress={() => setEditPointCostKey(r.key)}>
-                    <Text style={styles.editBtnText}>Edit</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-              <Text style={styles.hintText}>
-                for this many days (see the listing detail screen's Boost button). Re-boosting an
-                already-featured listing extends it rather than restarting the clock.
-              </Text>
-            </View>
-
             {profile && profile.role === 'superadmin' && (
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>🎭 Role-Based Pricing</Text>
@@ -1348,13 +1315,11 @@ export default function AdminHomeScreen() {
         visible={!!editPointCostKey}
         title={
           ACCESS_WINDOW_FIELDS.some((f) => f.key === editPointCostKey) ? 'New value (hours):'
-          : BOOST_DURATION_FIELDS.some((f) => f.key === editPointCostKey) ? 'New value (days):'
           : MODULE_SUBSCRIPTION_DAYS_FIELDS.some((f) => f.key === editPointCostKey) ? 'New value (days):'
           : 'New cost (points):'
         }
         placeholder={
           ACCESS_WINDOW_FIELDS.some((f) => f.key === editPointCostKey) ? 'e.g. 1'
-          : BOOST_DURATION_FIELDS.some((f) => f.key === editPointCostKey) ? 'e.g. 7'
           : MODULE_SUBSCRIPTION_DAYS_FIELDS.some((f) => f.key === editPointCostKey) ? 'e.g. 30'
           : 'e.g. 2'
         }
