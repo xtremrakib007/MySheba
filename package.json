@@ -65,7 +65,7 @@
           "@notifee/react-native",
           "crypto-js",
           "expo-av",
-          "firebase",
+          "firebase"
         ],
         "listUnknownPackages": false
       }
