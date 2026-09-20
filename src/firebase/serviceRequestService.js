@@ -18,6 +18,7 @@ import {
   onSnapshot,
   query,
   where,
+  limit,
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './config';
@@ -44,7 +45,7 @@ export async function createServiceRequest(customer, provider, message) {
 /** Provider's own view - requests sent to any of their provider profiles.
  * Sorted client-side, same reasoning as subscribeMyTransactions elsewhere. */
 export function subscribeReceivedRequests(providerOwnerUid, callback, onError) {
-  const q = query(collection(db, REQUESTS), where('providerOwnerId', '==', providerOwnerUid));
+  const q = query(collection(db, REQUESTS), where('providerOwnerId', '==', providerOwnerUid), limit(100));
   return onSnapshot(
     q,
     (snap) => {
@@ -58,7 +59,7 @@ export function subscribeReceivedRequests(providerOwnerUid, callback, onError) {
 
 /** Customer's own view - requests they've sent to any provider. */
 export function subscribeMyRequests(customerUid, callback, onError) {
-  const q = query(collection(db, REQUESTS), where('customerId', '==', customerUid));
+  const q = query(collection(db, REQUESTS), where('customerId', '==', customerUid), limit(100));
   return onSnapshot(
     q,
     (snap) => {
