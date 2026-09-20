@@ -366,7 +366,7 @@ export function AppProvider({ children }) {
   // ---- Contact Profile ---- read-only view of the other person in a 1:1
   // direct chat - opened by tapping their name in ChatScreen's header (see
   // ChatScreen's headerTitleRow). Same "just the navigation state" pattern
-  // as activeBusinessProfileUid above; ContactProfileScreen fetches the
+  // ContactProfileScreen fetches the
   // actual profile doc itself once it has the uid.
   const [activeContactProfileUid, setActiveContactProfileUid] = useState(null);
   const openContactProfile = useCallback((uid) => {
@@ -640,7 +640,7 @@ export function AppProvider({ children }) {
     salaryCalculator: 'salary', salaryWorkLog: 'salary', salaryReports: 'salary',
     salaryMonthlySummary: 'salary', salaryHistory: 'salary', createPayslip: 'salary',
     payslipHistory: 'salary', payslipDetails: 'salary',
-    transferPoints: 'walletTransfer', businessProfile: 'businessProfile',
+    transferPoints: 'walletTransfer',
     dealerFeatures: 'dealerFeatures', resellerFeatures: 'resellerFeatures',
     adminFeatures: 'adminFeatures', moreFeatures: 'moreFeaturesTile',
     adminAnalytics: 'adminAnalytics', userManagement: 'userManagement',
@@ -661,7 +661,6 @@ export function AppProvider({ children }) {
     adminAnalytics: ['admin', 'superadmin'],
     userManagement: ['admin', 'superadmin'],
     verificationManagement: ['admin', 'superadmin'],
-    adminBusinessManagement: ['admin', 'superadmin'],
     adminSupport: ['admin', 'superadmin'],
     all: ['admin', 'superadmin'],
     pending: ['admin', 'superadmin'],
