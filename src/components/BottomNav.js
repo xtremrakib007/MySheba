@@ -47,7 +47,7 @@ export default function BottomNav() {
           <TouchableOpacity key={tab.key} style={[styles.btn, isHome && styles.btnHome]} onPress={() => onPressTab(tab.key)}>
             {isActive ? (
               <LinearGradient colors={tab.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.iconCircle, isHome && styles.iconCircleHome]}>
-                <RoyalIcon name={tab.icon === "home" ? "more" : tab.icon} size={isHome ? 40 : 24} color="#FFFFFF" />
+                <RoyalIcon name={tab.icon} size={isHome ? 40 : 24} color="#FFFFFF" />
               </LinearGradient>
             ) : (
               <View style={[styles.iconCircle, isHome && styles.iconCircleHome]}>
