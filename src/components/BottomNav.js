@@ -3,13 +3,14 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
+import RoyalIcon from './RoyalIcon';
 
 const TABS = [
-  { key: 'account', icon: '👤', label: 'Account', colors: ['#1481B5', '#12A9A6'] },
-  { key: 'topup', icon: '💰', label: 'Top-Up', colors: ['#19C39B', '#0E9E8C'] },
-  { key: 'home', icon: '⌂', label: 'Home', colors: ['#A6F5D2', '#19C39B', '#0E9E8C'] },
-  { key: 'history', icon: '📋', label: 'History', colors: ['#0F6FA8', '#0FA0A0'] },
-  { key: 'support', icon: '🎧', label: 'Support', colors: ['#1481B5', '#25D48F'] },
+  { key: 'account', icon: 'account', label: 'Account', colors: ['#1481B5', '#12A9A6'] },
+  { key: 'topup', icon: 'topup', label: 'Top-Up', colors: ['#19C39B', '#0E9E8C'] },
+  { key: 'home', icon: 'home', label: 'Home', colors: ['#A6F5D2', '#19C39B', '#0E9E8C'] },
+  { key: 'history', icon: 'history', label: 'History', colors: ['#0F6FA8', '#0FA0A0'] },
+  { key: 'support', icon: 'support', label: 'Support', colors: ['#1481B5', '#25D48F'] },
 ];
 
 function screenForRole(key, role) {
@@ -46,11 +47,11 @@ export default function BottomNav() {
           <TouchableOpacity key={tab.key} style={[styles.btn, isHome && styles.btnHome]} onPress={() => onPressTab(tab.key)}>
             {isActive ? (
               <LinearGradient colors={tab.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.iconCircle, isHome && styles.iconCircleHome]}>
-                <Text style={[styles.iconActive, isHome && styles.iconHomeText]}>{tab.icon}</Text>
+                <RoyalIcon name={tab.icon === "home" ? "more" : tab.icon} size={isHome ? 40 : 24} color="#FFFFFF" />
               </LinearGradient>
             ) : (
               <View style={[styles.iconCircle, isHome && styles.iconCircleHome]}>
-                <Text style={[styles.icon, isHome && styles.iconHomeText]}>{tab.icon}</Text>
+                <RoyalIcon name={tab.icon} size={isHome ? 40 : 24} color={colors.placeholder || colors.textSecondary} />
               </View>
             )}
             <Text style={[styles.label, isActive && { color: colors.primary, fontWeight: '700' }]}>{tab.label}</Text>
