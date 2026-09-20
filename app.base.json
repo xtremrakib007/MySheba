@@ -32,15 +32,8 @@
         "android.permission.INTERNET",
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.VIBRATE",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION",
         "com.google.android.gms.permission.AD_ID"
       ],
-      "config": {
-        "googleMaps": {
-          "apiKey": "GOOGLE_MAPS_API_KEY_PLACEHOLDER"
-        }
-      },
       "intentFilters": [
         {
           "action": "VIEW",
@@ -61,11 +54,7 @@
     "ios": {
       "infoPlist": {
         "NSCameraUsageDescription": "Allow MySheba to access your camera for KYC identity verification and video calls.",
-        "NSLocationWhenInUseUsageDescription": "Allow MySheba to access your location to show nearby listings, properties, and service providers on the map."
       },
-      "config": {
-        "googleMapsApiKey": "GOOGLE_MAPS_API_KEY_PLACEHOLDER"
-      }
     },
     "notification": {
       "color": "#1A73E8",
@@ -127,12 +116,6 @@
         "expo-camera",
         {
           "cameraPermission": "Allow MySheba to access your camera for KYC identity verification and QR scanning."
-        }
-      ],
-      [
-        "expo-location",
-        {
-          "locationWhenInUsePermission": "Allow MySheba to access your location to show nearby listings, properties, and service providers on the map."
         }
       ],
       [
