@@ -1,7 +1,5 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
-const { SecretManagerServiceClient } = require('@google-cloud/secret-manager');
-
 // NOTE: `db` is intentionally NOT created at module load time. index.js
 // requires this file before it calls admin.initializeApp().
 const COLLECTION = 'api_providers';
@@ -11,8 +9,25 @@ const ALLOWED_AUTH = ['none', 'apiKey', 'bearer', 'basic'];
 const DEFAULT_MODES = Object.fromEntries(ALLOWED_SERVICES.map((service) => [service, 'legacy']));
 const MASK = '••••••••';
 
-const secretManager = new SecretManagerServiceClient();
 const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT;
+
+async function secretManagerRequest(path, options = {}) {
+  const credential = admin.app().options.credential;
+  const tokenResult = await credential.getAccessToken();
+  const token = typeof tokenResult === 'string' ? tokenResult : tokenResult?.access_token;
+  if (!token) throw new HttpsError('failed-precondition', 'Google Cloud credentials are unavailable.');
+  const res = await fetch(`https://secretmanager.googleapis.com/v1/${path}`, {
+    ...options,
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', ...(options.headers || {}) },
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    const err = new Error(`Secret Manager request failed (${res.status}): ${body.slice(0, 500)}`);
+    err.code = res.status === 404 ? 5 : res.status;
+    throw err;
+  }
+  return res.status === 204 ? null : res.json();
+}
 
 async function assertSuperadmin(db, request) {
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
@@ -73,32 +88,25 @@ function secretResource(secretName) {
 async function ensureSecret(secretName) {
   const parent = `projects/${projectId}`;
   try {
-    await secretManager.getSecret({ name: secretResource(secretName) });
+    await secretManagerRequest(encodeURI(secretResource(secretName)));
   } catch (err) {
     if (err.code !== 5) throw err; // NOT_FOUND
-    await secretManager.createSecret({
-      parent,
-      secretId: secretName,
-      secret: { replication: { automatic: {} } },
-    });
+    await secretManagerRequest(`${encodeURIComponent(parent)}/secrets?secretId=${encodeURIComponent(secretName)}`, { method: 'POST', body: JSON.stringify({ replication: { automatic: {} } }) });
   }
 }
 async function putSecret(secretName, value) {
   if (!value) return;
   await ensureSecret(secretName);
-  await secretManager.addSecretVersion({
-    parent: secretResource(secretName),
-    payload: { data: Buffer.from(value, 'utf8') },
-  });
+  await secretManagerRequest(`${encodeURI(secretResource(secretName))}:addVersion`, { method: 'POST', body: JSON.stringify({ payload: { data: Buffer.from(value, 'utf8').toString('base64') } }) });
 }
 async function readSecret(secretName) {
   if (!secretName) return '';
-  const [version] = await secretManager.accessSecretVersion({ name: `${secretResource(secretName)}/versions/latest` });
-  return version.payload?.data?.toString('utf8') || '';
+  const version = await secretManagerRequest(encodeURI(`${secretResource(secretName)}/versions/latest:access`));
+  return version.payload?.data ? Buffer.from(version.payload.data, 'base64').toString('utf8') : '';
 }
 async function deleteSecret(secretName) {
   if (!secretName) return;
-  try { await secretManager.deleteSecret({ name: secretResource(secretName) }); } catch (err) {
+  try { await secretManagerRequest(encodeURI(secretResource(secretName)), { method: 'DELETE' }); } catch (err) {
     if (err.code !== 5) throw err;
   }
 }
