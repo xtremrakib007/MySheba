@@ -10,6 +10,7 @@ import {
   query,
   where,
   orderBy,
+  limit,
   serverTimestamp,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -45,7 +46,7 @@ export async function createSupportTicket(payload, _user) {
 
 /** Live list of every support ticket, newest first - used by the Admin queue. */
 export function subscribeSupportTickets(callback, onError) {
-  const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'));
+  const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'), limit(100));
   return onSnapshot(
     q,
     (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
@@ -55,7 +56,7 @@ export function subscribeSupportTickets(callback, onError) {
 
 /** Live list of just the signed-in user's own support tickets, newest first. */
 export function subscribeMySupportTickets(uid, callback, onError) {
-  const q = query(collection(db, COLLECTION), where('userId', '==', uid));
+  const q = query(collection(db, COLLECTION), where('userId', '==', uid), limit(100));
   return onSnapshot(
     q,
     (snap) => {
@@ -69,7 +70,7 @@ export function subscribeMySupportTickets(uid, callback, onError) {
 
 /** Live list of tickets assigned to the signed-in staff member. */
 export function subscribeAssignedTickets(uid, callback, onError) {
-  const q = query(collection(db, COLLECTION), where('assignedToUid', '==', uid));
+  const q = query(collection(db, COLLECTION), where('assignedToUid', '==', uid), limit(100));
   return onSnapshot(
     q,
     (snap) => {
