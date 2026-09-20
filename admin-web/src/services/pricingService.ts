@@ -15,7 +15,6 @@ export const ROLE_PRICE_KEYS = [
   'webviewAccessCost',
   'webviewSubmitCost',
   'paymentSuccessCost',
-  'listingBoostCost',
   'notepadCost',
   'myDocumentsCost',
   'salaryOtCost',
@@ -38,8 +37,6 @@ export interface PricingSettings {
   salaryOtCost: number;
   moduleSubscriptionDays: number;
   webviewAccessWindowHours: number;
-  listingBoostCost: number;
-  listingBoostDurationDays: number;
   rolePricing: Partial<Record<PricingRole, Partial<Record<RolePriceKey, number>>>>;
 }
 
@@ -57,8 +54,6 @@ export const DEFAULT_PRICING: PricingSettings = {
   salaryOtCost: 0,
   moduleSubscriptionDays: 30,
   webviewAccessWindowHours: 1,
-  listingBoostCost: 5,
-  listingBoostDurationDays: 7,
   rolePricing: {},
 };
 
