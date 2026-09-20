@@ -50,7 +50,6 @@ const ADMIN_GROUPS = [
   { title: 'Users & Verification', icon: '👥', color: 'secondary', items: [
     { key: 'userManagement', icon: '👥', label: 'User Management' },
     { key: 'verificationManagement', icon: '🪪', label: 'KYC Verification' },
-    { key: 'adminBusinessManagement', icon: '🏢', label: 'Business Profiles' },
   ] },
   { title: 'Platform', icon: '🧩', color: 'primary', items: [
     { key: 'featureAccess', icon: '🔐', label: 'Feature Access' },
