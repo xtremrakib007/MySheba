@@ -89,8 +89,24 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
     if (existing.exists) {
       const d = existing.data() || {};
       if (d.customerId !== uid) throw new HttpsError('permission-denied', 'This request ID belongs to another account.');
-      if (d.status === 'completed' && d.rechargePinAvailable === true && pinDoc.exists && typeof pinDoc.data()?.pin === 'string' && pinDoc.data().pin) {
-        return { replay: true, id: txRef.id, cost: Number(d.cost) || 0, pin: pinDoc.data().pin, operator: d.operator || operator, amount: Number(d.amount) || denomination };
+      if (pinDoc.exists && pinDoc.data()?.customerId === uid && typeof pinDoc.data()?.pin === 'string' && pinDoc.data().pin) {
+        // The provider PIN is durably stored. If the transaction-completion
+        // write was interrupted, repair the transaction without charging or
+        // refunding the wallet a second time.
+        if (d.status !== 'completed' || d.rechargePinAvailable !== true) {
+          tx.update(txRef, {
+            status: 'completed',
+            rechargePinAvailable: true,
+            apiRefunded: false,
+            apiExecution: {
+              ...(d.apiExecution || {}),
+              status: 'accepted',
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+        return { replay: true, id: txRef.id, cost: Number(d.cost) || 0, pin: pinDoc.data().pin, operator: d.operator || pinDoc.data().operator || operator, amount: Number(d.amount) || Number(pinDoc.data().amount) || denomination };
       }
       if (d.status === 'unknown') throw new HttpsError('unavailable', 'The provider outcome is uncertain. Please verify the provider before retrying.');
       if (d.status === 'pending' || d.status === 'processing') {
@@ -139,6 +155,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
 
   if (reserved.replay) return reserved;
 
+  let providerSucceeded = false;
   try {
     const api = await executeConfiguredApi(PIN_SERVICE, {
       amount: denomination,
@@ -150,6 +167,10 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
     if (!api.secret) {
       throw new HttpsError('unavailable', 'The Recharge PIN provider completed but the voucher PIN could not be recovered. Please contact support before retrying.');
     }
+    // From this point onward the external provider has succeeded. Any
+    // persistence failure must be treated as UNKNOWN, never as a definitive
+    // provider failure, because refunding here could create a free voucher.
+    providerSucceeded = true;
 
     await db.collection('rechargePins').doc(txRef.id).set({
       transactionId: txRef.id, customerId: uid, operator, amount: denomination,
@@ -164,6 +185,13 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
     return { id: txRef.id, cost: reserved.cost, pin: api.secret, operator, amount: denomination };
   } catch (e) {
     const unavailable = String(e?.code || '') === 'unavailable';
+    if (unavailable || providerSucceeded) {
+      const message = providerSucceeded
+        ? 'The provider issued the Recharge PIN, but MySheba could not finish recording the transaction. Do not retry automatically; reconcile the voucher and transaction first.'
+        : String(e?.message || 'Provider outcome is uncertain').slice(0, 500);
+      await txRef.update({ status: 'unknown', apiExecution: { status: 'unknown', error: message, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      throw providerSucceeded ? new HttpsError('unavailable', message) : e;
+    }
     if (unavailable) {
       await txRef.update({ status: 'unknown', apiExecution: { status: 'unknown', error: String(e?.message || 'Provider outcome is uncertain').slice(0, 500), updatedAt: admin.firestore.FieldValue.serverTimestamp() }, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
       throw e;
