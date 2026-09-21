@@ -73,6 +73,7 @@ function validate(data) {
   const method = cleanString(data.method, 10).toUpperCase() || 'POST';
   if (!ALLOWED_SERVICES.includes(service)) throw new HttpsError('invalid-argument', 'Invalid service.');
   if (!name) throw new HttpsError('invalid-argument', 'API provider name is required.');
+  if (service === 'Recharge PIN' && !cleanString(data.responsePinPath, 200)) throw new HttpsError('invalid-argument', 'Recharge PIN providers must define Response PIN Path.');
   validateBaseUrl(baseUrl);
   if (!ALLOWED_AUTH.includes(authType)) throw new HttpsError('invalid-argument', 'Invalid authentication type.');
   if (!ALLOWED_METHODS.includes(method)) throw new HttpsError('invalid-argument', 'Invalid HTTP method.');
