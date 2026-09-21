@@ -5,8 +5,7 @@ const { checkVelocity, checkAnonymousAdVelocity, getClientIp } = require('./rate
 const PLACEMENTS = new Set([
   'HOME_TOP','HOME_MIDDLE','HOME_BOTTOM','RECHARGE_TOP','RECHARGE_BOTTOM','INTERNET_TOP','INTERNET_BOTTOM',
   'MOBILE_BANKING_TOP','MOBILE_BANKING_BOTTOM','REMITTANCE_TOP','REMITTANCE_BOTTOM','FLIGHT_TOP','FLIGHT_BOTTOM',
-  'JOBS_TOP','JOBS_BOTTOM','ACCOMMODATION_TOP','ACCOMMODATION_BOTTOM','BUY_SELL_TOP','BUY_SELL_BOTTOM',
-  'SERVICES_TOP','SERVICES_BOTTOM','COMMUNITY_TOP','COMMUNITY_BOTTOM','HELP_SUPPORT_TOP','HELP_SUPPORT_BOTTOM'
+  'JOBS_TOP','JOBS_BOTTOM','HELP_SUPPORT_TOP','HELP_SUPPORT_BOTTOM'
 ]);
 const FEATURES = new Set(['home','mobile_recharge','internet_package','mobile_banking','remittance','air_ticket','jobs','help_support']);
 const AD_TYPES = new Set(['banner','native','interstitial','sponsored']);
