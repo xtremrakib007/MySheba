@@ -2342,7 +2342,6 @@ export function AppProvider({ children }) {
     webViewPaymentBusy,
     webViewPaymentCharged,
     // direct chat
-    handleDeepLink,
     activeAdvertiserId,
     openAdvertiserManagement,
     openAdvertiserDetail,
