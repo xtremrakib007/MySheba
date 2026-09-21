@@ -1429,11 +1429,6 @@ export default function AdminHomeScreen() {
         onCancel={() => setEditSupportKey(null)}
       />
       <PromptModal
-        title="New value:"
-        placeholder={
-        }
-      />
-      <PromptModal
         visible={!!editPaymentKey}
         title={editPaymentKey === 'jompayBillerId' ? 'New JomPay Biller ID:' : editPaymentKey === 'jompayRefNo' ? 'New JomPay Reference No.:' : ''}
         placeholder={PAYMENT_FIELDS.find((f) => f.key === editPaymentKey)?.placeholder}
