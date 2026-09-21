@@ -44,7 +44,6 @@ export const navGroups: NavGroup[] = [
   ] },
   { label: 'Verification & Moderation', accent: 'warning', items: [
     { label: 'Identity Verification', path: '/verification', icon: BadgeCheck, enabled: true },
-    { label: 'Chat Reports', path: '/chat-reports', icon: MessageSquareWarning, enabled: true },
     { label: 'Security Center', path: '/security', icon: ShieldCheck, enabled: true },
   ] },
   { label: 'Finance & Risk', accent: 'danger', items: [
@@ -55,7 +54,7 @@ export const navGroups: NavGroup[] = [
   ] },
   { label: 'Support & Communications', accent: 'danger', items: [
     { label: 'Support Tickets', path: '/support', icon: LifeBuoy, allowedRoles: ['admin','superadmin','support'], enabled: true },
-    { label: 'Support Messages', path: '/support-messages', icon: MessageCircle, allowedRoles: ['admin','superadmin','support'], enabled: true },
+    { label: 'Support Messages', path: '/support/messages', icon: MessageCircle, allowedRoles: ['admin','superadmin','support'], enabled: true },
     { label: 'Announcements', path: '/announcements', icon: BellRing, enabled: true },
     { label: 'Communications Center', path: '/communications', icon: Megaphone, enabled: true },
     { label: 'Notification Delivery', path: '/notification-delivery', icon: Activity, enabled: true },
