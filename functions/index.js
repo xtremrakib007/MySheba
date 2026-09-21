@@ -98,6 +98,7 @@ exports.approveTransaction = require('./transactionService').approveTransaction;
 exports.acceptTransaction = require('./transactionService').acceptTransaction;
 exports.completeTransaction = require('./transactionService').completeTransaction;
 exports.generateCollectionPin = require('./transactionService').generateCollectionPin;
+exports.reconcileUnknownTransaction = require('./transactionService').reconcileUnknownTransaction;
 exports.rejectTransaction = require('./rejectionService').rejectTransaction;
 exports.assignDealer = require('./transactionService').assignDealer;
 admin.initializeApp();
