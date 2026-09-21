@@ -33,7 +33,6 @@ import * as supportContactService from "../firebase/supportContactService";
 import * as socialLinksService from "../firebase/socialLinksService";
 import * as paymentSettingsService from "../firebase/paymentSettingsService";
 import * as internetPricingService from "../firebase/internetPricingService";
-import * as categoryService from "../firebase/categoryService";
 import * as bannerService from "../firebase/bannerService";
 import * as announcementService from "../firebase/announcementService";
 import * as topupService from "../firebase/topupService";
@@ -191,7 +190,7 @@ export function AppProvider({ children }) {
   // No more manual role picker - `screen` starts on 'login' and, once
   // signed in, the account's Firestore `role` field (in `profile.role`)
   // decides which home screen to land on. See the bootstrap effect below.
-  const [screen, setScreen] = useState("login"); // login | register | forgotPassword | customerHome | service | dealerHome | resellerHome | adminHome | webview | buspicker | support | history | topup | settings | profile | myAccount | reports | notifications | marketplaceHome | marketplaceCreateListing | marketplaceMyListings | marketplaceMyReviews | marketplaceListingDetail | marketplaceModeration | verifyIdentity | verificationManagement | adminAnalytics | myDocuments | documentType | addDocument | documentDetails | documentViewer | moreFeatures | adminFeatures | apiProviderManagement | dealerFeatures | resellerFeatures | featureAccess | tierPromotions | adFeatureControls | bannerManagement | salaryReports | notepad | addNote | noteDetail | help | friendsList
+  const [screen, setScreen] = useState("login"); // login | register | forgotPassword | customerHome | service | dealerHome | resellerHome | adminHome | webview | buspicker | support | history | topup | settings | profile | myAccount | reports | notifications | verifyIdentity | verificationManagement | adminAnalytics | myDocuments | documentType | addDocument | documentDetails | documentViewer | moreFeatures | adminFeatures | apiProviderManagement | dealerFeatures | resellerFeatures | featureAccess | tierPromotions | adFeatureControls | bannerManagement | salaryReports | notepad | addNote | noteDetail | help | friendsList
 
   // ---- back-button navigation history ----
   // Tracks prior screens so the Android hardware back button can step
@@ -258,7 +257,7 @@ export function AppProvider({ children }) {
 
   // ---- My Documents (private per-user document vault - passport, visa,
   // work permit, etc.) ---- Screens call documentService.js directly
-  // (same pattern as marketplace/accommodation/etc. above); context only
+  // (same pattern as other private modules above); context only
   // tracks which document is being viewed/edited and which type is being
   // added. editDocumentId is null for "add new", set when opening the
   // Add screen from an existing document's "Edit Details" action.
@@ -626,18 +625,6 @@ export function AppProvider({ children }) {
   // (not advertisers too) - keyed by doc id for adTargetingService's
   // getEligibleAds step 13 (campaignId -> AdCampaign).
   const [adCampaignsById, setAdCampaignsById] = useState({});
-
-  // ---- Buy & Sell / Local Services category lists - admin-editable from
-  // Admin > Categories (see categoryService.js). Every screen with a
-  // category picker or filter chips reads these live instead of the
-  // hardcoded arrays that used to live in marketplaceService.js /
-  // serviceProviderService.js. ----
-  const [marketplaceCategories, setMarketplaceCategories] = useState(
-    categoryService.DEFAULT_CATEGORIES.marketplace,
-  );
-  const [serviceCategories, setServiceCategories] = useState(
-    categoryService.DEFAULT_CATEGORIES.services,
-  );
 
   // ---- live point cost per "point deduct" webview key, admin-editable
   // from Admin > Pricing > Point Feature Costs, with optional per-role
@@ -1118,26 +1105,6 @@ export function AppProvider({ children }) {
       (list) =>
         setAdCampaignsById(Object.fromEntries(list.map((c) => [c.id, c]))),
       logListenerError("adCampaigns"),
-    );
-    return unsub;
-  }, [authUser]);
-
-  useEffect(() => {
-    if (!authUser) return undefined;
-    const unsub = categoryService.subscribeCategories(
-      "marketplace",
-      setMarketplaceCategories,
-      logListenerError("marketplaceCategories"),
-    );
-    return unsub;
-  }, [authUser]);
-
-  useEffect(() => {
-    if (!authUser) return undefined;
-    const unsub = categoryService.subscribeCategories(
-      "services",
-      setServiceCategories,
-      logListenerError("serviceCategories"),
     );
     return unsub;
   }, [authUser]);
@@ -2509,8 +2476,6 @@ export function AppProvider({ children }) {
     pointCosts,
     accessWindowHours,
     featureAccess,
-    marketplaceCategories,
-    serviceCategories,
     supportContact,
     socialLinks,
     paymentSettings,
@@ -2542,26 +2507,10 @@ export function AppProvider({ children }) {
     activeChatReturnTo,
     openChat,
     // direct chat
-    // marketplace
-    activeListingId,
-    openMarketplace,
-    openListingDetail,
     handleDeepLink,
     activeAdvertiserId,
     openAdvertiserManagement,
     openAdvertiserDetail,
-    // accommodation
-    activePropertyId,
-    openAccommodation,
-    openPropertyDetail,
-    // room sharing
-    activeRoommateRequestId,
-    openRoomSharing,
-    openRoommateRequestDetail,
-    // local services
-    activeProviderId,
-    openServiceProvidersHome,
-    openServiceProviderDetail,
     // community
     activeCommunityPostId,
     openCommunity,
@@ -2570,7 +2519,6 @@ export function AppProvider({ children }) {
     openSocialFeed,
     openCreateSocialPost,
     openSocialPostDetail,
-    openMarketplaceSearch,
     // my documents
     activeDocumentId,
     activeDocumentType,
