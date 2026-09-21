@@ -52,6 +52,11 @@ function validateBaseUrl(baseUrl) {
   if (isIpLiteral(host)) throw new HttpsError('invalid-argument', 'Base URL must use a domain name, not a raw IP address.');
   if (parsed.username || parsed.password) throw new HttpsError('invalid-argument', 'Base URL must not contain embedded credentials.');
   if (parsed.hash) throw new HttpsError('invalid-argument', 'Base URL must not contain a URL fragment.');
+  for (const key of parsed.searchParams.keys()) {
+    if (/^(authorization|proxy-authorization|api[-_]?key|access[-_]?token|auth[-_]?token|token|password|passwd|secret|credential|private[-_]?key)$/i.test(key)) {
+      throw new HttpsError('invalid-argument', 'Sensitive credentials must not be stored in the provider base URL.');
+    }
+  }
 }
 function validateTemplate(value, label, maxBytes = 20000) {
   const obj = asObject(value);
@@ -248,6 +253,12 @@ exports.saveApiProvider = onCall({ enforceAppCheck: true }, async (request) => {
       if (!data.apiKey || data.apiKey === '••••••••') data.apiKey = current.apiKey || '';
       if (!data.password || data.password === '••••••••') data.password = current.password || '';
       if (!data.username) data.username = current.username || '';
+      // The admin UI receives only masked/safe provider metadata, so it cannot
+      // round-trip secret-bearing templates. Preserve existing templates when
+      // an edit submits empty defaults instead of silently deleting them.
+      if (!Object.keys(data.headers || {}).length && current.headers) data.headers = current.headers;
+      if (!Object.keys(data.queryTemplate || {}).length && current.queryTemplate) data.queryTemplate = current.queryTemplate;
+      if (!Object.keys(data.requestTemplate || {}).length && current.requestTemplate) data.requestTemplate = current.requestTemplate;
     }
     tx.set(ref, { ...data, updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: request.auth.uid }, { merge: false });
   });
