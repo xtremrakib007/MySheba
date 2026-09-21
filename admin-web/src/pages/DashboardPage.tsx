@@ -110,7 +110,6 @@ export default function DashboardPage() {
   const attentionItems = [
     { label: 'Pending KYC verifications', value: overview?.pendingVerifications, path: '/verification', danger: false },
     { label: 'Open support tickets', value: overview?.openTickets, path: '/support', danger: false },
-    { label: 'Chat reports', value: overview?.pendingChatReports, path: '/chat-reports', danger: true },
   ].filter((item) => item.value !== null && (item.value ?? 0) > 0);
   const attentionCount = attentionItems.reduce((total, item) => total + (item.value ?? 0), 0);
 
