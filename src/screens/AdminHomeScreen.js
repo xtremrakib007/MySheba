@@ -1014,36 +1014,6 @@ export default function AdminHomeScreen() {
           </View>
         )}
 
-          <View>
-            <View style={styles.card}>
-              {SOCIAL_FIELDS.map((r) => (
-                <View key={r.key} style={styles.rateRow}>
-                  <Text style={{ flex: 1 }}>{r.label}</Text>
-                    <Text style={styles.editBtnText}>Edit</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-              <Text style={styles.hintText}>
-                Shown as the "Follow Us" row on the customer Support screen - a platform only appears there once its link is set here.
-              </Text>
-            </View>
-
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>🔧 Story Sharing (technical)</Text>
-              {SOCIAL_TECHNICAL_FIELDS.map((r) => (
-                <View key={r.key} style={styles.rateRow}>
-                  <Text style={{ flex: 1 }}>{r.label}</Text>
-                    <Text style={styles.editBtnText}>Edit</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-              <Text style={styles.hintText}>
-                Required for the Facebook/Instagram Story options on a listing's Share sheet to work. Free to create at developers.facebook.com - no app review needed for this. Instagram Stories uses the same App ID as Facebook.
-              </Text>
-            </View>
-          </View>
-        )}
-
         {adminTab === 'payments' && (
           <View>
             <View style={styles.card}>
