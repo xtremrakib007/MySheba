@@ -3,7 +3,7 @@ import { Bell, CheckCircle2, RefreshCw, Send, Users, XCircle } from 'lucide-reac
 import { subscribeAnnouncements, type AnnouncementLogEntry } from '../services/announcementService';
 
 const audienceLabel: Record<string, string> = {
-  all: 'Everyone', customer: 'Customers', dealer: 'Dealers', subdealer: 'Subdealers', reseller: 'Resellers', admin: 'Admins', superadmin: 'Superadmins',
+  all: 'Everyone', customer: 'Customers', dealer: 'Dealers', reseller: 'Resellers', admin: 'Admins', superadmin: 'Superadmins',
 };
 
 export default function NotificationDeliveryPage() {
