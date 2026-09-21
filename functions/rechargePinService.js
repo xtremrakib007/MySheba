@@ -71,12 +71,13 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
   }
 
   const reserved = await db.runTransaction(async tx => {
-    const [user, existing] = await Promise.all([tx.get(profileRef), tx.get(txRef)]);
+    const pinRef = db.collection('rechargePins').doc(txRef.id);
+    const [user, existing, pinDoc] = await Promise.all([tx.get(profileRef), tx.get(txRef), tx.get(pinRef)]);
     if (existing.exists) {
       const d = existing.data() || {};
       if (d.customerId !== uid) throw new HttpsError('permission-denied', 'This request ID belongs to another account.');
-      if (d.status === 'completed' && typeof d.rechargePin === 'string' && d.rechargePin) {
-        return { replay: true, id: txRef.id, cost: Number(d.cost) || 0, pin: d.rechargePin, operator: d.operator || operator, amount: Number(d.amount) || denomination };
+      if (d.status === 'completed' && d.rechargePinAvailable === true && pinDoc.exists && typeof pinDoc.data()?.pin === 'string' && pinDoc.data().pin) {
+        return { replay: true, id: txRef.id, cost: Number(d.cost) || 0, pin: pinDoc.data().pin, operator: d.operator || operator, amount: Number(d.amount) || denomination };
       }
       if (d.status === 'unknown') throw new HttpsError('unavailable', 'The provider outcome is uncertain. Please verify the provider before retrying.');
       if (d.status === 'pending' || d.status === 'processing') throw new HttpsError('aborted', 'This Recharge PIN request is already being processed.');
