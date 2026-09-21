@@ -23,10 +23,11 @@ function requireAuth(request) {
 
 function safeNumber(v, label) {
   const n = Number(v);
-  if (!Number.isFinite(n) || n <= 0 || !Number.isSafeInteger(Math.round(n * 100))) {
-    throw new HttpsError('invalid-argument', `${label} must be greater than zero.`);
+  const cents = Math.round(n * 100);
+  if (!Number.isFinite(n) || n <= 0 || !Number.isSafeInteger(cents) || Math.abs(n * 100 - cents) > 1e-9) {
+    throw new HttpsError('invalid-argument', `${label} must be a valid amount with at most two decimal places.`);
   }
-  return Math.round(n * 100) / 100;
+  return cents / 100;
 }
 
 function requireSessionMatch(request, user) {
