@@ -177,6 +177,98 @@ exports.completeTransaction = onCall({ enforceAppCheck: true }, async (request) 
 
 
 
+exports.reconcileUnknownTransaction = onCall({ enforceAppCheck: true }, async (request) => {
+  requireAuth(request);
+  const uid = request.auth.uid;
+  const db = admin.firestore();
+  const actorSnap = await db.collection('users').doc(uid).get();
+  if (!actorSnap.exists) throw new HttpsError('permission-denied', 'Your staff profile was not found.');
+  const actorProfile = actorSnap.data() || {};
+  if (!['admin', 'superadmin'].includes(actorProfile.role) ||
+      actorProfile.suspended === true || actorProfile.inactive === true ||
+      actorProfile.disabled === true || actorProfile.active === false || actorProfile.mergedInto) {
+    throw new HttpsError('permission-denied', 'Only an active admin can reconcile an uncertain transaction.');
+  }
+  const id = String(request.data?.transactionId || '').trim();
+  const outcome = String(request.data?.outcome || '').trim().toLowerCase();
+  const providerReference = String(request.data?.providerReference || '').trim().slice(0, 200);
+  if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
+  if (!['completed', 'failed'].includes(outcome)) throw new HttpsError('invalid-argument', 'Outcome must be completed or failed.');
+  if (!providerReference) throw new HttpsError('invalid-argument', 'Provider confirmation/reference is required.');
+  await checkVelocity(db, uid, 'reconcileTransaction', { ip: getClientIp(request) });
+  const ref = db.collection('transactions').doc(id);
+  let result;
+  await db.runTransaction(async (tx) => {
+    const currentActor = await assertActorStillActive(tx, uid, ['admin', 'superadmin']);
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'That transaction no longer exists.');
+    const order = snap.data() || {};
+    if (order.status !== 'unknown') {
+      if (order.status === outcome && order.providerReference === providerReference) {
+        result = { ok: true, transactionId: id, outcome, alreadyReconciled: true };
+        return;
+      }
+      throw new HttpsError('failed-precondition', 'Only unknown transactions can be reconciled.');
+    }
+    const service = String(order.service || order.chargedServiceKind || '').trim();
+    if (!['Recharge', 'Internet', 'Bill Payment', 'Mobile Banking', 'Remittance'].includes(service)) {
+      throw new HttpsError('failed-precondition', 'This transaction type cannot be reconciled here.');
+    }
+    const customerId = typeof order.customerId === 'string' ? order.customerId : '';
+    if (!customerId) throw new HttpsError('failed-precondition', 'Customer information is missing. Reconciliation is required.');
+    if (outcome === 'completed') {
+      tx.update(ref, {
+        status: 'completed',
+        providerReference,
+        reconciled: true,
+        reconciledBy: currentActor.uid,
+        reconciledByRole: currentActor.role,
+        reconciledAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      result = { ok: true, transactionId: id, outcome };
+      return;
+    }
+    const refund = Number(order.pointsCharged ?? order.cost);
+    if (!Number.isFinite(refund) || refund < 0 || !Number.isSafeInteger(Math.round(refund * 100))) {
+      throw new HttpsError('failed-precondition', 'The wallet charge is invalid. Manual reconciliation is required.');
+    }
+    if (order.rejectionRefunded === true || order.apiRefunded === true) {
+      throw new HttpsError('failed-precondition', 'This transaction already has refund metadata. Manual reconciliation is required.');
+    }
+    const customerRef = db.collection('users').doc(customerId);
+    const customerSnap = await tx.get(customerRef);
+    if (!customerSnap.exists) throw new HttpsError('failed-precondition', 'The customer account could not be found.');
+    const customer = customerSnap.data() || {};
+    const balance = Number(customer.walletBalance);
+    const nextBalance = balance + refund;
+    if (!Number.isFinite(balance) || balance < 0 || !Number.isSafeInteger(Math.round(nextBalance * 100))) {
+      throw new HttpsError('failed-precondition', 'The customer wallet balance is invalid.');
+    }
+    tx.update(customerRef, { walletBalance: nextBalance });
+    tx.update(ref, {
+      status: 'failed',
+      providerReference,
+      reconciled: true,
+      reconciledBy: currentActor.uid,
+      reconciledByRole: currentActor.role,
+      reconciledAt: admin.firestore.FieldValue.serverTimestamp(),
+      apiRefunded: true,
+      apiRefundAmount: refund,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    result = { ok: true, transactionId: id, outcome, refunded: refund };
+  });
+  await require('./logService').logAudit({
+    action: 'transaction_reconciled',
+    targetUid: null,
+    performedBy: uid,
+    performedByRole: actorProfile.role,
+    details: { transactionId: id, outcome, providerReference },
+  });
+  return result;
+});
+
 exports.scrubCompletedTransactionPins = onCall({ enforceAppCheck: true }, async (request) => {
   requireAuth(request);
   const uid = request.auth.uid;
