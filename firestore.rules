@@ -78,7 +78,7 @@ service cloud.firestore {
     // but existing support threads must remain readable/writable by the authenticated customer and staff.
     match /chats/{chatId} {
       allow read: if activeProfile() && (request.auth.uid == chatId || isStaff());
-      allow create: if activeProfile() && ((request.auth.uid == chatId && request.resource.data.get('customerId', chatId) == chatId) || isStaff());
+      allow create: if activeProfile() && ((request.auth.uid == chatId && request.resource.data.get('customerId', chatId) == chatId) || (isStaff() && request.resource.data.get('customerId', null) == chatId && exists(/databases/$(database)/documents/users/$(chatId)) && activeStaff(chatId, 'customer')));
       allow update: if activeProfile() && (
         (request.auth.uid == chatId && request.resource.data.get('customerId', chatId) == chatId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage','lastMessageAt','lastSenderRole','unreadForCustomer','unreadForStaff','customerName','customerPhone'])) ||
         (isStaff() && request.resource.data.get('customerId', chatId) == resource.data.get('customerId', chatId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['customerId','customerName','customerPhone','lastMessage','lastMessageAt','lastSenderRole','unreadForCustomer','unreadForStaff','assignedToUid','assignedToName','assignedToRole','createdAt']))
