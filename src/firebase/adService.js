@@ -42,6 +42,7 @@ import {
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
 import * as ImageManipulator from 'expo-image-manipulator';
+import * as Crypto from 'expo-crypto';
 import { db, storage, functions } from './config';
 import { AD_COLLECTIONS, AD_STORAGE_PATHS, AD_TYPES } from '../constants/adCollections';
 import { AD_STATUSES, AD_TYPES } from '../constants/adEnums';
@@ -451,7 +452,7 @@ export async function uploadAdCreative(localUri, adType, mimeType) {
   }
 
   const prefix = adType === AD_TYPES.NATIVE ? AD_STORAGE_PATHS.NATIVE : AD_STORAGE_PATHS.INTERSTITIAL;
-  const storagePath = `${prefix}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+  const storagePath = `${prefix}/${Date.now()}-${Crypto.randomUUID()}.${ext}`;
   const storageRef = ref(storage, storagePath);
   await uploadBytes(storageRef, blob, { contentType });
   const imageUrl = await getDownloadURL(storageRef);
