@@ -213,10 +213,16 @@ exports.saveApiProvider = onCall({ enforceAppCheck: true }, async (request) => {
     }
     const existing = await tx.get(ref);
     if (existing.exists) {
-      if (data.apiKey === '••••••••') data.apiKey = existing.data().apiKey || '';
-      if (data.password === '••••••••') data.password = existing.data().password || '';
+      const current = existing.data() || {};
+      // Editing from the masked provider list must preserve existing credentials.
+      // The UI intentionally never receives the secret values, so an omitted
+      // credential field means "keep the current secret", while an explicit
+      // replacement value updates it.
+      if (!data.apiKey || data.apiKey === '••••••••') data.apiKey = current.apiKey || '';
+      if (!data.password || data.password === '••••••••') data.password = current.password || '';
+      if (!data.username) data.username = current.username || '';
     }
-    tx.set(ref, { ...data, updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: request.auth.uid }, { merge: true });
+    tx.set(ref, { ...data, updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: request.auth.uid }, { merge: false });
   });
   return { id: ref.id };
 });
