@@ -92,9 +92,26 @@ exports.approveTransaction = onCall({ enforceAppCheck: true }, async (request) =
 exports.generateCollectionPin = onCall({ enforceAppCheck: true }, async (request) => {
   requireAuth(request);
   const uid = request.auth.uid;
+  const db = admin.firestore();
+  const profileSnap = await db.collection('users').doc(uid).get();
+  if (!profileSnap.exists) throw new HttpsError('permission-denied', 'Your account was not found.');
+  const profile = profileSnap.data() || {};
+  if (profile.role !== 'customer' || profile.suspended === true || profile.inactive === true ||
+      profile.disabled === true || profile.active === false || profile.mergedInto) {
+    throw new HttpsError('permission-denied', 'Only an active customer can generate a collection PIN.');
+  }
+  const sessionId = request.data?.sessionId;
+  const deviceId = request.data?.deviceId;
+  if (typeof sessionId !== 'string' || !SESSION_ID_RE.test(sessionId) ||
+      typeof deviceId !== 'string' || !DEVICE_ID_RE.test(deviceId)) {
+    throw new HttpsError('failed-precondition', 'Your secure session is missing. Please sign in again.');
+  }
+  if (profile.activeSessionId !== sessionId || profile.activeDeviceId !== deviceId) {
+    throw new HttpsError('permission-denied', 'This device session is no longer active. Please sign in again.');
+  }
   const id = String(request.data?.transactionId || '').trim();
   if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
-  const db = admin.firestore(), ref = db.collection('transactions').doc(id);
+  const ref = db.collection('transactions').doc(id);
   await checkVelocity(db, uid, 'generateCollectionPin', { ip: getClientIp(request) });
   let pin = '';
   await db.runTransaction(async (tx) => {
