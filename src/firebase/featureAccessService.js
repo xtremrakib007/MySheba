@@ -26,7 +26,6 @@ export const USER_FEATURE_OVERRIDES_KEY = 'userOverrides';
 export const FEATURE_DEFS = [
   { key: 'userManagement', icon: '🧑‍💼', bg: '#E3F2FD', name: 'User Mgmt', defaultRoles: ['admin', 'superadmin'] },
   { key: 'transferPoints', icon: '💸', bg: '#E8F5E9', name: 'Transfer Pts', defaultRoles: ['admin', 'superadmin'] },
-  { key: 'chatReports', icon: '🚩', bg: '#FFEBEE', name: 'Chat Reports', defaultRoles: ['admin', 'superadmin', 'support'] },
   { key: 'verificationManagement', icon: '🪪', bg: '#E0F7FA', name: 'Verify Requests', defaultRoles: ['admin', 'superadmin'] },
   { key: 'adminAnalytics', icon: '📊', bg: '#FFF3E0', name: 'Analytics', defaultRoles: ['admin', 'superadmin', 'finance'] },
 ];
