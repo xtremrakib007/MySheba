@@ -927,11 +927,6 @@ export function AppProvider({ children }) {
     supportContactService.DEFAULT_SUPPORT_CONTACT,
   );
 
-  // ---- Official social media links (Facebook/Instagram/TikTok/LinkedIn/X)
-  // + facebookAppId - admin-editable from Admin > Social (see
-  // and used by ShareListingSheet.js for Story-sharing attribution. ----
-  const [socialLinks, setSocialLinks] = useState(
-  );
 
   // ---- JomPay biller ID/ref + DuitNow QR - superadmin-editable from
   // Admin > Payments (see paymentSettingsService.js). Blank until
