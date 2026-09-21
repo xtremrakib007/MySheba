@@ -135,22 +135,19 @@ export interface AnalyticsDashboard {
   modules: ModuleStat[];
   users: UserStats;
   reports: ReportStats;
-  reviews: { count: number; avg: number };
   trend: TrendPoint[];
   topCategories: CategoryCount[];
-  conversations: number;
 }
 
 export async function getDashboard(): Promise<AnalyticsDashboard> {
-  const [modules, users, reports, trend, topCategories, conversations] = await Promise.all([
+  const [modules, users, reports, trend, topCategories] = await Promise.all([
     getModuleStats().catch(() => []),
     getUserStats().catch(() => ({ total: 0, verified: 0, byRole: {} })),
     getReportStats().catch(() => ({ total: 0, open: 0, byKind: [] })),
     getWeeklyTrend().catch(() => []),
     getTopCategories().catch(() => []),
-    countOf('supportTickets'),
   ]);
-  return { modules, users, reports, reviews: { count: 0, avg: 0 }, trend, topCategories, conversations };
+  return { modules, users, reports, trend, topCategories };
 }
 
 export interface LogEntry { id: string; [key: string]: unknown; }
