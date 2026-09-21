@@ -167,7 +167,7 @@ export default function SupportScreen() {
   } = useTheme();
 
   const styles = createStyles(colors);
-  const { authUser, profile, supportContact, helpPrefill, setHelpPrefill, openChat, openHelp, chatUnreadCount, goBackOrHome } = useApp();
+  const { authUser, profile, supportContact, helpPrefill, setHelpPrefill, openHelp, goBackOrHome } = useApp();
   const hasPhone = !!supportContact?.phone;
   const hasWhatsapp = !!supportContact?.whatsapp;
 
@@ -273,15 +273,13 @@ export default function SupportScreen() {
       );
       setSubject('');
       setMessage('');
-      showAlert('Request Submitted', 'Our support team will review your request and update its status here. You can also use Message Support for a live chat.');
+      showAlert('Request Submitted', 'Our support team will review your request and update its status here.');
     } catch (err) {
       showAlert('MySheba', err.message || 'Could not submit your request. Please try again.');
     } finally {
       setSubmitting(false);
     }
   };
-
-  const messageSupport = () => openChat(authUser ? authUser.uid : null, 'Support');
 
   const openLink = async (url, label) => {
     try {
@@ -300,7 +298,7 @@ export default function SupportScreen() {
 
   const callSupport = () => {
     if (!hasPhone) {
-      showAlert('MySheba', 'Call support isn\u2019t set up yet. Please use Message Support or Email in the meantime.');
+      showAlert('MySheba', 'Call support isn\u2019t set up yet. Please use Email in the meantime.');
       return;
     }
     openLink(`tel:${supportContact.phone}`, 'the dialer');
@@ -308,7 +306,7 @@ export default function SupportScreen() {
 
   const whatsappSupport = () => {
     if (!hasWhatsapp) {
-      showAlert('MySheba', 'WhatsApp support isn\u2019t set up yet. Please use Message Support or Email in the meantime.');
+      showAlert('MySheba', 'WhatsApp support isn\u2019t set up yet. Please use Email in the meantime.');
       return;
     }
     const name = profile?.name ? profile.name : '';
@@ -382,19 +380,6 @@ export default function SupportScreen() {
               <Text style={styles.helpSubtitle}>Ask a question - salary, documents, housing, jobs & more</Text>
             </View>
             <Text style={styles.helpChevron}>›</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.messageSupportCard} onPress={messageSupport}>
-            <Text style={styles.messageSupportIcon}>💬</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.messageSupportTitle}>Message Support</Text>
-              <Text style={styles.messageSupportSubtitle}>Chat directly with our team</Text>
-            </View>
-            {chatUnreadCount > 0 && (
-              <View style={styles.messageSupportBadge}>
-                <Text style={styles.messageSupportBadgeText}>{chatUnreadCount > 9 ? '9+' : chatUnreadCount}</Text>
-              </View>
-            )}
           </TouchableOpacity>
 
           <View style={styles.contactRow}>
