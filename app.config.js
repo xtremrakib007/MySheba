@@ -26,6 +26,10 @@ module.exports = () => {
         googleMapsApiKey: GOOGLE_MAPS_API_KEY,
       },
     },
+      ios: {
+        ...expo.ios,
+        bundleIdentifier: 'com.satulink.mysheba',
+      },
     extra: {
       ...expo.extra,
       googleMapsApiKey: GOOGLE_MAPS_API_KEY,
