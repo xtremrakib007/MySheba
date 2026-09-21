@@ -96,9 +96,8 @@ export async function updateAdvertisement(adId, changes) {
 export async function deleteAdvertisement(adId) {
   return deleteDocById(AD_COLLECTIONS.ADVERTISEMENTS, adId);
 }
-/** Foundation only - no workflow validation. A later phase should reject
- * invalid transitions here (e.g. 'rejected' -> 'active') and write the
- * matching ad_audit_logs entry server-side. */
+/** Thin status mutation helper. Authorization is enforced by Firestore/Cloud
+ * Functions; audit-log writes remain server-owned. */
 export async function updateAdvertisementStatus(adId, status) {
   return updateDocById(AD_COLLECTIONS.ADVERTISEMENTS, adId, { status });
 }
