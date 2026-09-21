@@ -18,6 +18,7 @@ import KycOperationsPage from './pages/KycOperationsPage';
 import FraudRiskPage from './pages/FraudRiskPage';
 import CommunicationsCenterPage from './pages/CommunicationsCenterPage';
 import ServiceOperationsPage from './pages/ServiceOperationsPage';
+import NotificationDeliveryPage from './pages/NotificationDeliveryPage';
 import WalletSettlementPage from './pages/WalletSettlementPage';
 import SupportOperationsPage from './pages/SupportOperationsPage';
 import SupportTicketsPage from './pages/SupportTicketsPage';
@@ -69,8 +70,10 @@ function AdminRoutes() {
         <Route path="/support" element={<SupportTicketsPage />} />
         <Route path="/support/messages" element={<SupportMessagesPage />} />
         <Route path="/support-operations" element={<SupportOperationsPage />} />
+        <Route path="/service-operations" element={<ServiceOperationsPage />} />
         <Route path="/announcements" element={<AnnouncementsPage />} />
         <Route path="/communications" element={<CommunicationsCenterPage />} />
+        <Route path="/notification-delivery" element={<NotificationDeliveryPage />} />
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/growth" element={<GrowthCenterPage />} />
