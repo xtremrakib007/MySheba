@@ -120,7 +120,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   });
   if (!claim.owned) {
     const state = claim.state || {};
-    if (state.status === 'completed') return state.result || {};
+    if (state.status === 'completed') {\n      if (service === 'Recharge PIN') throw new HttpsError('unavailable','The provider request completed, but the voucher PIN is not recoverable from the cached execution. Do not retry automatically; reconcile the provider outcome first.');\n      return state.result || {};\n    }
     if (state.status === 'unknown') throw new HttpsError('unavailable','The API request outcome is uncertain. Check the provider before retrying.');
     if (state.status === 'processing') throw new HttpsError('aborted','This API request is already being processed.');
     if (state.status === 'failed') throw new HttpsError('failed-precondition',state.message || 'The provider rejected this request.');
