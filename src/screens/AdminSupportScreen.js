@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, FlatList, Linking, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Linking, ActivityIndicator, StyleSheet } from 'react-native';
 import { showAlert } from '../utils/appAlert';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
@@ -9,23 +9,6 @@ import HeaderDecor from '../components/HeaderDecor';
 import PromptModal from '../components/PromptModal';
 import * as supportTicketService from '../firebase/supportTicketService';
 
-// Superadmin's own Support screen - the full incoming queue every new
-// ticket lands in first. Two tabs:
-//   - "Tickets": the trackable open/in_progress/resolved queue, backed by
-//     supportTicketService.js. Superadmin assigns each ticket to whichever
-//     admin or dealer should solve it (see canAssign below) - that staff
-//     member then sees it in their own "Assigned to You" queue on the
-//     regular Support screen (SupportScreen.js), where they can work it
-//     the same way, minus the ability to reassign it further.
-//   - "Messages": every customer's live Support chat thread (the same data
-//     ChatListScreen shows), backed by chatService.js, so a superadmin
-//     doesn't have to leave Support to see who's messaged in. Each row can
-//     be assigned to a specific admin/dealer via AssignChatModal so it's
-//     clear who owns resolving it - tapping a row opens the full thread in
-//     ChatScreen (see openChat's `returnTo` param), where that same
-//     assignment can also be changed from the header.
-// Separate either way from AdminHomeScreen's own "Support" tab, which just
-// edits the Call/WhatsApp numbers shown to customers, not tickets or chats.
 const FILTERS = [
   { key: 'all', label: 'All' },
   { key: 'open', label: 'Open' },
@@ -73,8 +56,7 @@ export default function AdminSupportScreen() {
 
   const STATUS_STYLE = getStatusStyle(colors);
   const styles = createStyles(colors);
-  const { goBackOrHome, profile } = useApp();
-  const [topTab, setTopTab] = useState('tickets');
+  const { goBackOrHome } = useApp();
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
@@ -82,7 +64,6 @@ export default function AdminSupportScreen() {
   const [resolveId, setResolveId] = useState(null);
 
 
-  const canAssign = profile && profile.role === 'superadmin';
 
   useEffect(() => {
     const unsub = supportTicketService.subscribeSupportTickets(
@@ -232,68 +213,6 @@ export default function AdminSupportScreen() {
           )}
         </ScrollView>
       ))}
-
-      {topTab === 'messages' && (
-        chatsLoading ? (
-          <View style={styles.center}>
-            <ActivityIndicator size="large" color={colors.primary} />
-          </View>
-        ) : (
-          <FlatList
-            data={visibleChats}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.body}
-            ListEmptyComponent={
-              <View style={styles.center}>
-                <Text style={styles.emptyIcon}>💬</Text>
-                <Text style={styles.emptyText}>No messages yet.</Text>
-              </View>
-            }
-            renderItem={({ item }) => {
-              const name = item.customerName || item.customerPhone || 'Customer';
-              const unread = item.unreadForStaff || 0;
-              return (
-                <View style={styles.card}>
-                  <TouchableOpacity onPress={() => openChat(item.id, name, 'adminSupport')}>
-                    <View style={styles.cardTop}>
-                      <Text style={styles.subject}>{name}</Text>
-                      <Text style={styles.date}>{formatWhen(item.lastMessageAt)}</Text>
-                    </View>
-                    <Text style={styles.message} numberOfLines={2}>
-                      {item.lastSenderRole === 'staff' ? 'You: ' : ''}{item.lastMessage}
-                    </Text>
-                    {unread > 0 && (
-                      <View style={[styles.badge, { backgroundColor: '#E8F5E9', alignSelf: 'flex-start', marginTop: 6 }]}>
-                        <Text style={[styles.badgeText, { color: colors.success }]}>{unread} new</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-
-                  <View style={styles.assignRow}>
-                    <Text style={styles.assignRowText} numberOfLines={1}>
-                      {item.assignedToName
-                        ? `🧑‍💼 ${item.assignedToName}${item.assignedToRole ? ` (${item.assignedToRole})` : ''}`
-                        : '🧑‍💼 Unassigned'}
-                    </Text>
-                    {canAssign && (
-                      <View style={styles.assignRowActions}>
-                        <TouchableOpacity onPress={() => setAssignChatId(item.id)}>
-                          <Text style={styles.assignRowAction}>{item.assignedToName ? 'Reassign' : 'Assign'}</Text>
-                        </TouchableOpacity>
-                        {!!item.assignedToName && (
-                          <TouchableOpacity onPress={() => handleUnassignChat(item.id)}>
-                            <Text style={styles.assignRowClear}>Clear</Text>
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    )}
-                  </View>
-                </View>
-              );
-            }}
-          />
-        )
-      )}
 
       <PromptModal
         visible={!!resolveId}
