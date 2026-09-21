@@ -387,26 +387,6 @@ export default function AdminAnalyticsScreen() {
               </View>
             </Section>
 
-              <View style={styles.card}>
-                {modules.map(([key, m], i) => (
-                  <React.Fragment key={key}>
-                    {i > 0 && <View style={styles.divider} />}
-                    <ModuleRow cfg={m} onPress={MODULE_SCREENS[key] ? () => setScreen(MODULE_SCREENS[key]) : undefined} />
-                  </React.Fragment>
-                ))}
-              </View>
-            </Section>
-
-            <Section title="Top Buy & Sell Categories">
-              <View style={styles.card}>
-                {data.topCategories.length === 0 ? (
-                  <Text style={styles.emptyInline}>No active listings yet.</Text>
-                ) : (
-                  data.topCategories.map((c, i) => <CategoryBar key={i} item={c} max={maxCat} />)
-                )}
-              </View>
-            </Section>
-
             <Section title="Users by Role">
               <View style={styles.card}>
                 {Object.entries(data.users.byRole).map(([role, count], i) => (
