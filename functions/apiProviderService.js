@@ -205,6 +205,10 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
 }
 exports.executeConfiguredApi = executeConfiguredApi;
 
+// Pure validation helpers exported for backend unit tests. These do not expose
+// provider credentials and do not perform network or Firestore operations.
+exports._test = { isPrivateIp, validateBaseUrl, validateHeaders, validateTemplate, getPath, render, providerAuth, validate };
+
 exports.listApiProviders = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
