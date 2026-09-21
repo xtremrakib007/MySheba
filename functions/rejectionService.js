@@ -115,6 +115,34 @@ exports.rejectTransaction = onCall({ enforceAppCheck: true }, async request => {
       throw new HttpsError('failed-precondition', 'Only pending or approved transactions can be rejected.');
     }
 
+    // Every service order has already reserved/deducted the customer's
+    // wallet before it reaches the staff queue. Rejection must therefore
+    // refund that exact charge atomically with the rejection. Never refund
+    // a completed/unknown order, and never allow a second refund.
+    const customerId = typeof tx.customerId === 'string' ? tx.customerId : '';
+    const refund = Number(tx.pointsCharged ?? tx.cost);
+    if (!customerId || !Number.isFinite(refund) || refund < 0 ||
+        !Number.isSafeInteger(Math.round(refund * 100))) {
+      throw new HttpsError('failed-precondition', 'This transaction has an invalid wallet charge and requires reconciliation.');
+    }
+    if (tx.rejectionRefunded === true) {
+      throw new HttpsError('failed-precondition', 'This rejected transaction has already been refunded and requires reconciliation.');
+    }
+
+    const customerRef = db.collection('users').doc(customerId);
+    const customerSnap = await t.get(customerRef);
+    if (!customerSnap.exists) {
+      throw new HttpsError('failed-precondition', 'The customer account could not be found. Reconciliation is required.');
+    }
+    const customer = customerSnap.data() || {};
+    const balance = Number(customer.walletBalance);
+    const nextBalance = balance + refund;
+    if (!Number.isFinite(balance) || balance < 0 ||
+        !Number.isSafeInteger(Math.round(nextBalance * 100))) {
+      throw new HttpsError('failed-precondition', 'The customer wallet balance is invalid. Reconciliation is required.');
+    }
+
+    t.update(customerRef, { walletBalance: nextBalance });
     t.update(ref, {
       status: 'rejected',
       rejected: true,
@@ -122,9 +150,11 @@ exports.rejectTransaction = onCall({ enforceAppCheck: true }, async request => {
       rejectedBy: uid,
       rejectedByRole: currentActor.role,
       rejectedAt: admin.firestore.FieldValue.serverTimestamp(),
+      rejectionRefunded: true,
+      rejectionRefundAmount: refund,
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
-    result = { id, rejected: true };
+    result = { id, rejected: true, refunded: refund };
   });
 
   return result;
