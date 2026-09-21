@@ -290,7 +290,7 @@ export function AppProvider({ children }) {
 
   // ---- Notepad (private per-user notes, plus Credit/Debit/Loan "money
   // notes" for tracking who owes what) ---- Screens call notepadService.js
-  // directly (same pattern as marketplace/documents/etc. above); context
+  // directly (same pattern as other private modules above); context
   // only tracks which note is being viewed and which is being edited.
   // editNoteId is null for "add new", set when opening Add from
   // NoteDetailScreen's "Edit" action - same shape as
@@ -326,11 +326,8 @@ export function AppProvider({ children }) {
 
   // ---- Business Profile (PRD section 15 Monetization Plan - "Business
   // profile") ---- Screens call businessProfileService.js directly, so all
-  // that lives here is which uid's business page to show - same "just the
-  // navigation state" pattern as activeListingId/activePropertyId/
-  // activeProviderId above. Opened either from a listing/property/
-  // service's seller/owner/provider row (view someone else's), or from My
-  // Account (view/edit your own).
+  // that lives here is which uid's business page to show. It can be opened
+  // from My Account or another supported profile entry point.
   const [activeBusinessProfileUid, setActiveBusinessProfileUid] =
     useState(null);
   const openBusinessProfile = useCallback((uid) => {
