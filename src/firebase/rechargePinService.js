@@ -1,6 +1,7 @@
 import { httpsCallable } from 'firebase/functions';
 import * as Crypto from 'expo-crypto';
 import { functions } from './config';
+import { getSessionProof } from './deviceSessionService';
 
 const purchaseFn = httpsCallable(functions, 'purchaseRechargePin');
 
@@ -10,7 +11,8 @@ function requestId() {
 }
 
 export async function purchaseRechargePin({ operator, amount }) {
-  const { data } = await purchaseFn({ operator, amount, requestId: requestId() });
+  const session = await getSessionProof();
+  const { data } = await purchaseFn({ operator, amount, requestId: requestId(), ...session });
   return data;
 }
 
