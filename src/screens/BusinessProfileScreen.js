@@ -20,9 +20,6 @@ import VerifiedBadge from '../components/VerifiedBadge';
 import * as authService from '../firebase/authService';
 import * as businessProfileService from '../firebase/businessProfileService';
 import { uploadBusinessLogo } from '../firebase/mediaUpload';
-import { computeGeohash } from '../utils/geo';
-import LocationPickerModal from '../components/LocationPickerModal';
-import MapPreview from '../components/MapPreview';
 
 export default function BusinessProfileScreen() {
   const { colors, brandGradient } = useTheme();
@@ -38,8 +35,6 @@ export default function BusinessProfileScreen() {
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
-  const [showLocationPicker, setShowLocationPicker] = useState(false);
-  const [savingLocation, setSavingLocation] = useState(false);
 
   useEffect(() => {
     if (!targetUid) return undefined;
@@ -97,23 +92,6 @@ export default function BusinessProfileScreen() {
       showAlert('MySheba', err.message || 'Could not upload logo. Please try again.');
     } finally {
       setUploadingLogo(false);
-    }
-  };
-
-  const saveLocation = async ({ address, latitude, longitude }) => {
-    setShowLocationPicker(false);
-    setSavingLocation(true);
-    try {
-      await businessProfileService.updateBusinessDetails(targetUid, {
-        businessAddress: address,
-        latitude,
-        longitude,
-        geohash: computeGeohash(latitude, longitude),
-      });
-    } catch (err) {
-      showAlert('MySheba', err.message || 'Could not save that location. Please try again.');
-    } finally {
-      setSavingLocation(false);
     }
   };
 
@@ -202,31 +180,9 @@ export default function BusinessProfileScreen() {
               )
             )}
 
-            {(!!biz.businessAddress || isOwner) && (
-              <TouchableOpacity
-                style={styles.locationRow}
-                onPress={isOwner ? () => setShowLocationPicker(true) : undefined}
-                disabled={!isOwner || savingLocation}
-              >
-                <Text style={styles.locationText}>
-                  📍 {biz.businessAddress || (isOwner ? 'Add a business location ✎' : '')}
-                </Text>
-                {isOwner && <Text style={styles.saveLink}>{savingLocation ? '...' : '✎'}</Text>}
-              </TouchableOpacity>
-            )}
-            {biz.latitude != null && biz.longitude != null && (
-              <MapPreview latitude={biz.latitude} longitude={biz.longitude} address={biz.businessAddress} />
-            )}
           </View>
         </ScrollView>
       )}
-
-      <LocationPickerModal
-        visible={showLocationPicker}
-        initial={biz ? { address: biz.businessAddress, latitude: biz.latitude, longitude: biz.longitude } : null}
-        onConfirm={saveLocation}
-        onCancel={() => setShowLocationPicker(false)}
-      />
     </View>
   );
 }
