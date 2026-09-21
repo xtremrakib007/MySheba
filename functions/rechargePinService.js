@@ -93,7 +93,29 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
         return { replay: true, id: txRef.id, cost: Number(d.cost) || 0, pin: pinDoc.data().pin, operator: d.operator || operator, amount: Number(d.amount) || denomination };
       }
       if (d.status === 'unknown') throw new HttpsError('unavailable', 'The provider outcome is uncertain. Please verify the provider before retrying.');
-      if (d.status === 'pending' || d.status === 'processing') throw new HttpsError('aborted', 'This Recharge PIN request is already being processed.');
+      if (d.status === 'pending' || d.status === 'processing') {
+        // A function instance can terminate after the wallet debit but before
+        // the provider call/result is persisted. Never retry that request
+        // automatically: the provider may already have accepted it.
+        // After a bounded recovery window, move it to UNKNOWN so it cannot
+        // remain "processing" forever and support/reconciliation can resolve
+        // the provider outcome without issuing a blind refund.
+        const updatedAt = d.updatedAt?.toMillis ? d.updatedAt.toMillis() : 0;
+        const staleAfterMs = 15 * 60 * 1000;
+        if (updatedAt > 0 && Date.now() - updatedAt >= staleAfterMs) {
+          tx.update(txRef, {
+            status: 'unknown',
+            apiExecution: {
+              status: 'unknown',
+              error: 'Processing timed out before the provider outcome was confirmed. Reconciliation is required.',
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          throw new HttpsError('unavailable', 'This Recharge PIN request timed out while processing. The provider outcome must be reconciled before retrying.');
+        }
+        throw new HttpsError('aborted', 'This Recharge PIN request is already being processed.');
+      }
       throw new HttpsError('failed-precondition', 'This Recharge PIN request has already failed.');
     }
     if (!user.exists || !active(user.data()) || user.data().role !== 'customer') {
