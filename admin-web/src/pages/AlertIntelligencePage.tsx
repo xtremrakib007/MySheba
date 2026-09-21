@@ -27,7 +27,6 @@ export default function AlertIntelligencePage() {
   const alerts = useMemo<OperationalAlert[]>(() => [
     { key: 'kyc', title: 'Pending KYC reviews', value: Number(overview?.pendingVerifications || 0), severity: 'warning', path: '/kyc-operations', icon: ShieldAlert, description: 'Verification queue requires operational review.' },
     { key: 'support', title: 'Open support workload', value: Number(overview?.openTickets || 0), severity: 'warning', path: '/support-operations', icon: Bell, description: 'Customer support tickets remain open.' },
-    { key: 'chat', title: 'Chat reports', value: Number(overview?.pendingChatReports || 0), severity: 'critical', path: '/chat-reports', icon: XCircle, description: 'Reported chat content needs review.' },
   ].filter((a) => a.value > 0), [overview]);
 
   const visibleAlerts = alerts.filter((a) => severityFilter === 'all' || a.severity === severityFilter);
