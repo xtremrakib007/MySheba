@@ -8,10 +8,6 @@ export const FEATURE_IDS = {
   REMITTANCE: 'remittance',
   AIR_TICKET: 'air_ticket',
   JOBS: 'jobs',
-  ACCOMMODATION: 'accommodation',
-  BUY_SELL: 'buy_sell',
-  SERVICES: 'services',
-  COMMUNITY: 'community',
   HELP_SUPPORT: 'help_support',
 } as const;
 
@@ -25,10 +21,6 @@ export const FEATURE_LABELS: Record<FeatureId, string> = {
   [FEATURE_IDS.REMITTANCE]: 'Remittance',
   [FEATURE_IDS.AIR_TICKET]: 'Air Ticket',
   [FEATURE_IDS.JOBS]: 'Jobs',
-  [FEATURE_IDS.ACCOMMODATION]: 'Accommodation',
-  [FEATURE_IDS.BUY_SELL]: 'Buy & Sell',
-  [FEATURE_IDS.SERVICES]: 'Services',
-  [FEATURE_IDS.COMMUNITY]: 'Community',
   [FEATURE_IDS.HELP_SUPPORT]: 'Help / Support',
 };
 
@@ -40,9 +32,5 @@ export const FEATURE_ID_LIST: FeatureId[] = [
   FEATURE_IDS.REMITTANCE,
   FEATURE_IDS.AIR_TICKET,
   FEATURE_IDS.JOBS,
-  FEATURE_IDS.ACCOMMODATION,
-  FEATURE_IDS.BUY_SELL,
-  FEATURE_IDS.SERVICES,
-  FEATURE_IDS.COMMUNITY,
   FEATURE_IDS.HELP_SUPPORT,
 ];
