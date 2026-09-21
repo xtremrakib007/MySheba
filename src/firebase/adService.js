@@ -44,7 +44,7 @@ import { httpsCallable } from 'firebase/functions';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as Crypto from 'expo-crypto';
 import { db, storage, functions } from './config';
-import { AD_COLLECTIONS, AD_STORAGE_PATHS, AD_TYPES } from '../constants/adCollections';
+import { AD_COLLECTIONS, AD_STORAGE_PATHS } from '../constants/adCollections';
 import { AD_STATUSES, AD_TYPES } from '../constants/adEnums';
 import { getEffectiveAdStatus as getEffectiveAdStatusPure } from '../utils/adScheduleUtils';
 
