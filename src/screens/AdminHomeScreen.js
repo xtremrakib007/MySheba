@@ -614,13 +614,6 @@ export default function AdminHomeScreen() {
     }
   };
 
-    if (!key) return;
-    try {
-    } catch (e) {
-      showAlert('MySheba', e.message || 'Could not update this setting.');
-    }
-  };
-
   const savePaymentField = async (value) => {
     const key = editPaymentKey;
     setEditPaymentKey(null);
