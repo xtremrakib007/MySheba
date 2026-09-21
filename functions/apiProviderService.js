@@ -139,7 +139,17 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     const endpointPath = String(provider.endpointPath || '/');
     if (/^https?:\/\//i.test(endpointPath) || endpointPath.startsWith('//')) throw new Error('Endpoint path must be relative to the provider base URL.');
     const url = new URL(endpointPath,base);
-    for (const [k,v] of Object.entries(render(asObject(provider.queryTemplate),vars))) if(v!==''&&v!=null) url.searchParams.set(k,String(v));
+    for (const [k,v] of Object.entries(render(asObject(provider.queryTemplate),vars))) {
+      if (!/^[A-Za-z0-9_.-]{1,100}$/.test(k)) throw new Error('Provider query parameter name is invalid.');
+      if (/^(authorization|proxy-authorization|api[-_]?key|access[-_]?token|auth[-_]?token|token|password|passwd|secret|credential|private[-_]?key)$/i.test(k)) {
+        throw new Error('Sensitive credentials must not be sent through provider query parameters.');
+      }
+      if (v !== '' && v != null) {
+        const value = String(v);
+        if (value.length > 2000) throw new Error('Provider query parameter value is too large.');
+        url.searchParams.set(k, value);
+      }
+    }
     const method = String(provider.method||'POST').toUpperCase();
     const headers = { accept:'application/json', ...render(asObject(provider.headers),vars), ...providerAuth(provider) };
     let body;
