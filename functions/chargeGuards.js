@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const crypto = require('crypto');
 const walletService = require('./walletService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 
@@ -26,14 +27,15 @@ function getRequestId(request) {
 }
 
 async function recoverChargedRequest(db, uid, requestId, guardRef, expectedService) {
-  const recovered = await db.collection('transactions')
-    .where('customerId', '==', uid)
-    .where('raw.requestId', '==', requestId)
-    .where('service', '==', expectedService)
-    .limit(1)
-    .get();
-  if (recovered.empty) return null;
-  const txDoc = recovered.docs[0];
+  // walletService uses this same deterministic transaction ID. Recovering by
+  // document ID avoids a composite/nested-field query and guarantees that a
+  // request ID cannot accidentally recover another transaction.
+  const transactionId = crypto.createHash('sha256')
+    .update(`${uid}|${String(expectedService || '').trim().toLowerCase().replace(/\\s+/g, '')}|${requestId}`)
+    .digest('hex')
+    .slice(0, 40);
+  const txDoc = await db.collection('transactions').doc(transactionId).get();
+  if (!txDoc.exists) return null;
   const txData = txDoc.data() || {};
   if (txData.status === 'unknown') {
     throw new HttpsError('unavailable', 'The API request outcome is uncertain. Check the provider before retrying.');
