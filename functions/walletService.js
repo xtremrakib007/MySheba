@@ -75,6 +75,7 @@ const result=await db.runTransaction(async tx=>{const existingTx=await tx.get(tx
     }
   }
   return{id:txref.id,cost:result.cost,collectionPin:result.existing?result.collectionPin:collectionPin};}
+exports.runChargeProduct = chargeProduct;
 exports.chargeRecharge=onCall({ enforceAppCheck: true },async r=>chargeProduct(r,'recharge',r.data?.payload,r.data?.customer));
 exports.chargeInternetPackage=onCall({ enforceAppCheck: true },async r=>chargeProduct(r,'internet',r.data?.payload,r.data?.customer));
 exports.chargeBillPayment=onCall({ enforceAppCheck: true },async r=>chargeProduct(r,'billpayment',r.data?.payload,r.data?.customer));
