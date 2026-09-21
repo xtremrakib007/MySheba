@@ -66,6 +66,25 @@ service cloud.firestore {
     match /pointTransfers/{id} { allow read: if activeProfile() && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid || isAdmin()); allow create, update, delete: if false; }
     match /recommendationViews/{id} { allow read, write: if false; }
     match /announcements/{id} { allow read: if activeProfile() && isAdmin(); allow write: if false; }
+    // Staff support chat remains active for the admin/support inbox. Customer-facing chat UI is retired,
+    // but existing support threads must remain readable/writable by the authenticated customer and staff.
+    match /chats/{chatId} {
+      allow read: if activeProfile() && (request.auth.uid == chatId || isStaff());
+      allow create: if activeProfile() && ((request.auth.uid == chatId && request.resource.data.get('customerId', chatId) == chatId) || isStaff());
+      allow update: if activeProfile() && (
+        (request.auth.uid == chatId && request.resource.data.get('customerId', chatId) == chatId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage','lastMessageAt','lastSenderRole','unreadForCustomer','unreadForStaff','customerName','customerPhone'])) ||
+        (isStaff() && request.resource.data.get('customerId', chatId) == resource.data.get('customerId', chatId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['customerId','customerName','customerPhone','lastMessage','lastMessageAt','lastSenderRole','unreadForCustomer','unreadForStaff','assignedToUid','assignedToName','assignedToRole','createdAt']))
+      );
+      allow delete: if false;
+      match /messages/{messageId} {
+        allow read: if activeProfile() && (request.auth.uid == chatId || isStaff());
+        allow create: if activeProfile() && request.resource.data.get('senderId', '') == request.auth.uid && (
+          (request.auth.uid == chatId && request.resource.data.get('senderRole', '') == 'customer') ||
+          (isStaff() && request.resource.data.get('senderRole', '') == 'staff')
+        ) && request.resource.data.keys().hasOnly(['senderId','senderRole','senderName','text','type','mediaUrl','mediaName','mediaSize','mimeType','duration','createdAt']);
+        allow update, delete: if false;
+      }
+    }
     match /supportTickets/{id} { allow read: if activeProfile() && (isAdmin() || resource.data.get('userId', null) == request.auth.uid || resource.data.get('assignedToUid', '') == request.auth.uid); allow create: if false; allow update: if activeProfile() && ((isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['open','in_progress','resolved']) || (isSuperadmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['assignedToUid','assignedToName','assignedToRole','updatedAt']) && ((request.resource.data.assignedToUid == '' && request.resource.data.assignedToName == '' && request.resource.data.assignedToRole == '') || (request.resource.data.assignedToUid != '' && request.resource.data.assignedToRole in ['admin','superadmin','support'] && activeStaff(request.resource.data.assignedToUid, request.resource.data.assignedToRole) && request.resource.data.assignedToName == get(/databases/$(database)/documents/users/$(request.resource.data.assignedToUid)).data.name)) || (resource.data.get('assignedToUid', '') == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['in_progress','resolved']) || (resource.data.get('userId', null) == request.auth.uid && resource.data.status == 'resolved' && request.resource.data.status == 'open' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']))); allow delete: if false; }
   }
 }
