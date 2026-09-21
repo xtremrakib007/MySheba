@@ -16,7 +16,7 @@ export const GRID_DEFS = [
   ['userManagement','Users'],['verificationManagement','KYC Verification'],['featureAccess','Feature Access'],['banners','Banners'],['announcements','Announcements']
 ].map(([key,name]) => ({ key, name }));
 
-export const DEFAULT_GRID_MANAGEMENT = Object.fromEntries(GRID_DEFS.map(({key}) => [key, true]));
+export const DEFAULT_GRID_MANAGEMENT = Object.fromEntries(GRID_DEFS.map(({key}) => [key, key === 'rechargePin' ? false : true]));
 
 function merge(data) {
   const out = { ...DEFAULT_GRID_MANAGEMENT };
