@@ -2,6 +2,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const crypto = require('crypto');
 const progressionService = require('./progressionService');
+const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { executeConfiguredApi } = require('./apiProviderService');
 
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
@@ -74,6 +75,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
     throw new HttpsError('permission-denied', 'Only active customer accounts can purchase Recharge PINs.');
   }
   requireSessionMatch(request, userSnap.data());
+  await checkVelocity(db, uid, 'rechargePin', { ip: getClientIp(request) });
   const discount = progressionService.discountPercentFromSettings(tierSettings, userSnap.data().tier);
   const cost = Math.round(denomination * priceMultiplier * (1 - discount / 100) * 100) / 100;
   if (!Number.isFinite(cost) || cost <= 0 || !Number.isSafeInteger(Math.round(cost * 100))) {
