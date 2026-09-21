@@ -142,7 +142,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     let body;
     if(method!=='GET'){ headers['content-type']=headers['content-type']||'application/json'; body=JSON.stringify(render(asObject(provider.requestTemplate),vars)); }
     const ctl=new AbortController(), timer=setTimeout(()=>ctl.abort(),Math.max(3000,Math.min(60000,Number(provider.timeoutMs)||15000)));
-    let response; try { response=await fetch(url,{method,headers,body,signal:ctl.signal}); } finally { clearTimeout(timer); }
+    let response; try { response=await fetch(url,{method,headers,body,signal:ctl.signal,redirect:'error'}); } finally { clearTimeout(timer); }
     const responseText=await response.text();
     if(Buffer.byteLength(responseText,'utf8')>1000000) throw new Error('Provider response is too large.');
     let data={}; try { data=responseText?JSON.parse(responseText):{}; } catch { data={raw:responseText.slice(0,5000)}; }
