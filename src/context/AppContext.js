@@ -1275,33 +1275,6 @@ export function AppProvider({ children }) {
     return unsub;
   }, [screen, profile]);
 
-  // ---- live chat unread badge - customers watch their own thread; staff watch every thread's total. ----
-  useEffect(() => {
-    if (!authUser || !profile) {
-      setChatUnreadCount(0);
-      return undefined;
-    }
-    const isStaff = ["dealer", "reseller", "admin", "superadmin"].includes(
-      profile.role,
-    );
-    if (isStaff) {
-      const unsub = chatService.subscribeAllChats(
-        (list) =>
-          setChatUnreadCount(
-            list.reduce((sum, c) => sum + (c.unreadForStaff || 0), 0),
-          ),
-        logListenerError("chats:staff"),
-      );
-      return unsub;
-    }
-    const unsub = chatService.subscribeChatMeta(
-      authUser.uid,
-      (meta) => setChatUnreadCount(meta ? meta.unreadForCustomer || 0 : 0),
-      logListenerError("chats:customer"),
-    );
-    return unsub;
-  }, [authUser, profile]);
-
   // Re-locks the Locked Chats vault AND the Notepad/My Documents private
   // vault whenever the app leaves the foreground - same behavior as
   // WhatsApp's chat lock, so background/switch-app/screen-off always
@@ -1432,9 +1405,7 @@ export function AppProvider({ children }) {
     const handleResponse = async (response) => {
       const data = response?.notification?.request?.content?.data || {};
       try {
-        if (data.type === "chat" && data.chatId) {
-          openChat(data.chatId, "Support");
-        } else if (data.type === "topup") {
+        if (data.type === "topup") {
           // Admin/superadmin get notified of a new request to review; the
           // requester gets notified once it's approved/rejected. Route each
           // to wherever that status actually lives for them - staff never
@@ -1470,7 +1441,7 @@ export function AppProvider({ children }) {
     });
     const sub = addNotificationResponseListener(handleResponse);
     return () => sub.remove();
-  }, [authUser, profile, openChat, setAdminTab, setScreen]);
+  }, [authUser, profile, setAdminTab, setScreen]);
 
   const openResult = useCallback((kind, txId, svc, extra) => {
     setResultModal({
@@ -2479,12 +2450,6 @@ export function AppProvider({ children }) {
     confirmPaymentSuccess,
     webViewPaymentBusy,
     webViewPaymentCharged,
-    // support chat
-    activeChatId,
-    activeChatName,
-    chatUnreadCount,
-    activeChatReturnTo,
-    openChat,
     // direct chat
     handleDeepLink,
     activeAdvertiserId,
