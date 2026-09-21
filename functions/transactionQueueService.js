@@ -3,6 +3,19 @@ const admin = require('firebase-admin');
 
 const DEALER_SERVICE = 'Mobile Banking';
 const RESELLER_SERVICES = new Set(['Recharge', 'Internet', 'Bill Payment', 'Remittance']);
+const SERVICE_ALIASES = {
+  recharge: 'Recharge',
+  internet: 'Internet',
+  billpayment: 'Bill Payment',
+  'bill payment': 'Bill Payment',
+  mobilebanking: 'Mobile Banking',
+  'mobile banking': 'Mobile Banking',
+  remittance: 'Remittance',
+};
+function normalizeService(value) {
+  const raw = String(value || '').trim();
+  return SERVICE_ALIASES[raw.toLowerCase()] || raw;
+}
 const OPERATIONAL_RAW_FIELDS = [
   'phone', 'senderName', 'senderPhone', 'senderCompany', 'senderPassportNo', 'senderPassportExpiry',
   'senderAddress', 'receiverFirstName', 'receiverLastName', 'receiverRelationship', 'receiverPhone',
@@ -31,12 +44,12 @@ function sanitizeRaw(raw) {
 }
 
 function sanitizeTransaction(id, tx) {
-  const operatorRole = queueRole(tx.service);
+  const service = normalizeService(tx.service || tx.chargedServiceKind);\n  const operatorRole = queueRole(service);
   if (!operatorRole) return null;
   return {
     transactionId: id,
     operatorRole,
-    service: String(tx.service || ''),
+    service,
     status: String(tx.status || 'pending'),
     approved: tx.approved === true,
     amount: Number.isFinite(Number(tx.amount)) ? Number(tx.amount) : 0,
