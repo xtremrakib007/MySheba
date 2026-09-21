@@ -36,7 +36,6 @@ import ToolAccessPage from './pages/ToolAccessPage';
 import RolePermissionsPage from './pages/RolePermissionsPage';
 import SalarySettingsPage from './pages/SalarySettingsPage';
 import BannersPage from './pages/BannersPage';
-import CategoriesPage from './pages/CategoriesPage';
 import ModuleSubscriptionsPage from './pages/ModuleSubscriptionsPage';
 import PaymentSettingsPage from './pages/PaymentSettingsPage';
 import PointTopUpPage from './pages/PointTopUpPage';
