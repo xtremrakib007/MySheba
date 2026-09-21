@@ -38,12 +38,12 @@ async function recoverChargedRequest(db, uid, requestId, guardRef, expectedServi
   if (txData.status === 'unknown') {
     throw new HttpsError('unavailable', 'The API request outcome is uncertain. Check the provider before retrying.');
   }
-  // The charge callable's idempotency result is distinct from downstream
-  // service completion. A pending/processing transaction means the wallet
-  // charge and transaction record already exist, so replaying the callable
-  // must return the original charge result without charging again. Do not
-  // treat "unknown" as a successful replay.
-  if (!['pending', 'processing', 'completed'].includes(txData.status)) return null;
+  // Only a completed transaction proves that the downstream service
+  // completed. Pending/processing means the wallet charge exists but the
+  // provider/service still needs to be resumed through the idempotent runner.
+  // Never mark those states completed here or the customer could receive a
+  // false success without receiving the purchased service.
+  if (txData.status !== 'completed') return null;
   const rawCost = txData.pointsCharged ?? txData.cost;
   const cost = Number(rawCost);
   if (!Number.isFinite(cost) || cost < 0 || !Number.isSafeInteger(Math.round(cost * 100))) return null;
@@ -123,14 +123,12 @@ function wrap(name) {
       if (recovered) return recovered;
 
       // A committed transaction can exist while the first invocation was
-      // interrupted before the configured provider call completed. The wallet
-      // service exports callable wrappers, so do not invoke them through
-      // ".run" here. Instead, the recovery path must use the same callable
-      // handler that was originally wrapped.
-      const fn = walletService[name];
-      if (!fn || typeof fn !== 'function') throw new HttpsError('internal', 'Charge service is unavailable.');
+      // interrupted before the configured provider call completed. Resume
+      // through the internal runner, not the Firebase onCall wrapper.
+      const fn = walletService.runChargeProduct;
+      if (typeof fn !== 'function') throw new HttpsError('internal', 'Charge service is unavailable.');
       const safeRequest = await sanitizeRequest(request, requestId);
-      const result = await fn(safeRequest);
+      const result = await fn(safeRequest, SERVICE_BY_CALLABLE[name].toLowerCase().replace(' ', ''));
       await guardRef.set({
         status: 'completed',
         transactionId: result?.id || null,
