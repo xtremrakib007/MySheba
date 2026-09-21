@@ -62,7 +62,6 @@
         "exclude": [
           "@notifee/react-native",
           "crypto-js",
-          "expo-av",
           "firebase"
         ],
         "listUnknownPackages": false
