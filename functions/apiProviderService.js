@@ -5,7 +5,7 @@ const crypto = require('crypto');
 
 const COLLECTION = 'api_providers';
 const SETTINGS = 'api_settings/service_modes';
-const ALLOWED_SERVICES = ['Recharge', 'Internet', 'Bill Payment', 'Bus', 'Train', 'Flight', 'Mobile Banking', 'Remittance', 'Payment Gateway', 'Entertainment'];
+const ALLOWED_SERVICES = ['Recharge', 'Internet', 'Bill Payment', 'Bus', 'Train', 'Flight', 'Mobile Banking', 'Remittance', 'Payment Gateway', 'Entertainment', 'Recharge PIN'];
 const ALLOWED_AUTH = ['none', 'apiKey', 'bearer', 'basic'];
 const ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH'];
 const DEFAULT_MODES = Object.fromEntries(ALLOWED_SERVICES.map((service) => [service, 'legacy']));
