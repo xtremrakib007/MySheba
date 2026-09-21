@@ -117,7 +117,14 @@ function wrap(name) {
       if (existing.status === 'completed' && existing.transactionId) {
         const replayCost = existing.cost == null ? 0 : Number(existing.cost);
         if (!Number.isFinite(replayCost) || replayCost < 0 || !Number.isSafeInteger(Math.round(replayCost * 100))) throw new HttpsError('failed-precondition', 'The stored charge result is invalid.');
-        return { id: existing.transactionId, cost: replayCost, replay: true };
+        const replayTx = await db.collection('transactions').doc(existing.transactionId).get();
+        const replayData = replayTx.exists ? (replayTx.data() || {}) : {};
+        return {
+          id: existing.transactionId,
+          cost: replayCost,
+          collectionPin: typeof replayData.pin === 'string' ? replayData.pin : '',
+          replay: true,
+        };
       }
       const recovered = await recoverChargedRequest(db, uid, requestId, guardRef, SERVICE_BY_CALLABLE[name]);
       if (recovered) return recovered;
@@ -141,12 +148,13 @@ function wrap(name) {
     try {
       await checkVelocity(db, uid, 'chargeService', { ip: getClientIp(request) });
 
-      const fn = walletService[name];
-      if (!fn || typeof fn.run !== 'function') {
+      const fn = walletService.runChargeProduct;
+      if (typeof fn !== 'function') {
         throw new HttpsError('internal', 'Charge service is unavailable.');
       }
       const safeRequest = await sanitizeRequest(request, requestId);
-      const result = await fn.run(safeRequest);
+      const serviceKey = SERVICE_BY_CALLABLE[name].toLowerCase().replace(' ', '');
+      const result = await fn(safeRequest, serviceKey);
       await guardRef.update({
         status: 'completed', transactionId: result?.id || null,
         cost: result?.cost == null ? 0 : Number(result.cost),
