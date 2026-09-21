@@ -37,7 +37,6 @@ import * as categoryService from "../firebase/categoryService";
 import * as bannerService from "../firebase/bannerService";
 import * as announcementService from "../firebase/announcementService";
 import * as topupService from "../firebase/topupService";
-import * as chatService from "../firebase/chatService";
 import {
   registerForPushNotificationsAsync,
   addNotificationResponseListener,
@@ -683,8 +682,7 @@ export function AppProvider({ children }) {
     superAdminTopup: ['superadmin'],
     dealerFeatures: ['dealer'],
     resellerFeatures: ['reseller'],
-    chatList: ['admin', 'superadmin', 'dealer', 'reseller']
-  };
+    };
 
   const getHomeForRole = useCallback((role) => {
     if (role === 'dealer') return 'dealerHome';
