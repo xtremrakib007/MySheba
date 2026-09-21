@@ -27,8 +27,6 @@ import * as bannerService from '../firebase/bannerService';
 import * as announcementService from '../firebase/announcementService';
 import * as topupService from '../firebase/topupService';
 import * as transactionService from '../firebase/transactionService';
-import * as categoryService from '../firebase/categoryService';
-import { MODULE_LABELS } from '../firebase/categoryService';
 import { internetPackagesByOperator, countries } from '../data/countries';
 import CountryModal from '../components/CountryModal';
 import * as homepageConfigService from '../firebase/homepageConfigService';
@@ -44,7 +42,6 @@ const FEATURES = [
   { key: 'rates', icon: '💱', bg: '#F3E5F5', name: 'Rates' },
   { key: 'pricing', icon: '🏷️', bg: '#FFF3E0', name: 'Pricing' },
   { key: 'payments', icon: '💳', bg: '#E1F5FE', name: 'Payments' },
-  { key: 'categories', icon: '🗂️', bg: '#EDE7F6', name: 'Categories' },
   { key: 'support', icon: '☎️', bg: '#E0F2F1', name: 'Support' },
   { key: 'homepage', icon: '🏠', bg: '#E0F7FA', name: 'Homepage' },
   { key: 'banners', icon: '🖼️', bg: '#FFF0F0', name: 'Banners' },
@@ -274,7 +271,6 @@ export default function AdminHomeScreen() {
   // Role-Based Pricing (superadmin only): { role, key } for the field
   // currently being edited, or null when the modal's closed.
   const [editRolePrice, setEditRolePrice] = useState(null);
-  const [categoryBusy, setCategoryBusy] = useState(false);
   const [editSupportKey, setEditSupportKey] = useState(null);
   const [editPaymentKey, setEditPaymentKey] = useState(null); // 'jompayBillerId' | 'jompayRefNo' | null
   const [qrModalVisible, setQrModalVisible] = useState(false); // DuitNow QR upload modal
@@ -605,40 +601,6 @@ export default function AdminHomeScreen() {
     } catch (e) {
       showAlert('MySheba', e.message || 'Could not reset this price.');
     }
-  };
-
-  const saveNewCategory = async (value) => {
-    const module = addCategoryModule;
-    setAddCategoryModule(null);
-    if (!module) return;
-    setCategoryBusy(true);
-    try {
-      await categoryService.addCategory(module, value);
-    } catch (e) {
-      showAlert('MySheba', e.message || 'Could not add this category.');
-    } finally {
-      setCategoryBusy(false);
-    }
-  };
-
-  const confirmRemoveCategory = (module, name) => {
-    showAlert(`Remove "${name}"?`, "It stays on any existing listing that already uses it - this only takes it out of the picker for new ones.", [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          setCategoryBusy(true);
-          try {
-            await categoryService.removeCategory(module, name);
-          } catch (e) {
-            showAlert('MySheba', e.message || 'Could not remove this category.');
-          } finally {
-            setCategoryBusy(false);
-          }
-        },
-      },
-    ]);
   };
 
   const saveSupportContact = async (value) => {
@@ -1038,41 +1000,6 @@ export default function AdminHomeScreen() {
                 <Text style={styles.addPackageBtnText}>+ Add Package for {pricingOperator}</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        )}
-
-        {adminTab === 'categories' && (
-          <View>
-              return (
-                <View key={module} style={styles.card}>
-                  <Text style={styles.cardTitle}>{MODULE_LABELS[module]}</Text>
-                  {list.map((c) => (
-                    <View key={c} style={styles.rateRow}>
-                      <Text style={{ flex: 1 }}>{c}</Text>
-                      <TouchableOpacity
-                        style={[styles.editBtn, styles.removeCategoryBtn]}
-                        disabled={categoryBusy}
-                        onPress={() => confirmRemoveCategory(module, c)}
-                      >
-                        <Text style={[styles.editBtnText, styles.removeCategoryBtnText]}>Remove</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                  <TouchableOpacity
-                    style={styles.addCategoryBtn}
-                    disabled={categoryBusy}
-                    onPress={() => setAddCategoryModule(module)}
-                  >
-                    <Text style={styles.addCategoryBtnText}>+ Add Category</Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
-            <Text style={styles.hintText}>
-              These lists feed the category picker on Create Listing / List a Service and the filter chips on
-              their browse screens. Removing one only hides it from new listings going forward - anything
-              already posted under it keeps showing that category.
-            </Text>
           </View>
         )}
 
@@ -1494,13 +1421,6 @@ export default function AdminHomeScreen() {
         placeholder="e.g. 1.5"
         onSubmit={savePricing}
         onCancel={() => setEditPricingKey(null)}
-      />
-      <PromptModal
-        visible={!!addCategoryModule}
-        title={`New ${addCategoryModule === 'services' ? 'service' : 'Buy & Sell'} category:`}
-        placeholder="e.g. Sporting Goods"
-        onSubmit={saveNewCategory}
-        onCancel={() => setAddCategoryModule(null)}
       />
       <PromptModal
         visible={!!editPointCostKey}
