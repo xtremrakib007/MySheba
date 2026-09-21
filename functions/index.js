@@ -87,6 +87,7 @@ exports.saveApiProvider = require('./apiProviderService').saveApiProvider;
 exports.deleteApiProvider = require('./apiProviderService').deleteApiProvider;
 exports.getServiceApiSettings = require('./apiProviderService').getServiceApiSettings;
 exports.saveServiceApiSettings = require('./apiProviderService').saveServiceApiSettings;
+exports.purchaseRechargePin = require('./rechargePinService').purchaseRechargePin;
 exports.createSupportTicket = supportTicketService.createSupportTicket;
 exports.assignSupportTicket = supportTicketService.assignSupportTicket;
 exports.unassignSupportTicket = supportTicketService.unassignSupportTicket;
