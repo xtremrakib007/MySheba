@@ -14,7 +14,6 @@ const DOC_REF = doc(db, 'settings', 'featureAccess');
 export const FEATURE_DEFS = [
   { key: 'userManagement', icon: '🧑‍💼', name: 'User Mgmt', defaultRoles: ['admin', 'superadmin'] },
   { key: 'transferPoints', icon: '💸', name: 'Transfer Pts', defaultRoles: ['admin', 'superadmin'] },
-  { key: 'chatReports', icon: '🚩', name: 'Chat Reports', defaultRoles: ['admin', 'superadmin', 'support'] },
   { key: 'verificationManagement', icon: '🪪', name: 'Verify Requests', defaultRoles: ['admin', 'superadmin'] },
   { key: 'adminAnalytics', icon: '📊', name: 'Analytics', defaultRoles: ['admin', 'superadmin', 'finance'] },
 ] as const;
