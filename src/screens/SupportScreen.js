@@ -167,6 +167,7 @@ export default function SupportScreen() {
   } = useTheme();
 
   const styles = createStyles(colors);
+  const { authUser, profile, supportContact, helpPrefill, setHelpPrefill, openChat, openHelp, chatUnreadCount, goBackOrHome } = useApp();
   const hasPhone = !!supportContact?.phone;
   const hasWhatsapp = !!supportContact?.whatsapp;
 
@@ -325,9 +326,6 @@ export default function SupportScreen() {
     openLink(`mailto:${SUPPORT_EMAIL}?subject=${emailSubject}&body=${body}`, 'your email app');
   };
 
-    if (!url) return;
-    openLink(url, platform.label);
-  };
 
   // Swipe left/right across the tab content to move between Messages /
   // Tickets, same as tapping the segmented bar. Only claims the gesture
@@ -417,16 +415,6 @@ export default function SupportScreen() {
           </View>
 
           <Text style={styles.hoursNote}>Support hours: 9:00 AM – 9:00 PM, daily.</Text>
-
-            <View style={styles.followUsBlock}>
-              <Text style={styles.followUsTitle}>Follow Us</Text>
-              <View style={styles.followUsRow}>
-                    <Text style={styles.followUsIcon}>{p.icon}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          )}
 
           <SmartAd placement="HELP_SUPPORT_BOTTOM" feature="help_support" height={100} style={{ marginTop: 12 }} />
         </ScrollView>
