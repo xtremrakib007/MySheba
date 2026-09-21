@@ -61,7 +61,7 @@ function validateBaseUrl(baseUrl) {
 function validateTemplate(value, label, maxBytes = 20000) {
   const obj = asObject(value);
   const json = JSON.stringify(obj);
-  if (json.length > maxBytes) throw new HttpsError('invalid-argument', `${label} is too large.`);
+  if (Buffer.byteLength(json, 'utf8') > maxBytes) throw new HttpsError('invalid-argument', `${label} is too large.`);
   return obj;
 }
 function validateHeaders(value) {
@@ -131,7 +131,10 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   });
   if (!claim.owned) {
     const state = claim.state || {};
-    if (state.status === 'completed') {\n      if (service === 'Recharge PIN') throw new HttpsError('unavailable','The provider request completed, but the voucher PIN is not recoverable from the cached execution. Do not retry automatically; reconcile the provider outcome first.');\n      return state.result || {};\n    }
+    if (state.status === 'completed') {
+      if (service === 'Recharge PIN') throw new HttpsError('unavailable','The provider request completed, but the voucher PIN is not recoverable from the cached execution. Do not retry automatically; reconcile the provider outcome first.');
+      return state.result || {};
+    }
     if (state.status === 'unknown') throw new HttpsError('unavailable','The API request outcome is uncertain. Check the provider before retrying.');
     if (state.status === 'processing') throw new HttpsError('aborted','This API request is already being processed.');
     if (state.status === 'failed') throw new HttpsError('failed-precondition',state.message || 'The provider rejected this request.');
