@@ -361,17 +361,6 @@ export function AppProvider({ children }) {
     setScreen("support");
   }, []);
 
-  // ---- Contact Profile ---- read-only view of the other person in a 1:1
-  // direct chat - opened by tapping their name in ChatScreen's header (see
-  // ChatScreen's headerTitleRow). Same "just the navigation state" pattern
-  // ContactProfileScreen fetches the
-  // actual profile doc itself once it has the uid.
-  const [activeContactProfileUid, setActiveContactProfileUid] = useState(null);
-  const openContactProfile = useCallback((uid) => {
-    if (!uid) return;
-    setActiveContactProfileUid(uid);
-    setScreen("contactProfile");
-  }, []);
 
   // openSalary / openSalaryReports are defined further below, next to
   // openMyDocuments/openNotepad - see "Notepad / My Documents / Salary &
