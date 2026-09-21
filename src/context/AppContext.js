@@ -2408,8 +2408,6 @@ export function AppProvider({ children }) {
     closeResult,
     goHome,
     setNotifPref,
-    activeRingtoneContactUid,
-    activeRingtoneContactName,
     changePassword,
     linkGoogleAccount,
     startGoogleAccountMerge,
