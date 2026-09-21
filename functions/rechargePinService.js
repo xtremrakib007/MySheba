@@ -166,5 +166,3 @@ exports.getRechargePin = onCall({ enforceAppCheck: true }, async (request) => {
   }
   return { id: transactionId, operator: pinSnap.data()?.operator || txSnap.data()?.operator || '', amount: Number(pinSnap.data()?.amount || txSnap.data()?.amount || 0), pin: pinSnap.data()?.pin || '' };
 });
-
-});
