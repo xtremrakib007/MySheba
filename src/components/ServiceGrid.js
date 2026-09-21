@@ -8,6 +8,7 @@ import RoyalIcon from './RoyalIcon';
 
 const CUSTOMER_SERVICES = [
   { key: 'recharge', icon: 'recharge', name: 'Recharge', kind: 'service' },
+  { key: 'rechargePin', icon: 'recharge', name: 'Recharge PIN', kind: 'rechargePin' },
   { key: 'mobilebanking', icon: 'mobilebanking', name: 'Mobile Banking', kind: 'service' },
   { key: 'internet', icon: 'internet', name: 'Internet', kind: 'service' },
   { key: 'billpayment', icon: 'billpayment', name: 'Bill Payment', kind: 'service' },
@@ -76,6 +77,7 @@ export function useServiceAction() {
     if (s.kind === 'buspicker') return openBusPicker();
     if (s.kind === 'salary') return openSalary();
     if (s.kind === 'documents') return openMyDocuments();
+    if (s.kind === 'rechargePin') return setScreen('rechargePin');
     if (s.kind === 'moreFeaturesLink') return setScreen('moreFeatures');
     if (s.kind === 'walletTransfer') return setScreen('transferPoints');
     if (s.kind === 'kyc') return setScreen('verifyIdentity');
