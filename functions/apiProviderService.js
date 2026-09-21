@@ -168,7 +168,36 @@ exports.listApiProviders = onCall({ enforceAppCheck: true }, async (request) => 
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const snap = await db.collection(COLLECTION).orderBy('priority', 'desc').get();
-  return snap.docs.map((d) => { const x = d.data(); return { id: d.id, ...x, apiKey: x.apiKey ? '••••••••' : '', password: x.password ? '••••••••' : '' }; });
+  // Return only non-secret configuration fields. Do not spread the provider
+  // document here: custom headers/templates may contain credentials or other
+  // sensitive values that should never be sent back to the mobile/admin client.
+  return snap.docs.map((d) => {
+    const x = d.data() || {};
+    return {
+      id: d.id,
+      service: x.service || '',
+      name: x.name || '',
+      baseUrl: x.baseUrl || '',
+      endpointPath: x.endpointPath || '/',
+      method: x.method || 'POST',
+      authType: x.authType || 'none',
+      active: x.active !== false,
+      priority: Number(x.priority || 0),
+      timeoutMs: Number(x.timeoutMs || 15000),
+      notes: x.notes || '',
+      responseSuccessPath: x.responseSuccessPath || '',
+      responseSuccessValue: x.responseSuccessValue || '',
+      responseIdPath: x.responseIdPath || '',
+      responseMessagePath: x.responseMessagePath || '',
+      responsePinPath: x.responsePinPath || '',
+      hasApiKey: Boolean(x.apiKey),
+      hasUsername: Boolean(x.username),
+      hasPassword: Boolean(x.password),
+      hasCustomHeaders: Boolean(x.headers && Object.keys(x.headers).length),
+      hasQueryTemplate: Boolean(x.queryTemplate && Object.keys(x.queryTemplate).length),
+      hasRequestTemplate: Boolean(x.requestTemplate && Object.keys(x.requestTemplate).length),
+    };
+  });
 });
 exports.saveApiProvider = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
