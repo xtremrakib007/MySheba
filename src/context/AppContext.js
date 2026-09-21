@@ -2352,7 +2352,7 @@ export function AppProvider({ children }) {
     marketplaceCategories,
     serviceCategories,
     supportContact,
-    socialLinks,
+
     paymentSettings,
     banners,
     adSettings,
