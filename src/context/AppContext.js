@@ -30,7 +30,6 @@ import * as adControlsService from "../firebase/adControlsService";
 import * as homepageConfigService from "../firebase/homepageConfigService";
 import * as adService from "../firebase/adService";
 import * as supportContactService from "../firebase/supportContactService";
-import * as socialLinksService from "../firebase/socialLinksService";
 import * as paymentSettingsService from "../firebase/paymentSettingsService";
 import * as internetPricingService from "../firebase/internetPricingService";
 import * as bannerService from "../firebase/bannerService";
@@ -777,13 +776,6 @@ export function AppProvider({ children }) {
     supportContactService.DEFAULT_SUPPORT_CONTACT,
   );
 
-  // ---- Official social media links (Facebook/Instagram/TikTok/LinkedIn/X)
-  // + facebookAppId - admin-editable from Admin > Social (see
-  // socialLinksService.js). Shown on the Support screen's "Follow us" row
-  // and used by ShareListingSheet.js for Story-sharing attribution. ----
-  const [socialLinks, setSocialLinks] = useState(
-    socialLinksService.DEFAULT_SOCIAL_LINKS,
-  );
 
   // ---- JomPay biller ID/ref + DuitNow QR - superadmin-editable from
   // Admin > Payments (see paymentSettingsService.js). Blank until
@@ -1116,15 +1108,6 @@ export function AppProvider({ children }) {
     return unsub;
   }, [authUser]);
 
-  useEffect(() => {
-    if (!authUser) return undefined;
-    socialLinksService.ensureSocialLinks().catch(() => {});
-    const unsub = socialLinksService.subscribeSocialLinks(
-      (s) => setSocialLinks(s),
-      logListenerError("socialLinks"),
-    );
-    return unsub;
-  }, [authUser]);
 
   useEffect(() => {
     if (!authUser) return undefined;
@@ -2474,7 +2457,6 @@ export function AppProvider({ children }) {
     accessWindowHours,
     featureAccess,
     supportContact,
-    socialLinks,
     paymentSettings,
     banners,
     adSettings,
