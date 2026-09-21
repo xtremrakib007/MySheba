@@ -44,6 +44,7 @@ export default function SettingsScreen() {
       <Text style={styles.sectionTitle}>{t('settings.sectionGeneral')}</Text><View style={styles.card}>
         <LinkRow icon="🌙" label={t('settings.displayMode')} sub={isSystemMode ? `System Default (${isDark ? 'Dark' : 'Light'})` : (isDark ? 'Dark' : 'Light')} onPress={() => setDisplayModalVisible(true)} /><View style={styles.divider} />
         <LinkRow icon="🌐" label={t('settings.language')} sub={LANGUAGES[language]?.label || 'English'} onPress={() => setLanguageModalVisible(true)} /><View style={styles.divider} />
+        <LinkRow icon="🖨️" label="Printer" sub="Connect or select a supported printer" onPress={() => setScreen('printer')} /><View style={styles.divider} />
         <LinkRow icon="🔒" label={t('settings.changePassword')} onPress={() => setPwModalVisible(true)} />
         <View style={styles.divider} /><LinkRow icon="🔢" label={profile?.securityPinSet ? t('settings.changeSecurityPin') : t('settings.setUpSecurityPin')} sub={t('settings.securityPinSub')} onPress={() => setPinModalVisible(true)} /><View style={styles.divider} />
         <ToggleRow icon="🔐" label={t('settings.appLock')} sub={t('settings.appLockSub')} value={appLockEnabled} onValueChange={onToggleAppLock} />
