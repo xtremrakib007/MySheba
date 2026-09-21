@@ -123,6 +123,10 @@ exports.generateCollectionPin = onCall({ enforceAppCheck: true }, async (request
     if (order.customerId !== uid) throw new HttpsError('permission-denied', 'You can only manage your own collection PIN.');
     if (order.status !== 'pending') throw new HttpsError('failed-precondition', 'The collection PIN can only be generated while the order is pending.');
     if (order.rejected === true) throw new HttpsError('failed-precondition', 'A rejected order cannot receive a collection PIN.');
+    if (typeof order.pin === 'string' && /^\\d{4}$/.test(order.pin)) {
+      pin = order.pin;
+      return;
+    }
     pin = String(crypto.randomInt(0, 10000)).padStart(4, '0');
     tx.update(ref, { pin, pinGeneratedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
   });
