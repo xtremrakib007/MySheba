@@ -33,7 +33,6 @@ export default function OperationsCenterPage() {
     { title: 'Open Support', value: counts.open, text: 'Tickets waiting for action', icon: AlertCircle, path: '/support', tone: 'text-[var(--color-danger)] bg-[var(--color-danger)]/10' },
     { title: 'In Progress', value: counts.progress, text: 'Tickets being handled', icon: Clock3, path: '/support', tone: 'text-[#8a6d00] bg-[var(--color-warning)]/15' },
     { title: 'KYC Queue', value: 'Review', text: 'Identity verification workflow', icon: ShieldCheck, path: '/verification', tone: 'text-[var(--color-primary)] bg-[var(--color-primary)]/10' },
-    { title: 'Chat Reports', value: 'Review', text: 'Moderation and investigations', icon: Headphones, path: '/chat-reports', tone: 'text-[var(--color-secondary)] bg-[var(--color-secondary)]/10' },
   ];
 
   return (
