@@ -76,7 +76,7 @@ function validate(data) {
   validateBaseUrl(baseUrl);
   if (!ALLOWED_AUTH.includes(authType)) throw new HttpsError('invalid-argument', 'Invalid authentication type.');
   if (!ALLOWED_METHODS.includes(method)) throw new HttpsError('invalid-argument', 'Invalid HTTP method.');
-  return { service, name, baseUrl, endpointPath: cleanString(data.endpointPath, 500) || '/', method, authType, apiKey: cleanString(data.apiKey, 1000), username: cleanString(data.username, 200), password: cleanString(data.password, 1000), active: data.active !== false, priority: Math.max(0, Math.min(9999, Number(data.priority) || 0)), timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)), notes: cleanString(data.notes, 1000), headers: validateHeaders(data.headers || {}), queryTemplate: validateTemplate(data.queryTemplate || {}, 'Query template'), requestTemplate: validateTemplate(data.requestTemplate || {}, 'Request template'), responseSuccessPath: cleanString(data.responseSuccessPath, 200), responseSuccessValue: cleanString(data.responseSuccessValue, 200), responseIdPath: cleanString(data.responseIdPath, 200), responseMessagePath: cleanString(data.responseMessagePath, 200) };
+  return { service, name, baseUrl, endpointPath: cleanString(data.endpointPath, 500) || '/', method, authType, apiKey: cleanString(data.apiKey, 1000), username: cleanString(data.username, 200), password: cleanString(data.password, 1000), active: data.active !== false, priority: Math.max(0, Math.min(9999, Number(data.priority) || 0)), timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)), notes: cleanString(data.notes, 1000), headers: validateHeaders(data.headers || {}), queryTemplate: validateTemplate(data.queryTemplate || {}, 'Query template'), requestTemplate: validateTemplate(data.requestTemplate || {}, 'Request template'), responseSuccessPath: cleanString(data.responseSuccessPath, 200), responseSuccessValue: cleanString(data.responseSuccessValue, 200), responseIdPath: cleanString(data.responseIdPath, 200), responseMessagePath: cleanString(data.responseMessagePath, 200), responsePinPath: service === 'Recharge PIN' ? cleanString(data.responsePinPath, 200) : '' };
 }
 
 function asObject(value) { if (value && typeof value === 'object' && !Array.isArray(value)) return value; if (typeof value !== 'string') return {}; try { const x = JSON.parse(value); return x && typeof x === 'object' && !Array.isArray(x) ? x : {}; } catch { return {}; } }
@@ -93,7 +93,7 @@ function providerAuth(p) {
   if (p.authType === 'basic' && p.username) return { authorization: `Basic ${Buffer.from(`${p.username}:${p.password || ''}`).toString('base64')}` };
   return {};
 }
-async function executeConfiguredApi(service, payload, customer, requestId) {
+async function executeConfiguredApi(service, payload, customer, requestId, options = {}) {
   const db = admin.firestore();
   const snap = await db.collection(COLLECTION).where('service','==',service).where('active','==',true).get();
   const providers = snap.docs.map(d => ({ id:d.id, ...d.data() })).sort((x,y)=>Number(y.priority||0)-Number(x.priority||0));
@@ -148,6 +148,7 @@ async function executeConfiguredApi(service, payload, customer, requestId) {
     const success=provider.responseSuccessPath?getPath(data,provider.responseSuccessPath):true;
     if(success===false || (provider.responseSuccessValue && String(success)!==String(provider.responseSuccessValue))) throw new Error(provider.responseMessagePath?String(getPath(data,provider.responseMessagePath)||'Provider rejected the request.'):'Provider rejected the request.');
     const result={providerId:provider.id,providerName:provider.name,responseId:provider.responseIdPath?getPath(data,provider.responseIdPath):null,message:provider.responseMessagePath?getPath(data,provider.responseMessagePath):null};
+    if (options.extractPath) { const secret = getPath(data, options.extractPath); if (typeof secret !== 'string' || !secret.trim() || secret.length > 500) throw new Error('Provider did not return a valid recharge PIN.'); result.secret = secret.trim(); }
     await executionRef.set({status:'completed',result,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
     return result;
   } catch(e) {
