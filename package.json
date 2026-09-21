@@ -9,7 +9,8 @@
     "prebuild": "expo prebuild",
     "bump-version": "node scripts/bump-version.js",
     "build:apk": "npm run bump-version && eas build -p android --profile preview",
-    "build:aab": "npm run bump-version && eas build -p android --profile production"
+    "build:aab": "npm run bump-version && eas build -p android --profile production",
+    "audit:functions": "node --check functions/*.js"
   },
   "dependencies": {
     "expo": "~53.0.0",
