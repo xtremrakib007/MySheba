@@ -45,7 +45,6 @@ const ADMIN_GROUPS = [
     { key: 'pricing', icon: '🏷️', label: 'Pricing' },
     { key: 'payments', icon: '💳', label: 'Payments' },
     { key: 'transferPoints', icon: '↔️', label: 'Transfer Points' },
-    { key: 'categories', icon: '🗂️', label: 'Categories' },
   ] },
   { title: 'Users & Verification', icon: '👥', color: 'secondary', items: [
     { key: 'userManagement', icon: '👥', label: 'User Management' },
