@@ -142,7 +142,24 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
       return state.result || {};
     }
     if (state.status === 'unknown') throw new HttpsError('unavailable','The API request outcome is uncertain. Check the provider before retrying.');
-    if (state.status === 'processing') throw new HttpsError('aborted','This API request is already being processed.');
+    if (state.status === 'processing') {
+      // A crashed invocation can leave the execution claim in processing.
+      // Never retry a possibly side-effecting provider request automatically.
+      // After the recovery window, explicitly mark the execution unknown so
+      // support/reconciliation can investigate it without leaving a permanent
+      // "processing" lock.
+      const updatedAt = state.updatedAt;
+      const updatedMillis = updatedAt && typeof updatedAt.toMillis === 'function' ? updatedAt.toMillis() : 0;
+      const staleAfterMs = 15 * 60 * 1000;
+      if (updatedMillis > 0 && Date.now() - updatedMillis >= staleAfterMs) {
+        await executionRef.set({
+          status: 'unknown',
+          message: 'Provider execution timed out before the outcome was confirmed. Reconciliation is required.',
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        throw new HttpsError('unavailable','The previous provider request timed out before its outcome was confirmed. Reconciliation is required.');
+      }
+      throw new HttpsError('aborted','This API request is already being processed.');
     if (state.status === 'failed') throw new HttpsError('failed-precondition',state.message || 'The provider rejected this request.');
     throw new HttpsError('aborted','This API request is already being processed.');
   }
@@ -197,8 +214,14 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     await executionRef.set({status:'completed',result:safeResult,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
     return result;
   } catch(e) {
-    const message=String(e?.message||'Provider execution failed').slice(0,500);
-    const definitive=/^Provider HTTP 4\d{2}$/.test(message)||message.includes('Provider rejected the request')||message.includes('missing responsePinPath configuration')||message.includes('Provider did not return a valid recharge PIN.');
+    const rawMessage = String(e?.message || 'Provider execution failed');
+    const sanitizedMessage = rawMessage
+      .replace(/Bearer\\s+[A-Za-z0-9._~+\\/-]+/gi, 'Bearer [REDACTED]')
+      .replace(/Basic\\s+[A-Za-z0-9+/=]+/gi, 'Basic [REDACTED]')
+      .replace(/((?:api[-_]?key|access[-_]?token|auth[-_]?token|token|password|passwd|secret|credential|private[-_]?key)\\s*[:=]\\s*)[^,;\\s]+/gi, '$1[REDACTED]')
+      .slice(0,500);
+    const message = sanitizedMessage || 'Provider execution failed.';
+    const definitive=/^Provider HTTP 4\\d{2}$/.test(message)||message.includes('Provider rejected the request')||message.includes('missing responsePinPath configuration')||message.includes('Provider did not return a valid recharge PIN.');
     await executionRef.set({status:definitive?'failed':'unknown',message,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
     throw definitive?new HttpsError('failed-precondition',message):new HttpsError('unavailable',message);
   }
