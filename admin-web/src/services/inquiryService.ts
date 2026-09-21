@@ -1,8 +1,7 @@
 // Travel inquiries (Flight/Bus/Train "contact me" requests) — real schema
 // from the mobile app's src/firebase/inquiryService.js. No live booking;
 // customer leaves route/date/contact details, staff calls back to
-// arrange the ticket. firestore.rules grants any staff (dealer/
-// subdealer/reseller/admin/superadmin) read+update - not admin-only.
+// arrange the ticket. firestore.rules grants active staff (dealer/reseller/admin/superadmin) read+update - not admin-only.
 
 import { collection, doc, onSnapshot, orderBy, query, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
