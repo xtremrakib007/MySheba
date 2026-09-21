@@ -159,7 +159,7 @@ export default function SupportScreen() {
   } = useTheme();
 
   const styles = createStyles(colors);
-  const { goBackOrHome, authUser, profile, openChat, supportContact, openHelp, helpPrefill, setHelpPrefill } = useApp();
+  const { goBackOrHome, authUser, profile, supportContact, openHelp, helpPrefill, setHelpPrefill } = useApp();
   const hasPhone = !!supportContact?.phone;
   const hasWhatsapp = !!supportContact?.whatsapp;
 
@@ -273,7 +273,6 @@ export default function SupportScreen() {
     }
   };
 
-  const messageSupport = () => openChat(authUser ? authUser.uid : null, 'Support');
 
   const openLink = async (url, label) => {
     try {
@@ -376,18 +375,7 @@ export default function SupportScreen() {
             <Text style={styles.helpChevron}>›</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.messageSupportCard} onPress={messageSupport}>
-            <Text style={styles.messageSupportIcon}>💬</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.messageSupportTitle}>Message Support</Text>
-              <Text style={styles.messageSupportSubtitle}>Chat directly with our team</Text>
-            </View>
-            {chatUnreadCount > 0 && (
-              <View style={styles.messageSupportBadge}>
-                <Text style={styles.messageSupportBadgeText}>{chatUnreadCount > 9 ? '9+' : chatUnreadCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+
 
           <View style={styles.contactRow}>
             <TouchableOpacity style={[styles.contactCard, !hasPhone && styles.contactCardDisabled]} onPress={callSupport}>
