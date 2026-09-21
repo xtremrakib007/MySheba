@@ -6,18 +6,14 @@
 // modular calls against the shared `db` from ./config, no new Firebase
 // initialization anywhere in this file.
 //
-// What this phase deliberately does NOT implement (left for later phases,
-// per the PHASE 1 brief):
+// Responsibilities deliberately kept in their dedicated modules:
 //  - targeting evaluation -> src/firebase/adTargetingService.js
 //  - rotation/selection among matching ads -> src/firebase/adRotationService.js
 //  - impression/click recording + frequency-cap enforcement -> src/firebase/adTrackingService.js
 //  - creative upload for native/interstitial adTypes is implemented
 //    below alongside the banner uploader; all three paths are protected by
 //    storage.rules and limited to image creatives
-//  - status-transition validation (e.g. can't go straight from 'draft' to
-//    'active') - updateAdvertisementStatus below writes whatever status
-//    it's given, no workflow rules yet (PHASE 3's activate/deactivate/
-//    pause/archive helpers are thin conveniences over it, not validation)
+//  - server-side authorization/audit policy - enforced by Firestore/Cloud Functions;
 //  - ad_audit_logs writes for any action below - mirrors userAuditLog:
 //    only a Cloud Function via the Admin SDK writes there (see
 //    firestore.rules), so nothing in this client file can create an
