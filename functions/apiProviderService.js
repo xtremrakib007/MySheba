@@ -67,11 +67,14 @@ function validateHeaders(value) {
     if (/^(host|content-length|connection|transfer-encoding|proxy-)/i.test(key)) throw new HttpsError('invalid-argument', 'This API header is not allowed.');
     const v = headers[key];
     if (!(typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')) throw new HttpsError('invalid-argument', 'API header values must be scalar.');
+    if (typeof v === 'string' && /[\\u0000-\\u001F\\u007F]/.test(v)) throw new HttpsError('invalid-argument', 'API header values contain invalid control characters.');
   }
   return headers;
 }
 function validate(data) {
   const service = cleanString(data.service, 40), name = cleanString(data.name, 100), baseUrl = cleanString(data.baseUrl, 500);
+  const endpointPath = cleanString(data.endpointPath, 500) || '/';
+  if (endpointPath.includes('?') || endpointPath.includes('#')) throw new HttpsError('invalid-argument', 'Endpoint path must not contain a query string or fragment; use Query Template instead.');
   const authType = cleanString(data.authType, 20) || 'none';
   const method = cleanString(data.method, 10).toUpperCase() || 'POST';
   if (!ALLOWED_SERVICES.includes(service)) throw new HttpsError('invalid-argument', 'Invalid service.');
@@ -80,7 +83,7 @@ function validate(data) {
   validateBaseUrl(baseUrl);
   if (!ALLOWED_AUTH.includes(authType)) throw new HttpsError('invalid-argument', 'Invalid authentication type.');
   if (!ALLOWED_METHODS.includes(method)) throw new HttpsError('invalid-argument', 'Invalid HTTP method.');
-  return { service, name, baseUrl, endpointPath: cleanString(data.endpointPath, 500) || '/', method, authType, apiKey: cleanString(data.apiKey, 1000), username: cleanString(data.username, 200), password: cleanString(data.password, 1000), active: data.active !== false, priority: Math.max(0, Math.min(9999, Number(data.priority) || 0)), timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)), notes: cleanString(data.notes, 1000), headers: validateHeaders(data.headers || {}), queryTemplate: validateTemplate(data.queryTemplate || {}, 'Query template'), requestTemplate: validateTemplate(data.requestTemplate || {}, 'Request template'), responseSuccessPath: cleanString(data.responseSuccessPath, 200), responseSuccessValue: cleanString(data.responseSuccessValue, 200), responseIdPath: cleanString(data.responseIdPath, 200), responseMessagePath: cleanString(data.responseMessagePath, 200), responsePinPath: service === 'Recharge PIN' ? cleanString(data.responsePinPath, 200) : '' };
+  return { service, name, baseUrl, endpointPath, method, authType, apiKey: cleanString(data.apiKey, 1000), username: cleanString(data.username, 200), password: cleanString(data.password, 1000), active: data.active !== false, priority: Math.max(0, Math.min(9999, Number(data.priority) || 0)), timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)), notes: cleanString(data.notes, 1000), headers: validateHeaders(data.headers || {}), queryTemplate: validateTemplate(data.queryTemplate || {}, 'Query template'), requestTemplate: validateTemplate(data.requestTemplate || {}, 'Request template'), responseSuccessPath: cleanString(data.responseSuccessPath, 200), responseSuccessValue: cleanString(data.responseSuccessValue, 200), responseIdPath: cleanString(data.responseIdPath, 200), responseMessagePath: cleanString(data.responseMessagePath, 200), responsePinPath: service === 'Recharge PIN' ? cleanString(data.responsePinPath, 200) : '' };
 }
 
 function asObject(value) { if (value && typeof value === 'object' && !Array.isArray(value)) return value; if (typeof value !== 'string') return {}; try { const x = JSON.parse(value); return x && typeof x === 'object' && !Array.isArray(x) ? x : {}; } catch { return {}; } }
@@ -151,9 +154,16 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
       }
     }
     const method = String(provider.method||'POST').toUpperCase();
+    if (!ALLOWED_METHODS.includes(method)) throw new Error('Provider HTTP method is not allowed.');
+    if (url.search.length > 8000) throw new Error('Provider query string is too large.');
     const headers = { accept:'application/json', ...render(asObject(provider.headers),vars), ...providerAuth(provider) };
+    for (const [key, value] of Object.entries(headers)) {
+      if (typeof value === 'string' && /[\\u0000-\\u001F\\u007F]/.test(value)) throw new Error('Rendered API header contains invalid control characters.');
+      if (String(value).length > 4000) throw new Error('Rendered API header value is too large.');
+    }
+    if (Object.keys(headers).length > 50) throw new Error('Too many rendered API headers.');
     let body;
-    if(method!=='GET'){ headers['content-type']=headers['content-type']||'application/json'; body=JSON.stringify(render(asObject(provider.requestTemplate),vars)); }
+    if(method!=='GET'){ headers['content-type']=headers['content-type']||'application/json'; body=JSON.stringify(render(asObject(provider.requestTemplate),vars)); if(Buffer.byteLength(body,'utf8')>100000) throw new Error('Rendered API request body is too large.'); }
     const ctl=new AbortController(), timer=setTimeout(()=>ctl.abort(),Math.max(3000,Math.min(60000,Number(provider.timeoutMs)||15000)));
     let response; try { response=await fetch(url,{method,headers,body,signal:ctl.signal,redirect:'error'}); } finally { clearTimeout(timer); }
     const responseText=await response.text();
