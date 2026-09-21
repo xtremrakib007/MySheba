@@ -160,6 +160,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
         throw new HttpsError('unavailable','The previous provider request timed out before its outcome was confirmed. Reconciliation is required.');
       }
       throw new HttpsError('aborted','This API request is already being processed.');
+    }
     if (state.status === 'failed') throw new HttpsError('failed-precondition',state.message || 'The provider rejected this request.');
     throw new HttpsError('aborted','This API request is already being processed.');
   }
