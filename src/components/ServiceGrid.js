@@ -7,7 +7,7 @@ import { useLanguage } from '../i18n/LanguageContext';
 const CUSTOMER_SERVICES = [
   { key: 'recharge', icon: '📱', name: 'Recharge', kind: 'service' },
   { key: 'mobilebanking', icon: '🏦', name: 'Mobile Banking', kind: 'service' },
-  { key: 'internet', icon: '📡', name: 'Internet Banking', kind: 'service' },
+  { key: 'internet', icon: '📡', name: 'Internet', kind: 'service' },
   { key: 'remittance', icon: '💸', name: 'Remittance', kind: 'service' },
   { key: 'bus', icon: '🚌', name: 'Bus', kind: 'buspicker' },
   { key: 'train', icon: '🚆', name: 'Train', kind: 'webview' },
@@ -114,6 +114,6 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 17, fontWeight: '800' }, sectionSubtitle: { fontSize: 11, marginTop: 2 },
   gridCanvas: { marginHorizontal: 10, padding: 10, borderRadius: 18, backgroundColor: '#F5F7FA' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-  item: { width: '31.5%', minHeight: 94, marginBottom: 8, paddingHorizontal: 4, paddingVertical: 9, borderWidth: 1, borderRadius: 15, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  item: { width: '23.5%', minHeight: 92, marginBottom: 8, paddingHorizontal: 4, paddingVertical: 9, borderWidth: 1, borderRadius: 15, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
   itemDisabled: { opacity: 0.45 }, iconWrap: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 6 }, iconText: { fontSize: 25 }, name: { fontSize: 10.5, lineHeight: 14, fontWeight: '700', textAlign: 'center' },
 });
