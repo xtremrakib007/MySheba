@@ -8,6 +8,8 @@ const RESELLER_SERVICES = ['Recharge', 'Internet', 'Bill Payment', 'Remittance']
 const APPROVER_ROLES = ['admin', 'superadmin'];
 const OPERATOR_ROLES = ['dealer', 'reseller'];
 const ASSIGNABLE_ROLES = ['dealer'];
+const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
+const DEVICE_ID_RE = /^[A-Za-z0-9-]{16,100}$/;
 
 function requireAuth(request) { if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.'); }
 async function getActor(uid) {
