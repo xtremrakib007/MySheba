@@ -50,6 +50,8 @@ function validateBaseUrl(baseUrl) {
   const host = parsed.hostname.toLowerCase();
   if (BLOCKED_HOSTS.test(host)) throw new HttpsError('invalid-argument', 'Base URL host is not allowed.');
   if (isIpLiteral(host)) throw new HttpsError('invalid-argument', 'Base URL must use a domain name, not a raw IP address.');
+  if (parsed.username || parsed.password) throw new HttpsError('invalid-argument', 'Base URL must not contain embedded credentials.');
+  if (parsed.hash) throw new HttpsError('invalid-argument', 'Base URL must not contain a URL fragment.');
 }
 function validateTemplate(value, label, maxBytes = 20000) {
   const obj = asObject(value);
@@ -59,6 +61,7 @@ function validateTemplate(value, label, maxBytes = 20000) {
 }
 function validateHeaders(value) {
   const headers = validateTemplate(value, 'Headers', 12000);
+  if (Object.keys(headers).length > 50) throw new HttpsError('invalid-argument', 'Too many API headers.');
   for (const key of Object.keys(headers)) {
     if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,100}$/.test(key)) throw new HttpsError('invalid-argument', 'Invalid API header name.');
     if (/^(host|content-length|connection|transfer-encoding|proxy-)/i.test(key)) throw new HttpsError('invalid-argument', 'This API header is not allowed.');
@@ -149,7 +152,11 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     if(!response.ok) throw new Error(`Provider HTTP ${response.status}`);
     const success=provider.responseSuccessPath?getPath(data,provider.responseSuccessPath):true;
     if(success===false || (provider.responseSuccessValue && String(success)!==String(provider.responseSuccessValue))) throw new Error(provider.responseMessagePath?String(getPath(data,provider.responseMessagePath)||'Provider rejected the request.'):'Provider rejected the request.');
-    const result={providerId:provider.id,providerName:provider.name,responseId:provider.responseIdPath?getPath(data,provider.responseIdPath):null,message:provider.responseMessagePath?getPath(data,provider.responseMessagePath):null};
+    const responseId = provider.responseIdPath ? getPath(data, provider.responseIdPath) : null;
+    const responseMessage = provider.responseMessagePath ? getPath(data, provider.responseMessagePath) : null;
+    const safeResponseId = responseId == null ? null : (typeof responseId === 'string' || typeof responseId === 'number' || typeof responseId === 'boolean' ? String(responseId).slice(0, 200) : null);
+    const safeResponseMessage = responseMessage == null ? null : (typeof responseMessage === 'string' || typeof responseMessage === 'number' || typeof responseMessage === 'boolean' ? String(responseMessage).slice(0, 500) : null);
+    const result={providerId:provider.id,providerName:provider.name,responseId:safeResponseId,message:safeResponseMessage};
     const secretPath = options.extractPath || (service === 'Recharge PIN' ? provider.responsePinPath : '');
     if (secretPath) { const secret = getPath(data, secretPath); if (typeof secret !== 'string' || !secret.trim() || secret.length > 500) throw new Error('Provider did not return a valid recharge PIN.'); result.secret = secret.trim(); }
     const { secret: _secret, ...safeResult } = result;
@@ -157,7 +164,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     return result;
   } catch(e) {
     const message=String(e?.message||'Provider execution failed').slice(0,500);
-    const definitive=/^Provider HTTP 4\d{2}$/.test(message)||message.includes('Provider rejected the request')||message.includes('missing responsePinPath configuration');
+    const definitive=/^Provider HTTP 4\d{2}$/.test(message)||message.includes('Provider rejected the request')||message.includes('missing responsePinPath configuration')||message.includes('Provider did not return a valid recharge PIN.');
     await executionRef.set({status:definitive?'failed':'unknown',message,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
     throw definitive?new HttpsError('failed-precondition',message):new HttpsError('unavailable',message);
   }
