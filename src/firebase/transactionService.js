@@ -64,3 +64,12 @@ export async function acceptTransaction(id) { try { await httpsCallable(function
 export async function rejectTransaction(id, reason, service) { if (!['Recharge', 'Internet', 'Bill Payment', 'Mobile Banking', 'Remittance'].includes(service)) throw new Error('This order type does not support rejection.'); try { return (await httpsCallable(functions, 'rejectTransaction')({ transactionId: id, reason: reason || '' })).data; } catch (err) { throw new Error(err.message || 'Could not reject this order right now.'); } }
 export async function completeTransaction(id, pin, receiptUrl) { try { await httpsCallable(functions, 'completeTransaction')({ transactionId: id, pin: pin || '', receiptUrl: receiptUrl || '' }); } catch (err) { throw new Error(err.message || 'Could not complete this order.'); } }
 export async function assignDealer(id, dealerId) { try { await httpsCallable(functions, 'assignDealer')({ transactionId: id, dealerId }); } catch (err) { throw new Error(err.message || 'Could not assign this dealer.'); } }
+
+export async function generateCollectionPin(id) {
+  try {
+    const { data } = await httpsCallable(functions, 'generateCollectionPin')({ transactionId: id });
+    return data;
+  } catch (err) {
+    throw new Error(err.message || 'Could not generate the collection PIN.');
+  }
+}
