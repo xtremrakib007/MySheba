@@ -16,14 +16,13 @@ function normalizeService(value) {
   const raw = String(value || '').trim();
   return SERVICE_ALIASES[raw.toLowerCase()] || raw;
 }
-const OPERATIONAL_RAW_FIELDS = [
+const OPERATIONAL_RAW_FIELDS = new Set([
   'phone', 'senderName', 'senderPhone', 'senderCompany', 'senderPassportNo', 'senderPassportExpiry',
   'senderAddress', 'receiverFirstName', 'receiverLastName', 'receiverRelationship', 'receiverPhone',
   'receiverBankName', 'receiverAccountNumber', 'receiverBranch', 'receiverRoutingNumber',
   'receiverPickupNetwork', 'receiverIdType', 'receiverIdNumber', 'receiverPickupCity',
-  'receiverWalletProvider', 'receiverWalletNumber', 'country', 'method',
-  'provider', 'category', 'accountNumber',
-];
+  'receiverWalletProvider', 'receiverWalletNumber', 'country', 'method', 'provider', 'category', 'accountNumber',
+]);
 
 function queueRole(service) {
   if (service === DEALER_SERVICE) return 'dealer';
