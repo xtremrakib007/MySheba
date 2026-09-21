@@ -44,7 +44,8 @@ function sanitizeRaw(raw) {
 }
 
 function sanitizeTransaction(id, tx) {
-  const service = normalizeService(tx.service || tx.chargedServiceKind);\n  const operatorRole = queueRole(service);
+  const service = normalizeService(tx.service || tx.chargedServiceKind);
+  const operatorRole = queueRole(service);
   if (!operatorRole) return null;
   return {
     transactionId: id,
