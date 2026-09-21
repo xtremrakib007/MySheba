@@ -13,3 +13,5 @@ export async function purchaseRechargePin({ operator, amount }) {
   const { data } = await purchaseFn({ operator, amount, requestId: requestId() });
   return data;
 }
+
+export async function getRechargePin(transactionId) { const { data } = await httpsCallable(functions, 'getRechargePin')({ transactionId }); return data; }
