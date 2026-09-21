@@ -126,6 +126,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     if (state.status === 'failed') throw new HttpsError('failed-precondition',state.message || 'The provider rejected this request.');
     throw new HttpsError('aborted','This API request is already being processed.');
   }
+  if (service === 'Recharge PIN' && !provider.responsePinPath) throw new Error('Recharge PIN provider is missing responsePinPath configuration.');
   const raw = payload?.raw || {};
   const vars = { requestId, uid:customer?.uid||'', phone:customer?.phone||'', amount:payload?.amount??raw.amount??'', total:payload?.total??raw.total??'', service, country:raw.country||'', operator:raw.operator||'', packageCode:raw.packageCode||'', details:payload?.details||'', ...Object.fromEntries(Object.entries(raw).filter(([k,v]) => !['requestId'].includes(k) && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')).slice(0,100)) };
   try {
@@ -151,11 +152,12 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     const result={providerId:provider.id,providerName:provider.name,responseId:provider.responseIdPath?getPath(data,provider.responseIdPath):null,message:provider.responseMessagePath?getPath(data,provider.responseMessagePath):null};
     const secretPath = options.extractPath || (service === 'Recharge PIN' ? provider.responsePinPath : '');
     if (secretPath) { const secret = getPath(data, secretPath); if (typeof secret !== 'string' || !secret.trim() || secret.length > 500) throw new Error('Provider did not return a valid recharge PIN.'); result.secret = secret.trim(); }
-    await executionRef.set({status:'completed',result,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
+    const { secret: _secret, ...safeResult } = result;
+    await executionRef.set({status:'completed',result:safeResult,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
     return result;
   } catch(e) {
     const message=String(e?.message||'Provider execution failed').slice(0,500);
-    const definitive=/^Provider HTTP 4\d{2}$/.test(message)||message.includes('Provider rejected the request');
+    const definitive=/^Provider HTTP 4\d{2}$/.test(message)||message.includes('Provider rejected the request')||message.includes('missing responsePinPath configuration');
     await executionRef.set({status:definitive?'failed':'unknown',message,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
     throw definitive?new HttpsError('failed-precondition',message):new HttpsError('unavailable',message);
   }
