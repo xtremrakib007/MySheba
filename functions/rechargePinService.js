@@ -146,6 +146,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
     });
     throw e instanceof HttpsError ? e : new HttpsError('failed-precondition', 'Recharge PIN provider rejected the request.');
   }
+});
 
 exports.getRechargePin = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireAuth(request);
