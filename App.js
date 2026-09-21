@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { StyleSheet, View, Linking } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { AppProvider, useApp } from './src/context/AppContext';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { LanguageProvider } from './src/i18n/LanguageContext';
@@ -79,7 +79,7 @@ import ErrorBoundary from './src/components/ErrorBoundary';
 import AnimatedSplash from './src/components/AnimatedSplash';
 
 function Root() {
-  const { screen, authLoading, handleDeepLink, profile, adminViewingSection } = useApp();
+  const { screen, authLoading, profile, adminViewingSection } = useApp();
   const { colors, isDark } = useTheme();
   const styles = createStyles(colors);
   const [splashVisible, setSplashVisible] = useState(true);
@@ -93,11 +93,6 @@ function Root() {
 
   const handleSplashFinished = () => setTimeout(() => setSplashVisible(false), 0);
 
-  useEffect(() => {
-    Linking.getInitialURL().then((url) => { if (url) handleDeepLink(url); }).catch(() => {});
-    const sub = Linking.addEventListener('url', ({ url }) => handleDeepLink(url));
-    return () => sub.remove();
-  }, [handleDeepLink]);
 
   if (splashVisible) return <SafeAreaView style={styles.app} edges={['top', 'bottom']}><StatusBar style={isDark ? 'light' : 'dark'} /><AnimatedSplash ready={!authLoading} onFinished={handleSplashFinished} /></SafeAreaView>;
 
