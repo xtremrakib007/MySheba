@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, AlertTriangle, BarChart3, CheckCircle2, RefreshCw, Star, TrendingUp, Users } from 'lucide-react';
+import { Activity, AlertTriangle, BarChart3, CheckCircle2, RefreshCw, TrendingUp, Users } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getDashboard, setErrorResolved, subscribeActivityLog, subscribeAuditLog, subscribeErrorLog, type AnalyticsDashboard, type LogEntry } from '../services/analyticsService';
 
@@ -17,7 +17,6 @@ function Overview({ data }: { data: AnalyticsDashboard }) {
     <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
       <Card label="Registered users" value={data.users.total} icon={Users} hint={`${data.users.verified} verified`}/>
       <Card label="Open reports" value={data.reports.open} icon={AlertTriangle} hint={`${data.reports.total} total reports`}/>
-      <Card label="Average rating" value={data.reviews.avg ? data.reviews.avg.toFixed(1) : '—'} icon={Star} hint={`${data.reviews.count} reviews`}/>
     </div>
 
     <div className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
@@ -32,7 +31,7 @@ function Overview({ data }: { data: AnalyticsDashboard }) {
       <section className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-card)] p-5"><h2 className="font-bold">Report Breakdown</h2><div className="mt-4 space-y-3">{data.reports.byKind.map(r=><div key={r.kind} className="flex items-center gap-3"><span className="min-w-0 flex-1 text-sm font-semibold">{r.label}</span><span className="text-xs text-[var(--color-ink-soft)]">{r.total} total</span><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${r.open ? 'bg-[var(--color-danger)]/10 text-[var(--color-danger)]' : 'bg-[var(--color-success)]/10 text-[var(--color-success)]'}`}>{r.open} open</span></div>)}</div></section>
     </div>
 
-    {data.topCategories.length > 0 && <section className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-card)] p-5"><h2 className="font-bold">Top Active Listing Categories</h2><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{data.topCategories.map((c,i)=><div key={c.category} className="rounded-xl bg-slate-50 p-4"><p className="text-xs text-[var(--color-ink-soft)]">#{i+1}</p><p className="mt-1 truncate text-sm font-bold">{c.category}</p><p className="mt-1 text-xl font-extrabold">{c.count}</p></div>)}</div></section>}
+    {data.topCategories.length > 0 && <section className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-card)] p-5"><h2 className="font-bold">Top Transaction Services</h2><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{data.topCategories.map((c,i)=><div key={c.category} className="rounded-xl bg-slate-50 p-4"><p className="text-xs text-[var(--color-ink-soft)]">#{i+1}</p><p className="mt-1 truncate text-sm font-bold">{c.category}</p><p className="mt-1 text-xl font-extrabold">{c.count}</p></div>)}</div></section>}
   </div>;
 }
 
