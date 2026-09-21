@@ -196,14 +196,26 @@ exports.reconcileUnknownTransaction = onCall({ enforceAppCheck: true }, async (r
   const id = String(request.data?.transactionId || '').trim();
   const outcome = String(request.data?.outcome || '').trim().toLowerCase();
   const providerReference = String(request.data?.providerReference || '').trim().slice(0, 200);
+  const sessionId = request.data?.sessionId;
+  const deviceId = request.data?.deviceId;
   if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
   if (!['completed', 'failed'].includes(outcome)) throw new HttpsError('invalid-argument', 'Outcome must be completed or failed.');
   if (!providerReference) throw new HttpsError('invalid-argument', 'Provider confirmation/reference is required.');
+  if (typeof sessionId !== 'string' || !SESSION_ID_RE.test(sessionId) ||
+      typeof deviceId !== 'string' || !DEVICE_ID_RE.test(deviceId)) {
+    throw new HttpsError('failed-precondition', 'Your secure admin session is missing. Please sign in again.');
+  }
+  if (actorProfile.activeSessionId !== sessionId || actorProfile.activeDeviceId !== deviceId) {
+    throw new HttpsError('permission-denied', 'This admin device session is no longer active. Please sign in again.');
+  }
   await checkVelocity(db, uid, 'reconcileTransaction', { ip: getClientIp(request) });
   const ref = db.collection('transactions').doc(id);
   let result;
   await db.runTransaction(async (tx) => {
     const currentActor = await assertActorStillActive(tx, uid, ['admin', 'superadmin']);
+    if (currentActor.activeSessionId !== sessionId || currentActor.activeDeviceId !== deviceId) {
+      throw new HttpsError('permission-denied', 'This admin device session is no longer active. Please sign in again.');
+    }
     const snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError('not-found', 'That transaction no longer exists.');
     const order = snap.data() || {};
