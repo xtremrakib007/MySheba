@@ -108,7 +108,7 @@ async function getCountsSummary() {
 /** DASHBOARD - "Direct Advertising Revenue": sum of ad_payments.amount
  * where status === 'paid' (AdPayment.status - see src/types/ads.ts). No
  * payment flow writes ad_payments yet as of this phase (see that
- * collection's own header comment - "a later phase's Cloud Function is
+ * collection's own header comment - "the current ad pipeline Cloud Function is
  * the only writer"), so this correctly totals 0 today and starts
  * reflecting real revenue the moment that phase ships, with no change
  * needed here. getDocs rather than getCountFromServer because the SUM of
