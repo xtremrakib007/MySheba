@@ -148,7 +148,8 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     const success=provider.responseSuccessPath?getPath(data,provider.responseSuccessPath):true;
     if(success===false || (provider.responseSuccessValue && String(success)!==String(provider.responseSuccessValue))) throw new Error(provider.responseMessagePath?String(getPath(data,provider.responseMessagePath)||'Provider rejected the request.'):'Provider rejected the request.');
     const result={providerId:provider.id,providerName:provider.name,responseId:provider.responseIdPath?getPath(data,provider.responseIdPath):null,message:provider.responseMessagePath?getPath(data,provider.responseMessagePath):null};
-    if (options.extractPath) { const secret = getPath(data, options.extractPath); if (typeof secret !== 'string' || !secret.trim() || secret.length > 500) throw new Error('Provider did not return a valid recharge PIN.'); result.secret = secret.trim(); }
+    const secretPath = options.extractPath || (service === 'Recharge PIN' ? provider.responsePinPath : '');
+    if (secretPath) { const secret = getPath(data, secretPath); if (typeof secret !== 'string' || !secret.trim() || secret.length > 500) throw new Error('Provider did not return a valid recharge PIN.'); result.secret = secret.trim(); }
     await executionRef.set({status:'completed',result,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
     return result;
   } catch(e) {
