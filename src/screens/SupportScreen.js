@@ -39,7 +39,7 @@ const FAQS = [
   },
   {
     q: 'How do I check my remittance or transaction status?',
-    a: 'Open the Chat/History tab from your home screen to see the live status of any transaction you\u2019ve submitted - pending, processing, or completed.',
+    a: 'Open History from your home screen to see the live status of any transaction you\u2019ve submitted - pending, processing, or completed.',
   },
   {
     q: 'I submitted a Flight/Bus/Train inquiry - what happens next?',
@@ -236,7 +236,7 @@ export default function SupportScreen() {
   };
 
   // My own support tickets only - this is a personal request/status
-  // tracker, separate from the live Message Support chat thread above.
+  // tracker for support requests submitted from this screen.
   // Admin sees the full queue on their own Support screen (AdminSupportScreen).
   useEffect(() => {
     if (!authUser) { setTicketsLoading(false); return undefined; }
@@ -265,7 +265,7 @@ export default function SupportScreen() {
       );
       setSubject('');
       setMessage('');
-      showAlert('Request Submitted', 'Our support team will review your request and update its status here. You can also use Message Support for a live chat.');
+      showAlert('Request Submitted', 'Our support team will review your request and update its status here.');
     } catch (err) {
       showAlert('MySheba', err.message || 'Could not submit your request. Please try again.');
     } finally {
@@ -427,7 +427,7 @@ export default function SupportScreen() {
 
           <Text style={styles.sectionTitle}>Submit a Support Request</Text>
           <Text style={styles.sectionSubtitle}>
-            Describe your issue and our team will review it here - separate from live chat, so you can track its status anytime.
+            Describe your issue and our team will review it here, so you can track its status anytime.
           </Text>
           <FormLabel>Subject</FormLabel>
           <FormInput
