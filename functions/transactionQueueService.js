@@ -16,13 +16,19 @@ function normalizeService(value) {
   const raw = String(value || '').trim();
   return SERVICE_ALIASES[raw.toLowerCase()] || raw;
 }
-const OPERATIONAL_RAW_FIELDS = new Set([
-  'phone', 'senderName', 'senderPhone', 'senderCompany', 'senderPassportNo', 'senderPassportExpiry',
-  'senderAddress', 'receiverFirstName', 'receiverLastName', 'receiverRelationship', 'receiverPhone',
-  'receiverBankName', 'receiverAccountNumber', 'receiverBranch', 'receiverRoutingNumber',
-  'receiverPickupNetwork', 'receiverIdType', 'receiverIdNumber', 'receiverPickupCity',
-  'receiverWalletProvider', 'receiverWalletNumber', 'country', 'method', 'provider', 'category', 'accountNumber',
-]);
+const OPERATIONAL_RAW_FIELDS = {
+  Recharge: new Set(['phone', 'country', 'amount']),
+  Internet: new Set(['phone', 'country', 'amount', 'provider']),
+  'Bill Payment': new Set(['phone', 'country', 'amount', 'provider', 'category', 'accountNumber']),
+  'Mobile Banking': new Set(['phone', 'country', 'amount', 'provider', 'category', 'accountNumber']),
+  Remittance: new Set([
+    'phone', 'senderName', 'senderPhone', 'senderCompany', 'senderPassportNo', 'senderPassportExpiry',
+    'senderAddress', 'receiverFirstName', 'receiverLastName', 'receiverRelationship', 'receiverPhone',
+    'receiverBankName', 'receiverAccountNumber', 'receiverBranch', 'receiverRoutingNumber',
+    'receiverPickupNetwork', 'receiverIdType', 'receiverIdNumber', 'receiverPickupCity',
+    'receiverWalletProvider', 'receiverWalletNumber', 'country', 'method', 'provider',
+  ]),
+};
 
 function queueRole(service) {
   if (service === DEALER_SERVICE) return 'dealer';
@@ -30,10 +36,11 @@ function queueRole(service) {
   return null;
 }
 
-function sanitizeRaw(raw) {
+function sanitizeRaw(raw, service) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
   const out = {};
-  for (const key of OPERATIONAL_RAW_FIELDS) {
+  const allowed = OPERATIONAL_RAW_FIELDS[service] || new Set(['phone', 'country', 'amount', 'provider', 'category']);
+  for (const key of allowed) {
     const value = raw[key];
     if (typeof value === 'string') out[key] = value.slice(0, 500);
     else if (typeof value === 'number' && Number.isFinite(value)) out[key] = value;
@@ -56,7 +63,7 @@ function sanitizeTransaction(id, tx) {
     total: Number.isFinite(Number(tx.total)) ? Number(tx.total) : 0,
     customerPhone: typeof tx.customerPhone === 'string' ? tx.customerPhone.slice(0, 64) : '',
     details: typeof tx.details === 'string' ? tx.details.slice(0, 2000) : '',
-    raw: sanitizeRaw(tx.raw),
+    raw: sanitizeRaw(tx.raw, service),
     receiptUrl: typeof tx.receiptUrl === 'string' ? tx.receiptUrl.slice(0, 2048) : '',
     dealerId: tx.dealerId || null,
     resellerId: tx.resellerId || null,
