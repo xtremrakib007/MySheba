@@ -273,7 +273,6 @@ export function AppProvider({ children }) {
   // ---- support chat (customer <-> Support only - see SupportScreen.js) ----
   const [activeChatId, setActiveChatId] = useState(null); // the customer uid whose thread is open
   const [activeChatName, setActiveChatName] = useState("");
-  const [chatUnreadCount, setChatUnreadCount] = useState(0); // badge count for the signed-in side
   // Which screen ChatScreen's back button should return to - staff can open
   // a support thread from either the Chats inbox (chatList) or the
   // "Messages" tab inside Support Tickets (adminSupport); defaults to
@@ -1437,105 +1436,6 @@ export function AppProvider({ children }) {
     return unsub;
   }, [screen, profile]);
 
-  // ---- live chat unread badge - customers watch their own thread; staff watch every thread's total. ----
-  useEffect(() => {
-    if (!authUser || !profile) {
-      setChatUnreadCount(0);
-      return undefined;
-    }
-    const isStaff = ["dealer", "reseller", "admin", "superadmin"].includes(
-      profile.role,
-    );
-    if (isStaff) {
-      const unsub = chatService.subscribeAllChats(
-        (list) =>
-          setChatUnreadCount(
-            list.reduce((sum, c) => sum + (c.unreadForStaff || 0), 0),
-          ),
-        logListenerError("chats:staff"),
-      );
-      return unsub;
-    }
-    const unsub = chatService.subscribeChatMeta(
-      authUser.uid,
-      (meta) => setChatUnreadCount(meta ? meta.unreadForCustomer || 0 : 0),
-      logListenerError("chats:customer"),
-    );
-    return unsub;
-  }, [authUser, profile]);
-
-  // Re-locks the Locked Chats vault AND the Notepad/My Documents private
-  // vault whenever the app leaves the foreground - same behavior as
-  // WhatsApp's chat lock, so background/switch-app/screen-off always
-  // requires the security PIN again on return, rather than staying
-  // unlocked indefinitely once entered once. (Transfer Points is
-  // deliberately not included here - see requireSecurityPin call in
-  // TransferPointsScreen, which never checks privateVaultUnlocked.)
-  useEffect(() => {
-    const sub = AppState.addEventListener("change", (state) => {
-      if (state !== "active") {
-        setChatVaultUnlocked(false);
-        setPrivateVaultUnlocked(false);
-      }
-    });
-    return () => sub.remove();
-  }, []);
-
-  // App Lock: separate effect from the vault re-lock above since it needs
-  // to read appLockEnabled/authUser (which change rarely, so resubscribing
-  // on their change is cheap - unlike chatVaultUnlocked/privateVaultUnlocked
-  // above, which change constantly and would thrash a listener with those
-  // as deps). Only re-locks on RETURNING to active, and only if the app
-  // was actually away for at least APP_LOCK_GRACE_MS - records the
-  // backgrounding timestamp when leaving, then checks the gap on return.
-  // A quick background/foreground (notification peek, QR scanner, sharing
-  // to another app) comes straight back in with no PIN/biometric prompt;
-  // only a genuine gap re-locks. This trades away the old
-  // lock-screen-already-covering-content-on-return behavior for not
-  // nagging biometric every single backgrounding within one sitting.
-  useEffect(() => {
-    if (!appLockEnabled || !authUser) return undefined;
-    const sub = AppState.addEventListener("change", (state) => {
-      if (state !== "active") {
-        backgroundedAtRef.current = Date.now();
-      } else if (
-        backgroundedAtRef.current &&
-        Date.now() - backgroundedAtRef.current >= APP_LOCK_GRACE_MS
-      ) {
-        setAppLocked(true);
-        backgroundedAtRef.current = null;
-      } else {
-        backgroundedAtRef.current = null;
-      }
-    });
-    return () => sub.remove();
-  }, [appLockEnabled, authUser]);
-
-  // Cold-launch lock: once the profile has loaded and confirms a security
-  // PIN actually exists (appLockEnabled alone isn't enough - AppLockScreen
-  // has nothing to check against without one), require unlock immediately
-  // rather than only after the first backgrounding.
-  useEffect(() => {
-    if (appLockEnabled && authUser && profile?.securityPinSet)
-      setAppLocked(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appLockEnabled, authUser?.uid, profile?.securityPinSet]);
-
-  /** Opens the Support thread - `chatId` is the customer's uid, `name` is
-   * who to show in the header/inbox. `returnTo` (staff only) is which
-   * screen the back button should land on - defaults to the Chats inbox
-   * ('chatList') to match every existing caller; AdminSupportScreen's
-   * "Messages" tab passes 'adminSupport' so back returns there instead. */
-  const openChat = useCallback((chatId, name, returnTo) => {
-    setActiveChatId(chatId);
-    setActiveGroupId(null);
-    setActiveDirectChatId(null);
-    setActiveRoomId(null);
-    setActiveChatName(name || "");
-    setActiveChatReturnTo(returnTo || "chatList");
-    setScreen("chat");
-  }, []);
-
   // ---- push notification taps: jump to the right thread when the user
   // taps a notification, whether the app was foregrounded, backgrounded, or
   // fully closed. Re-subscribes whenever authUser changes (login/logout) so
@@ -2494,7 +2394,6 @@ export function AppProvider({ children }) {
     // support chat
     activeChatId,
     activeChatName,
-    chatUnreadCount,
     activeChatReturnTo,
     openChat,
     // advertiser management
