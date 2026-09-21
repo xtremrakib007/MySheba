@@ -220,6 +220,12 @@ exports.getRechargePin = onCall({ enforceAppCheck: true }, async (request) => {
   const transactionId = typeof request.data?.transactionId === 'string' ? request.data.transactionId.trim() : '';
   if (!/^[A-Za-z0-9_-]{1,100}$/.test(transactionId)) throw new HttpsError('invalid-argument', 'Invalid transaction ID.');
   const db = admin.firestore();
+  const profileSnap = await db.collection('users').doc(uid).get();
+  if (!profileSnap.exists || !active(profileSnap.data()) || profileSnap.data().role !== 'customer') {
+    throw new HttpsError('permission-denied', 'Your customer account is not active.');
+  }
+  requireSessionMatch(request, profileSnap.data());
+  await checkVelocity(db, uid, 'rechargePin', { ip: getClientIp(request) });
   const txSnap = await db.collection('transactions').doc(transactionId).get();
   if (!txSnap.exists || txSnap.data()?.customerId !== uid || txSnap.data()?.service !== PIN_SERVICE) {
     throw new HttpsError('not-found', 'Recharge PIN transaction not found.');
