@@ -294,7 +294,7 @@ export function AppProvider({ children }) {
 
   // ---- My Documents (private per-user document vault - passport, visa,
   // work permit, etc.) ---- Screens call documentService.js directly
-  // (same pattern as marketplace/accommodation/etc. above); context only
+  // (same pattern as other direct Firestore modules); context only
   // tracks which document is being viewed/edited and which type is being
   // added. editDocumentId is null for "add new", set when opening the
   // Add screen from an existing document's "Edit Details" action.
