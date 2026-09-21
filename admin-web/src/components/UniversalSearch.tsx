@@ -28,7 +28,6 @@ const ITEMS: SearchItem[] = [
   { label: 'Pricing', description: 'Service pricing configuration', path: '/config/pricing', keywords: 'price fee charges', group: 'Configuration' },
   { label: 'Payment Settings', description: 'Payment configuration', path: '/config/payments', keywords: 'payment gateway', group: 'Configuration' },
   { label: 'Feature Access', description: 'Enable or control modules', path: '/feature-access', keywords: 'modules services access', group: 'Configuration' },
-  { label: 'Chat Reports', description: 'Review reported direct chat content', path: '/chat-reports', keywords: 'chat report moderation', group: 'Moderation' },
   { label: 'Inquiries', description: 'Flight, bus, train and service inquiries', path: '/inquiries', keywords: 'flight bus train visa passport', group: 'Services' },
   { label: 'Service Operations', description: 'Monitor platform service modules', path: '/service-operations', keywords: 'mobile banking recharge remittance flight bus train', group: 'Services' },
   { label: 'System Health', description: 'Backend health and operational logs', path: '/system-health', keywords: 'health errors firestore activity', group: 'Governance' },
