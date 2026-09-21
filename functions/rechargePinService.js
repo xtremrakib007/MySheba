@@ -8,6 +8,7 @@ const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const DEVICE_ID_RE = /^[A-Za-z0-9-]{16,100}$/;
 const PIN_SERVICE = 'Recharge PIN';
+const MALAYSIA_OPERATORS = new Set(['Celcom', 'CelcomDigi', 'U Mobile', 'Hotlink', 'XOX', 'Tunetalk', 'Unifi', 'Yes']);
 
 function active(u) {
   return !!u && u.suspended !== true && u.inactive !== true && u.disabled !== true &&
@@ -48,7 +49,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
   const input = request.data || {};
   const operator = typeof input.operator === 'string' ? input.operator.trim().slice(0, 80) : '';
   const denomination = safeNumber(input.amount, 'Recharge PIN amount');
-  if (!operator) throw new HttpsError('invalid-argument', 'Select a Malaysian mobile operator.');
+  if (!operator || !MALAYSIA_OPERATORS.has(operator)) throw new HttpsError('invalid-argument', 'Select a supported Malaysian mobile operator.');
 
   const profileRef = db.collection('users').doc(uid);
   const txId = crypto.createHash('sha256').update(`${uid}|recharge-pin|${requestId}`).digest('hex').slice(0, 40);
