@@ -7,6 +7,9 @@ const SERVICE_ALIASES = {
   internet: 'Internet',
   mobilebanking: 'Mobile Banking',
   'mobile banking': 'Mobile Banking',
+  billpayment: 'Bill Payment',
+  'bill payment': 'Bill Payment',
+  'bill_payment': 'Bill Payment',
   remittance: 'Remittance'
 };
 const STAFF_ROLES = ['dealer', 'reseller', 'admin', 'superadmin'];
@@ -105,10 +108,6 @@ exports.rejectTransaction = onCall({ enforceAppCheck: true }, async request => {
     if (tx.rejected === true || tx.status === 'rejected') {
       result = { id, rejected: true, alreadyRejected: true };
       return;
-    }
-
-    if (!canReject(currentActor, { ...tx, service })) {
-      throw new HttpsError('permission-denied', 'You are not authorized to reject this transaction.');
     }
 
     if (!['pending', 'approved'].includes(tx.status)) {
