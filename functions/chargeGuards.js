@@ -120,10 +120,24 @@ function wrap(name) {
         const replayCost = existing.cost == null ? 0 : Number(existing.cost);
         if (!Number.isFinite(replayCost) || replayCost < 0 || !Number.isSafeInteger(Math.round(replayCost * 100))) throw new HttpsError('failed-precondition', 'The stored charge result is invalid.');
         const replayTx = await db.collection('transactions').doc(existing.transactionId).get();
-        const replayData = replayTx.exists ? (replayTx.data() || {}) : {};
+        if (!replayTx.exists) {
+          throw new HttpsError('failed-precondition', 'The stored charge record is missing. Please contact support before retrying.');
+        }
+        const replayData = replayTx.data() || {};
+        if (replayData.customerId !== uid ||
+            replayData.service !== SERVICE_BY_CALLABLE[name] ||
+            replayData.status !== 'completed') {
+          throw new HttpsError('failed-precondition', 'The stored charge record is inconsistent. Please contact support before retrying.');
+        }
+        const storedCost = Number(replayData.pointsCharged ?? replayData.cost);
+        if (!Number.isFinite(storedCost) || storedCost < 0 ||
+            !Number.isSafeInteger(Math.round(storedCost * 100)) ||
+            Math.abs(storedCost - replayCost) > 0.01) {
+          throw new HttpsError('failed-precondition', 'The stored charge amount is inconsistent. Please contact support before retrying.');
+        }
         return {
           id: existing.transactionId,
-          cost: replayCost,
+          cost: storedCost,
           collectionPin: typeof replayData.pin === 'string' ? replayData.pin : '',
           replay: true,
         };
