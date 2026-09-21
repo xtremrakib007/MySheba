@@ -14,7 +14,6 @@ import {
 
 const ROLE_LABELS: Record<PricingRole, string> = {
   customer: 'Customer',
-  subdealer: 'Sub Dealer',
   dealer: 'Dealer',
   reseller: 'Reseller',
   admin: 'Admin',
