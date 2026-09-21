@@ -212,7 +212,7 @@ export default function AdminSupportScreen() {
             })
           )}
         </ScrollView>
-      ))}
+      )}
 
       <PromptModal
         visible={!!resolveId}
@@ -222,14 +222,6 @@ export default function AdminSupportScreen() {
         onCancel={() => setResolveId(null)}
       />
 
-      {canAssign && (
-        <AssignChatModal
-          visible={!!assignChatId}
-          currentUid={(chats.find((c) => c.id === assignChatId) || {}).assignedToUid || ''}
-          onSelect={handleAssignChat}
-          onCancel={() => setAssignChatId(null)}
-        />
-      )}
 
     </View>
   );
