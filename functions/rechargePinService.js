@@ -5,6 +5,8 @@ const progressionService = require('./progressionService');
 const { executeConfiguredApi } = require('./apiProviderService');
 
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
+const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
+const DEVICE_ID_RE = /^[A-Za-z0-9-]{16,100}$/;
 const PIN_SERVICE = 'Recharge PIN';
 
 function active(u) {
@@ -23,6 +25,12 @@ function safeNumber(v, label) {
     throw new HttpsError('invalid-argument', `${label} must be greater than zero.`);
   }
   return Math.round(n * 100) / 100;
+}
+
+function requireSessionMatch(request, user) {
+  const sessionId = request.data?.sessionId, deviceId = request.data?.deviceId;
+  if (typeof sessionId !== 'string' || !SESSION_ID_RE.test(sessionId) || typeof deviceId !== 'string' || !DEVICE_ID_RE.test(deviceId)) throw new HttpsError('failed-precondition', 'Your secure session is missing. Please sign in again.');
+  if (user.activeSessionId !== sessionId || user.activeDeviceId !== deviceId) throw new HttpsError('permission-denied', 'This device session is no longer active. Please sign in again.');
 }
 
 function requestIdOf(request) {
@@ -64,6 +72,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
   if (!userSnap.exists || !active(userSnap.data()) || userSnap.data().role !== 'customer') {
     throw new HttpsError('permission-denied', 'Only active customer accounts can purchase Recharge PINs.');
   }
+  requireSessionMatch(request, userSnap.data());
   const discount = progressionService.discountPercentFromSettings(tierSettings, userSnap.data().tier);
   const cost = Math.round(denomination * priceMultiplier * (1 - discount / 100) * 100) / 100;
   if (!Number.isFinite(cost) || cost <= 0 || !Number.isSafeInteger(Math.round(cost * 100))) {
