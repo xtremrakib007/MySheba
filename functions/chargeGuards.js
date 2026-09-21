@@ -38,7 +38,11 @@ async function recoverCompleted(db, uid, requestId, guardRef, expectedService) {
   if (txData.status === 'unknown') {
     throw new HttpsError('unavailable', 'The API request outcome is uncertain. Check the provider before retrying.');
   }
-  if (txData.status !== 'pending') return null;
+  // A pending transaction only proves that the wallet charge was committed.
+  // It does NOT prove that the downstream service/provider completed. Treating
+  // pending as recovered could return success to the client without delivering
+  // the purchased service. Let walletService resume the idempotent execution.
+  if (txData.status !== 'completed') return null;
   const rawCost = txData.pointsCharged ?? txData.cost;
   const cost = Number(rawCost);
   if (!Number.isFinite(cost) || cost < 0 || !Number.isSafeInteger(Math.round(cost * 100))) return null;
