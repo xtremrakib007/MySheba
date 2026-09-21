@@ -8,7 +8,7 @@ const PLACEMENTS = new Set([
   'JOBS_TOP','JOBS_BOTTOM','ACCOMMODATION_TOP','ACCOMMODATION_BOTTOM','BUY_SELL_TOP','BUY_SELL_BOTTOM',
   'SERVICES_TOP','SERVICES_BOTTOM','COMMUNITY_TOP','COMMUNITY_BOTTOM','HELP_SUPPORT_TOP','HELP_SUPPORT_BOTTOM'
 ]);
-const FEATURES = new Set(['home','mobile_recharge','internet_package','mobile_banking','remittance','air_ticket','jobs','accommodation','buy_sell','services','community','help_support']);
+const FEATURES = new Set(['home','mobile_recharge','internet_package','mobile_banking','remittance','air_ticket','jobs','help_support']);
 const AD_TYPES = new Set(['banner','native','interstitial','sponsored']);
 const CLICK_ACTIONS = new Set(['none','url','internal','whatsapp','phone']);
 const MAX = { adId:128, campaignId:128, placementId:64, feature:64, sessionId:128 };
