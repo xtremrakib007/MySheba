@@ -25,7 +25,7 @@ function getRequestId(request) {
   return requestId;
 }
 
-async function recoverCompleted(db, uid, requestId, guardRef, expectedService) {
+async function recoverChargedRequest(db, uid, requestId, guardRef, expectedService) {
   const recovered = await db.collection('transactions')
     .where('customerId', '==', uid)
     .where('raw.requestId', '==', requestId)
@@ -38,11 +38,12 @@ async function recoverCompleted(db, uid, requestId, guardRef, expectedService) {
   if (txData.status === 'unknown') {
     throw new HttpsError('unavailable', 'The API request outcome is uncertain. Check the provider before retrying.');
   }
-  // A pending transaction only proves that the wallet charge was committed.
-  // It does NOT prove that the downstream service/provider completed. Treating
-  // pending as recovered could return success to the client without delivering
-  // the purchased service. Let walletService resume the idempotent execution.
-  if (txData.status !== 'completed') return null;
+  // The charge callable's idempotency result is distinct from downstream
+  // service completion. A pending/processing transaction means the wallet
+  // charge and transaction record already exist, so replaying the callable
+  // must return the original charge result without charging again. Do not
+  // treat "unknown" as a successful replay.
+  if (!['pending', 'processing', 'completed'].includes(txData.status)) return null;
   const rawCost = txData.pointsCharged ?? txData.cost;
   const cost = Number(rawCost);
   if (!Number.isFinite(cost) || cost < 0 || !Number.isSafeInteger(Math.round(cost * 100))) return null;
@@ -50,7 +51,12 @@ async function recoverCompleted(db, uid, requestId, guardRef, expectedService) {
     status: 'completed', transactionId: txDoc.id, cost,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   }, { merge: true });
-  return { id: txDoc.id, cost, replay: true };
+  return {
+    id: txDoc.id,
+    cost,
+    collectionPin: typeof txData.pin === 'string' ? txData.pin : '',
+    replay: true,
+  };
 }
 
 async function sanitizeRequest(request, requestId) {
@@ -113,7 +119,7 @@ function wrap(name) {
         if (!Number.isFinite(replayCost) || replayCost < 0 || !Number.isSafeInteger(Math.round(replayCost * 100))) throw new HttpsError('failed-precondition', 'The stored charge result is invalid.');
         return { id: existing.transactionId, cost: replayCost, replay: true };
       }
-      const recovered = await recoverCompleted(db, uid, requestId, guardRef, SERVICE_BY_CALLABLE[name]);
+      const recovered = await recoverChargedRequest(db, uid, requestId, guardRef, SERVICE_BY_CALLABLE[name]);
       if (recovered) return recovered;
 
       // A committed transaction can exist while the first invocation was
@@ -148,7 +154,7 @@ function wrap(name) {
       });
       return result;
     } catch (err) {
-      const recovered = await recoverCompleted(db, uid, requestId, guardRef, SERVICE_BY_CALLABLE[name]).catch((err) => { if (err?.code === 'unavailable') throw err; return null; });
+      const recovered = await recoverChargedRequest(db, uid, requestId, guardRef, SERVICE_BY_CALLABLE[name]).catch((err) => { if (err?.code === 'unavailable') throw err; return null; });
       if (recovered) return recovered;
       if (err?.code !== 'unavailable') await guardRef.delete().catch(() => {});
       throw err;
