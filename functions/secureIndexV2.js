@@ -24,6 +24,7 @@ functions.rejectTransaction = rejectionService.rejectTransaction;
 functions.approveTransaction = transactionService.approveTransaction;
 functions.acceptTransaction = transactionService.acceptTransaction;
 functions.completeTransaction = transactionService.completeTransaction;
+functions.generateCollectionPin = transactionService.generateCollectionPin;
 functions.assignDealer = transactionService.assignDealer;
 functions.scrubCompletedTransactionPins = transactionService.scrubCompletedTransactionPins;
 
