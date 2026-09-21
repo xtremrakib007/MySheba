@@ -95,7 +95,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
       service: PIN_SERVICE, customerId: uid, customerRole: 'customer',
       customerPhone: user.data().phone || '', operator, amount: denomination, total: denomination,
       cost, pointsCharged: cost, tierDiscountPercent: discount, executionMode: 'api',
-      status: 'processing', rechargePin: null, apiRefunded: false, raw: { requestId, country: 'MY', operator },
+      status: 'processing', rechargePinAvailable: false, apiRefunded: false, raw: { requestId, country: 'MY', operator },
       createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
     return { replay: false, id: txRef.id, cost, pin: null, operator, amount: denomination };
@@ -115,9 +115,13 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
       throw new HttpsError('unavailable', 'The Recharge PIN provider completed but the voucher PIN could not be recovered. Please contact support before retrying.');
     }
 
+    await db.collection('rechargePins').doc(txRef.id).set({
+      transactionId: txRef.id, customerId: uid, operator, amount: denomination,
+      pin: api.secret, createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
     await txRef.update({
       status: 'completed',
-      rechargePin: api.secret,
+      rechargePinAvailable: true,
       apiExecution: { status: 'accepted', providerId: api.providerId, providerName: api.providerName, responseId: api.responseId || null, message: api.message || null, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
@@ -141,4 +145,24 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
     });
     throw e instanceof HttpsError ? e : new HttpsError('failed-precondition', 'Recharge PIN provider rejected the request.');
   }
+
+exports.getRechargePin = onCall({ enforceAppCheck: true }, async (request) => {
+  const uid = requireAuth(request);
+  const transactionId = typeof request.data?.transactionId === 'string' ? request.data.transactionId.trim() : '';
+  if (!/^[A-Za-z0-9_-]{1,100}$/.test(transactionId)) throw new HttpsError('invalid-argument', 'Invalid transaction ID.');
+  const db = admin.firestore();
+  const txSnap = await db.collection('transactions').doc(transactionId).get();
+  if (!txSnap.exists || txSnap.data()?.customerId !== uid || txSnap.data()?.service !== PIN_SERVICE) {
+    throw new HttpsError('not-found', 'Recharge PIN transaction not found.');
+  }
+  if (txSnap.data()?.status !== 'completed' || txSnap.data()?.rechargePinAvailable !== true) {
+    throw new HttpsError('failed-precondition', 'This Recharge PIN is not available yet.');
+  }
+  const pinSnap = await db.collection('rechargePins').doc(transactionId).get();
+  if (!pinSnap.exists || pinSnap.data()?.customerId !== uid) {
+    throw new HttpsError('not-found', 'Recharge PIN is unavailable. Contact support if you were charged.');
+  }
+  return { id: transactionId, operator: pinSnap.data()?.operator || txSnap.data()?.operator || '', amount: Number(pinSnap.data()?.amount || txSnap.data()?.amount || 0), pin: pinSnap.data()?.pin || '' };
+});
+
 });
