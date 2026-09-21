@@ -123,12 +123,14 @@ function wrap(name) {
       if (recovered) return recovered;
 
       // A committed transaction can exist while the first invocation was
-      // interrupted before the configured provider call completed. Resume
-      // through the idempotent wallet service instead of treating it as done.
+      // interrupted before the configured provider call completed. The wallet
+      // service exports callable wrappers, so do not invoke them through
+      // ".run" here. Instead, the recovery path must use the same callable
+      // handler that was originally wrapped.
       const fn = walletService[name];
-      if (!fn || typeof fn.run !== 'function') throw new HttpsError('internal', 'Charge service is unavailable.');
+      if (!fn || typeof fn !== 'function') throw new HttpsError('internal', 'Charge service is unavailable.');
       const safeRequest = await sanitizeRequest(request, requestId);
-      const result = await fn.run(safeRequest);
+      const result = await fn(safeRequest);
       await guardRef.set({
         status: 'completed',
         transactionId: result?.id || null,
