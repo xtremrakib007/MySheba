@@ -11,9 +11,9 @@
 //  - targeting evaluation -> src/firebase/adTargetingService.js
 //  - rotation/selection among matching ads -> src/firebase/adRotationService.js
 //  - impression/click recording + frequency-cap enforcement -> src/firebase/adTrackingService.js
-//  - creative upload to Storage for non-banner adTypes - uploadAdCreative
-//    below is still a documented stub for those (banner creatives are
-//    implemented for real as of PHASE 3 - see uploadBannerCreative)
+//  - creative upload for native/interstitial adTypes is implemented
+//    below alongside the banner uploader; all three paths are protected by
+//    storage.rules and limited to image creatives
 //  - status-transition validation (e.g. can't go straight from 'draft' to
 //    'active') - updateAdvertisementStatus below writes whatever status
 //    it's given, no workflow rules yet (PHASE 3's activate/deactivate/
@@ -43,7 +43,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { db, storage, functions } from './config';
-import { AD_COLLECTIONS, AD_STORAGE_PATHS } from '../constants/adCollections';
+import { AD_COLLECTIONS, AD_STORAGE_PATHS, AD_TYPES } from '../constants/adCollections';
 import { AD_STATUSES, AD_TYPES } from '../constants/adEnums';
 import { getEffectiveAdStatus as getEffectiveAdStatusPure } from '../utils/adScheduleUtils';
 
@@ -424,16 +424,38 @@ export async function deactivatePackage(packageId) {
 // ---- creative upload (Storage) ----
 
 /**
- * PHASE 3 - still a stub for native/interstitial creatives; only the
- * 'banner' adType has a real uploader now (uploadBannerCreative below).
- * Throws rather than silently no-op-ing, so accidentally calling this for
- * an unimplemented adType fails loudly instead of pretending to have
- * uploaded something.
- * @param {string} _localUri
- * @param {import('../constants/adEnums').AdType} _adType
+ * Uploads a native/interstitial advertisement image to its dedicated
+ * Storage prefix. Banner creatives use uploadBannerCreative because banners
+ * also keep a resized thumbnail. Storage rules enforce superadmin-only writes
+ * and an image-only 10 MB limit.
+ *
+ * @param {string} localUri local file URI from expo-image-picker
+ * @param {'native'|'interstitial'} adType
+ * @param {string} [mimeType] e.g. 'image/jpeg'
+ * @returns {Promise<{imageUrl:string, storagePath:string}>}
  */
-export async function uploadAdCreative(_localUri, _adType) {
-  throw new Error(`uploadAdCreative is not implemented for adType "${_adType}" yet.`);
+export async function uploadAdCreative(localUri, adType, mimeType) {
+  if (!localUri) throw new Error('A local creative image is required.');
+  if (adType !== AD_TYPES.NATIVE && adType !== AD_TYPES.INTERSTITIAL) {
+    throw new Error(`uploadAdCreative only supports native/interstitial creatives; use uploadBannerCreative for "${adType}".`);
+  }
+
+  const ext = (mimeType || '').toLowerCase().includes('png') ? 'png' : 'jpg';
+  const contentType = ext === 'png' ? 'image/png' : 'image/jpeg';
+  const response = await fetch(localUri);
+  if (!response.ok) throw new Error('Could not read the selected creative image.');
+  const blob = await response.blob();
+
+  if (blob.size >= 10 * 1024 * 1024) {
+    throw new Error('Creative image must be smaller than 10 MB.');
+  }
+
+  const prefix = adType === AD_TYPES.NATIVE ? AD_STORAGE_PATHS.NATIVE : AD_STORAGE_PATHS.INTERSTITIAL;
+  const storagePath = `${prefix}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+  const storageRef = ref(storage, storagePath);
+  await uploadBytes(storageRef, blob, { contentType });
+  const imageUrl = await getDownloadURL(storageRef);
+  return { imageUrl, storagePath };
 }
 
 /**
