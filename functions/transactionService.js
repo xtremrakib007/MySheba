@@ -89,6 +89,27 @@ exports.approveTransaction = onCall({ enforceAppCheck: true }, async (request) =
   return { ok: true, transactionId: id };
 });
 
+exports.generateCollectionPin = onCall({ enforceAppCheck: true }, async (request) => {
+  requireAuth(request);
+  const uid = request.auth.uid;
+  const id = String(request.data?.transactionId || '').trim();
+  if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
+  const db = admin.firestore(), ref = db.collection('transactions').doc(id);
+  await checkVelocity(db, uid, 'generateCollectionPin', { ip: getClientIp(request) });
+  let pin = '';
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'That order no longer exists.');
+    const order = snap.data() || {};
+    if (order.customerId !== uid) throw new HttpsError('permission-denied', 'You can only manage your own collection PIN.');
+    if (order.status !== 'pending') throw new HttpsError('failed-precondition', 'The collection PIN can only be generated while the order is pending.');
+    if (order.rejected === true) throw new HttpsError('failed-precondition', 'A rejected order cannot receive a collection PIN.');
+    pin = String(crypto.randomInt(0, 10000)).padStart(4, '0');
+    tx.update(ref, { pin, pinGeneratedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+  });
+  return { ok: true, transactionId: id, pin };
+});
+
 exports.acceptTransaction = onCall({ enforceAppCheck: true }, async (request) => {
   requireAuth(request); const actor = await getActor(request.auth.uid);
   const id = String(request.data?.transactionId || ''); if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
