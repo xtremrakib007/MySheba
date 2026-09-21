@@ -112,7 +112,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
     }, { uid, phone: userSnap.data().phone || '' }, requestId, { extractPath: undefined });
 
     if (!api.secret) {
-      throw new Error('Recharge PIN provider is missing responsePinPath configuration.');
+      throw new HttpsError('unavailable', 'The Recharge PIN provider completed but the voucher PIN could not be recovered. Please contact support before retrying.');
     }
 
     await txRef.update({
