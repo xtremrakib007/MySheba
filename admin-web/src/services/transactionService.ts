@@ -1,9 +1,10 @@
 // Admin/superadmin transaction queue. Approval is separate from operator
 // acceptance: admin/superadmin approves first, dealer/reseller claims as the
 // Operator, then that Operator completes the order.
-import { collection, onSnapshot, orderBy, query, where, type DocumentData, type QueryDocumentSnapshot } from 'firebase/firestore';
+import { collection, doc, getDoc, onSnapshot, orderBy, query, where, type DocumentData, type QueryDocumentSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { db, functions } from '../firebase/config';
+import { db, functions, auth } from '../firebase/config';
+import { getOrCreateDeviceId } from '../utils/deviceId';
 
 const COLLECTION = 'transactions';
 export type TxStatus = 'pending' | 'processing' | 'completed' | 'rejected';
@@ -12,7 +13,7 @@ function mapTx(d: QueryDocumentSnapshot<DocumentData>): Transaction { const data
 export function subscribeTransactions(onUpdate: (txs: Transaction[]) => void, onError: (err: Error) => void) { const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc')); return onSnapshot(q, (snap) => onUpdate(snap.docs.map(mapTx)), (err) => onError(err as Error)); }
 export async function approveTransaction(id: string): Promise<void> { try { await httpsCallable(functions, 'approveTransaction')({ transactionId: id }); } catch (err) { throw new Error((err as Error).message || 'Could not approve this order.'); } }
 export async function acceptTransaction(id: string): Promise<void> { try { await httpsCallable(functions, 'acceptTransaction')({ transactionId: id }); } catch (err) { throw new Error((err as Error).message || 'Could not accept this order.'); } }
-export async function rejectTransaction(id: string, reason: string, service: string): Promise<void> { if (!['Recharge', 'Internet', 'Bill Payment', 'Mobile Banking', 'Remittance'].includes(service)) throw new Error('This order type does not support rejection.'); try { await httpsCallable(functions, 'rejectTransaction')({ transactionId: id, reason: reason || '' }); } catch (err) { throw new Error((err as Error).message || 'Could not reject this order right now.'); } }
+export async function rejectTransaction(id: string, reason: string, service: string): Promise<void> { if (!['Recharge', 'Internet', 'Bill Payment', 'Mobile Banking', 'Remittance'].includes(service)) throw new Error('This order type does not support rejection.'); try { const uid = auth.currentUser?.uid; if (!uid) throw new Error('You must be signed in.'); const profile = await getDoc(doc(db, 'users', uid)); const sessionId = profile.exists() ? profile.data()?.activeSessionId : null; const deviceId = getOrCreateDeviceId(); if (typeof sessionId !== 'string' || !sessionId) throw new Error('Your secure session is missing. Please sign in again.'); await httpsCallable(functions, 'rejectTransaction')({ transactionId: id, reason: reason || '', sessionId, deviceId }); } catch (err) { throw new Error((err as Error).message || 'Could not reject this order right now.'); } }
 export async function completeTransaction(id: string, pin?: string, receiptUrl?: string): Promise<void> { try { await httpsCallable(functions, 'completeTransaction')({ transactionId: id, pin: pin || '', receiptUrl: receiptUrl || '' }); } catch (err) { throw new Error((err as Error).message || 'Could not complete this order.'); } }
 export async function assignDealer(id: string, dealerId: string): Promise<void> { try { await httpsCallable(functions, 'assignDealer')({ transactionId: id, dealerId }); } catch (err) { throw new Error((err as Error).message || 'Could not assign this dealer.'); } }
 export interface DealerOption { id: string; name: string; phone: string; }
