@@ -59,7 +59,7 @@ export const AD_USER_TYPE_LABELS = {
 // visible effect today, exactly like targetCountries would have no effect
 // before this same phase wired country matching into the app's own
 // context builder in SmartAd.js. This is intentional: the matching engine
-// (adTargetingService.js) is fully general-purpose so a later phase that
+// (adTargetingService.js) is fully general-purpose so the current ad pipeline that
 // DOES add real state/city/area/outlet data to a user's profile only has
 // to start populating AdTargetingContext with it - no change needed here
 // or in the matching logic itself.
