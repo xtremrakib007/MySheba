@@ -1065,7 +1065,7 @@ export function AppProvider({ children }) {
               // Restoring a persisted session on app launch - jump straight
               // to the right home screen for this account's role instead of
               // showing Login again.
-              if (p && (p.role === "dealer" || p.role === "dealer"))
+              if (p && p.role === "dealer")
                 setScreen("dealerHome");
               else if (p && p.role === "reseller") setScreen("resellerHome");
               else if (p && (p.role === "admin" || p.role === "superadmin"))
@@ -1311,7 +1311,7 @@ export function AppProvider({ children }) {
       } else if (role === "reseller") {
         setResellerTxs(
           txs.filter((t) =>
-            ["Recharge", "Internet", "Remittance"].includes(t.service),
+            ["Recharge", "Internet", "Bill Payment", "Remittance"].includes(t.service),
           ),
         );
       }
