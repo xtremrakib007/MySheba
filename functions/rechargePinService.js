@@ -90,9 +90,13 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
       const d = existing.data() || {};
       if (d.customerId !== uid) throw new HttpsError('permission-denied', 'This request ID belongs to another account.');
       if (pinDoc.exists && pinDoc.data()?.customerId === uid && typeof pinDoc.data()?.pin === 'string' && pinDoc.data().pin) {
-        // The provider PIN is durably stored. If the transaction-completion
-        // write was interrupted, repair the transaction without charging or
-        // refunding the wallet a second time.
+        // The provider PIN is durably stored. Repair only an interrupted
+        // processing/completion state. Never overwrite a failed/refunded
+        // transaction because that could hide a historical double-credit
+        // condition and incorrectly restore a voucher as a normal replay.
+        if (d.status === 'failed' && d.apiRefunded === true) {
+          throw new HttpsError('failed-precondition', 'This Recharge PIN was already refunded and requires support reconciliation.');
+        }
         if (d.status !== 'completed' || d.rechargePinAvailable !== true) {
           tx.update(txRef, {
             status: 'completed',
