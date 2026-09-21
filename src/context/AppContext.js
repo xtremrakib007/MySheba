@@ -205,7 +205,7 @@ export function AppProvider({ children }) {
   // No more manual role picker - `screen` starts on 'login' and, once
   // signed in, the account's Firestore `role` field (in `profile.role`)
   // decides which home screen to land on. See the bootstrap effect below.
-  const [screen, setScreenState] = useState("login"); // login | register | forgotPassword | customerHome | service | dealerHome | resellerHome | adminHome | webview | buspicker | support | history | topup | chat | chatList | settings | profile | myAccount | reports | notifications | marketplaceHome | marketplaceCreateListing | marketplaceMyListings | marketplaceMyReviews | marketplaceListingDetail | marketplaceModeration | verifyIdentity | verificationManagement | adminAnalytics | myDocuments | documentType | addDocument | documentDetails | documentViewer | moreFeatures | adminFeatures | apiProviderManagement | dealerFeatures | resellerFeatures | featureAccess | tierPromotions | adFeatureControls | bannerManagement | salaryReports | notepad | addNote | noteDetail | help | friendsList
+  const [screen, setScreenState] = useState("login"); // login | register | forgotPassword | customerHome | service | dealerHome | resellerHome | adminHome | webview | buspicker | support | history | topup | chat | chatList | settings | profile | myAccount | reports | notifications | verifyIdentity | verificationManagement | adminAnalytics | myDocuments | documentType | addDocument | documentDetails | documentViewer | moreFeatures | adminFeatures | apiProviderManagement | dealerFeatures | resellerFeatures | featureAccess | tierPromotions | adFeatureControls | bannerManagement | salaryReports | notepad | addNote | noteDetail | help | friendsList
 
   // ---- back-button navigation history ----
   // Tracks prior screens so the Android hardware back button can step
@@ -289,8 +289,7 @@ export function AppProvider({ children }) {
     setScreen("advertiserDetail");
   }, []);
 
-  // Listing/marketplace deep-link screens were removed from App.js. Keep the
-  // listener callback safe and inert rather than referencing deleted state.
+  // Deep-link handling is intentionally inert; retired listing routes are no longer exposed.
   const handleDeepLink = useCallback(() => {}, []);
 
   // ---- My Documents (private per-user document vault - passport, visa,
@@ -327,7 +326,7 @@ export function AppProvider({ children }) {
 
   // ---- Notepad (private per-user notes, plus Credit/Debit/Loan "money
   // notes" for tracking who owes what) ---- Screens call notepadService.js
-  // directly (same pattern as marketplace/documents/etc. above); context
+  // directly; context
   // only tracks which note is being viewed and which is being edited.
   // editNoteId is null for "add new", set when opening Add from
   // NoteDetailScreen's "Edit" action - same shape as
@@ -750,14 +749,7 @@ export function AppProvider({ children }) {
   // getEligibleAds step 13 (campaignId -> AdCampaign).
   const [adCampaignsById, setAdCampaignsById] = useState({});
 
-  // ---- Buy & Sell / Local Services category lists - admin-editable from
-  // Admin > Categories (see categoryService.js). Every screen with a
-  // category picker or filter chips reads these live instead of the
-  // hardcoded arrays that used to live in marketplaceService.js /
-  // serviceProviderService.js. ----
-  const [marketplaceCategories, setMarketplaceCategories] = useState(
-    categoryService.DEFAULT_CATEGORIES.marketplace,
-  );
+  // ---- Local Services categories - admin-editable from Admin > Categories. ----
   const [serviceCategories, setServiceCategories] = useState(
     categoryService.DEFAULT_CATEGORIES.services,
   );
@@ -1233,16 +1225,6 @@ export function AppProvider({ children }) {
       (list) =>
         setAdCampaignsById(Object.fromEntries(list.map((c) => [c.id, c]))),
       logListenerError("adCampaigns"),
-    );
-    return unsub;
-  }, [authUser]);
-
-  useEffect(() => {
-    if (!authUser) return undefined;
-    const unsub = categoryService.subscribeCategories(
-      "marketplace",
-      setMarketplaceCategories,
-      logListenerError("marketplaceCategories"),
     );
     return unsub;
   }, [authUser]);
@@ -2349,7 +2331,6 @@ export function AppProvider({ children }) {
     accessWindowHours,
     featureAccess,
     gridManagement,
-    marketplaceCategories,
     serviceCategories,
     supportContact,
 
