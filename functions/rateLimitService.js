@@ -15,6 +15,7 @@ const DEFAULT_LIMITS = {
   findWalletRecipient: { max: 60, windowMinutes: 60 },
   support_ticket_create: { max: 8, windowMinutes: 60 },
   chargeService: { max: 30, windowMinutes: 10 },
+  rechargePin: { max: 10, windowMinutes: 10 },
   transactionComplete: { max: 5, windowMinutes: 10 },
 };
 
