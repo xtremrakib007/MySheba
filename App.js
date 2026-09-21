@@ -11,6 +11,8 @@ import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
 import DeviceVerifyScreen from './src/screens/DeviceVerifyScreen';
 import GooglePhoneScreen from './src/screens/GooglePhoneScreen';
 import CustomerHomeScreen from './src/screens/CustomerHomeScreen';
+import ChatScreen from './src/screens/ChatScreen';
+import ChatListScreen from './src/screens/ChatListScreen';
 import ServiceScreen from './src/screens/ServiceScreen';
 import DealerHomeScreen from './src/screens/DealerHomeScreen';
 import ResellerHomeScreen from './src/screens/ResellerHomeScreen';
