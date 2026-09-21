@@ -1,6 +1,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const dns = require('dns').promises;
+const https = require('https');
 const crypto = require('crypto');
 
 const COLLECTION = 'api_providers';
@@ -35,6 +36,43 @@ function isPrivateIp(ip) {
     (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) ||
     (a === 100 && b >= 64 && b <= 127) || (a === 198 && (b === 18 || b === 19)) ||
     (a === 192 && b === 0 && c === 0);
+}
+async function resolvePublicAddress(hostname) {
+  if (!hostname || isIpLiteral(hostname) || BLOCKED_HOSTS.test(hostname)) throw new Error('Provider URL host is not allowed.');
+  let addresses;
+  try { addresses = await dns.lookup(hostname, { all: true, verbatim: true }); }
+  catch { throw new Error('Provider hostname could not be resolved.'); }
+  if (!addresses.length || addresses.some(a => isPrivateIp(a.address))) throw new Error('Provider hostname resolves to a private or reserved address.');
+  return addresses[0];
+}
+function requestHttpsPinned(url, options, pinnedAddress) {
+  return new Promise((resolve, reject) => {
+    const request = https.request(url, {
+      method: options.method,
+      headers: options.headers,
+      signal: options.signal,
+      // Pin the already-validated DNS result for this request. TLS still uses
+      // the original hostname, so certificate/SNI validation is preserved.
+      lookup: (_hostname, _opts, callback) => callback(null, pinnedAddress.address, pinnedAddress.family),
+    }, (response) => {
+      let bytes = 0;
+      const chunks = [];
+      response.on('data', (chunk) => {
+        bytes += chunk.length;
+        if (bytes <= 1000000) chunks.push(chunk);
+        else response.destroy(new Error('Provider response is too large.'));
+      });
+      response.on('end', () => resolve({
+        status: response.statusCode || 0,
+        ok: (response.statusCode || 0) >= 200 && (response.statusCode || 0) < 300,
+        text: () => Promise.resolve(Buffer.concat(chunks).toString('utf8')),
+      }));
+      response.on('error', reject);
+    });
+    request.on('error', reject);
+    if (options.body != null) request.write(options.body);
+    request.end();
+  });
 }
 async function assertPublicHostname(hostname) {
   if (!hostname || isIpLiteral(hostname) || BLOCKED_HOSTS.test(hostname)) throw new Error('Provider URL host is not allowed.');
@@ -170,7 +208,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   try {
     let base; try { base = new URL(provider.baseUrl); } catch { throw new Error('Provider URL is invalid.'); }
     if (base.protocol !== 'https:') throw new Error('Provider URL is not allowed.');
-    await assertPublicHostname(base.hostname);
+    const pinnedAddress = await resolvePublicAddress(base.hostname);
     const endpointPath = String(provider.endpointPath || '/');
     if (/^https?:\/\//i.test(endpointPath) || endpointPath.startsWith('//')) throw new Error('Endpoint path must be relative to the provider base URL.');
     const url = new URL(endpointPath,base);
@@ -197,7 +235,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     let body;
     if(method!=='GET'){ headers['content-type']=headers['content-type']||'application/json'; body=JSON.stringify(render(asObject(provider.requestTemplate),vars)); if(Buffer.byteLength(body,'utf8')>100000) throw new Error('Rendered API request body is too large.'); }
     const ctl=new AbortController(), timer=setTimeout(()=>ctl.abort(),Math.max(3000,Math.min(60000,Number(provider.timeoutMs)||15000)));
-    let response; try { response=await fetch(url,{method,headers,body,signal:ctl.signal,redirect:'error'}); } finally { clearTimeout(timer); }
+    let response; try { response=await requestHttpsPinned(url,{method,headers,body,signal:ctl.signal},pinnedAddress); } finally { clearTimeout(timer); }
     const responseText=await response.text();
     if(Buffer.byteLength(responseText,'utf8')>1000000) throw new Error('Provider response is too large.');
     let data={}; try { data=responseText?JSON.parse(responseText):{}; } catch { data={raw:responseText.slice(0,5000)}; }
