@@ -7,9 +7,7 @@ import { radius, spacing } from '../theme/theme';
 import { useTheme } from "../theme/ThemeContext";
 import HeaderDecor from '../components/HeaderDecor';
 import PromptModal from '../components/PromptModal';
-import AssignChatModal from '../components/AssignChatModal';
 import * as supportTicketService from '../firebase/supportTicketService';
-import * as chatService from '../firebase/chatService';
 
 // Superadmin's own Support screen - the full incoming queue every new
 // ticket lands in first. Two tabs:
@@ -28,11 +26,6 @@ import * as chatService from '../firebase/chatService';
 //     assignment can also be changed from the header.
 // Separate either way from AdminHomeScreen's own "Support" tab, which just
 // edits the Call/WhatsApp numbers shown to customers, not tickets or chats.
-const TOP_TABS = [
-  { key: 'tickets', label: '🎫 Tickets' },
-  { key: 'messages', label: '💬 Messages' },
-];
-
 const FILTERS = [
   { key: 'all', label: 'All' },
   { key: 'open', label: 'Open' },
@@ -80,7 +73,7 @@ export default function AdminSupportScreen() {
 
   const STATUS_STYLE = getStatusStyle(colors);
   const styles = createStyles(colors);
-  const { goBackOrHome, openChat, profile } = useApp();
+  const { goBackOrHome, profile } = useApp();
   const [topTab, setTopTab] = useState('tickets');
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -88,15 +81,6 @@ export default function AdminSupportScreen() {
   const [busyId, setBusyId] = useState(null);
   const [resolveId, setResolveId] = useState(null);
 
-  // "Messages" tab: every customer's live Support chat thread.
-  const [chats, setChats] = useState([]);
-  const [chatsLoading, setChatsLoading] = useState(true);
-  const [assignChatId, setAssignChatId] = useState(null); // thread id currently open in the assign picker
-
-  // "Tickets" tab assignment - kept as a separate id from assignChatId
-  // since a ticket id and a chat thread id (customer uid) are different
-  // things and the two "Assign to" modals are never open at the same time.
-  const [assignTicketId, setAssignTicketId] = useState(null);
 
   const canAssign = profile && profile.role === 'superadmin';
 
@@ -107,54 +91,6 @@ export default function AdminSupportScreen() {
     );
     return unsub;
   }, []);
-
-  useEffect(() => {
-    const unsub = chatService.subscribeAllChats(
-      (list) => { setChats(list); setChatsLoading(false); },
-      () => setChatsLoading(false)
-    );
-    return unsub;
-  }, []);
-
-  const visibleChats = chats.filter((c) => c.lastMessage);
-
-  const handleAssignChat = async (staff) => {
-    const chatId = assignChatId;
-    setAssignChatId(null);
-    if (!chatId) return;
-    try {
-      await chatService.assignChat(chatId, staff);
-    } catch (e) {
-      showAlert('MySheba', e.message || 'Could not assign this chat.');
-    }
-  };
-
-  const handleUnassignChat = async (chatId) => {
-    try {
-      await chatService.unassignChat(chatId);
-    } catch (e) {
-      showAlert('MySheba', e.message || 'Could not clear this assignment.');
-    }
-  };
-
-  const handleAssignTicket = async (staff) => {
-    const ticketId = assignTicketId;
-    setAssignTicketId(null);
-    if (!ticketId) return;
-    try {
-      await supportTicketService.assignTicket(ticketId, staff);
-    } catch (e) {
-      showAlert('MySheba', e.message || 'Could not assign this ticket.');
-    }
-  };
-
-  const handleUnassignTicket = async (ticketId) => {
-    try {
-      await supportTicketService.unassignTicket(ticketId);
-    } catch (e) {
-      showAlert('MySheba', e.message || 'Could not clear this assignment.');
-    }
-  };
 
   const counts = tickets.reduce((acc, t) => {
     acc[t.status] = (acc[t.status] || 0) + 1;
@@ -221,35 +157,7 @@ export default function AdminSupportScreen() {
         <Text style={styles.headerTitle}>Support</Text>
       </LinearGradient>
 
-      <View style={styles.topTabRow}>
-        {TOP_TABS.map((t) => (
-          <TouchableOpacity
-            key={t.key}
-            style={[styles.topTab, topTab === t.key && styles.topTabActive]}
-            onPress={() => setTopTab(t.key)}
-          >
-            <Text style={[styles.topTabText, topTab === t.key && styles.topTabTextActive]}>{t.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {topTab === 'tickets' && (
-      <View style={styles.filterRow}>
-        {FILTERS.map((f) => (
-          <TouchableOpacity
-            key={f.key}
-            style={[styles.filterChip, filter === f.key && styles.filterChipActive]}
-            onPress={() => setFilter(f.key)}
-          >
-            <Text style={[styles.filterText, filter === f.key && styles.filterTextActive]}>
-              {f.label}{f.key !== 'all' && counts[f.key] ? ` (${counts[f.key]})` : ''}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      )}
-
-      {topTab === 'tickets' && (loading ? (
+      {loading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
@@ -282,26 +190,6 @@ export default function AdminSupportScreen() {
                       <Text style={styles.noteText}>{t.adminNote}</Text>
                     </View>
                   )}
-
-                  <View style={styles.assignRow}>
-                    <Text style={styles.assignRowText} numberOfLines={1}>
-                      {t.assignedToName
-                        ? `🧑‍💼 ${t.assignedToName}${t.assignedToRole ? ` (${t.assignedToRole})` : ''}`
-                        : '🧑‍💼 Unassigned'}
-                    </Text>
-                    {canAssign && (
-                      <View style={styles.assignRowActions}>
-                        <TouchableOpacity onPress={() => setAssignTicketId(t.id)}>
-                          <Text style={styles.assignRowAction}>{t.assignedToName ? 'Reassign' : 'Assign'}</Text>
-                        </TouchableOpacity>
-                        {!!t.assignedToName && (
-                          <TouchableOpacity onPress={() => handleUnassignTicket(t.id)}>
-                            <Text style={styles.assignRowClear}>Clear</Text>
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    )}
-                  </View>
 
                   <View style={styles.actions}>
                     <TouchableOpacity style={styles.callBtn} onPress={() => callRequester(t)}>
@@ -424,14 +312,6 @@ export default function AdminSupportScreen() {
         />
       )}
 
-      {canAssign && (
-        <AssignChatModal
-          visible={!!assignTicketId}
-          currentUid={(tickets.find((t) => t.id === assignTicketId) || {}).assignedToUid || ''}
-          onSelect={handleAssignTicket}
-          onCancel={() => setAssignTicketId(null)}
-        />
-      )}
     </View>
   );
 }
@@ -443,11 +323,6 @@ function createStyles(colors) {
     backBtn: { padding: 4 },
     backText: { color: 'white', fontSize: 20 },
     headerTitle: { color: 'white', fontWeight: '700', fontSize: 16, marginLeft: 10 },
-    topTabRow: { flexDirection: 'row', backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.border },
-    topTab: { flex: 1, paddingVertical: 13, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
-    topTabActive: { borderBottomColor: colors.primary },
-    topTabText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
-    topTabTextActive: { color: colors.primary },
     filterRow: { flexDirection: 'row', gap: 8, paddingHorizontal: spacing.lg, paddingVertical: 10, backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.border },
     filterChip: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border },
     filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
@@ -478,14 +353,6 @@ function createStyles(colors) {
     noteBox: { backgroundColor: '#F0F7FF', borderRadius: radius.md, padding: 10, marginBottom: 8 },
     noteLabel: { fontSize: 10, fontWeight: '700', color: colors.primary, textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 3 },
     noteText: { fontSize: 12, color: colors.text, lineHeight: 17 },
-    assignRow: {
-      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-      marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border,
-    },
-    assignRowText: { flex: 1, fontSize: 11, color: colors.textSecondary, marginRight: 8 },
-    assignRowActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    assignRowAction: { fontSize: 11, fontWeight: '700', color: colors.primary },
-    assignRowClear: { fontSize: 11, fontWeight: '700', color: colors.error },
     badge: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: radius.pill },
     badgeText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
     actions: { flexDirection: 'row', gap: 8, marginTop: 8 },
