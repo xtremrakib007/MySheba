@@ -17,6 +17,15 @@ jobs:
           node-version: 24
           cache: npm
 
+      # Cheap, dependency-free guard: the script only reads source with
+      # node's own fs, so it runs before npm ci and fails in seconds rather
+      # than after a ten-minute build. Catches a tile or setScreen() that
+      # points at a screen, tab or service which no longer exists - the
+      # shape of bug the retired-module cleanup kept producing, and one that
+      # neither lint nor a syntax check sees.
+      - name: Audit navigation targets
+        run: npm run audit:nav
+
       - name: Setup Expo and EAS
         uses: expo/expo-github-action@v8
         with:
