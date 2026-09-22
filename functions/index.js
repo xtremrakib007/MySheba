@@ -16,6 +16,7 @@ exports.manageUser = userManagement.manageUser;
 // Compatibility/production callable exports that are consumed by the mobile
 // client. Keep every client-facing callable reachable from the actual
 // functions entrypoint (secureIndexV2 -> index.js).
+exports.refreshWalletExchangeRates = require('./walletExchangeRateService').refreshWalletExchangeRates;
 exports.registerCustomer = require('./customerRegistration').registerCustomer;
 exports.createInquiry = require('./inquiryService').createInquiry;
 exports.registerPushToken = require('./pushTokenService').registerPushToken;
