@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Modal, View, Text, TouchableOpacity, ScrollView, Linking, Image, StyleSheet } from 'react-native';
 import { radius } from '../theme/theme';
 import { useTheme } from "../theme/ThemeContext";
+import { showAlert } from '../utils/appAlert';
 import CopyButton from './CopyButton';
+import { printTransactionReceipt } from '../utils/printService';
 import DownloadButton from './DownloadButton';
 import * as topupService from '../firebase/topupService';
 import * as supportTicketService from '../firebase/supportTicketService';
@@ -265,6 +267,19 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
   } = useTheme();
 
   const styles = createStyles(colors);
+  const [printing, setPrinting] = useState(false);
+
+  const onPrint = async () => {
+    setPrinting(true);
+    try {
+      await printTransactionReceipt(item, {});
+    } catch (e) {
+      showAlert('MySheba', e?.message || 'Could not start printing. Check that a printer is set up on this device.');
+    } finally {
+      setPrinting(false);
+    }
+  };
+
   if (!item) return null;
 
   const title = type === 'inquiry' ? `${TYPE_ICON[item.type] || '🗺️'} Travel Inquiry`
@@ -302,6 +317,11 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
 
           <View style={styles.footer}>
             <CopyButton value={copyValue} label="Copy Details" />
+            {type !== 'supportTicket' && (
+              <TouchableOpacity style={styles.printBtn} disabled={printing} onPress={onPrint}>
+                <Text style={styles.printText}>{printing ? 'Printing…' : '🖨️ Print'}</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
               <Text style={styles.closeText}>Close</Text>
             </TouchableOpacity>
@@ -331,6 +351,8 @@ function createStyles(colors) {
     pinRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     pinValue: { fontSize: 22, fontWeight: '700', color: colors.text, letterSpacing: 4 },
     footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
+    printBtn: { backgroundColor: '#EEF4FF', paddingVertical: 9, paddingHorizontal: 14, borderRadius: radius.md },
+    printText: { color: '#1A4FBF', fontSize: 12, fontWeight: '700' },
     closeBtn: { flex: 1, paddingVertical: 10, borderRadius: radius.md, backgroundColor: colors.primary, alignItems: 'center' },
     closeText: { color: 'white', fontWeight: '600', fontSize: 13 },
   });

@@ -54,6 +54,7 @@ import AdvertiserDetailScreen from './src/screens/AdvertiserDetailScreen';
 import AdPackagesManagementScreen from './src/screens/AdPackagesManagementScreen';
 import AdPaymentsManagementScreen from './src/screens/AdPaymentsManagementScreen';
 import TrustedDevicesScreen from './src/screens/TrustedDevicesScreen';
+import PrinterSettingsScreen from './src/screens/PrinterSettingsScreen';
 import DocumentTypeScreen from './src/screens/DocumentTypeScreen';
 import AddDocumentScreen from './src/screens/AddDocumentScreen';
 import DocumentDetailsScreen from './src/screens/DocumentDetailsScreen';
@@ -171,6 +172,7 @@ function Root() {
       {renderedScreen === 'adPackagesManagement' && <AdPackagesManagementScreen />}
       {renderedScreen === 'adPaymentsManagement' && <AdPaymentsManagementScreen />}
       {renderedScreen === 'trustedDevices' && <TrustedDevicesScreen />}
+      {renderedScreen === 'printerSettings' && <PrinterSettingsScreen />}
       {renderedScreen === 'documentType' && <DocumentTypeScreen />}
       {renderedScreen === 'addDocument' && <AddDocumentScreen />}
       {renderedScreen === 'documentDetails' && <DocumentDetailsScreen />}

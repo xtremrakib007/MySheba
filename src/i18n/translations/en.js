@@ -35,6 +35,8 @@ export default {
     calls: 'Calls',
     callsSub: 'Ringtone, vibration, and call alerts',
     language: 'Language',
+    printer: 'Printer',
+    printerSub: 'Choose the printer used for receipts and reports',
     changePassword: 'Change Password',
     linkGoogleAccount: 'Link Google Account',
     linkGoogleAccountSub: 'Sign in with Google using this account',
