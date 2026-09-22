@@ -307,3 +307,83 @@ function friendlyAuthError(err) {
   if (code.includes('network-request-failed')) return 'Network error. Please check your internet connection.';
   return message || 'Authentication failed. Please try again.';
 }
+
+// ---- profile reads/writes and password management ----
+// Dropped by 78aca14 ("Fix existing Google sign-in account transfer"), which
+// cut this file from 483 lines to 378 while every caller kept calling them -
+// so each call resolved to undefined and threw at the call site. Restored
+// unchanged from e2e64e2, the last commit that had them; their imports were
+// never removed, which is part of why the deletion went unnoticed.
+export function subscribeProfile(uid, callback, onError) {
+  return onSnapshot(doc(db, 'users', uid), (snap) => callback(snap.exists() ? snap.data() : null), onError);
+}
+
+export async function resetPassword({ phone, phoneE164, dialCode, email, newPassword, phoneIdToken, emailIdToken }) {
+  try {
+    const fn = httpsCallable(functions, 'resetPassword');
+    await fn({ phone, phoneE164, dialCode, email, newPassword, phoneIdToken, emailIdToken });
+  } catch (err) {
+    throw new Error(friendlyAuthError(err));
+  }
+}
+
+export async function changePassword(currentPin, newPin) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('You must be signed in to change your password.');
+  if (!user.email) throw new Error('This account signed in with Google and has no password to change.');
+  if (!currentPin) throw new Error('Please enter your current password.');
+  if (!isValidPin(newPin)) throw new Error('New password must be 6-20 characters.');
+  if (currentPin === newPin) throw new Error('New password must be different from your current password.');
+  await reauthenticate(currentPin);
+  try { await updatePassword(user, newPin); }
+  catch (err) { throw new Error(friendlyAuthError(err)); }
+  logActivity('changePassword');
+}
+
+export async function reauthenticate(currentPassword) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('You must be signed in.');
+  if (!user.email) throw new Error('This account signed in with Google and has no password.');
+  if (!currentPassword) throw new Error('Please enter your current password.');
+  const credential = EmailAuthProvider.credential(user.email, currentPassword);
+  try { await reauthenticateWithCredential(user, credential); }
+  catch (err) {
+    if (err && (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential')) throw new Error('Your current password is incorrect.');
+    throw new Error(friendlyAuthError(err));
+  }
+}
+
+export async function updateNotifPrefs(uid, prefs) {
+  if (!uid) return;
+  const patch = {};
+  Object.keys(prefs || {}).forEach((k) => { patch[`notifPrefs.${k}`] = prefs[k]; });
+  if (Object.keys(patch).length === 0) return;
+  await updateDoc(doc(db, 'users', uid), patch);
+}
+
+export async function markAnnouncementsSeen(uid) {
+  if (!uid) return;
+  await updateDoc(doc(db, 'users', uid), { lastSeenAnnouncementAt: serverTimestamp() });
+}
+
+export async function updateUserFields(uid, patch) {
+  if (!uid || !patch || Object.keys(patch).length === 0) return;
+  const clean = {};
+  Object.keys(patch).forEach((k) => { clean[k] = typeof patch[k] === 'string' ? patch[k].trim() : patch[k]; });
+  await updateDoc(doc(db, 'users', uid), clean);
+}
+
+export async function updateUserNameParts(uid, { firstName, lastName }) {
+  const first = (firstName || '').trim();
+  const last = (lastName || '').trim();
+  if (!first) throw new Error('Please enter your first name.');
+  const fullName = [first, last].filter(Boolean).join(' ');
+  await updateDoc(doc(db, 'users', uid), { firstName: first, lastName: last, name: fullName });
+  if (auth.currentUser) await updateProfile(auth.currentUser, { displayName: fullName });
+}
+
+export async function updateUserAvatar(uid, url) {
+  if (!uid || !url) return;
+  await updateDoc(doc(db, 'users', uid), { avatarUrl: url });
+  if (auth.currentUser) await updateProfile(auth.currentUser, { photoURL: url });
+}
