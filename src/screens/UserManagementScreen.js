@@ -33,7 +33,7 @@ const ROLE_LABEL = { customer: 'Customer', dealer: 'Dealer', reseller: 'Reseller
 // target user is already at or above that role - e.g. an admin would see
 // an "Upgrade" button on a row that's already a Dealer, offering to
 // "upgrade" them to Dealer again.
-const ROLE_RANK = { customer: 0, dealer: 1, dealer: 1, reseller: 1, admin: 2, superadmin: 3 };
+const ROLE_RANK = { customer: 0, dealer: 1, reseller: 1, admin: 2, superadmin: 3 };
 
 /** Which of `canUpgradeTo` are a genuine promotion for this specific user -
  * i.e. strictly outrank their current role. */

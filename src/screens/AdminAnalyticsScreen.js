@@ -21,7 +21,7 @@ import * as analyticsService from '../firebase/analyticsService';
 import * as logService from '../firebase/logService';
 import { subscribeAllUsers } from '../firebase/userManagementService';
 
-const ROLE_LABELS = { customer: 'Customers', dealer: 'Dealers', dealer: 'Dealers', reseller: 'Resellers', admin: 'Admins', superadmin: 'Super Admins' };
+const ROLE_LABELS = { customer: 'Customers', dealer: 'Dealers', reseller: 'Resellers', admin: 'Admins', superadmin: 'Super Admins' };
 
 // Which screen each module's row should open, keyed exactly the same way
 const MODULE_SCREENS = {

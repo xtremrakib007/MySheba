@@ -334,6 +334,21 @@ export function AppProvider({ children }) {
     setScreen("businessProfile");
   }, []);
 
+  // ---- MySheba advertiser and campaign management ---- Same "dedicated
+  // nav state alongside setScreen" pattern as activeBusinessProfileUid
+  // above: AdvertiserManagementScreen is the roster (no id needed to open
+  // it), while AdvertiserDetailScreen needs to know which ad_advertisers
+  // doc to show.
+  const [activeAdvertiserId, setActiveAdvertiserId] = useState(null);
+  const openAdvertiserManagement = useCallback(
+    () => setScreen("advertiserManagement"),
+    [],
+  );
+  const openAdvertiserDetail = useCallback((advertiserId) => {
+    setActiveAdvertiserId(advertiserId);
+    setScreen("advertiserDetail");
+  }, []);
+
   // ---- Contact Profile ---- read-only view of the other person in a 1:1
   // direct chat - opened by tapping their name in ChatScreen's header (see
   // ChatScreen's headerTitleRow). Same "just the navigation state" pattern
@@ -545,10 +560,6 @@ export function AppProvider({ children }) {
     },
     [setBiometricEnabled],
   );
-
-  // ---- voice / video calls (Agora) ----
-  const [activeCall, setActiveCall] = useState(null); // the call doc currently on-screen (ringing/accepted)
-  const [incomingCall, setIncomingCall] = useState(null); // a 1:1 call ringing FOR me
 
   // ---- service wizard state (mirrors currentService/currentStep/totalSteps/serviceData) ----
   const [currentService, setCurrentService] = useState("");
@@ -1275,17 +1286,16 @@ export function AppProvider({ children }) {
     return unsub;
   }, [screen, profile]);
 
-  // Re-locks the Locked Chats vault AND the Notepad/My Documents private
-  // vault whenever the app leaves the foreground - same behavior as
-  // WhatsApp's chat lock, so background/switch-app/screen-off always
-  // requires the security PIN again on return, rather than staying
-  // unlocked indefinitely once entered once. (Transfer Points is
-  // deliberately not included here - see requireSecurityPin call in
-  // TransferPointsScreen, which never checks privateVaultUnlocked.)
+  // Re-locks the Notepad/My Documents private vault whenever the app
+  // leaves the foreground - same behavior as WhatsApp's chat lock, so
+  // background/switch-app/screen-off always requires the security PIN
+  // again on return, rather than staying unlocked indefinitely once
+  // entered once. (Transfer Points is deliberately not included here -
+  // see requireSecurityPin call in TransferPointsScreen, which never
+  // checks privateVaultUnlocked.)
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
       if (state !== "active") {
-        setChatVaultUnlocked(false);
         setPrivateVaultUnlocked(false);
       }
     });
@@ -1331,61 +1341,6 @@ export function AppProvider({ children }) {
       setAppLocked(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appLockEnabled, authUser?.uid, profile?.securityPinSet]);
-
-  // Listens for a call ringing FOR me no matter what screen I'm on, so the
-  // incoming-call prompt can show up over any screen (see IncomingCallModal).
-  useEffect(() => {
-    if (!authUser) {
-      setIncomingCall(null);
-      return undefined;
-    }
-    const unsub = callService.subscribeIncomingCalls(authUser.uid, (call) => {
-      // Don't re-prompt for a call I'm already on.
-      setIncomingCall(call && call.id !== activeCall?.id ? call : null);
-    });
-    return unsub;
-  }, [authUser, activeCall]);
-
-  /** Starts a call with another user and switches to the call screen.
-   * `caller` is supplied by the call site (e.g. ChatScreen) rather than
-   * built here, so it always reflects the profile the screen has in hand. */
-  const startCall = useCallback(
-    async (caller, callee, type = "video") => {
-      if (!authUser) return;
-      const { callId, channelName } = await callService.startCall(
-        caller,
-        callee,
-        type,
-      );
-      setActiveCall({
-        id: callId,
-        channelName,
-        type,
-        callerUid: caller.uid,
-        callerName: caller.name,
-        calleeUid: callee.uid,
-        calleeName: callee.name,
-      });
-      setScreen("call");
-    },
-    [authUser],
-  );
-
-  /** Accepts the currently-ringing incoming call and switches to the call screen. */
-  const answerIncomingCall = useCallback(async () => {
-    if (!incomingCall) return;
-    await callService.acceptCall(incomingCall.id);
-    setActiveCall(incomingCall);
-    setIncomingCall(null);
-    setScreen("call");
-  }, [incomingCall]);
-
-  /** Declines the currently-ringing incoming call without joining. */
-  const rejectIncomingCall = useCallback(async () => {
-    if (!incomingCall) return;
-    await callService.declineCall(incomingCall.id);
-    setIncomingCall(null);
-  }, [incomingCall]);
 
   /** Opens the Support thread - `chatId` is the customer's uid, `name` is
    * who to show in the header/inbox. `returnTo` (staff only) is which
@@ -2341,18 +2296,10 @@ export function AppProvider({ children }) {
     confirmPaymentSuccess,
     webViewPaymentBusy,
     webViewPaymentCharged,
-    // direct chat
+    // advertiser + campaign management
     activeAdvertiserId,
     openAdvertiserManagement,
     openAdvertiserDetail,
-    // community
-    activeCommunityPostId,
-    openCommunity,
-    openCommunityPostDetail,
-    activeSocialPostId,
-    openSocialFeed,
-    openCreateSocialPost,
-    openSocialPostDetail,
     // my documents
     activeDocumentId,
     activeDocumentType,
@@ -2392,13 +2339,6 @@ export function AppProvider({ children }) {
     // private vault unlock (Notepad + My Documents; NOT Transfer Points)
     privateVaultUnlocked,
     setPrivateVaultUnlocked,
-    // voice / video calls
-    activeCall,
-    setActiveCall,
-    incomingCall,
-    startCall,
-    answerIncomingCall,
-    rejectIncomingCall,
     // overlays
     ratePopupVisible,
     setRatePopupVisible,

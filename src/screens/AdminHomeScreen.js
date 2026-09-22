@@ -260,6 +260,29 @@ function formatInquiryCopy(inq) {
 // rates. Everything reads/writes Firestore directly - no mock data.
 export default function AdminHomeScreen() {
   const {
+    authUser,
+    profile,
+    dealerTxs,
+    inquiries,
+    topups,
+    banners,
+    announcements,
+    adminTab,
+    setAdminTab,
+    rates,
+    pricing,
+    internetPricing,
+    supportContact,
+    paymentSettings,
+    logout,
+    setScreen,
+    openSidebar,
+    setHomeBackInterceptor,
+    adminViewingSection: viewingSection,
+    setAdminViewingSection: setViewingSection,
+    homepageConfig,
+  } = useApp();
+  const {
     colors,
     brandGradient
   } = useTheme();
@@ -557,15 +580,6 @@ export default function AdminHomeScreen() {
     if (!key || Number.isNaN(num)) return;
     try {
       await settingsService.updatePricing(key, num);
-    } catch (e) {
-      showAlert('MySheba', e.message || 'Could not update this setting.');
-    }
-  };
-
-  // Boolean, not numeric - unlike every other pricing field above, so it
-  // toggles directly on tap instead of going through PromptModal. Treats
-  const toggleGiftEnabled = async () => {
-    try {
     } catch (e) {
       showAlert('MySheba', e.message || 'Could not update this setting.');
     }
@@ -901,28 +915,6 @@ export default function AdminHomeScreen() {
               <Text style={styles.hintText}>
                 for this many days (see the listing detail screen's Boost button). Re-boosting an
                 already-featured listing extends it rather than restarting the clock.
-              </Text>
-            </View>
-
-            <View style={styles.card}>
-              <View style={styles.rateRow}>
-                <Text style={{ flex: 1 }}>Gifting Enabled</Text>
-                <TouchableOpacity style={styles.editBtn} onPress={toggleGiftEnabled}>
-                </TouchableOpacity>
-              </View>
-              {GIFT_LIMIT_FIELDS.map((r) => (
-                <View key={r.key} style={styles.rateRow}>
-                  <Text style={{ flex: 1 }}>{r.label}</Text>
-                  <Text style={styles.rateValue}>{pricing[r.key]} pts</Text>
-                  <TouchableOpacity style={styles.editBtn} onPress={() => setEditPointCostKey(r.key)}>
-                    <Text style={styles.editBtnText}>Edit</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-              <Text style={styles.hintText}>
-                Gifting always splits 80/20 (receiver / MySheba service fee) - that split is fixed by design,
-                not editable here. Turning gifting off blocks new gifts immediately (in-progress ones already
-                completed are unaffected); the min/max above bound how many points a single gift can move.
               </Text>
             </View>
 
