@@ -104,7 +104,7 @@ exports.walletTransfer = onCall({ enforceAppCheck: true }, async (request) => {
   const securityPin = request.data?.securityPin;
   if (typeof securityPin !== 'string' || !SECURITY_PIN_RE.test(securityPin)) throw new HttpsError('invalid-argument', 'Enter your 4-8 digit security PIN.');
   const amountCents = parseMoneyCents(request.data?.amount);
-  if (amountCents < Math.round(MIN_TRANSFER_MYR * 100) || amountCents > Math.round(MAX_TRANSFER_MYR * 100)) throw new HttpsError('invalid-argument', 'Enter a valid wallet transfer amount.');
+  if (amountCents < Math.round(MIN_TRANSFER_BASE * 100) || amountCents > Math.round(MAX_TRANSFER_BASE * 100)) throw new HttpsError('invalid-argument', 'Enter a valid wallet transfer amount.');
   const recipient = await resolveRecipient(db, request.data?.recipient, senderUid), recipientUid = recipient.id, note = String(request.data?.note || '').trim().slice(0, 120), ip = getClientIp(request);
   await checkVelocity(db, senderUid, 'walletTransfer', { ip });
   const transferRef = db.collection('walletTransfers').doc(`${senderUid}_${requestId}`), pinRef = db.collection('securityPins').doc(senderUid), senderRef = db.collection('users').doc(senderUid), recipientRef = db.collection('users').doc(recipientUid), senderLedgerRef = db.collection('walletLedger').doc(), recipientLedgerRef = db.collection('walletLedger').doc();
