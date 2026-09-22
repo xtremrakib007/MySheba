@@ -41,7 +41,7 @@ exports.manageUser = onCall({ enforceAppCheck: true }, async (request) => {
     let userRecord;
     try { userRecord = await admin.auth().createUser({ email: phoneToEmail(phone), password: pin, displayName: name.trim() }); }
     catch (err) { if (err.code === 'auth/email-already-exists') throw new HttpsError('already-exists', 'An account with this phone number already exists.'); await logServerError('manageUser.create', err, { userId: callerUid }); throw new HttpsError('internal', 'Could not create the account.'); }
-    const newProfile = { uid: userRecord.uid, userId: await assignUniqueUserId(db, userRecord.uid), name: name.trim(), phone: normalizePhone(phone), role, walletBalance: 0, notifPrefs: { pushEnabled: true, emailEnabled: true, rateAlerts: false }, createdBy: callerUid, createdAt: admin.firestore.FieldValue.serverTimestamp() };
+    const newProfile = { uid: userRecord.uid, userId: await assignUniqueUserId(db, userRecord.uid), name: name.trim(), phone: normalizePhone(phone), role, walletBalance: 0, walletCurrency: inferWalletCurrency({ phoneCountryCode: '+60' }), notifPrefs: { pushEnabled: true, emailEnabled: true, rateAlerts: false }, createdBy: callerUid, createdAt: admin.firestore.FieldValue.serverTimestamp() };
     if (dealerId) newProfile.dealerId = dealerId;
     if (resellerId) newProfile.resellerId = resellerId;
     try {
