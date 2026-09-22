@@ -62,7 +62,7 @@ const STAT_CARDS: { key: keyof OpsOverview; label: string; path: string; icon: t
 const REFRESH_INTERVAL_MS = 30_000;
 
 export default function DashboardPage() {
-  const { profile } = useAuth();
+  const { profile, access } = useAuth();
   const navigate = useNavigate();
   const [overview, setOverview] = useState<OpsOverview | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -101,8 +101,8 @@ export default function DashboardPage() {
 
   const isSuperadmin = profile?.role === 'superadmin';
   // Never offer a tile that would bounce off the route guard.
-  const visibleFeatures = FEATURES.filter((feature) => canAccess(feature.path, profile?.role));
-  const visibleShortcuts = SHORTCUTS.filter((shortcut) => canAccess(shortcut.path, profile?.role));
+  const visibleFeatures = FEATURES.filter((feature) => canAccess(feature.path, access));
+  const visibleShortcuts = SHORTCUTS.filter((shortcut) => canAccess(shortcut.path, access));
   const filteredFeatures = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return visibleFeatures;
@@ -113,7 +113,7 @@ export default function DashboardPage() {
     { label: 'Pending KYC verifications', value: overview?.pendingVerifications, path: '/verification', danger: false },
     { label: 'Open support tickets', value: overview?.openTickets, path: '/support', danger: false },
     { label: 'Chat reports', value: overview?.pendingChatReports, path: '/chat-reports', danger: true },
-  ].filter((item) => canAccess(item.path, profile?.role) && item.value !== null && (item.value ?? 0) > 0);
+  ].filter((item) => canAccess(item.path, access) && item.value !== null && (item.value ?? 0) > 0);
   const attentionCount = attentionItems.reduce((total, item) => total + (item.value ?? 0), 0);
 
   return (
@@ -126,7 +126,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4 md:gap-3">
-        {STAT_CARDS.filter((card) => canAccess(card.path, profile?.role)).map(({ key, label, path, icon: Icon }) => <button key={key} onClick={() => navigate(path)} className="group flex min-h-[76px] items-center gap-2 rounded-2xl border border-slate-200 bg-white px-2.5 py-2.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md sm:min-h-0 sm:gap-2.5 sm:px-3 sm:py-3 md:px-4"><div className="shrink-0 rounded-xl bg-blue-50 p-2 text-blue-600 sm:p-2.5"><Icon size={17} className="sm:h-[18px] sm:w-[18px]" /></div><div className="min-w-0"><p className="truncate text-[9px] font-bold uppercase tracking-wide text-slate-500 sm:text-[10px] md:text-[11px]">{label}</p><p className="text-lg font-extrabold text-slate-900 sm:text-xl md:text-2xl">{overview?.[key] ?? '—'}</p></div></button>)}
+        {STAT_CARDS.filter((card) => canAccess(card.path, access)).map(({ key, label, path, icon: Icon }) => <button key={key} onClick={() => navigate(path)} className="group flex min-h-[76px] items-center gap-2 rounded-2xl border border-slate-200 bg-white px-2.5 py-2.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md sm:min-h-0 sm:gap-2.5 sm:px-3 sm:py-3 md:px-4"><div className="shrink-0 rounded-xl bg-blue-50 p-2 text-blue-600 sm:p-2.5"><Icon size={17} className="sm:h-[18px] sm:w-[18px]" /></div><div className="min-w-0"><p className="truncate text-[9px] font-bold uppercase tracking-wide text-slate-500 sm:text-[10px] md:text-[11px]">{label}</p><p className="text-lg font-extrabold text-slate-900 sm:text-xl md:text-2xl">{overview?.[key] ?? '—'}</p></div></button>)}
       </div>
 
       {attentionItems.length > 0 && <div className="mb-6 rounded-[20px] border border-amber-200 bg-gradient-to-r from-amber-50 to-white p-3.5 shadow-sm sm:p-4 md:p-5"><div className="mb-3 flex items-start justify-between gap-2"><div className="flex min-w-0 items-start gap-2"><AlertTriangle size={19} className="mt-0.5 shrink-0 text-amber-600" /><div><h2 className="text-base font-extrabold text-slate-900">Requires Your Attention</h2><p className="text-[11px] leading-4 text-slate-500">{attentionCount} active item{attentionCount === 1 ? '' : 's'} across operational queues</p></div></div><span className="hidden shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold uppercase text-amber-700 xs:inline-flex sm:inline-flex">Action Center</span></div><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{attentionItems.map((item) => <button key={item.label} onClick={() => navigate(item.path)} className="flex min-h-[44px] items-center justify-between rounded-xl border border-white bg-white/80 px-3 py-2.5 text-left shadow-sm transition hover:border-amber-300 hover:bg-white"><span className="flex min-w-0 items-center gap-2 text-xs font-semibold text-slate-700"><span className={item.danger ? 'text-red-500' : 'text-amber-500'}>{item.danger ? <XCircle size={15} /> : <AlertTriangle size={15} />}</span><span className="truncate">{item.label}</span></span><span className="ml-2 text-sm font-extrabold text-slate-900">{item.value}</span></button>)}</div></div>}

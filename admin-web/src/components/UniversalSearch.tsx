@@ -41,18 +41,18 @@ const ITEMS: SearchItem[] = [
 
 export default function UniversalSearch() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { access } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
 
   const results = useMemo(() => {
-    const allowed = ITEMS.filter((item) => canAccess(item.path, profile?.role));
+    const allowed = ITEMS.filter((item) => canAccess(item.path, access));
     const q = query.trim().toLowerCase();
     if (!q) return allowed.slice(0, 10);
     return allowed.filter((item) => `${item.label} ${item.description} ${item.keywords ?? ''} ${item.group}`.toLowerCase().includes(q)).slice(0, 12);
-  }, [query, profile?.role]);
+  }, [query, access]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

@@ -20,7 +20,7 @@ const COLLAPSE_KEY = 'mysheba-admin-sidebar-collapsed';
 const GROUPS_KEY = 'mysheba-admin-sidebar-groups';
 
 export default function AppShell() {
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, access } = useAuth();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_KEY) === '1');
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -32,8 +32,8 @@ export default function AppShell() {
   // the sidebar offers and what ProtectedRoute lets through.
   const visibleGroups = useMemo(() => navGroups.map((group) => ({
     ...group,
-    items: group.items.filter((item) => canAccess(item.path, profile?.role)),
-  })).filter((group) => group.items.length > 0), [profile?.role]);
+    items: group.items.filter((item) => canAccess(item.path, access)),
+  })).filter((group) => group.items.length > 0), [access]);
 
   useEffect(() => { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0'); }, [collapsed]);
   useEffect(() => { localStorage.setItem(GROUPS_KEY, JSON.stringify(openGroups)); }, [openGroups]);

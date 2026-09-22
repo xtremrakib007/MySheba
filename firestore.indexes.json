@@ -189,6 +189,20 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
+          "fieldPath": "action",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "userAuditLog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
           "fieldPath": "targetUid",
           "order": "ASCENDING"
         },

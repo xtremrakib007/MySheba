@@ -1,12 +1,13 @@
 import type { LucideIcon } from 'lucide-react';
 import type { AdminRole } from '../contexts/AuthContext';
+import type { Capability } from '../services/accessControlService';
 import {
   LayoutDashboard, Users, SlidersHorizontal, BadgeCheck, ShieldAlert,
   MessageCircle, LifeBuoy, BarChart3, Tag, Wallet, Megaphone, BellRing, LayoutGrid, Layers,
   CreditCard, Coins, Smartphone, PercentCircle, Receipt, Plane, Send, Building2, LineChart, Lock,
   Activity, Search, TriangleAlert, ClipboardList, Headphones, Mail, BriefcaseBusiness, Banknote,
   ListChecks, UserCog, UserRoundCog,
-  Network, TrendingUp, ScrollText, Settings2, ShieldCheck, Gauge, Workflow, Ticket,
+  Network, TrendingUp, ScrollText, Settings2, ShieldCheck, Gauge, Workflow, Ticket, KeyRound,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -26,42 +27,79 @@ export interface NavGroup {
 // ---------------------------------------------------------------------
 // Who may open what.
 //
-// The panel serves four staff roles. A support agent works the support
-// queues and sees no user records, money or configuration; a finance user
-// works the money screens but performs no role, feature or security
-// administration; admins get everything that is not superadmin governance.
-// Anything not listed here is admin + superadmin, which keeps a newly added
-// screen private until someone decides otherwise.
+// Screens are gated by capability, not by role name, so a superadmin's
+// per-user grants and revokes (Access Control) change what someone sees the
+// moment they are saved. Each screen lists the capabilities that open it -
+// any one is enough. SUPERADMIN screens are governance and are never
+// grantable. A screen not listed here needs 'users', which keeps a newly
+// added screen closed to support and finance until someone decides otherwise.
 // ---------------------------------------------------------------------
 
-const ADMINS: AdminRole[] = ['admin', 'superadmin'];
-const EVERY_ROLE: AdminRole[] = ['admin', 'superadmin', 'support', 'finance'];
-const SUPERADMIN: AdminRole[] = ['superadmin'];
+export interface Access {
+  role: AdminRole | undefined;
+  capabilities: readonly Capability[];
+}
 
-export const PATH_ROLES: Record<string, AdminRole[]> = {
-  '/': EVERY_ROLE,
+const SUPERADMIN = 'superadmin-only' as const;
+type Requirement = readonly Capability[] | typeof SUPERADMIN | 'everyone';
 
-  // Support queues
-  '/support': [...ADMINS, 'support'],
-  '/support-messages': [...ADMINS, 'support'],
-  '/support-operations': [...ADMINS, 'support'],
-  '/inquiries': [...ADMINS, 'support'],
-  '/announcements': [...ADMINS, 'support'],
+export const PATH_ACCESS: Record<string, Requirement> = {
+  '/': 'everyone',
 
-  // Money
-  '/transactions': [...ADMINS, 'finance'],
-  '/financial': [...ADMINS, 'finance'],
-  '/wallet-settlement': [...ADMINS, 'finance'],
-  '/fraud-risk': [...ADMINS, 'finance'],
-  '/reports': [...ADMINS, 'finance'],
-  '/analytics': [...ADMINS, 'finance'],
-  '/topup': ['superadmin', 'finance'],
+  // Support
+  '/support': ['support'],
+  '/support-messages': ['support'],
+  '/support-operations': ['support'],
+  '/operations': ['support'],
+  '/inquiries': ['support'],
+  '/announcements': ['support'],
+  '/communications': ['support'],
+  '/notification-delivery': ['support'],
+  '/chat-reports': ['support'],
+
+  // Orders and money. Transactions serve both: order handling and finance.
+  '/transactions': ['orders', 'finance'],
+  '/service-operations': ['orders'],
+  '/financial': ['finance'],
+  '/wallet-settlement': ['finance'],
+  '/fraud-risk': ['finance'],
+  '/topup': ['finance'],
+  '/transfer-points': ['finance'],
+
+  // Users
+  '/users': ['users'],
+  '/user-operations': ['users'],
+  '/advanced-user-operations': ['users'],
+  '/kyc-operations': ['users'],
+  '/verification': ['users'],
+  '/business-profiles': ['users'],
+  '/feature-access': ['users'],
+  '/investigation': ['users'],
+  '/security': ['users'],
+
+  // Settings
+  '/config/rates': ['settings'],
+  '/config/pricing': ['settings'],
+  '/config/payments': ['settings'],
+  '/config/salary': ['settings'],
+  '/config/banners': ['settings'],
+  '/config/categories': ['settings'],
+  '/config/billers': ['settings'],
+  '/config/modules': ['settings'],
+
+  // Reports
+  '/reports': ['reports'],
+  '/analytics': ['reports'],
+  '/growth': ['reports'],
+  '/executive': ['reports'],
+  '/alerts': ['reports'],
 
   // Superadmin governance
   '/governance': SUPERADMIN,
   '/platform-control': SUPERADMIN,
   '/role-permissions': SUPERADMIN,
   '/tool-access': SUPERADMIN,
+  '/access-control': SUPERADMIN,
   '/audit': SUPERADMIN,
   '/activity-center': SUPERADMIN,
   '/system-health': SUPERADMIN,
@@ -70,20 +108,33 @@ export const PATH_ROLES: Record<string, AdminRole[]> = {
   '/financial-risk': SUPERADMIN,
 };
 
-export function rolesForPath(path: string): AdminRole[] {
-  return PATH_ROLES[path] ?? ADMINS;
+export function canAccess(path: string, access: Access): boolean {
+  if (!access.role) return false;
+  if (access.role === 'superadmin') return true;
+  const need = PATH_ACCESS[path] ?? ['users'];
+  if (need === 'everyone') return true;
+  if (need === SUPERADMIN) return false;
+  return need.some((cap) => access.capabilities.includes(cap));
 }
 
-export function canAccess(path: string, role: AdminRole | undefined): boolean {
-  return Boolean(role) && rolesForPath(path).includes(role as AdminRole);
-}
+// First screen to try for each capability, in the order a role's landing
+// page is chosen.
+const LANDING_BY_CAPABILITY: [Capability, string][] = [
+  ['support', '/support'],
+  ['finance', '/transactions'],
+  ['orders', '/transactions'],
+  ['users', '/users'],
+  ['settings', '/config/rates'],
+  ['reports', '/reports'],
+];
 
-/** Where a role lands after signing in, and where it is sent if it opens
- * something it may not see. */
-export function landingPathFor(role: AdminRole | undefined): string {
-  if (role === 'support') return '/support';
-  if (role === 'finance') return '/transactions';
-  return '/';
+/** Where someone lands after signing in, or when they open a screen they may
+ * not see. Admins and superadmins land on the dashboard; the focused staff
+ * roles land on their own work. */
+export function landingPathFor(access: Access): string {
+  if (access.role === 'admin' || access.role === 'superadmin') return '/';
+  const hit = LANDING_BY_CAPABILITY.find(([cap]) => access.capabilities.includes(cap));
+  return hit ? hit[1] : '/';
 }
 
 export const ROLE_LABELS: Record<AdminRole, string> = {
@@ -153,6 +204,7 @@ export const navGroups: NavGroup[] = [
   { label: 'Superadmin Governance', accent: 'purple', items: [
     { label: 'Governance Center', path: '/governance', icon: Settings2, superadminOnly: true, enabled: true },
     { label: 'Platform Control', path: '/platform-control', icon: BriefcaseBusiness, superadminOnly: true, enabled: true },
+    { label: 'Access Control', path: '/access-control', icon: KeyRound, superadminOnly: true, enabled: true },
     { label: 'Role & Permissions', path: '/role-permissions', icon: Network, superadminOnly: true, enabled: true },
     { label: 'Tool Access', path: '/tool-access', icon: Lock, superadminOnly: true, enabled: true },
     { label: 'Audit & Compliance', path: '/audit', icon: ScrollText, superadminOnly: true, enabled: true },

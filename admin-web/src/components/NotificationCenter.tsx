@@ -14,7 +14,7 @@ function readIds(): string[] { try { const value = JSON.parse(localStorage.getIt
 
 export default function NotificationCenter() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { access } = useAuth();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<AnnouncementLogEntry[]>([]);
   const [overview, setOverview] = useState<OpsOverview | null>(null);
@@ -31,7 +31,7 @@ export default function NotificationCenter() {
     { key: 'kyc', title: 'Pending KYC reviews', value: Number(overview?.pendingVerifications || 0), severity: 'warning', path: '/kyc-operations' },
     { key: 'support', title: 'Open support workload', value: Number(overview?.openTickets || 0), severity: 'warning', path: '/support-operations' },
     { key: 'chat', title: 'Chat reports', value: Number(overview?.pendingChatReports || 0), severity: 'critical', path: '/chat-reports' },
-  ] as AlertItem[]).filter((item) => item.value > 0 && canAccess(item.path, profile?.role)), [overview, profile?.role]);
+  ] as AlertItem[]).filter((item) => item.value > 0 && canAccess(item.path, access)), [overview, access]);
   const unreadItems = useMemo(() => items.filter((item) => !read.includes(item.id)), [items, read]);
   const unreadCount = unreadItems.length + alerts.length;
   const markRead = (id: string) => setRead((current) => current.includes(id) ? current : [...current, id].slice(-MAX_READ_IDS));

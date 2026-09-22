@@ -46,6 +46,7 @@ import ModuleSubscriptionsPage from './pages/ModuleSubscriptionsPage';
 import PaymentSettingsPage from './pages/PaymentSettingsPage';
 import PointTopUpPage from './pages/PointTopUpPage';
 import RechargePinsPage from './pages/RechargePinsPage';
+import AccessControlPage from './pages/AccessControlPage';
 import DeviceSessionsPage from './pages/DeviceSessionsPage';
 import SecurityCenterPage from './pages/SecurityCenterPage';
 import GrowthCenterPage from './pages/GrowthCenterPage';
@@ -128,6 +129,7 @@ export default function App() {
             <Route element={<SuperadminRoute />}>
               <Route path="governance" element={<SystemGovernanceCenterPage />} />
               <Route path="platform-control" element={<PlatformControlCenterPage />} />
+              <Route path="access-control" element={<AccessControlPage />} />
               <Route path="role-permissions" element={<RolePermissionsPage />} />
               <Route path="tool-access" element={<ToolAccessPage />} />
               <Route path="audit" element={<AuditCompliancePage />} />

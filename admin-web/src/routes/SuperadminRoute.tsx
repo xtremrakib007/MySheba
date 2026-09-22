@@ -6,11 +6,11 @@ import { canAccess, landingPathFor } from '../routes/navConfig';
 // checks the same map; this keeps the guarantee even if a route is moved out
 // of that group by accident.
 export default function SuperadminRoute() {
-  const { profile } = useAuth();
+  const { access } = useAuth();
   const location = useLocation();
 
-  if (!canAccess(location.pathname, profile?.role)) {
-    return <Navigate to={landingPathFor(profile?.role)} replace />;
+  if (!canAccess(location.pathname, access)) {
+    return <Navigate to={landingPathFor(access)} replace />;
   }
 
   return <Outlet />;
