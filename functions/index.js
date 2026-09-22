@@ -32,6 +32,16 @@ exports.sendAnnouncement = require('./announcements').sendAnnouncement;
 exports.createSupportTicket = require('./supportTicketService').createSupportTicket;
 exports.createInquiry = require('./inquiryService').createInquiry;
 
+// Dealer/reseller/admin transaction workflow. transactionService.js was
+// never wired in here, so acceptTransaction and completeTransaction have
+// never been deployed even though DealerHomeScreen, ResellerHomeScreen and
+// AdminHomeScreen all call them - every accept/complete returned
+// not-found. approveTransaction is exported alongside them for
+// completeness; no screen calls it yet.
+exports.approveTransaction = require('./transactionService').approveTransaction;
+exports.acceptTransaction = require('./transactionService').acceptTransaction;
+exports.completeTransaction = require('./transactionService').completeTransaction;
+
 const secureTransfer = require('./secureTransfer');
 const secureWalletTransfer = require('./secureWalletTransfer');
 const secureWalletMutations = require('./secureWalletMutations');
