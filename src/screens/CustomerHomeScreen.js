@@ -8,6 +8,7 @@ import ServiceGrid from '../components/ServiceGrid';
 import HeaderDecor from '../components/HeaderDecor';
 import InfoBar from '../components/InfoBar';
 import RoyalIcon from '../components/RoyalIcon';
+import { formatWalletAmount } from '../firebase/walletExchangeRateService';
 
 export default function CustomerHomeScreen() {
   const { colors, brandGradient } = useTheme();
@@ -15,6 +16,8 @@ export default function CustomerHomeScreen() {
   const styles = createStyles(colors);
   const balance = profile?.balance ?? profile?.walletBalance ?? profile?.wallet?.balance ?? 0;
   const name = profile?.displayName || profile?.name || 'Welcome back';
+  const walletCurrency = profile?.walletCurrency || profile?.walletBalanceCurrency || 'MYR';
+  const formattedBalance = formatWalletAmount(balance, walletCurrency);
   const kycVerified = profile?.verified === true || profile?.verificationStatus === 'approved';
 
   return (
