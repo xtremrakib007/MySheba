@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const progressionService = require('./progressionService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { executeConfiguredApi } = require('./apiProviderService');
+const { getWalletCurrencyAndFx, baseToWallet } = require('./walletCurrencyService');
 
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
@@ -73,6 +74,9 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
   await checkVelocity(db, uid, 'rechargePin', { ip: getClientIp(request) });
   const discount = progressionService.discountPercentFromSettings(tierSettings, userSnap.data().tier);
   const cost = Math.round(denomination * priceMultiplier * (1 - discount / 100) * 100) / 100;
+  let walletFx;
+  try { walletFx = await getWalletCurrencyAndFx(db, userSnap.data()); } catch (fxErr) { throw new HttpsError('failed-precondition', fxErr.message || 'Wallet currency is not configured.'); }
+  const walletCost = baseToWallet(cost, walletFx);
   if (!Number.isFinite(cost) || cost <= 0 || !Number.isSafeInteger(Math.round(cost * 100))) throw new HttpsError('failed-precondition', 'Recharge PIN price is invalid.');
 
   const reserved = await db.runTransaction(async tx => {
