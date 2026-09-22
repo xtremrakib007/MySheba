@@ -25,6 +25,10 @@ export default function HelpScreen() {
 
   const styles = createStyles(colors);
   const {
+    goBackOrHome,
+    openMyDocuments,
+    openWebView,
+    openSupportWithPrefill,
   } = useApp();
 
   const HELP_ITEMS = [
@@ -47,21 +51,9 @@ export default function HelpScreen() {
       onPress: () => openWebView('fomema'),
     },
     {
-      icon: '🏠',
-      question: 'I need a room near my workplace.',
-    },
-    {
-      icon: '🗣️',
-      question: 'I need a Bengali-speaking clinic.',
-    },
-    {
       icon: '🛂',
       question: 'How can I renew my visa?',
       onPress: () => openWebView('visa'),
-    },
-    {
-      icon: '💼',
-      question: 'I need a job.',
     },
   ];
 
