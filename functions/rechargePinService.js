@@ -198,7 +198,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
     await txRef.update({
       status: 'completed',
       rechargePinAvailable: true,
-      apiExecution: { status: 'accepted', providerId: api.providerId, providerName: api.providerName, responseId: api.responseId || null, message: api.message || null, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+      apiExecution: { status: 'accepted', providerId: api.providerId, providerName: api.providerName, responseId: api.responseId || null, message: api.message || null, providerSucceeded: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
     return { id: txRef.id, cost: reserved.cost, pin: api.secret, operator, amount: denomination };
@@ -219,10 +219,6 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       throw providerSucceeded ? new HttpsError('unavailable', message) : e;
-    }
-    if (unavailable) {
-      await txRef.update({ status: 'unknown', apiExecution: { status: 'unknown', error: String(e?.message || 'Provider outcome is uncertain').slice(0, 500), updatedAt: admin.firestore.FieldValue.serverTimestamp() }, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-      throw e;
     }
     await db.runTransaction(async tx => {
       const [u, t] = await Promise.all([tx.get(profileRef), tx.get(txRef)]);
