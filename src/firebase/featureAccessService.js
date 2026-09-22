@@ -25,7 +25,6 @@ const FEATURE_ACCESS_DOC = doc(db, 'settings', 'featureAccess');
 export const FEATURE_DEFS = [
   { key: 'userManagement', icon: '🧑‍💼', bg: '#E3F2FD', name: 'User Mgmt', defaultRoles: ['dealer', 'admin', 'superadmin'] },
   { key: 'transferPoints', icon: '💸', bg: '#E8F5E9', name: 'Transfer Pts', defaultRoles: ['dealer', 'admin', 'superadmin'] },
-  { key: 'chatReports', icon: '🚩', bg: '#FFEBEE', name: 'Chat Reports', defaultRoles: ['admin', 'superadmin'] },
   { key: 'verificationManagement', icon: '🪪', bg: '#E0F7FA', name: 'Verify Requests', defaultRoles: ['admin', 'superadmin'] },
   { key: 'adminBusinessManagement', icon: '🏢', bg: '#F3E5F5', name: 'Business Profiles', defaultRoles: ['admin', 'superadmin'] },
   { key: 'adminAnalytics', icon: '📊', bg: '#FFF3E0', name: 'Analytics', defaultRoles: ['admin', 'superadmin'] },

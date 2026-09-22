@@ -11,7 +11,12 @@ import { FEATURE_DEFS, canAccessFeature } from '../firebase/featureAccessService
 // reached through the "Reseller Features" tile on ResellerHomeScreen.
 const DASHBOARD_TOOL_DEFS = [
   { key: 'pending', icon: '⏳', bg: '#FFF8E1', name: 'Pending' },
-  { key: 'sent', icon: '➡️', bg: '#E3F2FD', name: 'Sent to Dealer' },
+  // ResellerHomeScreen keys its lists by transaction status - pending,
+  // processing, completed. 'sent' matched none of them, so listByTab['sent']
+  // came back undefined and the tile opened an empty section with no
+  // matching feature header. Sent-to-dealer is the processing list: claimed
+  // by this reseller and passed on.
+  { key: 'processing', icon: '➡️', bg: '#E3F2FD', name: 'Sent to Dealer' },
 ];
 
 export default function ResellerFeaturesScreen() {
