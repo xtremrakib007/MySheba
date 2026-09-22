@@ -26,7 +26,7 @@ exports.manageUser = onCall({ enforceAppCheck: true }, async (request) => {
   const action = request.data?.action;
 
   if (action === 'create') {
-    const { name, phone, pin, role, dealerId: requestedDealerId, resellerId: requestedResellerId } = request.data;
+    const { name, phone, pin, role, dealerId: requestedDealerId, resellerId: requestedResellerId, dialCode } = request.data;
     if (!name || !name.trim()) throw new HttpsError('invalid-argument', 'Name is required.');
     if (!phone || normalizePhone(phone).length < 8) throw new HttpsError('invalid-argument', 'A valid phone number is required.');
     if (String(pin || '').length < 6 || String(pin || '').length > 20) throw new HttpsError('invalid-argument', 'Password must be 6-20 characters.');
@@ -41,7 +41,7 @@ exports.manageUser = onCall({ enforceAppCheck: true }, async (request) => {
     let userRecord;
     try { userRecord = await admin.auth().createUser({ email: phoneToEmail(phone), password: pin, displayName: name.trim() }); }
     catch (err) { if (err.code === 'auth/email-already-exists') throw new HttpsError('already-exists', 'An account with this phone number already exists.'); await logServerError('manageUser.create', err, { userId: callerUid }); throw new HttpsError('internal', 'Could not create the account.'); }
-    const newProfile = { uid: userRecord.uid, userId: await assignUniqueUserId(db, userRecord.uid), name: name.trim(), phone: normalizePhone(phone), role, walletBalance: 0, walletCurrency: inferWalletCurrency({ phoneCountryCode: '+60' }), notifPrefs: { pushEnabled: true, emailEnabled: true, rateAlerts: false }, createdBy: callerUid, createdAt: admin.firestore.FieldValue.serverTimestamp() };
+    const newProfile = { uid: userRecord.uid, userId: await assignUniqueUserId(db, userRecord.uid), name: name.trim(), phone: normalizePhone(phone), role, walletBalance: 0, walletCurrency: inferWalletCurrency({ phoneCountryCode: dialCode || '+60' }), notifPrefs: { pushEnabled: true, emailEnabled: true, rateAlerts: false }, createdBy: callerUid, createdAt: admin.firestore.FieldValue.serverTimestamp() };
     if (dealerId) newProfile.dealerId = dealerId;
     if (resellerId) newProfile.resellerId = resellerId;
     try {
