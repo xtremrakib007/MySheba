@@ -28,7 +28,7 @@ export default function WalletSettlementPage() {
   }, [transfers]);
 
   const cards = [
-    { label: 'Points transferred', value: stats.total.toLocaleString(), note: 'Platform transfer history' },
+    { label: 'Wallet funds transferred', value: stats.total.toLocaleString(), note: 'Platform transfer history' },
     { label: 'Transferred today', value: stats.today.toLocaleString(), note: 'Based on recorded timestamps' },
     { label: 'Active senders', value: stats.senders.toLocaleString(), note: 'Unique transfer sources' },
     { label: 'Recipients', value: stats.recipients.toLocaleString(), note: 'Unique transfer targets' },
@@ -64,7 +64,7 @@ export default function WalletSettlementPage() {
               <h2 className="font-bold">Recent Point Movement</h2>
               <p className="mt-1 text-xs text-[var(--color-ink-soft)]">Live platform-wide transfer records.</p>
             </div>
-            <Link to="/transfer-points" className="rounded-lg bg-[var(--color-primary)] px-3 py-2 text-xs font-semibold text-white">Transfer Points</Link>
+            <Link to="/transfer-points" className="rounded-lg bg-[var(--color-primary)] px-3 py-2 text-xs font-semibold text-white">Wallet Transfer</Link>
           </div>
           <div className="mt-4 space-y-2">
             {transfers.slice(0, 10).map((t) => (
@@ -81,7 +81,7 @@ export default function WalletSettlementPage() {
           <h2 className="font-bold">Settlement Tools</h2>
           <p className="mt-1 text-xs text-[var(--color-ink-soft)]">Use the existing operational controls rather than duplicating balance-changing logic.</p>
           <div className="mt-4 space-y-2">
-            <Link to="/transfer-points" className="block rounded-xl border border-[var(--color-line)] p-3 hover:border-[var(--color-primary)]"><b>Transfer Points</b><p className="text-xs text-[var(--color-ink-soft)]">Move points between manageable accounts.</p></Link>
+            <Link to="/transfer-points" className="block rounded-xl border border-[var(--color-line)] p-3 hover:border-[var(--color-primary)]"><b>Wallet Transfer</b><p className="text-xs text-[var(--color-ink-soft)]">Move points between manageable accounts.</p></Link>
             {profile?.role === 'superadmin' && <Link to="/topup" className="block rounded-xl border border-[var(--color-line)] p-3 hover:border-[var(--color-primary)]"><b>Recharge / Top-up</b><p className="text-xs text-[var(--color-ink-soft)]">Superadmin balance operations.</p></Link>}
             <Link to="/financial" className="block rounded-xl border border-[var(--color-line)] p-3 hover:border-[var(--color-primary)]"><b>Financial Control</b><p className="text-xs text-[var(--color-ink-soft)]">Transaction approvals and operational alerts.</p></Link>
             <Link to="/transactions" className="block rounded-xl border border-[var(--color-line)] p-3 hover:border-[var(--color-primary)]"><b>Transactions</b><p className="text-xs text-[var(--color-ink-soft)]">Review and process service transactions.</p></Link>
