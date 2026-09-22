@@ -126,10 +126,32 @@ for (const m of grid.matchAll(/key: '([a-zA-Z]+)'[^}]*kind: '([a-zA-Z]+)'/g)) {
   else check('customer/kind', `${key} (${kind})`, 'useServiceAction has no branch for this kind', handledKinds.has(kind));
 }
 
+// ---- 6. components and screens nothing mounts ----
+// The mirror of check 1. The same cleanup that left targets pointing at
+// deleted screens also deleted the lines that mounted surviving components:
+// BottomNav sat fully written, styled and unreferenced for six days because
+// one import went with a retired-screen commit. Nothing catches that - the
+// file parses, lints and even themes cleanly, it just never renders.
+// Reported as notes, not failures: some of these are genuinely dead code
+// waiting to be deleted, and the audit cannot tell which is which. A human
+// reads the list and decides.
+const orphans = [];
+for (const dir of ['src/components', 'src/screens']) {
+  for (const file of fs.readdirSync(path.join(root, dir))) {
+    if (!file.endsWith('.js')) continue;
+    if (!isReachable(`${dir}/${file}`)) orphans.push(`${dir}/${file}`);
+  }
+}
+
 // ---- report ----
 console.log(`Navigation audit: ${checked} target(s) checked\n`);
 for (const n of notes) console.log(`  note: ${n}`);
 if (notes.length) console.log('');
+if (orphans.length) {
+  console.log(`  ${orphans.length} file(s) nothing imports - unreachable, so they never render:`);
+  for (const o of orphans) console.log(`    ${o}`);
+  console.log('');
+}
 if (!failures.length) {
   console.log('  All navigation targets resolve.');
   process.exit(0);

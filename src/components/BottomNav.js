@@ -5,11 +5,11 @@ import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 
 const TABS = [
-  { key: 'account', icon: '👤', label: 'Account', colors: ['#4facfe', '#00A99D'] },
-  { key: 'topup', icon: '💰', label: 'Top-Up', colors: ['#00A99D', '#00C9B7'] },
-  { key: 'home', icon: '⌂', label: 'Home', colors: ['#00A99D', '#1A73E8'] },
-  { key: 'history', icon: '📋', label: 'History', colors: ['#667eea', '#764ba2'] },
-  { key: 'support', icon: '🎧', label: 'Support', colors: ['#1A73E8', '#4facfe'] },
+  { key: 'account', icon: '👤', label: 'Account', gradient: (c) => [c.secondary, c.primary] },
+  { key: 'topup', icon: '💰', label: 'Top-Up', gradient: (c) => [c.primary, c.gold] },
+  { key: 'home', icon: '⌂', label: 'Home', gradient: (c) => [c.secondary, c.primary, c.gold] },
+  { key: 'history', icon: '📋', label: 'History', gradient: (c) => [c.primaryDark, c.secondary] },
+  { key: 'support', icon: '🎧', label: 'Support', gradient: (c) => [c.goldDeep, c.primary] },
 ];
 
 function screenForRole(key, role) {
@@ -45,7 +45,7 @@ export default function BottomNav() {
         return (
           <TouchableOpacity key={tab.key} style={[styles.btn, isHome && styles.btnHome]} onPress={() => onPressTab(tab.key)}>
             {isActive ? (
-              <LinearGradient colors={tab.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.iconCircle, isHome && styles.iconCircleHome]}>
+              <LinearGradient colors={tab.gradient(colors)} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.iconCircle, isHome && styles.iconCircleHome]}>
                 <Text style={[styles.iconActive, isHome && styles.iconHomeText]}>{tab.icon}</Text>
               </LinearGradient>
             ) : (
