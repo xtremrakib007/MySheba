@@ -158,6 +158,7 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
   const eventRef = db.collection(EVENTS).doc(eventKey);
 
   let duplicate = false;
+  let providerMismatch = false;
   await db.runTransaction(async (tx) => {
     const eventSnap = await tx.get(eventRef);
     const orderSnap = await tx.get(txRef);
@@ -177,7 +178,8 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
     // belongs to this provider. Never let a provider callback settle a legacy
     // transaction or a transaction owned by another provider.
     if (order.executionMode !== 'api' || order.apiExecution?.providerId !== providerId) {
-      throw new Error('Webhook transaction/provider mismatch.');
+      providerMismatch = true;
+      return;
     }
 
     if (status === config.cancelStatus) {
@@ -214,5 +216,6 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
     });
   });
 
+  if (providerMismatch) return res.status(202).json({ ok: true, matched: false });
   return res.status(200).json({ ok: true, duplicate });
 });
