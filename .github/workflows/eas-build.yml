@@ -27,10 +27,33 @@ jobs:
         run: npm ci
 
       - name: Build production AAB
-        run: eas build --platform android --profile production --non-interactive --wait --message "Final MySheba production build"
+        run: |
+          eas build --platform android --profile production \
+            --non-interactive --wait --json \
+            --message "Final MySheba production build" | tee eas-build-result.json
 
       - name: Download AAB
-        run: eas build:download --platform android --latest --non-interactive
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const data = JSON.parse(fs.readFileSync('eas-build-result.json', 'utf8'));
+          const builds = Array.isArray(data) ? data : [data];
+          const build = builds.find((b) => String(b.platform).toUpperCase() === 'ANDROID') || builds[0];
+          if (!build) {
+            throw new Error('EAS CLI returned no build records.');
+          }
+          if (build.status && String(build.status).toUpperCase() !== 'FINISHED') {
+            throw new Error(`Build did not finish: status ${build.status}`);
+          }
+          const url = build.artifacts && (build.artifacts.applicationArchiveUrl || build.artifacts.buildUrl);
+          if (!url) {
+            throw new Error('EAS build result carried no application archive URL.');
+          }
+          fs.writeFileSync('aab-url.txt', url);
+          console.log(`Build ID: ${build.id}`);
+          console.log(`AAB: ${url}`);
+          NODE
+          curl -fSL --retry 3 -o mysheba-production.aab "$(cat aab-url.txt)"
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
