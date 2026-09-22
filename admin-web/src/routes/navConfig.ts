@@ -38,7 +38,7 @@ export const navGroups: NavGroup[] = [
     { label: 'Inquiries', path: '/inquiries', icon: Plane, enabled: true },
   ] },
   { label: 'Users & Access', accent: 'secondary', items: [
-    { label: 'Transfer Points', path: '/transfer-points', icon: Send, enabled: true },
+    { label: 'Wallet Transfer', path: '/transfer-points', icon: Send, enabled: true },
     { label: 'Feature Access', path: '/feature-access', icon: SlidersHorizontal, enabled: true },
     { label: 'Business Profiles', path: '/business-profiles', icon: Building2, enabled: true },
   ] },
