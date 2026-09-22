@@ -311,32 +311,38 @@ exports.listApiProviders = onCall({ enforceAppCheck: true }, async (request) => 
 exports.saveApiProvider = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
-  const data = validate(request.data || {}), id = cleanString(request.data?.id, 100);
+  const id = cleanString(request.data?.id, 100);
   if (id && !/^[A-Za-z0-9_-]{1,100}$/.test(id)) throw new HttpsError('invalid-argument', 'Provider id is invalid.');
   const ref = id ? db.collection(COLLECTION).doc(id) : db.collection(COLLECTION).doc();
+
   await db.runTransaction(async (tx) => {
+    // Read the current provider inside the same transaction as the write. This
+    // lets masked/omitted secrets and templates be preserved without a stale
+    // pre-read race if another superadmin edits the provider concurrently.
     const callerSnap = await tx.get(db.collection('users').doc(request.auth.uid));
     const caller = callerSnap.exists ? callerSnap.data() : null;
     if (!caller || caller.role !== 'superadmin' || caller.suspended === true || caller.inactive === true || caller.disabled === true || caller.active === false || caller.mergedInto) {
       throw new HttpsError('permission-denied', 'Your account is no longer active.');
     }
+
     const existing = await tx.get(ref);
+    const current = existing.exists ? (existing.data() || {}) : {};
+    const incoming = { ...(request.data || {}) };
+
+    // The admin UI only receives masked credentials and safe metadata. For an
+    // existing provider, an omitted/empty credential means "keep current",
+    // while the mask also means "keep current". Validate only after this merge
+    // so an edit cannot accidentally fail just because the secret is hidden.
     if (existing.exists) {
-      const current = existing.data() || {};
-      // Editing from the masked provider list must preserve existing credentials.
-      // The UI intentionally never receives the secret values, so an omitted
-      // credential field means "keep the current secret", while an explicit
-      // replacement value updates it.
-      if (!data.apiKey || data.apiKey === '••••••••') data.apiKey = current.apiKey || '';
-      if (!data.password || data.password === '••••••••') data.password = current.password || '';
-      if (!data.username) data.username = current.username || '';
-      // The admin UI receives only masked/safe provider metadata, so it cannot
-      // round-trip secret-bearing templates. Preserve existing templates when
-      // an edit submits empty defaults instead of silently deleting them.
-      if (!Object.keys(data.headers || {}).length && current.headers) data.headers = current.headers;
-      if (!Object.keys(data.queryTemplate || {}).length && current.queryTemplate) data.queryTemplate = current.queryTemplate;
-      if (!Object.keys(data.requestTemplate || {}).length && current.requestTemplate) data.requestTemplate = current.requestTemplate;
+      if (!incoming.apiKey || incoming.apiKey === '••••••••') incoming.apiKey = current.apiKey || '';
+      if (!incoming.password || incoming.password === '••••••••') incoming.password = current.password || '';
+      if (!incoming.username) incoming.username = current.username || '';
+      if (!Object.keys(incoming.headers || {}).length && current.headers) incoming.headers = current.headers;
+      if (!Object.keys(incoming.queryTemplate || {}).length && current.queryTemplate) incoming.queryTemplate = current.queryTemplate;
+      if (!Object.keys(incoming.requestTemplate || {}).length && current.requestTemplate) incoming.requestTemplate = current.requestTemplate;
     }
+
+    const data = validate(incoming);
     tx.set(ref, { ...data, updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: request.auth.uid }, { merge: false });
   });
   return { id: ref.id };
