@@ -103,10 +103,49 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asyn
     const result = await db.runTransaction(async (tx) => {
       const currentSnap = await tx.get(ref); if (!currentSnap.exists) throw new HttpsError('not-found', 'No profile found for this account.'); const current = currentSnap.data(); if (current.suspended) throw new HttpsError('permission-denied', 'Your account has been suspended.');
       if (verifiedNewStaffDevice) { const id = sessionId(); tx.update(ref, { activeSessionId: id, activeDeviceId: deviceId, pendingDeviceApproval: null, lastLoginAt: FieldValue.serverTimestamp() }); return { requiresOtp: false, sessionId: id, switchedDevice: Boolean(current.activeDeviceId && current.activeDeviceId !== deviceId) }; }
-      if (!current.activeDeviceId || current.activeDeviceId === deviceId) { const id = sessionId(); tx.update(ref, { activeSessionId: id, activeDeviceId: deviceId, pendingDeviceApproval: null, lastLoginAt: FieldValue.serverTimestamp() }); return { requiresOtp: false, sessionId: id }; }
+      // A device this account has already verified once stays verified.
+      // confirmDeviceSwitch has always written trustedDevices for every
+      // role, but only the staff branch above ever read it back, so for
+      // everyone else the entry was dead data and the decision fell to
+      // activeDeviceId alone - a single slot. That made the rule "one
+      // device at a time" rather than "a device you have verified": any
+      // account whose last sign-in was on another phone was challenged
+      // again, every time, forever. Worse, an account with no usable
+      // email could not answer that challenge at all and was locked out
+      // of the second phone entirely.
+      const deviceTrusted = Boolean(current.trustedDevices?.[deviceId]);
+      if (!current.activeDeviceId || current.activeDeviceId === deviceId || deviceTrusted) {
+        const id = sessionId();
+        const patch = { activeSessionId: id, activeDeviceId: deviceId, pendingDeviceApproval: null, lastLoginAt: FieldValue.serverTimestamp() };
+        // Keep lastSeenAt current so the Trusted Devices list stays
+        // meaningful and trustedMap evicts the genuinely stale entry
+        // when the cap is reached.
+        if (deviceTrusted) patch.trustedDevices = trustedMap(current.trustedDevices, deviceId, ip, label);
+        tx.update(ref, patch);
+        return { requiresOtp: false, sessionId: id, trustedDevice: deviceTrusted };
+      }
       const email = normalizeEmail(current.email); if (!validEmail(email)) throw new HttpsError('failed-precondition', 'This account has no email for new-device verification. Please contact support.'); tx.update(ref, { pendingDeviceApproval: { deviceId, email, requestedAt: FieldValue.serverTimestamp() } }); return { requiresOtp: true, reason: 'new_device', email, availableMfaMethods: ['email'] };
     });
-    if (!result.requiresOtp) { if (verifiedNewStaffDevice) { try { await admin.auth().revokeRefreshTokens(uid); } catch (error) { await logServerError('checkDeviceSession.revokeRefreshTokens', error, { userId: uid }); } try { await sendNewDeviceAlert({ email: normalizeEmail(profile.email) || null, pushToken: profile.pushToken || null, deviceId, ip }); } catch (error) {} } if (isStaffRole(profile.role)) await logAudit({ action: 'staff_login', targetUid: uid, performedBy: uid, performedByRole: profile.role, details: { deviceId, ip, newDevice: verifiedNewStaffDevice } }); await checkIpAnomaly(db, uid, ip, { action: 'login', role: profile.role }); } else await logAudit({ action: 'device_switch_requested', targetUid: uid, performedBy: uid, performedByRole: profile.role, details: { deviceId, ip } });
+    if (!result.requiresOtp) { if (verifiedNewStaffDevice) { try { await admin.auth().revokeRefreshTokens(uid); } catch (error) { await logServerError('checkDeviceSession.revokeRefreshTokens', error, { userId: uid }); } try { await sendNewDeviceAlert({ email: normalizeEmail(profile.email) || null, pushToken: profile.pushToken || null, deviceId, ip }); } catch (error) {} } if (isStaffRole(profile.role)) await logAudit({ action: 'staff_login', targetUid: uid, performedBy: uid, performedByRole: profile.role, details: { deviceId, ip, newDevice: verifiedNewStaffDevice } }); await checkIpAnomaly(db, uid, ip, { action: 'login', role: profile.role }); } else {
+      // Actually send the code. resendEmailChallenge was only ever handled
+      // inside the staff branch above, and sendDeviceVerification - the one
+      // other function that emails a device code - is exported but called
+      // from nowhere in the app. So a non-staff account raised a challenge
+      // it was never sent: DeviceVerifyScreen said "check your email", no
+      // email existed, and confirmDeviceSwitch had no challenge to match a
+      // code against. There was no way through, which is what made a second
+      // account on an already-used phone impossible to sign in.
+      //
+      // sendStaffEmailChallenge is staff only in its name; it writes
+      // pendingAdminEmailChallenge, which consumeStaffEmailOtp - already on
+      // confirmDeviceSwitch's emailOtp path for every role - validates
+      // against. Sending it here is what connects the two halves.
+      if (data.resendEmailChallenge && !isStaffRole(profile.role)) {
+        await sendStaffEmailChallenge({ db, uid, email: result.email, deviceId, displayName: profile.name || profile.displayName });
+        result.emailChallengeSent = true;
+      }
+      await logAudit({ action: 'device_switch_requested', targetUid: uid, performedBy: uid, performedByRole: profile.role, details: { deviceId, ip } });
+    }
     return result;
   } catch (error) { if (error instanceof HttpsError) throw error; await logServerError('checkDeviceSession', error, { userId: uid }); throw new HttpsError('internal', 'Could not verify this device. Please try again.'); }
 });
