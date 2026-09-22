@@ -15,7 +15,7 @@ function requireAuth(request) {
 function isActive(user) { return user && user.suspended !== true && user.inactive !== true && user.disabled !== true && !user.mergedInto; }
 function validMoney(value) { const n = Number(value); return Number.isFinite(n) && n > 0 && n <= MAX_AMOUNT && Number.isSafeInteger(Math.round(n * 100)) ? n : null; }
 
-function validateReceiptUrl(value, uid) {
+async function validateReceiptUrl(value, uid) {
   if (typeof value !== 'string' || value.length < 1 || value.length > 2048) {
     throw new HttpsError('invalid-argument', 'A valid payment receipt is required.');
   }
