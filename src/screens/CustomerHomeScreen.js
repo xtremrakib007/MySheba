@@ -42,11 +42,11 @@ export default function CustomerHomeScreen() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.walletCard}>
           <View>
-            <Text style={styles.walletCaption}>Points Balance</Text>
-            <Text style={styles.walletBalance}>{Number(balance || 0).toFixed(2)} points</Text>
+            <Text style={styles.walletCaption}>Wallet Balance</Text>
+            <Text style={styles.walletBalance}>{Number(balance || 0).toFixed(2)} MYR</Text>
           </View>
           <TouchableOpacity style={styles.topUpButton} onPress={() => setScreen('topup')} accessibilityRole="button" accessibilityLabel="Top up">
-            <Text style={styles.topUpText}>+ Top Up Points</Text>
+            <Text style={styles.topUpText}>+ Top Up</Text>
           </TouchableOpacity>
         </View>
 
