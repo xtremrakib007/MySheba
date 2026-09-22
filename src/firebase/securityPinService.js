@@ -1,5 +1,5 @@
 // Client half of the secondary "security PIN" gate (My Documents
-// view/share, Transfer Points send, Notepad).
+// view/share, Wallet Transfer send, Notepad).
 import { httpsCallable } from 'firebase/functions';
 import { functions } from './config';
 
