@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
 import { Appearance } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getPalette, accentThemes, accentList, DEFAULT_ACCENT, gridStyles, gridStyleList, DEFAULT_GRID_STYLE } from './theme';
+import { getPalette, brandGradientFor, accentThemes, accentList, DEFAULT_ACCENT, gridStyles, gridStyleList, DEFAULT_GRID_STYLE } from './theme';
 
 const STORAGE_KEY = 'mysheba.themeMode';
 const ACCENT_STORAGE_KEY = 'mysheba.themeAccent';
@@ -32,7 +32,7 @@ const ThemeContext = createContext({
   mode: 'system', resolvedMode: initialSystemScheme,
   accent: DEFAULT_ACCENT,
   colors: getPalette(initialSystemScheme, DEFAULT_ACCENT),
-  brandGradient: [getPalette(initialSystemScheme, DEFAULT_ACCENT).primary, getPalette(initialSystemScheme, DEFAULT_ACCENT).secondary],
+  brandGradient: brandGradientFor(getPalette(initialSystemScheme, DEFAULT_ACCENT)),
   isDark: initialSystemScheme === 'dark', isSystemMode: true,
   setMode: () => {}, toggleMode: () => {}, setAccent: () => {}, accentThemes, accentList,
   gridStyle: DEFAULT_GRID_STYLE, setGridStyle: () => {}, gridStyles, gridStyleList,
@@ -97,7 +97,7 @@ export function ThemeProvider({ children }) {
     const palette = getPalette(resolvedMode, accent);
     return {
       mode, resolvedMode, accent, colors: palette,
-      brandGradient: [palette.primary, palette.secondary],
+      brandGradient: brandGradientFor(palette),
       isDark: resolvedMode === 'dark', isSystemMode: mode === 'system',
       setMode, toggleMode, setAccent, accentThemes, accentList,
       gridStyle, setGridStyle, gridStyles, gridStyleList,
