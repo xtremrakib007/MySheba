@@ -1,0 +1,41 @@
+name: Submit MySheba AAB to Play
+
+# Deliberately dispatch-only and takes an explicit build id: submitting is
+# outward-facing, so it never rides along with a build or a push to main.
+on:
+  workflow_dispatch:
+    inputs:
+      build_id:
+        description: "EAS build ID to submit (from the build's expo.dev page)"
+        required: true
+
+jobs:
+  submit:
+    name: Submit to Google Play
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Submit to Google Play
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          BUILD_ID: ${{ inputs.build_id }}
+        run: |
+          eas submit --platform android --profile production \
+            --id "$BUILD_ID" --non-interactive
