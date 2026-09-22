@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Image } from 'rea
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
+import { radius, shadows, fonts } from '../theme/theme';
 import BannerSlider from '../components/BannerSlider';
 import ServiceGrid from '../components/ServiceGrid';
 import HeaderDecor from '../components/HeaderDecor';
@@ -33,10 +34,10 @@ export default function CustomerHomeScreen() {
       </LinearGradient>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.walletCard}>
+        <LinearGradient colors={colors.heroGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.walletCard}>
           <View><Text style={styles.walletCaption}>Available Balance</Text><Text style={styles.walletBalance}>RM {Number(balance || 0).toFixed(2)}</Text></View>
           <TouchableOpacity style={styles.topUpButton} onPress={() => setScreen('topup')}><Text style={styles.topUpText}>+ Top Up</Text></TouchableOpacity>
-        </View>
+        </LinearGradient>
 
         {!kycVerified && <View style={styles.kycCard}>
           <View style={styles.kycIcon}><Text>!</Text></View>
@@ -70,8 +71,8 @@ function createStyles(colors) {
     logoBox:{width:38,height:38,backgroundColor:'white',borderRadius:12,alignItems:'center',justifyContent:'center',marginRight:10,overflow:'hidden'},logoImage:{width:'100%',height:'100%'},
     brand:{color:'white',fontWeight:'800',fontSize:16},tagline:{color:'white',fontSize:11,opacity:0.85,marginTop:2},headerRight:{flexDirection:'row',alignItems:'center'},bellBtn:{padding:6},bell:{fontSize:19},
     bellDot:{position:'absolute',top:3,right:3,width:8,height:8,borderRadius:4,backgroundColor:'#FF5252',borderWidth:1,borderColor:colors.primary},content:{padding:14,paddingBottom:28},
-    walletCard:{borderRadius:20,padding:20,marginBottom:12,backgroundColor:colors.primary,flexDirection:'row',justifyContent:'space-between',alignItems:'center',elevation:4},walletCaption:{color:'white',opacity:0.8,fontSize:12,marginBottom:5},walletBalance:{color:'white',fontSize:28,fontWeight:'800'},
-    topUpButton:{backgroundColor:'white',paddingHorizontal:14,paddingVertical:9,borderRadius:12},topUpText:{color:colors.primary,fontWeight:'800',fontSize:12},
+    walletCard:{borderRadius:26,paddingVertical:24,paddingHorizontal:20,marginBottom:12,overflow:'hidden',borderWidth:1.5,borderColor:colors.goldLight,flexDirection:'row',justifyContent:'space-between',alignItems:'center',...shadows.raised},walletCaption:{color:colors.heroText,fontSize:14,marginBottom:2},walletBalance:{color:'#FFFFFF',fontSize:36,fontWeight:'700',fontFamily:fonts.serif},
+    topUpButton:{backgroundColor:'#FFFFFF',paddingHorizontal:16,paddingVertical:10,borderRadius:radius.tile,borderWidth:1.5,borderColor:colors.goldLight,...shadows.card},topUpText:{color:colors.primaryDark,fontWeight:'800',fontSize:13},
     kycCard:{backgroundColor:colors.card,borderRadius:16,padding:13,marginBottom:12,flexDirection:'row',alignItems:'center',borderWidth:1,borderColor:colors.border},
     verifiedCard:{backgroundColor:colors.card,borderRadius:16,padding:13,marginBottom:12,flexDirection:'row',alignItems:'center',borderWidth:1,borderColor:colors.border},
     kycIcon:{width:34,height:34,borderRadius:17,alignItems:'center',justifyContent:'center',backgroundColor:'#FFF3CD',marginRight:10},verifiedIcon:{width:34,height:34,borderRadius:17,alignItems:'center',justifyContent:'center',backgroundColor:'#E8F5E9',marginRight:10},
