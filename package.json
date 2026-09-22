@@ -11,7 +11,8 @@
     "build:apk": "npm run bump-version && eas build -p android --profile preview",
     "build:aab": "npm run bump-version && eas build -p android --profile production",
     "audit:functions": "node --check functions/*.js",
-    "test:api-provider": "node scripts/test-api-provider-service.js"
+    "test:api-provider": "node scripts/test-api-provider-service.js",
+    "production:check": "node scripts/production-readiness-check.js"
   },
   "dependencies": {
     "expo": "~53.0.0",
