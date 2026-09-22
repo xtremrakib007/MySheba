@@ -4,9 +4,10 @@ const admin = require('firebase-admin');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { checkIpAnomaly } = require('./anomalyService');
 const { logAudit, logServerError } = require('./logService');
+const { getWalletCurrencyAndFx, baseToWallet, walletToBase } = require('./walletCurrencyService');
 
-const MAX_TRANSFER_MYR = 10000;
-const MIN_TRANSFER_MYR = 0.01;
+const MAX_TRANSFER_BASE = 10000;
+const MIN_TRANSFER_BASE = 0.01;
 const MAX_RECIPIENT_QUERY = 80;
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const SECURITY_PIN_RE = /^\d{4,8}$/;
@@ -28,14 +29,14 @@ function normalizeQuery(value) { return String(value || '').trim(); }
 function active(profile) { return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && profile.active !== false && profile.mergedInto == null; }
 function parseMoneyCents(value) {
   if (typeof value === 'number') {
-    if (!Number.isFinite(value) || !Number.isSafeInteger(Math.round(value * 100))) throw new HttpsError('invalid-argument', 'Enter a valid MYR transfer amount.');
+    if (!Number.isFinite(value) || !Number.isSafeInteger(Math.round(value * 100))) throw new HttpsError('invalid-argument', 'Enter a valid wallet transfer amount.');
     const text = String(value);
     if (!MONEY_RE.test(text)) throw new HttpsError('invalid-argument', 'Transfer amount must use no more than 2 decimal places.');
   } else if (typeof value === 'string') {
     const text = value.trim();
-    if (!MONEY_RE.test(text)) throw new HttpsError('invalid-argument', 'Transfer amount must be a valid MYR amount with no more than 2 decimal places.');
+    if (!MONEY_RE.test(text)) throw new HttpsError('invalid-argument', 'Transfer amount must be a valid wallet amount with no more than 2 decimal places.');
     value = Number(text);
-  } else throw new HttpsError('invalid-argument', 'Enter a valid MYR transfer amount.');
+  } else throw new HttpsError('invalid-argument', 'Enter a valid wallet transfer amount.');
   const amountCents = Math.round(Number(value) * 100);
   if (!Number.isSafeInteger(amountCents)) throw new HttpsError('invalid-argument', 'Transfer amount is too large.');
   return amountCents;
@@ -103,7 +104,7 @@ exports.walletTransfer = onCall({ enforceAppCheck: true }, async (request) => {
   const securityPin = request.data?.securityPin;
   if (typeof securityPin !== 'string' || !SECURITY_PIN_RE.test(securityPin)) throw new HttpsError('invalid-argument', 'Enter your 4-8 digit security PIN.');
   const amountCents = parseMoneyCents(request.data?.amount);
-  if (amountCents < Math.round(MIN_TRANSFER_MYR * 100) || amountCents > Math.round(MAX_TRANSFER_MYR * 100)) throw new HttpsError('invalid-argument', 'Enter a valid MYR transfer amount.');
+  if (amountCents < Math.round(MIN_TRANSFER_MYR * 100) || amountCents > Math.round(MAX_TRANSFER_MYR * 100)) throw new HttpsError('invalid-argument', 'Enter a valid wallet transfer amount.');
   const recipient = await resolveRecipient(db, request.data?.recipient, senderUid), recipientUid = recipient.id, note = String(request.data?.note || '').trim().slice(0, 120), ip = getClientIp(request);
   await checkVelocity(db, senderUid, 'walletTransfer', { ip });
   const transferRef = db.collection('walletTransfers').doc(`${senderUid}_${requestId}`), pinRef = db.collection('securityPins').doc(senderUid), senderRef = db.collection('users').doc(senderUid), recipientRef = db.collection('users').doc(recipientUid), senderLedgerRef = db.collection('walletLedger').doc(), recipientLedgerRef = db.collection('walletLedger').doc();
@@ -146,19 +147,24 @@ exports.walletTransfer = onCall({ enforceAppCheck: true }, async (request) => {
       if (!active(senderData) || !active(recipientData)) throw new HttpsError('failed-precondition', 'Both customer accounts must be active.');
       if (senderData.role !== 'customer' || recipientData.role !== 'customer') throw new HttpsError('permission-denied', 'Only customer wallets can use this transfer.');
       if (!isKycApproved(senderData) || !isKycApproved(recipientData)) throw new HttpsError('failed-precondition', 'Both customer wallets must complete KYC.');
-      const senderBalanceCents = cents(senderData.walletBalance), recipientBalanceCents = cents(recipientData.walletBalance);
-      if (!Number.isSafeInteger(senderBalanceCents) || !Number.isSafeInteger(recipientBalanceCents) || senderBalanceCents < 0 || recipientBalanceCents < 0) throw new HttpsError('failed-precondition', 'One of the wallet balances is invalid.');
+      let senderFx, recipientFx;
+      try { senderFx = await getWalletCurrencyAndFx(db, senderData); recipientFx = await getWalletCurrencyAndFx(db, recipientData); } catch (fxErr) { throw new HttpsError('failed-precondition', fxErr.message || 'Wallet exchange rates are not configured.'); }
+      const senderAmount = Number(amountCents) / 100;
+      const baseAmount = walletToBase(senderAmount, senderFx);
+      const recipientAmount = baseToWallet(baseAmount, recipientFx);
+      const senderBalanceCents = cents(senderData.walletBalance), recipientBalanceCents = cents(recipientData.walletBalance), recipientAmountCents = Math.round(recipientAmount * 100);
+      if (!Number.isSafeInteger(senderBalanceCents) || !Number.isSafeInteger(recipientBalanceCents) || !Number.isSafeInteger(recipientAmountCents) || senderBalanceCents < 0 || recipientBalanceCents < 0 || recipientAmountCents <= 0) throw new HttpsError('failed-precondition', 'One of the wallet balances is invalid.');
       if (senderBalanceCents < amountCents) throw new HttpsError('failed-precondition', 'Insufficient wallet balance.');
-      const senderAfter = senderBalanceCents - amountCents, recipientAfter = recipientBalanceCents + amountCents, now = admin.firestore.FieldValue.serverTimestamp();
+      const senderAfter = senderBalanceCents - amountCents, recipientAfter = recipientBalanceCents + recipientAmountCents, now = admin.firestore.FieldValue.serverTimestamp();
       if (!Number.isSafeInteger(senderAfter) || !Number.isSafeInteger(recipientAfter)) throw new HttpsError('failed-precondition', 'The resulting wallet balance is invalid.');
-      tx.update(senderRef, { walletBalance: myrFromCents(senderAfter), walletBalanceCurrency: 'MYR', walletUpdatedAt: now });
-      tx.update(recipientRef, { walletBalance: myrFromCents(recipientAfter), walletBalanceCurrency: 'MYR', walletUpdatedAt: now });
-      tx.create(transferRef, { type: 'wallet_transfer', currency: 'MYR', requestId, fromUid: senderUid, fromName: senderData.displayName || senderData.name || '', toUid: recipientUid, toName: recipientData.displayName || recipientData.name || '', amount: myrFromCents(amountCents), amountMinor: amountCents, note, status: 'completed', participants: [senderUid, recipientUid], createdAt: now });
-      tx.set(senderLedgerRef, { uid: senderUid, type: 'wallet_transfer_debit', direction: 'debit', currency: 'MYR', amount: myrFromCents(amountCents), amountMinor: amountCents, transferId: transferRef.id, counterpartyUid: recipientUid, balanceAfter: myrFromCents(senderAfter), note, createdAt: now });
-      tx.set(recipientLedgerRef, { uid: recipientUid, type: 'wallet_transfer_credit', direction: 'credit', currency: 'MYR', amount: myrFromCents(amountCents), amountMinor: amountCents, transferId: transferRef.id, counterpartyUid: senderUid, balanceAfter: myrFromCents(recipientAfter), note, createdAt: now });
+      tx.update(senderRef, { walletBalance: myrFromCents(senderAfter), walletCurrency: senderFx.currency, walletBalanceCurrency: senderFx.currency, walletUpdatedAt: now });
+      tx.update(recipientRef, { walletBalance: myrFromCents(recipientAfter), walletCurrency: recipientFx.currency, walletBalanceCurrency: recipientFx.currency, walletUpdatedAt: now });
+      tx.create(transferRef, { type: 'wallet_transfer', currency: senderFx.currency, recipientCurrency: recipientFx.currency, requestId, fromUid: senderUid, fromName: senderData.displayName || senderData.name || '', toUid: recipientUid, toName: recipientData.displayName || recipientData.name || '', amount: senderAmount, amountMinor: amountCents, recipientAmount, recipientAmountMinor: recipientAmountCents, baseAmountMyr: baseAmount, senderFxRate: senderFx.buyRate, recipientFxRate: recipientFx.sellRate, note, status: 'completed', participants: [senderUid, recipientUid], createdAt: now });
+      tx.set(senderLedgerRef, { uid: senderUid, type: 'wallet_transfer_debit', direction: 'debit', currency: senderFx.currency, amount: senderAmount, amountMinor: amountCents, transferId: transferRef.id, counterpartyUid: recipientUid, balanceAfter: myrFromCents(senderAfter), baseAmountMyr: baseAmount, fxRate: senderFx.buyRate, note, createdAt: now });
+      tx.set(recipientLedgerRef, { uid: recipientUid, type: 'wallet_transfer_credit', direction: 'credit', currency: recipientFx.currency, amount: recipientAmount, amountMinor: recipientAmountCents, transferId: transferRef.id, counterpartyUid: senderUid, balanceAfter: myrFromCents(recipientAfter), baseAmountMyr: baseAmount, fxRate: recipientFx.sellRate, note, createdAt: now });
     });
     if (!pinValid) throw new HttpsError('permission-denied', 'Incorrect security PIN.');
-    if (replay) return { transferId: transferRef.id, amount: myrFromCents(amountCents), currency: 'MYR', recipient: { uid: recipientUid, name: recipient.name || recipient.displayName || 'MySheba Customer' }, replay: true };
+    if (replay) return { transferId: transferRef.id, amount: senderAmount, currency: senderFx.currency, recipientAmount, recipientCurrency: recipientFx.currency, baseAmountMyr: baseAmount, recipient: { uid: recipientUid, name: recipient.name || recipient.displayName || 'MySheba Customer' }, replay: true };
     await logAudit({ action: 'wallet_transfer', targetUid: recipientUid, performedBy: senderUid, performedByRole: 'customer', details: { transferId: transferRef.id, amount: myrFromCents(amountCents), currency: 'MYR', ip } });
     await checkIpAnomaly(db, senderUid, ip, { action: 'walletTransfer', role: 'customer' });
     return { transferId: transferRef.id, amount: myrFromCents(amountCents), currency: 'MYR', recipient: { uid: recipientUid, name: recipient.name || recipient.displayName || 'MySheba Customer' } };
