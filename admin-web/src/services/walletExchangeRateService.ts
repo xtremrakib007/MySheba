@@ -33,13 +33,11 @@ export async function saveWalletFxPair(currency: string, values: { buyRate: numb
   }
   await setDoc(doc(db, 'settings', 'walletExchangeRates'), {
     baseCurrency: 'MYR',
-    pairs: {
-      [currency]: {
-        buyRate: values.buyRate,
-        sellRate: values.sellRate,
-        active: values.active,
-        manuallyUpdatedAt: serverTimestamp(),
-      },
+    [`pairs.${currency}`]: {
+      buyRate: values.buyRate,
+      sellRate: values.sellRate,
+      active: values.active,
+      manuallyUpdatedAt: serverTimestamp(),
     },
     updatedAt: serverTimestamp(),
   }, { merge: true });
