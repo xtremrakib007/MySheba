@@ -166,6 +166,36 @@ exports.confirmDeviceSwitch = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
 
 exports.clearActiveSession = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => { const uid = requireAuth(request); const deviceId = requireDeviceId(request); const db = getFirestore(); try { await db.runTransaction(async (tx) => { const ref = userRef(db, uid); const snap = await tx.get(ref); if (!snap.exists) return; const data = snap.data(); const patch = {}; if (data.activeDeviceId === deviceId) { patch.activeSessionId = null; patch.activeDeviceId = null; } if (data.pendingDeviceApproval?.deviceId === deviceId) patch.pendingDeviceApproval = null; if (Object.keys(patch).length) tx.update(ref, patch); }); return { ok: true }; } catch (error) { await logServerError('clearActiveSession', error, { userId: uid }); return { ok: false }; } });
 
+/**
+ * Superadmin-only remote sign-out. The admin panel's Device Sessions screen
+ * lists users/{uid} docs that currently hold an activeSessionId/activeDeviceId
+ * and calls this to clear them; the mobile app's own live listener on those
+ * fields signs the displaced device out immediately, which is why this clears
+ * the session fields rather than setting a flag nothing reads. Superadmin only,
+ * and never usable against another superadmin.
+ */
+exports.adminForceLogout = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  const db = getFirestore();
+  const { uid, profile } = await requireStaff(request, db);
+  if (profile.role !== 'superadmin') throw new HttpsError('permission-denied', 'Only a superadmin can force a device sign-out.');
+  const targetUid = String(request.data?.targetUid || '').trim();
+  if (!targetUid || targetUid.length > 128) throw new HttpsError('invalid-argument', 'targetUid is required.');
+  if (targetUid === uid) throw new HttpsError('invalid-argument', 'You cannot force your own session out.');
+  const ref = userRef(db, targetUid);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'That user does not exist.');
+  const target = snap.data() || {};
+  if (target.role === 'superadmin') throw new HttpsError('permission-denied', 'You cannot force another superadmin out.');
+  try {
+    await ref.update({ activeSessionId: null, activeDeviceId: null, pendingDeviceApproval: null });
+    await logAudit({ action: 'admin_force_logout', targetUid, performedBy: uid, performedByRole: profile.role, details: { deviceId: target.activeDeviceId || null } });
+    return { ok: true };
+  } catch (error) {
+    await logServerError('adminForceLogout', error, { userId: targetUid });
+    throw new HttpsError('internal', 'Could not sign that device out. Please try again.');
+  }
+});
+
 exports.listTrustedDevices = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => { const db = getFirestore(); const { uid, profile } = await requireStaff(request, db); const currentDeviceId = typeof request.data?.currentDeviceId === 'string' ? request.data.currentDeviceId.trim().slice(0, MAX_DEVICE_ID_LENGTH) : null; try { const trusted = profile.trustedDevices || {}; const devices = Object.keys(trusted).map((id) => ({ deviceId: id, label: trusted[id]?.label || null, ip: trusted[id]?.ip || null, lastIp: trusted[id]?.lastIp || trusted[id]?.ip || null, trustedAt: trusted[id]?.trustedAt?.toMillis?.() || null, lastSeenAt: trusted[id]?.lastSeenAt?.toMillis?.() || null, isCurrent: id === currentDeviceId })).sort((a, b) => (b.lastSeenAt || 0) - (a.lastSeenAt || 0)); return { devices }; } catch (error) { await logServerError('listTrustedDevices', error, { userId: uid }); throw new HttpsError('internal', 'Could not load trusted devices. Please try again.'); } });
 
 exports.revokeTrustedDevice = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => { const db = getFirestore(); const { uid, profile } = await requireStaff(request, db); const deviceId = requireDeviceId(request); if (!profile.trustedDevices?.[deviceId]) return { ok: true }; try { await userRef(db, uid).update({ [`trustedDevices.${deviceId}`]: FieldValue.delete() }); await logAudit({ action: 'staff_trusted_device_revoked', targetUid: uid, performedBy: uid, performedByRole: profile.role, details: { deviceId } }); return { ok: true }; } catch (error) { await logServerError('revokeTrustedDevice', error, { userId: uid }); throw new HttpsError('internal', 'Could not remove this device. Please try again.'); } });

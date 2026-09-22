@@ -22,6 +22,7 @@ exports.checkDeviceSession = require('./deviceSessionService').checkDeviceSessio
 exports.confirmDeviceSwitch = require('./deviceSessionService').confirmDeviceSwitch;
 exports.clearActiveSession = require('./deviceSessionService').clearActiveSession;
 exports.listTrustedDevices = require('./deviceSessionService').listTrustedDevices;
+exports.adminForceLogout = require('./deviceSessionService').adminForceLogout;
 exports.revokeTrustedDevice = require('./deviceSessionService').revokeTrustedDevice;
 exports.validateActiveSession = require('./validateActiveSessionService').validateActiveSession;
 exports.registerPushToken = require('./pushTokenService').registerPushToken;

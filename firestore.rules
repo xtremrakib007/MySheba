@@ -54,6 +54,46 @@ service cloud.firestore {
     match /ad_daily_stats/{id} { allow read: if isSuperadmin(); allow create, update, delete: if false; }
     match /ad_impressions/{id} { allow create: if false; allow read: if activeProfile() && (isSuperadmin() || resource.data.get('userId', null) == request.auth.uid); allow update, delete: if false; }
     match /ad_clicks/{id} { allow create: if false; allow read: if activeProfile() && (isSuperadmin() || resource.data.get('userId', null) == request.auth.uid); allow update, delete: if false; }
+    // settings/{id}: platform configuration every role's app reads (pricing,
+    // homepageConfig, featureAccess, progression, support). paymentMethods holds
+    // the platform's actual billing credentials, so it is superadmin-only to
+    // write while the rest of the collection is editable by any admin - the split
+    // src/firebase/paymentSettingsService.js documents.
+    match /settings/{id} { allow read: if activeProfile(); allow create, update: if (id == 'paymentMethods' && isSuperadmin()) || (id != 'paymentMethods' && isAdmin()); allow delete: if false; }
+    // notes and myDocuments are private per-user vaults, flat collections keyed by
+    // a userId field; a client may only ever see and touch its own rows.
+    match /notes/{id} { allow read: if activeProfile() && resource.data.userId == request.auth.uid; allow create: if activeProfile() && request.resource.data.userId == request.auth.uid; allow update: if activeProfile() && resource.data.userId == request.auth.uid && request.resource.data.userId == resource.data.userId; allow delete: if activeProfile() && resource.data.userId == request.auth.uid; }
+    match /myDocuments/{id} { allow read: if activeProfile() && resource.data.userId == request.auth.uid; allow create: if activeProfile() && request.resource.data.userId == request.auth.uid; allow update: if activeProfile() && resource.data.userId == request.auth.uid && request.resource.data.userId == resource.data.userId; allow delete: if activeProfile() && resource.data.userId == request.auth.uid; }
+    // Home-screen banner slides, shown to every role and managed from Admin > Banners.
+    match /banners/{id} { allow read: if activeProfile(); allow create, update, delete: if isAdmin(); }
+    // One doc per operator of internet package price overrides, read by customers
+    // and resellers, managed from Admin > Pricing.
+    match /internetPricing/{operator} { allow read: if activeProfile(); allow create, update, delete: if isAdmin(); }
+    // Customer -> provider service leads. Either side of the lead can read it; only
+    // the provider's owner or an admin moves it along the new/contacted/closed flow.
+    match /serviceRequests/{id} { allow read: if activeProfile() && (resource.data.customerId == request.auth.uid || resource.data.providerOwnerId == request.auth.uid || isAdmin()); allow create: if activeProfile() && request.resource.data.customerId == request.auth.uid && request.resource.data.status == 'new'; allow update: if activeProfile() && (resource.data.providerOwnerId == request.auth.uid || isAdmin()) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']) && request.resource.data.status in ['new','contacted','closed']; allow delete: if false; }
+    // Audit trail written by the adminTopUpPoints Cloud Function; admins read it
+    // back as the Point Top-Up history, nobody writes it from a client.
+    match /pointTopUps/{id} { allow read: if isAdmin(); allow write: if false; }
+    // Account-deletion requests submitted by the public website (mysheba.top).
+    // Anonymous create only, with every field constrained; never readable client-side.
+    match /accountDeletionRequests/{requestId} {
+      allow create: if request.resource.data.keys().hasOnly(['requestId','fullName','phone','email','reason','details','language','status','source','page','createdAt'])
+        && request.resource.id == request.resource.data.requestId
+        && request.resource.data.requestId is string
+        && request.resource.data.fullName is string && request.resource.data.fullName.size() >= 2 && request.resource.data.fullName.size() <= 120
+        && request.resource.data.phone is string && request.resource.data.phone.size() >= 5 && request.resource.data.phone.size() <= 40
+        && request.resource.data.email is string && request.resource.data.email.size() <= 160
+        && request.resource.data.reason is string && request.resource.data.reason.size() <= 120
+        && request.resource.data.details is string && request.resource.data.details.size() <= 2000
+        && request.resource.data.language in ['en', 'bn']
+        && request.resource.data.status == 'pending'
+        && request.resource.data.source == 'website-account-deletion'
+        && request.resource.data.page in ['/delete-account/', '/bn/delete-account/']
+        && request.resource.data.reason in ['', 'Not using MySheba anymore', 'Privacy concern', 'Duplicate account', 'Other', 'আর MySheba ব্যবহার করছি না', 'গোপনীয়তা সংক্রান্ত উদ্বেগ', 'ডুপ্লিকেট অ্যাকাউন্ট', 'অন্যান্য']
+        && request.resource.data.createdAt is timestamp && request.resource.data.createdAt == request.time;
+      allow read, update, delete: if false;
+    }
     match /contactMessages/{id} { allow create: if false; allow read: if isAdmin(); allow update: if isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','handledBy','handledAt']) && request.resource.data.status in ['new','read','replied','closed'] && request.resource.data.get('handledBy', null) == request.auth.uid; allow delete: if false; }
     match /chatReports/{id} { allow create: if false; allow read: if isAdmin(); allow update: if isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','reviewedBy','reviewedAt']) && request.resource.data.status in ['open','resolved','dismissed'] && request.resource.data.get('reviewedBy', null) == request.auth.uid; allow delete: if false; }
     match /supportTickets/{id} { allow create: if false; allow read: if activeProfile() && (isSuperadmin() || resource.data.get('userId', null) == request.auth.uid || resource.data.get('assignedToUid', '') == request.auth.uid || (isAdmin() && resource.data.get('userId', null) != null)); allow update: if activeProfile() && ((isSuperadmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','assignedToUid','assignedToName','assignedToRole','updatedAt']) && request.resource.data.status in ['open','in_progress','resolved']) || (isAdmin() && !isSuperadmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['open','in_progress','resolved']) || (resource.data.get('assignedToUid', '') == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['in_progress','resolved']) || (resource.data.get('userId', null) == request.auth.uid && resource.data.status == 'resolved' && request.resource.data.status == 'open' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']))); allow delete: if false; }
