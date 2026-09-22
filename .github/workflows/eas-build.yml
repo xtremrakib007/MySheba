@@ -26,6 +26,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify EAS production environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          vars="$(eas env:list --environment production --non-interactive)"
+          echo "$vars" | grep -q "GOOGLE_SERVICES_JSON" || {
+            echo "Missing EAS production file variable: GOOGLE_SERVICES_JSON"
+            exit 1
+          }
+
       - name: Validate production source
         run: npm run production:check
 
