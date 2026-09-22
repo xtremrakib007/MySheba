@@ -36,7 +36,7 @@ export default function LegacyTransferPointsScreen() {
 
   useEffect(() => {
     let cancelled = false;
-    requireSecurityPin('opening Transfer Points')
+    requireSecurityPin('opening Wallet Transfer')
       .then(() => { if (!cancelled) setUnlocked(true); })
       .catch(() => { if (!cancelled) goBackOrHome(); });
     return () => { cancelled = true; };
@@ -92,7 +92,7 @@ export default function LegacyTransferPointsScreen() {
       <LinearGradient colors={brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
         <HeaderDecor />
         <TouchableOpacity style={styles.backBtn} onPress={goBackOrHome}><Text style={styles.backText}>←</Text></TouchableOpacity>
-        <Text style={styles.headerTitle}>Transfer Points</Text>
+        <Text style={styles.headerTitle}>Wallet Transfer</Text>
       </LinearGradient>
 
       {!unlocked ? <ActivityIndicator style={{ marginTop: 40 }} color={colors.primary} /> : (
