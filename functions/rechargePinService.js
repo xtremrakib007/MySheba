@@ -144,7 +144,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
       apiExecution: { status: 'accepted', providerId: api.providerId, providerName: api.providerName, responseId: api.responseId || null, message: api.message || null, providerSucceeded: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
-    return { id: txRef.id, cost: walletCost, baseCostMyr: reserved.cost, pin: api.secret, operator, amount: denomination, currency: walletFx.currency, fxRate: walletFx.sellRate };
+    return { id: txRef.id, cost: walletCost, baseCostMyr: reserved.baseCostMyr, pin: api.secret, operator, amount: denomination, currency: walletFx.currency, fxRate: walletFx.sellRate };
   } catch (e) {
     const unavailable = String(e?.code || '') === 'unavailable';
     if (unavailable || providerSucceeded) {
