@@ -8,9 +8,9 @@ import { db } from './config';
 
 export const CAPABILITIES = ['support', 'orders', 'finance', 'users', 'settings', 'reports'];
 
-// The role sheet's defaults; a superadmin can change them in Access Control.
+// Built-in defaults; a superadmin can change them in Access Control.
 export const BUILT_IN_DEFAULTS = {
-  admin: ['support', 'users', 'settings', 'reports'],
+  admin: ['support', 'orders', 'users', 'settings', 'reports'],
   support: ['support'],
   finance: ['finance', 'reports'],
 };

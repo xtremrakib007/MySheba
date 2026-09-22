@@ -55,6 +55,7 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(db, 'transactions/tx1'), { customerId: 'customer1', service: 'Recharge', status: 'pending', total: 50 });
   await setDoc(doc(db, 'transactions/tx2'), { customerId: 'customer1', service: 'Recharge', status: 'pending', total: 20 });
   await setDoc(doc(db, 'transactions/tx3'), { customerId: 'customer1', service: 'Recharge', status: 'pending', total: 30 });
+  await setDoc(doc(db, 'transactions/tx4'), { customerId: 'customer1', service: 'Recharge', status: 'pending', total: 40 });
   await setDoc(doc(db, 'topups/tp1'), { userId: 'customer1', points: 100, status: 'pending' });
   await setDoc(doc(db, 'pointTopUps/pt1'), { targetUid: 'customer1', amount: 10 });
 });
@@ -119,7 +120,7 @@ await check('support CANNOT write pricing', 'deny', () => setDoc(doc(as('support
 // ---- finance: money screens, no user administration ----
 await check('finance reads transactions', 'allow', () => getDoc(doc(as('finance1'), 'transactions/tx1')));
 await check('finance CANNOT approve an order', 'deny', () => updateDoc(doc(as('finance1'), 'transactions/tx1'), { approved: true, approvedBy: 'finance1', approvedByRole: 'finance', approvedAt: new Date(), updatedAt: new Date() }));
-await check('default admin CANNOT approve an order', 'deny', () => updateDoc(doc(as('admin1'), 'transactions/tx2'), { approved: true, approvedBy: 'admin1', approvedByName: 'Admin', approvedByRole: 'admin', approvedAt: new Date(), updatedAt: new Date() }));
+await check('default admin approves an order', 'allow', () => updateDoc(doc(as('admin1'), 'transactions/tx2'), { approved: true, approvedBy: 'admin1', approvedByName: 'Admin', approvedByRole: 'admin', approvedAt: new Date(), updatedAt: new Date() }));
 await check('finance reads top-ups', 'allow', () => getDoc(doc(as('finance1'), 'topups/tp1')));
 await check('finance reads point top-up history', 'allow', () => getDoc(doc(as('finance1'), 'pointTopUps/pt1')));
 await check('finance looks up a user for top-up', 'allow', () => getDoc(doc(as('finance1'), 'users/customer1')));
@@ -132,14 +133,14 @@ await check('finance CANNOT read contact messages', 'deny', () => getDoc(doc(as(
 // ---- role defaults (built in, per the role sheet) ----
 await check('default admin manages users', 'allow', () => getDoc(doc(as('admin1'), 'users/customer1')));
 await check('default admin reviews KYC', 'allow', () => getDoc(doc(as('admin1'), 'verificationRequests/customer1')).catch((e) => { if (String(e).includes('not-found')) return; throw e; }));
-await check('default admin CANNOT read transactions', 'deny', () => getDoc(doc(as('admin1'), 'transactions/tx1')));
+await check('default admin reads transactions', 'allow', () => getDoc(doc(as('admin1'), 'transactions/tx1')));
 await check('default admin CANNOT read top-ups', 'deny', () => getDoc(doc(as('admin1'), 'topups/tp1')));
 await check('default admin CANNOT read point top-ups', 'deny', () => getDoc(doc(as('admin1'), 'pointTopUps/pt1')));
 
 // ---- per-user overrides ----
 await check('admin granted orders approves an order', 'allow', () => updateDoc(doc(as('admin2'), 'transactions/tx3'), { approved: true, approvedBy: 'admin2', approvedByName: 'A2', approvedByRole: 'admin', approvedAt: new Date(), updatedAt: new Date() }));
 await check('admin granted finance reads top-ups', 'allow', () => getDoc(doc(as('admin2'), 'topups/tp1')));
-await check('approval must name the approver\'s real role', 'deny', () => updateDoc(doc(as('admin2'), 'transactions/tx2'), { approved: true, approvedBy: 'admin2', approvedByName: 'A2', approvedByRole: 'superadmin', approvedAt: new Date(), updatedAt: new Date() }));
+await check('approval must name the approver\'s real role', 'deny', () => updateDoc(doc(as('admin2'), 'transactions/tx4'), { approved: true, approvedBy: 'admin2', approvedByName: 'A2', approvedByRole: 'superadmin', approvedAt: new Date(), updatedAt: new Date() }));
 await check('admin with users revoked CANNOT read users', 'deny', () => getDoc(doc(as('admin3'), 'users/customer1')));
 await check('admin with users revoked still edits settings', 'allow', () => setDoc(doc(as('admin3'), 'settings/pricing'), { notepadCost: 4 }, { merge: true }));
 await check('finance with finance revoked CANNOT read transactions', 'deny', () => getDoc(doc(as('finance2'), 'transactions/tx1')));

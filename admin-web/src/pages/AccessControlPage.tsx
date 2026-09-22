@@ -53,7 +53,7 @@ function RoleDefaultsRow({ role, current, onSaved }: { role: ConfigurableRole; c
     <tr className="border-b border-[var(--color-line)] last:border-0 align-top">
       <td className="px-3 py-3">
         <p className="font-semibold">{ROLE_LABELS[role]}</p>
-        <p className="text-[11px] text-[var(--color-ink-soft)]">{isBuiltIn ? 'Role sheet defaults' : 'Customised'}</p>
+        <p className="text-[11px] text-[var(--color-ink-soft)]">{isBuiltIn ? 'Built-in defaults' : 'Customised'}</p>
         {error && <p className="mt-1 text-[11px] text-[var(--color-danger)]">{error}</p>}
       </td>
       {CAPABILITIES.map((cap) => (
@@ -64,7 +64,7 @@ function RoleDefaultsRow({ role, current, onSaved }: { role: ConfigurableRole; c
       <td className="px-3 py-3 text-right">
         <div className="inline-flex gap-2">
           {!isBuiltIn && !dirty && (
-            <button disabled={saving} onClick={() => void save(BUILT_IN_DEFAULTS[role])} title="Back to the role sheet defaults" className="rounded-lg border border-[var(--color-line)] p-1.5 text-[var(--color-ink-soft)] disabled:opacity-40">
+            <button disabled={saving} onClick={() => void save(BUILT_IN_DEFAULTS[role])} title="Back to the built-in defaults" className="rounded-lg border border-[var(--color-line)] p-1.5 text-[var(--color-ink-soft)] disabled:opacity-40">
               <RotateCcw size={14} />
             </button>
           )}

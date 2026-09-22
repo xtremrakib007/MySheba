@@ -24,9 +24,9 @@ export const CAPABILITY_INFO: Record<Capability, { label: string; description: s
 export type ConfigurableRole = 'admin' | 'support' | 'finance';
 export const CONFIGURABLE_ROLES: ConfigurableRole[] = ['admin', 'support', 'finance'];
 
-// The role sheet's defaults. A superadmin can change them in Access Control.
+// Built-in defaults. A superadmin can change them in Access Control.
 export const BUILT_IN_DEFAULTS: Record<ConfigurableRole, Capability[]> = {
-  admin: ['support', 'users', 'settings', 'reports'],
+  admin: ['support', 'orders', 'users', 'settings', 'reports'],
   support: ['support'],
   finance: ['finance', 'reports'],
 };
