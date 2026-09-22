@@ -121,6 +121,7 @@ export default {
     mobilebanking: 'Mobile Banking',
     internet: 'Internet',
     remittance: 'Remittance',
+    billpayment: 'Bill Payment',
     bus: 'Bus',
     train: 'Train',
     flight: 'Flight',

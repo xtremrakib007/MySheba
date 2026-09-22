@@ -6,10 +6,12 @@ const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 const SERVICE_BY_FUNCTION = {
   rejectRechargeTransaction: 'recharge', rejectInternetPackageTransaction: 'internet',
   rejectMobileBankingTransaction: 'mobilebanking', rejectRemittanceTransaction: 'remittance',
+  rejectBillPaymentTransaction: 'billpayment',
 };
 const ROLE_SERVICES = {
-  dealer: ['mobilebanking'], reseller: ['recharge', 'internet', 'remittance'],
-  admin: ['recharge', 'internet', 'mobilebanking', 'remittance'], superadmin: ['recharge', 'internet', 'mobilebanking', 'remittance'],
+  dealer: ['mobilebanking'], reseller: ['recharge', 'internet', 'remittance', 'billpayment'],
+  admin: ['recharge', 'internet', 'mobilebanking', 'remittance', 'billpayment'],
+  superadmin: ['recharge', 'internet', 'mobilebanking', 'remittance', 'billpayment'],
 };
 async function getActor(db, uid) {
   const snap = await db.collection('users').doc(uid).get();
@@ -62,3 +64,4 @@ exports.rejectRechargeTransaction = makeRejectCallable('recharge');
 exports.rejectInternetPackageTransaction = makeRejectCallable('internet');
 exports.rejectMobileBankingTransaction = makeRejectCallable('mobilebanking');
 exports.rejectRemittanceTransaction = makeRejectCallable('remittance');
+exports.rejectBillPaymentTransaction = makeRejectCallable('billpayment');

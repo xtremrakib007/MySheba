@@ -39,6 +39,7 @@ export async function acceptTransaction(id: string): Promise<void> {
 const REJECT_FNS: Record<string, string> = {
   Recharge: 'rejectRechargeTransaction', Internet: 'rejectInternetPackageTransaction',
   'Mobile Banking': 'rejectMobileBankingTransaction', Remittance: 'rejectRemittanceTransaction',
+  'Bill Payment': 'rejectBillPaymentTransaction',
 };
 export async function rejectTransaction(id: string, reason: string, service: string): Promise<void> {
   const fnName = REJECT_FNS[service];

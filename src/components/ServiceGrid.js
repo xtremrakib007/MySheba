@@ -11,6 +11,7 @@ const CUSTOMER_SERVICES = [
   { key: 'mobilebanking', icon: '🏦', name: 'Mobile Banking', kind: 'service' },
   { key: 'internet', icon: '📡', name: 'Internet', kind: 'service' },
   { key: 'remittance', icon: '💸', name: 'Remittance', kind: 'service' },
+  { key: 'billpayment', icon: '🧾', name: 'Bill Payment', kind: 'service' },
   { key: 'bus', icon: '🚌', name: 'Bus', kind: 'buspicker' },
   { key: 'train', icon: '🚆', name: 'Train', kind: 'webview' },
   { key: 'flight', icon: '✈️', name: 'Flight', kind: 'service' },

@@ -75,6 +75,7 @@ export const navGroups: NavGroup[] = [
     { label: 'Salary Settings', path: '/config/salary', icon: Wallet, enabled: true },
     { label: 'Banners', path: '/config/banners', icon: Megaphone, enabled: true },
     { label: 'Categories', path: '/config/categories', icon: LayoutGrid, enabled: true },
+    { label: 'Billers', path: '/config/billers', icon: Receipt, enabled: true },
     { label: 'Module Subscriptions', path: '/config/modules', icon: Layers, enabled: true },
   ] },
   { label: 'Superadmin Governance', accent: 'purple', items: [

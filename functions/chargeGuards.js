@@ -6,11 +6,13 @@ const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const RECHARGE_COUNTRIES = new Set(['BD', 'IN', 'NP', 'PK', 'PH', 'ID', 'MM', 'KH']);
 const REMITTANCE_COUNTRIES = new Set(['BD', 'NP', 'PK', 'PH', 'LK', 'IN', 'ID', 'MM']);
+const BILL_COUNTRIES = new Set(['MY', 'BD']);
 const SERVICE_LABELS = {
   chargeRecharge: 'Recharge',
   chargeInternetPackage: 'Internet',
   chargeMobileBanking: 'Mobile Banking',
   chargeRemittance: 'Remittance',
+  chargeBillPayment: 'Bill Payment',
 };
 
 function requireAuth(request) {
@@ -61,6 +63,12 @@ function validateCountry(name, payload) {
     if (!country || !REMITTANCE_COUNTRIES.has(country)) {
       throw new HttpsError('invalid-argument', 'A supported remittance country is required.');
     }
+  } else if (name === 'chargeBillPayment') {
+    // Bill Payment only covers the countries whose billers the app lists.
+    if (!country || !BILL_COUNTRIES.has(country)) {
+      throw new HttpsError('invalid-argument', 'A supported bill payment country is required.');
+    }
+    if (raw.country !== country) raw.country = country;
   } else if (name === 'chargeRecharge' || name === 'chargeInternetPackage') {
     // Missing country preserves the existing Malaysia/default behavior. Explicit
     // unsupported countries must never silently fall back to a 1:1 exchange rate.
@@ -187,3 +195,4 @@ exports.chargeRecharge = wrap('chargeRecharge');
 exports.chargeInternetPackage = wrap('chargeInternetPackage');
 exports.chargeMobileBanking = wrap('chargeMobileBanking');
 exports.chargeRemittance = wrap('chargeRemittance');
+exports.chargeBillPayment = wrap('chargeBillPayment');

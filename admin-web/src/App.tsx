@@ -40,6 +40,7 @@ import ToolAccessPage from './pages/ToolAccessPage';
 import RolePermissionsPage from './pages/RolePermissionsPage';
 import SalarySettingsPage from './pages/SalarySettingsPage';
 import BannersPage from './pages/BannersPage';
+import BillersPage from './pages/BillersPage';
 import CategoriesPage from './pages/CategoriesPage';
 import ModuleSubscriptionsPage from './pages/ModuleSubscriptionsPage';
 import PaymentSettingsPage from './pages/PaymentSettingsPage';
@@ -119,6 +120,7 @@ export default function App() {
               <Route path="salary" element={<SalarySettingsPage />} />
               <Route path="banners" element={<BannersPage />} />
               <Route path="categories" element={<CategoriesPage />} />
+              <Route path="billers" element={<BillersPage />} />
               <Route path="modules" element={<ModuleSubscriptionsPage />} />
             </Route>
 

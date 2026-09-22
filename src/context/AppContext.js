@@ -77,6 +77,7 @@ function logListenerError(label) {
 
 const SERVICE_STEPS = {
   recharge: 4,
+  billpayment: 4,
   mobilebanking: 3,
   internet: 4,
   remittance: 7,
@@ -91,6 +92,7 @@ const TRAVEL_SERVICES = ["flight", "bus", "train"];
 const TRAVEL_LABELS = { flight: "Flight", bus: "Bus", train: "Train" };
 const DEALER_LABELS = {
   recharge: "Recharge",
+  billpayment: "Bill Payment",
   mobilebanking: "Mobile Banking",
   internet: "Internet",
   remittance: "Remittance",
@@ -123,6 +125,18 @@ function buildTransactionPayload(service, serviceData, pricing, rates) {
       total: amount,
       cost,
       profit,
+    };
+  }
+  if (service === "billpayment") {
+    const rawAmount = serviceData.amount || 0;
+    // Bills are entered in the biller's own currency; the wallet is always
+    // charged in MYR through the same rate table Recharge uses.
+    const amount = amountToPoints(rawAmount, serviceData.country, rates);
+    return {
+      service: DEALER_LABELS.billpayment,
+      details: `${serviceData.billerName || ""} - ${serviceData.currency || "MYR"} ${rawAmount} (Acct: ${serviceData.accountNumber || ""})`,
+      amount,
+      total: amount,
     };
   }
   if (service === "mobilebanking") {

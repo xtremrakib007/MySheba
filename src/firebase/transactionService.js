@@ -7,8 +7,8 @@ import { logActivity } from './logService';
 
 const COLLECTION = 'transactions';
 const QUEUE_COLLECTION = 'transactionQueue';
-const CHARGEABLE_SERVICE_FNS = { Recharge: 'chargeRecharge', Internet: 'chargeInternetPackage', 'Mobile Banking': 'chargeMobileBanking', Remittance: 'chargeRemittance' };
-const REJECT_FNS = { Recharge: 'rejectRechargeTransaction', Internet: 'rejectInternetPackageTransaction', 'Mobile Banking': 'rejectMobileBankingTransaction', Remittance: 'rejectRemittanceTransaction' };
+const CHARGEABLE_SERVICE_FNS = { Recharge: 'chargeRecharge', Internet: 'chargeInternetPackage', 'Mobile Banking': 'chargeMobileBanking', Remittance: 'chargeRemittance', 'Bill Payment': 'chargeBillPayment' };
+const REJECT_FNS = { Recharge: 'rejectRechargeTransaction', Internet: 'rejectInternetPackageTransaction', 'Mobile Banking': 'rejectMobileBankingTransaction', Remittance: 'rejectRemittanceTransaction', 'Bill Payment': 'rejectBillPaymentTransaction' };
 
 function createRequestId() {
   if (typeof Crypto.randomUUID !== 'function') throw new Error('Secure request identifier generation is unavailable. Please update the app.');
