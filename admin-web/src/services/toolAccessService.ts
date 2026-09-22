@@ -25,15 +25,14 @@ export type FeatureKey = (typeof FEATURE_DEFS)[number]['key'];
 // superadmin excluded on purpose (always has full access, never
 // toggleable off by accident); customer excluded (separate grid this
 // screen never touches).
-export const TOGGLEABLE_ROLES = ['dealer', 'reseller', 'support', 'finance', 'admin'] as const;
+// Operators only. Staff access (admin, support, finance) is managed in Access
+// Control as role defaults + per-user overrides.
+export const TOGGLEABLE_ROLES = ['dealer', 'reseller'] as const;
 export type ToggleableRole = (typeof TOGGLEABLE_ROLES)[number];
 
 export const ROLE_LABEL: Record<ToggleableRole, string> = {
-  support: 'Support Agent',
-  finance: 'Finance',
   dealer: 'Dealer',
   reseller: 'Reseller',
-  admin: 'Admin',
 };
 
 export type FeatureAccessMap = Record<FeatureKey, string[]>;

@@ -26,6 +26,7 @@ import * as transactionService from "../firebase/transactionService";
 import * as ratesService from "../firebase/ratesService";
 import * as settingsService from "../firebase/settingsService";
 import * as featureAccessService from "../firebase/featureAccessService";
+import * as accessControlService from "../firebase/accessControlService";
 import * as adControlsService from "../firebase/adControlsService";
 import * as homepageConfigService from "../firebase/homepageConfigService";
 import * as adService from "../firebase/adService";
@@ -189,6 +190,16 @@ export function AppProvider({ children }) {
   // ---- auth / profile ----
   const [authUser, setAuthUser] = useState(null);
   const [profile, setProfile] = useState(null);
+  // Effective staff capabilities (role defaults + this person's overrides),
+  // kept live so a superadmin's change applies without signing out.
+  const [capabilities, setCapabilities] = useState([]);
+  const capabilityUid = profile?.uid || authUser?.uid || null;
+  const capabilityRole = profile?.role || null;
+  useEffect(
+    () => accessControlService.subscribeMyCapabilities(capabilityUid, capabilityRole, setCapabilities),
+    [capabilityUid, capabilityRole],
+  );
+  const can = useCallback((capability) => capabilities.includes(capability), [capabilities]);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
@@ -1194,10 +1205,11 @@ export function AppProvider({ children }) {
     const role = profile && profile.role;
     if (!needsTx || !role || !authUser) return undefined;
 
-    const isStaffQueue = ["dealer", "reseller", "admin", "superadmin"].includes(
-      role,
-    );
-    if (!isStaffQueue) return undefined;
+    // Staff see the full stream only if their access includes orders or
+    // finance; operators see their own queue.
+    const seesAllOrders = can("orders") || can("finance");
+    const isOperator = role === "dealer" || role === "reseller";
+    if (!isOperator && !seesAllOrders) return undefined;
 
     // Phase 10: Dealer and Reseller no longer share one undifferentiated
     // queue - each only ever sees the specific service(s) their tier owns
@@ -1205,7 +1217,7 @@ export function AppProvider({ children }) {
     // - this filter is UX, that's the actual security boundary). Admin/
     // superadmin keep the full unfiltered stream, same as before.
     const unsub = transactionService.subscribeBroadcastTransactions((txs) => {
-      if (role === "admin" || role === "superadmin") {
+      if (seesAllOrders && !isOperator) {
         setDealerTxs(txs);
         setResellerTxs(txs);
       } else if (role === "dealer") {
@@ -1213,13 +1225,13 @@ export function AppProvider({ children }) {
       } else if (role === "reseller") {
         setResellerTxs(
           txs.filter((t) =>
-            ["Recharge", "Internet", "Remittance"].includes(t.service),
+            ["Recharge", "Internet", "Remittance", "Bill Payment"].includes(t.service),
           ),
         );
       }
-    }, logListenerError("transactions:broadcast"));
+    }, logListenerError("transactions:broadcast"), { fullStream: seesAllOrders && !isOperator });
     return unsub;
-  }, [screen, profile, authUser]);
+  }, [screen, profile, authUser, can]);
 
   // ---- admin push announcement history, only needed on the Admin
   // dashboard (Admin > Announcements), and only for admin/superadmin -
@@ -1229,15 +1241,14 @@ export function AppProvider({ children }) {
   // powers the customer-facing notification bell.) ----
   useEffect(() => {
     const role = profile && profile.role;
-    const needsAnnouncements =
-      screen === "adminHome" && (role === "admin" || role === "superadmin");
+    const needsAnnouncements = screen === "adminHome" && can("support");
     if (!needsAnnouncements) return undefined;
     const unsub = announcementService.subscribeAnnouncements(
       (list) => setAnnouncements(list),
       logListenerError("announcements"),
     );
     return unsub;
-  }, [screen, profile]);
+  }, [screen, profile, can]);
 
   // ---- notification bell feed: any signed-in user (not just admin) reads
   // the same announcement log and filters it client-side to what's actually
@@ -1290,8 +1301,7 @@ export function AppProvider({ children }) {
   useEffect(() => {
     const role = profile && profile.role;
     const isAdminScreen =
-      (screen === "adminHome" || screen === "reports") &&
-      ["admin", "superadmin"].includes(role);
+      (screen === "adminHome" || screen === "reports") && can("support");
     const isResellerScreen = screen === "resellerHome" && role === "reseller";
     if (!isAdminScreen && !isResellerScreen) return undefined;
     const unsub = inquiryService.subscribeInquiries(
@@ -1302,19 +1312,19 @@ export function AppProvider({ children }) {
       logListenerError("inquiries"),
     );
     return unsub;
-  }, [screen, profile]);
+  }, [screen, profile, can]);
 
   // ---- live top-up requests, only needed on the Admin dashboard ----
   useEffect(() => {
-    const isStaff = profile && ["admin", "superadmin"].includes(profile.role);
-    if ((screen !== "adminHome" && screen !== "reports") || !isStaff)
+    // Reviewing top-ups is finance work.
+    if ((screen !== "adminHome" && screen !== "reports") || !can("finance"))
       return undefined;
     const unsub = topupService.subscribeTopups(
       (list) => setTopups(list),
       logListenerError("topups"),
     );
     return unsub;
-  }, [screen, profile]);
+  }, [screen, profile, can]);
 
   // Re-locks the Notepad/My Documents private vault whenever the app
   // leaves the foreground - same behavior as WhatsApp's chat lock, so
@@ -1395,10 +1405,7 @@ export function AppProvider({ children }) {
           // requester gets notified once it's approved/rejected. Route each
           // to wherever that status actually lives for them - staff never
           // see their own self-topups in this queue (see topupService).
-          const isStaff =
-            profile &&
-            (profile.role === "admin" || profile.role === "superadmin");
-          if (isStaff) {
+          if (can("finance")) {
             setAdminTab("topups");
             setScreen("adminHome");
           } else setScreen("history");
@@ -1426,7 +1433,7 @@ export function AppProvider({ children }) {
     });
     const sub = addNotificationResponseListener(handleResponse);
     return () => sub.remove();
-  }, [authUser, profile, setAdminTab, setScreen]);
+  }, [authUser, profile, setAdminTab, setScreen, can]);
 
   const openResult = useCallback((kind, txId, svc, extra) => {
     setResultModal({
@@ -2252,6 +2259,8 @@ export function AppProvider({ children }) {
     // auth
     authUser,
     profile,
+    capabilities,
+    can,
     authLoading,
     authError,
     authBusy,

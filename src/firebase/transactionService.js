@@ -45,7 +45,9 @@ export function subscribeTransactions(callback, onError) {
 
 // Dealer/reseller broadcast queue. Full transaction documents are intentionally
 // not read here. transactionQueue contains only server-sanitized operator fields.
-export function subscribeBroadcastTransactions(callback, onError) {
+// `fullStream` is true for staff whose access includes orders or finance
+// (see accessControlService); everyone else gets their operator queue.
+export function subscribeBroadcastTransactions(callback, onError, { fullStream = false } = {}) {
   let stopped = false;
   const unsubs = [];
   let pending = [];
@@ -76,7 +78,7 @@ export function subscribeBroadcastTransactions(callback, onError) {
       if (stopped) return;
       const role = profileSnap.exists() ? profileSnap.data()?.role : null;
 
-      if (role === 'admin' || role === 'superadmin') {
+      if (fullStream) {
         const q = query(collection(db, COLLECTION), where('status', 'in', ['pending', 'processing', 'completed']));
         attach(q, pending);
         return;
@@ -88,7 +90,7 @@ export function subscribeBroadcastTransactions(callback, onError) {
         attach(query(collection(db, QUEUE_COLLECTION), where('service', '==', 'Mobile Banking'), where('status', '==', 'pending'), where('dealerId', '==', null)), pending);
         attach(query(collection(db, QUEUE_COLLECTION), where('service', '==', 'Mobile Banking'), where('status', '==', 'pending'), where('dealerId', '==', uid)), pending);
       } else {
-        const services = ['Recharge', 'Internet', 'Remittance'];
+        const services = ['Recharge', 'Internet', 'Remittance', 'Bill Payment'];
         attach(query(collection(db, QUEUE_COLLECTION), where('service', 'in', services), where('status', '==', 'pending'), where('resellerId', '==', null)), pending);
         attach(query(collection(db, QUEUE_COLLECTION), where('service', 'in', services), where('status', '==', 'pending'), where('resellerId', '==', uid)), pending);
       }

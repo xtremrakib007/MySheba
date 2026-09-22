@@ -7,7 +7,6 @@ import HeaderDecor from '../components/HeaderDecor';
 import FeatureGrid from '../components/FeatureGrid';
 import PromptModal from '../components/PromptModal';
 import * as ratesService from '../firebase/ratesService';
-import { FEATURE_DEFS, canAccessFeature } from '../firebase/featureAccessService';
 
 const CATEGORIES = [
   { key: 'operations', icon: '⚙️', bg: '#E3F2FD', name: 'Operations' },
@@ -38,6 +37,18 @@ const USERS = [
 // a tab within AdminHomeScreen - see openItem below.
 const SCREEN_FEATURES = ['adminAnalytics', 'transferPoints', 'userManagement', 'verificationManagement', 'featureAccess'];
 
+// Which capability opens each hub item (any one is enough). Staff access is
+// role defaults + per-user overrides (accessControlService); a superadmin
+// has every capability.
+const CAPABILITY_FOR = {
+  all: ['orders', 'finance'], pending: ['orders'], inquiries: ['support'], topups: ['finance'],
+  support: ['support'], adminAnalytics: ['reports'],
+  rates: ['settings'], pricing: ['settings'], payments: ['settings'], categories: ['settings'], banners: ['settings'],
+  transferPoints: ['finance'],
+  userManagement: ['users'], verificationManagement: ['users'],
+  announcements: ['support'],
+};
+
 const SYSTEM = [
   { key: 'featureAccess', icon: '🔐', bg: '#EDE7F6', name: 'Feature Access' },
   { key: 'banners', icon: '🖼️', bg: '#FFF0F0', name: 'Banners' },
@@ -64,15 +75,16 @@ const RECHARGE_RATE_FIELDS = [
 export default function AdminFeaturesScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { profile, goBackOrHome, setScreen, openSidebar, dealerTxs, inquiries, topups, setAdminTab, setAdminViewingSection, featureAccess, rates } = useApp();
+  const { profile, goBackOrHome, setScreen, openSidebar, dealerTxs, inquiries, topups, setAdminTab, setAdminViewingSection, rates, can } = useApp();
   const [section, setSection] = useState(null);
   const [rateView, setRateView] = useState(false);
   const [editRateKey, setEditRateKey] = useState(null);
   const isSuperadmin = profile?.role === 'superadmin';
 
   const allow = (items) => items.filter((item) => {
-    const always = ['all','pending','inquiries','topups','support','rates','pricing','payments','categories','banners','announcements'];
-    return always.includes(item.key) || canAccessFeature(featureAccess, item.key, profile?.role);
+    if (item.key === 'featureAccess') return isSuperadmin;
+    const need = CAPABILITY_FOR[item.key];
+    return need ? need.some((cap) => can(cap)) : isSuperadmin;
   });
   const badges = {
     pending: dealerTxs.filter((t) => t.status === 'pending').length || undefined,

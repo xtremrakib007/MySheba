@@ -20,6 +20,10 @@ const env = await initializeTestEnvironment({
   firestore: { host: '127.0.0.1', port: 8080, rules: readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8') },
 });
 
+// Start from an empty database every run. Some checks below rewrite
+// settings/accessControl; without this, a second run inherits them.
+await env.clearFirestore();
+
 // Seed the profiles the rules read, plus some data.
 await env.withSecurityRulesDisabled(async (ctx) => {
   const db = ctx.firestore();
