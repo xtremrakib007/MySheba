@@ -21,6 +21,7 @@ export default {
     title: 'Settings',
     sectionNotifications: 'Notifications',
     sectionGeneral: 'General',
+    sectionAppearance: 'Appearance',
     pushNotifications: 'Push Notifications',
     pushNotificationsSub: 'Order updates and alerts',
     emailNotifications: 'Email Notifications',
