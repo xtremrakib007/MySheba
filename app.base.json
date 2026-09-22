@@ -54,7 +54,7 @@
     "ios": {
       "infoPlist": {
         "NSCameraUsageDescription": "Allow MySheba to access your camera for KYC identity verification and video calls."
-      },
+      }
     },
     "notification": {
       "color": "#1A73E8",
