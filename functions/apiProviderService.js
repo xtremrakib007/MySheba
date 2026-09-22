@@ -178,7 +178,8 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   if (!claim.owned) {
     const state = claim.state || {};
     if (state.status === 'completed') {
-      if (service === 'Recharge PIN') throw new HttpsError('unavailable','The provider request completed, but the voucher PIN is not recoverable from the cached execution. Do not retry automatically; reconcile the provider outcome first.');
+      if (service === 'Recharge PIN' && typeof state.result?.secret === 'string' && state.result.secret) return state.result;
+      if (service === 'Recharge PIN') throw new HttpsError('unavailable','The provider request completed, but the voucher PIN is not recoverable from the cached execution. Reconciliation is required.');
       return state.result || {};
     }
     if (state.status === 'unknown') throw new HttpsError('unavailable','The API request outcome is uncertain. Check the provider before retrying.');
@@ -252,7 +253,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     const secretPath = options.extractPath || (service === 'Recharge PIN' ? provider.responsePinPath : '');
     if (secretPath) { const secret = getPath(data, secretPath); if (typeof secret !== 'string' || !secret.trim() || secret.length > 500) throw new Error('Provider did not return a valid recharge PIN.'); result.secret = secret.trim(); }
     const { secret: _secret, ...safeResult } = result;
-    await executionRef.set({status:'completed',result:safeResult,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
+    await executionRef.set({status:'completed',result:service === 'Recharge PIN' ? { ...safeResult, secret: result.secret } : safeResult,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
     return result;
   } catch(e) {
     const rawMessage = String(e?.message || 'Provider execution failed');
