@@ -6,6 +6,7 @@ import { radius } from '../theme/theme';
 import { useTheme } from "../theme/ThemeContext";
 import HeaderDecor from '../components/HeaderDecor';
 import VerifiedBadge from '../components/VerifiedBadge';
+import { formatWalletAmount } from '../firebase/walletExchangeRateService';
 
 const ROLE_LABEL = { customer: 'Customer', dealer: 'Dealer', reseller: 'Reseller', admin: 'Admin', superadmin: 'Super Admin' };
 
@@ -33,6 +34,7 @@ export default function MyAccountScreen() {
   const styles = createStyles(colors);
   const { goBackOrHome, setScreen, profile } = useApp();
 
+  const walletCurrency = profile?.walletCurrency || profile?.walletBalanceCurrency || 'MYR';
   const walletBalance = profile && typeof profile.walletBalance === 'number' ? profile.walletBalance : 0;
   const isCustomer = !profile || profile.role === 'customer';
 
@@ -50,7 +52,7 @@ export default function MyAccountScreen() {
         {isCustomer && (
           <View style={styles.balanceCard}>
             <Text style={styles.balanceLabel}>Wallet Balance</Text>
-            <Text style={styles.balanceValue}>MYR {walletBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+            <Text style={styles.balanceValue}>{formatWalletAmount(walletBalance, walletCurrency)}</Text>
             <TouchableOpacity style={styles.topupBtn} onPress={() => setScreen('topup')}>
               <Text style={styles.topupBtnText}>+ Top Up</Text>
             </TouchableOpacity>
