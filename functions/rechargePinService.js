@@ -119,7 +119,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
       apiRefunded: false, raw: { requestId, country: 'MY', operator, amount: denomination },
       createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
-    return { replay: false, id: txRef.id, cost, pin: null, operator, amount: denomination };
+    return { replay: false, id: txRef.id, cost: walletCost, baseCostMyr: cost, pin: null, operator, amount: denomination, currency: walletFx.currency, fxRate: walletFx.sellRate };
   });
 
   if (reserved.replay) return reserved;
