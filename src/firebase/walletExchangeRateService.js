@@ -44,7 +44,7 @@ export async function updateWalletExchangePair(currency, patch) {
   if (patch.active !== undefined) clean.active = !!patch.active;
   if (!Object.keys(clean).length) return;
   await setDoc(RATES_DOC, {
-    pairs: { [currency]: clean },
+    [`pairs.${currency}`]: clean,
     updatedAt: serverTimestamp(),
   }, { merge: true });
 }
