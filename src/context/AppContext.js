@@ -448,8 +448,8 @@ export function AppProvider({ children }) {
   const [privateVaultUnlocked, setPrivateVaultUnlocked] = useState(false);
 
   // ---- App Lock (whole-app PIN/biometric gate, separate from the vault
-  // unlocks above) ---- appLockEnabled mirrors a per-device AsyncStorage
-  // flag (src/firebase/appLockPrefs.js) - loaded once below and kept in
+  // unlocks above) ---- appLockEnabled mirrors a per-account AsyncStorage
+  // flag (src/firebase/appLockPrefs.js) - loaded per uid below and kept in
   // sync whenever setAppLockEnabled is called. appLocked is the live
   // "currently showing the lock screen" flag AppLockScreen.js reads; it's
   // set true both on cold launch (once the profile's securityPinSet is
@@ -475,9 +475,16 @@ export function AppProvider({ children }) {
   const APP_LOCK_GRACE_MS = 2 * 60 * 1000;
   const backgroundedAtRef = useRef(null);
 
+  // Load the signed-in account's own setting. Keyed by uid, so signing out
+  // drops back to off rather than leaving the previous account's lock
+  // standing over the next one (see appLockPrefs.js).
   useEffect(() => {
-    getAppLockEnabled().then(setAppLockEnabledState);
-  }, []);
+    const uid = authUser?.uid;
+    if (!uid) { setAppLockEnabledState(false); return undefined; }
+    let cancelled = false;
+    getAppLockEnabled(uid).then((v) => { if (!cancelled) setAppLockEnabledState(v); });
+    return () => { cancelled = true; };
+  }, [authUser?.uid]);
 
   const setAppLockEnabled = useCallback(
     async (value) => {
@@ -485,9 +492,9 @@ export function AppProvider({ children }) {
         await requireSecurityPin("App Lock");
       }
       setAppLockEnabledState(value);
-      await setAppLockEnabledPref(value);
+      await setAppLockEnabledPref(authUser?.uid, value);
     },
-    [requireSecurityPin, profile],
+    [requireSecurityPin, profile, authUser?.uid],
   );
 
   const unlockApp = useCallback(() => setAppLocked(false), []);
