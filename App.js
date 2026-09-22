@@ -72,6 +72,7 @@ import RatePopup from './src/components/RatePopup';
 import ResultModal from './src/components/ResultModal';
 import Sidebar from './src/components/Sidebar';
 import BottomNav from './src/components/BottomNav';
+import UpdateGate from './src/components/UpdateGate';
 import AppAlertHost from './src/components/AppAlertHost';
 import SecurityPinGate from './src/components/SecurityPinGate';
 import AppLockScreen from './src/components/AppLockScreen';
@@ -186,7 +187,7 @@ function Root() {
       {renderedScreen === 'payslipDetails' && <PayslipDetailsScreen />}
     </View>
     {NAV_SCREENS.includes(renderedScreen) && <BottomNav />}
-    <RatePopup /><ResultModal /><Sidebar /><AppAlertHost /><SecurityPinGate /><AppLockScreen /><BiometricOptInPrompt />
+    <RatePopup /><ResultModal /><Sidebar /><AppAlertHost /><UpdateGate /><SecurityPinGate /><AppLockScreen /><BiometricOptInPrompt />
   </SafeAreaView>;
 }
 
