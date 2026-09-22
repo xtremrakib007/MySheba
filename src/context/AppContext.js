@@ -973,9 +973,11 @@ export function AppProvider({ children }) {
               // Restoring a persisted session on app launch - jump straight
               // to the right home screen for this account's role instead of
               // showing Login again.
-              if (p && (p.role === "dealer" || p.role === "dealer"))
+              if (p && p.role === "dealer")
                 setScreen("dealerHome");
               else if (p && p.role === "reseller") setScreen("resellerHome");
+              else if (p && (p.role === "support" || p.role === "finance"))
+                setScreen("staffHome");
               else if (p && (p.role === "admin" || p.role === "superadmin"))
                 setScreen("adminHome");
               else setScreen("customerHome");
@@ -1544,8 +1546,9 @@ export function AppProvider({ children }) {
     // of arming the exit-app confirmation (see onBackPress's HOME_SCREENS
     // check, which now also skips goBack() outright as a second guard).
     screenHistoryRef.current = [];
-    if (r === "dealer" || r === "dealer") setScreen("dealerHome");
+    if (r === "dealer") setScreen("dealerHome");
     else if (r === "reseller") setScreen("resellerHome");
+    else if (r === "support" || r === "finance") setScreen("staffHome");
     else if (r === "admin" || r === "superadmin") setScreen("adminHome");
     else setScreen("customerHome");
   }, [profile]);
@@ -1652,12 +1655,14 @@ export function AppProvider({ children }) {
         return true;
       }
       setProfile(p);
-      if (p.role === "dealer" || p.role === "dealer") {
+      if (p.role === "dealer") {
         setDealerTab("pending");
         setScreen("dealerHome");
       } else if (p.role === "reseller") {
         setResellerTab("pending");
         setScreen("resellerHome");
+      } else if (p.role === "support" || p.role === "finance") {
+        setScreen("staffHome");
       } else if (p.role === "admin" || p.role === "superadmin") {
         setAdminTab("all");
         setScreen("adminHome");
@@ -1692,12 +1697,14 @@ export function AppProvider({ children }) {
         return true;
       }
       setProfile(p);
-      if (p.role === "dealer" || p.role === "dealer") {
+      if (p.role === "dealer") {
         setDealerTab("pending");
         setScreen("dealerHome");
       } else if (p.role === "reseller") {
         setResellerTab("pending");
         setScreen("resellerHome");
+      } else if (p.role === "support" || p.role === "finance") {
+        setScreen("staffHome");
       } else if (p.role === "admin" || p.role === "superadmin") {
         setAdminTab("all");
         setScreen("adminHome");
@@ -1749,12 +1756,14 @@ export function AppProvider({ children }) {
       }
       setPendingGooglePhone(false);
       setProfile(p);
-      if (p.role === "dealer" || p.role === "dealer") {
+      if (p.role === "dealer") {
         setDealerTab("pending");
         setScreen("dealerHome");
       } else if (p.role === "reseller") {
         setResellerTab("pending");
         setScreen("resellerHome");
+      } else if (p.role === "support" || p.role === "finance") {
+        setScreen("staffHome");
       } else if (p.role === "admin" || p.role === "superadmin") {
         setAdminTab("all");
         setScreen("adminHome");
@@ -1833,12 +1842,14 @@ export function AppProvider({ children }) {
 
         setPendingDeviceVerification(null);
         setProfile(p);
-        if (p.role === "dealer" || p.role === "dealer") {
+        if (p.role === "dealer") {
           setDealerTab("pending");
           setScreen("dealerHome");
         } else if (p.role === "reseller") {
           setResellerTab("pending");
           setScreen("resellerHome");
+        } else if (p.role === "support" || p.role === "finance") {
+          setScreen("staffHome");
         } else if (p.role === "admin" || p.role === "superadmin") {
           setAdminTab("all");
           setScreen("adminHome");

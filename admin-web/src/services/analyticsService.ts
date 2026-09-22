@@ -88,7 +88,7 @@ export interface UserStats {
 }
 
 async function getUserStats(): Promise<UserStats> {
-  const roles = ['customer', 'dealer', 'subdealer', 'reseller', 'admin', 'superadmin'];
+  const roles = ['customer', 'dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin'];
   const [total, verified, ...byRole] = await Promise.all([
     countOf('users'),
     countOf('users', where('verified', '==', true)),

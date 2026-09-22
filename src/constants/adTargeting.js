@@ -19,6 +19,8 @@ export const AD_USER_TYPES = {
   CUSTOMER: 'customer',
   DEALER: 'dealer',
   RESELLER: 'reseller',
+  SUPPORT: 'support',
+  FINANCE: 'finance',
   ADMIN: 'admin',
   SUPERADMIN: 'superadmin',
 };
@@ -27,6 +29,8 @@ export const AD_USER_TYPE_LIST = [
   AD_USER_TYPES.CUSTOMER,
   AD_USER_TYPES.DEALER,
   AD_USER_TYPES.RESELLER,
+  AD_USER_TYPES.SUPPORT,
+  AD_USER_TYPES.FINANCE,
   AD_USER_TYPES.ADMIN,
   AD_USER_TYPES.SUPERADMIN,
 ];

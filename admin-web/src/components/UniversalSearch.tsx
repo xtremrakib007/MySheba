@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Command, Search, Sparkles } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { canAccess } from '../routes/navConfig';
 
 type SearchItem = { label: string; description: string; path: string; keywords?: string; group: string };
 
@@ -39,16 +41,18 @@ const ITEMS: SearchItem[] = [
 
 export default function UniversalSearch() {
   const navigate = useNavigate();
+  const { profile } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
 
   const results = useMemo(() => {
+    const allowed = ITEMS.filter((item) => canAccess(item.path, profile?.role));
     const q = query.trim().toLowerCase();
-    if (!q) return ITEMS.slice(0, 10);
-    return ITEMS.filter((item) => `${item.label} ${item.description} ${item.keywords ?? ''} ${item.group}`.toLowerCase().includes(q)).slice(0, 12);
-  }, [query]);
+    if (!q) return allowed.slice(0, 10);
+    return allowed.filter((item) => `${item.label} ${item.description} ${item.keywords ?? ''} ${item.group}`.toLowerCase().includes(q)).slice(0, 12);
+  }, [query, profile?.role]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

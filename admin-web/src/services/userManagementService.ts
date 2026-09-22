@@ -18,8 +18,11 @@ import { db, functions } from '../firebase/config';
 import type { AdminRole } from '../contexts/AuthContext';
 
 export type UserRole = 'customer' | 'dealer' | 'reseller' | AdminRole;
-export const ALL_ROLES: UserRole[] = ['customer', 'dealer', 'reseller', 'admin', 'superadmin'];
-export const ROLE_RANK: Record<UserRole, number> = { customer: 0, dealer: 1, reseller: 2, admin: 3, superadmin: 4 };
+// Appointing staff is a superadmin act, matching functions/userManagement.js's
+// ROLE_PERMISSIONS - an admin manages customers and operators only.
+const SUPERADMIN_ONLY_ROLES: UserRole[] = ['support', 'finance', 'admin'];
+export const ALL_ROLES: UserRole[] = ['customer', 'dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin'];
+export const ROLE_RANK: Record<UserRole, number> = { customer: 0, dealer: 1, reseller: 2, support: 3, finance: 3, admin: 4, superadmin: 5 };
 
 /** Older user documents wrote the customer role as 'user'. */
 function normalizeRole(value: unknown): UserRole {
@@ -29,7 +32,9 @@ function normalizeRole(value: unknown): UserRole {
 }
 
 export function assignableRoles(actingRole: AdminRole): UserRole[] {
-  return ALL_ROLES.filter((r) => actingRole === 'superadmin' ? r !== 'superadmin' : ROLE_RANK[r] < ROLE_RANK.admin);
+  if (actingRole === 'superadmin') return ALL_ROLES.filter((r) => r !== 'superadmin');
+  if (actingRole !== 'admin') return [];
+  return ALL_ROLES.filter((r) => r !== 'superadmin' && !SUPERADMIN_ONLY_ROLES.includes(r));
 }
 
 export function canEditTarget(actingRole: AdminRole, targetRole: UserRole): boolean {
@@ -123,11 +128,11 @@ export async function updateUserRole(uid: string, role: UserRole): Promise<void>
   const callable = httpsCallable(functions, 'manageUser');
 
   if (role === currentRole) return;
-  if (role === 'customer' && ['dealer', 'admin', 'reseller'].includes(currentRole)) {
+  if (role === 'customer' && ['dealer', 'admin', 'reseller', 'support', 'finance'].includes(currentRole)) {
     await callable({ action: 'downgradeRole', targetUid: uid });
     return;
   }
-  if (currentRole === 'customer' && ['dealer', 'admin', 'reseller'].includes(role)) {
+  if (currentRole === 'customer' && ['dealer', 'admin', 'reseller', 'support', 'finance'].includes(role)) {
     await callable({ action: 'setRole', targetUid: uid, newRole: role });
     return;
   }

@@ -22,12 +22,12 @@ function phoneToEmail(phone) { return `${normalizePhone(phone)}@${APP_EMAIL_DOMA
 const ROLE_PERMISSIONS = {
   dealer: { canCreate: ['customer'], canUpgradeTo: [] },
   admin: { canCreate: ['customer', 'dealer', 'reseller'], canUpgradeTo: ['dealer', 'reseller'] },
-  superadmin: { canCreate: ['customer', 'dealer', 'admin', 'reseller'], canUpgradeTo: ['dealer', 'admin', 'reseller'] },
+  superadmin: { canCreate: ['customer', 'dealer', 'admin', 'reseller', 'support', 'finance'], canUpgradeTo: ['dealer', 'admin', 'reseller', 'support', 'finance'] },
 };
 const DOWNGRADE_PERMISSIONS = {
   dealer: { dealer: 'customer' },
   admin: { dealer: 'customer', reseller: 'customer' },
-  superadmin: { dealer: 'customer', admin: 'dealer', reseller: 'customer' },
+  superadmin: { dealer: 'customer', admin: 'dealer', reseller: 'customer', support: 'customer', finance: 'customer' },
 };
 
 async function getCallerProfile(uid) {

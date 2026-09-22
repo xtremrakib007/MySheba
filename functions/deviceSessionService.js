@@ -32,7 +32,7 @@ const otpHash = (value) => crypto.createHash('sha256').update(String(value).trim
 const safeEqualHash = (leftHex, rightHex) => { try { const left = Buffer.from(String(leftHex || ''), 'hex'); const right = Buffer.from(String(rightHex || ''), 'hex'); return left.length > 0 && left.length === right.length && crypto.timingSafeEqual(left, right); } catch { return false; } };
 const sessionId = () => crypto.randomBytes(24).toString('hex');
 const userRef = (db, uid) => db.collection('users').doc(uid);
-const isStaffRole = (role) => ['admin', 'superadmin', 'dealer', 'reseller'].includes(role);
+const isStaffRole = (role) => ['admin', 'superadmin', 'support', 'finance', 'dealer', 'reseller'].includes(role);
 
 async function resolveUidForVerification(request, db) {
   if (request.auth?.uid) { const requestedUid = String(request.data?.uid || '').trim(); if (requestedUid && requestedUid !== request.auth.uid) throw new HttpsError('permission-denied', 'The verification account does not match the signed-in account.'); return request.auth.uid; }

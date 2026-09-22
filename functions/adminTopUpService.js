@@ -4,7 +4,8 @@ const { logAudit, logServerError } = require('./logService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const MAX_AMOUNT = 100000;
-const ADMIN_ROLES = ['admin', 'superadmin'];
+// Finance staff top accounts up; role/feature administration stays with admins.
+const ADMIN_ROLES = ['admin', 'superadmin', 'finance'];
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 
 function activeAccount(user) {

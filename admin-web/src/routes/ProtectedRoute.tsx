@@ -1,15 +1,12 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { canAccess, landingPathFor } from '../routes/navConfig';
 import AppShell from '../layouts/AppShell';
 
-// These screens read superadmin-scoped operational/governance data. Keep the
-// route-level check here as defense-in-depth even if a route is accidentally
-// moved outside the nested SuperadminRoute group in App.tsx.
-const SUPERADMIN_ONLY_PATHS = new Set([
-  '/activity-center',
-  '/governance',
-]);
-
+// Every screen is gated by navConfig's PATH_ROLES, so a support agent or a
+// finance user who types a URL they may not open is sent to their own landing
+// page rather than a screen that would fail on permission-denied reads.
+// Firestore rules enforce the same boundaries server-side.
 export default function ProtectedRoute() {
   const { profile, loading } = useAuth();
   const location = useLocation();
@@ -26,8 +23,8 @@ export default function ProtectedRoute() {
     return <Navigate to="/login" replace />;
   }
 
-  if (SUPERADMIN_ONLY_PATHS.has(location.pathname) && profile.role !== 'superadmin') {
-    return <Navigate to="/" replace />;
+  if (!canAccess(location.pathname, profile.role)) {
+    return <Navigate to={landingPathFor(profile.role)} replace />;
   }
 
   return <AppShell />;

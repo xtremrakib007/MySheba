@@ -55,6 +55,7 @@ import AdPackagesManagementScreen from './src/screens/AdPackagesManagementScreen
 import AdPaymentsManagementScreen from './src/screens/AdPaymentsManagementScreen';
 import TrustedDevicesScreen from './src/screens/TrustedDevicesScreen';
 import PrinterSettingsScreen from './src/screens/PrinterSettingsScreen';
+import StaffHomeScreen from './src/screens/StaffHomeScreen';
 import DocumentTypeScreen from './src/screens/DocumentTypeScreen';
 import AddDocumentScreen from './src/screens/AddDocumentScreen';
 import DocumentDetailsScreen from './src/screens/DocumentDetailsScreen';
@@ -132,6 +133,7 @@ function Root() {
       {renderedScreen === 'service' && <ServiceScreen />}
       {renderedScreen === 'dealerHome' && <DealerHomeScreen />}
       {renderedScreen === 'resellerHome' && <ResellerHomeScreen />}
+      {renderedScreen === 'staffHome' && <StaffHomeScreen />}
       {renderedScreen === 'adminHome' && ((profile?.role === 'admin' || profile?.role === 'superadmin') && !adminViewingSection ? <AdminFeaturesScreen /> : <AdminHomeScreen />)}
       {renderedScreen === 'webview' && <WebViewScreen />}
       {renderedScreen === 'buspicker' && <BusPickerScreen />}

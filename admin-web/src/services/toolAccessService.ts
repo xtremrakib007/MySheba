@@ -13,7 +13,7 @@ const DOC_REF = doc(db, 'settings', 'featureAccess');
 
 export const FEATURE_DEFS = [
   { key: 'userManagement', icon: '🧑‍💼', name: 'User Mgmt', defaultRoles: ['dealer', 'admin', 'superadmin'] },
-  { key: 'transferPoints', icon: '💸', name: 'Transfer Pts', defaultRoles: ['dealer', 'subdealer', 'admin', 'superadmin'] },
+  { key: 'transferPoints', icon: '💸', name: 'Transfer Pts', defaultRoles: ['admin', 'superadmin'] },
   { key: 'chatReports', icon: '🚩', name: 'Chat Reports', defaultRoles: ['admin', 'superadmin'] },
   { key: 'verificationManagement', icon: '🪪', name: 'Verify Requests', defaultRoles: ['admin', 'superadmin'] },
   { key: 'adminBusinessManagement', icon: '🏢', name: 'Business Profiles', defaultRoles: ['admin', 'superadmin'] },
@@ -25,11 +25,12 @@ export type FeatureKey = (typeof FEATURE_DEFS)[number]['key'];
 // superadmin excluded on purpose (always has full access, never
 // toggleable off by accident); customer excluded (separate grid this
 // screen never touches).
-export const TOGGLEABLE_ROLES = ['subdealer', 'dealer', 'reseller', 'admin'] as const;
+export const TOGGLEABLE_ROLES = ['dealer', 'reseller', 'support', 'finance', 'admin'] as const;
 export type ToggleableRole = (typeof TOGGLEABLE_ROLES)[number];
 
 export const ROLE_LABEL: Record<ToggleableRole, string> = {
-  subdealer: 'Sub Dealer',
+  support: 'Support Agent',
+  finance: 'Finance',
   dealer: 'Dealer',
   reseller: 'Reseller',
   admin: 'Admin',

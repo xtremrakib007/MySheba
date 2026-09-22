@@ -17,7 +17,7 @@ import {
   type OtpMethod,
 } from '../services/deviceAuthService';
 
-export type AdminRole = 'admin' | 'superadmin';
+export type AdminRole = 'admin' | 'superadmin' | 'support' | 'finance';
 
 interface AdminProfile {
   uid: string;
@@ -45,7 +45,7 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-const ADMIN_ROLES: AdminRole[] = ['admin', 'superadmin'];
+const ADMIN_ROLES: AdminRole[] = ['admin', 'superadmin', 'support', 'finance'];
 
 function normalizeRole(value: unknown): AdminRole | null {
   if (typeof value !== 'string') return null;

@@ -6,7 +6,7 @@ const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const ADMIN_ROLES = ['admin', 'superadmin'];
-const AUDIENCES = ['all', 'customer', 'dealer', 'reseller', 'admin', 'superadmin'];
+const AUDIENCES = ['all', 'customer', 'dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin'];
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const MAX_TITLE_LENGTH = 120;
 const MAX_BODY_LENGTH = 2000;

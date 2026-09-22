@@ -1,4 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
+import type { AdminRole } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Users, SlidersHorizontal, BadgeCheck, ShieldAlert,
   MessageCircle, LifeBuoy, BarChart3, Tag, Wallet, Megaphone, BellRing, LayoutGrid, Layers,
@@ -21,6 +22,76 @@ export interface NavGroup {
   accent: 'primary' | 'secondary' | 'warning' | 'danger' | 'success' | 'purple';
   items: NavItem[];
 }
+
+// ---------------------------------------------------------------------
+// Who may open what.
+//
+// The panel serves four staff roles. A support agent works the support
+// queues and sees no user records, money or configuration; a finance user
+// works the money screens but performs no role, feature or security
+// administration; admins get everything that is not superadmin governance.
+// Anything not listed here is admin + superadmin, which keeps a newly added
+// screen private until someone decides otherwise.
+// ---------------------------------------------------------------------
+
+const ADMINS: AdminRole[] = ['admin', 'superadmin'];
+const EVERY_ROLE: AdminRole[] = ['admin', 'superadmin', 'support', 'finance'];
+const SUPERADMIN: AdminRole[] = ['superadmin'];
+
+export const PATH_ROLES: Record<string, AdminRole[]> = {
+  '/': EVERY_ROLE,
+
+  // Support queues
+  '/support': [...ADMINS, 'support'],
+  '/support-messages': [...ADMINS, 'support'],
+  '/support-operations': [...ADMINS, 'support'],
+  '/inquiries': [...ADMINS, 'support'],
+  '/announcements': [...ADMINS, 'support'],
+
+  // Money
+  '/transactions': [...ADMINS, 'finance'],
+  '/financial': [...ADMINS, 'finance'],
+  '/wallet-settlement': [...ADMINS, 'finance'],
+  '/fraud-risk': [...ADMINS, 'finance'],
+  '/reports': [...ADMINS, 'finance'],
+  '/analytics': [...ADMINS, 'finance'],
+  '/topup': ['superadmin', 'finance'],
+
+  // Superadmin governance
+  '/governance': SUPERADMIN,
+  '/platform-control': SUPERADMIN,
+  '/role-permissions': SUPERADMIN,
+  '/tool-access': SUPERADMIN,
+  '/audit': SUPERADMIN,
+  '/activity-center': SUPERADMIN,
+  '/system-health': SUPERADMIN,
+  '/devices': SUPERADMIN,
+  '/recharge-pins': SUPERADMIN,
+  '/financial-risk': SUPERADMIN,
+};
+
+export function rolesForPath(path: string): AdminRole[] {
+  return PATH_ROLES[path] ?? ADMINS;
+}
+
+export function canAccess(path: string, role: AdminRole | undefined): boolean {
+  return Boolean(role) && rolesForPath(path).includes(role as AdminRole);
+}
+
+/** Where a role lands after signing in, and where it is sent if it opens
+ * something it may not see. */
+export function landingPathFor(role: AdminRole | undefined): string {
+  if (role === 'support') return '/support';
+  if (role === 'finance') return '/transactions';
+  return '/';
+}
+
+export const ROLE_LABELS: Record<AdminRole, string> = {
+  superadmin: 'Superadmin',
+  admin: 'Admin',
+  support: 'Support Agent',
+  finance: 'Finance',
+};
 
 export const navGroups: NavGroup[] = [
   { label: 'Overview', accent: 'primary', items: [
@@ -53,6 +124,7 @@ export const navGroups: NavGroup[] = [
   { label: 'Finance & Risk', accent: 'danger', items: [
     { label: 'Financial Control', path: '/financial', icon: Banknote, enabled: true },
     { label: 'Wallet Settlement', path: '/wallet-settlement', icon: Wallet, enabled: true },
+    { label: 'Point Top-Up', path: '/topup', icon: Coins, enabled: true },
     { label: 'Fraud & Risk', path: '/fraud-risk', icon: ShieldAlert, enabled: true },
     { label: 'Financial Risk Controls', path: '/financial-risk', icon: Lock, superadminOnly: true, enabled: true },
   ] },
@@ -87,7 +159,6 @@ export const navGroups: NavGroup[] = [
     { label: 'Activity Center', path: '/activity-center', icon: Activity, superadminOnly: true, enabled: true },
     { label: 'System Health', path: '/system-health', icon: Activity, superadminOnly: true, enabled: true },
     { label: 'Device Sessions', path: '/devices', icon: Smartphone, superadminOnly: true, enabled: true },
-    { label: 'Point Top-Up', path: '/topup', icon: Coins, superadminOnly: true, enabled: true },
     { label: 'Recharge PINs', path: '/recharge-pins', icon: Ticket, superadminOnly: true, enabled: true },
   ] },
 ];

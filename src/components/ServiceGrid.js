@@ -47,6 +47,22 @@ const STAFF_SERVICES = {
     { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount' },
     { key: 'profile', icon: '🪪', name: 'Profile', kind: 'profile' },
   ],
+  // Support Agent: support queues only - no orders, money or configuration.
+  support: [
+    { key: 'adminSupport', icon: '🎧', name: 'Support Inbox', kind: 'staffSupport' },
+    { key: 'inquiries', icon: '🗺️', name: 'Inquiries', kind: 'staffInquiries' },
+    { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount' },
+    { key: 'profile', icon: '🪪', name: 'Profile', kind: 'profile' },
+  ],
+  // Finance: payments, reconciliation and reporting. Order handling belongs
+  // to the operators, so there is no queue tile here.
+  finance: [
+    { key: 'history', icon: '📋', name: 'Transactions', kind: 'history' },
+    { key: 'topup', icon: '💰', name: 'Top-Ups', kind: 'adminTopup' },
+    { key: 'reports', icon: '📊', name: 'Reports', kind: 'staffReports' },
+    { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount' },
+    { key: 'profile', icon: '🪪', name: 'Profile', kind: 'profile' },
+  ],
   superadmin: [
     { key: 'adminFeatures', icon: '⚙️', name: 'Superadmin Features', kind: 'adminFeatures' },
     { key: 'topup', icon: '💰', name: 'Top-Ups', kind: 'adminTopup' },
@@ -94,6 +110,9 @@ export function useServiceAction() {
     if (s.kind === 'dealerFeatures') return setScreen('dealerFeatures');
     if (s.kind === 'resellerFeatures') return setScreen('resellerFeatures');
     if (s.kind === 'adminFeatures') return setScreen('adminFeatures');
+    if (s.kind === 'staffSupport') return setScreen('adminSupport');
+    if (s.kind === 'staffInquiries') return setScreen('adminHome');
+    if (s.kind === 'staffReports') return setScreen('reports');
     return startService(s.key);
   };
 }
@@ -105,7 +124,7 @@ export default function ServiceGrid() {
   const { webViewBusy, profile } = useApp();
   const handlePress = useServiceAction();
   const role = profile?.role || 'customer';
-  const isStaff = ['dealer', 'reseller', 'admin', 'superadmin'].includes(role);
+  const isStaff = ['dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin'].includes(role);
   const services = isStaff ? (STAFF_SERVICES[role] || STAFF_SERVICES.admin) : CUSTOMER_SERVICES;
   return <View>
     <View style={styles.sectionHead}><Text style={[styles.sectionTitle, { color: colors.text || '#222' }]}>{isStaff ? 'Management Dashboard' : 'Services'}</Text><Text style={[styles.sectionSubtitle, { color: colors.muted || '#6B7280' }]}>{isStaff ? 'Manage transactions, accounts and operations' : 'Banking • Remittance • Payments • Travel'}</Text></View>
