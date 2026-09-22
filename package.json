@@ -10,7 +10,8 @@
     "bump-version": "node scripts/bump-version.js",
     "audit:nav": "node scripts/audit-navigation.js",
     "build:apk": "eas build -p android --profile preview",
-    "build:aab": "eas build -p android --profile production"
+    "build:aab": "eas build -p android --profile production",
+    "test:rules": "node scripts/test-firestore-rules.mjs"
   },
   "dependencies": {
     "expo": "~53.0.0",
@@ -55,7 +56,8 @@
     "@babel/core": "^7.24.0",
     "@types/react": "~19.0.10",
     "babel-plugin-transform-remove-console": "^6.9.4",
-    "typescript": "~5.8.3"
+    "typescript": "~5.8.3",
+    "@firebase/rules-unit-testing": "^5.0.0"
   },
   "expo": {
     "doctor": {
