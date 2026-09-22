@@ -13,6 +13,7 @@ const admin = require('firebase-admin');
 const { assignUniqueUserId } = require('./userId');
 const { logAudit, logServerError } = require('./logService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+const { hasCapability } = require('./accessControl');
 
 const APP_EMAIL_DOMAIN = 'mysheba.app';
 
@@ -64,6 +65,9 @@ exports.manageUser = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (reque
   const perms = ROLE_PERMISSIONS[callerRole];
   if (!perms) throw new HttpsError('permission-denied', 'Your account cannot manage users.');
   const db = admin.firestore();
+  if (callerRole === 'admin' && !(await hasCapability(db, callerUid, callerProfile, 'users'))) {
+    throw new HttpsError('permission-denied', 'Your account does not manage users.');
+  }
   const data = request.data || {};
   const action = data.action;
 

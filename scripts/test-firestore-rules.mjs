@@ -12,7 +12,7 @@
 // none of the suspended/inactive/disabled/mergedInto flags, which is exactly
 // the case that used to deny every such account.
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { readFileSync } from 'node:fs';
 
 const env = await initializeTestEnvironment({
@@ -30,6 +30,13 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(db, 'users/super1'), { role: 'superadmin', name: 'Super' });
   await setDoc(doc(db, 'users/support1'), { role: 'support', name: 'Support Agent' });
   await setDoc(doc(db, 'users/finance1'), { role: 'finance', name: 'Finance' });
+  await setDoc(doc(db, 'users/admin2'), { role: 'admin', name: 'Admin granted orders+finance' });
+  await setDoc(doc(db, 'accessOverrides/admin2'), { grant: ['orders', 'finance'], revoke: [] });
+  await setDoc(doc(db, 'users/admin3'), { role: 'admin', name: 'Admin without users' });
+  await setDoc(doc(db, 'accessOverrides/admin3'), { grant: [], revoke: ['users'] });
+  await setDoc(doc(db, 'users/finance2'), { role: 'finance', name: 'Finance revoked' });
+  await setDoc(doc(db, 'accessOverrides/finance2'), { grant: [], revoke: ['finance'] });
+  await setDoc(doc(db, 'accessOverrides/super1'), { grant: [], revoke: ['support', 'orders', 'finance', 'users', 'settings', 'reports'] });
   await setDoc(doc(db, 'notes/n1'), { userId: 'customer1', text: 'mine' });
   await setDoc(doc(db, 'myDocuments/d1'), { userId: 'customer1', title: 'passport' });
   await setDoc(doc(db, 'rechargePins/p1'), { pin: '1234', status: 'available' });
@@ -42,6 +49,8 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(db, 'inquiries/i1'), { customerId: 'customer1', type: 'flight', status: 'new' });
   await setDoc(doc(db, 'announcements/a1'), { title: 'Notice' });
   await setDoc(doc(db, 'transactions/tx1'), { customerId: 'customer1', service: 'Recharge', status: 'pending', total: 50 });
+  await setDoc(doc(db, 'transactions/tx2'), { customerId: 'customer1', service: 'Recharge', status: 'pending', total: 20 });
+  await setDoc(doc(db, 'transactions/tx3'), { customerId: 'customer1', service: 'Recharge', status: 'pending', total: 30 });
   await setDoc(doc(db, 'topups/tp1'), { userId: 'customer1', points: 100, status: 'pending' });
   await setDoc(doc(db, 'pointTopUps/pt1'), { targetUid: 'customer1', amount: 10 });
 });
@@ -106,7 +115,7 @@ await check('support CANNOT write pricing', 'deny', () => setDoc(doc(as('support
 // ---- finance: money screens, no user administration ----
 await check('finance reads transactions', 'allow', () => getDoc(doc(as('finance1'), 'transactions/tx1')));
 await check('finance CANNOT approve an order', 'deny', () => updateDoc(doc(as('finance1'), 'transactions/tx1'), { approved: true, approvedBy: 'finance1', approvedByRole: 'finance', approvedAt: new Date(), updatedAt: new Date() }));
-await check('admin approves an order', 'allow', () => updateDoc(doc(as('admin1'), 'transactions/tx1'), { approved: true, approvedBy: 'admin1', approvedByName: 'Admin', approvedByRole: 'admin', approvedAt: new Date(), updatedAt: new Date() }));
+await check('default admin CANNOT approve an order', 'deny', () => updateDoc(doc(as('admin1'), 'transactions/tx2'), { approved: true, approvedBy: 'admin1', approvedByName: 'Admin', approvedByRole: 'admin', approvedAt: new Date(), updatedAt: new Date() }));
 await check('finance reads top-ups', 'allow', () => getDoc(doc(as('finance1'), 'topups/tp1')));
 await check('finance reads point top-up history', 'allow', () => getDoc(doc(as('finance1'), 'pointTopUps/pt1')));
 await check('finance looks up a user for top-up', 'allow', () => getDoc(doc(as('finance1'), 'users/customer1')));
@@ -115,6 +124,41 @@ await check('finance CANNOT change feature access', 'deny', () => updateDoc(doc(
 await check('finance CANNOT write pricing', 'deny', () => setDoc(doc(as('finance1'), 'settings/pricing'), { notepadCost: 9 }, { merge: true }));
 await check('finance CANNOT read recharge PINs', 'deny', () => getDoc(doc(as('finance1'), 'rechargePins/p1')));
 await check('finance CANNOT read contact messages', 'deny', () => getDoc(doc(as('finance1'), 'contactMessages/m1')));
+
+// ---- role defaults (built in, per the role sheet) ----
+await check('default admin manages users', 'allow', () => getDoc(doc(as('admin1'), 'users/customer1')));
+await check('default admin reviews KYC', 'allow', () => getDoc(doc(as('admin1'), 'verificationRequests/customer1')).catch((e) => { if (String(e).includes('not-found')) return; throw e; }));
+await check('default admin CANNOT read transactions', 'deny', () => getDoc(doc(as('admin1'), 'transactions/tx1')));
+await check('default admin CANNOT read top-ups', 'deny', () => getDoc(doc(as('admin1'), 'topups/tp1')));
+await check('default admin CANNOT read point top-ups', 'deny', () => getDoc(doc(as('admin1'), 'pointTopUps/pt1')));
+
+// ---- per-user overrides ----
+await check('admin granted orders approves an order', 'allow', () => updateDoc(doc(as('admin2'), 'transactions/tx3'), { approved: true, approvedBy: 'admin2', approvedByName: 'A2', approvedByRole: 'admin', approvedAt: new Date(), updatedAt: new Date() }));
+await check('admin granted finance reads top-ups', 'allow', () => getDoc(doc(as('admin2'), 'topups/tp1')));
+await check('approval must name the approver\'s real role', 'deny', () => updateDoc(doc(as('admin2'), 'transactions/tx2'), { approved: true, approvedBy: 'admin2', approvedByName: 'A2', approvedByRole: 'superadmin', approvedAt: new Date(), updatedAt: new Date() }));
+await check('admin with users revoked CANNOT read users', 'deny', () => getDoc(doc(as('admin3'), 'users/customer1')));
+await check('admin with users revoked still edits settings', 'allow', () => setDoc(doc(as('admin3'), 'settings/pricing'), { notepadCost: 4 }, { merge: true }));
+await check('finance with finance revoked CANNOT read transactions', 'deny', () => getDoc(doc(as('finance2'), 'transactions/tx1')));
+await check('superadmin cannot be restricted by an override', 'allow', () => getDoc(doc(as('super1'), 'transactions/tx1')));
+
+// ---- the access documents are unforgeable from a client ----
+await check('staff reads own override', 'allow', () => getDoc(doc(as('admin2'), 'accessOverrides/admin2')));
+await check("staff CANNOT read another's override", 'deny', () => getDoc(doc(as('admin1'), 'accessOverrides/admin2')));
+await check('admin CANNOT grant themselves access', 'deny', () => setDoc(doc(as('admin1'), 'accessOverrides/admin1'), { grant: ['finance', 'orders'], revoke: [] }));
+await check('admin CANNOT delete their own revokes', 'deny', () => deleteDoc(doc(as('admin3'), 'accessOverrides/admin3')));
+await check('admin CANNOT rewrite role defaults', 'deny', () => setDoc(doc(as('admin1'), 'settings/accessControl'), { roleDefaults: { admin: ['orders', 'finance'] } }));
+await check('superadmin CANNOT write role defaults directly either', 'deny', () => setDoc(doc(as('super1'), 'settings/accessControl'), { roleDefaults: { admin: ['orders'] } }));
+
+// ---- changing a role default takes effect immediately ----
+await env.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), 'settings/accessControl'), { roleDefaults: { admin: ['support', 'users', 'settings', 'reports', 'finance'] } });
+});
+await check('after superadmin adds finance to admin defaults, admin reads top-ups', 'allow', () => getDoc(doc(as('admin1'), 'topups/tp1')));
+await env.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), 'settings/accessControl'), { roleDefaults: { support: [] } });
+});
+await check('after superadmin empties support defaults, support loses tickets', 'deny', () => getDoc(doc(as('support1'), 'supportTickets/t1')));
+await check('...and admin falls back to built-in defaults (no finance)', 'deny', () => getDoc(doc(as('admin1'), 'topups/tp1')));
 
 await check('suspended customer is blocked', 'deny', () => getDoc(doc(as('suspended1'), 'settings/pricing')));
 await check('signed-in user with no profile is blocked', 'deny', () => getDoc(doc(as('ghost'), 'settings/pricing')));

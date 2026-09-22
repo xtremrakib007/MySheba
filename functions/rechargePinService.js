@@ -20,15 +20,30 @@ const admin = require('firebase-admin');
 const crypto = require('crypto');
 const { logAudit, logServerError } = require('./logService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+const { hasCapability } = require('./accessControl');
 
 const COLLECTION = 'rechargePins';
-const STAFF_ROLES = ['dealer', 'reseller', 'admin', 'superadmin'];
+const OPERATOR_ROLES = ['dealer', 'reseller'];
 const MAX_BATCH = 500;
 const MAX_PIN_LENGTH = 64;
 const MAX_SERIAL_LENGTH = 64;
 
 function activeAccount(user) {
   return user && user.suspended !== true && user.inactive !== true && user.disabled !== true && !user.mergedInto;
+}
+
+/** An operator by role, or staff holding one of `capabilities`. */
+async function requireOperatorOrCapability(request, capabilities) {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
+  const db = admin.firestore();
+  const snap = await db.collection('users').doc(request.auth.uid).get();
+  const profile = snap.exists ? snap.data() : null;
+  if (!profile || !activeAccount(profile)) throw new HttpsError('permission-denied', 'This account is not active.');
+  if (OPERATOR_ROLES.includes(profile.role)) return { db, uid: request.auth.uid, profile };
+  for (const cap of capabilities) {
+    if (await hasCapability(db, request.auth.uid, profile, cap)) return { db, uid: request.auth.uid, profile };
+  }
+  throw new HttpsError('permission-denied', 'Your role cannot manage recharge PINs.');
 }
 
 async function requireRole(request, roles) {
@@ -132,7 +147,7 @@ exports.uploadRechargePins = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asyn
  * transaction, where the customer and the operator can both see it.
  */
 exports.issueRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
-  const { db, uid, profile } = await requireRole(request, STAFF_ROLES);
+  const { db, uid, profile } = await requireOperatorOrCapability(request, ['orders']);
   const transactionId = cleanText(request.data?.transactionId, 128);
   if (!transactionId) throw new HttpsError('invalid-argument', 'transactionId is required.');
 
@@ -241,7 +256,7 @@ exports.voidRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (
  * codes themselves stay on the server.
  */
 exports.rechargePinStock = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
-  const { db } = await requireRole(request, STAFF_ROLES);
+  const { db } = await requireOperatorOrCapability(request, ['orders', 'finance']);
   const snap = await db.collection(COLLECTION).where('status', '==', 'available').get();
   const now = Date.now();
   const buckets = new Map();
