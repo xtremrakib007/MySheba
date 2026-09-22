@@ -13,14 +13,13 @@ import * as supportContactService from '../firebase/supportContactService';
 
 const SUPPORT_EMAIL = 'info.mysheba@gmail.com';
 const REMEMBER_KEY = 'mysheba_remembered_phone';
-const BRAND_TEAL = '#00A99D';
-const BRAND_BLUE = '#1A73E8';
+
 const BRAND_NAVY = '#0B2447';
 
 // Phone + password only. The account role determines the dashboard after login.
 // New-device verification is handled by the existing device-session flow.
 export default function LoginScreen() {
-  const { colors } = useTheme();
+  const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
   const { t } = useLanguage();
   const { setScreen, doLogin, authError, authBusy } = useApp();
@@ -71,13 +70,13 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.screen}>
-      <LinearGradient colors={[BRAND_TEAL, BRAND_BLUE]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.topSwoosh} />
+      <LinearGradient colors={brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.topSwoosh} />
       <View style={styles.topDots}>
         {Array.from({ length: 12 }).map((_, i) => <View key={i} style={styles.dot} />)}
       </View>
       <View style={styles.bottomWaveLight} />
       <View style={styles.bottomWaveMid} />
-      <LinearGradient colors={[BRAND_TEAL, BRAND_BLUE]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.bottomWaveDark} />
+      <LinearGradient colors={brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.bottomWaveDark} />
       <View style={styles.bottomDots}>
         {Array.from({ length: 12 }).map((_, i) => <View key={i} style={styles.dot} />)}
       </View>
@@ -130,7 +129,7 @@ export default function LoginScreen() {
             {!!authError && <Text style={styles.errorText}>{authError}</Text>}
 
             <TouchableOpacity activeOpacity={0.85} onPress={onSignIn} disabled={authBusy}>
-              <LinearGradient colors={[BRAND_TEAL, BRAND_BLUE]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.loginBtn, authBusy && styles.btnDisabled]}>
+              <LinearGradient colors={brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.loginBtn, authBusy && styles.btnDisabled]}>
                 {authBusy ? <ActivityIndicator color="white" /> : <><Text style={styles.loginBtnText}>{t('login.login')}</Text><View style={styles.arrowCircle}><Text style={styles.arrowText}>→</Text></View></>}
               </LinearGradient>
             </TouchableOpacity>
@@ -165,13 +164,13 @@ function createStyles(colors) {
     logo: { width: 130, height: 130, marginBottom: 4 },
     brandRow: { flexDirection: 'row', marginBottom: 14 },
     brandDark: { fontSize: 28, fontWeight: '700', color: BRAND_NAVY },
-    brandTeal: { fontSize: 28, fontWeight: '700', color: BRAND_TEAL },
+    brandTeal: { fontSize: 28, fontWeight: '700', color: colors.primary },
     welcome: { fontSize: 22, fontWeight: '700', color: BRAND_NAVY, marginBottom: 8 },
     subtitle: { fontSize: 13, color: '#6B7785', textAlign: 'center', lineHeight: 19 },
     card: { backgroundColor: 'white', marginHorizontal: 18, borderRadius: radius.xl, padding: 22, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 3 },
     label: { fontWeight: '600', fontSize: 13, color: BRAND_NAVY, marginBottom: 8 },
     labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-    forgotLink: { color: BRAND_TEAL, fontSize: 12, fontWeight: '600' },
+    forgotLink: { color: colors.primary, fontSize: 12, fontWeight: '600' },
     phoneRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: 'white', marginBottom: 18, paddingHorizontal: 12 },
     countryChip: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 6 },
     flagEmoji: { fontSize: 16 },
@@ -184,7 +183,7 @@ function createStyles(colors) {
     eyeIcon: { fontSize: 16, marginLeft: 8 },
     rememberRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 8 },
     checkbox: { width: 20, height: 20, borderRadius: 5, borderWidth: 1.5, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
-    checkboxChecked: { backgroundColor: BRAND_TEAL, borderColor: BRAND_TEAL },
+    checkboxChecked: { backgroundColor: colors.primary, borderColor: colors.primary },
     checkboxTick: { color: 'white', fontSize: 12, fontWeight: '700' },
     rememberText: { fontSize: 13, color: BRAND_NAVY },
     errorText: { color: colors.error, fontSize: 12, marginBottom: 12, textAlign: 'center' },
@@ -196,6 +195,6 @@ function createStyles(colors) {
     signupRow: { marginTop: 18, alignItems: 'center' },
     helpRow: { marginTop: 10, alignItems: 'center' },
     signupText: { fontSize: 13, color: '#6B7785' },
-    signupLink: { color: BRAND_TEAL, fontWeight: '700' },
+    signupLink: { color: colors.primary, fontWeight: '700' },
   });
 }

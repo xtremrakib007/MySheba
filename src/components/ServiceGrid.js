@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
-import { radius, shadows } from '../theme/theme';
+import { radius, shadows, fonts } from '../theme/theme';
 import { useLanguage } from '../i18n/LanguageContext';
 
 const CUSTOMER_SERVICES = [
@@ -112,7 +112,7 @@ export default function ServiceGrid() {
 
 const styles = StyleSheet.create({
   sectionHead: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8 },
-  sectionTitle: { fontSize: 17, fontWeight: '800' }, sectionSubtitle: { fontSize: 11, marginTop: 2 },
+  sectionTitle: { fontSize: 19, fontWeight: '700', fontFamily: fonts.serif, letterSpacing: 0.2 }, sectionSubtitle: { fontSize: 11, marginTop: 2 },
   gridCanvas: { marginHorizontal: 10, padding: 10, borderRadius: radius.card },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   item: { width: '23.5%', minHeight: 92, marginBottom: 8, paddingHorizontal: 4, paddingVertical: 9, borderWidth: 1.5, borderRadius: radius.tile, alignItems: 'center', justifyContent: 'center', ...shadows.card },
