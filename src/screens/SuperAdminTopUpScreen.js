@@ -94,8 +94,8 @@ const result = await ImagePicker.launchImageLibraryAsync({
       );
       setAmount(''); setBankName(''); setRefNo(''); setReceiptUri(null);
       showAlert(
-        'Points Credited',
-        `MYR ${formatAmount(amountNum)} (${formatAmount(amountNum)} points) has been credited to your account instantly.`,
+        'Wallet Credited',
+        `MYR ${formatAmount(amountNum)} (${formatAmount(amountNum)} wallet funds) has been credited to your account instantly.`,
         [{ text: 'OK', onPress: goHome }]
       );
     } catch (err) {
@@ -119,7 +119,7 @@ const result = await ImagePicker.launchImageLibraryAsync({
         <View style={styles.balanceCard}>
           <Text style={styles.balanceLabel}>Current Balance</Text>
           <Text style={styles.balanceValue}>MYR {formatAmount(walletBalance)}</Text>
-          <Text style={styles.balanceHint}>1 RM = 1 point · credited instantly, no review needed</Text>
+          <Text style={styles.balanceHint}>credited instantly, no review needed</Text>
         </View>
 
         <FormLabel>Amount (RM)</FormLabel>
