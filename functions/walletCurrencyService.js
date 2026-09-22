@@ -36,7 +36,8 @@ function money(value, currency) {
 }
 
 async function getWalletCurrencyAndFx(db, profile) {
-  const currency = inferWalletCurrency(profile);
+  const explicit = String(profile.walletCurrency || profile.walletBalanceCurrency || '').trim().toUpperCase();
+  const currency = SUPPORTED.has(explicit) ? explicit : 'MYR';
   if (currency === 'MYR') return { currency, buyRate: 1, sellRate: 1, liveRate: 1, rateSource: 'base' };
   const snap = await db.collection('settings').doc('walletExchangeRates').get();
   const pair = snap.exists ? (snap.data()?.pairs?.[currency] || {}) : {};
