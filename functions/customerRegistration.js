@@ -134,6 +134,7 @@ exports.registerWithDealerCode = onCall({ enforceAppCheck: true }, async (reques
       email: normalizedEmail,
       role: 'customer',
       walletBalance: 0,
+      walletCurrency: require('./walletCurrencyService').CURRENCY_BY_DIAL[String(dialCode || '+60').replace(/[^0-9]/g, '')] || 'MYR',
       notifPrefs: { pushEnabled: true, emailEnabled: true, rateAlerts: false },
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
