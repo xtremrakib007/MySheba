@@ -8,9 +8,8 @@ import RoyalIcon from './RoyalIcon';
 
 const CUSTOMER_SERVICES = [
   // Money & connectivity
-  { key: 'recharge', icon: 'recharge', name: 'Recharge', kind: 'service' },
+  { key: 'recharge', icon: 'recharge', name: 'Recharge (Voice & Internet)', kind: 'service' },
   { key: 'internet', icon: 'internet', name: 'Internet & Data', kind: 'service' },
-  { key: 'rechargeVoice', icon: 'recharge', name: 'Voice Recharge', kind: 'service' },
   { key: 'rechargePin', icon: 'recharge', name: 'PIN Generate', kind: 'rechargePin' },
   { key: 'billpayment', icon: 'billpayment', name: 'Bill Payment', kind: 'service' },
   { key: 'mobilebanking', icon: 'mobilebanking', name: 'Mobile Banking', kind: 'service' },
