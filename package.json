@@ -8,7 +8,7 @@
     "android": "expo run:android",
     "prebuild": "expo prebuild",
     "bump-version": "node scripts/bump-version.js",
-    "build:apk": "npm run bump-version && eas build -p android --profile preview",
+    "build:apk": "npm run bump-version && eas build -p android --profile production-apk",
     "build:aab": "npm run bump-version && eas build -p android --profile production",
     "audit:functions": "node --check functions/*.js",
     "test:api-provider": "node scripts/test-api-provider-service.js",
