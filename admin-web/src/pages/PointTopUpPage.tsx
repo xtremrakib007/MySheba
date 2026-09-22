@@ -66,7 +66,7 @@ export default function PointTopUpPage() {
     setSuccess(null);
     try {
       await topUpPoints(selected, amt, note);
-      setSuccess(`Added ${amt} points to ${selected.name}.`);
+      setSuccess(`Added ${amt} funds to ${selected.name}.`);
       setSelected((prev) => (prev ? { ...prev, walletBalance: prev.walletBalance + amt } : prev));
       setResults((prev) =>
         prev.map((u) =>
@@ -86,9 +86,9 @@ export default function PointTopUpPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold">Point Top-Up</h1>
+      <h1 className="text-2xl font-bold">Wallet Top-Up</h1>
       <p className="mt-1 text-sm text-[var(--color-ink-soft)]">
-        Add points to a dealer or reseller's wallet balance. Superadmin only.
+        Add funds to a dealer or reseller's wallet balance. Superadmin only.
       </p>
 
       {error && (
