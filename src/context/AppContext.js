@@ -229,7 +229,14 @@ export function AppProvider({ children }) {
   // hardware back should never be able to land here again (there's no valid
   // "go back to login" while signed in), so they're never pushed onto the
   // back-history stack below.
-  const PRE_AUTH_SCREENS = ["login", "register", "deviceVerify", "googlePhone"];
+  // Screens a signed-out user is allowed to be on. Anything else is
+  // bounced back to "login" by the guard effect below, so a screen missing
+  // from here is unreachable before sign-in: setScreen puts it up and the
+  // guard immediately takes it down again, which looks from the outside
+  // like the button doing nothing at all. That is what kept
+  // "forgotPassword" unreachable - it is reached from the login screen, so
+  // by definition there is no authUser yet.
+  const PRE_AUTH_SCREENS = ["login", "register", "forgotPassword", "deviceVerify", "googlePhone"];
 
   useEffect(() => {
     const prev = prevScreenRef.current;
