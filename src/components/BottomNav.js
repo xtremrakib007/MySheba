@@ -61,9 +61,15 @@ export default function BottomNav() {
   );
 }
 
+// The divider uses colors.border, not colors.accentLine. accentLine is a
+// highlight token: #D9FFF0 on a near-white card in light and #A6F5D2 on
+// #0B2226 in dark, which measures 1.07:1 one way and 13.07:1 the other. As
+// the nav's top edge that reads as invisible in light and as a glowing
+// hairline in dark. border is defined per mode and lands at 1.34:1 and
+// 3.07:1 - present in both, loud in neither.
 function createStyles(colors) {
   return StyleSheet.create({
-    nav: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-end', paddingTop: 6, paddingBottom: 10, paddingHorizontal: 4, backgroundColor: colors.card, borderTopWidth: 1.5, borderTopColor: colors.accentLine },
+    nav: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-end', paddingTop: 6, paddingBottom: 10, paddingHorizontal: 4, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border },
     btn: { alignItems: 'center', paddingVertical: 4, paddingHorizontal: 6, flex: 1 },
     btnHome: { marginTop: -12 },
     iconCircle: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', marginBottom: 2, backgroundColor: colors.surface },
