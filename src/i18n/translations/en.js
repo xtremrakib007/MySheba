@@ -31,6 +31,7 @@ export default {
     displayMode: 'Display Mode',
     themeColor: 'Theme Color',
     gridStyle: 'Grid Style',
+    iconStyle: 'Icon Style',
     calls: 'Calls',
     callsSub: 'Ringtone, vibration, and call alerts',
     language: 'Language',
