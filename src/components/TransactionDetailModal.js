@@ -144,11 +144,15 @@ function TxBody({ item, showCost }) {
       )}
       {!!item.pin && (
         <View style={styles.pinBlock}>
-          <Text style={styles.pinLabel}>COLLECTION PIN</Text>
+          {/* A voucher PIN is a real operator reload code, so it is labelled
+              and detailed differently from the 4-digit collection code. */}
+          <Text style={styles.pinLabel}>{item.pinSource === 'voucher' ? 'RECHARGE PIN' : 'COLLECTION PIN'}</Text>
           <View style={styles.pinRow}>
             <Text style={styles.pinValue}>{item.pin}</Text>
             <CopyButton value={item.pin} label="Copy PIN" />
           </View>
+          {!!item.pinSerial && <Text style={styles.pinMeta}>Serial: {item.pinSerial}</Text>}
+          {!!item.pinExpiresAt && <Text style={styles.pinMeta}>Valid until: {formatDate(item.pinExpiresAt)}</Text>}
         </View>
       )}
       <Row label="Order ID" value={item.id} />
@@ -348,6 +352,7 @@ function createStyles(colors) {
     pdfLink: { color: colors.primary, fontWeight: '600', fontSize: 13, marginTop: 10 },
     pinBlock: { backgroundColor: '#FFF8E1', borderRadius: radius.md, padding: 12, marginVertical: 8, borderWidth: 1, borderColor: '#FFE9A8' },
     pinLabel: { fontSize: 10, fontWeight: '700', color: '#B8860B', letterSpacing: 0.5, marginBottom: 6 },
+    pinMeta: { fontSize: 11, color: '#8A6D1B', marginTop: 6 },
     pinRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     pinValue: { fontSize: 22, fontWeight: '700', color: colors.text, letterSpacing: 4 },
     footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },

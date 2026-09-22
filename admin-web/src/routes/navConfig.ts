@@ -5,7 +5,7 @@ import {
   CreditCard, Coins, Smartphone, PercentCircle, Receipt, Plane, Send, Building2, LineChart, Lock,
   Activity, Search, TriangleAlert, ClipboardList, Headphones, Mail, BriefcaseBusiness, Banknote,
   ListChecks, UserCog, UserRoundCog,
-  Network, TrendingUp, ScrollText, Settings2, ShieldCheck, Gauge, Workflow,
+  Network, TrendingUp, ScrollText, Settings2, ShieldCheck, Gauge, Workflow, Ticket,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -87,5 +87,6 @@ export const navGroups: NavGroup[] = [
     { label: 'System Health', path: '/system-health', icon: Activity, superadminOnly: true, enabled: true },
     { label: 'Device Sessions', path: '/devices', icon: Smartphone, superadminOnly: true, enabled: true },
     { label: 'Point Top-Up', path: '/topup', icon: Coins, superadminOnly: true, enabled: true },
+    { label: 'Recharge PINs', path: '/recharge-pins', icon: Ticket, superadminOnly: true, enabled: true },
   ] },
 ];

@@ -44,6 +44,7 @@ import CategoriesPage from './pages/CategoriesPage';
 import ModuleSubscriptionsPage from './pages/ModuleSubscriptionsPage';
 import PaymentSettingsPage from './pages/PaymentSettingsPage';
 import PointTopUpPage from './pages/PointTopUpPage';
+import RechargePinsPage from './pages/RechargePinsPage';
 import DeviceSessionsPage from './pages/DeviceSessionsPage';
 import SecurityCenterPage from './pages/SecurityCenterPage';
 import GrowthCenterPage from './pages/GrowthCenterPage';
@@ -132,6 +133,7 @@ export default function App() {
               <Route path="system-health" element={<SystemHealthPage />} />
               <Route path="devices" element={<DeviceSessionsPage />} />
               <Route path="topup" element={<PointTopUpPage />} />
+              <Route path="recharge-pins" element={<RechargePinsPage />} />
               <Route path="financial-risk" element={<FinancialRiskControlsPage />} />
             </Route>
 
