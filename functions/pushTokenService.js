@@ -2,11 +2,11 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 
 function isValidExpoToken(token) {
-  return typeof token === 'string' && token.length <= 256 && /^(Exponent|Expo)PushToken\\[[A-Za-z0-9_-]+\\]$/.test(token);
+  return typeof token === 'string' && token.length <= 256 && /^(Exponent|Expo)PushToken\[[A-Za-z0-9_-]+\]$/.test(token);
 }
 
 function isValidFcmToken(token) {
-  return typeof token === 'string' && token.length >= 20 && token.length <= 4096 && /^[A-Za-z0-9_:\\-.]+$/.test(token);
+  return typeof token === 'string' && token.length >= 20 && token.length <= 4096 && /^[A-Za-z0-9_.:-]+$/.test(token);
 }
 
 function isActive(profile) {
