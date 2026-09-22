@@ -1,6 +1,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const MAX_AMOUNT = 100000;
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
@@ -56,7 +57,7 @@ async function validateReceiptUrl(value, uid) {
   return value;
 }
 
-exports.submitTopupRequest = onCall({ enforceAppCheck: true }, async request => {
+exports.submitTopupRequest = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
   const { uid, requestId } = requireAuth(request); const db = admin.firestore(); const data = request.data || {};
   const amount = validMoney(data.amount); if (amount === null) throw new HttpsError('invalid-argument', 'Enter a valid top-up amount.');
   const method = String(data.method || 'transfer').trim().slice(0, 40), bankName = String(data.bankName || '').trim().slice(0, 120), refNo = String(data.refNo || '').trim().slice(0, 120), receiptUrl = String(data.receiptUrl || '').trim().slice(0, 2048);

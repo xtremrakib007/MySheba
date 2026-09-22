@@ -2,6 +2,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logAdAudit, logServerError } = require('./logService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const AD_SETTINGS_COLLECTION = 'ad_settings';
 const AD_SETTINGS_DOC_ID = 'general';
@@ -41,7 +42,7 @@ function pickValidBooleans(changes, allowedFields) {
   return any ? picked : null;
 }
 
-exports.updateAdSettings = onCall({ enforceAppCheck: true }, async (request) => {
+exports.updateAdSettings = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const callerUid = requireAuth(request);
   const db = admin.firestore();
   const caller = await requireSuperadmin(db, callerUid);
@@ -66,7 +67,7 @@ exports.updateAdSettings = onCall({ enforceAppCheck: true }, async (request) => 
   return { ok: true };
 });
 
-exports.updateAdFeatureControl = onCall({ enforceAppCheck: true }, async (request) => {
+exports.updateAdFeatureControl = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const callerUid = requireAuth(request);
   const db = admin.firestore();
   const caller = await requireSuperadmin(db, callerUid);
@@ -91,7 +92,7 @@ exports.updateAdFeatureControl = onCall({ enforceAppCheck: true }, async (reques
   return { ok: true };
 });
 
-exports.bulkUpdateAdFeatureControls = onCall({ enforceAppCheck: true }, async (request) => {
+exports.bulkUpdateAdFeatureControls = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const callerUid = requireAuth(request);
   const db = admin.firestore();
   const caller = await requireSuperadmin(db, callerUid);

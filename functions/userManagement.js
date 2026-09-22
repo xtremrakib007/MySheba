@@ -12,6 +12,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { assignUniqueUserId } = require('./userId');
 const { logAudit, logServerError } = require('./logService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const APP_EMAIL_DOMAIN = 'mysheba.app';
 
@@ -55,7 +56,7 @@ function sanitizeManagedUser(doc) {
   };
 }
 
-exports.manageUser = onCall({ enforceAppCheck: true }, async (request) => {
+exports.manageUser = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const callerUid = request.auth.uid;
   const callerProfile = await getCallerProfile(callerUid);

@@ -4,6 +4,7 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { assignUniqueUserId } = require('./userId');
 const { logAudit, logServerError } = require('./logService');
 const { trackTemporaryAuthUser, deleteTrackedTemporaryAuthUser } = require('./temporaryAuthCleanup');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const VERIFIED_WINDOW_MS = 15 * 60 * 1000;
 const GOOGLE_PROFILE_LOCK_MS = 120000;
@@ -32,7 +33,7 @@ async function assertGooglePhoneProof(data) {
   const tokenPhoneE164 = toE164(verified.phone_number || '', undefined); if (!isValidE164(tokenPhoneE164)) throw new HttpsError('failed-precondition', 'Your SMS verification did not contain a valid phone number. Please verify your phone number again.'); return tokenPhoneE164;
 }
 
-exports.signInExistingGoogleAccount = onCall({ enforceAppCheck: true }, async (request) => {
+exports.signInExistingGoogleAccount = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in with Google.');
   const token = request.auth.token || {}; const provider = token.firebase?.sign_in_provider || ''; const googleEmail = normalizeEmail(token.email); const callerUid = request.auth.uid;
   if (provider !== 'google.com' || !googleEmail || !token.email_verified) throw new HttpsError('permission-denied', 'A verified Google account is required.');
@@ -56,7 +57,7 @@ exports.signInExistingGoogleAccount = onCall({ enforceAppCheck: true }, async (r
   return { found: true, customToken, uid: targetUid, profile: { uid: targetUid, ...userData } };
 });
 
-exports.ensureGoogleProfile = onCall({ enforceAppCheck: true }, async (request) => {
+exports.ensureGoogleProfile = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const uid = request.auth.uid; const token = request.auth.token || {}; const db = getFirestore(); const ref = db.collection('users').doc(uid);
   const initialSnap = await ref.get();

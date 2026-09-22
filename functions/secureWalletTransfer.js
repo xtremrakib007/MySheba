@@ -1,6 +1,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const walletTransferService = require('./walletTransferService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 
@@ -25,7 +26,7 @@ function amountMinor(value) {
   return minor;
 }
 
-exports.walletTransfer = onCall({ enforceAppCheck: true }, async (request) => {
+exports.walletTransfer = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const uid = requireAuth(request);
   const requestId = getRequestId(request);
   const db = admin.firestore();

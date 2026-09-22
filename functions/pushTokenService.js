@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 function isValidExpoToken(token) {
   return typeof token === 'string' && token.length <= 256 && /^(Exponent|Expo)PushToken\[[A-Za-z0-9_-]+\]$/.test(token);
@@ -13,7 +14,7 @@ function active(profile) {
   return profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto;
 }
 
-exports.registerPushToken = onCall({ enforceAppCheck: true }, async (request) => {
+exports.registerPushToken = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required.');
   const { token, tokenType, platform } = request.data || {};
   if (!['expo', 'fcm'].includes(tokenType)) throw new HttpsError('invalid-argument', 'Invalid push token type.');

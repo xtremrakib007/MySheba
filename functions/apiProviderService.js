@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 // NOTE: `db` is intentionally NOT created at module load time. index.js
 // requires this file before it calls admin.initializeApp().
@@ -48,13 +49,13 @@ function validate(data) {
   return { service, name, baseUrl, authType, apiKey: cleanString(data.apiKey, 1000), username: cleanString(data.username, 200), password: cleanString(data.password, 1000), active: data.active !== false, priority: Math.max(0, Math.min(9999, Number(data.priority) || 0)), timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)), notes: cleanString(data.notes, 1000) };
 }
 
-exports.listApiProviders = onCall({ enforceAppCheck: true }, async (request) => {
+exports.listApiProviders = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const snap = await db.collection(COLLECTION).orderBy('priority', 'desc').get();
   return snap.docs.map((d) => { const x = d.data(); return { id: d.id, ...x, apiKey: x.apiKey ? '••••••••' : '', password: x.password ? '••••••••' : '' }; });
 });
-exports.saveApiProvider = onCall({ enforceAppCheck: true }, async (request) => {
+exports.saveApiProvider = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const data = validate(request.data || {}), id = cleanString(request.data?.id, 100);
@@ -64,7 +65,7 @@ exports.saveApiProvider = onCall({ enforceAppCheck: true }, async (request) => {
   await ref.set({ ...data, updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: request.auth.uid }, { merge: true });
   return { id: ref.id };
 });
-exports.deleteApiProvider = onCall({ enforceAppCheck: true }, async (request) => {
+exports.deleteApiProvider = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const id = cleanString(request.data?.id, 100);
@@ -73,13 +74,13 @@ exports.deleteApiProvider = onCall({ enforceAppCheck: true }, async (request) =>
   return { ok: true };
 });
 
-exports.getServiceApiSettings = onCall({ enforceAppCheck: true }, async (request) => {
+exports.getServiceApiSettings = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const snap = await db.doc(SETTINGS).get();
   return { modes: { ...DEFAULT_MODES, ...(snap.exists ? (snap.data().modes || {}) : {}) } };
 });
-exports.saveServiceApiSettings = onCall({ enforceAppCheck: true }, async (request) => {
+exports.saveServiceApiSettings = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const incoming = request.data?.modes || {};

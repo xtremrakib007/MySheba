@@ -9,6 +9,7 @@ const admin = require('firebase-admin');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { checkIpAnomaly } = require('./anomalyService');
 const { logAudit, logServerError } = require('./logService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const MAX_TRANSFER_MYR = 10000;
 const MIN_TRANSFER_MYR = 0.01;
@@ -106,7 +107,7 @@ async function resolveRecipient(db, query, senderUid) {
   return recipient;
 }
 
-exports.findWalletRecipient = onCall({ enforceAppCheck: true }, async (request) => {
+exports.findWalletRecipient = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const uid = requireAuth(request);
   const db = admin.firestore();
   const sender = await getProfile(db, uid);
@@ -123,7 +124,7 @@ exports.findWalletRecipient = onCall({ enforceAppCheck: true }, async (request) 
   };
 });
 
-exports.listWalletTransfers = onCall({ enforceAppCheck: true }, async (request) => {
+exports.listWalletTransfers = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const uid = requireAuth(request);
   const db = admin.firestore();
   const profile = await getProfile(db, uid);
@@ -152,7 +153,7 @@ exports.listWalletTransfers = onCall({ enforceAppCheck: true }, async (request) 
   });
 });
 
-exports.walletTransfer = onCall({ enforceAppCheck: true }, async (request) => {
+exports.walletTransfer = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const senderUid = requireAuth(request);
   const requestId = requireRequestId(request);
   const db = admin.firestore();

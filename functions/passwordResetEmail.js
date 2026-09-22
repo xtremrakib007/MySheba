@@ -4,6 +4,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { sendEmail } = require('./mailerService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { logServerError } = require('./logService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const OTP_EXPIRY_MS = 10 * 60 * 1000;
 const PROOF_EXPIRY_MS = 15 * 60 * 1000;
@@ -143,5 +144,5 @@ async function verifyPasswordResetEmailOtp(data) {
   return { verificationId: result.verificationId, uid, email };
 }
 
-exports.sendPasswordResetEmailVerification = onCall({ enforceAppCheck: true }, async request => sendPasswordResetEmailVerification(request.data, request));
-exports.verifyPasswordResetEmailOtp = onCall({ enforceAppCheck: true }, async request => verifyPasswordResetEmailOtp(request.data));
+exports.sendPasswordResetEmailVerification = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => sendPasswordResetEmailVerification(request.data, request));
+exports.verifyPasswordResetEmailOtp = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => verifyPasswordResetEmailOtp(request.data));

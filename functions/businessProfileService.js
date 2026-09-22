@@ -2,6 +2,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logAudit, logServerError } = require('./logService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 function activeAccount(user) {
   return user && user.suspended !== true && user.inactive !== true && user.disabled !== true && !user.mergedInto;
@@ -22,7 +23,7 @@ async function requireAdmin(db, callerUid) {
   return caller;
 }
 
-exports.setBusinessProfileStatus = onCall({ enforceAppCheck: true }, async (request) => {
+exports.setBusinessProfileStatus = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const callerUid = requireAuth(request);
   const db = admin.firestore();
   const caller = await requireAdmin(db, callerUid);

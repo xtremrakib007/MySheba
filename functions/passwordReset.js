@@ -6,6 +6,7 @@ const { assertPhoneVerified } = require('./phoneVerification');
 const { assertEmailVerified, assertEmailOtpVerified } = require('./emailVerification');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { logAudit, logServerError } = require('./logService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const RESET_PROOF_TTL_MS = 15 * 60 * 1000;
 function normalizePhone(phone) { return String(phone || '').replace(/[^0-9]/g, ''); }
@@ -19,7 +20,7 @@ function tokenFingerprint(token) { return crypto.createHash('sha256').update(Str
 async function consumeResetProof(db, token, uid, via) { const ref = db.collection('passwordResetProofs').doc(tokenFingerprint(token)); const result = await db.runTransaction(async tx => { const snap = await tx.get(ref); if (snap.exists) return false; tx.create(ref, { uid, via, createdAt: admin.firestore.FieldValue.serverTimestamp(), expiresAt: Date.now() + RESET_PROOF_TTL_MS }); return true; }); if (!result) throw new HttpsError('failed-precondition', 'This verification has already been used. Please verify again.'); }
 function isActiveProfile(profile) { return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto && profile.active !== false; }
 
-exports.resetPassword = onCall({ enforceAppCheck: true }, async request => {
+exports.resetPassword = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
   const { phone, phoneE164, dialCode, email, newPassword, phoneIdToken, emailIdToken, emailVerificationId } = request.data || {};
   const normalizedPhone = normalizePhone(phone), normalizedE164 = toE164(phoneE164 || phone, dialCode);
   if (!normalizedPhone) throw new HttpsError('invalid-argument', 'Please enter a valid phone number.');

@@ -1,6 +1,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logAudit, logServerError } = require('./logService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 function activeAdmin(profile) { return profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto && ['admin', 'superadmin'].includes(profile.role); }
 
@@ -10,7 +11,7 @@ async function deleteStoragePrefix(bucket, prefix) {
   await Promise.all(files.map((file) => file.delete()));
 }
 
-exports.deleteManagedUser = onCall({ enforceAppCheck: true }, async (request) => {
+exports.deleteManagedUser = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const callerUid = request.auth?.uid;
   if (!callerUid) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const db = admin.firestore();

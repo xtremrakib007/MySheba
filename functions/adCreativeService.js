@@ -2,6 +2,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logServerError } = require('./logService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 function requireAuth(request) {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
@@ -21,7 +22,7 @@ async function requireSuperadmin(db, callerUid) {
   return caller;
 }
 
-exports.deleteAdCreative = onCall({ enforceAppCheck: true }, async (request) => {
+exports.deleteAdCreative = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const callerUid = requireAuth(request);
   const db = admin.firestore();
   await requireSuperadmin(db, callerUid);

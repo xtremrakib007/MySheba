@@ -2,6 +2,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logAdAudit, logServerError } = require('./logService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const PAYMENT_STATUS_TRANSITIONS = {
   pending: ['paid', 'failed'],
@@ -39,7 +40,7 @@ function text(v, field, max = MAX_TEXT, required = false) {
   return value;
 }
 
-exports.createAdPayment = onCall({ enforceAppCheck: true }, async (request) => {
+exports.createAdPayment = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const callerUid = requireAuth(request);
   const db = admin.firestore();
   const caller = await requireSuperadmin(db, callerUid);
@@ -97,7 +98,7 @@ exports.createAdPayment = onCall({ enforceAppCheck: true }, async (request) => {
   return { ok: true, paymentId: paymentRef.id };
 });
 
-exports.updateAdPaymentStatus = onCall({ enforceAppCheck: true }, async (request) => {
+exports.updateAdPaymentStatus = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const callerUid = requireAuth(request);
   const db = admin.firestore();
   const caller = await requireSuperadmin(db, callerUid);

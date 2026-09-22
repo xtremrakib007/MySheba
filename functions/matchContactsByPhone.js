@@ -5,6 +5,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logServerError } = require('./logService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 function normalizeDigits(value) {
   return String(value || '').replace(/[^0-9]/g, '');
@@ -23,7 +24,7 @@ function chunks(values, size) {
   return out;
 }
 
-exports.matchContactsByPhone = onCall({ enforceAppCheck: true }, async (request) => {
+exports.matchContactsByPhone = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const callerUid = request.auth.uid;
   const db = admin.firestore();

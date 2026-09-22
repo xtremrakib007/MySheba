@@ -2,6 +2,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { logAudit, logServerError } = require('./logService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const MAX_KEY_LENGTH = 200;
@@ -53,7 +54,7 @@ function isActiveAccount(user) {
   return user && user.suspended !== true && user.inactive !== true && user.disabled !== true && !user.mergedInto;
 }
 
-exports.chargeWallet = onCall({ enforceAppCheck: true }, async (request) => {
+exports.chargeWallet = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const uid = auth(request);
   const rid = requestId(request);
   const { kind, key } = request.data || {};
