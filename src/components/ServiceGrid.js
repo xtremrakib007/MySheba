@@ -7,16 +7,30 @@ import * as gridManagementService from '../firebase/gridManagementService';
 import RoyalIcon from './RoyalIcon';
 
 const CUSTOMER_SERVICES = [
+  // Money & connectivity
   { key: 'recharge', icon: 'recharge', name: 'Recharge', kind: 'service' },
-  { key: 'rechargePin', icon: 'recharge', name: 'Recharge PIN', kind: 'rechargePin' },
-  { key: 'mobilebanking', icon: 'mobilebanking', name: 'Mobile Banking', kind: 'service' },
-  { key: 'internet', icon: 'internet', name: 'Internet', kind: 'service' },
+  { key: 'internet', icon: 'internet', name: 'Internet & Data', kind: 'service' },
+  { key: 'rechargeVoice', icon: 'recharge', name: 'Voice Recharge', kind: 'service' },
+  { key: 'rechargePin', icon: 'recharge', name: 'PIN Generate', kind: 'rechargePin' },
   { key: 'billpayment', icon: 'billpayment', name: 'Bill Payment', kind: 'service' },
+  { key: 'mobilebanking', icon: 'mobilebanking', name: 'Mobile Banking', kind: 'service' },
   { key: 'remittance', icon: 'remittance', name: 'Remittance', kind: 'service' },
+
+  // Travel
   { key: 'bus', icon: 'bus', name: 'Bus', kind: 'buspicker' },
   { key: 'train', icon: 'train', name: 'Train', kind: 'webview' },
   { key: 'flight', icon: 'flight', name: 'Flight', kind: 'service' },
+
+  // Malaysia worker / immigration services
+  { key: 'visa', icon: 'visa', name: 'Visa', kind: 'webview' },
+  { key: 'fomema', icon: 'fomema', name: 'FOMEMA', kind: 'webview' },
+  { key: 'mydigital', icon: 'mydigital', name: 'Malaysia Arrival Card', kind: 'webview' },
+  { key: 'passport', icon: 'passport', name: 'Passport', kind: 'webview' },
+
+  // Other services
   { key: 'entertainment', icon: 'entertainment', name: 'Entertainment', kind: 'service' },
+  { key: 'salary', icon: 'salary', name: 'Salary & Payslip', kind: 'salary' },
+  { key: 'documents', icon: 'passport', name: 'Documents', kind: 'documents' },
   { key: 'moreFeaturesTile', icon: 'more', name: 'More Services', kind: 'moreFeaturesLink' },
 ];
 
