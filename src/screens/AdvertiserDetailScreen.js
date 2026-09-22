@@ -216,7 +216,7 @@ function AnalyticsTab({ advertiserId, colors }) {
       <View style={styles.statsGrid}>
         <StatCard label="Impressions" value={summary.impressions.toLocaleString()} colors={colors} />
         <StatCard label="Clicks" value={summary.clicks.toLocaleString()} colors={colors} />
-        <StatCard label="CTR" value={`${(summary.ctr * 100).toFixed(2)}%`} colors={colors} />
+        <StatCard label="CTR" value={`${(summary.ctr || 0).toFixed(2)}%`} colors={colors} />
         <StatCard label="Revenue" value={summary.revenue.toLocaleString()} colors={colors} />
       </View>
 
@@ -227,7 +227,7 @@ function AnalyticsTab({ advertiserId, colors }) {
         campaignRows.map((row) => (
           <View key={row.campaignId} style={styles.tableRow}>
             <Text style={styles.tableRowName} numberOfLines={1}>{row.name}</Text>
-            <Text style={styles.tableRowMeta}>{row.impressions.toLocaleString()} imp · {row.clicks.toLocaleString()} clicks · {(row.ctr * 100).toFixed(2)}% CTR</Text>
+            <Text style={styles.tableRowMeta}>{row.impressions.toLocaleString()} imp · {row.clicks.toLocaleString()} clicks · {(row.ctr || 0).toFixed(2)}% CTR</Text>
           </View>
         ))
       )}

@@ -269,6 +269,71 @@ export async function getAdvertiserPerformance(filterKey, customRange) {
   });
 }
 
+/**
+ * ADVERTISER DETAIL - the top stat cards on AdvertiserDetailScreen, scoped
+ * to one advertiser instead of the whole account. Same ad_daily_stats rows
+ * and the same "sum then divide" CTR as getAdvertiserPerformance above,
+ * just filtered to a single advertiserId rather than grouped across all of
+ * them.
+ *
+ * `revenue` is that advertiser's lifetime paid total, NOT the filtered
+ * range - getPaidRevenueForAdvertiser sums every ad_payments row with
+ * status 'paid' regardless of date, exactly as getAdvertiserPerformance
+ * already reports it. Kept consistent deliberately: the same figure should
+ * not mean one thing on the roster report and another on the detail
+ * screen. Worth revisiting if the screen's "Last 30 Days" heading is meant
+ * to cover this card too.
+ * @param {string} advertiserId
+ * @param {'today' | 'yesterday' | 'last7' | 'last30' | 'custom'} filterKey
+ * @param {{ startKey: string, endKey: string }} [customRange]
+ */
+export async function getAdvertiserSummary(advertiserId, filterKey, customRange) {
+  const { startKey, endKey } = resolveDateRange(filterKey, Date.now(), customRange);
+  const [dailyStats, revenue] = await Promise.all([
+    getDailyStatsInRange(startKey, endKey),
+    getPaidRevenueForAdvertiser(advertiserId),
+  ]);
+  const { impressions, clicks, ctr } = sumStats(
+    dailyStats.filter((r) => r.advertiserId === advertiserId)
+  );
+  return { impressions, clicks, ctr, revenue };
+}
+
+/**
+ * ADVERTISER DETAIL - the "By Campaign" table on AdvertiserDetailScreen.
+ * getCampaignPerformance's per-advertiser counterpart: same grouping and
+ * same campaign-name join, over only this advertiser's rows. A campaign
+ * whose config doc has since been deleted still renders, falling back to
+ * its bare id, for the reason getDocById's own comment gives.
+ * @param {string} advertiserId
+ * @param {'today' | 'yesterday' | 'last7' | 'last30' | 'custom'} filterKey
+ * @param {{ startKey: string, endKey: string }} [customRange]
+ */
+export async function getAdvertiserCampaignPerformance(advertiserId, filterKey, customRange) {
+  const { startKey, endKey } = resolveDateRange(filterKey, Date.now(), customRange);
+  const dailyStats = await getDailyStatsInRange(startKey, endKey);
+  const grouped = aggregateBy(
+    dailyStats.filter((r) => r.advertiserId === advertiserId && r.campaignId),
+    (r) => r.campaignId
+  );
+  if (grouped.length === 0) return [];
+
+  const campaigns = await Promise.all(
+    grouped.map((g) => getDocById(AD_COLLECTIONS.CAMPAIGNS, g.key))
+  );
+  return grouped.map((g, i) => {
+    const campaign = campaigns[i];
+    return {
+      campaignId: g.key,
+      name: campaign?.name || g.key,
+      status: campaign ? getEffectiveAdStatus(campaign) : null,
+      impressions: g.impressions,
+      clicks: g.clicks,
+      ctr: g.ctr,
+    };
+  });
+}
+
 async function getPaidRevenueForAdvertiser(advertiserId) {
   const paid = await getAllDocs(
     AD_COLLECTIONS.PAYMENTS,
