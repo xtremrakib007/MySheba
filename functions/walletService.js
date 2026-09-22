@@ -58,7 +58,27 @@ const CHARGEABLE={recharge:'rechargePointCostPerUnit',internet:'internetPointCos
 async function chargeProduct(request,service,payload,customer){const uid=requireAuth(request),db=admin.firestore(),rates=await getRates(db),calc=recompute(service,payload?.raw,rates),clientAmount=Number(payload?.amount),clientTotal=Number(payload?.total),charge=service==='mobilebanking'||service==='remittance'?calc.total:calc.amount;if(!Number.isFinite(calc.amount)||calc.amount<=0||!Number.isFinite(charge)||charge<=0)throw new HttpsError('invalid-argument','Amount must be greater than zero.');if(Number.isFinite(clientAmount)&&Math.abs(clientAmount-calc.amount)>.01)throw new HttpsError('failed-precondition','Rate changed - please review your order.');if(Number.isFinite(clientTotal)&&Math.abs(clientTotal-calc.total)>.01)throw new HttpsError('failed-precondition','Order total changed - please review your order.');const p=await getPricing(db),settings=await progressionService.getProgressionSettings(),uref=db.collection('users').doc(uid),requestId=payload?.requestId;if(typeof requestId!=='string'||!REQUEST_ID_RE.test(requestId))throw new HttpsError('invalid-argument','A valid requestId is required.');const txId=crypto.createHash('sha256').update(`${uid}|${service}|${requestId}`).digest('hex').slice(0,40);const txref=db.collection('transactions').doc(txId);const collectionPin=String(crypto.randomInt(0,10000)).padStart(4,'0');const serviceLabel = { recharge: 'Recharge', internet: 'Internet', billpayment: 'Bill Payment', mobilebanking: 'Mobile Banking', remittance: 'Remittance' }[service];
 const apiSettingsSnap = serviceLabel ? await db.collection('api_settings').doc('service_modes').get() : null;
 const apiMode = apiSettingsSnap?.exists ? apiSettingsSnap.data()?.modes?.[serviceLabel] || 'legacy' : 'legacy';
-const result=await db.runTransaction(async tx=>{const existingTx=await tx.get(txref);if(existingTx.exists){const existing=existingTx.data()||{};if(existing.customerId!==uid)throw new HttpsError('permission-denied','This request ID belongs to another account.');const existingStatus=String(existing.status||'pending');if(existingStatus==='failed')throw new HttpsError('failed-precondition',existing.apiError||'This order already failed.');if(existingStatus==='unknown'){
+const result=await db.runTransaction(async tx=>{const existingTx=await tx.get(txref);if(existingTx.exists){const existing=existingTx.data()||{};if(existing.customerId!==uid)throw new HttpsError('permission-denied','This request ID belongs to another account.');const existingStatus=String(existing.status||'pending');if(existingStatus==='failed')throw new HttpsError('failed-precondition',existing.apiError||'This order already failed.');if(existingStatus==='pending' && (existing.executionMode==='api' || apiMode==='api')){
+  // A previously created API transaction must never be sent to the provider
+  // again just because the original function instance disappeared mid-flight.
+  // The external outcome may already exist. Only explicit provider-success
+  // evidence is safe to recover; otherwise leave it for reconciliation.
+  if(existing.apiExecution?.providerSucceeded === true && existing.apiRefunded !== true){
+    tx.update(txref,{
+      status:'completed',
+      completedAt:admin.firestore.FieldValue.serverTimestamp(),
+      apiExecution:{
+        ...(existing.apiExecution || {}),
+        status:'accepted',
+        reconciliationRecovered:true,
+        updatedAt:admin.firestore.FieldValue.serverTimestamp(),
+      },
+      updatedAt:admin.firestore.FieldValue.serverTimestamp()
+    });
+    return{existing:true,cost:Number(existing.cost)||0,role:existing.customerRole||'',apiMode:existing.executionMode||'api',customerUid:uid,customerPhone:existing.customerPhone||'',apiAmount:Number(existing.amount)||0,apiTotal:Number(existing.total)||0,status:'completed',collectionPin:existing.pin||''};
+  }
+  throw new HttpsError('unavailable','This API request may already have reached the provider. Verify the provider outcome before retrying.');
+}if(existingStatus==='unknown'){
   // If the provider already returned success and only the final transaction
   // persistence failed, the previous invocation records explicit provider
   // success. Recover the transaction instead of permanently trapping it in
