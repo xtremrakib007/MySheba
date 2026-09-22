@@ -13,6 +13,7 @@ import LanguageModal from '../components/LanguageModal';
 import DisplayModeModal, { DISPLAY_OPTIONS } from '../components/DisplayModeModal';
 import ThemeColorModal from '../components/ThemeColorModal';
 import GridStyleModal from '../components/GridStyleModal';
+import IconStyleModal from '../components/IconStyleModal';
 
 function ToggleRow({ icon, label, sub, value, onValueChange }) {
   const { colors } = useTheme(); const styles = createStyles(colors);
@@ -28,13 +29,14 @@ export default function SettingsScreen() {
     colors, brandGradient,
     mode, setMode, accent, setAccent, accentThemes,
     gridStyle, setGridStyle, gridStyles,
+    iconStyle, setIconStyle, iconStyles,
   } = useTheme();
   const styles = createStyles(colors); const { language, t } = useLanguage();
   const { goBackOrHome, logout, profile, setNotifPref, changePassword, resetSecurityPin, setScreen, appLockEnabled, setAppLockEnabled } = useApp();
   const prefs = profile?.notifPrefs || {};
   const [pushEnabled, setPushEnabledState] = useState(prefs.pushEnabled !== false); const [emailEnabled, setEmailEnabledState] = useState(prefs.emailEnabled !== false); const [rateAlerts, setRateAlertsState] = useState(!!prefs.rateAlerts);
   const [pwModalVisible, setPwModalVisible] = useState(false); const [pinModalVisible, setPinModalVisible] = useState(false); const [languageModalVisible, setLanguageModalVisible] = useState(false);
-  const [displayModalVisible, setDisplayModalVisible] = useState(false); const [themeModalVisible, setThemeModalVisible] = useState(false); const [gridModalVisible, setGridModalVisible] = useState(false);
+  const [displayModalVisible, setDisplayModalVisible] = useState(false); const [themeModalVisible, setThemeModalVisible] = useState(false); const [gridModalVisible, setGridModalVisible] = useState(false); const [iconModalVisible, setIconModalVisible] = useState(false);
   const displayModeLabel = (DISPLAY_OPTIONS.find((o) => o.key === mode) || {}).label || mode;
   useEffect(() => { if (!profile?.notifPrefs) return; setPushEnabledState(profile.notifPrefs.pushEnabled !== false); setEmailEnabledState(profile.notifPrefs.emailEnabled !== false); setRateAlertsState(!!profile.notifPrefs.rateAlerts); }, [profile?.notifPrefs]);
   const onTogglePush = (value) => { setPushEnabledState(value); setNotifPref('pushEnabled', value); }; const onToggleEmail = (value) => { setEmailEnabledState(value); setNotifPref('emailEnabled', value); }; const onToggleRateAlerts = (value) => { setRateAlertsState(value); setNotifPref('rateAlerts', value); };
@@ -52,7 +54,8 @@ export default function SettingsScreen() {
       <Text style={styles.sectionTitle}>{t('settings.sectionAppearance')}</Text><View style={styles.card}>
         <LinkRow icon="🌑" label={t('settings.displayMode')} sub={displayModeLabel} onPress={() => setDisplayModalVisible(true)} /><View style={styles.divider} />
         <LinkRow icon="🎨" label={t('settings.themeColor')} sub={accentThemes[accent]?.label} onPress={() => setThemeModalVisible(true)} /><View style={styles.divider} />
-        <LinkRow icon="▦" label={t('settings.gridStyle')} sub={gridStyles[gridStyle]?.label} onPress={() => setGridModalVisible(true)} />
+        <LinkRow icon="▦" label={t('settings.gridStyle')} sub={gridStyles[gridStyle]?.label} onPress={() => setGridModalVisible(true)} /><View style={styles.divider} />
+        <LinkRow icon="✨" label={t('settings.iconStyle')} sub={iconStyles[iconStyle]?.label} onPress={() => setIconModalVisible(true)} />
       </View>
       <Text style={styles.sectionTitle}>{t('settings.sectionGeneral')}</Text><View style={styles.card}>
         <LinkRow icon="🌐" label={t('settings.language')} sub={LANGUAGES[language]?.label || 'English'} onPress={() => setLanguageModalVisible(true)} /><View style={styles.divider} />
@@ -69,6 +72,7 @@ export default function SettingsScreen() {
     <DisplayModeModal visible={displayModalVisible} selected={mode} onSelect={setMode} onClose={() => setDisplayModalVisible(false)} />
     <ThemeColorModal visible={themeModalVisible} selected={accent} onSelect={setAccent} onClose={() => setThemeModalVisible(false)} />
     <GridStyleModal visible={gridModalVisible} selected={gridStyle} onSelect={setGridStyle} onClose={() => setGridModalVisible(false)} />
+    <IconStyleModal visible={iconModalVisible} selected={iconStyle} onSelect={setIconStyle} onClose={() => setIconModalVisible(false)} />
   </View>;
 }
 function createStyles(colors) { return StyleSheet.create({

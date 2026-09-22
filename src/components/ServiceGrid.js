@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
+import { iconFor, iconRenderFor } from '../theme/iconSets';
 import { radius, shadows, fonts } from '../theme/theme';
 import { useLanguage } from '../i18n/LanguageContext';
 
@@ -58,15 +59,16 @@ const STAFF_SERVICES = {
 function asSafeText(value, fallback = '') { return typeof value === 'string' || typeof value === 'number' ? String(value) : fallback; }
 
 export function Tile({ s, onPress, disabled }) {
-  const { colors } = useTheme();
+  const { colors, iconStyle } = useTheme();
   const { t } = useLanguage();
   const safeKey = asSafeText(s?.key, 'service');
   const translated = typeof t === 'function' ? t(`service.${safeKey}`, s?.name) : null;
   const label = asSafeText(translated, asSafeText(s?.name, safeKey));
-  const icon = asSafeText(s?.icon, '•');
+  const iconRender = iconRenderFor(iconStyle);
+  const icon = asSafeText(iconFor(safeKey, iconStyle, s?.icon), '•');
   const accent = asSafeText(s?.accent, colors.primary || '#1A73E8');
   return <TouchableOpacity style={[styles.item, { backgroundColor: colors.tileBg, borderColor: `${accent}45` }, disabled && styles.itemDisabled]} activeOpacity={0.82} disabled={!!disabled} onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
-    <View style={[styles.iconWrap, { backgroundColor: `${accent}18` }]}><Text style={[styles.iconText, { color: accent }]}>{icon}</Text></View>
+    <View style={[styles.iconWrap, { backgroundColor: `${accent}18` }]}><Text style={[styles.iconText, { color: accent, fontSize: 25 * iconRender.scale, fontWeight: iconRender.weight }]}>{icon}</Text></View>
     <Text style={[styles.name, { color: colors.text || '#222' }]} numberOfLines={2}>{label}</Text>
   </TouchableOpacity>;
 }
