@@ -48,12 +48,20 @@ exports.refreshWalletExchangeRates = onCall({ enforceAppCheck: true }, async (re
     throw new HttpsError('failed-precondition', 'The live provider did not return usable exchange rates.');
   }
 
+  const existingSnap = await admin.firestore().collection('settings').doc('walletExchangeRates').get();
+  const existingPairs = existingSnap.exists ? (existingSnap.data()?.pairs || {}) : {};
+  const pairs = { ...existingPairs };
+  for (const [currency, liveRate] of Object.entries(rates)) {
+    if (currency === 'MYR') continue;
+    pairs[currency] = { ...(pairs[currency] || {}), liveRate, active: pairs[currency]?.active !== false };
+  }
   const now = admin.firestore.FieldValue.serverTimestamp();
   await admin.firestore().collection('settings').doc('walletExchangeRates').set({
     baseCurrency: 'MYR',
     provider: 'open.er-api.com',
     providerUrl: PROVIDER_URL,
     liveRates: rates,
+    pairs,
     liveUpdatedAt: now,
     updatedAt: now,
     updatedBy: uid,
