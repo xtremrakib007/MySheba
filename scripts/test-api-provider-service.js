@@ -8,6 +8,17 @@ assert(api, 'test helpers must be exported');
 
 // URL validation: only HTTPS domains, no embedded credentials/fragments/raw IPs.
 api.validateBaseUrl('https://api.example.com');
+// SSRF reserved-address regression coverage.
+assert.strictEqual(api.isPrivateIp('192.0.2.1'), true);
+assert.strictEqual(api.isPrivateIp('198.51.100.10'), true);
+assert.strictEqual(api.isPrivateIp('203.0.113.10'), true);
+assert.strictEqual(api.isPrivateIp('224.0.0.1'), true);
+assert.strictEqual(api.isPrivateIp('240.0.0.1'), true);
+assert.strictEqual(api.isPrivateIp('::1'), true);
+assert.strictEqual(api.isPrivateIp('2001:db8::1'), true);
+assert.strictEqual(api.isPrivateIp('ff02::1'), true);
+assert.strictEqual(api.isPrivateIp('2001:4860:4860::8888'), false);
+
 assert.throws(() => api.validateBaseUrl('http://api.example.com'));
 assert.throws(() => api.validateBaseUrl('https://127.0.0.1'));
 assert.throws(() => api.validateBaseUrl('https://user:pass@api.example.com'));
