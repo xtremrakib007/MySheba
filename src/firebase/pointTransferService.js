@@ -1,4 +1,4 @@
-// Point (wallet balance) transfers - lets staff send points to accounts in
+// Wallet transfers - lets staff send points to accounts in
 // their permitted scope. The actual balance move is server-side.
 import { collection, query, where, orderBy, onSnapshot, limit } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -26,7 +26,7 @@ export async function transferPoints({ to, amount, note, securityPin }) {
   const fn = httpsCallable(functions, 'transferPoints');
   try {
     const { data } = await fn({ requestId, toUid: to.uid, amount: amt, note: note || '', securityPin: String(securityPin || ''), ...session });
-    logActivity('points_transferred', { toUid: to.uid, amount: amt });
+    logActivity('wallet_transferred', { toUid: to.uid, amount: amt });
     return data;
   } catch (err) {
     logError('pointTransferService.transferPoints', err);
