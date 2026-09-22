@@ -2,6 +2,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { assignUniqueUserId } = require('./userId');
 const { logAudit, logServerError } = require('./logService');
+const { inferWalletCurrency } = require('./walletCurrencyService');
 
 const APP_EMAIL_DOMAIN = 'mysheba.app';
 function normalizePhone(phone) { return String(phone || '').replace(/[^0-9]/g, ''); }
