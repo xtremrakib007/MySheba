@@ -77,6 +77,29 @@ const result=await db.runTransaction(async tx=>{const existingTx=await tx.get(tx
     });
     return{existing:true,cost:Number(existing.cost)||0,role:existing.customerRole||'',apiMode:existing.executionMode||'api',customerUid:uid,customerPhone:existing.customerPhone||'',apiAmount:Number(existing.amount)||0,apiTotal:Number(existing.total)||0,status:'completed',collectionPin:existing.pin||''};
   }
+  const executionKey=crypto.createHash('sha256').update(service+'|'+uid+'|'+requestId).digest('hex');
+  const executionRef=db.collection('apiExecutions').doc(executionKey);
+  const executionSnap=await tx.get(executionRef);
+  const execution=executionSnap.exists ? (executionSnap.data()||{}) : {};
+  if(execution.status==='completed' && existing.apiRefunded !== true){
+    tx.update(txref,{
+      status:'completed',
+      completedAt:admin.firestore.FieldValue.serverTimestamp(),
+      apiExecution:{
+        ...(existing.apiExecution || {}),
+        status:'accepted',
+        providerSucceeded:true,
+        providerId:execution.result?.providerId || existing.apiExecution?.providerId || null,
+        providerName:execution.result?.providerName || existing.apiExecution?.providerName || null,
+        responseId:execution.result?.responseId || existing.apiExecution?.responseId || null,
+        message:execution.result?.message || existing.apiExecution?.message || null,
+        reconciliationRecovered:true,
+        updatedAt:admin.firestore.FieldValue.serverTimestamp(),
+      },
+      updatedAt:admin.firestore.FieldValue.serverTimestamp()
+    });
+    return{existing:true,cost:Number(existing.cost)||0,role:existing.customerRole||'',apiMode:existing.executionMode||'api',customerUid:uid,customerPhone:existing.customerPhone||'',apiAmount:Number(existing.amount)||0,apiTotal:Number(existing.total)||0,status:'completed',collectionPin:existing.pin||''};
+  }
   throw new HttpsError('unavailable','This API request may already have reached the provider. Verify the provider outcome before retrying.');
 }if(existingStatus==='unknown'){
   // If the provider already returned success and only the final transaction
