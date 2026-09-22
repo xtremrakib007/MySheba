@@ -134,7 +134,7 @@ function validate(data) {
     if (!cleanString(data.username, 200) || !cleanString(data.password, 1000)) throw new HttpsError('invalid-argument', 'Username and password are required for Basic authentication.');
   }
   if (!ALLOWED_METHODS.includes(method)) throw new HttpsError('invalid-argument', 'Invalid HTTP method.');
-  return { service, name, baseUrl, endpointPath, method, authType, apiKey: cleanString(data.apiKey, 1000), username: cleanString(data.username, 200), password: cleanString(data.password, 1000), active: data.active !== false, priority: Math.max(0, Math.min(9999, Number(data.priority) || 0)), timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)), notes: cleanString(data.notes, 1000), headers: validateHeaders(data.headers || {}), queryTemplate: validateTemplate(data.queryTemplate || {}, 'Query template'), requestTemplate: validateTemplate(data.requestTemplate || {}, 'Request template'), responseSuccessPath: cleanString(data.responseSuccessPath, 200), responseSuccessValue: cleanString(data.responseSuccessValue, 200), responseIdPath: cleanString(data.responseIdPath, 200), responseMessagePath: cleanString(data.responseMessagePath, 200), responsePinPath: service === 'Recharge PIN' ? cleanString(data.responsePinPath, 200) : '' };
+  return { service, name, baseUrl, endpointPath, method, authType, apiKey: cleanString(data.apiKey, 1000), secretKey: cleanString(data.secretKey, 1000), username: cleanString(data.username, 200), password: cleanString(data.password, 1000), active: data.active !== false, priority: Math.max(0, Math.min(9999, Number(data.priority) || 0)), timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)), notes: cleanString(data.notes, 1000), headers: validateHeaders(data.headers || {}), queryTemplate: validateTemplate(data.queryTemplate || {}, 'Query template'), requestTemplate: validateTemplate(data.requestTemplate || {}, 'Request template'), responseSuccessPath: cleanString(data.responseSuccessPath, 200), responseSuccessValue: cleanString(data.responseSuccessValue, 200), responseIdPath: cleanString(data.responseIdPath, 200), responseMessagePath: cleanString(data.responseMessagePath, 200), responsePinPath: service === 'Recharge PIN' ? cleanString(data.responsePinPath, 200) : '' };
 }
 
 function asObject(value) { if (value && typeof value === 'object' && !Array.isArray(value)) return value; if (typeof value !== 'string') return {}; try { const x = JSON.parse(value); return x && typeof x === 'object' && !Array.isArray(x) ? x : {}; } catch { return {}; } }
@@ -206,7 +206,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   }
   if (service === 'Recharge PIN' && !provider.responsePinPath) throw new Error('Recharge PIN provider is missing responsePinPath configuration.');
   const raw = payload?.raw || {};
-  const vars = { requestId, uid:customer?.uid||'', phone:customer?.phone||'', amount:payload?.amount??raw.amount??'', total:payload?.total??raw.total??'', service, country:raw.country||'', operator:raw.operator||'', packageCode:raw.packageCode||'', details:payload?.details||'', ...Object.fromEntries(Object.entries(raw).filter(([k,v]) => !['requestId'].includes(k) && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')).slice(0,100)) };
+  const vars = { requestId, uid:customer?.uid||'', phone:customer?.phone||'', amount:payload?.amount??raw.amount??'', total:payload?.total??raw.total??'', service, country:raw.country||'', operator:raw.operator||'', packageCode:raw.packageCode||'', details:payload?.details||'', apiKey:provider.apiKey||'', secretKey:provider.secretKey||'', ...Object.fromEntries(Object.entries(raw).filter(([k,v]) => !['requestId'].includes(k) && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')).slice(0,100)) };
   try {
     let base; try { base = new URL(provider.baseUrl); } catch { throw new Error('Provider URL is invalid.'); }
     if (base.protocol !== 'https:') throw new Error('Provider URL is not allowed.');
@@ -300,6 +300,7 @@ exports.listApiProviders = onCall({ enforceAppCheck: true }, async (request) => 
       responseMessagePath: x.responseMessagePath || '',
       responsePinPath: x.responsePinPath || '',
       hasApiKey: Boolean(x.apiKey),
+      hasSecretKey: Boolean(x.secretKey),
       hasUsername: Boolean(x.username),
       hasPassword: Boolean(x.password),
       hasCustomHeaders: Boolean(x.headers && Object.keys(x.headers).length),
@@ -335,6 +336,7 @@ exports.saveApiProvider = onCall({ enforceAppCheck: true }, async (request) => {
     // so an edit cannot accidentally fail just because the secret is hidden.
     if (existing.exists) {
       if (!incoming.apiKey || incoming.apiKey === '••••••••') incoming.apiKey = current.apiKey || '';
+      if (!incoming.secretKey || incoming.secretKey === '••••••••') incoming.secretKey = current.secretKey || '';
       if (!incoming.password || incoming.password === '••••••••') incoming.password = current.password || '';
       if (!incoming.username) incoming.username = current.username || '';
       if (!Object.keys(incoming.headers || {}).length && current.headers) incoming.headers = current.headers;
