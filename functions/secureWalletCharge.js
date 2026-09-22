@@ -2,6 +2,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { logAudit, logServerError } = require('./logService');
+const { getWalletCurrencyAndFx, baseToWallet } = require('./walletCurrencyService');
 
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
@@ -99,6 +100,8 @@ exports.chargeWallet = onCall({ enforceAppCheck: true }, async (request) => {
       }
       const pricing = { ...DEFAULT_PRICING, ...(pricingSnap.exists ? pricingSnap.data() : {}) };
       const balance = finiteNonNegative(user.walletBalance == null ? 0 : user.walletBalance, 'Wallet balance');
+      let walletFx;
+      try { walletFx = await getWalletCurrencyAndFx(db, user); } catch (fxErr) { throw new HttpsError('failed-precondition', fxErr.message || 'Wallet currency is not configured.'); }
 
       let cost;
       let resultData;
@@ -142,15 +145,17 @@ exports.chargeWallet = onCall({ enforceAppCheck: true }, async (request) => {
         return resultData;
       }
       if (!field) throw new HttpsError('failed-precondition', 'Wallet charge target is invalid.');
-      if (balance < cost) throw new HttpsError('failed-precondition', `You need ${cost} pts.`);
-      const newBalance = balance - cost;
+      const walletCost = baseToWallet(cost, walletFx);
+      if (balance < walletCost) throw new HttpsError('failed-precondition', `You need ${walletCost.toFixed(2)} ${walletFx.currency} in your wallet.`);
+      const newBalance = balance - walletCost;
+      resultData = { ...resultData, baseCostMyr: cost, walletCost, currency: walletFx.currency, fxRate: walletFx.sellRate, fxRateType: 'sell', fxRateSource: walletFx.rateSource };
       if (!Number.isSafeInteger(Math.round(newBalance * 100))) throw new HttpsError('failed-precondition', 'The resulting wallet balance is invalid.');
       const updates = { walletBalance: newBalance, [field]: now };
       tx.update(userRef, updates);
-      tx.create(opRef, { uid, type: 'chargeWallet', kind, key: cleanKeyValue, requestId: rid, cost, status: 'completed', result: resultData, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+      tx.create(opRef, { uid, type: 'chargeWallet', kind, key: cleanKeyValue, requestId: rid, cost, walletCost: resultData.walletCost, currency: resultData.currency, fxRate: resultData.fxRate, fxRateType: resultData.fxRateType, status: 'completed', result: resultData, createdAt: admin.firestore.FieldValue.serverTimestamp() });
       return resultData;
     });
-    if (result.charged) await logAudit({ action: 'wallet_charged', targetUid: uid, performedBy: uid, performedByRole: 'user', details: { kind, key: cleanKeyValue, cost: result.cost, requestId: rid } });
+    if (result.charged) await logAudit({ action: 'wallet_charged', targetUid: uid, performedBy: uid, performedByRole: 'user', details: { kind, key: cleanKeyValue, cost: result.walletCost ?? result.cost, baseCostMyr: result.baseCostMyr ?? result.cost, currency: result.currency || 'MYR', fxRate: result.fxRate || 1, requestId: rid } });
     return result;
   } catch (error) {
     if (error instanceof HttpsError) throw error;
