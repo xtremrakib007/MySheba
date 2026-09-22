@@ -29,12 +29,15 @@ const FINANCE = [
   { key: 'pricing', icon: '🏷️', bg: '#FFF3E0', name: 'Pricing' },
   { key: 'payments', icon: '💳', bg: '#E1F5FE', name: 'Payments' },
   { key: 'transferPoints', icon: '↔️', bg: '#E8F5E9', name: 'Transfers' },
-  { key: 'categories', icon: '🗂️', bg: '#EDE7F6', name: 'Categories' },
 ];
 const USERS = [
   { key: 'userManagement', icon: '👥', bg: '#E3F2FD', name: 'Users' },
   { key: 'verificationManagement', icon: '🪪', bg: '#E0F7FA', name: 'KYC Verification' },
 ];
+// Feature keys that App.js renders as their own screen. Everything else is
+// a tab within AdminHomeScreen - see openItem below.
+const SCREEN_FEATURES = ['adminAnalytics', 'transferPoints', 'userManagement', 'verificationManagement', 'featureAccess'];
+
 const SYSTEM = [
   { key: 'featureAccess', icon: '🔐', bg: '#EDE7F6', name: 'Feature Access' },
   { key: 'banners', icon: '🖼️', bg: '#FFF0F0', name: 'Banners' },
@@ -78,6 +81,11 @@ export default function AdminFeaturesScreen() {
   };
   const openItem = (key) => {
     if (key === 'rates') { setRateView(true); return; }
+    // These are screens of their own in App.js, not tabs inside
+    // AdminHomeScreen. Sending them down the setAdminTab path landed on
+    // adminHome with a tab nothing renders for, so every one of them opened
+    // to an empty dashboard.
+    if (SCREEN_FEATURES.includes(key)) { setScreen(key); return; }
     setAdminTab(key); setAdminViewingSection(true); setScreen('adminHome');
   };
   const itemsForSection = () => {
