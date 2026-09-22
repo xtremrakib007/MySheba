@@ -26,11 +26,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate production source
+        run: npm run production:check
+
       - name: Validate Cloud Functions syntax
         run: npm run audit:functions
 
+      - name: Run API provider regression tests
+        run: npm run test:api-provider
+
       - name: Build production AAB
-        run: eas build --platform android --profile production --non-interactive --wait --message "Final MySheba production build"
+        run: eas build --platform android --profile production --non-interactive --wait --message "MySheba production AAB"
 
       - name: Download AAB
         run: eas build:download --platform android --non-interactive
