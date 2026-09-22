@@ -279,6 +279,17 @@ export function AppProvider({ children }) {
   // 'chatList' to match the existing behavior for every other entry point.
   const [activeChatReturnTo, setActiveChatReturnTo] = useState("chatList");
 
+  // Opens the shared customer/support chat screen. The third argument records
+  // which screen the chat was launched from so future back-navigation can
+  // return to the correct inbox (Chat List or Admin Support > Messages).
+  const openChat = useCallback((chatId, chatName = "", returnTo = "chatList") => {
+    if (!chatId) return;
+    setActiveChatId(chatId);
+    setActiveChatName(chatName || "");
+    setActiveChatReturnTo(returnTo || "chatList");
+    setScreen("chat");
+  }, []);
+
   // ---- Advertiser management ----
   // These screens remain in App.js and need only their selected advertiser id.
   const [activeAdvertiserId, setActiveAdvertiserId] = useState(null);
