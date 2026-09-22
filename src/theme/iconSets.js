@@ -26,12 +26,12 @@
 
 const SYMBOLS_FILLED = {
   recharge: '↻', mobilebanking: '▣', internet: '◉', remittance: '⇄',
-  bus: '▰', train: '▬', flight: '✈', fomema: '✚', visa: '◩',
+  bus: '▬', train: '▦', flight: '✈', fomema: '✚', visa: '◩',
   mydigital: '◤', passport: '▮', moreFeaturesTile: '✦',
   myAccount: '●', profile: '◆', support: '☏', history: '◕',
   topup: '▲', topups: '▴', all: '☰', pending: '◐', processing: '◒',
   completed: '☑', finance: '★', payments: '▤', pricing: '▪',
-  rates: '⇅', announcements: '▶', banners: '▦', inquiries: '✎',
+  rates: '⇅', announcements: '▶', banners: '▰', inquiries: '✎',
   operations: '◈', system: '▩', users: '◙', userManagement: '◧',
   transferPoints: '↔', verificationManagement: '✔', featureAccess: '◫',
   adminAnalytics: '◢', adminBusinessManagement: '■', adminFeatures: '◍',
@@ -40,12 +40,12 @@ const SYMBOLS_FILLED = {
 
 const SYMBOLS_OUTLINE = {
   recharge: '↺', mobilebanking: '▢', internet: '◎', remittance: '⇆',
-  bus: '▱', train: '▭', flight: '➔', fomema: '✛', visa: '◪',
+  bus: '▭', train: '▧', flight: '✈', fomema: '✛', visa: '◪',
   mydigital: '◥', passport: '▯', moreFeaturesTile: '✧',
   myAccount: '○', profile: '◇', support: '☎', history: '◔',
   topup: '△', topups: '▵', all: '≡', pending: '◑', processing: '◓',
   completed: '☐', finance: '☆', payments: '▥', pricing: '▫',
-  rates: '↕', announcements: '▷', banners: '▧', inquiries: '✐',
+  rates: '↕', announcements: '▷', banners: '▱', inquiries: '✐',
   operations: '◊', system: '▨', users: '◘', userManagement: '◨',
   transferPoints: '⇔', verificationManagement: '✓', featureAccess: '◬',
   adminAnalytics: '◣', adminBusinessManagement: '□', adminFeatures: '◌',
@@ -113,12 +113,12 @@ export const ICON_STYLE_RENDER = {
   business: { set: BUSINESS, scale: 1, weight: '400' },
   playful: { set: PLAYFUL, scale: 1.06, weight: '400' },
   colorful: { set: COLORFUL, scale: 1.06, weight: '400' },
-  thin: { set: SYMBOLS_OUTLINE, scale: 0.86, weight: '300' },
+  thin: { set: SYMBOLS_OUTLINE, scale: 0.76, weight: '300' },
   outline: { set: SYMBOLS_OUTLINE, scale: 1.0, weight: '400' },
-  modern: { set: SYMBOLS_OUTLINE, scale: 1.12, weight: '500' },
-  compact: { set: SYMBOLS_FILLED, scale: 0.82, weight: '600' },
+  modern: { set: SYMBOLS_OUTLINE, scale: 1.26, weight: '500' },
+  compact: { set: SYMBOLS_FILLED, scale: 0.72, weight: '600' },
   filled: { set: SYMBOLS_FILLED, scale: 1.0, weight: '600' },
-  bold: { set: SYMBOLS_FILLED, scale: 1.24, weight: '900' },
+  bold: { set: SYMBOLS_FILLED, scale: 1.38, weight: '900' },
 };
 
 const FALLBACK = ICON_STYLE_RENDER.classic;
