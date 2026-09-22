@@ -150,7 +150,7 @@ exports.chargeWallet = onCall({ enforceAppCheck: true }, async (request) => {
       const newBalance = balance - walletCost;
       resultData = { ...resultData, baseCostMyr: cost, walletCost, currency: walletFx.currency, fxRate: walletFx.sellRate, fxRateType: 'sell', fxRateSource: walletFx.rateSource };
       if (!Number.isSafeInteger(Math.round(newBalance * 100))) throw new HttpsError('failed-precondition', 'The resulting wallet balance is invalid.');
-      const updates = { walletBalance: newBalance, [field]: now };
+      const updates = { walletBalance: newBalance, walletCurrency: walletFx.currency, walletBalanceCurrency: walletFx.currency, [field]: now };
       tx.update(userRef, updates);
       tx.create(opRef, { uid, type: 'chargeWallet', kind, key: cleanKeyValue, requestId: rid, cost, walletCost: resultData.walletCost, currency: resultData.currency, fxRate: resultData.fxRate, fxRateType: resultData.fxRateType, status: 'completed', result: resultData, createdAt: admin.firestore.FieldValue.serverTimestamp() });
       return resultData;
