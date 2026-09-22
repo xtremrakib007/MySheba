@@ -25,6 +25,7 @@ import SupportTicketsPage from './pages/SupportTicketsPage';
 import SupportMessagesPage from './pages/SupportMessagesPage';
 import ReportsPage from './pages/ReportsPage';
 import RatesPricingPage from './pages/RatesPricingPage';
+import WalletExchangeRatesPage from './pages/WalletExchangeRatesPage';
 import PricingPage from './pages/PricingPage';
 import TransactionsPage from './pages/TransactionsPage';
 import FinancialControlPage from './pages/FinancialControlPage';
@@ -83,6 +84,7 @@ function AdminRoutes() {
         <Route path="/feature-access" element={<FeatureAccessPage />} />
         <Route path="/security" element={<SecurityCenterPage />} />
         <Route path="/config/rates" element={<RatesPricingPage />} />
+        <Route element={<SuperadminRoute />}><Route path="/config/wallet-exchange" element={<WalletExchangeRatesPage />} /></Route>
         <Route path="/config/pricing" element={<PricingPage />} />
         <Route path="/config/payments" element={<PaymentSettingsPage />} />
         <Route path="/config/salary" element={<SalarySettingsPage />} />
