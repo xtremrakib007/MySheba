@@ -20,7 +20,7 @@ function cleanRate(value) {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-exports.refreshWalletExchangeRates = onCall({ enforceAppCheck: true }, async (request) => {
+exports.refreshWalletExchangeRates = onCall({ enforceAppCheck: false }, async (request) => {
   const uid = requireSuperadmin(request);
   await requireRole(uid);
 
