@@ -114,6 +114,14 @@ exports.rejectTransaction = onCall({ enforceAppCheck: true }, async request => {
       throw new HttpsError('failed-precondition', 'Only pending or approved transactions can be rejected.');
     }
 
+    // API transactions have an explicit dispatch gate. They may be rejected
+    // only before the charge worker atomically claims dispatch. Once dispatch
+    // starts, the provider may receive the request and a refund must not race
+    // with that external side effect.
+    if (tx.executionMode === 'api' && tx.apiDispatchStatus !== 'ready') {
+      throw new HttpsError('failed-precondition', 'This API transaction is already being processed or requires reconciliation.');
+    }
+
     // Every service order has already reserved/deducted the customer's
     // wallet before it reaches the staff queue. Rejection must therefore
     // refund that exact charge atomically with the rejection. Never refund
@@ -151,6 +159,7 @@ exports.rejectTransaction = onCall({ enforceAppCheck: true }, async request => {
       rejectedAt: admin.firestore.FieldValue.serverTimestamp(),
       rejectionRefunded: true,
       rejectionRefundAmount: refund,
+      ...(tx.executionMode === 'api' ? { apiDispatchStatus: 'rejected' } : {}),
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
     result = { id, rejected: true, refunded: refund };
