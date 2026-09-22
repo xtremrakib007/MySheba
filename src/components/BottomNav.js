@@ -63,7 +63,7 @@ export default function BottomNav() {
 
 function createStyles(colors) {
   return StyleSheet.create({
-    nav: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 6, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border },
+    nav: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-end', paddingTop: 6, paddingBottom: 10, paddingHorizontal: 4, backgroundColor: colors.card, borderTopWidth: 1.5, borderTopColor: colors.accentLine },
     btn: { alignItems: 'center', paddingVertical: 4, paddingHorizontal: 6, flex: 1 },
     btnHome: { marginTop: -12 },
     iconCircle: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', marginBottom: 2, backgroundColor: colors.surface },

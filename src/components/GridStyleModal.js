@@ -76,7 +76,7 @@ function Preview({ keyName, colors, isDark }) {
   const darkBg = isDark ? '#11161A' : '#F4F7FA';
   const iconColor = isDark ? '#FFFFFF' : '#111111';
   if (keyName === 'gradient') {
-    return <LinearGradient colors={[colors.primary, colors.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={previewStyle.wrap}><Text style={previewStyle.iconLight}>{meta.icon}</Text></LinearGradient>;
+    return <LinearGradient colors={[colors.secondary, colors.primary, colors.gold]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={previewStyle.wrap}><Text style={previewStyle.iconLight}>{meta.icon}</Text></LinearGradient>;
   }
   if (keyName === 'neon') {
     return <View style={[previewStyle.wrap, { backgroundColor: '#080A0C', borderColor: colors.primary, shadowColor: colors.primary, shadowOpacity: 0.45, shadowRadius: 6, elevation: 4 }]}><Text style={[previewStyle.iconLight, { color: colors.primary }]}>{meta.icon}</Text></View>;
