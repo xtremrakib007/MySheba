@@ -71,12 +71,34 @@ import PayslipDetailsScreen from './src/screens/PayslipDetailsScreen';
 import RatePopup from './src/components/RatePopup';
 import ResultModal from './src/components/ResultModal';
 import Sidebar from './src/components/Sidebar';
+import BottomNav from './src/components/BottomNav';
 import AppAlertHost from './src/components/AppAlertHost';
 import SecurityPinGate from './src/components/SecurityPinGate';
 import AppLockScreen from './src/components/AppLockScreen';
 import BiometricOptInPrompt from './src/components/BiometricOptInPrompt';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import AnimatedSplash from './src/components/AnimatedSplash';
+
+const NAV_SCREENS = [
+  'customerHome',
+  'dealerHome',
+  'resellerHome',
+  'adminHome',
+  'support',
+  'help',
+  'adminSupport',
+  'history',
+  'topup',
+  'superAdminTopup',
+  'profile',
+  'settings',
+  'myAccount',
+  'moreFeatures',
+  'adminFeatures',
+  'dealerFeatures',
+  'resellerFeatures',
+  'notifications',
+];
 
 function Root() {
   const { screen, authLoading, profile, adminViewingSection } = useApp();
@@ -163,6 +185,7 @@ function Root() {
       {renderedScreen === 'payslipHistory' && <PayslipHistoryScreen />}
       {renderedScreen === 'payslipDetails' && <PayslipDetailsScreen />}
     </View>
+    {NAV_SCREENS.includes(renderedScreen) && <BottomNav />}
     <RatePopup /><ResultModal /><Sidebar /><AppAlertHost /><SecurityPinGate /><AppLockScreen /><BiometricOptInPrompt />
   </SafeAreaView>;
 }
