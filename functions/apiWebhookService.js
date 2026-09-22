@@ -103,10 +103,16 @@ exports.deleteApiWebhook = onCall({ enforceAppCheck: true }, async (request) => 
 
 async function findTransaction(db, providerId, providerTransactionId) {
   const byRequest = await db.collection('transactions').where('raw.requestId', '==', providerTransactionId).limit(2).get();
-  const requestMatches = byRequest.docs.filter((d) => (d.data() || {}).executionMode === 'api');
+  const requestMatches = byRequest.docs.filter((d) => {
+    const data = d.data() || {};
+    return data.executionMode === 'api' && data.status !== 'failed' && data.status !== 'unknown';
+  });
   if (requestMatches.length === 1) return requestMatches[0];
   const byResponse = await db.collection('transactions').where('apiExecution.responseId', '==', providerTransactionId).limit(2).get();
-  const responseMatches = byResponse.docs.filter((d) => (d.data() || {}).apiExecution?.providerId === providerId);
+  const responseMatches = byResponse.docs.filter((d) => {
+    const data = d.data() || {};
+    return data.executionMode === 'api' && data.apiExecution?.providerId === providerId;
+  });
   if (responseMatches.length === 1) return responseMatches[0];
   return null;
 }
@@ -166,6 +172,13 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
       providerMessage: message,
       webhookReceivedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
+
+    // A webhook is only allowed to mutate an API-dispatched transaction that
+    // belongs to this provider. Never let a provider callback settle a legacy
+    // transaction or a transaction owned by another provider.
+    if (order.executionMode !== 'api' || order.apiExecution?.providerId !== providerId) {
+      throw new Error('Webhook transaction/provider mismatch.');
+    }
 
     if (status === config.cancelStatus) {
       if (order.apiRefunded !== true) {
