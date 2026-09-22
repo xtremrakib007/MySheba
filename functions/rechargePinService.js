@@ -175,6 +175,21 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
     // persistence failure must be treated as UNKNOWN, never as a definitive
     // provider failure, because refunding here could create a free voucher.
     providerSucceeded = true;
+    // Persist explicit provider-success evidence before storing the secret.
+    // If secret persistence fails, retries must never interpret the request as
+    // a safe provider failure and issue a refund or a second voucher request.
+    await txRef.update({
+      apiExecution: {
+        status: 'accepted',
+        providerId: api.providerId,
+        providerName: api.providerName,
+        responseId: api.responseId || null,
+        message: api.message || null,
+        providerSucceeded: true,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
 
     await db.collection('rechargePins').doc(txRef.id).set({
       transactionId: txRef.id, customerId: uid, operator, amount: denomination,
@@ -193,7 +208,16 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
       const message = providerSucceeded
         ? 'The provider issued the Recharge PIN, but MySheba could not finish recording the transaction. Do not retry automatically; reconcile the voucher and transaction first.'
         : String(e?.message || 'Provider outcome is uncertain').slice(0, 500);
-      await txRef.update({ status: 'unknown', apiExecution: { status: 'unknown', error: message, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      await txRef.update({
+        status: 'unknown',
+        apiExecution: {
+          status: 'unknown',
+          providerSucceeded,
+          error: message,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
       throw providerSucceeded ? new HttpsError('unavailable', message) : e;
     }
     if (unavailable) {
