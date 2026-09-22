@@ -183,7 +183,14 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
         tx.update(txRef, { apiExecution, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
       }
     } else if (status === config.successStatus) {
-      tx.update(txRef, { status: 'completed', apiExecution, completedAt: order.completedAt || admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      // Never resurrect a transaction that has already been refunded/failed.
+      // Provider callbacks can arrive out of order, so a late Success after
+      // Cancel must not undo the refund or mark the order completed again.
+      if (order.apiRefunded === true || order.status === 'failed') {
+        tx.update(txRef, { apiExecution, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      } else {
+        tx.update(txRef, { status: 'completed', apiExecution, completedAt: order.completedAt || admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      }
     } else {
       tx.update(txRef, { apiExecution, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
     }
