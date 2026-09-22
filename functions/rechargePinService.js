@@ -110,11 +110,11 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
     if (!user.exists || !active(user.data()) || user.data().role !== 'customer') throw new HttpsError('permission-denied', 'Your customer account is not active.');
     const balance = Number(user.data().walletBalance || 0);
     if (!Number.isFinite(balance) || balance < 0 || !Number.isSafeInteger(Math.round(balance * 100))) throw new HttpsError('failed-precondition', 'Wallet balance is invalid.');
-    if (balance < cost) throw new HttpsError('failed-precondition', `You need MYR ${cost.toFixed(2)} in your wallet to buy this PIN.`);
-    tx.update(profileRef, { walletBalance: balance - cost });
+    if (balance < walletCost) throw new HttpsError('failed-precondition', `You need ${walletCost.toFixed(2)} ${walletFx.currency} in your wallet to buy this PIN.`);
+    tx.update(profileRef, { walletBalance: balance - walletCost, walletCurrency: walletFx.currency });
     tx.create(txRef, {
       service: PIN_SERVICE, customerId: uid, customerRole: 'customer', customerPhone: user.data().phone || '',
-      operator, amount: denomination, total: denomination, currency: 'MYR', cost, pointsCharged: cost,
+      operator, amount: denomination, total: denomination, currency: walletFx.currency, cost: walletCost, walletCost, baseCostMyr: cost, fxRate: walletFx.sellRate, fxRateType: 'sell', fxRateSource: walletFx.rateSource,
       tierDiscountPercent: discount, executionMode: 'api', status: 'processing', rechargePinAvailable: false,
       apiRefunded: false, raw: { requestId, country: 'MY', operator, amount: denomination },
       createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp()
@@ -144,7 +144,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
       apiExecution: { status: 'accepted', providerId: api.providerId, providerName: api.providerName, responseId: api.responseId || null, message: api.message || null, providerSucceeded: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
-    return { id: txRef.id, cost: reserved.cost, pin: api.secret, operator, amount: denomination, currency: 'MYR' };
+    return { id: txRef.id, cost: walletCost, baseCostMyr: reserved.cost, pin: api.secret, operator, amount: denomination, currency: walletFx.currency, fxRate: walletFx.sellRate };
   } catch (e) {
     const unavailable = String(e?.code || '') === 'unavailable';
     if (unavailable || providerSucceeded) {
@@ -182,5 +182,5 @@ exports.getRechargePin = onCall({ enforceAppCheck: true }, async (request) => {
   if (txSnap.data()?.status !== 'completed' || txSnap.data()?.rechargePinAvailable !== true) throw new HttpsError('failed-precondition', 'This Recharge PIN is not available yet.');
   const pinSnap = await db.collection('rechargePins').doc(transactionId).get();
   if (!pinSnap.exists || pinSnap.data()?.customerId !== uid) throw new HttpsError('not-found', 'Recharge PIN is unavailable. Contact support if you were charged.');
-  return { id: transactionId, operator: pinSnap.data()?.operator || txSnap.data()?.operator || '', amount: Number(pinSnap.data()?.amount || txSnap.data()?.amount || 0), currency: 'MYR', pin: pinSnap.data()?.pin || '' };
+  return { id: transactionId, operator: pinSnap.data()?.operator || txSnap.data()?.operator || '', amount: Number(pinSnap.data()?.amount || txSnap.data()?.amount || 0), currency: txSnap.data()?.currency || 'MYR', fxRate: Number(txSnap.data()?.fxRate || 1), pin: pinSnap.data()?.pin || '' };
 });
