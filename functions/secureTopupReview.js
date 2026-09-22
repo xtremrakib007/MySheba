@@ -87,7 +87,7 @@ exports.approveTopup = onCall({ enforceAppCheck: true }, async request => {
       const newBalanceCents = balanceCents + pointsCents;
       if (!Number.isSafeInteger(newBalanceCents)) throw new HttpsError('failed-precondition', 'Wallet balance is too large.');
       const newBalance = newBalanceCents / 100;
-      tx.update(userRef, { walletBalance: newBalance, walletCurrency: inferWalletCurrency(user) });
+      tx.update(userRef, { walletBalance: newBalance, walletCurrency: user.walletCurrency || user.walletBalanceCurrency || 'MYR' });
       tx.update(ref, { status: 'approved', approvedBy: uid, approvedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp(), creditedPoints: points });
       return { userId, points };
     });
