@@ -1,9 +1,9 @@
 // Admin/superadmin transaction queue. Approval is separate from operator
 // acceptance: admin/superadmin approves first, dealer/reseller claims as the
 // Operator, then that Operator completes the order.
-import { collection, doc, getDoc, onSnapshot, orderBy, query, updateDoc, where, type DocumentData, type QueryDocumentSnapshot } from 'firebase/firestore';
+import { collection, doc, onSnapshot, orderBy, query, updateDoc, where, type DocumentData, type QueryDocumentSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { db, functions, auth } from '../firebase/config';
+import { db, functions } from '../firebase/config';
 
 const COLLECTION = 'transactions';
 export type TxStatus = 'pending' | 'processing' | 'completed';
@@ -28,11 +28,6 @@ function mapTx(d: QueryDocumentSnapshot<DocumentData>): Transaction {
 export function subscribeTransactions(onUpdate: (txs: Transaction[]) => void, onError: (err: Error) => void) {
   const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc')); return onSnapshot(q, (snap) => onUpdate(snap.docs.map(mapTx)), (err) => onError(err as Error));
 }
-async function getStaffActor() {
-  const uid = auth?.currentUser?.uid || ''; if (!uid) throw new Error('You must be signed in to perform this action.');
-  const snap = await getDoc(doc(db, 'users', uid)); const p = snap.exists() ? snap.data() : {};
-  return { uid, name: p.fullName || p.name || p.displayName || p.phone || uid, role: p.role || '' };
-}
 export async function approveTransaction(id: string): Promise<void> {
   try { await httpsCallable(functions, 'approveTransaction')({ transactionId: id }); }
   catch (err) { throw new Error((err as Error).message || 'Could not approve this order.'); }
@@ -41,11 +36,16 @@ export async function acceptTransaction(id: string): Promise<void> {
   try { await httpsCallable(functions, 'acceptTransaction')({ transactionId: id }); }
   catch (err) { throw new Error((err as Error).message || 'Could not accept this order.'); }
 }
-const REJECT_FNS: Record<string, string> = { Recharge: 'rejectRechargeTransaction', Internet: 'rejectInternetPackageTransaction' };
+const REJECT_FNS: Record<string, string> = {
+  Recharge: 'rejectRechargeTransaction', Internet: 'rejectInternetPackageTransaction',
+  'Mobile Banking': 'rejectMobileBankingTransaction', Remittance: 'rejectRemittanceTransaction',
+};
 export async function rejectTransaction(id: string, reason: string, service: string): Promise<void> {
   const fnName = REJECT_FNS[service];
   if (fnName) { try { await httpsCallable(functions, fnName)({ transactionId: id, reason: reason || '' }); } catch (err) { throw new Error((err as Error).message || 'Could not reject this order right now.'); } return; }
-  await updateDoc(doc(db, COLLECTION, id), { status: 'completed', rejected: true, rejectReason: reason || '', updatedAt: new Date() });
+  // Rejection is a server-side operation for every service the platform
+  // issues; a client write here would be denied by firestore.rules.
+  throw new Error(`No rejection workflow exists for "${service}" orders.`);
 }
 export async function completeTransaction(id: string, pin?: string, receiptUrl?: string): Promise<void> {
   try { await httpsCallable(functions, 'completeTransaction')({ transactionId: id, pin: pin || '', receiptUrl: receiptUrl || '' }); }

@@ -4,6 +4,7 @@ import { CreditCard, Layers, Megaphone, Percent, Receipt, Settings2, Tags, Walle
 const groups = [
   { title: 'Money & Commercial', items: [['Rates & Pricing','/config/rates','Exchange rates, remittance and service pricing', Tags],['Pricing','/config/pricing','Customer and service pricing controls', Percent],['Payment Settings','/config/payments','Payment and collection configuration', CreditCard],['Salary Settings','/config/salary','Salary and commission settings', Wallet]] },
   { title: 'Operational Records', items: [['Transactions','/transactions','Review live transaction activity', Receipt]] },
+  { title: 'Content & Modules', items: [['Banners','/config/banners','Home-screen banners shown in the mobile app', Megaphone],['Module Subscriptions','/config/modules','Module plans and their pricing', Layers]] },
 ] as const;
 
 export default function PlatformControlCenterPage() {

@@ -3,7 +3,8 @@ import {
   LayoutDashboard, Users, SlidersHorizontal, BadgeCheck, ShieldAlert,
   MessageCircle, LifeBuoy, BarChart3, Tag, Wallet, Megaphone, BellRing, LayoutGrid, Layers,
   CreditCard, Coins, Smartphone, PercentCircle, Receipt, Plane, Send, Building2, LineChart, Lock,
-  Activity, Search, TriangleAlert, ClipboardList, Headphones, Store, BriefcaseBusiness, Banknote,
+  Activity, Search, TriangleAlert, ClipboardList, Headphones, Mail, BriefcaseBusiness, Banknote,
+  ListChecks, UserCog, UserRoundCog,
   Network, TrendingUp, ScrollText, Settings2, ShieldCheck, Gauge, Workflow,
 } from 'lucide-react';
 
@@ -29,8 +30,11 @@ export const navGroups: NavGroup[] = [
     { label: 'Investigation Center', path: '/investigation', icon: Search, enabled: true },
   ] },
   { label: 'Operations', accent: 'secondary', items: [
+    { label: 'Operations Center', path: '/operations', icon: ListChecks, enabled: true },
     { label: 'Transactions', path: '/transactions', icon: Receipt, enabled: true },
-    { label: 'User Operations', path: '/users', icon: Users, enabled: true },
+    { label: 'User Management', path: '/users', icon: Users, enabled: true },
+    { label: 'User Operations', path: '/user-operations', icon: UserRoundCog, enabled: true },
+    { label: 'Advanced User Ops', path: '/advanced-user-operations', icon: UserCog, enabled: true },
     { label: 'KYC Operations', path: '/kyc-operations', icon: ClipboardList, enabled: true },
     { label: 'Support Operations', path: '/support-operations', icon: Headphones, enabled: true },
     { label: 'Service Operations', path: '/service-operations', icon: Workflow, enabled: true },
@@ -44,6 +48,7 @@ export const navGroups: NavGroup[] = [
   { label: 'Verification & Moderation', accent: 'warning', items: [
     { label: 'Identity Verification', path: '/verification', icon: BadgeCheck, enabled: true },
     { label: 'Security Center', path: '/security', icon: ShieldCheck, enabled: true },
+    { label: 'Chat Reports', path: '/chat-reports', icon: MessageCircle, enabled: true },
   ] },
   { label: 'Finance & Risk', accent: 'danger', items: [
     { label: 'Financial Control', path: '/financial', icon: Banknote, enabled: true },
@@ -53,6 +58,7 @@ export const navGroups: NavGroup[] = [
   ] },
   { label: 'Support & Communications', accent: 'danger', items: [
     { label: 'Support Tickets', path: '/support', icon: LifeBuoy, enabled: true },
+    { label: 'Support Messages', path: '/support-messages', icon: Mail, enabled: true },
     { label: 'Announcements', path: '/announcements', icon: BellRing, enabled: true },
     { label: 'Communications Center', path: '/communications', icon: Megaphone, enabled: true },
     { label: 'Notification Delivery', path: '/notification-delivery', icon: Activity, enabled: true },

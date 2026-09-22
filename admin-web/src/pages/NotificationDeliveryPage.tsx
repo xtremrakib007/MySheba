@@ -38,9 +38,9 @@ export default function NotificationDeliveryPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[
+        {([
           ['Broadcasts', items.length, Bell], ['Recipients Matched', stats.matched, Users], ['Notifications Sent', stats.sent, CheckCircle2], ['Unsent / Failed', stats.failed, XCircle],
-        ].map(([label, value, Icon]) => (
+        ] as const).map(([label, value, Icon]) => (
           <div key={String(label)} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><span className="text-sm text-slate-500">{label}</span><Icon size={20} /></div><div className="mt-2 text-2xl font-bold text-[#0b2447]">{Number(value).toLocaleString()}</div></div>
         ))}
       </div>
