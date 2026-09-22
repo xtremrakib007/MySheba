@@ -1,0 +1,52 @@
+name: Publish Production OTA Update
+
+on:
+  workflow_dispatch:
+    inputs:
+      message:
+        description: "EAS Update message"
+        required: true
+        default: "Publish production Android OTA update"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+        with:
+          ref: audit-fix-all-2026-09-16
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify production source
+        run: |
+          npm run production:check
+          npm run test:api-provider
+          npm run audit:functions
+
+      - name: Publish Android production OTA
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          test -n "$EXPO_TOKEN" || {
+            echo "::error::EXPO_TOKEN GitHub Actions secret is not configured."
+            exit 1
+          }
+          npx eas-cli@24.7.0 update \
+            --channel production \
+            --platform android \
+            --message "${{ inputs.message }}" \
+            --non-interactive
