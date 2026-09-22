@@ -8,6 +8,7 @@
     "android": "expo run:android",
     "prebuild": "expo prebuild",
     "bump-version": "node scripts/bump-version.js",
+    "audit:nav": "node scripts/audit-navigation.js",
     "build:apk": "eas build -p android --profile preview",
     "build:aab": "eas build -p android --profile production"
   },
