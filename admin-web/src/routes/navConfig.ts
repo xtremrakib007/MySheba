@@ -66,6 +66,7 @@ export const navGroups: NavGroup[] = [
   ] },
   { label: 'Platform Configuration', accent: 'success', items: [
     { label: 'Rates & Pricing', path: '/config/rates', icon: Tag, enabled: true },
+    { label: 'Wallet Exchange Rates', path: '/config/wallet-exchange', icon: Coins, superadminOnly: true, enabled: true },
     { label: 'Pricing', path: '/config/pricing', icon: PercentCircle, enabled: true },
     { label: 'Payment Settings', path: '/config/payments', icon: CreditCard, enabled: true },
     { label: 'Salary Settings', path: '/config/salary', icon: Wallet, enabled: true },
