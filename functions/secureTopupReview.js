@@ -1,6 +1,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logAudit, logServerError } = require('./logService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const ADMIN_ROLES = ['admin', 'superadmin'];
 const MAX_AMOUNT = 100000;
@@ -26,7 +27,7 @@ function validBalance(value) {
   return n;
 }
 
-exports.approveTopup = onCall({ enforceAppCheck: true }, async request => {
+exports.approveTopup = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
   const uid = requireAdmin(request);
   const db = admin.firestore();
   const callerSnap = await db.collection('users').doc(uid).get();
@@ -67,7 +68,7 @@ exports.approveTopup = onCall({ enforceAppCheck: true }, async request => {
   }
 });
 
-exports.rejectTopup = onCall({ enforceAppCheck: true }, async request => {
+exports.rejectTopup = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
   const uid = requireAdmin(request);
   const db = admin.firestore();
   const callerSnap = await db.collection('users').doc(uid).get();

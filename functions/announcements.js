@@ -3,6 +3,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logAudit, logServerError } = require('./logService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const ADMIN_ROLES = ['admin', 'superadmin'];
 const AUDIENCES = ['all', 'customer', 'dealer', 'reseller', 'admin', 'superadmin'];
@@ -23,7 +24,7 @@ async function sendExpoPush(messages) {
     } catch (e) { console.error('Expo push send failed', e); }
   }
 }
-exports.sendAnnouncement = onCall({ enforceAppCheck: true }, async (request) => {
+exports.sendAnnouncement = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const db = admin.firestore();
   const callerUid = request.auth.uid;

@@ -8,6 +8,7 @@ const { assignUniqueUserId } = require('./userId');
 const { logAudit, logServerError } = require('./logService');
 const emailOtpService = require('./emailOtpService');
 const { trackTemporaryAuthUser, deleteTrackedTemporaryAuthUser } = require('./temporaryAuthCleanup');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const APP_EMAIL_DOMAIN = 'mysheba.app';
 const REGISTRATION_LOCK_MS = 120000;
@@ -125,5 +126,5 @@ async function registerCustomer(request) {
 
 // App Check is required because this callable also exposes unauthenticated verification actions.
 // Compatibility alias for already-deployed clients. The implementation is now explicitly self-service.
-exports.registerCustomer = onCall({ enforceAppCheck: true }, registerCustomer);
+exports.registerCustomer = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, registerCustomer);
 exports.registerWithDealerCode = exports.registerCustomer;

@@ -4,6 +4,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logServerError } = require('./logService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const MAX_QUERY_LENGTH = 80;
 const MAX_SCAN_RESULTS = 25;
@@ -27,7 +28,7 @@ function discoverable(u) {
   return !u.mergedInto && u.suspended !== true && u.inactive !== true && u.disabled !== true;
 }
 
-exports.searchUsers = onCall({ enforceAppCheck: true }, async (request) => {
+exports.searchUsers = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const callerUid = request.auth.uid;
   const term = String(request.data?.query || '').trim();
@@ -68,7 +69,7 @@ exports.searchUsers = onCall({ enforceAppCheck: true }, async (request) => {
   return { results };
 });
 
-exports.getUserByUid = onCall({ enforceAppCheck: true }, async (request) => {
+exports.getUserByUid = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const callerUid = request.auth.uid;
   const targetUid = String(request.data?.uid || '').trim();

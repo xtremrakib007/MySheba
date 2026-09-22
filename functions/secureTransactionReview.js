@@ -1,6 +1,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logAudit } = require('./logService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const SERVICE_BY_FUNCTION = {
   rejectRechargeTransaction: 'recharge', rejectInternetPackageTransaction: 'internet',
@@ -20,7 +21,7 @@ async function getActor(db, uid) {
   return { uid, role, dealerId: profile.dealerId || null, resellerId: profile.resellerId || null };
 }
 function makeRejectCallable(service) {
-  return onCall({ enforceAppCheck: true }, async (request) => {
+  return onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
     const db = admin.firestore(); const actor = await getActor(db, request.auth.uid);
     if (!ROLE_SERVICES[actor.role].includes(service)) throw new HttpsError('permission-denied', 'Your role cannot reject this service.');

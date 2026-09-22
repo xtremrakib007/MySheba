@@ -3,6 +3,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logAudit, logServerError } = require('./logService');
 const { finalizeKycFaceTemplate } = require('./faceVerificationService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 function requireAuth(request) {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
@@ -67,7 +68,7 @@ function validateRequestData(data, uid) {
   if (data.liveFaceVerified !== true) throw new HttpsError('failed-precondition', 'Live face verification is required.');
 }
 
-exports.approveVerification = onCall({ enforceAppCheck: true }, async (request) => {
+exports.approveVerification = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const callerUid = requireAuth(request);
   const db = admin.firestore();
   const caller = await requireAdmin(db, callerUid);
@@ -99,7 +100,7 @@ exports.approveVerification = onCall({ enforceAppCheck: true }, async (request) 
   return { ok: true };
 });
 
-exports.rejectVerification = onCall({ enforceAppCheck: true }, async (request) => {
+exports.rejectVerification = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const callerUid = requireAuth(request);
   const db = admin.firestore();
   const caller = await requireAdmin(db, callerUid);

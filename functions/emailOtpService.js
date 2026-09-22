@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const admin = require('firebase-admin');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { sendEmail } = require('./mailerService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 const OTP_EXPIRY_MS=10*60*1000, VERIFIED_EXPIRY_MS=15*60*1000, MAX_ATTEMPTS=5, RESEND_COOLDOWN_MS=60*1000;
 const EMAIL_LINK_URL='https://mysheba.top/verifyEmail';
 const normalizeEmail=e=>String(e||'').trim().toLowerCase();
@@ -35,7 +36,7 @@ async function verifyEmailVerificationOtp(data){
   if(result.status==='invalid') throw new HttpsError('invalid-argument','Incorrect verification code.');
   return {verificationId:result.verificationId,email};
 }
-exports.sendEmailVerificationOtp=onCall({ enforceAppCheck: true },async r=>sendEmailVerificationOtp(r.data));
-exports.verifyEmailVerificationOtp=onCall({ enforceAppCheck: true },async r=>verifyEmailVerificationOtp(r.data));
+exports.sendEmailVerificationOtp=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>sendEmailVerificationOtp(r.data));
+exports.verifyEmailVerificationOtp=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>verifyEmailVerificationOtp(r.data));
 exports.sendEmailVerificationOtpInternal=sendEmailVerificationOtp;
 exports.verifyEmailVerificationOtpInternal=verifyEmailVerificationOtp;

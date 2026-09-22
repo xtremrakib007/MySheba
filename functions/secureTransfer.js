@@ -3,6 +3,7 @@ const admin = require('firebase-admin');
 const { logAudit, logServerError } = require('./logService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { checkIpAnomaly } = require('./anomalyService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const KEY_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const MAX_TRANSFER = 100000;
@@ -38,7 +39,7 @@ function validBalance(value) {
   return n;
 }
 
-exports.transferPoints = onCall({ enforceAppCheck: true }, async (request) => {
+exports.transferPoints = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const callerUid = requireAuth(request);
   const requestId = requireRequestId(request);
   const db = admin.firestore();

@@ -1,6 +1,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const ADMIN_ROLES = ['admin', 'superadmin'];
@@ -33,7 +34,7 @@ function isActiveAccount(account) {
   return account && account.suspended !== true && account.inactive !== true && account.disabled !== true && !account.mergedInto;
 }
 
-exports.createSelfTopup = onCall({ enforceAppCheck: true }, async (request) => {
+exports.createSelfTopup = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const { uid, requestId } = requireRequest(request);
   const db = admin.firestore();
   const data = request.data || {};

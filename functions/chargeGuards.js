@@ -1,6 +1,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const walletService = require('./walletService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const RECHARGE_COUNTRIES = new Set(['BD', 'IN', 'NP', 'PK', 'PH', 'ID', 'MM', 'KH']);
@@ -128,7 +129,7 @@ async function sanitizeRequest(request, requestId, name) {
 }
 
 function wrap(name) {
-  return onCall({ enforceAppCheck: true }, async (request) => {
+  return onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
     const uid = requireAuth(request);
     const requestId = getRequestId(request);
     const db = admin.firestore();

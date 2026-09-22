@@ -1,6 +1,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logAudit } = require('./logService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const DEALER_SERVICES = ['Mobile Banking'];
 const RESELLER_SERVICES = ['Recharge', 'Internet', 'Remittance'];
@@ -64,7 +65,7 @@ async function validateOrderReceipt(receiptUrl, transactionId) {
   return receiptUrl;
 }
 
-exports.approveTransaction = onCall({ enforceAppCheck: true }, async (request) => {
+exports.approveTransaction = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   requireAuth(request); const actor = await getActor(request.auth.uid);
   if (!APPROVER_ROLES.includes(actor.role)) throw new HttpsError('permission-denied', 'Only an admin or superadmin can approve an order.');
   const id = String(request.data?.transactionId || ''); if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
@@ -80,7 +81,7 @@ exports.approveTransaction = onCall({ enforceAppCheck: true }, async (request) =
   return { ok: true, transactionId: id };
 });
 
-exports.acceptTransaction = onCall({ enforceAppCheck: true }, async (request) => {
+exports.acceptTransaction = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   requireAuth(request); const actor = await getActor(request.auth.uid);
   const id = String(request.data?.transactionId || ''); if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
   const db = admin.firestore(), ref = db.collection('transactions').doc(id);
@@ -105,7 +106,7 @@ exports.acceptTransaction = onCall({ enforceAppCheck: true }, async (request) =>
   return { ok: true, transactionId: id };
 });
 
-exports.completeTransaction = onCall({ enforceAppCheck: true }, async (request) => {
+exports.completeTransaction = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   requireAuth(request); const actor = await getActor(request.auth.uid);
   if (!OPERATOR_ROLES.includes(actor.role)) throw new HttpsError('permission-denied', 'Only the dealer/reseller Operator can complete an order.');
   const id = String(request.data?.transactionId || ''), pin = String(request.data?.pin || ''), receiptUrl = String(request.data?.receiptUrl || '');

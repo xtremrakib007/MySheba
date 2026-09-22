@@ -4,6 +4,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const PENDING = 'pendingBiometricTemplates';
 const VERIFIED = 'biometricTemplates';
@@ -101,7 +102,7 @@ function validateSubmission(data, uid, phone) {
   if (data.liveFaceVerified !== true) throw new HttpsError('failed-precondition', 'Complete live face verification first.');
 }
 
-exports.createDiditKycSession = onCall({ enforceAppCheck: true }, async (request) => {
+exports.createDiditKycSession = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const uid = requireAuth(request);
   const db = admin.firestore();
 

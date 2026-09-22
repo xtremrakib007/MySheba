@@ -1,6 +1,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logAudit, logServerError } = require('./logService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const MAX_AMOUNT = 100000;
 const ADMIN_ROLES = ['admin', 'superadmin'];
@@ -10,7 +11,7 @@ function activeAccount(user) {
   return user && user.suspended !== true && user.inactive !== true && user.disabled !== true && !user.mergedInto;
 }
 
-exports.adminTopUpPoints = onCall({ enforceAppCheck: true }, async request => {
+exports.adminTopUpPoints = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
 
   const db = admin.firestore();
