@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const admin = require('firebase-admin');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 const { sendEmail } = require('./mailerService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { logServerError } = require('./logService');
@@ -57,5 +58,5 @@ async function verifyPasswordResetEmailOtp(data) {
   if (result.status === 'invalid') throw new HttpsError('invalid-argument', 'Incorrect verification code.');
   return { verificationId: result.verificationId, uid, email };
 }
-exports.sendPasswordResetEmailVerification = onCall({ enforceAppCheck: true }, async request => sendPasswordResetEmailVerification(request.data, request));
-exports.verifyPasswordResetEmailOtp = onCall({ enforceAppCheck: true }, async request => verifyPasswordResetEmailOtp(request.data));
+exports.sendPasswordResetEmailVerification = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => sendPasswordResetEmailVerification(request.data, request));
+exports.verifyPasswordResetEmailOtp = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => verifyPasswordResetEmailOtp(request.data));

@@ -1,5 +1,6 @@
 // PHASE 2 - MySheba Advertisement Feature Controls (Super Admin).
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 const admin = require('firebase-admin');
 const { logAdAudit, logServerError } = require('./logService');
 
@@ -26,7 +27,7 @@ function pickValidBooleans(changes, allowedFields) {
   return any ? picked : null;
 }
 
-exports.updateAdSettings = onCall({ enforceAppCheck: true }, async (request) => {
+exports.updateAdSettings = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const callerUid = requireAuth(request); const db = admin.firestore(); const caller = await requireSuperadmin(db, callerUid);
   const changes = pickValidBooleans((request.data || {}).changes, VALID_SETTINGS_FIELDS);
   if (!changes) throw new HttpsError('invalid-argument', 'No valid settings changes were provided.');
@@ -36,7 +37,7 @@ exports.updateAdSettings = onCall({ enforceAppCheck: true }, async (request) => 
   return { ok:true };
 });
 
-exports.updateAdFeatureControl = onCall({ enforceAppCheck: true }, async (request) => {
+exports.updateAdFeatureControl = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const callerUid = requireAuth(request); const db = admin.firestore(); const caller = await requireSuperadmin(db, callerUid);
   const { featureId } = request.data || {};
   if (!featureId || !VALID_FEATURE_IDS.includes(featureId)) throw new HttpsError('invalid-argument', 'featureId is missing or not recognized.');
@@ -48,7 +49,7 @@ exports.updateAdFeatureControl = onCall({ enforceAppCheck: true }, async (reques
   return {ok:true};
 });
 
-exports.bulkUpdateAdFeatureControls = onCall({ enforceAppCheck: true }, async (request) => {
+exports.bulkUpdateAdFeatureControls = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const callerUid = requireAuth(request); const db = admin.firestore(); const caller = await requireSuperadmin(db, callerUid);
   const { featureIds } = request.data || {};
   if (!Array.isArray(featureIds) || featureIds.length === 0 || featureIds.length > VALID_FEATURE_IDS.length) throw new HttpsError('invalid-argument', 'featureIds must be a non-empty array within the supported feature limit.');
