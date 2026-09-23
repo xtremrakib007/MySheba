@@ -1,0 +1,103 @@
+name: Deploy MySheba Cloud Functions
+
+# Manual only, matching the OTA workflow. A functions deploy replaces live
+# backend behaviour for every user at once, so it waits to be asked.
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Limit the deploy, e.g. functions:registerCustomer. Blank deploys all functions."
+        required: false
+        default: ""
+
+jobs:
+  deploy:
+    name: Deploy functions
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check required secrets
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$SA" ]; then
+            echo "FIREBASE_SERVICE_ACCOUNT secret is required (the full service-account JSON)."
+            echo "Create one in Google Cloud console > IAM > Service Accounts, then add it as a repository secret."
+            exit 1
+          fi
+
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'   # functions/package.json pins engines.node to 22
+
+      # node --check on every function file. This is what a syntax error in
+      # one file costs otherwise: validateReceiptUrl was missing an `async`
+      # and silently blocked every deploy for weeks, because the failure only
+      # showed up as the whole codebase failing to load at deploy time.
+      - name: Syntax-check functions
+        run: npm run audit:functions
+
+      - name: Install function dependencies
+        working-directory: functions
+        run: npm ci --no-audit --no-fund
+
+      # Firebase reads functions/.env at deploy time and bakes the values into
+      # the deployed environment. The file is gitignored, so without this step
+      # every deploy from CI would silently ship with no SMTP configuration -
+      # password reset, device verification and receipt email would all stop,
+      # with no error at deploy time and none at runtime either.
+      - name: Write functions/.env from secrets
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+        run: |
+          missing=""
+          for k in SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM; do
+            [ -z "$(printenv "$k")" ] && missing="$missing $k"
+          done
+          if [ -n "$missing" ]; then
+            echo "Refusing to deploy: missing SMTP secret(s):$missing"
+            echo "Deploying without them would drop mail configuration silently."
+            echo "See functions/.env.example. Add each as a repository secret."
+            exit 1
+          fi
+          {
+            echo "SMTP_HOST=$SMTP_HOST"
+            echo "SMTP_PORT=$SMTP_PORT"
+            echo "SMTP_USER=$SMTP_USER"
+            echo "SMTP_PASS=$SMTP_PASS"
+            echo "SMTP_FROM=$SMTP_FROM"
+          } > functions/.env
+          echo "functions/.env written with $(wc -l < functions/.env) keys (values not printed)."
+
+      - name: Authenticate to Firebase
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
+
+      - name: Deploy
+        env:
+          ONLY: ${{ inputs.only }}
+          # .firebaserc already points at this project; passing it explicitly
+          # means a deploy cannot land somewhere else if that file changes.
+          PROJECT: satulink-solutions
+        run: |
+          if [ -n "$ONLY" ]; then
+            npx --yes firebase-tools@latest deploy --only "$ONLY" --project "$PROJECT" --non-interactive --force
+          else
+            npx --yes firebase-tools@latest deploy --only functions --project "$PROJECT" --non-interactive --force
+          fi
+
+      - name: Remove credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json" functions/.env

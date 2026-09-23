@@ -10,7 +10,7 @@
     "bump-version": "node scripts/bump-version.js",
     "build:apk": "npm run bump-version && eas build -p android --profile production-apk",
     "build:aab": "npm run bump-version && eas build -p android --profile production",
-    "audit:functions": "node --check functions/*.js",
+    "audit:functions": "find functions -maxdepth 1 -name '*.js' -print0 | xargs -0 -n1 node --check",
     "audit:nav": "node scripts/audit-navigation.js",
     "test:api-provider": "node scripts/test-api-provider-service.js",
     "production:check": "node scripts/production-readiness-check.js",
