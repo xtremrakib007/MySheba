@@ -10,6 +10,8 @@ import { secureAsyncStorage } from '../firebase/secureLocalStorage';
 import PhoneCountryPicker from '../components/PhoneCountryPicker';
 import { DEFAULT_PHONE_COUNTRY } from '../data/phoneCountries';
 import * as supportContactService from '../firebase/supportContactService';
+import { signInErrorCopy } from '../utils/signInErrorCopy';
+import { isValidPhone } from '../firebase/authService';
 
 const SUPPORT_EMAIL = 'info.mysheba@gmail.com';
 const REMEMBER_KEY = 'mysheba_remembered_phone';
@@ -29,6 +31,10 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+  // Per-field problems sit under the field they belong to; anything that
+  // comes back from the server is a form-level failure instead.
+  const [phoneError, setPhoneError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
 
   useEffect(() => {
     secureAsyncStorage.getItem(REMEMBER_KEY)
@@ -36,7 +42,22 @@ export default function LoginScreen() {
       .catch(() => {});
   }, []);
 
+  // Validate before calling out, so an empty or malformed field is answered
+  // under that field rather than as a round trip and a generic failure.
+  const validate = () => {
+    const nextPhone = !phone.trim()
+      ? t('login.errPhoneRequired', 'Enter your phone number.')
+      : !isValidPhone(phone)
+        ? t('login.errPhoneInvalid', 'Enter a valid phone number.')
+        : '';
+    const nextPassword = !password ? t('login.errPasswordRequired', 'Enter your password.') : '';
+    setPhoneError(nextPhone);
+    setPasswordError(nextPassword);
+    return !nextPhone && !nextPassword;
+  };
+
   const onSignIn = () => {
+    if (!validate()) return;
     secureAsyncStorage.setItem(REMEMBER_KEY, rememberMe ? phone : '').catch(() => {});
     doLogin(phone, password, phoneCountry.dial);
   };
@@ -96,14 +117,15 @@ export default function LoginScreen() {
           <View style={styles.card}>
             <Text style={styles.label}>{t('login.phoneNumber')}</Text>
             <View style={styles.phoneRow}>
-              <TouchableOpacity style={styles.countryChip} onPress={() => setCountryPicker(true)}>
+              <TouchableOpacity style={styles.countryChip} onPress={() => setCountryPicker(true)} disabled={authBusy}>
                 <Text style={styles.flagEmoji}>{phoneCountry.flag}</Text>
                 <Text style={styles.countryCode}>{phoneCountry.dial}</Text>
                 <Text style={{ fontSize: 10, marginLeft: 3 }}>▾</Text>
               </TouchableOpacity>
               <View style={styles.fieldDivider} />
-              <TextInput style={styles.phoneInput} placeholder={t('login.phonePlaceholder')} placeholderTextColor="#9AA5B1" keyboardType="phone-pad" value={phone} onChangeText={setPhone} autoCapitalize="none" />
+              <TextInput style={styles.phoneInput} placeholder={t('login.phonePlaceholder')} placeholderTextColor="#9AA5B1" keyboardType="phone-pad" value={phone} onChangeText={(v) => { setPhone(v); if (phoneError) setPhoneError(''); }} autoCapitalize="none" editable={!authBusy} />
             </View>
+            {!!phoneError && <Text style={styles.fieldError}>{phoneError}</Text>}
 
             <View style={styles.labelRow}>
               <Text style={styles.label}>{t('login.password')}</Text>
@@ -113,24 +135,35 @@ export default function LoginScreen() {
             </View>
             <View style={styles.pinRow}>
               <Text style={styles.lockIcon}>🔒</Text>
-              <TextInput style={styles.pinInput} placeholder={t('login.passwordPlaceholder')} placeholderTextColor="#9AA5B1" secureTextEntry={!showPassword} maxLength={20} autoCapitalize="none" value={password} onChangeText={setPassword} />
+              <TextInput style={styles.pinInput} placeholder={t('login.passwordPlaceholder')} placeholderTextColor="#9AA5B1" secureTextEntry={!showPassword} maxLength={20} autoCapitalize="none" value={password} onChangeText={(v) => { setPassword(v); if (passwordError) setPasswordError(''); }} editable={!authBusy} />
               <TouchableOpacity onPress={() => setShowPassword((s) => !s)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Text style={styles.eyeIcon}>{showPassword ? '🙈' : '👁️'}</Text>
               </TouchableOpacity>
             </View>
+            {!!passwordError && <Text style={styles.fieldError}>{passwordError}</Text>}
 
-            <TouchableOpacity style={styles.rememberRow} onPress={() => setRememberMe((r) => !r)} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.rememberRow} onPress={() => setRememberMe((r) => !r)} activeOpacity={0.7} disabled={authBusy}>
               <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
                 {rememberMe && <Text style={styles.checkboxTick}>✓</Text>}
               </View>
               <Text style={styles.rememberText}>{t('login.rememberMe')}</Text>
             </TouchableOpacity>
 
-            {!!authError && <Text style={styles.errorText}>{authError}</Text>}
+            {!!authError && !authBusy && (
+              <View style={styles.errorCard} accessibilityRole="alert" accessibilityLiveRegion="polite">
+                <Text style={styles.errorTitle}>{signInErrorCopy(authError).title}</Text>
+                <Text style={styles.errorBody}>{signInErrorCopy(authError).message}</Text>
+                <TouchableOpacity style={styles.retryBtn} onPress={onSignIn} accessibilityRole="button">
+                  <Text style={styles.retryText}>{t('login.tryAgain', 'Try Again')}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             <TouchableOpacity activeOpacity={0.85} onPress={onSignIn} disabled={authBusy}>
               <LinearGradient colors={brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.loginBtn, authBusy && styles.btnDisabled]}>
-                {authBusy ? <ActivityIndicator color="white" /> : <><Text style={styles.loginBtnText}>{t('login.login')}</Text><View style={styles.arrowCircle}><Text style={styles.arrowText}>→</Text></View></>}
+                {authBusy
+                  ? <><ActivityIndicator color="white" /><Text style={[styles.loginBtnText, styles.loginBtnTextBusy]}>{t('login.signingIn', 'Signing in…')}</Text></>
+                  : <><Text style={styles.loginBtnText}>{t('login.login')}</Text><View style={styles.arrowCircle}><Text style={styles.arrowText}>→</Text></View></>}
               </LinearGradient>
             </TouchableOpacity>
 
@@ -186,7 +219,17 @@ function createStyles(colors) {
     checkboxChecked: { backgroundColor: colors.primary, borderColor: colors.primary },
     checkboxTick: { color: 'white', fontSize: 12, fontWeight: '700' },
     rememberText: { fontSize: 13, color: BRAND_NAVY },
-    errorText: { color: colors.error, fontSize: 12, marginBottom: 12, textAlign: 'center' },
+    // Sits directly under its field, left-aligned with the label above it,
+    // so it reads as belonging to that input rather than to the form.
+    fieldError: { color: colors.error, fontSize: 11.5, marginTop: 5, marginBottom: 2 },
+    // Form-level failure: a titled block, not a red sentence, because it
+    // carries an action.
+    errorCard: { backgroundColor: `${colors.error}14`, borderWidth: 1, borderColor: `${colors.error}40`, borderRadius: radius.md, padding: 12, marginTop: 14, marginBottom: 4 },
+    errorTitle: { color: colors.error, fontSize: 13.5, fontWeight: '700' },
+    errorBody: { color: colors.text, fontSize: 12, lineHeight: 17, marginTop: 3 },
+    retryBtn: { alignSelf: 'flex-start', marginTop: 10, paddingVertical: 7, paddingHorizontal: 14, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.error },
+    retryText: { color: colors.error, fontSize: 12.5, fontWeight: '700' },
+    loginBtnTextBusy: { marginLeft: 10 },
     loginBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 15, borderRadius: radius.md, gap: 10 },
     btnDisabled: { opacity: 0.7 },
     loginBtnText: { color: 'white', fontWeight: '700', fontSize: 16 },
