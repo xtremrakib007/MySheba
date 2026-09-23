@@ -114,7 +114,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
     tx.update(profileRef, { walletBalance: balance - walletCost, walletCurrency: walletFx.currency });
     tx.create(txRef, {
       service: PIN_SERVICE, customerId: uid, customerRole: 'customer', customerPhone: user.data().phone || '',
-      operator, amount: denomination, total: denomination, currency: walletFx.currency, cost: walletCost, walletCost, baseCostMyr: cost, fxRate: walletFx.sellRate, fxRateType: 'sell', fxRateSource: walletFx.rateSource,
+      operator, amount: denomination, total: denomination, denominationCurrency: 'MYR', currency: walletFx.currency, walletCurrency: walletFx.currency, cost: walletCost, walletCost, baseCostMyr: cost, fxRate: walletFx.sellRate, fxRateType: 'sell', fxRateSource: walletFx.rateSource,
       tierDiscountPercent: discount, executionMode: 'api', status: 'processing', rechargePinAvailable: false,
       apiRefunded: false, raw: { requestId, country: 'MY', operator, amount: denomination },
       createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp()
