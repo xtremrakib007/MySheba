@@ -25,6 +25,9 @@ const BADGE_COLORS = {
 };
 
 const TYPE_ICON = { flight: '✈️', bus: '🚌', train: '🚂' };
+const ZERO_DECIMAL_CURRENCIES = new Set(['IDR', 'KHR', 'MMK']);
+function txCurrency(item) { return String(item?.currency || item?.walletCurrency || 'MYR').toUpperCase(); }
+function txAmount(value, currency) { const digits = ZERO_DECIMAL_CURRENCIES.has(currency) ? 0 : 2; return `${currency} ${Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })}`; }
 
 function formatDate(ts) {
   if (!ts || !ts.seconds) return '';
@@ -51,11 +54,12 @@ function Row({ label, value }) {
 }
 
 function formatTxCopy(tx) {
+  const currency = txCurrency(tx);
   return [
     `Service: ${tx.service || ''}`,
     `Customer: ${tx.customerPhone || 'Unknown'}`,
     `Details: ${tx.details || ''}`,
-    `Amount: MYR ${Number(tx.total || 0).toFixed(2)}`,
+    `Amount: ${txAmount(tx.total, currency)}`,
     `Status: ${(tx.status || '').toUpperCase()}`,
   ].join('\n');
 }
@@ -76,13 +80,14 @@ function formatInquiryCopy(inq) {
 }
 
 function formatTopupCopy(tp) {
+  const currency = txCurrency(tp);
   const lines = [
     `Method: ${topupService.METHODS[tp.method] || tp.method || ''}`,
     `User: ${tp.userName || 'Unknown'} (${tp.userRole || ''})`,
     `Phone: ${tp.userPhone || ''}`,
   ];
   if (tp.bankName) lines.push(`Bank: ${tp.bankName}${tp.refNo ? ` · Ref: ${tp.refNo}` : ''}`);
-  lines.push(`Amount: MYR ${Number(tp.amount || 0).toFixed(2)}`);
+  lines.push(`Amount: ${txAmount(tp.amount, currency)}`);
   lines.push(`Points: ${Number(tp.points || 0).toFixed(2)}`);
   if (tp.rejectReason) lines.push(`Reject reason: ${tp.rejectReason}`);
   lines.push(`Status: ${(tp.status || 'pending').toUpperCase()}`);
@@ -102,6 +107,7 @@ function formatTicketCopy(t) {
 }
 
 function TxBody({ item, showCost, pinOverride, onGeneratePin, generatingPin }) {
+  const currency = txCurrency(item);
   const {
     colors
   } = useTheme();
@@ -136,11 +142,11 @@ function TxBody({ item, showCost, pinOverride, onGeneratePin, generatingPin }) {
       {!!raw.receiverPickupCity && <Row label="Pickup City" value={raw.receiverPickupCity} />}
       {!!raw.receiverWalletProvider && <Row label="Wallet Provider" value={raw.receiverWalletProvider} />}
       {!!raw.receiverWalletNumber && <Row label="Wallet Number" value={raw.receiverWalletNumber} />}
-      <Row label="Amount" value={`MYR ${Number(item.total || 0).toFixed(2)}`} />
+      <Row label="Amount" value={txAmount(item.total, currency)} />
       {showCost && !!(item.cost || item.profit) && (
         <>
-          <Row label="Cost" value={`MYR ${Number(item.cost || 0).toFixed(2)}`} />
-          <Row label="Profit" value={`MYR ${Number(item.profit || 0).toFixed(2)}`} />
+          <Row label="Cost" value={txAmount(item.cost, currency)} />
+          <Row label="Profit" value={txAmount(item.profit, currency)} />
         </>
       )}
       {!!(pinOverride || item.pin) && (
@@ -227,6 +233,7 @@ function InquiryBody({ item }) {
 }
 
 function TopupBody({ item }) {
+  const currency = txCurrency(item);
   const {
     colors
   } = useTheme();
@@ -239,8 +246,8 @@ function TopupBody({ item }) {
       <Row label="Phone" value={item.userPhone} />
       <Row label="Bank" value={item.bankName} />
       <Row label="Reference" value={item.refNo} />
-      <Row label="Amount" value={`MYR ${Number(item.amount || 0).toFixed(2)}`} />
-      <Row label="Points" value={Number(item.points || 0).toFixed(2)} />
+      <Row label="Amount" value={txAmount(item.amount, currency)} />
+      <Row label="Wallet credit" value={txAmount(item.walletAmount ?? item.amount, currency)} />
       <Row label="Top-up ID" value={item.id} />
       <Row label="Created" value={formatDate(item.createdAt)} />
       {item.status === 'rejected' && <Row label="Reject reason" value={item.rejectReason} />}
@@ -329,7 +336,8 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
                 try {
                   const safe = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
                   const pin = pinOverride || item.pin || 'Not generated';
-                  const html = `<html><body style="font-family:Arial;padding:18px"><h2 style="text-align:center">MySheba</h2><p style="text-align:center">Transaction Receipt</p><hr/><p><b>Service:</b> ${safe(item.service)}</p><p><b>Order ID:</b> ${safe(item.id)}</p><p><b>Amount:</b> MYR ${Number(item.total || 0).toFixed(2)}</p><p><b>Status:</b> ${safe(item.status)}</p><div style="margin-top:18px;padding:14px;border:2px solid #0B8A94;text-align:center"><div style="font-size:11px">COLLECTION PIN</div><div style="font-size:28px;font-weight:bold;letter-spacing:6px">${safe(pin)}</div></div><p style="margin-top:20px;font-size:11px;text-align:center">Keep this receipt and collection PIN safe.</p></body></html>`;
+                  const currency = txCurrency(item);
+                  const html = `<html><body style="font-family:Arial;padding:18px"><h2 style="text-align:center">MySheba</h2><p style="text-align:center">Transaction Receipt</p><hr/><p><b>Service:</b> ${safe(item.service)}</p><p><b>Order ID:</b> ${safe(item.id)}</p><p><b>Amount:</b> ${txAmount(item.total, currency)}</p><p><b>Status:</b> ${safe(item.status)}</p><div style="margin-top:18px;padding:14px;border:2px solid #0B8A94;text-align:center"><div style="font-size:11px">COLLECTION PIN</div><div style="font-size:28px;font-weight:bold;letter-spacing:6px">${safe(pin)}</div></div><p style="margin-top:20px;font-size:11px;text-align:center">Keep this receipt and collection PIN safe.</p></body></html>`;
                   await Print.printAsync({ html });
                 } catch (err) { showAlert('Printer', err?.message || 'Printing is not available on this device.'); }
               }}>
