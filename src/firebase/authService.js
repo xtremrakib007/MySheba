@@ -23,6 +23,14 @@ import { toE164 as phoneToE164 } from '../data/phoneCountries';
 
 const APP_EMAIL_DOMAIN = 'mysheba.app';
 
+// A callable invoked immediately after Firebase sign-in must receive the
+// current ID token. Force-refreshing here prevents a stale/expired token from
+// being sent to checkDeviceSession and being rejected as UNAUTHENTICATED (401).
+async function refreshCallableAuthToken() {
+  if (!auth.currentUser) throw new Error('Please sign in again.');
+  await auth.currentUser.getIdToken(true);
+}
+
 export function normalizePhone(phone) {
   return String(phone || '').replace(/[^0-9]/g, '');
 }
@@ -105,6 +113,7 @@ export async function login(phone, pin, dialCode = '+60') {
     } catch (e) {}
   }
 
+  await refreshCallableAuthToken();
   const deviceId = await getDeviceId();
   const sessionFn = httpsCallable(functions, 'checkDeviceSession');
   let sessionResult;
@@ -137,6 +146,7 @@ export async function login(phone, pin, dialCode = '+60') {
 }
 
 export async function retryDeviceSession(uid, phoneIdToken, emailIdToken, emailOtp, resendEmailChallenge = false) {
+  await refreshCallableAuthToken();
   const deviceId = await getDeviceId();
   const sessionFn = httpsCallable(functions, 'checkDeviceSession');
   const { data: sessionResult } = await sessionFn({
@@ -167,6 +177,7 @@ export async function retryDeviceSession(uid, phoneIdToken, emailIdToken, emailO
 }
 
 export async function confirmDeviceLogin(uid, emailIdToken) {
+  await refreshCallableAuthToken();
   const deviceId = await getDeviceId();
   const confirmFn = httpsCallable(functions, 'confirmDeviceSwitch');
   const { data: sessionResult } = await confirmFn({ deviceId, emailIdToken });
@@ -180,6 +191,7 @@ export async function confirmDeviceLogin(uid, emailIdToken) {
 export async function logout() {
   logActivity('logout');
   try {
+    if (auth.currentUser) await refreshCallableAuthToken();
     const deviceId = await getDeviceId();
     const clearFn = httpsCallable(functions, 'clearActiveSession');
     await clearFn({ deviceId });
