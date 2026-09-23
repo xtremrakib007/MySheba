@@ -86,7 +86,7 @@ exports.findWalletRecipient = onCall({ enforceAppCheck: false }, async (request)
   if (!isKycApproved(sender)) throw new HttpsError('failed-precondition', 'Complete KYC before using wallet transfers.');
   await checkVelocity(db, uid, 'findWalletRecipient', { ip: getClientIp(request) });
   const recipient = await resolveRecipient(db, request.data?.recipient, uid);
-  return { uid: recipient.id, name: recipient.displayName || recipient.name || 'MySheba Customer', customerId: recipient.customerId || recipient.userId || '', phoneMasked: String(recipient.phone || '').replace(/(\d{3})\d+(\d{2})$/, '$1••••$2') };
+  return { uid: recipient.id, name: recipient.displayName || recipient.name || 'MySheba Customer', customerId: recipient.customerId || recipient.userId || '', phoneMasked: String(recipient.phone || '').replace(/(\d{3})\d+(\d{2})$/, '$1••••$2'), walletCurrency: inferWalletCurrency(recipient) };
 });
 
 exports.listWalletTransfers = onCall({ enforceAppCheck: false }, async (request) => {
