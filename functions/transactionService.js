@@ -1,11 +1,13 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { hasCapability } = require('./accessControl');
 const crypto = require('crypto');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 
 const DEALER_SERVICES = ['Mobile Banking'];
 const RESELLER_SERVICES = ['Recharge', 'Internet', 'Bill Payment', 'Remittance'];
-const APPROVER_ROLES = ['admin', 'superadmin'];
+// Staff who may hold the 'orders' capability (functions/accessControl.js).
+const APPROVER_ROLES = ['admin', 'superadmin', 'support', 'finance'];
 const OPERATOR_ROLES = ['dealer', 'reseller'];
 const ASSIGNABLE_ROLES = ['dealer'];
 const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
@@ -19,7 +21,7 @@ async function getActor(uid) {
   if (p.suspended === true || p.inactive === true || p.disabled === true || p.active === false || p.mergedInto) {
     throw new HttpsError('permission-denied', 'Your account is not active.');
   }
-  return { uid, role: p.role || '', name: p.fullName || p.name || p.displayName || p.phone || uid };
+  return { uid, role: p.role || '', name: p.fullName || p.name || p.displayName || p.phone || uid, profile: p };
 }
 async function assertActorStillActive(tx, uid, allowedRoles) {
   const snap = await tx.get(admin.firestore().collection('users').doc(uid));
@@ -78,7 +80,7 @@ function assertOperatorCanHandle(actor, order) {
 
 exports.approveTransaction = onCall({ enforceAppCheck: true }, async (request) => {
   requireAuth(request); const actor = await getActor(request.auth.uid);
-  if (!APPROVER_ROLES.includes(actor.role)) throw new HttpsError('permission-denied', 'Only an admin or superadmin can approve an order.');
+  if (!(await hasCapability(admin.firestore(), actor.uid, actor.profile, 'orders'))) throw new HttpsError('permission-denied', 'Your account does not manage orders.');
   const id = String(request.data?.transactionId || ''); if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
   const db = admin.firestore(), ref = db.collection('transactions').doc(id);
   await db.runTransaction(async (tx) => {
@@ -137,11 +139,13 @@ exports.acceptTransaction = onCall({ enforceAppCheck: true }, async (request) =>
   requireAuth(request); const actor = await getActor(request.auth.uid);
   const id = String(request.data?.transactionId || ''); if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
   const db = admin.firestore(), ref = db.collection('transactions').doc(id);
+  const approvesOrders = !OPERATOR_ROLES.includes(actor.role) && await hasCapability(db, actor.uid, actor.profile, 'orders');
+  if (!approvesOrders && !OPERATOR_ROLES.includes(actor.role)) throw new HttpsError('permission-denied', 'Your account does not manage orders.');
   await db.runTransaction(async (tx) => {
     const currentActor = await assertActorStillActive(tx, actor.uid, [...APPROVER_ROLES, ...OPERATOR_ROLES]);
     const snap = await tx.get(ref); if (!snap.exists) throw new HttpsError('not-found', 'That order no longer exists.');
     const order = snap.data();
-    if (APPROVER_ROLES.includes(currentActor.role)) {
+    if (approvesOrders) {
       if (order.status !== 'pending') throw new HttpsError('failed-precondition', 'Only pending orders can be approved.');
       if (order.approved === true) throw new HttpsError('already-exists', 'This order is already approved.');
       tx.update(ref, { approved: true, approvedBy: currentActor.uid, approvedByName: currentActor.name, approvedByRole: currentActor.role, approvedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
@@ -323,7 +327,7 @@ exports.scrubCompletedTransactionPins = onCall({ enforceAppCheck: true }, async 
 exports.assignDealer = onCall({ enforceAppCheck: true }, async (request) => {
   requireAuth(request);
   const actor = await getActor(request.auth.uid);
-  if (!APPROVER_ROLES.includes(actor.role)) throw new HttpsError('permission-denied', 'Only an admin or superadmin can assign a dealer.');
+  if (!(await hasCapability(admin.firestore(), actor.uid, actor.profile, 'orders'))) throw new HttpsError('permission-denied', 'Your account does not manage orders.');
   const id = String(request.data?.transactionId || '').trim();
   const dealerId = String(request.data?.dealerId || '').trim();
   if (!id || !dealerId) throw new HttpsError('invalid-argument', 'Transaction ID and dealer ID are required.');
