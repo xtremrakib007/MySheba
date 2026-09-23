@@ -186,7 +186,6 @@ export default function TransferPointsScreen() {
             />
             <View style={styles.divider} />
             <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Balance after</Text><Text style={styles.summaryValue}>{fmt(balance - Number(amount || 0), currency)}</Text></View>
-            {!!recipient?.walletCurrency && <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Recipient receives</Text><Text style={styles.summaryValue}>{recipient.walletCurrency}</Text></View>}
             <View style={styles.actions}>
               <TouchableOpacity style={styles.cancelButton} onPress={() => setConfirmVisible(false)} disabled={busy}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
               <TouchableOpacity style={styles.confirmButton} onPress={confirmTransfer} disabled={busy}><Text style={styles.confirmText}>{busy ? 'Sending…' : 'Confirm & Send'}</Text></TouchableOpacity>
