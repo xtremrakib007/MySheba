@@ -27,6 +27,7 @@ import * as ratesService from "../firebase/ratesService";
 import * as settingsService from "../firebase/settingsService";
 import * as featureAccessService from "../firebase/featureAccessService";
 import * as gridManagementService from "../firebase/gridManagementService";
+import * as accessControlService from "../firebase/accessControlService";
 import * as adControlsService from "../firebase/adControlsService";
 import * as homepageConfigService from "../firebase/homepageConfigService";
 import * as adService from "../firebase/adService";
@@ -191,6 +192,16 @@ export function AppProvider({ children }) {
   // ---- auth / profile ----
   const [authUser, setAuthUser] = useState(null);
   const [profile, setProfile] = useState(null);
+  // Effective staff capabilities (role defaults + this person's overrides),
+  // kept live so a superadmin's change applies without signing out.
+  const [capabilities, setCapabilities] = useState([]);
+  const capabilityUid = profile?.uid || authUser?.uid || null;
+  const capabilityRole = profile?.role || null;
+  useEffect(
+    () => accessControlService.subscribeMyCapabilities(capabilityUid, capabilityRole, setCapabilities),
+    [capabilityUid, capabilityRole],
+  );
+  const can = useCallback((capability) => capabilities.includes(capability), [capabilities]);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
@@ -1096,6 +1107,8 @@ export function AppProvider({ children }) {
               if (p && p.role === "dealer")
                 setScreen("dealerHome");
               else if (p && p.role === "reseller") setScreen("resellerHome");
+              else if (p && (p.role === "support" || p.role === "finance"))
+                setScreen("staffHome");
               else if (p && (p.role === "admin" || p.role === "superadmin"))
                 setScreen("adminHome");
               else setScreen("customerHome");
@@ -1320,10 +1333,11 @@ export function AppProvider({ children }) {
     const role = profile && profile.role;
     if (!needsTx || !role || !authUser) return undefined;
 
-    const isStaffQueue = ["dealer", "reseller", "admin", "superadmin"].includes(
-      role,
-    );
-    if (!isStaffQueue) return undefined;
+    // Staff see the full stream only if their access includes orders or
+    // finance; operators see their own queue.
+    const seesAllOrders = can("orders") || can("finance");
+    const isOperator = role === "dealer" || role === "reseller";
+    if (!isOperator && !seesAllOrders) return undefined;
 
     // Phase 10: Dealer and Reseller no longer share one undifferentiated
     // queue - each only ever sees the specific service(s) their tier owns
@@ -1331,7 +1345,7 @@ export function AppProvider({ children }) {
     // - this filter is UX, that's the actual security boundary). Admin/
     // superadmin keep the full unfiltered stream, same as before.
     const unsub = transactionService.subscribeBroadcastTransactions((txs) => {
-      if (role === "admin" || role === "superadmin") {
+      if (seesAllOrders && !isOperator) {
         setDealerTxs(txs);
         setResellerTxs(txs);
       } else if (role === "dealer") {
@@ -1343,9 +1357,9 @@ export function AppProvider({ children }) {
           ),
         );
       }
-    }, logListenerError("transactions:broadcast"));
+    }, logListenerError("transactions:broadcast"), { fullStream: seesAllOrders && !isOperator });
     return unsub;
-  }, [screen, profile, authUser]);
+  }, [screen, profile, authUser, can]);
 
   // ---- admin push announcement history, only needed on the Admin
   // ---- notification bell feed: any signed-in user (not just admin) reads
@@ -1404,8 +1418,7 @@ export function AppProvider({ children }) {
   useEffect(() => {
     const role = profile && profile.role;
     const isAdminScreen =
-      (screen === "adminHome" || screen === "reports") &&
-      ["admin", "superadmin"].includes(role);
+      (screen === "adminHome" || screen === "reports") && can("support");
     const isResellerScreen = screen === "resellerHome" && role === "reseller";
     if (!isAdminScreen && !isResellerScreen) return undefined;
     const unsub = inquiryService.subscribeInquiries(
@@ -1416,19 +1429,19 @@ export function AppProvider({ children }) {
       logListenerError("inquiries"),
     );
     return unsub;
-  }, [screen, profile]);
+  }, [screen, profile, can]);
 
   // ---- live top-up requests, only needed on the Admin dashboard ----
   useEffect(() => {
-    const isStaff = profile && ["admin", "superadmin"].includes(profile.role);
-    if ((screen !== "adminHome" && screen !== "reports") || !isStaff)
+    // Reviewing top-ups is finance work.
+    if ((screen !== "adminHome" && screen !== "reports") || !can("finance"))
       return undefined;
     const unsub = topupService.subscribeTopups(
       (list) => setTopups(list),
       logListenerError("topups"),
     );
     return unsub;
-  }, [screen, profile]);
+  }, [screen, profile, can]);
 
   // ---- push notification taps: jump to the right thread when the user
   // taps a notification, whether the app was foregrounded, backgrounded, or
@@ -1449,10 +1462,7 @@ export function AppProvider({ children }) {
           // requester gets notified once it's approved/rejected. Route each
           // to wherever that status actually lives for them - staff never
           // see their own self-topups in this queue (see topupService).
-          const isStaff =
-            profile &&
-            (profile.role === "admin" || profile.role === "superadmin");
-          if (isStaff) {
+          if (can("finance")) {
             setAdminTab("topups");
             setScreen("adminHome");
           } else setScreen("history");
@@ -1476,7 +1486,7 @@ export function AppProvider({ children }) {
     });
     const sub = addNotificationResponseListener(handleResponse);
     return () => sub.remove();
-  }, [authUser, profile, openChat, setAdminTab, setScreen]);
+  }, [authUser, profile, openChat, setAdminTab, setScreen, can]);
 
   const openResult = useCallback((kind, txId, svc, extra) => {
     setResultModal({
@@ -1595,8 +1605,9 @@ export function AppProvider({ children }) {
     // of arming the exit-app confirmation (see onBackPress's HOME_SCREENS
     // check, which now also skips goBack() outright as a second guard).
     screenHistoryRef.current = [];
-    if (r === "dealer" || r === "dealer") setScreen("dealerHome");
+    if (r === "dealer") setScreen("dealerHome");
     else if (r === "reseller") setScreen("resellerHome");
+    else if (r === "support" || r === "finance") setScreen("staffHome");
     else if (r === "admin" || r === "superadmin") setScreen("adminHome");
     else setScreen("customerHome");
   }, [profile]);
@@ -1703,12 +1714,14 @@ export function AppProvider({ children }) {
         return true;
       }
       setProfile(p);
-      if (p.role === "dealer" || p.role === "dealer") {
+      if (p.role === "dealer") {
         setDealerTab("pending");
         setScreen("dealerHome");
       } else if (p.role === "reseller") {
         setResellerTab("pending");
         setScreen("resellerHome");
+      } else if (p.role === "support" || p.role === "finance") {
+        setScreen("staffHome");
       } else if (p.role === "admin" || p.role === "superadmin") {
         setAdminTab("all");
         setScreen("adminHome");
@@ -1743,12 +1756,14 @@ export function AppProvider({ children }) {
         return true;
       }
       setProfile(p);
-      if (p.role === "dealer" || p.role === "dealer") {
+      if (p.role === "dealer") {
         setDealerTab("pending");
         setScreen("dealerHome");
       } else if (p.role === "reseller") {
         setResellerTab("pending");
         setScreen("resellerHome");
+      } else if (p.role === "support" || p.role === "finance") {
+        setScreen("staffHome");
       } else if (p.role === "admin" || p.role === "superadmin") {
         setAdminTab("all");
         setScreen("adminHome");
@@ -1799,12 +1814,14 @@ export function AppProvider({ children }) {
       }
       setPendingGooglePhone(false);
       setProfile(p);
-      if (p.role === "dealer" || p.role === "dealer") {
+      if (p.role === "dealer") {
         setDealerTab("pending");
         setScreen("dealerHome");
       } else if (p.role === "reseller") {
         setResellerTab("pending");
         setScreen("resellerHome");
+      } else if (p.role === "support" || p.role === "finance") {
+        setScreen("staffHome");
       } else if (p.role === "admin" || p.role === "superadmin") {
         setAdminTab("all");
         setScreen("adminHome");
@@ -1883,12 +1900,14 @@ export function AppProvider({ children }) {
 
         setPendingDeviceVerification(null);
         setProfile(p);
-        if (p.role === "dealer" || p.role === "dealer") {
+        if (p.role === "dealer") {
           setDealerTab("pending");
           setScreen("dealerHome");
         } else if (p.role === "reseller") {
           setResellerTab("pending");
           setScreen("resellerHome");
+        } else if (p.role === "support" || p.role === "finance") {
+          setScreen("staffHome");
         } else if (p.role === "admin" || p.role === "superadmin") {
           setAdminTab("all");
           setScreen("adminHome");
@@ -2298,6 +2317,8 @@ export function AppProvider({ children }) {
     // auth
     authUser,
     profile,
+    capabilities,
+    can,
     authLoading,
     authError,
     authBusy,
