@@ -134,10 +134,13 @@ export default function ServiceGrid({ extraTiles = [] }) {
     gridManagementService.isGridActive(gridManagement, gridKeyFor(service))
   );
 
+  const roleManagement = STAFF_SERVICES[role] || STAFF_SERVICES.admin;
   const managementItems = isStaff
     ? [
-        ...(STAFF_SERVICES[role] || STAFF_SERVICES.admin),
-        ...extraTiles.map((tile) => ({ ...tile, kind: tile.kind || 'adminFeatures' })),
+        ...roleManagement,
+        ...extraTiles
+          .map((tile) => ({ ...tile, kind: tile.kind || 'adminFeatures' }))
+          .filter((tile) => !roleManagement.some((item) => item.kind === tile.kind)),
       ].filter((service, index, arr) =>
         arr.findIndex((item) => item.key === service.key) === index &&
         gridManagementService.isGridActive(gridManagement, gridKeyFor(service))
