@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Image } from 'rea
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
-import { radius, shadows } from '../theme/theme';
+import { radius } from '../theme/theme';
 import BannerSlider from '../components/BannerSlider';
 import ServiceGrid from '../components/ServiceGrid';
 import HeaderDecor from '../components/HeaderDecor';
@@ -79,7 +79,7 @@ function createStyles(colors) {
     bell: { fontSize: 18 },
     bellDot: { position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF5252' },
     content: { padding: 16, paddingBottom: 40 },
-    roleCard: { backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: 16, marginBottom: 14, ...shadows.card },
+    roleCard: { backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: 16, marginBottom: 14, elevation: 2, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
     roleTitle: { fontSize: 17, fontWeight: '800', color: colors.text },
     roleBlurb: { fontSize: 13, color: colors.textSecondary, marginTop: 4 },
     roleHint: { fontSize: 11, color: colors.textSecondary, marginTop: 10, lineHeight: 16 },
