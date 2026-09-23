@@ -61,6 +61,30 @@ export function getDeviceLabel() {
   }
 }
 
+// AppLockScreen awaits this before letting an unlock through. The client
+// half went missing while the callable stayed deployed, so the call
+// resolved to undefined and threw a TypeError the moment someone tried to
+// unlock - not a failed check, a crash.
+//
+// The server throws rather than returning false when the session is no
+// longer the active one, so those cases are caught and reported as invalid;
+// anything else is re-thrown, since a network blip should not silently read
+// as "this session is fine".
+export async function validateActiveSession() {
+  const deviceId = await getDeviceId();
+  const sessionId = await getLocalSessionId();
+  if (!sessionId) return false;
+  const fn = httpsCallable(functions, 'validateActiveSession');
+  try {
+    const { data } = await fn({ deviceId, sessionId });
+    return data?.valid === true;
+  } catch (error) {
+    const code = String(error?.code || '');
+    if (['functions/failed-precondition', 'functions/permission-denied', 'functions/not-found', 'functions/unauthenticated'].includes(code)) return false;
+    throw error;
+  }
+}
+
 export async function listTrustedDevices() {
   const currentDeviceId = await getDeviceId();
   const fn = httpsCallable(functions, 'listTrustedDevices');

@@ -382,6 +382,10 @@ export async function signInWithGoogle() {
   throw googleSignInRetiredError();
 }
 
+export async function completeGoogleSignup() {
+  throw googleSignInRetiredError();
+}
+
 export async function linkGoogleAccount() {
   throw googleSignInRetiredError();
 }

@@ -1,5 +1,6 @@
 // Admin-triggered push broadcast.
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 const admin = require('firebase-admin');
 const { hasCapability } = require('./accessControl');
 const { logAudit, logServerError } = require('./logService');
@@ -10,7 +11,7 @@ const EXPO_PUSH_URL='https://exp.host/--/api/v2/push/send';
 function chunk(arr,size){const out=[];for(let i=0;i<arr.length;i+=size)out.push(arr.slice(i,i+size));return out;}
 function clean(v,max){return typeof v==='string'?v.trim().slice(0,max):'';}
 async function sendExpoPush(messages){const valid=messages.filter(m=>m&&m.to);for(const batch of chunk(valid,100)){try{const res=await fetch(EXPO_PUSH_URL,{method:'POST',headers:{'content-type':'application/json',accept:'application/json'},body:JSON.stringify(batch.map(m=>({sound:'default',...m})))});if(!res.ok)console.error('Expo push HTTP error',res.status,await res.text());}catch(e){console.error('Expo push send failed',e);}}}
-exports.sendAnnouncement=onCall({enforceAppCheck:true},async(request)=>{
+exports.sendAnnouncement=onCall({enforceAppCheck: ENFORCE_APP_CHECK},async(request)=>{
  if(!request.auth)throw new HttpsError('unauthenticated','You must be signed in.');
  const db=admin.firestore(),callerUid=request.auth.uid,callerSnap=await db.collection('users').doc(callerUid).get(),callerProfile=callerSnap.exists?callerSnap.data():null;
  if(!callerProfile||!ADMIN_ROLES.includes(callerProfile.role))throw new HttpsError('permission-denied','Your account cannot send announcements.');
