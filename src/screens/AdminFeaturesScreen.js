@@ -74,6 +74,18 @@ const RECHARGE_RATE_FIELDS = [
   { key: 'rechargePH', label: 'Recharge/Internet — PHP' }, { key: 'rechargeKH', label: 'Recharge/Internet — KHR' },
 ];
 
+// Tiles that open a screen of their own rather than an AdminHomeScreen tab.
+// Anything not listed falls through to setAdminTab, and a key with no branch
+// there opens an empty page - which is what five of these were doing.
+// adminAnalytics, transferPoints, userManagement, verificationManagement and
+// featureAccess all have real screens in App.js and were all being routed to
+// a tab that does not exist. gridManagement and apiManagement were already
+// special-cased by hand in openItem; folding them in gives one path, so the
+// navigation audit reads a single list instead of chasing special cases.
+const SCREEN_FEATURES = ['adminAnalytics', 'transferPoints', 'userManagement', 'verificationManagement', 'featureAccess', 'gridManagement', 'apiManagement'];
+// Where the tile key and the screen name differ.
+const SCREEN_FOR = { apiManagement: 'apiProviderManagement' };
+
 export default function AdminFeaturesScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
@@ -98,8 +110,7 @@ export default function AdminFeaturesScreen() {
   };
   const openItem = (key) => {
     if (key === 'rates') { setRateView(true); return; }
-    if (key === 'gridManagement') { setScreen('gridManagement'); return; }
-    if (key === 'apiManagement') { setScreen('apiProviderManagement'); return; }
+    if (SCREEN_FEATURES.includes(key)) { setScreen(SCREEN_FOR[key] || key); return; }
     setAdminTab(key); setAdminViewingSection(true); setScreen('adminHome');
   };
   const itemsForSection = () => {
