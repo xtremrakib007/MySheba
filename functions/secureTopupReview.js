@@ -31,14 +31,15 @@ function activeAccount(profile) {
   return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && profile.active !== false && profile.mergedInto == null;
 }
 
-function validMoney(value) {
+function validMoney(value, currency = 'MYR') {
   if (typeof value === 'number') {
     if (!Number.isFinite(value) || value <= 0 || value > MAX_AMOUNT) return null;
-    const cents = Math.round(value * 100);
-    if (!Number.isSafeInteger(cents) || Math.abs(value * 100 - cents) > Number.EPSILON * Math.max(1, Math.abs(value * 100))) return null;
+    const scale = 10 ** (ZERO_DECIMAL_CURRENCIES.has(currency) ? 0 : 2);
+    const cents = Math.round(value * scale);
+    if (!Number.isSafeInteger(cents) || Math.abs(value * scale - cents) > Number.EPSILON * Math.max(1, Math.abs(value * scale))) return null;
     return value;
   }
-  if (typeof value !== 'string' || !MONEY_RE.test(value)) return null;
+  if (typeof value !== 'string' || (ZERO_DECIMAL_CURRENCIES.has(currency) ? !/^\d+$/.test(value) : !MONEY_RE.test(value))) return null;
   const n = Number(value);
   return Number.isFinite(n) && n > 0 && n <= MAX_AMOUNT ? n : null;
 }
@@ -82,15 +83,16 @@ exports.approveTopup = onCall({ enforceAppCheck: true }, async request => {
       const currency = inferWalletCurrency(user);
       const requestedCurrency = String(topup.currency || '').toUpperCase();
       if (requestedCurrency && requestedCurrency !== currency) throw new HttpsError('failed-precondition', `Top-up currency ${requestedCurrency} does not match the user's wallet currency ${currency}.`);
-      const points = validMoney(topup.walletAmount ?? topup.points ?? topup.amount);
+      const points = validMoney(topup.walletAmount ?? topup.points ?? topup.amount, currency);
       const balance = validBalance(user.walletBalance);
       if (points === null) throw new HttpsError('failed-precondition', 'Top-up amount is invalid.');
       if (balance === null) throw new HttpsError('failed-precondition', 'User wallet balance is invalid.');
-      const balanceCents = Math.round(balance * 100);
-      const pointsCents = Math.round(points * 100);
+      const scale = 10 ** (ZERO_DECIMAL_CURRENCIES.has(currency) ? 0 : 2);
+      const balanceCents = Math.round(balance * scale);
+      const pointsCents = Math.round(points * scale);
       const newBalanceCents = balanceCents + pointsCents;
       if (!Number.isSafeInteger(newBalanceCents)) throw new HttpsError('failed-precondition', 'Wallet balance is too large.');
-      const newBalance = newBalanceCents / 100;
+      const newBalance = newBalanceCents / scale;
       tx.update(userRef, { walletBalance: newBalance, walletCurrency: currency, walletBalanceCurrency: currency });
       tx.update(ref, { status: 'approved', approvedBy: uid, approvedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp(), creditedAmount: points, creditedCurrency: currency, creditedPoints: points });
       return { userId, points };
