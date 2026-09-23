@@ -6,7 +6,6 @@ const CARDS: { key: keyof OpsOverview; label: string; tone?: 'warn' | 'danger' }
   { key: 'verifiedUsers', label: 'Verified users' },
   { key: 'pendingVerifications', label: 'Pending verifications', tone: 'warn' },
   { key: 'openTickets', label: 'Open support tickets', tone: 'warn' },
-  { key: 'pendingChatReports', label: 'Open chat reports', tone: 'danger' },
 ];
 
 export default function ReportsPage() {

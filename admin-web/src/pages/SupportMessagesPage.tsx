@@ -104,7 +104,7 @@ export default function SupportMessagesPage() {
                 key={t.id}
                 thread={t}
                 active={t.id === chatId}
-                onClick={() => navigate(`/support-messages/${t.id}`)}
+                onClick={() => navigate(`/support/messages/${t.id}`)}
               />
             ))
           )}
