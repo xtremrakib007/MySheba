@@ -13,6 +13,7 @@ import { subscribeRecurringDeductions } from '../firebase/deductionService';
 import { listWorkLogEntriesInRange, dateKey } from '../firebase/workLogService';
 import { calculateBasicPay, calculateOTForPeriod, deriveHourlyRate, calculateTakeHomePay, sumLineItems } from '../utils/salaryCalculationService';
 import { OT_CALCULATION_METHODS, CURRENCY } from '../data/salaryConstants';
+import * as gridManagementService from '../firebase/gridManagementService';
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -133,7 +134,7 @@ export default function SalaryDashboardScreen() {
           <Text style={styles.setupSubtitle}>
             Add your basic salary and working hours so MySheba can estimate your monthly pay and overtime.
           </Text>
-          <PrimaryButton label="Get Started" onPress={() => setScreen('salarySettings')} style={styles.setupBtn} />
+          <PrimaryButton label="Get Started" onPress={() => gridManagementService.isGridActive(gridManagement, 'salarySettings') && setScreen('salarySettings')} style={styles.setupBtn} />
         </View>
       </View>
     );

@@ -5,13 +5,13 @@ const secureWalletTransfer = require('./secureWalletTransfer');
 const secureWalletMutations = require('./secureWalletMutations');
 const secureWalletCharge = require('./secureWalletCharge');
 const secureTopupReview = require('./secureTopupReview');
-const secureTransactionReview = require('./secureTransactionReview');
-const transactionQueue = require('./transactionQueueService');
-const adTrackingCallable = require('./adTrackingCallable');
-const userDeletionService = require('./userDeletionService');
+const rejectionService = require('./rejectionService');
+const transactionService = require('./transactionService');
+const salaryMutationService = require('./salaryMutationService');
 
 functions.chargeRecharge = guards.chargeRecharge;
 functions.chargeInternetPackage = guards.chargeInternetPackage;
+functions.chargeBillPayment = guards.chargeBillPayment;
 functions.chargeMobileBanking = guards.chargeMobileBanking;
 functions.chargeRemittance = guards.chargeRemittance;
 functions.chargeWallet = secureWalletCharge.chargeWallet;
@@ -19,13 +19,29 @@ functions.transferPoints = secureTransfer.transferPoints;
 functions.walletTransfer = secureWalletTransfer.walletTransfer;
 functions.createSelfTopup = secureWalletMutations.createSelfTopup;
 functions.approveTopup = secureTopupReview.approveTopup;
-functions.rejectTopup = secureTransactionReview.rejectTopup;
-functions.rejectRechargeTransaction = secureTransactionReview.rejectRechargeTransaction;
-functions.rejectInternetPackageTransaction = secureTransactionReview.rejectInternetPackageTransaction;
-functions.rejectMobileBankingTransaction = secureTransactionReview.rejectMobileBankingTransaction;
-functions.rejectRemittanceTransaction = secureTransactionReview.rejectRemittanceTransaction;
-functions.onTransactionQueueCreated = transactionQueue.onTransactionQueueCreated;
-functions.onTransactionQueueUpdated = transactionQueue.onTransactionQueueUpdated;
-functions.recordAdEvent = adTrackingCallable.recordAdEvent;
-functions.deleteManagedUser = userDeletionService.deleteManagedUser;
+functions.rejectTopup = secureTopupReview.rejectTopup;
+functions.rejectTransaction = rejectionService.rejectTransaction;
+functions.approveTransaction = transactionService.approveTransaction;
+functions.acceptTransaction = transactionService.acceptTransaction;
+functions.completeTransaction = transactionService.completeTransaction;
+functions.generateCollectionPin = transactionService.generateCollectionPin;
+functions.reconcileUnknownTransaction = transactionService.reconcileUnknownTransaction;
+functions.assignDealer = transactionService.assignDealer;
+functions.scrubCompletedTransactionPins = transactionService.scrubCompletedTransactionPins;
+
+// Salary & OT mutations are server-owned. secureIndexV2 is the production
+// functions entrypoint, so these must be attached here (not only exported
+// from an unused helper module).
+functions.saveSalarySettings = salaryMutationService.saveSalarySettings;
+functions.addAllowance = salaryMutationService.addAllowance;
+functions.updateAllowance = salaryMutationService.updateAllowance;
+functions.deleteAllowance = salaryMutationService.deleteAllowance;
+functions.addDeduction = salaryMutationService.addDeduction;
+functions.updateDeduction = salaryMutationService.updateDeduction;
+functions.deleteDeduction = salaryMutationService.deleteDeduction;
+functions.saveSalaryEstimate = salaryMutationService.saveSalaryEstimate;
+functions.recordActualSalary = salaryMutationService.recordActualSalary;
+functions.attachSalaryPayslip = salaryMutationService.attachSalaryPayslip;
+functions.deleteSalaryRecord = salaryMutationService.deleteSalaryRecord;
+
 module.exports = functions;

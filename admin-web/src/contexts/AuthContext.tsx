@@ -10,7 +10,6 @@ import {
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import { getOrCreateDeviceId, getDeviceLabel } from '../utils/deviceId';
-import { subscribeMyCapabilities, type Capability } from '../services/accessControlService';
 import {
   isDeviceTrusted,
   requestLoginOtp,
@@ -31,13 +30,6 @@ interface AuthContextValue {
   firebaseUser: User | null;
   profile: AdminProfile | null;
   loading: boolean;
-  /** Effective staff capabilities: role defaults + this person's overrides, live. */
-  capabilities: Capability[];
-  /** True until the first capability snapshot arrives for this profile. */
-  accessLoading: boolean;
-  can: (capability: Capability) => boolean;
-  /** Role + capabilities together, the shape navConfig's canAccess takes. */
-  access: { role: AdminRole | undefined; capabilities: Capability[] };
   accessDenied: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
@@ -72,28 +64,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [otpError, setOtpError] = useState<string | null>(null);
   const [otpSubmitting, setOtpSubmitting] = useState(false);
   const pendingProfileRef = useRef<AdminProfile | null>(null);
-  const [capabilities, setCapabilities] = useState<Capability[]>([]);
-  const [accessLoading, setAccessLoading] = useState(true);
-
-  // Access is live: a superadmin granting or revoking something reaches an
-  // open panel on the next snapshot, with no reload (role sheet rule 6).
-  const profileUid = profile?.uid;
-  const profileRole = profile?.role;
-  useEffect(() => {
-    if (!profileUid || !profileRole) {
-      setCapabilities([]);
-      setAccessLoading(true);
-      return;
-    }
-    setAccessLoading(true);
-    return subscribeMyCapabilities(profileUid, profileRole, (caps) => {
-      setCapabilities(caps);
-      setAccessLoading(false);
-    });
-  }, [profileUid, profileRole]);
-
-  const can = (capability: Capability) => capabilities.includes(capability);
-  const access = { role: profile?.role, capabilities };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -152,8 +122,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           role,
         };
 
-        // Device trust is an optional extra security layer. If the device-auth
-        // function is unavailable, a valid admin account can still enter.
+        // Device verification is mandatory for the admin web console. Do not
+        // fall back to password-only access if the verification service fails.
         try {
           const deviceId = getOrCreateDeviceId();
           const trusted = await isDeviceTrusted(user.uid, deviceId);
@@ -170,18 +140,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setOtpMethod(method);
             setOtpDestination(maskedDestination);
           } catch (err) {
-            console.warn('Device verification OTP unavailable; allowing authenticated admin login:', err);
-            setOtpError(null);
-            setDeviceVerificationRequired(false);
-            setProfile(adminProfile);
-            pendingProfileRef.current = null;
+            console.error('Device verification OTP unavailable:', err);
+            setProfile(null);
+            setAccessDenied(true);
+            await firebaseSignOut(auth).catch(() => undefined);
           }
         } catch (err) {
-          console.warn('Device trust check unavailable; allowing authenticated admin login:', err);
-          setOtpError(null);
-          setDeviceVerificationRequired(false);
-          setProfile(adminProfile);
-          pendingProfileRef.current = null;
+          console.error('Device trust check unavailable:', err);
+          setProfile(null);
+          setAccessDenied(true);
+          await firebaseSignOut(auth).catch(() => undefined);
         }
       } catch (err) {
         console.error('Failed to load admin profile:', err);
@@ -260,10 +228,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         firebaseUser,
         profile,
         loading,
-        capabilities,
-        accessLoading,
-        can,
-        access,
         accessDenied,
         signIn,
         signInWithGoogle,

@@ -1,48 +1,53 @@
-// Search every account by name, phone number, or numeric userId. Results are
-// deliberately limited to public-safe contact fields.
+// Search every account by name, phone number, or numeric userId, regardless
+// of role. Results are intentionally limited to public-safe picker fields.
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logServerError } = require('./logService');
-const { checkVelocity, getClientIp } = require('./rateLimitService');
-const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
-const MAX_QUERY_LENGTH = 80;
-const MAX_SCAN_RESULTS = 25;
+const SEARCH_MAX = 30;
+const SEARCH_WINDOW_MS = 10 * 60 * 1000;
+const QR_MAX = 60;
+const QR_WINDOW_MS = 60 * 60 * 1000;
 
 function normalizeDigits(value) {
   return String(value || '').replace(/[^0-9]/g, '');
 }
 
-function publicUser(doc) {
-  const u = doc.data() || {};
-  return {
-    uid: doc.id,
-    name: String(u.name || '').slice(0, 160),
-    phone: String(u.phone || '').slice(0, 40),
-    role: u.role || 'customer',
-    userId: String(u.userId || '').slice(0, 40),
-  };
+function isPublicActiveAccount(u) {
+  return u && u.mergedInto == null && u.suspended !== true && u.inactive !== true && u.disabled !== true && u.active !== false;
 }
 
-function discoverable(u) {
-  return !u.mergedInto && u.suspended !== true && u.inactive !== true && u.disabled !== true;
+async function rateLimit(db, uid, action, max, windowMs) {
+  const ref = db.collection('userSearchVelocity').doc(`${uid}_${action}`);
+  const now = Date.now();
+  const tripped = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const events = ((snap.exists && snap.data().events) || [])
+      .filter((ts) => Number.isFinite(ts) && now - ts < windowMs);
+    if (events.length >= max) {
+      tx.set(ref, { events, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      return true;
+    }
+    events.push(now);
+    tx.set(ref, { events, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    return false;
+  });
+  if (tripped) {
+    throw new HttpsError('resource-exhausted', 'Too many account lookups. Please wait and try again.');
+  }
 }
 
-exports.searchUsers = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+exports.searchUsers = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const callerUid = request.auth.uid;
-  const term = String(request.data?.query || '').trim();
+  const term = String((request.data && request.data.query) || '').trim().slice(0, 100);
   if (term.length < 2) return { results: [] };
-  if (term.length > MAX_QUERY_LENGTH) throw new HttpsError('invalid-argument', 'Search query is too long.');
 
   const db = admin.firestore();
-  await checkVelocity(db, callerUid, 'search_users', { ip: getClientIp(request) });
+  await rateLimit(db, callerUid, 'search', SEARCH_MAX, SEARCH_WINDOW_MS);
 
   let snap;
   try {
-    // This remains intentionally server-side because client Firestore rules
-    // do not expose arbitrary user profiles. The result payload contains
-    // only contact-picker fields.
     snap = await db.collection('users').get();
   } catch (err) {
     await logServerError('searchUsers', err, { userId: callerUid });
@@ -52,32 +57,43 @@ exports.searchUsers = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (requ
   const termLower = term.toLowerCase();
   const termDigits = normalizeDigits(term);
   const results = [];
+
   snap.forEach((doc) => {
-    if (doc.id === callerUid || results.length >= MAX_SCAN_RESULTS) return;
+    if (doc.id === callerUid) return;
     const u = doc.data() || {};
-    if (!discoverable(u)) return;
+    if (!isPublicActiveAccount(u)) return;
     const nameLower = String(u.name || '').toLowerCase();
-    const phoneDigits = normalizeDigits(u.phoneE164 || u.phone);
+    const phoneDigits = normalizeDigits(u.phone);
     const userIdStr = String(u.userId || '');
-    if (!nameLower.includes(termLower) &&
-        !(termDigits && phoneDigits.includes(termDigits)) &&
-        !(termDigits && userIdStr.includes(termDigits))) return;
-    results.push(publicUser(doc));
+    if (!nameLower.includes(termLower)
+      && !(termDigits.length > 0 && phoneDigits.includes(termDigits))
+      && !(termDigits.length > 0 && userIdStr.includes(termDigits))) return;
+    results.push({
+      uid: doc.id,
+      name: u.name || '',
+      phone: u.phone || '',
+      role: u.role || 'customer',
+      userId: u.userId || '',
+    });
   });
 
   results.sort((a, b) => a.name.localeCompare(b.name));
-  return { results };
+  return { results: results.slice(0, 25) };
 });
 
-exports.getUserByUid = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+// QR lookup returns the same public-safe fields as searchUsers and never trusts
+// the name/phone/userId embedded in a QR payload.
+exports.getUserByUid = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const callerUid = request.auth.uid;
-  const targetUid = String(request.data?.uid || '').trim();
-  if (!targetUid || targetUid.length > 128) throw new HttpsError('invalid-argument', 'Missing or invalid uid.');
+  const targetUid = String((request.data && request.data.uid) || '').trim();
+  if (!targetUid || targetUid.length > 128) {
+    throw new HttpsError('invalid-argument', 'Missing uid.');
+  }
   if (targetUid === callerUid) throw new HttpsError('invalid-argument', 'That is your own code.');
 
   const db = admin.firestore();
-  await checkVelocity(db, callerUid, 'get_user_by_uid', { ip: getClientIp(request) });
+  await rateLimit(db, callerUid, 'qr', QR_MAX, QR_WINDOW_MS);
 
   let snap;
   try {
@@ -86,8 +102,17 @@ exports.getUserByUid = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (req
     await logServerError('getUserByUid', err, { userId: callerUid });
     throw new HttpsError('internal', 'Could not look up this account right now.');
   }
-  if (!snap.exists || !discoverable(snap.data() || {})) {
-    throw new HttpsError('not-found', 'This account no longer exists.');
-  }
-  return { result: publicUser(snap) };
+  if (!snap.exists) throw new HttpsError('not-found', 'This account no longer exists.');
+
+  const u = snap.data() || {};
+  if (!isPublicActiveAccount(u)) throw new HttpsError('not-found', 'This account no longer exists.');
+  return {
+    result: {
+      uid: snap.id,
+      name: u.name || '',
+      phone: u.phone || '',
+      role: u.role || 'customer',
+      userId: u.userId || '',
+    },
+  };
 });

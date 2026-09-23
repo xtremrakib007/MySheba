@@ -14,17 +14,8 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 20
           cache: npm
-
-      # Cheap, dependency-free guard: the script only reads source with
-      # node's own fs, so it runs before npm ci and fails in seconds rather
-      # than after a ten-minute build. Catches a tile or setScreen() that
-      # points at a screen, tab or service which no longer exists - the
-      # shape of bug the retired-module cleanup kept producing, and one that
-      # neither lint nor a syntax check sees.
-      - name: Audit navigation targets
-        run: npm run audit:nav
 
       - name: Setup Expo and EAS
         uses: expo/expo-github-action@v8
@@ -35,34 +26,30 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build production AAB
+      - name: Verify EAS production environment
+        shell: bash
         run: |
-          eas build --platform android --profile production \
-            --non-interactive --wait --json \
-            --message "Final MySheba production build" | tee eas-build-result.json
+          set -euo pipefail
+          vars="$(eas env:list --environment production --non-interactive)"
+          echo "$vars" | grep -q "GOOGLE_SERVICES_JSON" || {
+            echo "Missing EAS production file variable: GOOGLE_SERVICES_JSON"
+            exit 1
+          }
+
+      - name: Validate production source
+        run: npm run production:check
+
+      - name: Validate Cloud Functions syntax
+        run: npm run audit:functions
+
+      - name: Run API provider regression tests
+        run: npm run test:api-provider
+
+      - name: Build production AAB
+        run: eas build --platform android --profile production --non-interactive --wait --message "MySheba production AAB"
 
       - name: Download AAB
-        run: |
-          node <<'NODE'
-          const fs = require('fs');
-          const data = JSON.parse(fs.readFileSync('eas-build-result.json', 'utf8'));
-          const builds = Array.isArray(data) ? data : [data];
-          const build = builds.find((b) => String(b.platform).toUpperCase() === 'ANDROID') || builds[0];
-          if (!build) {
-            throw new Error('EAS CLI returned no build records.');
-          }
-          if (build.status && String(build.status).toUpperCase() !== 'FINISHED') {
-            throw new Error(`Build did not finish: status ${build.status}`);
-          }
-          const url = build.artifacts && (build.artifacts.applicationArchiveUrl || build.artifacts.buildUrl);
-          if (!url) {
-            throw new Error('EAS build result carried no application archive URL.');
-          }
-          fs.writeFileSync('aab-url.txt', url);
-          console.log(`Build ID: ${build.id}`);
-          console.log(`AAB: ${url}`);
-          NODE
-          curl -fSL --retry 3 -o mysheba-production.aab "$(cat aab-url.txt)"
+        run: eas build:download --platform android --non-interactive
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4

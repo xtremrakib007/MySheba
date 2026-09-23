@@ -3,7 +3,7 @@
 // myNotifications (client-side filter over the same 'announcements'
 // collection Admin > Announcements writes to) and firestore.rules, which
 // opens read access to any signed-in user for this collection.
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, FlatList, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
@@ -17,6 +17,14 @@ function formatDate(ts) {
   return d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) +
     ' \u00B7 ' +
     d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
+function notificationCategory(item) {
+  const raw = String(item?.category || item?.type || 'general').toLowerCase();
+  if (raw.includes('transaction') || raw.includes('order') || raw.includes('topup') || raw.includes('payment')) return 'activity';
+  if (raw.includes('security') || raw.includes('kyc') || raw.includes('verification') || raw.includes('device')) return 'security';
+  if (raw.includes('promotion') || raw.includes('offer') || raw.includes('advert')) return 'offers';
+  return 'general';
 }
 
 function NoticeCard({ item }) {
@@ -45,6 +53,11 @@ export default function NotificationsScreen() {
 
   const styles = createStyles(colors);
   const { goBackOrHome, myNotifications, markNotificationsSeen } = useApp();
+  const [filter, setFilter] = useState('all');
+  const filteredNotifications = useMemo(() => {
+    if (filter === 'all') return myNotifications;
+    return myNotifications.filter((item) => notificationCategory(item) === filter);
+  }, [myNotifications, filter]);
 
   // Mark everything as seen the moment this screen opens, so the home
   // screen's unread dot clears - matches how a phone's own notification
@@ -63,8 +76,16 @@ export default function NotificationsScreen() {
         <Text style={styles.headerTitle}>Notifications</Text>
       </LinearGradient>
 
+      <View style={styles.filters}>
+        {[['all', 'All'], ['activity', 'Activity'], ['security', 'Security'], ['offers', 'Offers']].map(([key, label]) => (
+          <TouchableOpacity key={key} style={[styles.filterBtn, filter === key && styles.filterBtnActive]} onPress={() => setFilter(key)} accessibilityRole="button" accessibilityLabel={label + ' notifications'}>
+            <Text style={[styles.filterText, filter === key && styles.filterTextActive]}>{label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
       <FlatList
-        data={myNotifications}
+        data={filteredNotifications}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
         renderItem={({ item }) => <NoticeCard item={item} />}
@@ -86,6 +107,11 @@ function createStyles(colors) {
     backBtn: { padding: 4 },
     backText: { color: 'white', fontSize: 20 },
     headerTitle: { color: 'white', fontWeight: '600', fontSize: 16, marginLeft: 10 },
+    filters: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
+    filterBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+    filterBtnActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+    filterText: { fontSize: 11, fontWeight: '600', color: colors.textSecondary },
+    filterTextActive: { color: '#fff' },
     list: { padding: 16, paddingBottom: 30, flexGrow: 1 },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
     emptyIcon: { fontSize: 40, marginBottom: 10 },

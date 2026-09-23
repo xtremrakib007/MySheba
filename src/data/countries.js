@@ -4,7 +4,7 @@ export const countries = [
   { code: 'BD', name: 'Bangladesh', flag: '🇧🇩', dial: '+880', curr: 'BDT' },
   { code: 'IN', name: 'India', flag: '🇮🇳', dial: '+91', curr: 'INR' },
   { code: 'NP', name: 'Nepal', flag: '🇳🇵', dial: '+977', curr: 'NPR' },
-  { code: 'ID', name: 'Indonesia', flag: '🇲🇨', dial: '+62', curr: 'IDR' },
+  { code: 'ID', name: 'Indonesia', flag: '🇮🇩', dial: '+62', curr: 'IDR' },
   { code: 'PK', name: 'Pakistan', flag: '🇵🇰', dial: '+92', curr: 'PKR' },
   { code: 'MM', name: 'Myanmar', flag: '🇲🇲', dial: '+95', curr: 'MMK' },
   { code: 'PH', name: 'Philippines', flag: '🇵🇭', dial: '+63', curr: 'PHP' },

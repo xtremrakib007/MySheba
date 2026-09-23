@@ -64,7 +64,7 @@ export default function TransactionsPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold">Transactions</h1>
-      <p className="mt-1 text-sm text-[var(--color-ink-soft)]">Approve orders first. Dealers/resellers then accept them as the Operator and complete them.</p>
+      <p className="mt-1 text-sm text-[var(--color-ink-soft)]">Approve orders first. Dealers/resellers then accept them as the Operator and complete the order.</p>
 
       <div className="mt-4 flex gap-2">
         {(['all', 'pending'] as const).map((t) => (
@@ -126,7 +126,6 @@ export default function TransactionsPage() {
                 )}
 
                 {tx.status === 'processing' && tx.approved && <div className="mt-4"><CompleteControl tx={tx} busy={busy} onComplete={(pin, receiptUrl) => run(tx.id, () => completeTransaction(tx.id, pin, receiptUrl))} /></div>}
-                {tx.status === 'completed' && !!tx.pin && <p className="mt-2 text-xs">🔐 Collection PIN: {tx.pin}</p>}
                 {tx.status === 'completed' && tx.rejected && <p className="mt-2 text-xs text-[var(--color-danger)]">Rejected: {tx.rejectReason}</p>}
               </div>
             );

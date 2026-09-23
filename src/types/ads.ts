@@ -9,7 +9,7 @@
 //
 // This is a types-only foundation: no service in src/firebase/ad*.js
 // implements more than basic CRUD yet (see those files' own header
-// comments for exactly what's deferred to a later phase).
+// comments for exactly what's deferred to the current ad pipeline).
 import type { AdType, ClickActionType, AdStatus, AdAuditAction, AdPricingModel } from '../constants/adEnums';
 import type { FeatureId } from '../constants/adFeatures';
 import type { PlacementId } from '../constants/adPlacements';
@@ -37,7 +37,7 @@ export interface ClickAction {
 /**
  * advertisements/{adId} - the ad creative + targeting + scheduling
  * record. One doc per ad; totalImpressions/totalClicks are denormalized
- * counters a later phase's adTrackingService.js keeps in sync (Phase 1
+ * counters the current ad pipeline adTrackingService.js keeps in sync (Phase 1
  * never writes to them - see that file's header comment).
  */
 export interface Advertisement {
@@ -46,7 +46,7 @@ export interface Advertisement {
   // necessarily tied to an ad_campaigns/ad_advertisers doc (the brief's
   // CREATE BANNER form only takes a free-text Advertiser name, not a
   // campaign/advertiser picker) - both optional so that flow doesn't need
-  // to fabricate placeholder ids. A later phase linking banners to real
+  // to fabricate placeholder ids. the current ad pipeline linking banners to real
   // campaigns/advertisers can populate these.
   campaignId?: string;
   advertiserId?: string;
@@ -95,7 +95,7 @@ export interface Advertisement {
   maxImpressionsPerUser: number;
   maxClicksPerUser: number;
 
-  // ---- denormalized counters (kept in sync by a later phase - see adTrackingService.js) ----
+  // ---- denormalized counters (kept in sync by the current ad pipeline - see adTrackingService.js) ----
   totalImpressions: number;
   totalClicks: number;
 
@@ -266,7 +266,7 @@ export interface AdClick {
 
 /**
  * ad_reports/{id} - aggregated performance rollups (e.g. daily
- * impressions/clicks per ad or campaign). Written by a later phase's
+ * impressions/clicks per ad or campaign). Written by the current ad pipeline
  * scheduled Cloud Function, not the client - see firestore.rules.
  */
 export interface AdReport {

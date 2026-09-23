@@ -1,7 +1,7 @@
 {
   "cli": {
     "version": ">= 5.9.0",
-    "appVersionSource": "remote"
+    "appVersionSource": "local"
   },
   "build": {
     "development": {
@@ -13,6 +13,7 @@
       "channel": "development"
     },
     "preview": {
+      "environment": "preview",
       "distribution": "internal",
       "android": {
         "buildType": "apk"
@@ -20,7 +21,7 @@
       "channel": "preview"
     },
     "production": {
-      "autoIncrement": true,
+      "environment": "production",
       "android": {
         "buildType": "app-bundle"
       },
@@ -35,11 +36,6 @@
     }
   },
   "submit": {
-    "production": {
-      "android": {
-        "track": "production",
-        "releaseStatus": "completed"
-      }
-    }
+    "production": {}
   }
 }

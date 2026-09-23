@@ -21,7 +21,7 @@ import * as analyticsService from '../firebase/analyticsService';
 import * as logService from '../firebase/logService';
 import { subscribeAllUsers } from '../firebase/userManagementService';
 
-const ROLE_LABELS = { customer: 'Customers', dealer: 'Dealers', reseller: 'Resellers', admin: 'Admins', superadmin: 'Super Admins' };
+const ROLE_LABELS = { customer: 'Customers', dealer: 'Dealers', dealer: 'Dealers', reseller: 'Resellers', admin: 'Admins', superadmin: 'Super Admins' };
 
 // Which screen each module's row should open, keyed exactly the same way
 const MODULE_SCREENS = {
@@ -384,6 +384,27 @@ export default function AdminAnalyticsScreen() {
             <Section title="New Posts - Last 7 Days">
               <View style={styles.card}>
                 <TrendChart trend={data.trend} />
+              </View>
+            </Section>
+
+              <Section title="Modules">
+              <View style={styles.card}>
+                {modules.map(([key, m], i) => (
+                  <React.Fragment key={key}>
+                    {i > 0 && <View style={styles.divider} />}
+                    <ModuleRow cfg={m} onPress={MODULE_SCREENS[key] ? () => setScreen(MODULE_SCREENS[key]) : undefined} />
+                  </React.Fragment>
+                ))}
+              </View>
+            </Section>
+
+            <Section title="Top Buy & Sell Categories">
+              <View style={styles.card}>
+                {data.topCategories.length === 0 ? (
+                  <Text style={styles.emptyInline}>No active listings yet.</Text>
+                ) : (
+                  data.topCategories.map((c, i) => <CategoryBar key={i} item={c} max={maxCat} />)
+                )}
               </View>
             </Section>
 

@@ -26,13 +26,14 @@ import * as transactionService from "../firebase/transactionService";
 import * as ratesService from "../firebase/ratesService";
 import * as settingsService from "../firebase/settingsService";
 import * as featureAccessService from "../firebase/featureAccessService";
-import * as accessControlService from "../firebase/accessControlService";
+import * as gridManagementService from "../firebase/gridManagementService";
 import * as adControlsService from "../firebase/adControlsService";
 import * as homepageConfigService from "../firebase/homepageConfigService";
 import * as adService from "../firebase/adService";
 import * as supportContactService from "../firebase/supportContactService";
 import * as paymentSettingsService from "../firebase/paymentSettingsService";
 import * as internetPricingService from "../firebase/internetPricingService";
+import * as categoryService from "../firebase/categoryService";
 import * as bannerService from "../firebase/bannerService";
 import * as announcementService from "../firebase/announcementService";
 import * as topupService from "../firebase/topupService";
@@ -78,9 +79,9 @@ function logListenerError(label) {
 
 const SERVICE_STEPS = {
   recharge: 4,
-  billpayment: 4,
   mobilebanking: 3,
   internet: 4,
+  billpayment: 5,
   remittance: 7,
   bus: 3,
   train: 3,
@@ -93,9 +94,9 @@ const TRAVEL_SERVICES = ["flight", "bus", "train"];
 const TRAVEL_LABELS = { flight: "Flight", bus: "Bus", train: "Train" };
 const DEALER_LABELS = {
   recharge: "Recharge",
-  billpayment: "Bill Payment",
   mobilebanking: "Mobile Banking",
   internet: "Internet",
+  billpayment: "Bill Payment",
   remittance: "Remittance",
 };
 
@@ -128,18 +129,6 @@ function buildTransactionPayload(service, serviceData, pricing, rates) {
       profit,
     };
   }
-  if (service === "billpayment") {
-    const rawAmount = serviceData.amount || 0;
-    // Bills are entered in the biller's own currency; the wallet is always
-    // charged in MYR through the same rate table Recharge uses.
-    const amount = amountToPoints(rawAmount, serviceData.country, rates);
-    return {
-      service: DEALER_LABELS.billpayment,
-      details: `${serviceData.billerName || ""} - ${serviceData.currency || "MYR"} ${rawAmount} (Acct: ${serviceData.accountNumber || ""})`,
-      amount,
-      total: amount,
-    };
-  }
   if (service === "mobilebanking") {
     const myr = serviceData.myr || 0;
     return {
@@ -158,6 +147,18 @@ function buildTransactionPayload(service, serviceData, pricing, rates) {
     return {
       service: DEALER_LABELS.internet,
       details: `${serviceData.operator || ""} - ${serviceData.package || ""} (${serviceData.currency || "MYR"} ${rawAmount})`,
+      amount,
+      total: amount,
+    };
+  }
+  if (service === "billpayment") {
+    const rawAmount = Number(serviceData.amount) || 0;
+    // Convert the selected country's bill amount to MySheba points before
+    // sending it. The server independently recomputes this value.
+    const amount = amountToPoints(rawAmount, serviceData.country, rates);
+    return {
+      service: DEALER_LABELS.billpayment,
+      details: `${serviceData.provider || ""} - ${serviceData.category || ""} (${serviceData.accountNumber || ""})`,
       amount,
       total: amount,
     };
@@ -190,16 +191,6 @@ export function AppProvider({ children }) {
   // ---- auth / profile ----
   const [authUser, setAuthUser] = useState(null);
   const [profile, setProfile] = useState(null);
-  // Effective staff capabilities (role defaults + this person's overrides),
-  // kept live so a superadmin's change applies without signing out.
-  const [capabilities, setCapabilities] = useState([]);
-  const capabilityUid = profile?.uid || authUser?.uid || null;
-  const capabilityRole = profile?.role || null;
-  useEffect(
-    () => accessControlService.subscribeMyCapabilities(capabilityUid, capabilityRole, setCapabilities),
-    [capabilityUid, capabilityRole],
-  );
-  const can = useCallback((capability) => capabilities.includes(capability), [capabilities]);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
@@ -214,7 +205,7 @@ export function AppProvider({ children }) {
   // No more manual role picker - `screen` starts on 'login' and, once
   // signed in, the account's Firestore `role` field (in `profile.role`)
   // decides which home screen to land on. See the bootstrap effect below.
-  const [screen, setScreen] = useState("login"); // login | register | forgotPassword | customerHome | service | dealerHome | resellerHome | adminHome | webview | buspicker | support | history | topup | settings | profile | myAccount | reports | notifications | verifyIdentity | verificationManagement | adminAnalytics | myDocuments | documentType | addDocument | documentDetails | documentViewer | moreFeatures | adminFeatures | apiProviderManagement | dealerFeatures | resellerFeatures | featureAccess | tierPromotions | adFeatureControls | bannerManagement | salaryReports | notepad | addNote | noteDetail | help | friendsList
+  const [screen, setScreenState] = useState("login"); // login | register | forgotPassword | customerHome | service | dealerHome | resellerHome | adminHome | webview | buspicker | support | history | topup | chat | chatList | settings | profile | myAccount | reports | notifications | verifyIdentity | verificationManagement | adminAnalytics | myDocuments | documentType | addDocument | documentDetails | documentViewer | moreFeatures | adminFeatures | apiProviderManagement | dealerFeatures | resellerFeatures | featureAccess | tierPromotions | adFeatureControls | bannerManagement | salaryReports | notepad | addNote | noteDetail | help | friendsList
 
   // ---- back-button navigation history ----
   // Tracks prior screens so the Android hardware back button can step
@@ -254,14 +245,7 @@ export function AppProvider({ children }) {
   // hardware back should never be able to land here again (there's no valid
   // "go back to login" while signed in), so they're never pushed onto the
   // back-history stack below.
-  // Screens a signed-out user is allowed to be on. Anything else is
-  // bounced back to "login" by the guard effect below, so a screen missing
-  // from here is unreachable before sign-in: setScreen puts it up and the
-  // guard immediately takes it down again, which looks from the outside
-  // like the button doing nothing at all. That is what kept
-  // "forgotPassword" unreachable - it is reached from the login screen, so
-  // by definition there is no authUser yet.
-  const PRE_AUTH_SCREENS = ["login", "register", "forgotPassword", "deviceVerify", "googlePhone"];
+  const PRE_AUTH_SCREENS = ["login", "register", "deviceVerify", "googlePhone"];
 
   useEffect(() => {
     const prev = prevScreenRef.current;
@@ -286,9 +270,59 @@ export function AppProvider({ children }) {
   // ---- sidebar drawer (Settings / Profile / My Account / Reports) ----
   const [sidebarVisible, setSidebarVisible] = useState(false);
 
+  // ---- support chat (customer <-> Support only - see SupportScreen.js) ----
+  const [activeChatId, setActiveChatId] = useState(null); // the customer uid whose thread is open
+  const [activeChatName, setActiveChatName] = useState("");
+  // Which screen ChatScreen's back button should return to - staff can open
+  // a support thread from either the Chats inbox (chatList) or the
+  // "Messages" tab inside Support Tickets (adminSupport); defaults to
+  // 'chatList' to match the existing behavior for every other entry point.
+  const [activeChatReturnTo, setActiveChatReturnTo] = useState("chatList");
+
+  // Opens the shared customer/support chat screen. The third argument records
+  // which screen the chat was launched from so future back-navigation can
+  // return to the correct inbox (Chat List or Admin Support > Messages).
+  const openChat = useCallback((chatId, chatName = "", returnTo = "chatList") => {
+    if (!chatId) return;
+    setActiveChatId(chatId);
+    setActiveChatName(chatName || "");
+    setActiveChatReturnTo(returnTo || "chatList");
+    setScreen("chat");
+  }, []);
+
+  // ---- Advertiser management ----
+  // These screens remain in App.js and need only their selected advertiser id.
+  const [activeAdvertiserId, setActiveAdvertiserId] = useState(null);
+  const openAdvertiserManagement = useCallback(() => setScreen("advertiserManagement"), []);
+  const openAdvertiserDetail = useCallback((advertiserId) => {
+    if (!advertiserId) return;
+    setActiveAdvertiserId(advertiserId);
+    setScreen("advertiserDetail");
+  }, []);
+
+  // Deep-link handling is intentionally inert; retired listing routes are no longer exposed.
+  const handleDeepLink = useCallback(() => {}, []);
+
+  // ---- Profile navigation state ----
+  // These ids are navigation-only; the destination screens load the actual
+  // profile documents themselves.
+  const [activeBusinessProfileUid, setActiveBusinessProfileUid] = useState(null);
+  const openBusinessProfile = useCallback((uid) => {
+    if (!uid) return;
+    setActiveBusinessProfileUid(uid);
+    setScreen("businessProfile");
+  }, []);
+
+  const [activeContactProfileUid, setActiveContactProfileUid] = useState(null);
+  const openContactProfile = useCallback((uid) => {
+    if (!uid) return;
+    setActiveContactProfileUid(uid);
+    setScreen("contactProfile");
+  }, []);
+
   // ---- My Documents (private per-user document vault - passport, visa,
   // work permit, etc.) ---- Screens call documentService.js directly
-  // (same pattern as other private modules above); context only
+  // (same pattern as other direct Firestore modules); context only
   // tracks which document is being viewed/edited and which type is being
   // added. editDocumentId is null for "add new", set when opening the
   // Add screen from an existing document's "Edit Details" action.
@@ -316,12 +350,11 @@ export function AppProvider({ children }) {
   }, []);
   const openDocumentViewer = useCallback((documentId) => {
     setActiveDocumentId(documentId);
-    setScreen("documentViewer");
-  }, []);
+    setScreen("documentViewer");  }, []);
 
   // ---- Notepad (private per-user notes, plus Credit/Debit/Loan "money
   // notes" for tracking who owes what) ---- Screens call notepadService.js
-  // directly (same pattern as other private modules above); context
+  // directly; context
   // only tracks which note is being viewed and which is being edited.
   // editNoteId is null for "add new", set when opening Add from
   // NoteDetailScreen's "Edit" action - same shape as
@@ -355,43 +388,6 @@ export function AppProvider({ children }) {
     setScreen("support");
   }, []);
 
-  // ---- Business Profile (PRD section 15 Monetization Plan - "Business
-  // profile") ---- Screens call businessProfileService.js directly, so all
-  // that lives here is which uid's business page to show. It can be opened
-  // from My Account or another supported profile entry point.
-  const [activeBusinessProfileUid, setActiveBusinessProfileUid] =
-    useState(null);
-  const openBusinessProfile = useCallback((uid) => {
-    setActiveBusinessProfileUid(uid);
-    setScreen("businessProfile");
-  }, []);
-
-  // ---- MySheba advertiser and campaign management ---- Same "dedicated
-  // nav state alongside setScreen" pattern as activeBusinessProfileUid
-  // above: AdvertiserManagementScreen is the roster (no id needed to open
-  // it), while AdvertiserDetailScreen needs to know which ad_advertisers
-  // doc to show.
-  const [activeAdvertiserId, setActiveAdvertiserId] = useState(null);
-  const openAdvertiserManagement = useCallback(
-    () => setScreen("advertiserManagement"),
-    [],
-  );
-  const openAdvertiserDetail = useCallback((advertiserId) => {
-    setActiveAdvertiserId(advertiserId);
-    setScreen("advertiserDetail");
-  }, []);
-
-  // ---- Contact Profile ---- read-only view of the other person in a 1:1
-  // direct chat - opened by tapping their name in ChatScreen's header (see
-  // ChatScreen's headerTitleRow). Same "just the navigation state" pattern
-  // as activeBusinessProfileUid above; ContactProfileScreen fetches the
-  // actual profile doc itself once it has the uid.
-  const [activeContactProfileUid, setActiveContactProfileUid] = useState(null);
-  const openContactProfile = useCallback((uid) => {
-    if (!uid) return;
-    setActiveContactProfileUid(uid);
-    setScreen("contactProfile");
-  }, []);
 
   // openSalary / openSalaryReports are defined further below, next to
   // openMyDocuments/openNotepad - see "Notepad / My Documents / Salary &
@@ -473,8 +469,8 @@ export function AppProvider({ children }) {
   const [privateVaultUnlocked, setPrivateVaultUnlocked] = useState(false);
 
   // ---- App Lock (whole-app PIN/biometric gate, separate from the vault
-  // unlocks above) ---- appLockEnabled mirrors a per-account AsyncStorage
-  // flag (src/firebase/appLockPrefs.js) - loaded per uid below and kept in
+  // unlocks above) ---- appLockEnabled mirrors a per-device AsyncStorage
+  // flag (src/firebase/appLockPrefs.js) - loaded once below and kept in
   // sync whenever setAppLockEnabled is called. appLocked is the live
   // "currently showing the lock screen" flag AppLockScreen.js reads; it's
   // set true both on cold launch (once the profile's securityPinSet is
@@ -500,16 +496,9 @@ export function AppProvider({ children }) {
   const APP_LOCK_GRACE_MS = 2 * 60 * 1000;
   const backgroundedAtRef = useRef(null);
 
-  // Load the signed-in account's own setting. Keyed by uid, so signing out
-  // drops back to off rather than leaving the previous account's lock
-  // standing over the next one (see appLockPrefs.js).
   useEffect(() => {
-    const uid = authUser?.uid;
-    if (!uid) { setAppLockEnabledState(false); return undefined; }
-    let cancelled = false;
-    getAppLockEnabled(uid).then((v) => { if (!cancelled) setAppLockEnabledState(v); });
-    return () => { cancelled = true; };
-  }, [authUser?.uid]);
+    getAppLockEnabled().then(setAppLockEnabledState);
+  }, []);
 
   const setAppLockEnabled = useCallback(
     async (value) => {
@@ -517,9 +506,9 @@ export function AppProvider({ children }) {
         await requireSecurityPin("App Lock");
       }
       setAppLockEnabledState(value);
-      await setAppLockEnabledPref(authUser?.uid, value);
+      await setAppLockEnabledPref(value);
     },
-    [requireSecurityPin, profile, authUser?.uid],
+    [requireSecurityPin, profile],
   );
 
   const unlockApp = useCallback(() => setAppLocked(false), []);
@@ -636,14 +625,130 @@ export function AppProvider({ children }) {
   // cost/profit % - admin-editable from Admin > Pricing (see
   // settingsService.js). ----
   const [pricing, setPricing] = useState(settingsService.DEFAULT_PRICING);
+  useEffect(() => {
+    if (!authUser || !profile) return undefined;
+    return gridManagementService.subscribeGridManagement(
+      setGridManagement,
+      logListenerError('gridManagement')
+    );
+  }, [authUser, profile]);
 
-  // ---- feature access: which roles can open each admin/dealer/reseller
   // management tool - superadmin-editable from Superadmin > Feature Access
   // (see featureAccessService.js). Customer features (ServiceGrid) aren't
   // part of this - those stay identical for every role. ----
   const [featureAccess, setFeatureAccess] = useState(
     featureAccessService.DEFAULT_FEATURE_ACCESS,
   );
+  const [gridManagement, setGridManagement] = useState(gridManagementService.DEFAULT_GRID_MANAGEMENT);
+
+  // Central navigation boundary. UI hiding is not a security boundary:
+  // every internal setScreen() call (notifications, deep links, callbacks,
+  // and manually triggered handlers) must pass role + live grid checks here.
+  // Backend/Firebase rules remain the final authority for data mutations.
+  const SCREEN_GRID_KEYS = {
+    service: null,
+    buspicker: 'bus',
+    topup: 'topup', history: 'history', support: 'support',
+    profile: 'profile', myAccount: 'myAccount', verifyIdentity: 'kyc',
+    myDocuments: 'myDocuments', salaryDashboard: 'salary', salarySettings: 'salary',
+    salaryCalculator: 'salary', salaryWorkLog: 'salary', salaryReports: 'salary',
+    salaryMonthlySummary: 'salary', salaryHistory: 'salary', createPayslip: 'salary',
+    payslipHistory: 'salary', payslipDetails: 'salary',
+    transferPoints: 'walletTransfer',
+    dealerFeatures: 'dealerFeatures', resellerFeatures: 'resellerFeatures',
+    adminFeatures: 'adminFeatures', moreFeatures: 'moreFeaturesTile',
+    adminAnalytics: 'adminAnalytics', userManagement: 'userManagement',
+    verificationManagement: 'verificationManagement', featureAccess: 'featureAccess',
+    apiProviderManagement: 'apiManagement', bannerManagement: 'banners',
+    gridManagement: null
+  };
+
+  // Screens whose UI exposes administrative or role-specific operations.
+  // Keep this list centralized so a hidden menu item cannot be bypassed by
+  // calling setScreen('...') directly.
+  const SCREEN_ROLES = {
+    customerHome: ['customer'],
+    dealerHome: ['dealer'],
+    resellerHome: ['reseller'],
+    adminHome: ['admin', 'superadmin'],
+    adminFeatures: ['admin', 'superadmin'],
+    adminAnalytics: ['admin', 'superadmin'],
+    userManagement: ['admin', 'superadmin'],
+    verificationManagement: ['admin', 'superadmin'],
+    adminSupport: ['admin', 'superadmin'],
+    all: ['admin', 'superadmin'],
+    pending: ['admin', 'superadmin'],
+    inquiries: ['admin', 'superadmin'],
+    topups: ['admin', 'superadmin'],
+    rates: ['admin', 'superadmin'],
+    pricing: ['admin', 'superadmin'],
+    payments: ['admin', 'superadmin'],
+    featureAccess: ['admin', 'superadmin'],
+    apiProviderManagement: ['superadmin'],
+    gridManagement: ['superadmin'],
+    adFeatureControls: ['superadmin'],
+    adAnalytics: ['superadmin'],
+    advertiserManagement: ['superadmin'],
+    advertiserDetail: ['superadmin'],
+    adPackagesManagement: ['superadmin'],
+    adPaymentsManagement: ['superadmin'],
+    trustedDevices: ['superadmin'],
+    tierPromotions: ['superadmin'],
+    superAdminTopup: ['superadmin'],
+    dealerFeatures: ['dealer'],
+    resellerFeatures: ['reseller'],
+    };
+
+  const getHomeForRole = useCallback((role) => {
+    if (role === 'dealer') return 'dealerHome';
+    if (role === 'reseller') return 'resellerHome';
+    if (role === 'admin' || role === 'superadmin') return 'adminHome';
+    return 'customerHome';
+  }, []);
+
+  const setScreen = useCallback((nextScreen) => {
+    const role = profile?.role;
+    const allowedRoles = SCREEN_ROLES[nextScreen];
+
+    // Pre-auth routes are intentionally unrestricted; protected routes are
+    // denied until a verified profile/role exists.
+    if (allowedRoles) {
+      // Auth flows call setProfile(p) and setScreen(home) in the same
+      // callback, so React may not have committed the new profile role yet.
+      // Allow only a role-specific home during that tiny transition; the
+      // effect below re-checks it immediately after the profile commits.
+      const rolePendingHome =
+        !role &&
+        !!authUser &&
+        ['customerHome', 'dealerHome', 'resellerHome', 'adminHome'].includes(nextScreen);
+      if (!rolePendingHome && (!role || !allowedRoles.includes(role))) {
+        if (authUser) showAlert('MySheba', 'You do not have access to this feature.');
+        return;
+      }
+    }
+
+    const gridKey = SCREEN_GRID_KEYS[nextScreen];
+    const isSuperadminGridManager = nextScreen === 'gridManagement' && role === 'superadmin';
+    if (gridKey && !isSuperadminGridManager && !gridManagementService.isGridActive(gridManagement, gridKey)) {
+      showAlert('MySheba', 'This feature is currently unavailable.');
+      return;
+    }
+    setScreenState(nextScreen);
+  }, [authUser, gridManagement, profile?.role]);
+
+  useEffect(() => {
+    const role = profile?.role;
+    const allowedRoles = SCREEN_ROLES[screen];
+    const gridKey = SCREEN_GRID_KEYS[screen];
+    const roleDenied = allowedRoles && (!role || !allowedRoles.includes(role));
+    const gridDenied = gridKey && !(
+      screen === 'gridManagement' && role === 'superadmin'
+    ) && !gridManagementService.isGridActive(gridManagement, gridKey);
+
+    if (roleDenied || gridDenied) {
+      setScreenState(role ? getHomeForRole(role) : 'login');
+    }
+  }, [screen, gridManagement, profile?.role, getHomeForRole]);
 
   // PHASE 4 - Global/per-feature advertisement controls (ad_settings/general,
   // ad_feature_controls/{featureId}), subscribed once here rather than once
@@ -671,6 +776,11 @@ export function AppProvider({ children }) {
   // (not advertisers too) - keyed by doc id for adTargetingService's
   // getEligibleAds step 13 (campaignId -> AdCampaign).
   const [adCampaignsById, setAdCampaignsById] = useState({});
+
+  // ---- Local Services categories - admin-editable from Admin > Categories. ----
+  const [serviceCategories, setServiceCategories] = useState(
+    categoryService.DEFAULT_CATEGORIES.services,
+  );
 
   // ---- live point cost per "point deduct" webview key, admin-editable
   // from Admin > Pricing > Point Feature Costs, with optional per-role
@@ -916,8 +1026,7 @@ export function AppProvider({ children }) {
           //      saved locally after its own last successful
           //      login/verification) -> sign out immediately.
           // Wrapped in try/catch and fails open into the normal routing
-          // below on any error - a device-check hiccup shouldn't brick
-          // login for everyone, it just skips this extra hardening once.
+          // below on any error - a device-check hiccup shouldn't brick          // login for everyone, it just skips this extra hardening once.
           (async () => {
             if (!p) {
               setProfile(null);
@@ -987,8 +1096,6 @@ export function AppProvider({ children }) {
               if (p && p.role === "dealer")
                 setScreen("dealerHome");
               else if (p && p.role === "reseller") setScreen("resellerHome");
-              else if (p && (p.role === "support" || p.role === "finance"))
-                setScreen("staffHome");
               else if (p && (p.role === "admin" || p.role === "superadmin"))
                 setScreen("adminHome");
               else setScreen("customerHome");
@@ -1152,6 +1259,16 @@ export function AppProvider({ children }) {
 
   useEffect(() => {
     if (!authUser) return undefined;
+    const unsub = categoryService.subscribeCategories(
+      "services",
+      setServiceCategories,
+      logListenerError("serviceCategories"),
+    );
+    return unsub;
+  }, [authUser]);
+
+  useEffect(() => {
+    if (!authUser) return undefined;
     supportContactService.ensureSupportContact().catch(() => {});
     const unsub = supportContactService.subscribeSupportContact(
       (c) => setSupportContact(c),
@@ -1159,7 +1276,6 @@ export function AppProvider({ children }) {
     );
     return unsub;
   }, [authUser]);
-
 
   useEffect(() => {
     if (!authUser) return undefined;
@@ -1189,8 +1305,7 @@ export function AppProvider({ children }) {
     const unsub = bannerService.subscribeBanners(
       (list) => setBanners(list),
       logListenerError("banners"),
-    );
-    return unsub;
+    );    return unsub;
   }, [authUser]);
 
   // ---- live broadcast transactions. Admin/superadmin see the same full
@@ -1205,11 +1320,10 @@ export function AppProvider({ children }) {
     const role = profile && profile.role;
     if (!needsTx || !role || !authUser) return undefined;
 
-    // Staff see the full stream only if their access includes orders or
-    // finance; operators see their own queue.
-    const seesAllOrders = can("orders") || can("finance");
-    const isOperator = role === "dealer" || role === "reseller";
-    if (!isOperator && !seesAllOrders) return undefined;
+    const isStaffQueue = ["dealer", "reseller", "admin", "superadmin"].includes(
+      role,
+    );
+    if (!isStaffQueue) return undefined;
 
     // Phase 10: Dealer and Reseller no longer share one undifferentiated
     // queue - each only ever sees the specific service(s) their tier owns
@@ -1217,7 +1331,7 @@ export function AppProvider({ children }) {
     // - this filter is UX, that's the actual security boundary). Admin/
     // superadmin keep the full unfiltered stream, same as before.
     const unsub = transactionService.subscribeBroadcastTransactions((txs) => {
-      if (seesAllOrders && !isOperator) {
+      if (role === "admin" || role === "superadmin") {
         setDealerTxs(txs);
         setResellerTxs(txs);
       } else if (role === "dealer") {
@@ -1225,31 +1339,15 @@ export function AppProvider({ children }) {
       } else if (role === "reseller") {
         setResellerTxs(
           txs.filter((t) =>
-            ["Recharge", "Internet", "Remittance", "Bill Payment"].includes(t.service),
+            ["Recharge", "Internet", "Bill Payment", "Remittance"].includes(t.service),
           ),
         );
       }
-    }, logListenerError("transactions:broadcast"), { fullStream: seesAllOrders && !isOperator });
+    }, logListenerError("transactions:broadcast"));
     return unsub;
-  }, [screen, profile, authUser, can]);
+  }, [screen, profile, authUser]);
 
   // ---- admin push announcement history, only needed on the Admin
-  // dashboard (Admin > Announcements), and only for admin/superadmin -
-  // scoped to that screen just to avoid an always-on listener nobody but
-  // admin looks at. (Every signed-in user - not just admin - can read this
-  // collection per firestore.rules; see the separate listener below that
-  // powers the customer-facing notification bell.) ----
-  useEffect(() => {
-    const role = profile && profile.role;
-    const needsAnnouncements = screen === "adminHome" && can("support");
-    if (!needsAnnouncements) return undefined;
-    const unsub = announcementService.subscribeAnnouncements(
-      (list) => setAnnouncements(list),
-      logListenerError("announcements"),
-    );
-    return unsub;
-  }, [screen, profile, can]);
-
   // ---- notification bell feed: any signed-in user (not just admin) reads
   // the same announcement log and filters it client-side to what's actually
   // addressed to them ('all' or their own role) - see firestore.rules,
@@ -1260,11 +1358,16 @@ export function AppProvider({ children }) {
       return undefined;
     }
     const unsub = announcementService.subscribeAnnouncements(
-      (list) => setRawAnnouncements(list),
+      (list) => {
+        setRawAnnouncements(list);
+        if (profile && (profile.role === "admin" || profile.role === "superadmin") && screen === "adminHome") {
+          setAnnouncements(list);
+        }
+      },
       logListenerError("myAnnouncements"),
     );
     return unsub;
-  }, [authUser]);
+  }, [authUser, profile, screen]);
 
   const myNotifications = useMemo(() => {
     const role = profile && profile.role;
@@ -1301,7 +1404,8 @@ export function AppProvider({ children }) {
   useEffect(() => {
     const role = profile && profile.role;
     const isAdminScreen =
-      (screen === "adminHome" || screen === "reports") && can("support");
+      (screen === "adminHome" || screen === "reports") &&
+      ["admin", "superadmin"].includes(role);
     const isResellerScreen = screen === "resellerHome" && role === "reseller";
     if (!isAdminScreen && !isResellerScreen) return undefined;
     const unsub = inquiryService.subscribeInquiries(
@@ -1312,81 +1416,19 @@ export function AppProvider({ children }) {
       logListenerError("inquiries"),
     );
     return unsub;
-  }, [screen, profile, can]);
+  }, [screen, profile]);
 
   // ---- live top-up requests, only needed on the Admin dashboard ----
   useEffect(() => {
-    // Reviewing top-ups is finance work.
-    if ((screen !== "adminHome" && screen !== "reports") || !can("finance"))
+    const isStaff = profile && ["admin", "superadmin"].includes(profile.role);
+    if ((screen !== "adminHome" && screen !== "reports") || !isStaff)
       return undefined;
     const unsub = topupService.subscribeTopups(
       (list) => setTopups(list),
       logListenerError("topups"),
     );
     return unsub;
-  }, [screen, profile, can]);
-
-  // Re-locks the Notepad/My Documents private vault whenever the app
-  // leaves the foreground - same behavior as WhatsApp's chat lock, so
-  // background/switch-app/screen-off always requires the security PIN
-  // again on return, rather than staying unlocked indefinitely once
-  // entered once. (Transfer Points is deliberately not included here -
-  // see requireSecurityPin call in TransferPointsScreen, which never
-  // checks privateVaultUnlocked.)
-  useEffect(() => {
-    const sub = AppState.addEventListener("change", (state) => {
-      if (state !== "active") {
-        setPrivateVaultUnlocked(false);
-      }
-    });
-    return () => sub.remove();
-  }, []);
-
-  // App Lock: separate effect from the vault re-lock above since it needs
-  // to read appLockEnabled/authUser (which change rarely, so resubscribing
-  // on their change is cheap - unlike chatVaultUnlocked/privateVaultUnlocked
-  // above, which change constantly and would thrash a listener with those
-  // as deps). Only re-locks on RETURNING to active, and only if the app
-  // was actually away for at least APP_LOCK_GRACE_MS - records the
-  // backgrounding timestamp when leaving, then checks the gap on return.
-  // A quick background/foreground (notification peek, QR scanner, sharing
-  // to another app) comes straight back in with no PIN/biometric prompt;
-  // only a genuine gap re-locks. This trades away the old
-  // lock-screen-already-covering-content-on-return behavior for not
-  // nagging biometric every single backgrounding within one sitting.
-  useEffect(() => {
-    if (!appLockEnabled || !authUser) return undefined;
-    const sub = AppState.addEventListener("change", (state) => {
-      if (state !== "active") {
-        backgroundedAtRef.current = Date.now();
-      } else if (
-        backgroundedAtRef.current &&
-        Date.now() - backgroundedAtRef.current >= APP_LOCK_GRACE_MS
-      ) {
-        setAppLocked(true);
-        backgroundedAtRef.current = null;
-      } else {
-        backgroundedAtRef.current = null;
-      }
-    });
-    return () => sub.remove();
-  }, [appLockEnabled, authUser]);
-
-  // Cold-launch lock: once the profile has loaded and confirms a security
-  // PIN actually exists (appLockEnabled alone isn't enough - AppLockScreen
-  // has nothing to check against without one), require unlock immediately
-  // rather than only after the first backgrounding.
-  useEffect(() => {
-    if (appLockEnabled && authUser && profile?.securityPinSet)
-      setAppLocked(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appLockEnabled, authUser?.uid, profile?.securityPinSet]);
-
-  /** Opens the Support thread - `chatId` is the customer's uid, `name` is
-   * who to show in the header/inbox. `returnTo` (staff only) is which
-   * screen the back button should land on - defaults to the Chats inbox
-   * ('chatList') to match every existing caller; AdminSupportScreen's
-   * "Messages" tab passes 'adminSupport' so back returns there instead. */
+  }, [screen, profile]);
 
   // ---- push notification taps: jump to the right thread when the user
   // taps a notification, whether the app was foregrounded, backgrounded, or
@@ -1400,12 +1442,17 @@ export function AppProvider({ children }) {
     const handleResponse = async (response) => {
       const data = response?.notification?.request?.content?.data || {};
       try {
-        if (data.type === "topup") {
+        if (data.type === "chat" && data.chatId) {
+          openChat(data.chatId, "Support");
+        } else if (data.type === "topup") {
           // Admin/superadmin get notified of a new request to review; the
           // requester gets notified once it's approved/rejected. Route each
           // to wherever that status actually lives for them - staff never
           // see their own self-topups in this queue (see topupService).
-          if (can("finance")) {
+          const isStaff =
+            profile &&
+            (profile.role === "admin" || profile.role === "superadmin");
+          if (isStaff) {
             setAdminTab("topups");
             setScreen("adminHome");
           } else setScreen("history");
@@ -1418,10 +1465,6 @@ export function AppProvider({ children }) {
           const isSuperadmin = profile && profile.role === "superadmin";
           setScreen(isSuperadmin ? "adminSupport" : "support");
         }
-        // 'call' notifications need no explicit navigation here - the
-        // system-wide incoming-call listener above already surfaces
-        // IncomingCallModal over whatever screen is active as soon as the
-        // app opens, as long as the call is still ringing.
       } catch (e) {
         // Non-fatal - worst case the user lands on their home screen
         // instead of the exact thread and can navigate there manually.
@@ -1433,7 +1476,7 @@ export function AppProvider({ children }) {
     });
     const sub = addNotificationResponseListener(handleResponse);
     return () => sub.remove();
-  }, [authUser, profile, setAdminTab, setScreen, can]);
+  }, [authUser, profile, openChat, setAdminTab, setScreen]);
 
   const openResult = useCallback((kind, txId, svc, extra) => {
     setResultModal({
@@ -1450,8 +1493,7 @@ export function AppProvider({ children }) {
 
   const closeResult = useCallback(() => {
     setResultModal({
-      visible: false,
-      kind: null,
+      visible: false,      kind: null,
       txId: "",
       service: "",
       details: "",
@@ -1553,9 +1595,8 @@ export function AppProvider({ children }) {
     // of arming the exit-app confirmation (see onBackPress's HOME_SCREENS
     // check, which now also skips goBack() outright as a second guard).
     screenHistoryRef.current = [];
-    if (r === "dealer") setScreen("dealerHome");
+    if (r === "dealer" || r === "dealer") setScreen("dealerHome");
     else if (r === "reseller") setScreen("resellerHome");
-    else if (r === "support" || r === "finance") setScreen("staffHome");
     else if (r === "admin" || r === "superadmin") setScreen("adminHome");
     else setScreen("customerHome");
   }, [profile]);
@@ -1662,14 +1703,12 @@ export function AppProvider({ children }) {
         return true;
       }
       setProfile(p);
-      if (p.role === "dealer") {
+      if (p.role === "dealer" || p.role === "dealer") {
         setDealerTab("pending");
         setScreen("dealerHome");
       } else if (p.role === "reseller") {
         setResellerTab("pending");
         setScreen("resellerHome");
-      } else if (p.role === "support" || p.role === "finance") {
-        setScreen("staffHome");
       } else if (p.role === "admin" || p.role === "superadmin") {
         setAdminTab("all");
         setScreen("adminHome");
@@ -1704,14 +1743,12 @@ export function AppProvider({ children }) {
         return true;
       }
       setProfile(p);
-      if (p.role === "dealer") {
+      if (p.role === "dealer" || p.role === "dealer") {
         setDealerTab("pending");
         setScreen("dealerHome");
       } else if (p.role === "reseller") {
         setResellerTab("pending");
         setScreen("resellerHome");
-      } else if (p.role === "support" || p.role === "finance") {
-        setScreen("staffHome");
       } else if (p.role === "admin" || p.role === "superadmin") {
         setAdminTab("all");
         setScreen("adminHome");
@@ -1755,22 +1792,19 @@ export function AppProvider({ children }) {
           uid: p.uid,
           email: p.pendingDeviceApproval.email,
           phone: p.pendingDeviceApproval.phone,
-          reason: p.pendingDeviceApproval.reason,
-          availableMfaMethods: p.pendingDeviceApproval.availableMfaMethods,
+          reason: p.pendingDeviceApproval.reason,          availableMfaMethods: p.pendingDeviceApproval.availableMfaMethods,
         });
         setScreen("deviceVerify");
         return true;
       }
       setPendingGooglePhone(false);
       setProfile(p);
-      if (p.role === "dealer") {
+      if (p.role === "dealer" || p.role === "dealer") {
         setDealerTab("pending");
         setScreen("dealerHome");
       } else if (p.role === "reseller") {
         setResellerTab("pending");
         setScreen("resellerHome");
-      } else if (p.role === "support" || p.role === "finance") {
-        setScreen("staffHome");
       } else if (p.role === "admin" || p.role === "superadmin") {
         setAdminTab("all");
         setScreen("adminHome");
@@ -1849,14 +1883,12 @@ export function AppProvider({ children }) {
 
         setPendingDeviceVerification(null);
         setProfile(p);
-        if (p.role === "dealer") {
+        if (p.role === "dealer" || p.role === "dealer") {
           setDealerTab("pending");
           setScreen("dealerHome");
         } else if (p.role === "reseller") {
           setResellerTab("pending");
           setScreen("resellerHome");
-        } else if (p.role === "support" || p.role === "finance") {
-          setScreen("staffHome");
         } else if (p.role === "admin" || p.role === "superadmin") {
           setAdminTab("all");
           setScreen("adminHome");
@@ -1950,11 +1982,15 @@ export function AppProvider({ children }) {
   }, []);
 
   const startService = useCallback((service) => {
+    if (!gridManagementService.isGridActive(gridManagement, service)) {
+      showAlert("MySheba", "This feature is currently unavailable.");
+      return;
+    }
     setCurrentService(service);
     setCurrentStep(0);
     setServiceData({});
     setScreen("service");
-  }, []);
+  }, [gridManagement, showAlert]);
 
   // Every "point deduct" webview (FOMEMA/Visa, MY Digital/Passport, Bus
   // redBus/Bus Online Ticket/Easybook, MY e-SIM) is gated right here, at the door, before
@@ -1992,6 +2028,10 @@ export function AppProvider({ children }) {
   const [webViewPaymentCharged, setWebViewPaymentCharged] = useState(false);
   const openWebView = useCallback(
     async (key) => {
+      if (!gridManagementService.isGridActive(gridManagement, key)) {
+        showAlert('MySheba', 'This feature is currently unavailable.');
+        return;
+      }
       const cost = pointCosts[key];
       if (!cost || !authUser?.uid) {
         setWebViewKey(key);
@@ -2056,11 +2096,10 @@ export function AppProvider({ children }) {
         ],
       );
     },
-    [authUser, webViewBusy, profile, pointCosts],
+    [authUser, webViewBusy, profile, pointCosts, gridManagement],
   );
 
-  // Shows the Bus screen's 3-option grid (redBus / Bus Online Ticket /
-  // Easybook) instead of opening a WebView directly - each card then
+  // Shows the Bus screen's 3-option grid (redBus / Bus Online Ticket /  // Easybook) instead of opening a WebView directly - each card then
   // calls openWebView with its own key ('bus-redbus' |
   // 'bus-busonlineticket' | 'bus-easybook'), which re-runs the same
   // insufficient-points gate above.
@@ -2259,8 +2298,6 @@ export function AppProvider({ children }) {
     // auth
     authUser,
     profile,
-    capabilities,
-    can,
     authLoading,
     authError,
     authBusy,
@@ -2321,7 +2358,10 @@ export function AppProvider({ children }) {
     pointCosts,
     accessWindowHours,
     featureAccess,
+    gridManagement,
+    serviceCategories,
     supportContact,
+
     paymentSettings,
     banners,
     adSettings,
@@ -2344,10 +2384,16 @@ export function AppProvider({ children }) {
     confirmPaymentSuccess,
     webViewPaymentBusy,
     webViewPaymentCharged,
-    // advertiser + campaign management
+    // support chat
+    activeChatId,
+    activeChatName,
+    activeChatReturnTo,
+    openChat,
+    // advertiser management
     activeAdvertiserId,
     openAdvertiserManagement,
     openAdvertiserDetail,
+    handleDeepLink,
     // my documents
     activeDocumentId,
     activeDocumentType,
@@ -2368,9 +2414,6 @@ export function AppProvider({ children }) {
     setHelpPrefill,
     openHelp,
     openSupportWithPrefill,
-    // business profile
-    activeBusinessProfileUid,
-    openBusinessProfile,
     activeContactProfileUid,
     openContactProfile,
     // salary & OT

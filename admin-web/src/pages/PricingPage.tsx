@@ -23,7 +23,6 @@ const ROLE_PRICE_LABELS: Record<RolePriceKey, string> = {
   webviewAccessCost: 'FOMEMA / Visa Status Check (pts)',
   webviewSubmitCost: 'Malaysia Arrival Card / Passport Submission (pts)',
   paymentSuccessCost: 'Bus / Train / MY e-SIM Purchase (pts)',
-  listingBoostCost: 'Listing Boost (pts)',
   notepadCost: 'Notepad (pts/month)',
   myDocumentsCost: 'My Documents (pts/month)',
   salaryOtCost: 'Salary & OT (pts/month)',
@@ -90,8 +89,6 @@ export default function PricingPage() {
           <FieldRow label="Dealer Earning on Customer Transfer (%)" value={pricing.dealerEarningPercent} suffix="%" onSave={(v) => save('dealerEarningPercent', v)} />
           <FieldRow label="Mobile Recharge Cost (%)" value={pricing.rechargeCostPercent} suffix="%" onSave={(v) => save('rechargeCostPercent', v)} />
           <FieldRow label="Mobile Recharge Profit (%)" value={pricing.rechargeProfitPercent} suffix="%" onSave={(v) => save('rechargeProfitPercent', v)} />
-          <FieldRow label="Recharge Point Cost per Unit" value={pricing.rechargePointCostPerUnit} suffix=" pts" onSave={(v) => save('rechargePointCostPerUnit', v)} />
-          <FieldRow label="Internet Point Cost per Unit" value={pricing.internetPointCostPerUnit} suffix=" pts" onSave={(v) => save('internetPointCostPerUnit', v)} />
         </Section>
         <Section title="Point Feature Costs">
           <FieldRow label="FOMEMA / Visa Status Check (pts)" value={pricing.webviewAccessCost} suffix=" pts" onSave={(v) => save('webviewAccessCost', v)} />
@@ -104,12 +101,7 @@ export default function PricingPage() {
           <FieldRow label="My Documents (pts/month)" value={pricing.myDocumentsCost} suffix=" pts" onSave={(v) => save('myDocumentsCost', v)} />
           <FieldRow label="Salary & OT (pts/month)" value={pricing.salaryOtCost} suffix=" pts" onSave={(v) => save('salaryOtCost', v)} />
           <FieldRow label="Subscription Cycle Length (days)" value={pricing.moduleSubscriptionDays} suffix=" days" onSave={(v) => save('moduleSubscriptionDays', v)} />
-        </Section>
-        <Section title="Listing Boost">
-          <FieldRow label="Listing Boost Cost (pts)" value={pricing.listingBoostCost} suffix=" pts" onSave={(v) => save('listingBoostCost', v)} />
-          <FieldRow label="Boost Duration (days)" value={pricing.listingBoostDurationDays} suffix=" days" onSave={(v) => save('listingBoostDurationDays', v)} />
-        </Section>
-        {isSuperadmin ? <Section title="Role-Based Pricing (superadmin only)">{ROLE_PRICE_KEYS.map((key) => <RolePriceRow key={key} priceKey={key} pricing={pricing} onSave={saveRolePrice} />)}</Section> : <div className="rounded-2xl border border-dashed border-[var(--color-line)] bg-[var(--color-card)] p-5 text-sm text-[var(--color-ink-soft)]">Role-Based Pricing is visible to superadmin accounts only.</div>}
+        </Section>\n        {isSuperadmin ? <Section title="Role-Based Pricing (superadmin only)">{ROLE_PRICE_KEYS.map((key) => <RolePriceRow key={key} priceKey={key} pricing={pricing} onSave={saveRolePrice} />)}</Section> : <div className="rounded-2xl border border-dashed border-[var(--color-line)] bg-[var(--color-card)] p-5 text-sm text-[var(--color-ink-soft)]">Role-Based Pricing is visible to superadmin accounts only.</div>}
       </div>
     </div>
   );

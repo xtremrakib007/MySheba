@@ -10,7 +10,7 @@ const SETTINGS_DOC = doc(db, 'settings', 'pricing');
 
 export const ROLE_PRICE_ROLES = ['customer', 'dealer', 'reseller', 'admin'];
 
-export const ROLE_PRICE_KEYS = ['webviewAccessCost', 'webviewSubmitCost', 'paymentSuccessCost', 'listingBoostCost', 'notepadCost', 'myDocumentsCost', 'salaryOtCost', 'rechargePointCostPerUnit', 'internetPointCostPerUnit'];
+export const ROLE_PRICE_KEYS = ['webviewAccessCost', 'webviewSubmitCost', 'paymentSuccessCost', 'notepadCost', 'myDocumentsCost', 'salaryOtCost', 'rechargePointCostPerUnit', 'internetPointCostPerUnit'];
 
 export const DEFAULT_PRICING = {
   dealerEarningPercent: 1.5,
@@ -26,8 +26,6 @@ export const DEFAULT_PRICING = {
   salaryOtCost: 0,
   moduleSubscriptionDays: 30,
   webviewAccessWindowHours: 1,
-  listingBoostCost: 5,
-  listingBoostDurationDays: 7,
   rolePricing: {},
 };
 

@@ -10,10 +10,11 @@ import HeaderDecor from '../components/HeaderDecor';
 import SmartAd from '../components/SmartAd';
 
 import RechargeStep, { validateStep as validateRecharge } from '../steps/RechargeSteps';
-import BillPaymentStep, { validateStep as validateBillPayment } from '../steps/BillPaymentSteps';
 import MobileBankingStep, { validateStep as validateMobileBanking } from '../steps/MobileBankingSteps';
 import InternetStep, { validateStep as validateInternet } from '../steps/InternetSteps';
 import RemittanceStep, { validateStep as validateRemittance } from '../steps/RemittanceSteps';
+import BillPaymentStep, { validateStep as validateBillPayment } from '../steps/BillPaymentSteps';
+import EntertainmentStep, { validateStep as validateEntertainment } from '../steps/EntertainmentSteps';
 import BusStep from '../steps/BusSteps';
 import TrainStep from '../steps/TrainSteps';
 import FlightStep from '../steps/FlightSteps';
@@ -25,6 +26,7 @@ const SERVICE_TITLES = {
   internet: 'Internet',
   remittance: 'Remittance',
   billpayment: 'Bill Payment',
+  entertainment: 'Entertainment',
   bus: 'Bus',
   train: 'Train',
   flight: 'Flight',
@@ -32,10 +34,11 @@ const SERVICE_TITLES = {
 
 const STEP_COMPONENTS = {
   recharge: RechargeStep,
-  billpayment: BillPaymentStep,
   mobilebanking: MobileBankingStep,
   internet: InternetStep,
   remittance: RemittanceStep,
+  billpayment: BillPaymentStep,
+  entertainment: EntertainmentStep,
   bus: BusStep,
   train: TrainStep,
   flight: FlightStep,
@@ -45,10 +48,11 @@ const STEP_COMPONENTS = {
 // when the step is complete, or a message to show the user when it isn't.
 const VALIDATORS = {
   recharge: validateRecharge,
-  billpayment: validateBillPayment,
   mobilebanking: validateMobileBanking,
   internet: validateInternet,
   remittance: validateRemittance,
+  billpayment: validateBillPayment,
+  entertainment: validateEntertainment,
   bus: validateTravelInquiry,
   train: validateTravelInquiry,
   flight: validateTravelInquiry,
@@ -68,6 +72,7 @@ const AD_SLOTS = {
   internet: { feature: 'internet_package', top: 'INTERNET_TOP', bottom: 'INTERNET_BOTTOM' },
   remittance: { feature: 'remittance', top: 'REMITTANCE_TOP', bottom: 'REMITTANCE_BOTTOM' },
   flight: { feature: 'air_ticket', top: 'FLIGHT_TOP', bottom: 'FLIGHT_BOTTOM' },
+  entertainment: { feature: 'entertainment', top: 'ENTERTAINMENT_TOP', bottom: 'ENTERTAINMENT_BOTTOM' },
 };
 
 export default function ServiceScreen() {
@@ -81,6 +86,7 @@ export default function ServiceScreen() {
 
   const StepComponent = STEP_COMPONENTS[currentService];
   const title = SERVICE_TITLES[currentService] || 'Service';
+  const isEntertainment = currentService === 'entertainment';
   const isLast = currentStep === totalSteps - 1;
   const adSlot = AD_SLOTS[currentService];
 
@@ -114,7 +120,7 @@ export default function ServiceScreen() {
         <Text style={styles.headerTitle}>{title}</Text>
       </LinearGradient>
 
-      <StepBar totalSteps={totalSteps} currentStep={currentStep} />
+      {!isEntertainment && <StepBar totalSteps={totalSteps} currentStep={currentStep} />}
 
       <ScrollView style={styles.content} contentContainerStyle={{ padding: 16 }}>
         {adSlot && <SmartAd placement={adSlot.top} feature={adSlot.feature} height={100} style={{ marginBottom: 12 }} />}
@@ -122,7 +128,7 @@ export default function ServiceScreen() {
         {adSlot && <SmartAd placement={adSlot.bottom} feature={adSlot.feature} height={100} style={{ marginTop: 12 }} />}
       </ScrollView>
 
-      <View style={styles.navBar}>
+      {!isEntertainment && <View style={styles.navBar}>
         <View style={styles.btnGroup}>
           {currentStep > 0 && <OutlineButton label="← Back" onPress={prevStep} />}
           <PrimaryButton
@@ -131,7 +137,7 @@ export default function ServiceScreen() {
             disabled={isLast && submitting}
           />
         </View>
-      </View>
+      </View>}
     </View>
   );
 }

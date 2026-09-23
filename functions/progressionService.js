@@ -4,6 +4,7 @@
 // server-side triggers only; client writes are blocked by Firestore Rules.
 
 const admin = require('firebase-admin');
+const crypto = require('crypto');
 
 function progressionDocRef() {
   return admin.firestore().collection('settings').doc('progression');
@@ -49,17 +50,25 @@ function tierForPoints(tiers, points) {
   return current;
 }
 
-async function incrementTierPoints(uid) {
+async function incrementTierPoints(uid, eventId = null) {
   if (!uid) return;
   const db = admin.firestore();
+  const eventRef = eventId ? db.collection('progressionEvents').doc(crypto.createHash('sha256').update(String(eventId)).digest('hex')) : null;
   const settings = await getProgressionSettings();
   const userRef = db.collection('users').doc(uid);
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(userRef);
     if (!snap.exists) return;
+    const currentUser = snap.data() || {};
+    if (currentUser.suspended === true || currentUser.inactive === true || currentUser.disabled === true || currentUser.active === false || currentUser.mergedInto != null) return;
+    if (eventRef) {
+      const eventSnap = await tx.get(eventRef);
+      if (eventSnap.exists) return;
+    }
     const points = Number(snap.data().tierPoints || 0) + 1;
     const tier = tierForPoints(settings.tiers, points);
     tx.update(userRef, { tierPoints: points, tier: tier.key, tierLabel: tier.label });
+    if (eventRef) tx.create(eventRef, { type: 'tier_increment', eventId: String(eventId).slice(0, 500), userId: uid, createdAt: admin.firestore.FieldValue.serverTimestamp() });
   });
 }
 
@@ -89,13 +98,6 @@ async function getTierDiscountPercent(tierKey) {
   if (!tierKey) return 0;
   const settings = await getProgressionSettings();
   return discountPercentFromSettings(settings, tierKey);
-}
-
-const transactionService = require('./transactionService');
-if (module.parent && module.parent.exports) {
-  module.parent.exports.approveTransaction = transactionService.approveTransaction;
-  module.parent.exports.acceptTransaction = transactionService.acceptTransaction;
-  module.parent.exports.completeTransaction = transactionService.completeTransaction;
 }
 
 module.exports = { DEFAULT_TIERS, DEFAULT_LEVEL_STEP, DEFAULT_PROGRESSION, getProgressionSettings, tierForPoints, incrementTierPoints, incrementLevelPoints, getTierDiscountPercent, discountPercentFromSettings };

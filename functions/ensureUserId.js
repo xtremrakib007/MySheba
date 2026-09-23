@@ -1,13 +1,16 @@
 // Backfills a unique numeric userId onto accounts that predate this
-// feature. Called lazily by the client after login when the profile has no
-// userId yet. Existing accounts are returned unchanged.
+// feature (created before assignUniqueUserId existed in the
+// registerWithDealerCode / manageUser paths). Called lazily by the client
+// right after a normal phone+PIN login when the fetched profile has no
+// userId yet - see src/firebase/authService.js login(). A no-op (just
+// echoes back the existing one) for every account created after this
+// shipped, since those already got a userId at creation time.
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { assignUniqueUserId } = require('./userId');
 const { logServerError } = require('./logService');
-const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
-exports.ensureUserId = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+exports.ensureUserId = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'You must be signed in.');
   }
@@ -21,40 +24,11 @@ exports.ensureUserId = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (req
   const existing = snap.data().userId;
   if (existing) return { uid, userId: existing };
 
-  let reservedUserId = null;
   try {
-    reservedUserId = await assignUniqueUserId(db, uid);
-    // Do not blindly overwrite a value assigned concurrently by another
-    // invocation. A transaction makes the lazy backfill race-safe.
-    const result = await db.runTransaction(async (tx) => {
-      const current = await tx.get(ref);
-      if (!current.exists) throw new HttpsError('not-found', 'Profile not found.');
-      const currentUserId = current.data()?.userId;
-      if (currentUserId) return currentUserId;
-      tx.update(ref, { userId: reservedUserId });
-      return reservedUserId;
-    });
-
-    // If another invocation won the race while this invocation was reserving
-    // an ID, release the reservation created by this invocation. Likewise,
-    // only the reservation whose uid matches ours may be removed.
-    if (result !== reservedUserId) {
-      const idRef = db.collection('userIds').doc(String(reservedUserId));
-      await db.runTransaction(async (tx) => {
-        const idSnap = await tx.get(idRef);
-        if (idSnap.exists && idSnap.data()?.uid === uid) tx.delete(idRef);
-      }).catch(() => {});
-    }
-    return { uid, userId: result };
+    const userId = await assignUniqueUserId(db, uid);
+    await ref.update({ userId });
+    return { uid, userId };
   } catch (err) {
-    if (reservedUserId) {
-      const idRef = db.collection('userIds').doc(String(reservedUserId));
-      await db.runTransaction(async (tx) => {
-        const idSnap = await tx.get(idRef);
-        if (idSnap.exists && idSnap.data()?.uid === uid) tx.delete(idRef);
-      }).catch(() => {});
-    }
-    if (err instanceof HttpsError) throw err;
     await logServerError('ensureUserId', err, { userId: uid });
     throw new HttpsError('internal', 'Could not assign a user ID.');
   }

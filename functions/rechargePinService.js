@@ -1,282 +1,186 @@
-// Prepaid recharge PIN (e-PIN) inventory.
-//
-// A superadmin uploads batches of real operator reload PINs; the app hands
-// one out when a Recharge order is fulfilled. PIN codes are money, so they
-// never leave the server except onto the one transaction they were issued
-// against: firestore.rules denies every client read of rechargePins, the
-// admin panel reads stock through the summary callable below, and issuing is
-// a transaction so the same code can never go to two customers.
-//
-// rechargePins/{id}
-//   country, operator, denomination, currency
-//   pin            the code itself
-//   serial         optional operator serial/batch reference
-//   status         'available' | 'assigned' | 'void'
-//   batchId, uploadedBy, createdAt
-//   expiresAt      optional
-//   transactionId, assignedTo, assignedBy, assignedAt   (once issued)
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const crypto = require('crypto');
-const { logAudit, logServerError } = require('./logService');
-const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
-const { hasCapability } = require('./accessControl');
+const progressionService = require('./progressionService');
+const { checkVelocity, getClientIp } = require('./rateLimitService');
+const { executeConfiguredApi } = require('./apiProviderService');
+const { getWalletCurrencyAndFx, baseToWallet } = require('./walletCurrencyService');
 
-const COLLECTION = 'rechargePins';
-const OPERATOR_ROLES = ['dealer', 'reseller'];
-const MAX_BATCH = 500;
-const MAX_PIN_LENGTH = 64;
-const MAX_SERIAL_LENGTH = 64;
+const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
+const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
+const DEVICE_ID_RE = /^[A-Za-z0-9-]{16,100}$/;
+const PIN_SERVICE = 'Recharge PIN';
+const MALAYSIA_OPERATORS = new Set(['Celcom', 'CelcomDigi', 'U Mobile', 'Hotlink', 'XOX', 'Tunetalk', 'Unifi', 'Yes']);
 
-function activeAccount(user) {
-  return user && user.suspended !== true && user.inactive !== true && user.disabled !== true && !user.mergedInto;
+function active(u) {
+  return !!u && u.suspended !== true && u.inactive !== true && u.disabled !== true &&
+    u.active !== false && u.mergedInto == null;
+}
+function requireAuth(request) {
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
+  return request.auth.uid;
+}
+function safeNumber(v, label) {
+  const n = Number(v);
+  const cents = Math.round(n * 100);
+  if (!Number.isFinite(n) || n <= 0 || !Number.isSafeInteger(cents) || Math.abs(n * 100 - cents) > 1e-9) {
+    throw new HttpsError('invalid-argument', `${label} must be a valid amount with at most two decimal places.`);
+  }
+  return cents / 100;
+}
+function requireSessionMatch(request, user) {
+  const sessionId = request.data?.sessionId, deviceId = request.data?.deviceId;
+  if (typeof sessionId !== 'string' || !SESSION_ID_RE.test(sessionId) || typeof deviceId !== 'string' || !DEVICE_ID_RE.test(deviceId)) {
+    throw new HttpsError('failed-precondition', 'Your secure session is missing. Please sign in again.');
+  }
+  if (user.activeSessionId !== sessionId || user.activeDeviceId !== deviceId) {
+    throw new HttpsError('permission-denied', 'This device session is no longer active. Please sign in again.');
+  }
+}
+function requestIdOf(request) {
+  const id = request.data?.requestId;
+  if (typeof id !== 'string' || !REQUEST_ID_RE.test(id)) throw new HttpsError('invalid-argument', 'A valid requestId is required.');
+  return id;
 }
 
-/** An operator by role, or staff holding one of `capabilities`. */
-async function requireOperatorOrCapability(request, capabilities) {
-  if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
+exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) => {
+  const uid = requireAuth(request);
+  const requestId = requestIdOf(request);
   const db = admin.firestore();
-  const snap = await db.collection('users').doc(request.auth.uid).get();
-  const profile = snap.exists ? snap.data() : null;
-  if (!profile || !activeAccount(profile)) throw new HttpsError('permission-denied', 'This account is not active.');
-  if (OPERATOR_ROLES.includes(profile.role)) return { db, uid: request.auth.uid, profile };
-  for (const cap of capabilities) {
-    if (await hasCapability(db, request.auth.uid, profile, cap)) return { db, uid: request.auth.uid, profile };
+  const input = request.data || {};
+  const operator = typeof input.operator === 'string' ? input.operator.trim().slice(0, 80) : '';
+  const denomination = safeNumber(input.amount, 'Recharge PIN amount');
+  if (!operator || !MALAYSIA_OPERATORS.has(operator)) throw new HttpsError('invalid-argument', 'Select a supported Malaysian mobile operator.');
+
+  const profileRef = db.collection('users').doc(uid);
+  const txId = crypto.createHash('sha256').update(`${uid}|recharge-pin|${requestId}`).digest('hex').slice(0, 40);
+  const txRef = db.collection('transactions').doc(txId);
+
+  const settingsSnap = await db.collection('api_settings').doc('service_modes').get();
+  const mode = settingsSnap.exists ? settingsSnap.data()?.modes?.[PIN_SERVICE] || 'legacy' : 'legacy';
+  if (mode !== 'api') throw new HttpsError('failed-precondition', 'Recharge PIN is not configured for API processing yet.');
+
+  const pricingSnap = await db.collection('settings').doc('pricing').get();
+  const pricing = pricingSnap.exists ? pricingSnap.data() || {} : {};
+  const priceMultiplier = Number(pricing.rolePricing?.customer?.rechargePointCostPerUnit ?? pricing.rechargePointCostPerUnit ?? 1);
+  if (!Number.isFinite(priceMultiplier) || priceMultiplier <= 0) throw new HttpsError('failed-precondition', 'Recharge PIN pricing is not configured correctly.');
+
+  const tierSettings = await progressionService.getProgressionSettings();
+  const userSnap = await profileRef.get();
+  if (!userSnap.exists || !active(userSnap.data()) || userSnap.data().role !== 'customer') {
+    throw new HttpsError('permission-denied', 'Only active customer accounts can purchase Recharge PINs.');
   }
-  throw new HttpsError('permission-denied', 'Your role cannot manage recharge PINs.');
-}
+  requireSessionMatch(request, userSnap.data());
+  await checkVelocity(db, uid, 'rechargePin', { ip: getClientIp(request) });
+  const discount = progressionService.discountPercentFromSettings(tierSettings, userSnap.data().tier);
+  const cost = Math.round(denomination * priceMultiplier * (1 - discount / 100) * 100) / 100;
+  let walletFx;
+  try { walletFx = await getWalletCurrencyAndFx(db, userSnap.data()); } catch (fxErr) { throw new HttpsError('failed-precondition', fxErr.message || 'Wallet currency is not configured.'); }
+  const walletCost = baseToWallet(cost, walletFx);
+  if (!Number.isFinite(cost) || cost <= 0 || !Number.isSafeInteger(Math.round(cost * 100))) throw new HttpsError('failed-precondition', 'Recharge PIN price is invalid.');
 
-async function requireRole(request, roles) {
-  if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
-  const db = admin.firestore();
-  const snap = await db.collection('users').doc(request.auth.uid).get();
-  const profile = snap.exists ? snap.data() : null;
-  if (!profile || !roles.includes(profile.role)) throw new HttpsError('permission-denied', 'Your role cannot manage recharge PINs.');
-  if (!activeAccount(profile)) throw new HttpsError('permission-denied', 'This account is not active.');
-  return { db, uid: request.auth.uid, profile };
-}
-
-const cleanText = (value, max) => String(value == null ? '' : value).trim().slice(0, max);
-
-/** Same shape the stock is bucketed by, so upload and issue always agree. */
-function stockKey(country, operator, denomination) {
-  return `${String(country || '').toUpperCase()}|${String(operator || '').trim().toLowerCase()}|${Number(denomination) || 0}`;
-}
-
-/**
- * Uploads a batch of PINs for one country/operator/denomination.
- * Codes already present (same operator + same pin) are reported as
- * duplicates rather than stored twice.
- */
-exports.uploadRechargePins = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
-  const { db, uid, profile } = await requireRole(request, ['superadmin']);
-  const data = request.data || {};
-  const country = cleanText(data.country, 4).toUpperCase();
-  const operator = cleanText(data.operator, 60);
-  const currency = cleanText(data.currency, 4).toUpperCase() || 'MYR';
-  const denomination = Number(data.denomination);
-  const expiresAt = data.expiresAt ? new Date(data.expiresAt) : null;
-  const pins = Array.isArray(data.pins) ? data.pins : [];
-
-  if (!country || !operator) throw new HttpsError('invalid-argument', 'Country and operator are required.');
-  if (!Number.isFinite(denomination) || denomination <= 0) throw new HttpsError('invalid-argument', 'Enter a valid denomination.');
-  if (!pins.length) throw new HttpsError('invalid-argument', 'Add at least one PIN.');
-  if (pins.length > MAX_BATCH) throw new HttpsError('invalid-argument', `Upload at most ${MAX_BATCH} PINs at a time.`);
-  if (expiresAt && Number.isNaN(expiresAt.getTime())) throw new HttpsError('invalid-argument', 'That expiry date is not valid.');
-
-  const cleaned = [];
-  const seen = new Set();
-  for (const entry of pins) {
-    const pin = cleanText(typeof entry === 'string' ? entry : entry?.pin, MAX_PIN_LENGTH);
-    if (!pin) continue;
-    if (seen.has(pin)) continue;
-    seen.add(pin);
-    cleaned.push({ pin, serial: cleanText(typeof entry === 'string' ? '' : entry?.serial, MAX_SERIAL_LENGTH) });
-  }
-  if (!cleaned.length) throw new HttpsError('invalid-argument', 'None of those lines contained a PIN.');
-
-  // Existing codes for this operator, so a re-uploaded file does not
-  // duplicate stock.
-  const existingSnap = await db.collection(COLLECTION)
-    .where('stockKey', '==', stockKey(country, operator, denomination))
-    .where('status', '==', 'available')
-    .get();
-  const existing = new Set(existingSnap.docs.map((d) => d.data().pin));
-
-  const batchId = crypto.randomBytes(8).toString('hex');
-  let added = 0;
-  let duplicates = 0;
-  let writer = db.batch();
-  let pending = 0;
-
-  for (const item of cleaned) {
-    if (existing.has(item.pin)) { duplicates += 1; continue; }
-    const ref = db.collection(COLLECTION).doc();
-    writer.set(ref, {
-      country, operator, currency, denomination,
-      stockKey: stockKey(country, operator, denomination),
-      pin: item.pin,
-      serial: item.serial || null,
-      status: 'available',
-      batchId,
-      uploadedBy: uid,
-      expiresAt: expiresAt ? admin.firestore.Timestamp.fromDate(expiresAt) : null,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-    added += 1;
-    pending += 1;
-    // Firestore caps a batch at 500 writes.
-    if (pending === 400) { await writer.commit(); writer = db.batch(); pending = 0; }
-  }
-  if (pending) await writer.commit();
-
-  await logAudit({
-    action: 'recharge_pins_uploaded',
-    targetUid: null,
-    performedBy: uid,
-    performedByRole: profile.role,
-    // Never the codes themselves.
-    details: { country, operator, denomination, currency, added, duplicates, batchId },
-  });
-
-  return { added, duplicates, batchId };
-});
-
-/**
- * Issues one PIN for a pending Recharge order and writes it onto the
- * transaction, where the customer and the operator can both see it.
- */
-exports.issueRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
-  const { db, uid, profile } = await requireOperatorOrCapability(request, ['orders']);
-  const transactionId = cleanText(request.data?.transactionId, 128);
-  if (!transactionId) throw new HttpsError('invalid-argument', 'transactionId is required.');
-
-  const txRef = db.collection('transactions').doc(transactionId);
-  const txSnap = await txRef.get();
-  if (!txSnap.exists) throw new HttpsError('not-found', 'That order does not exist.');
-  const tx = txSnap.data();
-
-  if (tx.service !== 'Recharge') throw new HttpsError('failed-precondition', 'Only a Recharge order can be given a PIN.');
-  if (tx.rejected === true) throw new HttpsError('failed-precondition', 'That order was rejected.');
-  if (tx.pin) throw new HttpsError('failed-precondition', 'That order already has a PIN.');
-  if (profile.role === 'dealer' && tx.dealerId && tx.dealerId !== uid) throw new HttpsError('permission-denied', 'That order belongs to another dealer.');
-  if (profile.role === 'reseller' && tx.resellerId && tx.resellerId !== uid) throw new HttpsError('permission-denied', 'That order belongs to another reseller.');
-
-  const raw = tx.raw || {};
-  const country = String(raw.country || '').toUpperCase();
-  const operator = String(raw.operator || '');
-  const denomination = Number(raw.amount);
-  if (!country || !operator || !Number.isFinite(denomination)) {
-    throw new HttpsError('failed-precondition', 'That order is missing the operator or amount needed to match a PIN.');
-  }
-
-  const now = admin.firestore.Timestamp.now();
-  const candidates = await db.collection(COLLECTION)
-    .where('stockKey', '==', stockKey(country, operator, denomination))
-    .where('status', '==', 'available')
-    .limit(10)
-    .get();
-
-  const usable = candidates.docs.filter((d) => {
-    const expiry = d.data().expiresAt;
-    return !expiry || expiry.toMillis() > now.toMillis();
-  });
-  if (!usable.length) {
-    throw new HttpsError('failed-precondition', `No ${operator} ${denomination} PIN is left in stock. Upload more from the admin panel.`);
-  }
-
-  let issued = null;
-  // Take the PIN inside a transaction so two operators cannot be handed the
-  // same code; if the first candidate was taken meanwhile, try the next.
-  for (const candidate of usable) {
-    try {
-      issued = await db.runTransaction(async (t) => {
-        const pinSnap = await t.get(candidate.ref);
-        if (!pinSnap.exists || pinSnap.data().status !== 'available') return null;
-        const freshTx = await t.get(txRef);
-        if (!freshTx.exists) throw new HttpsError('not-found', 'That order does not exist.');
-        if (freshTx.data().pin) throw new HttpsError('failed-precondition', 'That order already has a PIN.');
-        const pinData = pinSnap.data();
-        t.update(candidate.ref, {
-          status: 'assigned',
-          transactionId,
-          assignedTo: freshTx.data().customerId || null,
-          assignedBy: uid,
-          assignedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        t.update(txRef, {
-          pin: pinData.pin,
-          pinSerial: pinData.serial || null,
-          pinSource: 'voucher',
-          pinIssuedBy: uid,
-          pinIssuedAt: admin.firestore.FieldValue.serverTimestamp(),
-          pinExpiresAt: pinData.expiresAt || null,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        return { pin: pinData.pin, serial: pinData.serial || null, expiresAt: pinData.expiresAt ? pinData.expiresAt.toMillis() : null };
-      });
-    } catch (error) {
-      if (error instanceof HttpsError) throw error;
-      await logServerError('issueRechargePin', error, { userId: uid });
-      throw new HttpsError('internal', 'Could not issue a PIN. Please try again.');
+  const reserved = await db.runTransaction(async tx => {
+    const pinRef = db.collection('rechargePins').doc(txRef.id);
+    const [user, existing, pinDoc] = await Promise.all([tx.get(profileRef), tx.get(txRef), tx.get(pinRef)]);
+    if (existing.exists) {
+      const d = existing.data() || {};
+      if (d.customerId !== uid) throw new HttpsError('permission-denied', 'This request ID belongs to another account.');
+      if (pinDoc.exists && pinDoc.data()?.customerId === uid && typeof pinDoc.data()?.pin === 'string' && pinDoc.data().pin) {
+        if (d.status === 'failed' && d.apiRefunded === true) throw new HttpsError('failed-precondition', 'This Recharge PIN was already refunded and requires support reconciliation.');
+        if (d.status !== 'completed' || d.rechargePinAvailable !== true) {
+          tx.update(txRef, {
+            status: 'completed', rechargePinAvailable: true, apiRefunded: false,
+            apiExecution: { ...(d.apiExecution || {}), status: 'accepted', updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+        return { replay: true, id: txRef.id, cost: Number(d.cost) || 0, pin: pinDoc.data().pin, operator: d.operator || pinDoc.data().operator || operator, amount: Number(d.amount) || Number(pinDoc.data().amount) || denomination };
+      }
+      if (d.status === 'unknown') throw new HttpsError('unavailable', 'The provider outcome is uncertain. Please verify the provider before retrying.');
+      if (d.status === 'pending' || d.status === 'processing') {
+        const updatedAt = d.updatedAt?.toMillis ? d.updatedAt.toMillis() : 0;
+        if (updatedAt > 0 && Date.now() - updatedAt >= 15 * 60 * 1000) {
+          tx.update(txRef, { status: 'unknown', apiExecution: { status: 'unknown', error: 'Processing timed out before the provider outcome was confirmed. Reconciliation is required.', updatedAt: admin.firestore.FieldValue.serverTimestamp() }, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+          throw new HttpsError('unavailable', 'This Recharge PIN request timed out while processing. The provider outcome must be reconciled before retrying.');
+        }
+        throw new HttpsError('aborted', 'This Recharge PIN request is already being processed.');
+      }
+      throw new HttpsError('failed-precondition', 'This Recharge PIN request has already failed.');
     }
-    if (issued) break;
+    if (!user.exists || !active(user.data()) || user.data().role !== 'customer') throw new HttpsError('permission-denied', 'Your customer account is not active.');
+    const balance = Number(user.data().walletBalance || 0);
+    if (!Number.isFinite(balance) || balance < 0 || !Number.isSafeInteger(Math.round(balance * 100))) throw new HttpsError('failed-precondition', 'Wallet balance is invalid.');
+    if (balance < walletCost) throw new HttpsError('failed-precondition', `You need ${walletCost.toFixed(2)} ${walletFx.currency} in your wallet to buy this PIN.`);
+    tx.update(profileRef, { walletBalance: balance - walletCost, walletCurrency: walletFx.currency });
+    tx.create(txRef, {
+      service: PIN_SERVICE, customerId: uid, customerRole: 'customer', customerPhone: user.data().phone || '',
+      operator, amount: denomination, total: denomination, currency: walletFx.currency, cost: walletCost, walletCost, baseCostMyr: cost, fxRate: walletFx.sellRate, fxRateType: 'sell', fxRateSource: walletFx.rateSource,
+      tierDiscountPercent: discount, executionMode: 'api', status: 'processing', rechargePinAvailable: false,
+      apiRefunded: false, raw: { requestId, country: 'MY', operator, amount: denomination },
+      createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    return { replay: false, id: txRef.id, cost: walletCost, baseCostMyr: cost, pin: null, operator, amount: denomination, currency: walletFx.currency, fxRate: walletFx.sellRate };
+  });
+
+  if (reserved.replay) return reserved;
+  let providerSucceeded = false;
+  try {
+    const api = await executeConfiguredApi(PIN_SERVICE, {
+      amount: denomination, total: denomination, details: `Malaysia Recharge PIN • ${operator}`,
+      raw: { requestId, country: 'MY', operator, amount: denomination, packageCode: String(denomination) }
+    }, { uid, phone: userSnap.data().phone || '' }, requestId, {});
+    if (!api.secret) throw new HttpsError('unavailable', 'The Recharge PIN provider completed but the voucher PIN could not be recovered. Please contact support before retrying.');
+    providerSucceeded = true;
+    await txRef.update({
+      apiExecution: { status: 'accepted', providerId: api.providerId, providerName: api.providerName, responseId: api.responseId || null, message: api.message || null, providerSucceeded: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    await db.collection('rechargePins').doc(txRef.id).set({
+      transactionId: txRef.id, customerId: uid, operator, amount: denomination,
+      currency: 'MYR', pin: api.secret, createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    await txRef.update({
+      status: 'completed', rechargePinAvailable: true,
+      apiExecution: { status: 'accepted', providerId: api.providerId, providerName: api.providerName, responseId: api.responseId || null, message: api.message || null, providerSucceeded: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    return { id: txRef.id, cost: walletCost, baseCostMyr: reserved.baseCostMyr, pin: api.secret, operator, amount: denomination, currency: walletFx.currency, fxRate: walletFx.sellRate };
+  } catch (e) {
+    const unavailable = String(e?.code || '') === 'unavailable';
+    if (unavailable || providerSucceeded) {
+      const message = providerSucceeded
+        ? 'The provider issued the Recharge PIN, but MySheba could not finish recording the transaction. Do not retry automatically; reconcile the voucher and transaction first.'
+        : String(e?.message || 'Provider outcome is uncertain').slice(0, 500);
+      await txRef.update({ status: 'unknown', apiExecution: { status: 'unknown', providerSucceeded, error: message, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      throw providerSucceeded ? new HttpsError('unavailable', message) : e;
+    }
+    await db.runTransaction(async tx => {
+      const [u, t] = await Promise.all([tx.get(profileRef), tx.get(txRef)]);
+      if (!t.exists || t.data().status !== 'processing' || t.data().apiRefunded === true) return;
+      const balance = Number(u.data()?.walletBalance || 0), refund = Number(reserved.cost || 0);
+      if (!Number.isFinite(balance) || !Number.isFinite(refund) || refund <= 0 || !Number.isSafeInteger(Math.round((balance + refund) * 100))) {
+        throw new HttpsError('failed-precondition', 'The provider failed and the wallet could not be safely refunded. Please contact support.');
+      }
+      tx.update(profileRef, { walletBalance: balance + refund });
+      tx.update(txRef, { status: 'failed', apiRefunded: true, apiError: String(e?.message || 'Provider execution failed').slice(0, 500), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    });
+    throw e instanceof HttpsError ? e : new HttpsError('failed-precondition', 'Recharge PIN provider rejected the request.');
   }
-
-  if (!issued) throw new HttpsError('failed-precondition', 'That PIN was just taken. Try again.');
-
-  await logAudit({
-    action: 'recharge_pin_issued',
-    targetUid: tx.customerId || null,
-    performedBy: uid,
-    performedByRole: profile.role,
-    details: { transactionId, country, operator, denomination },
-  });
-
-  return issued;
 });
 
-/** Takes a bad code out of circulation. */
-exports.voidRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
-  const { db, uid, profile } = await requireRole(request, ['superadmin']);
-  const pinId = cleanText(request.data?.pinId, 128);
-  const reason = cleanText(request.data?.reason, 300);
-  if (!pinId) throw new HttpsError('invalid-argument', 'pinId is required.');
-  const ref = db.collection(COLLECTION).doc(pinId);
-  const snap = await ref.get();
-  if (!snap.exists) throw new HttpsError('not-found', 'That PIN does not exist.');
-  if (snap.data().status === 'assigned') throw new HttpsError('failed-precondition', 'That PIN was already issued to a customer.');
-  await ref.update({ status: 'void', voidReason: reason || null, voidedBy: uid, voidedAt: admin.firestore.FieldValue.serverTimestamp() });
-  await logAudit({ action: 'recharge_pin_voided', targetUid: null, performedBy: uid, performedByRole: profile.role, details: { pinId, reason } });
-  return { ok: true };
-});
-
-/**
- * Stock levels per country/operator/denomination. Returns counts only - the
- * codes themselves stay on the server.
- */
-exports.rechargePinStock = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
-  const { db } = await requireOperatorOrCapability(request, ['orders', 'finance']);
-  const snap = await db.collection(COLLECTION).where('status', '==', 'available').get();
-  const now = Date.now();
-  const buckets = new Map();
-  snap.docs.forEach((d) => {
-    const data = d.data();
-    const expired = data.expiresAt && data.expiresAt.toMillis() <= now;
-    const key = data.stockKey || stockKey(data.country, data.operator, data.denomination);
-    const bucket = buckets.get(key) || {
-      country: data.country || '',
-      operator: data.operator || '',
-      denomination: Number(data.denomination) || 0,
-      currency: data.currency || 'MYR',
-      available: 0,
-      expired: 0,
-    };
-    if (expired) bucket.expired += 1; else bucket.available += 1;
-    buckets.set(key, bucket);
-  });
-  const rows = Array.from(buckets.values()).sort((a, b) =>
-    a.country.localeCompare(b.country) || a.operator.localeCompare(b.operator) || a.denomination - b.denomination
-  );
-  return { rows };
+exports.getRechargePin = onCall({ enforceAppCheck: true }, async (request) => {
+  const uid = requireAuth(request);
+  const transactionId = typeof request.data?.transactionId === 'string' ? request.data.transactionId.trim() : '';
+  if (!/^[A-Za-z0-9_-]{1,100}$/.test(transactionId)) throw new HttpsError('invalid-argument', 'Invalid transaction ID.');
+  const db = admin.firestore();
+  const profileSnap = await db.collection('users').doc(uid).get();
+  if (!profileSnap.exists || !active(profileSnap.data()) || profileSnap.data().role !== 'customer') throw new HttpsError('permission-denied', 'Your customer account is not active.');
+  requireSessionMatch(request, profileSnap.data());
+  await checkVelocity(db, uid, 'rechargePin', { ip: getClientIp(request) });
+  const txSnap = await db.collection('transactions').doc(transactionId).get();
+  if (!txSnap.exists || txSnap.data()?.customerId !== uid || txSnap.data()?.service !== PIN_SERVICE) throw new HttpsError('not-found', 'Recharge PIN transaction not found.');
+  if (txSnap.data()?.status !== 'completed' || txSnap.data()?.rechargePinAvailable !== true) throw new HttpsError('failed-precondition', 'This Recharge PIN is not available yet.');
+  const pinSnap = await db.collection('rechargePins').doc(transactionId).get();
+  if (!pinSnap.exists || pinSnap.data()?.customerId !== uid) throw new HttpsError('not-found', 'Recharge PIN is unavailable. Contact support if you were charged.');
+  return { id: transactionId, operator: pinSnap.data()?.operator || txSnap.data()?.operator || '', amount: Number(pinSnap.data()?.amount || txSnap.data()?.amount || 0), currency: txSnap.data()?.currency || 'MYR', fxRate: Number(txSnap.data()?.fxRate || 1), pin: pinSnap.data()?.pin || '' };
 });

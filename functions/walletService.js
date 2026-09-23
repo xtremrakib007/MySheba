@@ -1,36 +1,212 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const crypto = require('crypto');
 const progressionService = require('./progressionService');
 const { logAudit, logServerError } = require('./logService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { checkIpAnomaly } = require('./anomalyService');
-const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+const { executeConfiguredApi } = require('./apiProviderService');
+const { getWalletCurrencyAndFx, baseToWallet } = require('./walletCurrencyService');
 
 const DEFAULT_PRICING={dealerEarningPercent:1.5,webviewAccessCost:2,webviewSubmitCost:2,paymentSuccessCost:3,webviewAccessWindowHours:1,notepadCost:0,myDocumentsCost:0,salaryOtCost:0,moduleSubscriptionDays:30};
 const DEFAULT_RATES={mobileBanking:110.5,BD_ACC:30.26,BD_CASH:30.11,NP:37.65,PK:67.79,PH:15.05,LK:81.99,IN:23.5,ID:230,MM:966,remittanceFee:7,rechargeBD:30.26,rechargeIN:23.5,rechargeNP:37.65,rechargeID:230,rechargePK:67.79,rechargeMM:966,rechargePH:15.05,rechargeKH:900};
 const RECHARGE_RATE_KEYS={BD:'rechargeBD',IN:'rechargeIN',NP:'rechargeNP',ID:'rechargeID',PK:'rechargePK',MM:'rechargeMM',PH:'rechargePH',KH:'rechargeKH'};
+const SESSION_ID_RE=/^[A-Za-z0-9_-]{16,128}$/;
+const DEVICE_ID_RE=/^[A-Za-z0-9-]{16,100}$/;
+const REQUEST_ID_RE=/^[A-Za-z0-9_-]{16,128}$/;
+const TRANSACTION_RAW_FIELDS = {
+  recharge: new Set(['phone', 'country', 'amount']),
+  internet: new Set(['phone', 'country', 'amount', 'provider']),
+  billpayment: new Set(['phone', 'country', 'amount', 'provider', 'category', 'accountNumber']),
+  mobilebanking: new Set(['phone', 'country', 'amount', 'provider', 'category', 'accountNumber']),
+  remittance: new Set([
+    'phone', 'senderName', 'senderPhone', 'senderCompany', 'senderPassportNo', 'senderPassportExpiry',
+    'senderAddress', 'receiverFirstName', 'receiverLastName', 'receiverRelationship', 'receiverPhone',
+    'receiverBankName', 'receiverAccountNumber', 'receiverBranch', 'receiverRoutingNumber',
+    'receiverPickupNetwork', 'receiverIdType', 'receiverIdNumber', 'receiverPickupCity',
+    'receiverWalletProvider', 'receiverWalletNumber', 'country', 'method', 'provider',
+  ]),
+};
+function sanitizeTransactionRaw(raw, service) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const allowed = TRANSACTION_RAW_FIELDS[service] || new Set(['phone', 'country', 'amount', 'provider', 'category']);
+  const out = {};
+  for (const key of allowed) {
+    const value = raw[key];
+    if (typeof value === 'string') out[key] = value.slice(0, 500);
+    else if (typeof value === 'number' && Number.isFinite(value)) out[key] = value;
+    else if (typeof value === 'boolean') out[key] = value;
+  }
+  return out;
+}
+function requireSessionMatch(request,user){const sessionId=request.data?.sessionId,deviceId=request.data?.deviceId;if(typeof sessionId!=='string'||!SESSION_ID_RE.test(sessionId)||typeof deviceId!=='string'||!DEVICE_ID_RE.test(deviceId))throw new HttpsError('failed-precondition','Your secure session is missing. Please sign in again.');if(user.activeSessionId!==sessionId||user.activeDeviceId!==deviceId)throw new HttpsError('permission-denied','This device session is no longer active. Please sign in again.');}
 async function getPricing(db){const s=await db.collection('settings').doc('pricing').get();return{...DEFAULT_PRICING,...(s.exists?s.data():{})};}
 async function getRates(db){const s=await db.collection('rates').doc('current').get();return{...DEFAULT_RATES,...(s.exists?s.data():{})};}
 async function getProfile(db,uid){const s=await db.collection('users').doc(uid).get();return s.exists?{id:s.id,...s.data()}:null;}
 function requireAuth(r){if(!r.auth)throw new HttpsError('unauthenticated','You must be signed in.');return r.auth.uid;}
 function priceForRole(p,key,role){const v=role&&p.rolePricing&&p.rolePricing[role]&&p.rolePricing[role][key];return v!=null?v:p[key];}
-function amountToPoints(n,c,r){const x=Number(n)||0;if(!c||c==='MY')return{x,rate:1};const k=RECHARGE_RATE_KEYS[c];const rate=k&&Number(r[k])>0?Number(r[k]):1;return{x:Math.round(x/rate*100)/100,rate};}
-function recompute(service,raw,rates){const r=raw||{};if(service==='recharge'||service==='internet'||service==='billpayment'){const q=amountToPoints(r.amount,r.country,rates);return{amount:q.x,total:q.x,exchangeRate:r.country&&r.country!=='MY'?q.rate:null,exchangeRateSource:r.country&&r.country!=='MY'?RECHARGE_RATE_KEYS[r.country]||null:null};}if(service==='mobilebanking'){const a=Math.round((Number(r.myr)||0)*100)/100;return{amount:a,total:Math.round((a+5)*100)/100,exchangeRate:Number(rates.mobileBanking)||110.5,exchangeRateSource:'mobileBanking'};}if(service==='remittance'){const a=Math.round((Number(r.sendAmt)||0)*100)/100;const fee=Math.round((Number(rates.remittanceFee)||7)*100)/100;const rate=r.country==='BD'?(r.method==='deposit'?Number(rates.BD_ACC):Number(rates.BD_CASH)):Number(rates[r.country])||30.26;return{amount:a,total:Math.round((a+fee)*100)/100,exchangeRate:rate,exchangeRateSource:r.country==='BD'?(r.method==='deposit'?'BD_ACC':'BD_CASH'):r.country};}return{amount:Number(r.amount)||0,total:Number(r.total)||0,exchangeRate:null,exchangeRateSource:null};}
+function safePrice(p,key,role){const raw=priceForRole(p,key,role);if(raw==null||raw==='')return 1;const n=Number(raw);if(!Number.isFinite(n)||n<0)throw new HttpsError('failed-precondition','Pricing configuration is invalid.');return n===0?1:n;}
+function amountToPoints(n,c,r){const x=Number(n)||0;const country=String(c||'').trim().toUpperCase();if(country==='MY')return{x,rate:1};const k=RECHARGE_RATE_KEYS[country];if(!k)throw new HttpsError('invalid-argument','Unsupported recharge country.');const rate=Number(r[k]);if(!Number.isFinite(rate)||rate<=0)throw new HttpsError('failed-precondition','The exchange rate for this country is unavailable.');return{x:Math.round(x/rate*100)/100,rate};}
+function recompute(service,raw,rates){const r=raw||{};if(service==='recharge'||service==='internet'){const country=String(r.country||'').trim().toUpperCase();if(!country)throw new HttpsError('invalid-argument','Recharge country is required.');const q=amountToPoints(r.amount,country,rates);return{amount:q.x,total:q.x,exchangeRate:country!=='MY'?q.rate:null,exchangeRateSource:country!=='MY'?RECHARGE_RATE_KEYS[country]:null};}if(service==='mobilebanking'){const a=Math.round((Number(r.myr)||0)*100)/100;return{amount:a,total:Math.round((a+5)*100)/100,exchangeRate:Number(rates.mobileBanking)||110.5,exchangeRateSource:'mobileBanking'};}if(service==='billpayment'){const country=String(r.country||'').trim().toUpperCase();if(!['MY','BD'].includes(country))throw new HttpsError('invalid-argument','Unsupported bill payment country.');const raw=Math.round((Number(r.amount)||0)*100)/100;if(!Number.isFinite(raw)||raw<=0)throw new HttpsError('invalid-argument','Bill amount must be greater than zero.');const q=amountToPoints(raw,country,rates);return{amount:q.x,total:q.x,exchangeRate:q.rate,exchangeRateSource:country==='MY'?'MYR':RECHARGE_RATE_KEYS[country]};}if(service==='remittance'){const country=String(r.country||'').trim().toUpperCase();const allowed=['BD','NP','PK','PH','IN','ID','MM'];if(!allowed.includes(country))throw new HttpsError('invalid-argument','Unsupported remittance country.');const a=Math.round((Number(r.sendAmt)||0)*100)/100;const fee=Math.round((Number(rates.remittanceFee)||7)*100)/100;const rate=country==='BD'?(r.method==='deposit'?Number(rates.BD_ACC):Number(rates.BD_CASH)):Number(rates[country]);if(!Number.isFinite(rate)||rate<=0)throw new HttpsError('failed-precondition','The exchange rate for this country is unavailable.');return{amount:a,total:Math.round((a+fee)*100)/100,exchangeRate:rate,exchangeRateSource:country==='BD'?(r.method==='deposit'?'BD_ACC':'BD_CASH'):country};}return{amount:Number(r.amount)||0,total:Number(r.total)||0,exchangeRate:null,exchangeRateSource:null};}
+function active(account){return !!account&&account.suspended!==true&&account.inactive!==true&&account.disabled!==true&&account.active!==false&&account.mergedInto==null;}
 
-exports.approveTopup=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>{const uid=requireAuth(r),db=admin.firestore(),caller=await getProfile(db,uid);if(!caller||!['admin','superadmin','finance'].includes(caller.role))throw new HttpsError('permission-denied','Only an admin or finance account can approve top-ups.');const{id}=r.data||{};const topupId=id||r.data?.topupId;if(!topupId)throw new HttpsError('invalid-argument','topupId is required.');const ref=db.collection('topups').doc(topupId);try{const out=await db.runTransaction(async tx=>{const s=await tx.get(ref);if(!s.exists)throw new HttpsError('not-found','That top-up request does not exist.');const t=s.data();if(t.status!=='pending')throw new HttpsError('failed-precondition','That request has already been reviewed.');const uref=db.collection('users').doc(t.userId),u=await tx.get(uref);if(!u.exists)throw new HttpsError('not-found','That user account no longer exists.');const pts=Number(t.points||t.amount||0),bal=Number(u.data().walletBalance||0);if(!Number.isFinite(pts)||pts<=0)throw new HttpsError('invalid-argument','Invalid top-up amount.');tx.update(uref,{walletBalance:bal+pts});tx.update(ref,{status:'approved',approvedBy:uid,updatedAt:admin.firestore.FieldValue.serverTimestamp()});return{userId:t.userId,points:pts};});await logAudit({action:'topup_approved',targetUid:out.userId,performedBy:uid,performedByRole:caller.role,details:{topupId,points:out.points}});return{approved:true};}catch(e){if(e instanceof HttpsError)throw e;await logServerError('approveTopup',e,{userId:uid});throw new HttpsError('internal','Could not approve this top-up.');}});
-exports.rejectTopup=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>{const uid=requireAuth(r),db=admin.firestore(),caller=await getProfile(db,uid);if(!caller||!['admin','superadmin','finance'].includes(caller.role))throw new HttpsError('permission-denied','Only an admin or finance account can reject top-ups.');const{topupId,reason}=r.data||{};if(!topupId)throw new HttpsError('invalid-argument','topupId is required.');const ref=db.collection('topups').doc(topupId);const s=await ref.get();if(!s.exists)throw new HttpsError('not-found','That top-up request does not exist.');if(s.data().status!=='pending')throw new HttpsError('failed-precondition','That request has already been reviewed.');await ref.update({status:'rejected',rejectReason:reason||'',approvedBy:uid,updatedAt:admin.firestore.FieldValue.serverTimestamp()});return{rejected:true};});
-exports.createSelfTopup=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>{const uid=requireAuth(r),db=admin.firestore(),caller=await getProfile(db,uid);if(!caller||!['admin','superadmin'].includes(caller.role))throw new HttpsError('permission-denied','Only admin/superadmin can self-top-up.');const{amount,method,bankName,refNo,receiptUrl}=r.data||{},amt=Number(amount);if(!Number.isFinite(amt)||amt<=0)throw new HttpsError('invalid-argument','Enter a valid amount.');await checkVelocity(db,uid,'createSelfTopup',{ip:getClientIp(r)});const uref=db.collection('users').doc(uid),ref=db.collection('selfTopups').doc();await db.runTransaction(async tx=>{const u=await tx.get(uref);if(!u.exists)throw new HttpsError('not-found','Account not found.');tx.update(uref,{walletBalance:Number(u.data().walletBalance||0)+amt});tx.set(ref,{userId:uid,userPhone:caller.phone||'',userName:caller.name||'',userRole:caller.role,amount:amt,points:amt,method:method||'transfer',bankName:bankName||'',refNo:refNo||'',receiptUrl:receiptUrl||'',status:'approved',createdAt:admin.firestore.FieldValue.serverTimestamp(),updatedAt:admin.firestore.FieldValue.serverTimestamp()});});return{id:ref.id};});
-function canTransferTo(role,caller,recipient){if(role==='dealer')return recipient.dealerId===caller.id;if(role==='admin')return recipient.role==='dealer';if(role==='superadmin')return['admin','dealer'].includes(recipient.role);return false;}
-exports.transferPoints=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>{const uid=requireAuth(r),db=admin.firestore(),caller=await getProfile(db,uid);if(!caller||!['dealer','admin','superadmin'].includes(caller.role))throw new HttpsError('permission-denied','Your account cannot transfer points.');const{toUid,amount,note}=r.data||{},amt=Number(amount);if(!toUid||toUid===uid||!Number.isFinite(amt)||amt<=0)throw new HttpsError('invalid-argument','Invalid transfer.');const recipient=await getProfile(db,toUid);if(!recipient||recipient.mergedInto)throw new HttpsError('not-found','That account does not exist.');if(!canTransferTo(caller.role,caller,recipient))throw new HttpsError('permission-denied','You are not allowed to send points to that account.');const ip=getClientIp(r);await checkVelocity(db,uid,'transferPoints',{ip});const p=await getPricing(db),earn=caller.role==='dealer'&&recipient.role==='customer'?Math.round(amt*(Number(p.dealerEarningPercent)||0)/100*100)/100:0;const from=db.collection('users').doc(uid),to=db.collection('users').doc(toUid),tr=db.collection('pointTransfers').doc();await db.runTransaction(async tx=>{const a=await tx.get(from),b=await tx.get(to);const ab=Number(a.data().walletBalance||0);if(ab<amt)throw new HttpsError('failed-precondition','Insufficient balance.');tx.update(from,{walletBalance:ab-amt+earn});tx.update(to,{walletBalance:Number(b.data().walletBalance||0)+amt});tx.set(tr,{fromUid:uid,fromName:caller.name||'',fromRole:caller.role,toUid,toName:recipient.name||'',toRole:recipient.role,amount:amt,note:note||'',participants:[uid,toUid],dealerId:caller.role==='dealer'?uid:caller.dealerId||null,dealerEarning:earn||null,createdAt:admin.firestore.FieldValue.serverTimestamp()});});return{transferId:tr.id};});
+exports.approveTopup=onCall({ enforceAppCheck: true },async r=>{const uid=requireAuth(r),db=admin.firestore(),caller=await getProfile(db,uid);if(!caller||!['admin','superadmin'].includes(caller.role))throw new HttpsError('permission-denied','Only an admin can approve top-ups.');const{id}=r.data||{};const topupId=id||r.data?.topupId;if(!topupId)throw new HttpsError('invalid-argument','topupId is required.');const ref=db.collection('topups').doc(topupId);try{const out=await db.runTransaction(async tx=>{const s=await tx.get(ref);if(!s.exists)throw new HttpsError('not-found','That top-up request does not exist.');const t=s.data();if(t.status!=='pending')throw new HttpsError('failed-precondition','That request has already been reviewed.');const uref=db.collection('users').doc(t.userId),u=await tx.get(uref);if(!u.exists)throw new HttpsError('not-found','That user account no longer exists.');const user=u.data();if(!active(user))throw new HttpsError('failed-precondition','The recipient account is not active.');const pts=Number(t.points||t.amount||0),bal=Number(user.walletBalance||0);if(!Number.isFinite(pts)||pts<=0||!Number.isFinite(bal)||bal<0)throw new HttpsError('invalid-argument','Invalid wallet amount.');const next=bal+pts;if(!Number.isSafeInteger(Math.round(next*100)))throw new HttpsError('failed-precondition','Wallet balance is invalid.');tx.update(uref,{walletBalance:next});tx.update(ref,{status:'approved',approvedBy:uid,updatedAt:admin.firestore.FieldValue.serverTimestamp()});return{userId:t.userId,points:pts};});await logAudit({action:'topup_approved',targetUid:out.userId,performedBy:uid,performedByRole:caller.role,details:{topupId,points:out.points}});return{approved:true};}catch(e){if(e instanceof HttpsError)throw e;await logServerError('approveTopup',e,{userId:uid});throw new HttpsError('internal','Could not approve this top-up.');}});
+exports.rejectTopup=onCall({ enforceAppCheck: true },async r=>{const uid=requireAuth(r),db=admin.firestore(),caller=await getProfile(db,uid);if(!caller||!['admin','superadmin'].includes(caller.role))throw new HttpsError('permission-denied','Only an admin can reject top-ups.');const{topupId,reason}=r.data||{};if(!topupId)throw new HttpsError('invalid-argument','topupId is required.');const ref=db.collection('topups').doc(topupId);const s=await ref.get();if(!s.exists)throw new HttpsError('not-found','That top-up request does not exist.');if(s.data().status!=='pending')throw new HttpsError('failed-precondition','That request has already been reviewed.');await ref.update({status:'rejected',rejectReason:typeof reason==='string'?reason.trim().slice(0,500):'',approvedBy:uid,updatedAt:admin.firestore.FieldValue.serverTimestamp()});return{rejected:true};});
+exports.createSelfTopup=onCall({ enforceAppCheck: true },async r=>{const uid=requireAuth(r),db=admin.firestore(),caller=await getProfile(db,uid);if(!active(caller)||!['admin','superadmin'].includes(caller.role))throw new HttpsError('permission-denied','Only admin/superadmin can self-top-up.');const{amount,method,bankName,refNo,receiptUrl}=r.data||{},amt=Number(amount);if(!Number.isFinite(amt)||amt<=0||amt>100000||!Number.isSafeInteger(Math.round(amt*100)))throw new HttpsError('invalid-argument','Enter a valid amount.');await checkVelocity(db,uid,'createSelfTopup',{ip:getClientIp(r)});const uref=db.collection('users').doc(uid),ref=db.collection('selfTopups').doc();await db.runTransaction(async tx=>{const u=await tx.get(uref);if(!u.exists||!active(u.data()))throw new HttpsError('failed-precondition','Account is not active.');const bal=Number(u.data().walletBalance||0),next=bal+amt;if(!Number.isFinite(bal)||bal<0||!Number.isSafeInteger(Math.round(next*100)))throw new HttpsError('failed-precondition','Wallet balance is invalid.');tx.update(uref,{walletBalance:next});tx.set(ref,{userId:uid,userPhone:caller.phone||'',userName:caller.name||'',userRole:caller.role,amount:amt,points:amt,method:typeof method==='string'?method.trim().slice(0,100):'transfer',bankName:typeof bankName==='string'?bankName.trim().slice(0,100):'',refNo:typeof refNo==='string'?refNo.trim().slice(0,200):'',receiptUrl:typeof receiptUrl==='string'?receiptUrl.trim().slice(0,2048):'',status:'approved',createdAt:admin.firestore.FieldValue.serverTimestamp(),updatedAt:admin.firestore.FieldValue.serverTimestamp()});});return{id:ref.id};});
+function canTransferTo(role,caller,recipient){if(role==='dealer')return recipient.role==='customer'&&recipient.dealerId===caller.id;if(role==='admin')return recipient.role==='dealer';if(role==='superadmin')return['admin','dealer'].includes(recipient.role);return false;}
+exports.transferPoints=onCall({ enforceAppCheck: true },async r=>{const uid=requireAuth(r),db=admin.firestore(),caller=await getProfile(db,uid);if(!active(caller)||!['dealer','admin','superadmin'].includes(caller.role))throw new HttpsError('permission-denied','Your account cannot transfer points.');const{toUid,amount,note}=r.data||{},amt=Number(amount);if(!toUid||toUid===uid||!Number.isFinite(amt)||amt<=0||amt>100000||!Number.isSafeInteger(Math.round(amt*100)))throw new HttpsError('invalid-argument','Invalid transfer.');const recipient=await getProfile(db,toUid);if(!active(recipient))throw new HttpsError('not-found','That account does not exist or is not active.');if(!canTransferTo(caller.role,caller,recipient))throw new HttpsError('permission-denied','You are not allowed to send points to that account.');const ip=getClientIp(r);await checkVelocity(db,uid,'transferPoints',{ip});const p=await getPricing(db),earn=caller.role==='dealer'&&recipient.role==='customer'?Math.round(amt*(Number(p.dealerEarningPercent)||0)/100*100)/100:0,from=db.collection('users').doc(uid),to=db.collection('users').doc(toUid),tr=db.collection('pointTransfers').doc();await db.runTransaction(async tx=>{const a=await tx.get(from),b=await tx.get(to);if(!a.exists||!b.exists||!active(a.data())||!active(b.data()))throw new HttpsError('failed-precondition','Both accounts must be active.');if(a.data().role!==caller.role||b.data().role!==recipient.role)throw new HttpsError('failed-precondition','Account status changed. Please retry.');const ab=Number(a.data().walletBalance||0),bb=Number(b.data().walletBalance||0),nextA=ab-amt+earn,nextB=bb+amt;if(!Number.isFinite(ab)||ab<0||!Number.isFinite(bb)||bb<0||ab<amt||!Number.isSafeInteger(Math.round(nextA*100))||!Number.isSafeInteger(Math.round(nextB*100)))throw new HttpsError('failed-precondition','Invalid wallet balance.');tx.update(from,{walletBalance:nextA});tx.update(to,{walletBalance:nextB});tx.set(tr,{fromUid:uid,fromName:caller.name||'',fromRole:caller.role,toUid,toName:recipient.name||'',toRole:recipient.role,amount:amt,note:typeof note==='string'?note.trim().slice(0,500):'',participants:[uid,toUid],dealerId:caller.role==='dealer'?uid:caller.dealerId||null,dealerEarning:earn||null,createdAt:admin.firestore.FieldValue.serverTimestamp()});});return{transferId:tr.id};});
 const CHARGEABLE={recharge:'rechargePointCostPerUnit',internet:'internetPointCostPerUnit',billpayment:'billPaymentPointCostPerUnit',mobilebanking:null,remittance:null};
-async function chargeProduct(request,service,payload,customer){const uid=requireAuth(request),db=admin.firestore(),rates=await getRates(db),calc=recompute(service,payload?.raw,rates),clientAmount=Number(payload?.amount),clientTotal=Number(payload?.total),charge=service==='mobilebanking'||service==='remittance'?calc.total:calc.amount;if(!Number.isFinite(calc.amount)||calc.amount<0||!Number.isFinite(charge)||charge<0)throw new HttpsError('invalid-argument','Invalid amount.');if(Number.isFinite(clientAmount)&&Math.abs(clientAmount-calc.amount)>.01)throw new HttpsError('failed-precondition','Rate changed - please review your order.');if(Number.isFinite(clientTotal)&&Math.abs(clientTotal-calc.total)>.01)throw new HttpsError('failed-precondition','Order total changed - please review your order.');const p=await getPricing(db),settings=await progressionService.getProgressionSettings(),uref=db.collection('users').doc(uid),requestId=payload?.requestId;const txref=db.collection('transactions').doc();const result=await db.runTransaction(async tx=>{const u=await tx.get(uref);if(!u.exists)throw new HttpsError('not-found','Account not found.');const d=u.data(),base=charge*(Number(priceForRole(p,CHARGEABLE[service],d.role))||1),discount=progressionService.discountPercentFromSettings(settings,d.tier),cost=Math.round(base*(1-discount/100)*100)/100;if(Number(d.walletBalance||0)<cost)throw new HttpsError('failed-precondition',`You need ${cost} pts - top up your wallet first.`);tx.update(uref,{walletBalance:Number(d.walletBalance||0)-cost});tx.set(txref,{service:payload.service,details:payload.details||'',amount:calc.amount,total:charge,cost:payload.cost||0,profit:payload.profit||0,pointsCharged:cost,tierDiscountPercent:discount,chargedServiceKind:service,exchangeRate:calc.exchangeRate,exchangeRateSource:calc.exchangeRateSource,status:'pending',customerId:uid,customerPhone:d.phone||'',resellerId:d.resellerId||null,dealerId:d.resellerId?null:d.dealerId||null,rejected:false,rejectReason:'',pin:'',raw:{...(payload.raw||{}),...(requestId?{requestId}: {})},createdAt:admin.firestore.FieldValue.serverTimestamp(),updatedAt:admin.firestore.FieldValue.serverTimestamp()});return{cost,role:d.role};});return{id:txref.id,cost:result.cost};}
-exports.chargeRecharge=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>chargeProduct(r,'recharge',r.data?.payload,r.data?.customer));
-exports.chargeInternetPackage=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>chargeProduct(r,'internet',r.data?.payload,r.data?.customer));
-// Bills are priced like a recharge: face value in the biller's currency,
-// converted to MYR points with the same rate table.
-exports.chargeBillPayment=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>chargeProduct(r,'billpayment',r.data?.payload,r.data?.customer));
-exports.chargeMobileBanking=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>chargeProduct(r,'mobilebanking',r.data?.payload,r.data?.customer));
-exports.chargeRemittance=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>chargeProduct(r,'remittance',r.data?.payload,r.data?.customer));
-async function rejectTx(r,service){const uid=requireAuth(r),db=admin.firestore(),{transactionId,reason}=r.data||{};if(!transactionId)throw new HttpsError('invalid-argument','transactionId is required.');const caller=await getProfile(db,uid);if(!caller||!['admin','superadmin','dealer','reseller'].includes(caller.role))throw new HttpsError('permission-denied','Only staff can reject an order.');const ref=db.collection('transactions').doc(transactionId);await db.runTransaction(async tx=>{const s=await tx.get(ref);if(!s.exists)throw new HttpsError('not-found','That order does not exist.');const d=s.data();if(d.chargedServiceKind!==service)throw new HttpsError('failed-precondition','Wrong service.');if(d.status!=='pending'||d.claimedBy)throw new HttpsError('failed-precondition','That order has already been accepted.');tx.update(ref,{rejected:true,rejectReason:reason||'Rejected by staff.',rejectedBy:uid,updatedAt:admin.firestore.FieldValue.serverTimestamp()});});return{rejected:true};}
-exports.rejectRechargeTransaction=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },r=>rejectTx(r,'recharge'));exports.rejectInternetPackageTransaction=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },r=>rejectTx(r,'internet'));exports.rejectMobileBankingTransaction=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },r=>rejectTx(r,'mobilebanking'));exports.rejectRemittanceTransaction=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },r=>rejectTx(r,'remittance'));
-exports.chargeWallet=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>{const uid=requireAuth(r),db=admin.firestore(),{kind,key}=r.data||{};if(!key||!['webview_access','webview_submit','payment_success','module_subscription'].includes(kind))throw new HttpsError('invalid-argument','Invalid charge.');await checkVelocity(db,uid,'chargeWallet',{ip:getClientIp(r)});const p=await getPricing(db),ref=db.collection('users').doc(uid);return db.runTransaction(async tx=>{const s=await tx.get(ref);if(!s.exists)throw new HttpsError('not-found','Account not found.');const d=s.data(),bal=Number(d.walletBalance||0),now=Date.now();if(kind==='webview_access'){const cost=Number(priceForRole(p,'webviewAccessCost',d.role))||0,win=(Number(p.webviewAccessWindowHours)||0)*3600000,last=d.lastAccessCharge?.[key];if(last&&win>0&&now-last<win)return{charged:false,freeUntil:last+win};if(bal<cost)throw new HttpsError('failed-precondition',`You need ${cost} pts.`);tx.update(ref,{walletBalance:bal-cost,[`lastAccessCharge.${key}`]:now});return{charged:true,cost,freeUntil:now+win};}if(kind==='webview_submit'){const cost=Number(priceForRole(p,'webviewSubmitCost',d.role))||0,last=d.webviewSubmitted?.[key];if(last)return{charged:false,submittedAt:last};if(bal<cost)throw new HttpsError('failed-precondition',`You need ${cost} pts.`);tx.update(ref,{walletBalance:bal-cost,[`webviewSubmitted.${key}`]:now});return{charged:true,cost,submittedAt:now};}if(kind==='payment_success'){const cost=Number(priceForRole(p,'paymentSuccessCost',d.role))||0,last=d.lastPaymentCharge?.[key];if(last)return{charged:false,chargedAt:last};if(bal<cost)throw new HttpsError('failed-precondition',`You need ${cost} pts.`);tx.update(ref,{walletBalance:bal-cost,[`lastPaymentCharge.${key}`]:now});return{charged:true,cost,chargedAt:now};}const keys={notepad:'notepadCost',myDocuments:'myDocumentsCost',salaryOt:'salaryOtCost'},ck=keys[key];if(!ck)throw new HttpsError('invalid-argument','Unknown module.');const cost=Number(priceForRole(p,ck,d.role))||0,win=(Number(p.moduleSubscriptionDays)||30)*86400000,last=d.moduleSubscription?.[key];if(last&&now-last<win)return{charged:false,subscribedUntil:last+win};if(bal<cost)throw new HttpsError('failed-precondition',`You need ${cost} pts.`);tx.update(ref,{walletBalance:bal-cost,[`moduleSubscription.${key}`]:now});return{charged:cost>0,cost,subscribedUntil:now+win};});});
+async function chargeProduct(request,service,payload,customer){const uid=requireAuth(request),db=admin.firestore(),rates=await getRates(db),calc=recompute(service,payload?.raw,rates),clientAmount=Number(payload?.amount),clientTotal=Number(payload?.total),charge=service==='mobilebanking'||service==='remittance'?calc.total:calc.amount;if(!Number.isFinite(calc.amount)||calc.amount<=0||!Number.isFinite(charge)||charge<=0)throw new HttpsError('invalid-argument','Amount must be greater than zero.');if(Number.isFinite(clientAmount)&&Math.abs(clientAmount-calc.amount)>.01)throw new HttpsError('failed-precondition','Rate changed - please review your order.');if(Number.isFinite(clientTotal)&&Math.abs(clientTotal-calc.total)>.01)throw new HttpsError('failed-precondition','Order total changed - please review your order.');const p=await getPricing(db),settings=await progressionService.getProgressionSettings(),uref=db.collection('users').doc(uid),requestId=payload?.requestId;if(typeof requestId!=='string'||!REQUEST_ID_RE.test(requestId))throw new HttpsError('invalid-argument','A valid requestId is required.');const txId=crypto.createHash('sha256').update(`${uid}|${service}|${requestId}`).digest('hex').slice(0,40);const txref=db.collection('transactions').doc(txId);const collectionPin=String(crypto.randomInt(0,10000)).padStart(4,'0');const serviceLabel = { recharge: 'Recharge', internet: 'Internet', billpayment: 'Bill Payment', mobilebanking: 'Mobile Banking', remittance: 'Remittance' }[service];
+const apiSettingsSnap = serviceLabel ? await db.collection('api_settings').doc('service_modes').get() : null;
+const apiMode = apiSettingsSnap?.exists ? apiSettingsSnap.data()?.modes?.[serviceLabel] || 'legacy' : 'legacy';
+const result=await db.runTransaction(async tx=>{const existingTx=await tx.get(txref);if(existingTx.exists){const existing=existingTx.data()||{};if(existing.customerId!==uid)throw new HttpsError('permission-denied','This request ID belongs to another account.');const existingStatus=String(existing.status||'pending');if(existingStatus==='failed')throw new HttpsError('failed-precondition',existing.apiError||'This order already failed.');if(existingStatus==='pending' && (existing.executionMode==='api' || apiMode==='api')){
+  // A previously created API transaction must never be sent to the provider
+  // again just because the original function instance disappeared mid-flight.
+  // The external outcome may already exist. Only explicit provider-success
+  // evidence is safe to recover; otherwise leave it for reconciliation.
+  if(existing.apiExecution?.providerSucceeded === true && existing.apiRefunded !== true){
+    tx.update(txref,{
+      status:'completed',
+      completedAt:admin.firestore.FieldValue.serverTimestamp(),
+      apiExecution:{
+        ...(existing.apiExecution || {}),
+        status:'accepted',
+        reconciliationRecovered:true,
+        updatedAt:admin.firestore.FieldValue.serverTimestamp(),
+      },
+      updatedAt:admin.firestore.FieldValue.serverTimestamp()
+    });
+    return{existing:true,cost:Number(existing.cost)||0,role:existing.customerRole||'',apiMode:existing.executionMode||'api',customerUid:uid,customerPhone:existing.customerPhone||'',apiAmount:Number(existing.amount)||0,apiTotal:Number(existing.total)||0,status:'completed',collectionPin:existing.pin||''};
+  }
+  const executionKey=crypto.createHash('sha256').update(service+'|'+uid+'|'+requestId).digest('hex');
+  const executionRef=db.collection('apiExecutions').doc(executionKey);
+  const executionSnap=await tx.get(executionRef);
+  const execution=executionSnap.exists ? (executionSnap.data()||{}) : {};
+  if(execution.status==='completed' && existing.apiRefunded !== true){
+    tx.update(txref,{
+      status:'completed',
+      completedAt:admin.firestore.FieldValue.serverTimestamp(),
+      apiExecution:{
+        ...(existing.apiExecution || {}),
+        status:'accepted',
+        providerSucceeded:true,
+        providerId:execution.result?.providerId || existing.apiExecution?.providerId || null,
+        providerName:execution.result?.providerName || existing.apiExecution?.providerName || null,
+        responseId:execution.result?.responseId || existing.apiExecution?.responseId || null,
+        message:execution.result?.message || existing.apiExecution?.message || null,
+        reconciliationRecovered:true,
+        updatedAt:admin.firestore.FieldValue.serverTimestamp(),
+      },
+      updatedAt:admin.firestore.FieldValue.serverTimestamp()
+    });
+    return{existing:true,cost:Number(existing.cost)||0,role:existing.customerRole||'',apiMode:existing.executionMode||'api',customerUid:uid,customerPhone:existing.customerPhone||'',apiAmount:Number(existing.amount)||0,apiTotal:Number(existing.total)||0,status:'completed',collectionPin:existing.pin||''};
+  }
+  throw new HttpsError('unavailable','This API request may already have reached the provider. Verify the provider outcome before retrying.');
+}if(existingStatus==='unknown'){
+  // If the provider already returned success and only the final transaction
+  // persistence failed, the previous invocation records explicit provider
+  // success. Recover the transaction instead of permanently trapping it in
+  // UNKNOWN or charging the customer a second time.
+  if(existing.apiExecution?.providerSucceeded === true && existing.apiRefunded !== true){
+    tx.update(txref,{
+      status:'completed',
+      completedAt:admin.firestore.FieldValue.serverTimestamp(),
+      apiExecution:{
+        ...(existing.apiExecution || {}),
+        status:'accepted',
+        reconciliationRecovered:true,
+        updatedAt:admin.firestore.FieldValue.serverTimestamp(),
+      },
+      updatedAt:admin.firestore.FieldValue.serverTimestamp()
+    });
+    return{existing:true,cost:Number(existing.cost)||0,role:existing.customerRole||'',apiMode:existing.executionMode||'legacy',customerUid:uid,customerPhone:existing.customerPhone||'',apiAmount:Number(existing.amount)||0,apiTotal:Number(existing.total)||0,status:'completed',collectionPin:existing.pin||''};
+  }
+  throw new HttpsError('unavailable','The API request outcome is uncertain. Check the provider before retrying.');
+}return{existing:true,cost:Number(existing.cost)||0,role:existing.customerRole||'',apiMode:existing.executionMode||'legacy',customerUid:uid,customerPhone:existing.customerPhone||'',apiAmount:Number(existing.amount)||0,apiTotal:Number(existing.total)||0,status:existingStatus,collectionPin:existing.pin||''};}const u=await tx.get(uref);if(!u.exists)throw new HttpsError('not-found','Account not found.');const d=u.data();requireSessionMatch(request,d);if(!active(d)||d.role!=='customer')throw new HttpsError('permission-denied','Your customer account is not active.');const wallet=Number(d.walletBalance||0);if(!Number.isFinite(wallet)||wallet<0||!Number.isSafeInteger(Math.round(wallet*100)))throw new HttpsError('failed-precondition','Wallet balance is invalid.');let walletFx;try{walletFx=await getWalletCurrencyAndFx(db,d);}catch(fxErr){throw new HttpsError('failed-precondition',fxErr.message||'Wallet currency is not configured.');}const base=charge*(CHARGEABLE[service]?safePrice(p,CHARGEABLE[service],d.role):1),discount=progressionService.discountPercentFromSettings(settings,d.tier),cost=Math.round(base*(1-discount/100)*100)/100;if(!Number.isFinite(cost)||cost<0||!Number.isSafeInteger(Math.round(cost*100)))throw new HttpsError('failed-precondition','Wallet charge is invalid.');const walletCost=baseToWallet(cost,walletFx);if(wallet<walletCost)throw new HttpsError('failed-precondition',`You need ${walletCost.toFixed(2)} ${walletFx.currency} in your wallet - top up your wallet first.`);const nextBalance=wallet-walletCost;if(!Number.isSafeInteger(Math.round(nextBalance*100)))throw new HttpsError('failed-precondition','The resulting wallet balance is invalid.');tx.update(uref,{walletBalance:nextBalance,walletCurrency:walletFx.currency});tx.set(txref,{service:serviceLabel || service,customerRole:d.role,details:typeof payload?.details==='string'?payload.details.slice(0,2000):'',amount:calc.amount,total:charge,cost:walletCost,baseCostMyr:cost,walletCost,currency:walletFx.currency,fxRate:walletFx.sellRate,fxRateType:'sell',fxRateSource:walletFx.rateSource,profit:null,tierDiscountPercent:discount,chargedServiceKind:service,exchangeRate:calc.exchangeRate,exchangeRateSource:calc.exchangeRateSource,executionMode:apiMode,apiDispatchStatus:apiMode==='api'?'ready':'legacy',status:'pending',customerId:uid,customerPhone:d.phone||'',resellerId:d.resellerId||null,dealerId:d.resellerId?null:d.dealerId||null,rejected:false,rejectReason:'',pin:collectionPin,raw:{...sanitizeTransactionRaw(payload?.raw,service),...(requestId?{requestId}: {})},createdAt:admin.firestore.FieldValue.serverTimestamp(),updatedAt:admin.firestore.FieldValue.serverTimestamp()});return{cost:walletCost,baseCostMyr:cost,currency:walletFx.currency,fxRate:walletFx.sellRate,role:d.role,apiMode,customerUid:uid,customerPhone:d.phone||'',apiAmount:calc.amount,apiTotal:charge};});if (result.apiMode === 'api' && result.status !== 'completed') {
+    // Atomically claim the right to dispatch the external side effect. Staff
+    // rejection is allowed only while this state is "ready"; once claimed,
+    // rejection cannot race with the provider call.
+    const dispatch = await db.runTransaction(async tx => {
+      const s = await tx.get(txref);
+      if (!s.exists || s.data()?.customerId !== result.customerUid) throw new HttpsError('not-found', 'Transaction not found.');
+      const d = s.data() || {};
+      if (d.status !== 'pending') return { dispatchable: false, status: d.status };
+      if (d.apiDispatchStatus !== 'ready') return { dispatchable: false, status: d.status };
+      tx.update(txref, { apiDispatchStatus: 'dispatching', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      return { dispatchable: true, status: 'pending' };
+    });
+    if (!dispatch.dispatchable) {
+      if (dispatch.status === 'rejected') return {id:txref.id,cost:result.cost,collectionPin:collectionPin};
+      throw new HttpsError('aborted', 'This API transaction is already being handled.');
+    }
+    let providerSucceeded = false;
+    try {
+      const serverCustomer = { uid: result.customerUid, phone: result.customerPhone };
+      const apiPayload = { ...payload, amount: result.apiAmount, total: result.apiTotal };
+      const api = await executeConfiguredApi(serviceLabel, apiPayload, serverCustomer, requestId);
+      // Once the configured provider has positively accepted the order, the
+      // external side effect exists. Never refund it because a subsequent
+      // Firestore write fails.
+      providerSucceeded = true;
+      await txref.update({
+        status: 'completed',
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+        apiExecution: {
+          status: 'accepted',
+          providerId: api.providerId,
+          providerName: api.providerName,
+          responseId: api.responseId || null,
+          message: api.message || null,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        },
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+    } catch (e) {
+      const errorCode = String(e?.code || '');
+      const ambiguousProviderOutcome = providerSucceeded || errorCode === 'unavailable';
+
+      // An unavailable/unknown provider result may mean the external API
+      // accepted the transaction but the response was lost. Never refund
+      // automatically: doing so could let a retry create a duplicate real
+      // transaction. Unknown transactions are also removed from the dealer/
+      // reseller queue by transactionQueueService.
+      if (ambiguousProviderOutcome) {
+        await txref.update({
+          status: 'unknown',
+          apiExecution: {
+            status: 'unknown',
+            providerSucceeded,
+            error: String(e?.message || 'Provider outcome is uncertain').slice(0, 500),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        throw e;
+      }
+
+      // Definitive failures refund this invocation's charge exactly once.
+      await db.runTransaction(async tx => {
+        const [u, t] = await Promise.all([tx.get(uref), tx.get(txref)]);
+        if (!t.exists || t.data().status !== 'pending' || t.data().apiRefunded === true) return;
+        const balance = Number(u.data()?.walletBalance || 0), refund = Number(result.cost || 0);
+        if (!Number.isFinite(balance) || !Number.isFinite(refund) || refund < 0 || !Number.isSafeInteger(Math.round((balance + refund) * 100))) throw new HttpsError('failed-precondition', 'Could not safely refund the failed API charge.');
+        tx.update(uref, { walletBalance: balance + refund });
+        tx.update(txref, { status: 'failed', apiRefunded: true, apiError: String(e?.message || 'Provider execution failed').slice(0, 500), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      });
+      throw e;
+
+    }
+  }
+  return{id:txref.id,cost:result.cost,collectionPin:result.existing?result.collectionPin:collectionPin};}
+async function runChargeProduct(request, service) {
+  const data = request?.data || {};
+  return chargeProduct(request, service, data.payload, data.customer);
+}
+exports.runChargeProduct = runChargeProduct;
+exports.chargeRecharge=onCall({ enforceAppCheck: true },async r=>chargeProduct(r,'recharge',r.data?.payload,r.data?.customer));
+exports.chargeInternetPackage=onCall({ enforceAppCheck: true },async r=>chargeProduct(r,'internet',r.data?.payload,r.data?.customer));
+exports.chargeBillPayment=onCall({ enforceAppCheck: true },async r=>chargeProduct(r,'billpayment',r.data?.payload,r.data?.customer));
+exports.chargeMobileBanking=onCall({ enforceAppCheck: true },async r=>chargeProduct(r,'mobilebanking',r.data?.payload,r.data?.customer));
+exports.chargeRemittance=onCall({ enforceAppCheck: true },async r=>chargeProduct(r,'remittance',r.data?.payload,r.data?.customer));
+
+exports.chargeWallet=onCall({ enforceAppCheck: true },async r=>{const uid=requireAuth(r),db=admin.firestore(),{kind,key}=r.data||{};if(!key||!['webview_access','webview_submit','payment_success','module_subscription'].includes(kind))throw new HttpsError('invalid-argument','Invalid charge.');await checkVelocity(db,uid,'chargeWallet',{ip:getClientIp(r)});const p=await getPricing(db),ref=db.collection('users').doc(uid);return db.runTransaction(async tx=>{const s=await tx.get(ref);if(!s.exists)throw new HttpsError('not-found','Account not found.');const d=s.data();if(!active(d))throw new HttpsError('permission-denied','Your account is not active.');const bal=Number(d.walletBalance||0);if(!Number.isFinite(bal)||bal<0||!Number.isSafeInteger(Math.round(bal*100)))throw new HttpsError('failed-precondition','Wallet balance is invalid.');const now=Date.now();if(kind==='webview_access'){const cost=safePrice(p,'webviewAccessCost',d.role),win=(Number(p.webviewAccessWindowHours)||0)*3600000,last=d.lastAccessCharge?.[key];if(last&&win>0&&now-last<win)return{charged:false,freeUntil:last+win};if(bal<cost)throw new HttpsError('failed-precondition',`You need ${cost} pts.`);tx.update(ref,{walletBalance:bal-cost,[`lastAccessCharge.${key}`]:now});return{charged:true,cost,freeUntil:now+win};}if(kind==='webview_submit'){const cost=safePrice(p,'webviewSubmitCost',d.role),last=d.webviewSubmitted?.[key];if(last)return{charged:false,submittedAt:last};if(bal<cost)throw new HttpsError('failed-precondition',`You need ${cost} pts.`);tx.update(ref,{walletBalance:bal-cost,[`webviewSubmitted.${key}`]:now});return{charged:true,cost,submittedAt:now};}if(kind==='payment_success'){const cost=safePrice(p,'paymentSuccessCost',d.role),last=d.lastPaymentCharge?.[key];if(last)return{charged:false,chargedAt:last};if(bal<cost)throw new HttpsError('failed-precondition',`You need ${cost} pts.`);tx.update(ref,{walletBalance:bal-cost,[`lastPaymentCharge.${key}`]:now});return{charged:true,cost,chargedAt:now};}const keys={notepad:'notepadCost',myDocuments:'myDocumentsCost',salaryOt:'salaryOtCost'},ck=keys[key];if(!ck)throw new HttpsError('invalid-argument','Unknown module.');const cost=safePrice(p,ck,d.role),win=(Number(p.moduleSubscriptionDays)||30)*86400000,last=d.moduleSubscription?.[key];if(last&&now-last<win)return{charged:false,subscribedUntil:last+win};if(bal<cost)throw new HttpsError('failed-precondition',`You need ${cost} pts.`);tx.update(ref,{walletBalance:bal-cost,[`moduleSubscription.${key}`]:now});return{charged:cost>0,cost,subscribedUntil:now+win};});});

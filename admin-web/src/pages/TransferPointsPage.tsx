@@ -50,7 +50,7 @@ export default function TransferPointsPage() {
     setResult(null);
     try {
       await transferPoints({ toUid: selected.id, amount: amt, note });
-      setResult(`Sent ${amt} points to ${selected.name || selected.phone}.`);
+      setResult(`Sent ${amt} wallet funds to ${selected.name || selected.phone}.`);
       setSelected(null);
       setAmount('');
       setNote('');
@@ -64,9 +64,9 @@ export default function TransferPointsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold">Transfer Points</h1>
+      <h1 className="text-2xl font-bold">Wallet Transfer</h1>
       <p className="mt-1 text-sm text-[var(--color-ink-soft)]">
-        Move wallet points to an account you manage. The balance change happens server-side, in one
+        Move wallet wallet funds to an account you manage. The balance change happens server-side, in one
         atomic transaction.
       </p>
 

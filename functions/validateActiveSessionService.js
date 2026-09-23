@@ -1,7 +1,5 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
-const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
-
 const MAX_DEVICE_ID_LENGTH = 100;
 const MAX_SESSION_ID_LENGTH = 128;
 
@@ -17,21 +15,27 @@ function requireString(value, maxLength, message) {
   return value.trim();
 }
 
-exports.validateActiveSession = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+function activeProfile(profile) {
+  return !!profile &&
+    profile.suspended !== true &&
+    profile.inactive !== true &&
+    profile.disabled !== true &&
+    profile.active !== false &&
+    profile.mergedInto == null;
+}
+
+exports.validateActiveSession = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireAuth(request);
   const deviceId = requireString(request.data?.deviceId, MAX_DEVICE_ID_LENGTH, 'Missing or invalid device id.');
   const sessionId = requireString(request.data?.sessionId, MAX_SESSION_ID_LENGTH, 'Missing or invalid session id.');
-
   const snap = await admin.firestore().collection('users').doc(uid).get();
   if (!snap.exists) throw new HttpsError('not-found', 'No profile found for this account.');
-
   const profile = snap.data() || {};
-  if (profile.suspended) throw new HttpsError('permission-denied', 'Your account has been suspended.');
-
-  const valid = profile.activeSessionId === sessionId && profile.activeDeviceId === deviceId;
-  if (!valid) {
+  if (!activeProfile(profile)) {
+    throw new HttpsError('permission-denied', 'Your account is not active.');
+  }
+  if (profile.activeSessionId !== sessionId || profile.activeDeviceId !== deviceId) {
     throw new HttpsError('failed-precondition', 'This device session is no longer active. Please sign in again.');
   }
-
   return { valid: true };
 });

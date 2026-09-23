@@ -19,14 +19,6 @@ const SUPPORT_EMAIL = 'info.mysheba@gmail.com';
 
 // Us row below once an admin has actually set its URL - same "hide until
 // configured" idea as the Call/WhatsApp support cards above.
-const SOCIAL_PLATFORMS = [
-  { key: 'facebook', icon: '📘', label: 'Facebook' },
-  { key: 'instagram', icon: '📷', label: 'Instagram' },
-  { key: 'tiktok', icon: '🎵', label: 'TikTok' },
-  { key: 'linkedin', icon: '💼', label: 'LinkedIn' },
-  { key: 'x', icon: '✖️', label: 'X' },
-];
-
 const TABS = [
   { key: 'messages', label: 'Messages' },
   { key: 'tickets', label: 'Tickets' },
@@ -47,7 +39,7 @@ const FAQS = [
   },
   {
     q: 'How do I check my remittance or transaction status?',
-    a: 'Open the Chat/History tab from your home screen to see the live status of any transaction you\u2019ve submitted - pending, processing, or completed.',
+    a: 'Open History from your home screen to see the live status of any transaction you\u2019ve submitted - pending, processing, or completed.',
   },
   {
     q: 'I submitted a Flight/Bus/Train inquiry - what happens next?',
@@ -167,7 +159,7 @@ export default function SupportScreen() {
   } = useTheme();
 
   const styles = createStyles(colors);
-  const { authUser, profile, supportContact, helpPrefill, setHelpPrefill, openHelp, goBackOrHome } = useApp();
+  const { goBackOrHome, authUser, profile, supportContact, openHelp, helpPrefill, setHelpPrefill } = useApp();
   const hasPhone = !!supportContact?.phone;
   const hasWhatsapp = !!supportContact?.whatsapp;
 
@@ -244,7 +236,7 @@ export default function SupportScreen() {
   };
 
   // My own support tickets only - this is a personal request/status
-  // tracker, separate from the live Message Support chat thread above.
+  // tracker for support requests submitted from this screen.
   // Admin sees the full queue on their own Support screen (AdminSupportScreen).
   useEffect(() => {
     if (!authUser) { setTicketsLoading(false); return undefined; }
@@ -281,6 +273,7 @@ export default function SupportScreen() {
     }
   };
 
+
   const openLink = async (url, label) => {
     try {
       // NOTE: Linking.canOpenURL() is unreliable for mailto:/tel: links on
@@ -298,7 +291,7 @@ export default function SupportScreen() {
 
   const callSupport = () => {
     if (!hasPhone) {
-      showAlert('MySheba', 'Call support isn\u2019t set up yet. Please use Email in the meantime.');
+      showAlert('MySheba', 'Call support isn\u2019t set up yet. Please use Message Support or Email in the meantime.');
       return;
     }
     openLink(`tel:${supportContact.phone}`, 'the dialer');
@@ -306,7 +299,7 @@ export default function SupportScreen() {
 
   const whatsappSupport = () => {
     if (!hasWhatsapp) {
-      showAlert('MySheba', 'WhatsApp support isn\u2019t set up yet. Please use Email in the meantime.');
+      showAlert('MySheba', 'WhatsApp support isn\u2019t set up yet. Please use Message Support or Email in the meantime.');
       return;
     }
     const name = profile?.name ? profile.name : '';
@@ -382,6 +375,8 @@ export default function SupportScreen() {
             <Text style={styles.helpChevron}>›</Text>
           </TouchableOpacity>
 
+
+
           <View style={styles.contactRow}>
             <TouchableOpacity style={[styles.contactCard, !hasPhone && styles.contactCardDisabled]} onPress={callSupport}>
               <Text style={styles.contactIcon}>📞</Text>
@@ -432,7 +427,7 @@ export default function SupportScreen() {
 
           <Text style={styles.sectionTitle}>Submit a Support Request</Text>
           <Text style={styles.sectionSubtitle}>
-            Describe your issue and our team will review it here - separate from live chat, so you can track its status anytime.
+            Describe your issue and our team will review it here, so you can track its status anytime.
           </Text>
           <FormLabel>Subject</FormLabel>
           <FormInput

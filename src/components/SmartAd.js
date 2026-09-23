@@ -54,10 +54,9 @@ const ROTATE_MS = 4000;
 // ever waits for it, so there's nothing that needs a special offline
 // check.
 //
-// `adType` defaults to 'banner' - the only ad type with a real creative
-// pipeline so far (adService.uploadBannerCreative); native/interstitial
-// stay dormant until a later phase implements their own upload + render
-// path, at which point a call site can pass adType explicitly.
+// `adType` defaults to 'banner'. Native/interstitial creatives now have
+// upload support in adService; rendering remains placement/component-specific
+// and is only used when a caller explicitly requests that adType.
 //
 // PHASE 5 - the AdTargetingContext this component builds now carries
 // userType and language in addition to placement/feature:

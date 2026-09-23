@@ -4,7 +4,6 @@ const crypto = require('crypto');
 const { logAudit, logServerError } = require('./logService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const mailerService = require('./mailerService');
-const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const OTP_LENGTH = 6;
 const OTP_TTL_MS = 5 * 60 * 1000;
@@ -22,7 +21,7 @@ async function getProfile(db, uid) { const snap = await db.collection('users').d
 function activeAccount(profile) { return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto && profile.active !== false; }
 function walletBalance(profile) { const value = Number(profile?.walletBalance || 0); if (!Number.isFinite(value) || value < 0 || !Number.isSafeInteger(Math.round(value * 100))) throw new HttpsError('failed-precondition', 'One of the account wallet balances is invalid.'); return value; }
 
-exports.startAccountMerge = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+exports.startAccountMerge = onCall({ enforceAppCheck: true }, async (request) => {
   const callerUid = requireAuth(request);
   const db = admin.firestore();
   const caller = await getProfile(db, callerUid);
@@ -61,13 +60,14 @@ exports.startAccountMerge = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async
   return { sent: true, emailMasked: maskEmail(email), yourWalletBalance, targetWalletBalance, combinedWalletBalance };
 });
 
-exports.confirmAccountMerge = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+exports.confirmAccountMerge = onCall({ enforceAppCheck: true }, async (request) => {
   const callerUid = requireAuth(request); const db = admin.firestore();
   const code = String(request.data?.code || '').trim();
   if (!/^\d{6}$/.test(code)) throw new HttpsError('invalid-argument', 'Please enter the 6-digit code we sent.');
   const ip = getClientIp(request); await checkVelocity(db, callerUid, 'account_merge_confirm', { ip });
   const otpRef = db.collection('mergeOtps').doc(callerUid); const callerRef = db.collection('users').doc(callerUid);
-  let targetUid; let targetEmail; let mergedWalletBalance = 0; let transferredGoogleProvider = null; let providerTransferred = false; let targetDisabled = false;
+  const callerMergeLedgerRef = db.collection('walletLedger').doc(); const targetMergeLedgerRef = db.collection('walletLedger').doc();
+  let targetUid; let targetEmail; let mergedWalletBalance = 0; let transferredGoogleProvider = null; let providerTransferred = false; let targetProviderUnlinked = false; let targetDisabled = false; let mergeCommitted = false;
 
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(otpRef); if (!snap.exists) throw new HttpsError('not-found', 'Please start the merge again from Settings.');
@@ -96,8 +96,9 @@ exports.confirmAccountMerge = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
     await admin.auth().revokeRefreshTokens(targetUid);
 
     await admin.auth().updateUser(targetAuthUser.uid, { providersToUnlink: ['google.com'] });
+    targetProviderUnlinked = true;
     try { await admin.auth().updateUser(callerUid, { providerToLink: transferredGoogleProvider }); providerTransferred = true; }
-    catch (err) { await admin.auth().updateUser(targetAuthUser.uid, { providerToLink: transferredGoogleProvider }).catch((rollbackErr) => logServerError('confirmAccountMerge.providerRollbackAfterLinkFailure', rollbackErr, { userId: callerUid })); throw err; }
+    catch (err) { throw err; }
 
     await db.runTransaction(async (tx) => {
       const otpSnap = await tx.get(otpRef); const callerSnap = await tx.get(callerRef); const targetRef = db.collection('users').doc(targetUid); const targetSnap = await tx.get(targetRef);
@@ -106,23 +107,42 @@ exports.confirmAccountMerge = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
       if (!callerSnap.exists || !targetSnap.exists) throw new HttpsError('not-found', 'One of the accounts no longer exists.');
       const callerData = callerSnap.data() || {}; const targetData = targetSnap.data() || {};
       if (!activeAccount(callerData) || !activeAccount(targetData) || callerData.role !== 'customer' || targetData.role !== 'customer') throw new HttpsError('failed-precondition', 'One of the accounts is no longer active. Please start again.');
-      const callerBalance = walletBalance(callerData); const targetBalance = walletBalance(targetData); mergedWalletBalance = callerBalance + targetBalance;
-      if (!Number.isSafeInteger(Math.round(mergedWalletBalance * 100))) throw new HttpsError('failed-precondition', 'The combined wallet balance is too large.');
+      const callerBalance = walletBalance(callerData); const targetBalance = walletBalance(targetData);
+      const callerBalanceCents = Math.round(callerBalance * 100); const targetBalanceCents = Math.round(targetBalance * 100);
+      const mergedBalanceCents = callerBalanceCents + targetBalanceCents;
+      if (!Number.isSafeInteger(mergedBalanceCents)) throw new HttpsError('failed-precondition', 'The combined wallet balance is too large.');
+      mergedWalletBalance = mergedBalanceCents / 100;
+      const now = admin.firestore.FieldValue.serverTimestamp();
       tx.update(callerRef, { walletBalance: mergedWalletBalance, googleLinked: true });
-      tx.update(targetRef, { walletBalance: 0, mergedInto: callerUid, active: false, mergedAt: admin.firestore.FieldValue.serverTimestamp() });
+      tx.update(targetRef, { walletBalance: 0, mergedInto: callerUid, active: false, mergedAt: now });
+      if (targetBalanceCents > 0) {
+        tx.set(targetMergeLedgerRef, { uid: targetUid, type: 'account_merge_debit', direction: 'debit', currency: 'MYR', amount: targetBalance, amountMinor: targetBalanceCents, transferId: `account_merge_${callerUid}_${targetUid}`, counterpartyUid: callerUid, balanceAfter: 0, createdAt: now });
+        tx.set(callerMergeLedgerRef, { uid: callerUid, type: 'account_merge_credit', direction: 'credit', currency: 'MYR', amount: targetBalance, amountMinor: targetBalanceCents, transferId: `account_merge_${callerUid}_${targetUid}`, counterpartyUid: targetUid, balanceAfter: mergedWalletBalance, createdAt: now });
+      }
       tx.delete(db.collection('biometricTemplates').doc(targetUid));
       tx.delete(db.collection('pendingBiometricTemplates').doc(targetUid));
       tx.delete(otpRef);
     });
+    // The wallet merge is now durably committed. From this point onward we
+    // must never roll back Auth state in response to a post-commit failure,
+    // otherwise the same wallet could be merged again on retry.
+    mergeCommitted = true;
 
     try { await admin.auth().revokeRefreshTokens(callerUid); }
     catch (revokeErr) { await logServerError('confirmAccountMerge.revokeCallerTokens', revokeErr, { userId: callerUid }); }
     await logAudit({ action: 'account_merged', targetUid, performedBy: callerUid, performedByRole: 'customer', details: { mergedWalletBalance, providerLinkFailed: false, ip } });
     return { merged: true, walletBalance: mergedWalletBalance, googleLinked: true, providerLinkFailed: false };
   } catch (err) {
+    if (mergeCommitted) {
+      await logServerError('confirmAccountMerge.postCommit', err, { userId: callerUid });
+      return { merged: true, walletBalance: mergedWalletBalance, googleLinked: true, providerLinkFailed: false };
+    }
     if (providerTransferred && transferredGoogleProvider) {
       try { await admin.auth().updateUser(callerUid, { providersToUnlink: ['google.com'] }); await admin.auth().updateUser(targetUid, { providerToLink: transferredGoogleProvider }); }
       catch (rollbackErr) { await logServerError('confirmAccountMerge.providerRollbackAfterFailure', rollbackErr, { userId: callerUid }); throw new HttpsError('internal', 'The merge failed and automatic recovery was unsuccessful. Please contact support before retrying.'); }
+    }
+    if (!providerTransferred && targetProviderUnlinked && transferredGoogleProvider) {
+      await admin.auth().updateUser(targetUid, { providerToLink: transferredGoogleProvider }).catch((rollbackErr) => logServerError('confirmAccountMerge.providerRestoreAfterLinkFailure', rollbackErr, { userId: callerUid }));
     }
     if (targetDisabled) {
       await admin.auth().updateUser(targetUid, { disabled: false }).catch((rollbackErr) => logServerError('confirmAccountMerge.targetReenable', rollbackErr, { userId: callerUid }));

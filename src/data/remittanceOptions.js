@@ -76,6 +76,30 @@ export const ewalletsByCountry = {
 };
 
 // Cash pickup partner networks per destination country.
+export const cashPickupCitiesByCountry = {
+  BD: ['Dhaka', 'Chattogram', 'Sylhet', 'Rajshahi', 'Khulna', 'Barishal', 'Rangpur', 'Mymensingh', 'Other / Not Listed'],
+  IN: ['Mumbai', 'Delhi', 'Bengaluru', 'Chennai', 'Kolkata', 'Hyderabad', 'Pune', 'Ahmedabad', 'Kochi', 'Jaipur', 'Other / Not Listed'],
+  NP: ['Kathmandu', 'Pokhara', 'Biratnagar', 'Lalitpur', 'Butwal', 'Birgunj', 'Bharatpur', 'Other / Not Listed'],
+  ID: ['Jakarta', 'Surabaya', 'Bandung', 'Medan', 'Denpasar', 'Semarang', 'Makassar', 'Yogyakarta', 'Other / Not Listed'],
+  PK: ['Karachi', 'Lahore', 'Islamabad', 'Rawalpindi', 'Faisalabad', 'Multan', 'Peshawar', 'Sialkot', 'Other / Not Listed'],
+  MM: ['Yangon', 'Mandalay', 'Naypyidaw', 'Bago', 'Taunggyi', 'Other / Not Listed'],
+  PH: ['Manila', 'Cebu City', 'Davao City', 'Quezon City', 'Baguio', 'Iloilo City', 'Cagayan de Oro', 'Other / Not Listed'],
+  KH: ['Phnom Penh', 'Siem Reap', 'Battambang', 'Sihanoukville', 'Other / Not Listed'],
+  MY: ['Kuala Lumpur', 'Penang', 'Johor Bahru', 'Ipoh', 'Malacca', 'Other / Not Listed'],
+};
+
+export const bankIdentifierTypeByCountry = {
+  BD: 'Routing Number',
+  IN: 'IFSC Code',
+  NP: 'SWIFT / BIC',
+  ID: 'SWIFT / BIC',
+  PK: 'SWIFT / BIC',
+  MM: 'SWIFT / BIC',
+  PH: 'SWIFT / BIC',
+  KH: 'SWIFT / BIC',
+  MY: 'SWIFT / BIC',
+};
+
 export const cashPickupByCountry = {
   BD: ['Sonali Bank Agent Network', 'Western Union Agent', 'MoneyGram Agent', 'bKash Cash Point'],
   IN: ['Western Union Agent', 'MoneyGram Agent', 'UAE Exchange Agent'],

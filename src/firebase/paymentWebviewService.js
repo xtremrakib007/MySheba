@@ -22,6 +22,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './config';
 import { PAYMENT_SUCCESS_COST } from '../data/countries';
+import { getSessionProof } from './deviceSessionService';
 
 /**
  * Read-only gate: throws (with a message safe to show the user) if `uid`'s
@@ -57,7 +58,8 @@ export async function checkPaymentEntryAccess(uid, cost = PAYMENT_SUCCESS_COST) 
 export async function chargePaymentSuccess(uid, key, cost = PAYMENT_SUCCESS_COST) {
   const fn = httpsCallable(functions, 'chargeWallet');
   try {
-    const { data } = await fn({ kind: 'payment_success', key });
+    const session = await getSessionProof();
+    const { data } = await fn({ kind: 'payment_success', key, ...session });
     return data;
   } catch (err) {
     throw new Error(err.message || `You need ${cost} pts to confirm this payment - top up your wallet first.`);

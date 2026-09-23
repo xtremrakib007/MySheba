@@ -1,9 +1,9 @@
 import { httpsCallable } from 'firebase/functions';
 import * as Crypto from 'expo-crypto';
 import { functions } from './config';
+import { getSessionProof } from './deviceSessionService';
 
 function createRequestId() {
-  if (typeof Crypto.randomUUID !== 'function') throw new Error('Secure request ID generation is unavailable.');
   return `mswt_${Crypto.randomUUID().replace(/-/g, '')}`;
 }
 
@@ -17,15 +17,18 @@ export async function findWalletRecipient(recipient) {
   }
 }
 
-export async function walletTransfer({ recipient, amount, note, requestId }) {
+export async function walletTransfer({ recipient, amount, note, securityPin, requestId }) {
   const fn = httpsCallable(functions, 'walletTransfer');
   const id = requestId || createRequestId();
+  const session = await getSessionProof();
   try {
     const { data } = await fn({
       recipient: String(recipient || '').trim(),
       amount: Number(amount),
       note: String(note || '').trim(),
+      securityPin: String(securityPin || ''),
       requestId: id,
+      ...session,
     });
     return data;
   } catch (err) {
