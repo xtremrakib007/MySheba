@@ -107,15 +107,16 @@ exports.walletTransfer = onCall({ enforceAppCheck: true }, async (request) => {
   if (typeof securityPin !== 'string' || !SECURITY_PIN_RE.test(securityPin)) throw new HttpsError('invalid-argument', 'Enter your 4-8 digit security PIN.');
   const senderCurrency = inferWalletCurrency(sender);
   const amountCents = parseMoneyCents(request.data?.amount, senderCurrency);
-  if (amountCents < Math.round(MIN_TRANSFER_BASE * 100) || amountCents > Math.round(MAX_TRANSFER_BASE * 100)) throw new HttpsError('invalid-argument', 'Enter a valid wallet transfer amount.');
+  if (amountCents <= 0) throw new HttpsError('invalid-argument', 'Enter a valid wallet transfer amount.');
   const recipient = await resolveRecipient(db, request.data?.recipient, senderUid), recipientUid = recipient.id, note = String(request.data?.note || '').trim().slice(0, 120), ip = getClientIp(request);
   await checkVelocity(db, senderUid, 'walletTransfer', { ip });
   const transferRef = db.collection('walletTransfers').doc(`${senderUid}_${requestId}`), pinRef = db.collection('securityPins').doc(senderUid), senderRef = db.collection('users').doc(senderUid), recipientRef = db.collection('users').doc(recipientUid), senderLedgerRef = db.collection('walletLedger').doc(), recipientLedgerRef = db.collection('walletLedger').doc();
   let replay = false;
   let pinValid = true;
   let replayData = null;
+  let transferResult = null;
   try {
-    await db.runTransaction(async tx => {
+    transferResult = await db.runTransaction(async tx => {
       // Validate the live sender session before returning an idempotent replay.
       const senderSnap = await tx.get(senderRef);
       if (!senderSnap.exists) throw new HttpsError('not-found', 'Wallet account not found.');
@@ -155,6 +156,7 @@ exports.walletTransfer = onCall({ enforceAppCheck: true }, async (request) => {
       try { senderFx = await getWalletCurrencyAndFx(db, senderData); recipientFx = await getWalletCurrencyAndFx(db, recipientData); } catch (fxErr) { throw new HttpsError('failed-precondition', fxErr.message || 'Wallet exchange rates are not configured.'); }
       const senderAmount = Number(amountCents) / (10 ** (ZERO_DECIMAL_CURRENCIES.has(senderFx.currency) ? 0 : 2));
       const baseAmount = walletToBase(senderAmount, senderFx);
+      if (baseAmount < MIN_TRANSFER_BASE || baseAmount > MAX_TRANSFER_BASE) throw new HttpsError('invalid-argument', 'Enter a valid wallet transfer amount.');
       const recipientAmount = baseToWallet(baseAmount, recipientFx);
       const senderDigits = ZERO_DECIMAL_CURRENCIES.has(senderFx.currency) ? 0 : 2, recipientDigits = ZERO_DECIMAL_CURRENCIES.has(recipientFx.currency) ? 0 : 2;
       const senderBalanceCents = Math.round(Number(senderData.walletBalance || 0) * (10 ** senderDigits)), recipientBalanceCents = Math.round(Number(recipientData.walletBalance || 0) * (10 ** recipientDigits)), recipientAmountCents = Math.round(recipientAmount * (10 ** recipientDigits));
@@ -167,11 +169,12 @@ exports.walletTransfer = onCall({ enforceAppCheck: true }, async (request) => {
       tx.create(transferRef, { type: 'wallet_transfer', currency: senderFx.currency, recipientCurrency: recipientFx.currency, requestId, fromUid: senderUid, fromName: senderData.displayName || senderData.name || '', toUid: recipientUid, toName: recipientData.displayName || recipientData.name || '', amount: senderAmount, amountMinor: amountCents, recipientAmount, recipientAmountMinor: recipientAmountCents, baseAmountMyr: baseAmount, senderFxRate: senderFx.buyRate, recipientFxRate: recipientFx.sellRate, note, status: 'completed', participants: [senderUid, recipientUid], createdAt: now });
       tx.set(senderLedgerRef, { uid: senderUid, type: 'wallet_transfer_debit', direction: 'debit', currency: senderFx.currency, amount: senderAmount, amountMinor: amountCents, transferId: transferRef.id, counterpartyUid: recipientUid, balanceAfter: senderAfter / (10 ** senderDigits), baseAmountMyr: baseAmount, fxRate: senderFx.buyRate, note, createdAt: now });
       tx.set(recipientLedgerRef, { uid: recipientUid, type: 'wallet_transfer_credit', direction: 'credit', currency: recipientFx.currency, amount: recipientAmount, amountMinor: recipientAmountCents, transferId: transferRef.id, counterpartyUid: senderUid, balanceAfter: recipientAfter / (10 ** recipientDigits), baseAmountMyr: baseAmount, fxRate: recipientFx.sellRate, note, createdAt: now });
+      return { amount: senderAmount, currency: senderFx.currency, recipientAmount, recipientCurrency: recipientFx.currency, baseAmountMyr: baseAmount, fxRate: senderFx.buyRate, recipientFxRate: recipientFx.sellRate };
     });
     if (!pinValid) throw new HttpsError('permission-denied', 'Incorrect security PIN.');
     if (replay) return { transferId: transferRef.id, ...replayData, recipient: { uid: recipientUid, name: recipient.name || recipient.displayName || 'MySheba Customer' }, replay: true };
-    await logAudit({ action: 'wallet_transfer', targetUid: recipientUid, performedBy: senderUid, performedByRole: 'customer', details: { transferId: transferRef.id, amount: senderAmount, currency: senderFx.currency, recipientAmount, recipientCurrency: recipientFx.currency, baseAmountMyr: baseAmount, fxRate: senderFx.buyRate, recipientFxRate: recipientFx.sellRate, ip } });
+    await logAudit({ action: 'wallet_transfer', targetUid: recipientUid, performedBy: senderUid, performedByRole: 'customer', details: { transferId: transferRef.id, amount: transferResult.amount, currency: transferResult.currency, recipientAmount: transferResult.recipientAmount, recipientCurrency: transferResult.recipientCurrency, baseAmountMyr: transferResult.baseAmountMyr, fxRate: transferResult.fxRate, recipientFxRate: transferResult.recipientFxRate, ip } });
     await checkIpAnomaly(db, senderUid, ip, { action: 'walletTransfer', role: 'customer' });
-    return { transferId: transferRef.id, amount: senderAmount, currency: senderFx.currency, recipientAmount, recipientCurrency: recipientFx.currency, baseAmountMyr: baseAmount, fxRate: senderFx.buyRate, recipientFxRate: recipientFx.sellRate, recipient: { uid: recipientUid, name: recipient.name || recipient.displayName || 'MySheba Customer' } };
+    return { transferId: transferRef.id, ...transferResult, recipient: { uid: recipientUid, name: recipient.name || recipient.displayName || 'MySheba Customer' } };
   } catch (err) { if (err instanceof HttpsError) throw err; await logServerError('walletTransfer', err, { userId: senderUid, recipientUid }); throw new HttpsError('internal', 'Could not complete the wallet transfer.'); }
 });
