@@ -1,10 +1,12 @@
 import type { LucideIcon } from 'lucide-react';
+import type { AdminRole } from '../contexts/AuthContext';
+import type { Capability } from '../services/accessControlService';
 import {
-  LayoutDashboard, Users, SlidersHorizontal, BadgeCheck, ShieldAlert, MessageSquareWarning,
+  LayoutDashboard, Users, SlidersHorizontal, BadgeCheck, ShieldAlert,
   MessageCircle, LifeBuoy, BarChart3, Tag, Wallet, Megaphone, BellRing, LayoutGrid, Layers,
-  CreditCard, Coins, Smartphone, PercentCircle, Receipt, Plane, Send, Building2, LineChart, Lock,
-  Activity, Search, TriangleAlert, ClipboardList, Headphones, Store, BriefcaseBusiness, Banknote,
-  Network, TrendingUp, ScrollText, Settings2, ShieldCheck, Gauge, Workflow,
+  CreditCard, Coins, Smartphone, PercentCircle, Receipt, Plane, Send, LineChart, Lock,
+  Activity, Search, TriangleAlert, ClipboardList, Headphones, BriefcaseBusiness, Banknote,
+  Network, TrendingUp, ScrollText, Settings2, ShieldCheck, Gauge, Workflow, KeyRound,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -21,6 +23,137 @@ export interface NavGroup {
   accent: 'primary' | 'secondary' | 'warning' | 'danger' | 'success' | 'purple';
   items: NavItem[];
 }
+
+// ---------------------------------------------------------------------
+// Who may open what.
+//
+// Screens are gated by capability, not by role name, so a superadmin's
+// per-user grants and revokes (Access Control) change what someone sees the
+// moment they are saved. Each screen lists the capabilities that open it -
+// any one is enough. SUPERADMIN screens are governance and are never
+// grantable. A screen not listed here needs 'users', which keeps a newly
+// added screen closed to support and finance until someone decides otherwise.
+// ---------------------------------------------------------------------
+
+export interface Access {
+  role: AdminRole | undefined;
+  capabilities: readonly Capability[];
+}
+
+const SUPERADMIN = 'superadmin-only' as const;
+type Requirement = readonly Capability[] | typeof SUPERADMIN | 'everyone';
+
+export const PATH_ACCESS: Record<string, Requirement> = {
+  '/': 'everyone',
+
+  // Support
+  '/support': ['support'],
+  '/support/messages': ['support'],
+  '/support-operations': ['support'],
+  '/operations': ['support'],
+  '/inquiries': ['support'],
+  '/announcements': ['support'],
+  '/communications': ['support'],
+  '/notification-delivery': ['support'],
+
+  // Orders and money. Transactions serve both: order handling and finance.
+  '/transactions': ['orders', 'finance'],
+  '/service-operations': ['orders'],
+  '/financial': ['finance'],
+  '/wallet-settlement': ['finance'],
+  '/fraud-risk': ['finance'],
+  '/topup': ['finance'],
+  '/transfer-points': ['finance'],
+
+  // Users
+  '/users': ['users'],
+  '/user-operations': ['users'],
+  '/advanced-user-operations': ['users'],
+  '/kyc-operations': ['users'],
+  '/verification': ['users'],
+  '/feature-access': ['users'],
+  '/investigation': ['users'],
+  '/security': ['users'],
+
+  // Settings
+  '/config/rates': ['settings'],
+  '/config/pricing': ['settings'],
+  '/config/payments': ['settings'],
+  '/config/salary': ['settings'],
+  '/config/banners': ['settings'],
+  '/config/categories': ['settings'],
+  '/config/modules': ['settings'],
+  '/config/wallet-exchange': SUPERADMIN,
+
+  // Reports
+  '/reports': ['reports'],
+  '/analytics': ['reports'],
+  '/growth': ['reports'],
+  '/executive': ['reports'],
+  '/alerts': ['reports'],
+
+  // Superadmin governance
+  '/governance': SUPERADMIN,
+  '/platform-control': SUPERADMIN,
+  '/role-permissions': SUPERADMIN,
+  '/tool-access': SUPERADMIN,
+  '/access-control': SUPERADMIN,
+  '/audit': SUPERADMIN,
+  '/activity-center': SUPERADMIN,
+  '/activity': SUPERADMIN,
+  '/system-health': SUPERADMIN,
+  '/devices': SUPERADMIN,
+  '/financial-risk': SUPERADMIN,
+};
+
+// A detail screen (e.g. /support/messages/abc) follows its nearest listed
+// parent; the dashboard's 'everyone' is never inherited.
+function requirementFor(path: string): Requirement {
+  if (PATH_ACCESS[path]) return PATH_ACCESS[path];
+  const parts = path.split('/');
+  while (parts.length > 2) {
+    parts.pop();
+    const parent = parts.join('/');
+    if (PATH_ACCESS[parent]) return PATH_ACCESS[parent];
+  }
+  return ['users'];
+}
+
+export function canAccess(path: string, access: Access): boolean {
+  if (!access.role) return false;
+  if (access.role === 'superadmin') return true;
+  const need = requirementFor(path);
+  if (need === 'everyone') return true;
+  if (need === SUPERADMIN) return false;
+  return need.some((cap) => access.capabilities.includes(cap));
+}
+
+// First screen to try for each capability, in the order a role's landing
+// page is chosen.
+const LANDING_BY_CAPABILITY: [Capability, string][] = [
+  ['support', '/support'],
+  ['finance', '/transactions'],
+  ['orders', '/transactions'],
+  ['users', '/users'],
+  ['settings', '/config/rates'],
+  ['reports', '/reports'],
+];
+
+/** Where someone lands after signing in, or when they open a screen they may
+ * not see. Admins and superadmins land on the dashboard; the focused staff
+ * roles land on their own work. */
+export function landingPathFor(access: Access): string {
+  if (access.role === 'admin' || access.role === 'superadmin') return '/';
+  const hit = LANDING_BY_CAPABILITY.find(([cap]) => access.capabilities.includes(cap));
+  return hit ? hit[1] : '/';
+}
+
+export const ROLE_LABELS: Record<AdminRole, string> = {
+  superadmin: 'Superadmin',
+  admin: 'Admin',
+  support: 'Support Agent',
+  finance: 'Finance',
+};
 
 export const navGroups: NavGroup[] = [
   { label: 'Overview', accent: 'primary', items: [
@@ -40,7 +173,6 @@ export const navGroups: NavGroup[] = [
   { label: 'Users & Access', accent: 'secondary', items: [
     { label: 'Wallet Transfer', path: '/transfer-points', icon: Send, enabled: true },
     { label: 'Feature Access', path: '/feature-access', icon: SlidersHorizontal, enabled: true },
-    { label: 'Business Profiles', path: '/business-profiles', icon: Building2, enabled: true },
   ] },
   { label: 'Verification & Moderation', accent: 'warning', items: [
     { label: 'Identity Verification', path: '/verification', icon: BadgeCheck, enabled: true },
@@ -50,6 +182,7 @@ export const navGroups: NavGroup[] = [
     { label: 'Financial Control', path: '/financial', icon: Banknote, allowedRoles: ['admin','superadmin','finance'], enabled: true },
     { label: 'Wallet Settlement', path: '/wallet-settlement', icon: Wallet, allowedRoles: ['admin','superadmin','finance'], enabled: true },
     { label: 'Fraud & Risk', path: '/fraud-risk', icon: ShieldAlert, allowedRoles: ['admin','superadmin','finance'], enabled: true },
+    { label: 'Point Top-Up', path: '/topup', icon: Coins, enabled: true },
     { label: 'Financial Risk Controls', path: '/financial-risk', icon: Lock, superadminOnly: true, enabled: true },
   ] },
   { label: 'Support & Communications', accent: 'danger', items: [
@@ -78,11 +211,11 @@ export const navGroups: NavGroup[] = [
     { label: 'Governance Center', path: '/governance', icon: Settings2, superadminOnly: true, enabled: true },
     { label: 'Platform Control', path: '/platform-control', icon: BriefcaseBusiness, superadminOnly: true, enabled: true },
     { label: 'Role & Permissions', path: '/role-permissions', icon: Network, superadminOnly: true, enabled: true },
+    { label: 'Access Control', path: '/access-control', icon: KeyRound, superadminOnly: true, enabled: true },
     { label: 'Tool Access', path: '/tool-access', icon: Lock, superadminOnly: true, enabled: true },
     { label: 'Audit & Compliance', path: '/audit', icon: ScrollText, superadminOnly: true, enabled: true },
     { label: 'Activity Center', path: '/activity-center', icon: Activity, superadminOnly: true, enabled: true },
     { label: 'System Health', path: '/system-health', icon: Activity, superadminOnly: true, enabled: true },
     { label: 'Device Sessions', path: '/devices', icon: Smartphone, superadminOnly: true, enabled: true },
-    { label: 'Point Top-Up', path: '/topup', icon: Coins, superadminOnly: true, enabled: true },
   ] },
 ];
