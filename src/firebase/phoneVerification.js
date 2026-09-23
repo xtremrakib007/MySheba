@@ -143,19 +143,16 @@ export async function confirmPhoneOtp(confirmation, code) {
 function friendlyPhoneAuthError(err) {
   const code = String(err?.code || '').toLowerCase();
   const rawMessage = String(err?.message || '');
-  const detail = code ? ` [Firebase: ${code}]` : '';
-
-  if (code === 'auth/unknown' && /code\s*:?\s*39/i.test(rawMessage)) {
-    return 'Firebase has temporarily rate-limited SMS verification for this phone number or device. Do not keep retrying; wait for the Firebase limit to clear, then request one new code.' + detail;
+  if (code === 'auth/unknown' && /code\\s*:?\\s*39/i.test(rawMessage)) {
+    return 'SMS verification is temporarily unavailable for this number. Please wait and try again later.';
   }
-  if (code.includes('invalid-phone')) return 'Please enter a valid international phone number.' + detail;
-  if (code.includes('missing-phone')) return 'Please enter your phone number.' + detail;
-  if (code.includes('too-many') || code.includes('quota')) return 'Too many SMS verification attempts. Please wait and try again later.' + detail;
-  if (code.includes('invalid-verification-code')) return 'Incorrect SMS code. Please check the latest SMS and try again.' + detail;
-  if (code.includes('code-expired') || code.includes('session-expired')) return 'That SMS code has expired. Please request a new code.' + detail;
-  if (code.includes('operation-not-allowed')) return 'Firebase Phone Authentication is not enabled. Enable Phone in Firebase Authentication.' + detail;
-  if (code.includes('app-not-authorized')) return 'This MySheba Android release is not authorized for Firebase Phone Auth. Add the release SHA-1/SHA-256 to Firebase and rebuild.' + detail;
-  if (code.includes('captcha') || code.includes('play-integrity')) return 'Firebase app verification failed. Check Google Play services and the Android SHA-256/SHA-1 configuration.' + detail;
-  if (code.includes('network')) return 'Network error. Check your connection and try again.' + detail;
-  return (err?.message || 'Could not verify your phone number. Please try again.') + detail;
-}
+  if (code.includes('invalid-phone')) return 'Please enter a valid phone number.';
+  if (code.includes('missing-phone')) return 'Please enter your phone number.';
+  if (code.includes('too-many') || code.includes('quota')) return 'Too many SMS verification attempts. Please wait and try again later.';
+  if (code.includes('invalid-verification-code')) return 'Incorrect SMS code. Please check the latest SMS and try again.';
+  if (code.includes('code-expired') || code.includes('session-expired')) return 'That SMS code has expired. Please request a new code.';
+  if (code.includes('operation-not-allowed')) return 'SMS verification is currently unavailable. Please try email verification instead.';
+  if (code.includes('app-not-authorized') || code.includes('captcha') || code.includes('play-integrity')) return 'SMS verification is currently unavailable on this device. Please try email verification instead.';
+  if (code.includes('network')) return 'Network error. Check your connection and try again.';
+  return 'Could not verify your phone number. Please try again.';
+
