@@ -150,6 +150,25 @@ for (const dir of ['src/components', 'src/screens']) {
   }
 }
 
+// ---- 7. every relative import resolves ----
+// A cleanup that deletes a file but leaves the import behind does not fail
+// a lint or a syntax check - it fails the bundler, which means it is found
+// by whoever next tries to ship. That has now happened twice: the chat
+// cleanup removed ChatListScreen and SupportChatScreen while App.js kept
+// importing them, and categoryService went the same way in AppContext.
+// Both made the app impossible to bundle at all.
+//
+// A failure, not a note: nothing in this list can ship.
+for (const file of [...reachable]) {
+  const src = fs.readFileSync(file, 'utf8');
+  for (const m of src.matchAll(/(?:from\s+|require\(\s*|import\(\s*)['"](\.[^'"]+)['"]/g)) {
+    checked += 1;
+    if (!resolveFrom(path.resolve(path.dirname(file), m[1]))) {
+      check('import', `${path.relative(root, file)} -> '${m[1]}'`, 'no such module - the bundle cannot build', false);
+    }
+  }
+}
+
 // ---- report ----
 console.log(`Navigation audit: ${checked} target(s) checked\n`);
 for (const n of notes) console.log(`  note: ${n}`);

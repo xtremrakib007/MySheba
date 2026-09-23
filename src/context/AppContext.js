@@ -34,7 +34,6 @@ import * as adService from "../firebase/adService";
 import * as supportContactService from "../firebase/supportContactService";
 import * as paymentSettingsService from "../firebase/paymentSettingsService";
 import * as internetPricingService from "../firebase/internetPricingService";
-import * as categoryService from "../firebase/categoryService";
 import * as bannerService from "../firebase/bannerService";
 import * as announcementService from "../firebase/announcementService";
 import * as topupService from "../firebase/topupService";
@@ -788,11 +787,6 @@ export function AppProvider({ children }) {
   // getEligibleAds step 13 (campaignId -> AdCampaign).
   const [adCampaignsById, setAdCampaignsById] = useState({});
 
-  // ---- Local Services categories - admin-editable from Admin > Categories. ----
-  const [serviceCategories, setServiceCategories] = useState(
-    categoryService.DEFAULT_CATEGORIES.services,
-  );
-
   // ---- live point cost per "point deduct" webview key, admin-editable
   // from Admin > Pricing > Point Feature Costs, with optional per-role
   // overrides from Admin > Pricing > Role-Based Pricing, superadmin-only
@@ -1266,16 +1260,6 @@ export function AppProvider({ children }) {
       (list) =>
         setAdCampaignsById(Object.fromEntries(list.map((c) => [c.id, c]))),
       logListenerError("adCampaigns"),
-    );
-    return unsub;
-  }, [authUser]);
-
-  useEffect(() => {
-    if (!authUser) return undefined;
-    const unsub = categoryService.subscribeCategories(
-      "services",
-      setServiceCategories,
-      logListenerError("serviceCategories"),
     );
     return unsub;
   }, [authUser]);
@@ -2380,7 +2364,6 @@ export function AppProvider({ children }) {
     accessWindowHours,
     featureAccess,
     gridManagement,
-    serviceCategories,
     supportContact,
 
     paymentSettings,
