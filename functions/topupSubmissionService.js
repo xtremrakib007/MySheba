@@ -1,6 +1,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
+const { inferWalletCurrency } = require('./walletCurrencyService');
 
 const MAX_AMOUNT = 100000;
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
@@ -115,6 +116,7 @@ exports.submitTopupRequest = onCall({ enforceAppCheck: true }, async request => 
       if (!ALLOWED_ROLES.includes(user.role)) throw new HttpsError('permission-denied', 'This account cannot submit wallet top-ups.');
 
       const topupRef = db.collection('topups').doc();
+      const walletCurrency = inferWalletCurrency(user);
       const now = admin.firestore.FieldValue.serverTimestamp();
       tx.create(topupRef, {
         userId: uid,
