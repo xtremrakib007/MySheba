@@ -26,10 +26,10 @@ jobs:
             exit 1
           }
 
-      - name: Checkout release branch
+      - name: Checkout main branch
         uses: actions/checkout@v4
         with:
-          ref: audit-fix-all-2026-09-16
+          ref: main
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
