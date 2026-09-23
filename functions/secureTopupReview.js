@@ -1,10 +1,11 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { hasCapability } = require('./accessControl');
 const { inferWalletCurrency } = require('./walletCurrencyService');
 const ZERO_DECIMAL_CURRENCIES = new Set(['IDR', 'KHR', 'MMK']);
 const { logAudit, logServerError } = require('./logService');
 
-const ADMIN_ROLES = ['admin', 'superadmin'];
+const ADMIN_ROLES = ['admin', 'superadmin', 'support', 'finance'];
 const ALLOWED_RECIPIENT_ROLES = ['customer', 'dealer', 'reseller'];
 const MAX_AMOUNT = 100000;
 const MONEY_RE = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
@@ -57,7 +58,7 @@ exports.approveTopup = onCall({ enforceAppCheck: true }, async request => {
   const db = admin.firestore();
   const callerSnap = await db.collection('users').doc(uid).get();
   const caller = callerSnap.exists ? callerSnap.data() : null;
-  if (!caller || !activeAccount(caller) || !ADMIN_ROLES.includes(caller.role)) throw new HttpsError('permission-denied', 'Your account cannot approve top-ups.');
+  if (!caller || !activeAccount(caller) || !(await hasCapability(db, uid, caller, 'finance'))) throw new HttpsError('permission-denied', 'Your account cannot approve top-ups.');
   requireSessionMatch(request, caller);
   const topupId = String(request.data?.topupId || request.data?.id || '').trim();
   if (!topupId) throw new HttpsError('invalid-argument', 'topupId is required.');
@@ -67,7 +68,7 @@ exports.approveTopup = onCall({ enforceAppCheck: true }, async request => {
       const [snap, callerTxSnap] = await Promise.all([tx.get(ref), tx.get(db.collection('users').doc(uid))]);
       if (!callerTxSnap.exists || !activeAccount(callerTxSnap.data())) throw new HttpsError('permission-denied', 'Your account is not active.');
       const callerTx = callerTxSnap.data() || {};
-      if (!ADMIN_ROLES.includes(callerTx.role)) throw new HttpsError('permission-denied', 'Your account cannot approve top-ups.');
+      if (!(await hasCapability(db, uid, callerTx, 'finance'))) throw new HttpsError('permission-denied', 'Your account cannot approve top-ups.');
       requireSessionMatch(request, callerTx);
       if (!snap.exists) throw new HttpsError('not-found', 'That top-up request does not exist.');
       const topup = snap.data() || {};
