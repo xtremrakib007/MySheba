@@ -35,6 +35,9 @@
         "firebase.json",
         "**/.*",
         "!.well-known/**"
+      ],
+      "rewrites": [
+        { "source": "**", "destination": "/index.html" }
       ]
     }
   ]
