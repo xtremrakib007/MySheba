@@ -42,6 +42,16 @@ jobs:
       - name: Validate Cloud Functions syntax
         run: npm run audit:functions
 
+      # scripts/test-api-provider-service.js requires functions/apiProviderService.js,
+      # which requires firebase-functions/v2/https - a dependency of functions/,
+      # not of the root package. The root `npm ci` above does not install it, so
+      # this gate failed with MODULE_NOT_FOUND on every run that got far enough
+      # to reach it, and would have blocked the build rather than the build
+      # being blocked by anything it actually tests.
+      - name: Install function dependencies
+        working-directory: functions
+        run: npm ci --no-audit --no-fund
+
       - name: Run API provider regression tests
         run: npm run test:api-provider
 
