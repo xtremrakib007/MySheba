@@ -1,17 +1,17 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Image } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import BannerSlider from '../components/BannerSlider';
 import ServiceGrid from '../components/ServiceGrid';
-import HeaderDecor from '../components/HeaderDecor';
+import AppHeader from '../components/AppHeader';
+import WalletCard from '../components/WalletCard';
 import InfoBar from '../components/InfoBar';
 import RoyalIcon from '../components/RoyalIcon';
 import { formatWalletAmount } from '../firebase/walletExchangeRateService';
 
 export default function CustomerHomeScreen() {
-  const { colors, brandGradient } = useTheme();
+  const { colors } = useTheme();
   const { openSidebar, setScreen, hasUnreadNotifications, profile } = useApp();
   const styles = createStyles(colors);
   const balance = profile?.balance ?? profile?.walletBalance ?? profile?.wallet?.balance ?? 0;
@@ -22,36 +22,15 @@ export default function CustomerHomeScreen() {
 
   return (
     <View style={styles.screen}>
-      <LinearGradient colors={brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
-        <HeaderDecor />
-        <View style={styles.logoArea}>
-          <TouchableOpacity style={styles.menuBtn} onPress={openSidebar} accessibilityRole="button" accessibilityLabel="Open menu">
-            <RoyalIcon name="more" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-          <View style={styles.logoBox}><Image source={require('../../assets/icon.png')} style={styles.logoImage} resizeMode="cover" /></View>
-          <View>
-            <Text style={styles.brand}>MySheba</Text>
-            <Text style={styles.tagline}>{name}</Text>
-          </View>
-        </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.bellBtn} onPress={() => setScreen('notifications')} accessibilityRole="button" accessibilityLabel="Notifications">
-            <RoyalIcon name="support" size={22} color="#FFFFFF" />
-            {hasUnreadNotifications && <View style={styles.bellDot} />}
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
+      <AppHeader unreadCount={hasUnreadNotifications ? 1 : 0} onPressRole={openSidebar} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.walletCard}>
-          <View>
-            <Text style={styles.walletCaption}>Wallet Balance</Text>
-            <Text style={styles.walletBalance}>{Number(balance || 0).toFixed(2)} MYR</Text>
-          </View>
-          <TouchableOpacity style={styles.topUpButton} onPress={() => setScreen('topup')} accessibilityRole="button" accessibilityLabel="Top up">
-            <Text style={styles.topUpText}>+ Top Up</Text>
-          </TouchableOpacity>
-        </View>
+        <WalletCard
+          balance={balance}
+          variant="solid"
+          onAddMoney={() => setScreen('topup')}
+          onTransfer={() => setScreen('transferPoints')}
+        />
 
         {!kycVerified && (
           <View style={styles.kycCard}>

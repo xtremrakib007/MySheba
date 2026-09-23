@@ -11,6 +11,7 @@
     "build:apk": "npm run bump-version && eas build -p android --profile production-apk",
     "build:aab": "npm run bump-version && eas build -p android --profile production",
     "audit:functions": "node --check functions/*.js",
+    "audit:nav": "node scripts/audit-navigation.js",
     "test:api-provider": "node scripts/test-api-provider-service.js",
     "production:check": "node scripts/production-readiness-check.js",
     "test:rules": "node scripts/test-firestore-rules.mjs"

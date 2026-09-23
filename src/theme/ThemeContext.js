@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
 import { Appearance } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getPalette, accentThemes, accentList, DEFAULT_ACCENT, gridStyles, gridStyleList, DEFAULT_GRID_STYLE } from './theme';
+import { getPalette, brandGradientFor, roleThemes, roleList, DEFAULT_ROLE, gridStyles, gridStyleList, DEFAULT_GRID_STYLE } from './theme';
+import { useApp } from '../context/AppContext';
 
 const STORAGE_KEY = 'mysheba.themeMode';
 
@@ -27,11 +28,11 @@ const initialSystemScheme = currentSystemScheme();
 
 const ThemeContext = createContext({
   mode: 'system', resolvedMode: initialSystemScheme,
-  accent: DEFAULT_ACCENT,
-  colors: getPalette(initialSystemScheme, DEFAULT_ACCENT),
-  brandGradient: [getPalette(initialSystemScheme, DEFAULT_ACCENT).primary, getPalette(initialSystemScheme, DEFAULT_ACCENT).secondary],
+  role: DEFAULT_ROLE,
+  colors: getPalette(initialSystemScheme, DEFAULT_ROLE),
+  brandGradient: brandGradientFor(getPalette(initialSystemScheme, DEFAULT_ROLE)),
   isDark: initialSystemScheme === 'dark', isSystemMode: true,
-  setMode: () => {}, toggleMode: () => {}, setAccent: () => {}, accentThemes, accentList,
+  setMode: () => {}, toggleMode: () => {}, roleThemes, roleList,
   gridStyle: DEFAULT_GRID_STYLE, setGridStyle: () => {}, gridStyles, gridStyleList,
   iconStyle: DEFAULT_ICON_STYLE, setIconStyle: () => {}, iconStyles, iconStyleList,
 });
@@ -39,7 +40,12 @@ const ThemeContext = createContext({
 export function ThemeProvider({ children }) {
   const [mode, setModeState] = useState('system');
   const [systemScheme, setSystemScheme] = useState(initialSystemScheme);
-  const [accent] = useState(DEFAULT_ACCENT);
+  // Role, not a stored preference: the palette follows the account that is
+  // signed in. ThemeProvider therefore sits inside AppProvider (see App.js)
+  // so it can read the profile directly - a copy kept in sync by hand would
+  // just be a second source of truth to drift.
+  const { profile } = useApp();
+  const role = roleThemes[profile?.role] ? profile.role : DEFAULT_ROLE;
   const [gridStyle] = useState(DEFAULT_GRID_STYLE);
   const [iconStyle] = useState(DEFAULT_ICON_STYLE);
   const [loaded, setLoaded] = useState(false);
@@ -71,23 +77,22 @@ export function ThemeProvider({ children }) {
     });
   }, []);
   // Product-controlled visual identity: theme color, grid, and icon style are not user-configurable.
-  const setAccent = useCallback(() => {}, []);
   const setGridStyle = useCallback(() => {}, []);
   const setIconStyle = useCallback(() => {}, []);
 
   const value = useMemo(() => {
     const resolvedMode = mode === 'system' ? systemScheme : mode;
-    const palette = getPalette(resolvedMode, accent);
+    const palette = getPalette(resolvedMode, role);
     return {
-      mode, resolvedMode, accent, colors: palette,
-      brandGradient: [palette.primary, palette.secondary],
+      mode, resolvedMode, role, colors: palette,
+      brandGradient: brandGradientFor(palette),
       isDark: resolvedMode === 'dark', isSystemMode: mode === 'system',
-      setMode, toggleMode, setAccent, accentThemes, accentList,
+      setMode, toggleMode, roleThemes, roleList,
       gridStyle, setGridStyle, gridStyles, gridStyleList,
       iconStyle, setIconStyle, iconStyles, iconStyleList,
       loaded,
     };
-  }, [mode, systemScheme, accent, gridStyle, iconStyle, loaded, setMode, toggleMode, setAccent, setGridStyle, setIconStyle]);
+  }, [mode, systemScheme, role, gridStyle, iconStyle, loaded, setMode, toggleMode, setGridStyle, setIconStyle]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

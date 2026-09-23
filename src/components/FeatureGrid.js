@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import { iconFor, iconRenderFor } from '../theme/iconSets';
+import { serviceColor } from '../theme/serviceColors';
 
 const GRID_PADDING = 10;
 const COLUMN_GAP = 8;
@@ -66,7 +67,11 @@ export default function FeatureGrid({ title, items, activeKey, onPress, numColum
               adaptive && styles.itemAdaptive,
               active && styles.itemActive,
             ];
-            const iconBg = isDark ? '#FFFFFF14' : (it.bg || '#E3F2FD');
+            // Each tile carries its own colour, as the mockup draws them; the
+            // wash behind the glyph is that colour so the tint tracks it
+            // instead of being one flat blue for everything.
+            const tileTint = serviceColor(it.key, isDark, null);
+            const iconBg = tileTint ? `${tileTint}24` : (isDark ? '#FFFFFF14' : (it.bg || '#E3F2FD'));
             const labelStyle = [styles.name, active && styles.nameActive, gridStyle === 'neon' && { color: '#FFFFFF' }, gridStyle === 'gradient' && { color: gradientText }];
             const content = (
               <>
@@ -74,7 +79,7 @@ export default function FeatureGrid({ title, items, activeKey, onPress, numColum
                   <View style={styles.badge}><Text style={styles.badgeText}>{String(it.badge)}</Text></View>
                 )}
                 <View style={[styles.iconWrap, { backgroundColor: iconBg }, (gridStyle === 'neon' || gridStyle === 'gradient') && styles.iconWrapBright]}>
-                  <Text style={[styles.iconText, { color: iconColor, fontSize: 27 * iconRender.scale, fontWeight: iconRender.weight }]}>{iconFor(it.key, iconStyle, it.icon)}</Text>
+                  <Text style={[styles.iconText, { color: tileTint || iconColor, fontSize: 27 * iconRender.scale, fontWeight: iconRender.weight }]}>{iconFor(it.key, iconStyle, it.icon)}</Text>
                 </View>
                 <Text style={labelStyle} numberOfLines={2}>{String(it.name || '')}</Text>
               </>

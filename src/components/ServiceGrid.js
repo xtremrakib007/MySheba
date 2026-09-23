@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
+import { serviceColor } from '../theme/serviceColors';
 import { useLanguage } from '../i18n/LanguageContext';
 import * as gridManagementService from '../firebase/gridManagementService';
 import RoyalIcon from './RoyalIcon';
@@ -71,13 +72,16 @@ const STAFF_SERVICES = {
 function asSafeText(value, fallback = '') { return typeof value === 'string' || typeof value === 'number' ? String(value) : fallback; }
 
 export function Tile({ s, onPress, disabled }) {
-  const { colors } = useTheme(); const { t } = useLanguage();
+  const { colors, isDark } = useTheme(); const { t } = useLanguage();
   const safeKey = asSafeText(s?.key, 'service');
   const translated = typeof t === 'function' ? t(`service.${safeKey}`, s?.name) : null;
   const label = asSafeText(translated, asSafeText(s?.name, safeKey));
-  const icon = asSafeText(s?.icon, 'more'); const accent = asSafeText(s?.accent, colors.primary || '#1A73E8');
+  const icon = asSafeText(s?.icon, 'more');
+  // Fixed colour per service, as the mockup draws the grid. RoyalIcon takes
+  // the stroke colour, so this drives the glyph itself, not just the wash.
+  const accent = asSafeText(serviceColor(safeKey, isDark, s?.accent), colors.primary || '#1A73E8');
   return <TouchableOpacity style={[styles.item, { borderColor: colors.tileBorder || `${accent}45`, backgroundColor: colors.tileBg || colors.card }, disabled && styles.itemDisabled]} activeOpacity={0.82} disabled={!!disabled} onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
-    <View style={[styles.iconWrap, { backgroundColor: `${accent}18` }]}><RoyalIcon name={icon} size={52} /></View>
+    <View style={[styles.iconWrap, { backgroundColor: `${accent}2E` }]}><RoyalIcon name={icon} size={52} color={accent} /></View>
     <Text style={[styles.name, { color: colors.text || '#222' }]} numberOfLines={2}>{label}</Text>
   </TouchableOpacity>;
 }
