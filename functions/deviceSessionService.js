@@ -426,10 +426,30 @@ exports.revokeTrustedDevice = onCall({ enforceAppCheck: false }, async (request)
 // attempt is counted atomically before the verifier runs. This keeps the
 // existing verification/link flow intact while making the five-attempt limit
 // effective against repeated guesses.
+// These three layers wrap checkDeviceSession/confirmDeviceSwitch by capturing
+// the previous export and delegating to it. The delegation must use .run().
+//
+// onCall() does not return the handler - it returns an Express-style request
+// handler with the handler attached as .run(). Calling it directly passes a
+// CallableRequest where it expects (req, res), so it throws
+// `TypeError: Cannot read properties of undefined (reading 'on')` before the
+// inner handler ever executes. Every call to checkDeviceSession failed this
+// way: the outer layer logged "Callable request verification passed" and then
+// died on the very next line.
+// These layers wrap checkDeviceSession/confirmDeviceSwitch by capturing the
+// previous export and delegating to it. The delegation must use .run().
+//
+// onCall() does not return the handler - it returns an Express-style request
+// handler with the handler attached as .run(). Calling it directly passes a
+// CallableRequest where (req, res) is expected, so it throws
+// "TypeError: Cannot read properties of undefined (reading 'on')" before the
+// inner handler ever runs. Every call to checkDeviceSession died this way:
+// the outer layer logged "Callable request verification passed" and then
+// failed on the very next line.
 const originalCheckDeviceSession = exports.checkDeviceSession;
 exports.checkDeviceSession = onCall({ enforceAppCheck: false }, async (request) => {
   const data = request.data || {};
-  if (!data.emailOtp) return originalCheckDeviceSession(request);
+  if (!data.emailOtp) return originalCheckDeviceSession.run(request);
 
   const db = getFirestore();
   const uid = requireAuth(request);
@@ -449,7 +469,7 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: false }, async (request) 
     }
     tx.update(ref, { 'pendingAdminEmailChallenge.attempts': attempts + 1 });
   });
-  return originalCheckDeviceSession(request);
+  return originalCheckDeviceSession.run(request);
 });
 
 // confirmDeviceSwitch uses the same email challenge verifier but is a separate
@@ -459,7 +479,7 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: false }, async (request) 
 const originalConfirmDeviceSwitch = exports.confirmDeviceSwitch;
 exports.confirmDeviceSwitch = onCall({ enforceAppCheck: false }, async (request) => {
   const data = request.data || {};
-  if (!data.emailOtp) return originalConfirmDeviceSwitch(request);
+  if (!data.emailOtp) return originalConfirmDeviceSwitch.run(request);
 
   const db = getFirestore();
   const uid = requireAuth(request);
@@ -481,7 +501,7 @@ exports.confirmDeviceSwitch = onCall({ enforceAppCheck: false }, async (request)
     }
     tx.update(ref, { 'pendingAdminEmailChallenge.attempts': attempts + 1 });
   });
-  return originalConfirmDeviceSwitch(request);
+  return originalConfirmDeviceSwitch.run(request);
 });
 
 // Reconcile trusted-device state after the legacy checkDeviceSession path.
@@ -489,7 +509,7 @@ exports.confirmDeviceSwitch = onCall({ enforceAppCheck: false }, async (request)
 // device logins from losing each other through stale trustedDevices snapshots.
 const originalCheckDeviceSessionWithMfa = exports.checkDeviceSession;
 exports.checkDeviceSession = onCall({ enforceAppCheck: false }, async (request) => {
-  const result = await originalCheckDeviceSessionWithMfa(request);
+  const result = await originalCheckDeviceSessionWithMfa.run(request);
   if (result?.requiresOtp) return result;
   const data = request.data || {};
   const deviceId = requireDeviceId(request);
