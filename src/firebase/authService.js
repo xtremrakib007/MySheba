@@ -303,15 +303,55 @@ export async function reauthenticate(currentPassword) {
 }
 
 function friendlyAuthError(err) {
-  const code = err && err.code;
-  if (code === 'auth/user-not-found' || code === 'auth/invalid-credential' || code === 'auth/wrong-password') return 'Incorrect phone number or password.';
-  if (code === 'auth/user-disabled') return 'This account has been suspended. Please contact support.';
-  if (code === 'auth/account-exists-with-different-credential') return 'An account already exists with this email.';
-  if (code === 'auth/too-many-requests') return 'Too many attempts. Please try again later.';
-  if (code === 'auth/network-request-failed') return 'Network error. Check your connection and try again.';
-  if (code === 'auth/weak-password') return 'New password is too weak. Please choose a stronger one.';
-  if (code === 'auth/requires-recent-login') return 'Please sign out and sign back in, then try again.';
-  return err && err.message ? err.message : 'Sign in failed. Please try again.';
+  const code = String(err?.code || '').toLowerCase();
+  const status = Number(err?.status || err?.httpStatus || 0);
+  const raw = String(err?.message || '').toLowerCase();
+
+  // Never return raw Firebase/HTTP/Callable messages to the UI. In
+  // particular, UNAUTHENTICATED/401, App Check, Axios, stack traces and
+  // provider errors are implementation details.
+  if (
+    code === 'auth/user-not-found' ||
+    code === 'auth/invalid-credential' ||
+    code === 'auth/wrong-password' ||
+    code === 'functions/unauthenticated' ||
+    status === 401 ||
+    raw.includes('unauthenticated') ||
+    raw.includes('[401]') ||
+    raw.includes('http 401')
+  ) {
+    return 'Incorrect phone number or password.';
+  }
+  if (code === 'auth/user-disabled' || code === 'functions/permission-denied') {
+    return 'This account is currently unavailable. Please contact support.';
+  }
+  if (code === 'auth/account-exists-with-different-credential') {
+    return 'An account already exists with this email.';
+  }
+  if (code === 'auth/too-many-requests' || code === 'functions/resource-exhausted') {
+    return 'Too many attempts. Please try again later.';
+  }
+  if (
+    code === 'auth/network-request-failed' ||
+    code === 'functions/unavailable' ||
+    code === 'functions/deadline-exceeded' ||
+    code === 'functions/internal' ||
+    raw.includes('network') ||
+    raw.includes('failed to fetch') ||
+    raw.includes('timeout') ||
+    raw.includes('timed out')
+  ) {
+    return 'Unable to connect right now. Please check your internet connection and try again.';
+  }
+  if (code === 'auth/weak-password') {
+    return 'New password is too weak. Please choose a stronger one.';
+  }
+  if (code === 'auth/requires-recent-login') {
+    return 'Please sign out and sign back in, then try again.';
+  }
+
+  // Deliberately generic for every unknown backend/provider failure.
+  return 'We could not complete your sign-in. Please try again.';
 }
 
 // Google Sign-In was intentionally retired from the mobile runtime.
