@@ -161,8 +161,13 @@ async function sendStaffEmailChallenge({ db, uid, email, deviceId, displayName }
       android: { packageName: 'com.satulink.mysheba', installApp: true, minimumVersion: '1' },
     });
   } catch (error) {
+    // Best-effort. The link is a convenience - tap it instead of typing -
+    // but the 6-digit code alone completes the flow. Throwing here meant a
+    // link-generation failure sent no email at all, and since this is the
+    // challenge a customer needs to sign in on a new phone, that left them
+    // with no way through. Send the code without the link instead.
     await logServerError('sendStaffEmailChallenge.generateLink', error, { userId: uid });
-    throw new HttpsError('failed-precondition', 'Could not create the verification link. Please try again.');
+    link = null;
   }
   await ref.update({ pendingAdminEmailChallenge: {
     deviceId,
@@ -177,8 +182,11 @@ async function sendStaffEmailChallenge({ db, uid, email, deviceId, displayName }
   await mailerService.sendEmail({
     to: normalized,
     subject: 'MySheba new-device verification',
-    text: `${greeting}\n\nVerify your new MySheba device:\n${link}\n\nOr enter this 6-digit code in the app:\n${code}\n\nThe code expires in 10 minutes.`,
-    html: `<h2>MySheba new-device verification</h2><p>${greeting}</p><p><a href="${link}">Verify this device</a></p><p><b>6-digit code:</b> ${code}</p><p>The code expires in 10 minutes.</p>`,
+    // The code is the part that always works; the link is included only
+    // when one was generated, so a link failure degrades the mail rather
+    // than replacing it with nothing.
+    text: `${greeting}\n\nYour MySheba verification code is: ${code}\n\nEnter it in the app to verify this device.${link ? `\n\nOr open this link on that device:\n${link}` : ''}\n\nThe code expires in 10 minutes.`,
+    html: `<h2>MySheba new-device verification</h2><p>${greeting}</p><p><b>Your 6-digit code:</b></p><div style="font-size:26px;font-weight:700;letter-spacing:6px">${code}</div>${link ? `<p><a href="${link}">Or verify this device</a></p>` : ''}<p>The code expires in 10 minutes.</p>`,
     context: 'deviceSessionService.staffEmailChallenge',
   });
 }
