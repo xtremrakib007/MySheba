@@ -93,11 +93,18 @@ const adminFeat = read('src/screens/AdminFeaturesScreen.js');
 const screenFeatures = new Set(
   ((adminFeat.match(/SCREEN_FEATURES = \[([^\]]*)\]/) || [, ''])[1].match(/[a-zA-Z]+/g)) || []
 );
+// A tile key and its screen name are not always the same; openItem consults
+// SCREEN_FOR for the ones that differ, so read that too rather than assuming
+// key === screen and reporting a working tile as broken.
+const screenFor = Object.fromEntries(
+  [...((adminFeat.match(/SCREEN_FOR = \{([^}]*)\}/) || [, ''])[1]).matchAll(/([a-zA-Z]+)\s*:\s*'([a-zA-Z]+)'/g)].map((m) => [m[1], m[2]])
+);
 for (const group of ['OPERATIONS', 'FINANCE', 'USERS', 'SYSTEM']) {
   for (const key of arrayKeys(adminFeat, group)) {
     if (key === 'rates') { checked += 1; continue; } // openItem intercepts it
-    const ok = screenFeatures.has(key) ? screens.has(key) : adminTabs.has(key);
-    const via = screenFeatures.has(key) ? 'setScreen, but no such screen' : 'adminTab, but AdminHomeScreen has no branch';
+    const target = screenFor[key] || key;
+    const ok = screenFeatures.has(key) ? screens.has(target) : adminTabs.has(key);
+    const via = screenFeatures.has(key) ? `setScreen('${target}'), but no such screen` : 'adminTab, but AdminHomeScreen has no branch';
     check(`admin/${group.toLowerCase()}`, key, via, ok);
   }
 }

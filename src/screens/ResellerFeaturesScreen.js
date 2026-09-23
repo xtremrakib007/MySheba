@@ -12,7 +12,7 @@ import * as gridManagementService from '../firebase/gridManagementService';
 // reached through the "Reseller Features" tile on ResellerHomeScreen.
 const DASHBOARD_TOOL_DEFS = [
   { key: 'pending', icon: '⏳', bg: '#FFF8E1', name: 'Pending' },
-  { key: 'sent', icon: '➡️', bg: '#E3F2FD', name: 'Sent to Dealer' },
+  { key: 'processing', icon: '➡️', bg: '#E3F2FD', name: 'Sent to Dealer' },
 ];
 
 export default function ResellerFeaturesScreen() {
@@ -35,7 +35,7 @@ export default function ResellerFeaturesScreen() {
   const dashboardBadges = {
     pending: resellerTxs.filter((t) => !t.dealerId).length || undefined,
   };
-  const dashboardTools = DASHBOARD_TOOL_DEFS.filter((t) => gridManagementService.isGridActive(gridManagement, t.key === 'sent' ? 'history' : t.key)).map((t) => ({ ...t, badge: dashboardBadges[t.key] }));
+  const dashboardTools = DASHBOARD_TOOL_DEFS.filter((t) => gridManagementService.isGridActive(gridManagement, t.key === 'processing' ? 'history' : t.key)).map((t) => ({ ...t, badge: dashboardBadges[t.key] }));
 
   const openDashboardTile = (key) => {
     setResellerTab(key);
