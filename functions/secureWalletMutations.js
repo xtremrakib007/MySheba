@@ -1,10 +1,12 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { hasCapability } = require('./accessControl');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { logAudit, logServerError } = require('./logService');
 
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
-const ADMIN_ROLES = ['admin', 'superadmin'];
+// Staff who may hold the 'finance' capability (functions/accessControl.js).
+const ADMIN_ROLES = ['admin', 'superadmin', 'support', 'finance'];
 const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const DEVICE_ID_RE = /^[A-Za-z0-9-]{16,100}$/;
 function requireSessionMatch(request, user) {
@@ -37,6 +39,12 @@ exports.createSelfTopup = onCall({ enforceAppCheck: true }, async (request) => {
   if (amount === null) throw new HttpsError('invalid-argument', 'Enter a valid amount.');
   await checkVelocity(db, uid, 'createSelfTopup', { ip: getClientIp(request) });
 
+  // Crediting your own wallet is a payment operation.
+  const callerProfileSnap = await db.collection('users').doc(uid).get();
+  if (!callerProfileSnap.exists || !(await hasCapability(db, uid, callerProfileSnap.data(), 'finance'))) {
+    throw new HttpsError('permission-denied', 'Your account cannot self top-up.');
+  }
+
   const callerRef = db.collection('users').doc(uid);
   const opRef = db.collection('walletOperations').doc(`${uid}_createSelfTopup_${requestId}`);
   const topupRef = db.collection('selfTopups').doc();
@@ -50,7 +58,7 @@ exports.createSelfTopup = onCall({ enforceAppCheck: true }, async (request) => {
       const caller = callerSnap.data() || {};
       requireSessionMatch(request, caller);
       callerRole = caller.role;
-      if (!active(caller) || !ADMIN_ROLES.includes(caller.role)) throw new HttpsError('permission-denied', 'Only active admin/superadmin accounts can self top-up.');
+      if (!active(caller) || !ADMIN_ROLES.includes(caller.role)) throw new HttpsError('permission-denied', 'Your account cannot self top-up.');
 
       const opSnap = await tx.get(opRef);
       if (opSnap.exists) {
