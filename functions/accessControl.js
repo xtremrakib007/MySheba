@@ -28,11 +28,11 @@ const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const CAPABILITIES = ['support', 'orders', 'finance', 'users', 'settings', 'reports'];
 
-// Built on the role sheet. Admin runs support, orders, users, settings and
-// reports; finance stays out of an admin's defaults and has to be granted.
-// Support works support; finance works money.
+// Built on the role sheet. Admin runs every staff area by default; a
+// superadmin can narrow that per role or per person. Support works support;
+// finance works money.
 const BUILT_IN_DEFAULTS = {
-  admin: ['support', 'orders', 'users', 'settings', 'reports'],
+  admin: ['support', 'orders', 'finance', 'users', 'settings', 'reports'],
   support: ['support'],
   finance: ['finance', 'reports'],
 };

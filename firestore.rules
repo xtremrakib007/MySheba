@@ -27,7 +27,7 @@ service cloud.firestore {
     // only by the audited setRoleDefaults / setUserAccessOverride callables.
     function accessDoc() { return /databases/$(database)/documents/settings/accessControl; }
     function overrideDoc() { return /databases/$(database)/documents/accessOverrides/$(request.auth.uid); }
-    function builtInCaps(r) { return r == 'admin' ? ['support', 'orders', 'users', 'settings', 'reports'] : r == 'support' ? ['support'] : r == 'finance' ? ['finance', 'reports'] : []; }
+    function builtInCaps(r) { return r == 'admin' ? ['support', 'orders', 'finance', 'users', 'settings', 'reports'] : r == 'support' ? ['support'] : r == 'finance' ? ['finance', 'reports'] : []; }
     function roleCaps() { return exists(accessDoc()) && get(accessDoc()).data.get('roleDefaults', {}).get(myRole(), null) != null ? get(accessDoc()).data.roleDefaults[myRole()] : builtInCaps(myRole()); }
     function grantedCaps() { return exists(overrideDoc()) ? get(overrideDoc()).data.get('grant', []) : []; }
     function revokedCaps() { return exists(overrideDoc()) ? get(overrideDoc()).data.get('revoke', []) : []; }

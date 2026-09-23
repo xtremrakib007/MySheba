@@ -26,7 +26,7 @@ export const CONFIGURABLE_ROLES: ConfigurableRole[] = ['admin', 'support', 'fina
 
 // Built-in defaults. A superadmin can change them in Access Control.
 export const BUILT_IN_DEFAULTS: Record<ConfigurableRole, Capability[]> = {
-  admin: ['support', 'orders', 'users', 'settings', 'reports'],
+  admin: ['support', 'orders', 'finance', 'users', 'settings', 'reports'],
   support: ['support'],
   finance: ['finance', 'reports'],
 };

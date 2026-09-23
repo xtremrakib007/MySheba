@@ -10,7 +10,7 @@ export const CAPABILITIES = ['support', 'orders', 'finance', 'users', 'settings'
 
 // Built-in defaults; a superadmin can change them in Access Control.
 export const BUILT_IN_DEFAULTS = {
-  admin: ['support', 'orders', 'users', 'settings', 'reports'],
+  admin: ['support', 'orders', 'finance', 'users', 'settings', 'reports'],
   support: ['support'],
   finance: ['finance', 'reports'],
 };

@@ -105,7 +105,7 @@ const db = admin.firestore();
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const ADMIN_ROLES = ['admin', 'superadmin'];
 // New work is pushed to the roles whose defaults own it (functions/accessControl.js).
-const PAYMENT_ROLES = ['superadmin', 'finance'];
+const PAYMENT_ROLES = ['superadmin', 'admin', 'finance'];
 const SUPPORT_ROLES = ['superadmin', 'admin', 'support'];
 function chunk(arr, size) { const out = []; for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size)); return out; }
 function isActiveProfile(profile) { return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto; }
