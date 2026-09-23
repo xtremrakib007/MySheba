@@ -153,17 +153,6 @@ async function sendStaffEmailChallenge({ db, uid, email, deviceId, displayName }
     throw new HttpsError('resource-exhausted', 'Please wait before requesting another verification email.');
   }
   const code = otp();
-  let link;
-  try {
-    link = await admin.auth().generateSignInWithEmailLink(normalized, {
-      url: 'https://mysheba.top/verifyEmail',
-      handleCodeInApp: true,
-      android: { packageName: 'com.satulink.mysheba', installApp: true, minimumVersion: '1' },
-    });
-  } catch (error) {
-    await logServerError('sendStaffEmailChallenge.generateLink', error, { userId: uid });
-    throw new HttpsError('failed-precondition', 'Could not create the verification link. Please try again.');
-  }
   await ref.update({ pendingAdminEmailChallenge: {
     deviceId,
     reason: 'new_device',
@@ -176,11 +165,11 @@ async function sendStaffEmailChallenge({ db, uid, email, deviceId, displayName }
   const greeting = String(displayName || '').trim() ? `Hello ${String(displayName).trim()},` : 'Hello,';
   await mailerService.sendEmail({
     to: normalized,
-    subject: 'MySheba new-device verification',
-    text: `${greeting}\n\nVerify your new MySheba device:\n${link}\n\nOr enter this 6-digit code in the app:\n${code}\n\nThe code expires in 10 minutes.`,
-    html: `<h2>MySheba new-device verification</h2><p>${greeting}</p><p><a href="${link}">Verify this device</a></p><p><b>6-digit code:</b> ${code}</p><p>The code expires in 10 minutes.</p>`,
+    subject: 'MySheba new-device verification code',
+    text: `${greeting}\n\nYour MySheba verification code is: ${code}\n\nEnter this 6-digit code in the MySheba app to verify this device.\n\nThe code expires in 10 minutes.`,
+    html: `<h2>MySheba new-device verification</h2><p>${greeting}</p><p>Your MySheba verification code is:</p><div style="font-size:28px;font-weight:700;letter-spacing:8px;padding:14px 18px;background:#f3f4f6;border-radius:8px;text-align:center">${code}</div><p>Enter this 6-digit code in the MySheba app. The code expires in 10 minutes.</p>`,
     context: 'deviceSessionService.staffEmailChallenge',
-  });
+  });;
 }
 
 function verifyStaffEmailOtp(challenge, code, deviceId, email) {
