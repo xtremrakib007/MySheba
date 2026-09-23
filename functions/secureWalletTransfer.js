@@ -45,7 +45,7 @@ exports.walletTransfer = onCall({ enforceAppCheck: false }, async (request) => {
       throw new HttpsError('failed-precondition', 'That request ID is already in use.');
     }
     if (existing.status === 'completed' && existing.transferId) {
-      return { transferId: existing.transferId, amount: existing.amount || 0, currency: 'MYR', replay: true };
+      return { transferId: existing.transferId, amount: Number(existing.amount || 0), currency: existing.currency || 'MYR', recipientAmount: Number(existing.recipientAmount || 0), recipientCurrency: existing.recipientCurrency || 'MYR', baseAmountMyr: Number(existing.baseAmountMyr || 0), fxRate: Number(existing.fxRate || 0), recipientFxRate: Number(existing.recipientFxRate || 0), replay: true };
     }
 
     const recovered = await db.collection('walletTransfers')
@@ -60,9 +60,15 @@ exports.walletTransfer = onCall({ enforceAppCheck: false }, async (request) => {
         status: 'completed',
         transferId: doc.id,
         amount: Number(data.amount || 0),
+        currency: data.currency || 'MYR',
+        recipientAmount: Number(data.recipientAmount || 0),
+        recipientCurrency: data.recipientCurrency || 'MYR',
+        baseAmountMyr: Number(data.baseAmountMyr || 0),
+        fxRate: Number(data.senderFxRate || 0),
+        recipientFxRate: Number(data.recipientFxRate || 0),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      return { transferId: doc.id, amount: Number(data.amount || 0), currency: data.currency || 'MYR', replay: true };
+      return { transferId: doc.id, amount: Number(data.amount || 0), currency: data.currency || 'MYR', recipientAmount: Number(data.recipientAmount || 0), recipientCurrency: data.recipientCurrency || 'MYR', baseAmountMyr: Number(data.baseAmountMyr || 0), fxRate: Number(data.senderFxRate || 0), recipientFxRate: Number(data.recipientFxRate || 0), replay: true };
     }
     throw new HttpsError('aborted', 'This transfer is already being processed. Please wait and check your transfer history.');
   }
@@ -79,6 +85,12 @@ exports.walletTransfer = onCall({ enforceAppCheck: false }, async (request) => {
         status: 'completed',
         transferId: result?.transferId || null,
         amount: Number(result?.amount || 0),
+        currency: result?.currency || 'MYR',
+        recipientAmount: Number(result?.recipientAmount || 0),
+        recipientCurrency: result?.recipientCurrency || 'MYR',
+        baseAmountMyr: Number(result?.baseAmountMyr || 0),
+        fxRate: Number(result?.fxRate || 0),
+        recipientFxRate: Number(result?.recipientFxRate || 0),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       if (result?.transferId) {
