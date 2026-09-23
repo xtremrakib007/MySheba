@@ -25,7 +25,7 @@
 // than to a blank tile.
 
 const SYMBOLS_FILLED = {
-  recharge: '↻', mobilebanking: '▣', internet: '◉', remittance: '⇄',
+  recharge: '↻', mobilebanking: '▣', internet: '◉', remittance: '⇄', billpayment: '▤',
   bus: '▬', train: '▦', flight: '✈', fomema: '✚', visa: '◩',
   mydigital: '◤', passport: '▮', moreFeaturesTile: '✦',
   myAccount: '●', profile: '◆', support: '☏', history: '◕',
@@ -39,7 +39,7 @@ const SYMBOLS_FILLED = {
 };
 
 const SYMBOLS_OUTLINE = {
-  recharge: '↺', mobilebanking: '▢', internet: '◎', remittance: '⇆',
+  recharge: '↺', mobilebanking: '▢', internet: '◎', remittance: '⇆', billpayment: '▥',
   bus: '▭', train: '▧', flight: '✈', fomema: '✛', visa: '◪',
   mydigital: '◥', passport: '▯', moreFeaturesTile: '✧',
   myAccount: '○', profile: '◇', support: '☎', history: '◔',
@@ -53,7 +53,7 @@ const SYMBOLS_OUTLINE = {
 };
 
 const BUSINESS = {
-  recharge: '📶', mobilebanking: '🏛️', internet: '🌐', remittance: '🏦',
+  recharge: '📶', mobilebanking: '🏛️', internet: '🌐', remittance: '🏦', billpayment: '🧾',
   bus: '🚍', train: '🚄', flight: '🛫', fomema: '⚕️', visa: '📑',
   mydigital: '🛃', passport: '📘', moreFeaturesTile: '➕',
   myAccount: '💼', profile: '🪪', support: '📞', history: '🗂️',
@@ -67,7 +67,7 @@ const BUSINESS = {
 };
 
 const PLAYFUL = {
-  recharge: '⚡', mobilebanking: '🐷', internet: '🛰️', remittance: '🎁',
+  recharge: '⚡', mobilebanking: '🐷', internet: '🛰️', remittance: '🎁', billpayment: '🧾',
   bus: '🚐', train: '🚂', flight: '🛩️', fomema: '🩺', visa: '🗺️',
   mydigital: '🛬', passport: '🧳', moreFeaturesTile: '🎉',
   myAccount: '🙂', profile: '🧑', support: '🤝', history: '📜',
@@ -81,7 +81,7 @@ const PLAYFUL = {
 };
 
 const COLORFUL = {
-  recharge: '🔋', mobilebanking: '💳', internet: '📶', remittance: '💵',
+  recharge: '🔋', mobilebanking: '💳', internet: '📶', remittance: '💵', billpayment: '🧾',
   bus: '🚌', train: '🚅', flight: '✈️', fomema: '🧬', visa: '🛂',
   mydigital: '🎫', passport: '📕', moreFeaturesTile: '🌈',
   myAccount: '🧑‍💻', profile: '🎭', support: '🎧', history: '📚',

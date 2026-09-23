@@ -19,14 +19,31 @@ import {
   type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
+import { REPORT_KINDS } from './moderationService';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const REPORT_KINDS: Record<string, { label: string; collection: string }> = {
+// The content modules the analytics overview counts. `closedStatus` is the
+// status value that takes an item out of circulation on that surface; a
+// module without one only reports total/active.
+const MODULES: Record<string, { label: string; icon: string; collection: string; closedStatus: string | null; closedLabel: string | null }> = {
+  listings: { label: 'Buy & Sell', icon: '🛒', collection: 'listings', closedStatus: 'sold', closedLabel: 'Sold' },
+  properties: { label: 'Property', icon: '🏠', collection: 'properties', closedStatus: 'rented', closedLabel: 'Rented' },
+  roomshare: { label: 'Room Sharing', icon: '🛏️', collection: 'roomshareRequests', closedStatus: 'filled', closedLabel: 'Filled' },
+  services: { label: 'Local Services', icon: '🧰', collection: 'serviceProviders', closedStatus: null, closedLabel: null },
+  posts: { label: 'Community', icon: '💬', collection: 'posts', closedStatus: null, closedLabel: null },
 };
 
-const MODULES: Record<string, { label: string; icon: string; collection: string; closedStatus: string | null; closedLabel: string | null }> = {
-};
+/** Reads a collection without letting one unavailable surface fail the
+ * whole dashboard - same tolerance countOf() applies to counts. */
+async function safeGetDocs(collectionName: string, ...constraints: Parameters<typeof query> extends [unknown, ...infer R] ? R : never[]) {
+  try {
+    return (await getDocs(query(collection(db, collectionName), ...constraints))).docs;
+  } catch (err) {
+    console.warn(`Could not read ${collectionName}:`, err);
+    return [];
+  }
+}
 
 async function countOf(collectionName: string, ...constraints: any[]): Promise<number> {
   try {
@@ -71,7 +88,7 @@ export interface UserStats {
 }
 
 async function getUserStats(): Promise<UserStats> {
-  const roles = ['customer', 'dealer', 'subdealer', 'reseller', 'admin', 'superadmin'];
+  const roles = ['customer', 'dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin'];
   const [total, verified, ...byRole] = await Promise.all([
     countOf('users'),
     countOf('users', where('verified', '==', true)),
@@ -96,6 +113,8 @@ async function getReportStats(): Promise<ReportStats> {
 
 async function getReviewStats(): Promise<{ count: number; avg: number }> {
   const [sellerSnap, providerSnap] = await Promise.all([
+    safeGetDocs('sellerRatings'),
+    safeGetDocs('serviceProviders'),
   ]);
   let count = 0;
   let sum = 0;
@@ -146,6 +165,7 @@ export interface CategoryCount { category: string; count: number; }
 async function getTopCategories(): Promise<CategoryCount[]> {
   try {
     const tally: Record<string, number> = {};
+    const snap = await safeGetDocs('listings', orderBy('createdAt', 'desc'), limit(500));
     snap.forEach((d) => {
       const c = d.data().category || 'Other';
       tally[c] = (tally[c] || 0) + 1;

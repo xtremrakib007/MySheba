@@ -3,6 +3,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logAudit, logServerError } = require('./logService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+const { hasCapability } = require('./accessControl');
 
 function activeAccount(user) {
   return user && user.suspended !== true && user.inactive !== true && user.disabled !== true && !user.mergedInto;
@@ -16,10 +17,10 @@ function requireAuth(request) {
 async function requireAdmin(db, callerUid) {
   const snap = await db.collection('users').doc(callerUid).get();
   const caller = snap.exists ? snap.data() : null;
-  if (!caller || !['admin', 'superadmin'].includes(caller.role)) {
-    throw new HttpsError('permission-denied', 'Only an admin can manage Business Profiles.');
+  if (!caller || !activeAccount(caller)) throw new HttpsError('permission-denied', 'This account is not active.');
+  if (!(await hasCapability(db, callerUid, caller, 'users'))) {
+    throw new HttpsError('permission-denied', 'Your account cannot manage Business Profiles.');
   }
-  if (!activeAccount(caller)) throw new HttpsError('permission-denied', 'This admin account is not active.');
   return caller;
 }
 
@@ -43,7 +44,7 @@ exports.setBusinessProfileStatus = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }
         tx.get(bizRef),
       ]);
       const latestCaller = callerSnap.exists ? callerSnap.data() : null;
-      if (!latestCaller || !['admin', 'superadmin'].includes(latestCaller.role) || !activeAccount(latestCaller)) {
+      if (!latestCaller || !['admin', 'superadmin', 'support', 'finance'].includes(latestCaller.role) || !activeAccount(latestCaller)) {
         throw new HttpsError('permission-denied', 'This admin account is not active.');
       }
       if (!targetSnap.exists) throw new HttpsError('not-found', 'That user account no longer exists.');

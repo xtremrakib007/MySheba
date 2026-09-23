@@ -4,6 +4,7 @@ const { logAudit, logServerError } = require('./logService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { checkIpAnomaly } = require('./anomalyService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+const { hasCapability } = require('./accessControl');
 
 const KEY_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const MAX_TRANSFER = 100000;
@@ -61,6 +62,9 @@ exports.transferPoints = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (r
   const caller = await profile(db, callerUid);
   if (!caller || !['dealer', 'admin', 'superadmin'].includes(caller.role) || !isActiveAccount(caller)) {
     throw new HttpsError('permission-denied', 'Your account cannot transfer points.');
+  }
+  if (caller.role !== 'dealer' && !(await hasCapability(db, callerUid, caller, 'finance'))) {
+    throw new HttpsError('permission-denied', 'Your account does not handle payments.');
   }
   const recipient = await profile(db, toUid);
   if (!recipient || recipient.mergedInto) throw new HttpsError('not-found', 'That account does not exist.');

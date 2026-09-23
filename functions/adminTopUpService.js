@@ -2,9 +2,10 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logAudit, logServerError } = require('./logService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+const { hasCapability } = require('./accessControl');
 
 const MAX_AMOUNT = 100000;
-const ADMIN_ROLES = ['admin', 'superadmin'];
+const STAFF_ROLES = ['admin', 'superadmin', 'support', 'finance'];
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 
 function activeAccount(user) {
@@ -19,10 +20,10 @@ exports.adminTopUpPoints = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async 
   const callerRef = db.collection('users').doc(callerUid);
   const callerSnap = await callerRef.get();
   const caller = callerSnap.exists ? callerSnap.data() : null;
-  if (!caller || !ADMIN_ROLES.includes(caller.role)) {
-    throw new HttpsError('permission-denied', 'Only admin/superadmin can top up points.');
+  if (!caller || !activeAccount(caller)) throw new HttpsError('permission-denied', 'This account is not active.');
+  if (!(await hasCapability(db, callerUid, caller, 'finance'))) {
+    throw new HttpsError('permission-denied', 'Your account does not handle payments.');
   }
-  if (!activeAccount(caller)) throw new HttpsError('permission-denied', 'This account is not active.');
 
   const data = request.data || {};
   const targetUid = String(data.targetUid || '').trim();
@@ -57,8 +58,8 @@ exports.adminTopUpPoints = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async 
         throw new HttpsError('permission-denied', 'This admin account is not active.');
       }
       const latestCaller = latestCallerSnap.data() || {};
-      if (!ADMIN_ROLES.includes(latestCaller.role)) {
-        throw new HttpsError('permission-denied', 'Only admin/superadmin can top up points.');
+      if (!STAFF_ROLES.includes(latestCaller.role)) {
+        throw new HttpsError('permission-denied', 'Your account does not handle payments.');
       }
       if (!targetSnap.exists) throw new HttpsError('not-found', 'Target user does not exist.');
 

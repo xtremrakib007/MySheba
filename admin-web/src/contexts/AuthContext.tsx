@@ -10,6 +10,7 @@ import {
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import { getOrCreateDeviceId, getDeviceLabel } from '../utils/deviceId';
+import { subscribeMyCapabilities, type Capability } from '../services/accessControlService';
 import {
   isDeviceTrusted,
   requestLoginOtp,
@@ -17,7 +18,7 @@ import {
   type OtpMethod,
 } from '../services/deviceAuthService';
 
-export type AdminRole = 'admin' | 'superadmin';
+export type AdminRole = 'admin' | 'superadmin' | 'support' | 'finance';
 
 interface AdminProfile {
   uid: string;
@@ -30,6 +31,13 @@ interface AuthContextValue {
   firebaseUser: User | null;
   profile: AdminProfile | null;
   loading: boolean;
+  /** Effective staff capabilities: role defaults + this person's overrides, live. */
+  capabilities: Capability[];
+  /** True until the first capability snapshot arrives for this profile. */
+  accessLoading: boolean;
+  can: (capability: Capability) => boolean;
+  /** Role + capabilities together, the shape navConfig's canAccess takes. */
+  access: { role: AdminRole | undefined; capabilities: Capability[] };
   accessDenied: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
@@ -45,7 +53,7 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-const ADMIN_ROLES: AdminRole[] = ['admin', 'superadmin'];
+const ADMIN_ROLES: AdminRole[] = ['admin', 'superadmin', 'support', 'finance'];
 
 function normalizeRole(value: unknown): AdminRole | null {
   if (typeof value !== 'string') return null;
@@ -64,6 +72,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [otpError, setOtpError] = useState<string | null>(null);
   const [otpSubmitting, setOtpSubmitting] = useState(false);
   const pendingProfileRef = useRef<AdminProfile | null>(null);
+  const [capabilities, setCapabilities] = useState<Capability[]>([]);
+  const [accessLoading, setAccessLoading] = useState(true);
+
+  // Access is live: a superadmin granting or revoking something reaches an
+  // open panel on the next snapshot, with no reload (role sheet rule 6).
+  const profileUid = profile?.uid;
+  const profileRole = profile?.role;
+  useEffect(() => {
+    if (!profileUid || !profileRole) {
+      setCapabilities([]);
+      setAccessLoading(true);
+      return;
+    }
+    setAccessLoading(true);
+    return subscribeMyCapabilities(profileUid, profileRole, (caps) => {
+      setCapabilities(caps);
+      setAccessLoading(false);
+    });
+  }, [profileUid, profileRole]);
+
+  const can = (capability: Capability) => capabilities.includes(capability);
+  const access = { role: profile?.role, capabilities };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -230,6 +260,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         firebaseUser,
         profile,
         loading,
+        capabilities,
+        accessLoading,
+        can,
+        access,
         accessDenied,
         signIn,
         signInWithGoogle,

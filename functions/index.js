@@ -22,6 +22,13 @@ exports.checkDeviceSession = require('./deviceSessionService').checkDeviceSessio
 exports.confirmDeviceSwitch = require('./deviceSessionService').confirmDeviceSwitch;
 exports.clearActiveSession = require('./deviceSessionService').clearActiveSession;
 exports.listTrustedDevices = require('./deviceSessionService').listTrustedDevices;
+exports.adminForceLogout = require('./deviceSessionService').adminForceLogout;
+exports.setRoleDefaults = require('./accessControl').setRoleDefaults;
+exports.setUserAccessOverride = require('./accessControl').setUserAccessOverride;
+exports.uploadRechargePins = require('./rechargePinService').uploadRechargePins;
+exports.issueRechargePin = require('./rechargePinService').issueRechargePin;
+exports.voidRechargePin = require('./rechargePinService').voidRechargePin;
+exports.rechargePinStock = require('./rechargePinService').rechargePinStock;
 exports.revokeTrustedDevice = require('./deviceSessionService').revokeTrustedDevice;
 exports.validateActiveSession = require('./validateActiveSessionService').validateActiveSession;
 exports.registerPushToken = require('./pushTokenService').registerPushToken;
@@ -63,12 +70,14 @@ exports.diditKycWebhook = require('./diditKycService').diditKycWebhook;
 exports.chargeWallet = secureWalletCharge.chargeWallet;
 exports.chargeRecharge = chargeGuards.chargeRecharge;
 exports.chargeInternetPackage = chargeGuards.chargeInternetPackage;
+exports.chargeBillPayment = chargeGuards.chargeBillPayment;
 exports.chargeMobileBanking = chargeGuards.chargeMobileBanking;
 exports.chargeRemittance = chargeGuards.chargeRemittance;
 exports.rejectRechargeTransaction = secureTransactionReview.rejectRechargeTransaction;
 exports.rejectInternetPackageTransaction = secureTransactionReview.rejectInternetPackageTransaction;
 exports.rejectMobileBankingTransaction = secureTransactionReview.rejectMobileBankingTransaction;
 exports.rejectRemittanceTransaction = secureTransactionReview.rejectRemittanceTransaction;
+exports.rejectBillPaymentTransaction = require('./secureTransactionReview').rejectBillPaymentTransaction;
 exports.approveVerification = require('./verificationService').approveVerification;
 exports.rejectVerification = require('./verificationService').rejectVerification;
 exports.setBusinessProfileStatus = require('./businessProfileService').setBusinessProfileStatus;
@@ -79,6 +88,8 @@ exports.updateAdSettings = require('./adControlsService').updateAdSettings;
 exports.updateAdFeatureControl = require('./adControlsService').updateAdFeatureControl;
 exports.bulkUpdateAdFeatureControls = require('./adControlsService').bulkUpdateAdFeatureControls;
 exports.deleteAdCreative = require('./adCreativeService').deleteAdCreative;
+exports.recordAdEvent = require('./adTrackingCallable').recordAdEvent;
+exports.deleteManagedUser = require('./userDeletionService').deleteManagedUser;
 exports.onAdImpressionCreated = require('./adTrackingService').onAdImpressionCreated;
 exports.onAdClickCreated = require('./adTrackingService').onAdClickCreated;
 exports.createAdPayment = require('./adPaymentService').createAdPayment;
@@ -93,6 +104,9 @@ admin.initializeApp();
 const db = admin.firestore();
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const ADMIN_ROLES = ['admin', 'superadmin'];
+// New work is pushed to the roles whose defaults own it (functions/accessControl.js).
+const PAYMENT_ROLES = ['superadmin', 'admin', 'finance'];
+const SUPPORT_ROLES = ['superadmin', 'admin', 'support'];
 function chunk(arr, size) { const out = []; for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size)); return out; }
 function isActiveProfile(profile) { return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto; }
 function isValidExpoToken(token) { return typeof token === 'string' && token.length <= 256 && /^(Exponent|Expo)PushToken\[[A-Za-z0-9_-]+\]$/.test(token); }
@@ -102,9 +116,9 @@ async function notifyUser(uid, title, body, data, extra) { const token = await g
 async function notifyRoles(roles, title, body, data) { const snap = await db.collection('users').where('role', 'in', roles).get(); const messages = []; snap.forEach(doc => { const u = doc.data(); if (isActiveProfile(u) && isValidExpoToken(u.pushToken) && !(u.notifPrefs && u.notifPrefs.pushEnabled === false)) messages.push({ to: u.pushToken, title, body, data: data || {} }); }); await sendExpoPush(messages); }
 exports.onTransactionCreated = onDocumentCreated('transactions/{id}', async event => { const tx = event.data.data(); if (tx.resellerId) await notifyUser(tx.resellerId, '🆕 New order', 'A new order is waiting for processing.', { type: 'transaction', id: event.params.id }); else await notifyRoles(['dealer'], '🆕 New order', 'A new order is waiting for processing.', { type: 'transaction', id: event.params.id }); });
 exports.onTransactionUpdated = onDocumentUpdated('transactions/{id}', async event => { const b = event.data.before.data(), a = event.data.after.data(); if (!b.dealerId && a.dealerId) await notifyUser(a.dealerId, '🆕 New order', 'A new order is waiting for processing.', { type: 'transaction', id: event.params.id }); if (b.status !== 'completed' && a.status === 'completed' && TIER_QUALIFYING_SERVICES.includes(a.service)) await progressionService.incrementTierPoints(a.customerId); if (b.status === a.status && b.rejected === a.rejected) return; let title = 'Order update', body = 'Your order status has changed.'; if (a.rejected) { title = '❌ Order rejected'; body = 'Your order was rejected. Open MySheba to view the details.'; } else if (a.status === 'processing') { title = '🔄 Order accepted'; body = 'Your order is being processed.'; } else if (a.status === 'completed') { title = '✅ Order completed'; body = 'Your order has been completed.'; } await notifyUser(a.customerId, title, body, { type: 'transaction', id: event.params.id }); });
-exports.onTopupCreated = onDocumentCreated('topups/{id}', async event => { await notifyRoles(ADMIN_ROLES, '💰 New top-up request', 'A new wallet top-up request is waiting for review.', { type: 'topup', id: event.params.id }); });
+exports.onTopupCreated = onDocumentCreated('topups/{id}', async event => { await notifyRoles(PAYMENT_ROLES, '💰 New top-up request', 'A new wallet top-up request is waiting for review.', { type: 'topup', id: event.params.id }); });
 exports.onTopupUpdated = onDocumentUpdated('topups/{id}', async event => { const b = event.data.before.data(), a = event.data.after.data(); if (b.status === a.status) return; if (a.status === 'approved') await notifyUser(a.userId, '✅ Top-up approved', 'Your wallet top-up has been approved and credited.', { type: 'topup', id: event.params.id }); else if (a.status === 'rejected') await notifyUser(a.userId, '❌ Top-up rejected', 'Your wallet top-up request was rejected. Open MySheba to view the details.', { type: 'topup', id: event.params.id }); });
-exports.onSupportTicketCreated = onDocumentCreated('supportTickets/{id}', async event => { await notifyRoles(ADMIN_ROLES, '🎧 New support request', 'A new support request is waiting for review.', { type: 'supportTicket', id: event.params.id }); });
+exports.onSupportTicketCreated = onDocumentCreated('supportTickets/{id}', async event => { await notifyRoles(SUPPORT_ROLES, '🎧 New support request', 'A new support request is waiting for review.', { type: 'supportTicket', id: event.params.id }); });
 exports.onSupportTicketUpdated = onDocumentUpdated('supportTickets/{id}', async event => { const b = event.data.before.data(), a = event.data.after.data(); if (b.status === a.status) return; if (a.status === 'in_progress') await notifyUser(a.userId, '🔄 Support request update', 'Your support request is being reviewed.', { type: 'supportTicket', id: event.params.id }); else if (a.status === 'resolved') await notifyUser(a.userId, '✅ Support request resolved', 'Your support request has been resolved. Open MySheba to view the details.', { type: 'supportTicket', id: event.params.id }); });
-exports.onInquiryCreated = onDocumentCreated('inquiries/{id}', async event => { await notifyRoles(ADMIN_ROLES, '✈️ New travel inquiry', 'A new travel inquiry is waiting for review.', { type: 'inquiry', id: event.params.id }); });
+exports.onInquiryCreated = onDocumentCreated('inquiries/{id}', async event => { await notifyRoles(SUPPORT_ROLES, '✈️ New travel inquiry', 'A new travel inquiry is waiting for review.', { type: 'inquiry', id: event.params.id }); });
 exports.onInquiryUpdated = onDocumentUpdated('inquiries/{id}', async event => { const b = event.data.before.data(), a = event.data.after.data(); if (b.status !== 'closed' && a.status === 'closed' && a.type === 'flight' && a.ticketUrl) await progressionService.incrementTierPoints(a.customerId); if (b.status === a.status) return; if (a.status === 'contacted') await notifyUser(a.customerId, '📞 We called about your inquiry', 'An agent has reached out about your inquiry.', { type: 'inquiry', id: event.params.id }); else if (a.status === 'closed') await notifyUser(a.customerId, '✅ Inquiry closed', 'Your inquiry has been closed.', { type: 'inquiry', id: event.params.id }); });

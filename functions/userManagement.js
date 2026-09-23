@@ -13,6 +13,7 @@ const admin = require('firebase-admin');
 const { assignUniqueUserId } = require('./userId');
 const { logAudit, logServerError } = require('./logService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+const { hasCapability } = require('./accessControl');
 
 const APP_EMAIL_DOMAIN = 'mysheba.app';
 
@@ -22,12 +23,12 @@ function phoneToEmail(phone) { return `${normalizePhone(phone)}@${APP_EMAIL_DOMA
 const ROLE_PERMISSIONS = {
   dealer: { canCreate: ['customer'], canUpgradeTo: [] },
   admin: { canCreate: ['customer', 'dealer', 'reseller'], canUpgradeTo: ['dealer', 'reseller'] },
-  superadmin: { canCreate: ['customer', 'dealer', 'admin', 'reseller'], canUpgradeTo: ['dealer', 'admin', 'reseller'] },
+  superadmin: { canCreate: ['customer', 'dealer', 'admin', 'reseller', 'support', 'finance'], canUpgradeTo: ['dealer', 'admin', 'reseller', 'support', 'finance'] },
 };
 const DOWNGRADE_PERMISSIONS = {
   dealer: { dealer: 'customer' },
   admin: { dealer: 'customer', reseller: 'customer' },
-  superadmin: { dealer: 'customer', admin: 'dealer', reseller: 'customer' },
+  superadmin: { dealer: 'customer', admin: 'dealer', reseller: 'customer', support: 'customer', finance: 'customer' },
 };
 
 async function getCallerProfile(uid) {
@@ -64,6 +65,9 @@ exports.manageUser = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (reque
   const perms = ROLE_PERMISSIONS[callerRole];
   if (!perms) throw new HttpsError('permission-denied', 'Your account cannot manage users.');
   const db = admin.firestore();
+  if (callerRole === 'admin' && !(await hasCapability(db, callerUid, callerProfile, 'users'))) {
+    throw new HttpsError('permission-denied', 'Your account does not manage users.');
+  }
   const data = request.data || {};
   const action = data.action;
 

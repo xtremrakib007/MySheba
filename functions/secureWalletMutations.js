@@ -2,9 +2,10 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+const { hasCapability } = require('./accessControl');
 
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
-const ADMIN_ROLES = ['admin', 'superadmin'];
+const STAFF_ROLES = ['admin', 'superadmin', 'support', 'finance'];
 const MAX_AMOUNT = 100000;
 
 function requireRequest(request) {
@@ -46,6 +47,12 @@ exports.createSelfTopup = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (
 
   if (amount === null) throw new HttpsError('invalid-argument', 'Enter a valid amount.');
 
+  // Crediting your own wallet is a payment operation.
+  const callerProfileSnap = await db.collection('users').doc(uid).get();
+  if (!callerProfileSnap.exists || !(await hasCapability(db, uid, callerProfileSnap.data(), 'finance'))) {
+    throw new HttpsError('permission-denied', 'Your account cannot self top-up.');
+  }
+
   await checkVelocity(db, uid, 'createSelfTopup', { ip: getClientIp(request) });
 
   const callerRef = db.collection('users').doc(uid);
@@ -69,7 +76,7 @@ exports.createSelfTopup = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (
       const callerSnap = await tx.get(callerRef);
       if (!callerSnap.exists) throw new HttpsError('not-found', 'Account not found.');
       const caller = callerSnap.data() || {};
-      if (!isActiveAccount(caller) || !ADMIN_ROLES.includes(caller.role)) {
+      if (!isActiveAccount(caller) || !STAFF_ROLES.includes(caller.role)) {
         throw new HttpsError('permission-denied', 'Your account cannot self top-up.');
       }
 

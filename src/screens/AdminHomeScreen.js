@@ -27,6 +27,7 @@ import * as bannerService from '../firebase/bannerService';
 import * as announcementService from '../firebase/announcementService';
 import * as topupService from '../firebase/topupService';
 import * as transactionService from '../firebase/transactionService';
+import * as rechargePinService from '../firebase/rechargePinService';
 import { internetPackagesByOperator, countries } from '../data/countries';
 import CountryModal from '../components/CountryModal';
 import * as homepageConfigService from '../firebase/homepageConfigService';
@@ -465,9 +466,31 @@ export default function AdminHomeScreen() {
     setReceiptTxId({ id: tx.id, pin });
   };
 
+  // Same e-PIN stock the resellers draw from (functions/rechargePinService.js).
+  const issuePinFromStock = async (tx) => {
+    setBusyTxId(tx.id);
+    try {
+      const issued = await rechargePinService.issueRechargePin(tx.id);
+      setReceiptTxId({ id: tx.id, pin: issued.pin });
+      showAlert('Recharge PIN issued', `PIN: ${issued.pin}${issued.serial ? `\nSerial: ${issued.serial}` : ''}\n\nAttach the receipt to finish the order.`);
+    } catch (e) {
+      showAlert('MySheba', e.message || 'Could not issue a recharge PIN.');
+    } finally {
+      setBusyTxId(null);
+    }
+  };
+
   const onCompleteTx = (tx) => {
     if (tx.claimedBy !== authUser?.uid) {
       showAlert('MySheba', 'This order was accepted by another staff member.');
+      return;
+    }
+    if (tx.service === 'Recharge') {
+      showAlert('Complete recharge', 'Use a PIN from the uploaded stock, or type a collection code yourself.', [
+        { text: 'Enter code', onPress: () => setPinTxId({ id: tx.id, service: tx.service }) },
+        { text: 'Use PIN from stock', onPress: () => issuePinFromStock(tx) },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
       return;
     }
     setPinTxId({ id: tx.id, service: tx.service });

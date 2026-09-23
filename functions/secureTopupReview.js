@@ -2,8 +2,9 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logAudit, logServerError } = require('./logService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+const { hasCapability } = require('./accessControl');
 
-const ADMIN_ROLES = ['admin', 'superadmin'];
+const STAFF_ROLES = ['admin', 'superadmin', 'support', 'finance'];
 const MAX_AMOUNT = 100000;
 
 function requireAdmin(request) {
@@ -32,7 +33,7 @@ exports.approveTopup = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async requ
   const db = admin.firestore();
   const callerSnap = await db.collection('users').doc(uid).get();
   const caller = callerSnap.exists ? callerSnap.data() : null;
-  if (!isActive(caller) || !ADMIN_ROLES.includes(caller.role)) throw new HttpsError('permission-denied', 'Your account cannot approve top-ups.');
+  if (!isActive(caller) || !(await hasCapability(db, uid, caller, 'finance'))) throw new HttpsError('permission-denied', 'Your account cannot approve top-ups.');
   const topupId = String(request.data?.topupId || request.data?.id || '').trim();
   if (!topupId) throw new HttpsError('invalid-argument', 'topupId is required.');
   const ref = db.collection('topups').doc(topupId);
@@ -73,7 +74,7 @@ exports.rejectTopup = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async reque
   const db = admin.firestore();
   const callerSnap = await db.collection('users').doc(uid).get();
   const caller = callerSnap.exists ? callerSnap.data() : null;
-  if (!isActive(caller) || !ADMIN_ROLES.includes(caller.role)) throw new HttpsError('permission-denied', 'Your account cannot reject top-ups.');
+  if (!isActive(caller) || !(await hasCapability(db, uid, caller, 'finance'))) throw new HttpsError('permission-denied', 'Your account cannot reject top-ups.');
   const topupId = String(request.data?.topupId || '').trim();
   const reason = String(request.data?.reason || '').trim().slice(0, 500);
   if (!topupId) throw new HttpsError('invalid-argument', 'topupId is required.');

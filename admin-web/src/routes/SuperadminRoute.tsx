@@ -1,17 +1,16 @@
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { canAccess, landingPathFor } from '../routes/navConfig';
 
-// Nested under ProtectedRoute, so `profile` is already guaranteed to
-// exist here. This adds the extra role check for routes whose backend
-// data/control surface is superadmin-only (Point Top-Up, Device Sessions,
-// Audit, Tool Access, Role Permissions and System Health).
-// Governance and Activity Center are also defended in ProtectedRoute
-// because their current App.tsx route declarations sit outside this group.
+// Second line of defence for the governance group. ProtectedRoute already
+// checks the same map; this keeps the guarantee even if a route is moved out
+// of that group by accident.
 export default function SuperadminRoute() {
-  const { profile } = useAuth();
+  const { access } = useAuth();
+  const location = useLocation();
 
-  if (profile?.role !== 'superadmin') {
-    return <Navigate to="/" replace />;
+  if (!canAccess(location.pathname, access)) {
+    return <Navigate to={landingPathFor(access)} replace />;
   }
 
   return <Outlet />;

@@ -2,14 +2,16 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logAudit } = require('./logService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+const { hasCapability } = require('./accessControl');
 
 const SERVICE_BY_FUNCTION = {
   rejectRechargeTransaction: 'recharge', rejectInternetPackageTransaction: 'internet',
   rejectMobileBankingTransaction: 'mobilebanking', rejectRemittanceTransaction: 'remittance',
+  rejectBillPaymentTransaction: 'billpayment',
 };
+const ALL_SERVICES = ['recharge', 'internet', 'mobilebanking', 'remittance', 'billpayment'];
 const ROLE_SERVICES = {
-  dealer: ['mobilebanking'], reseller: ['recharge', 'internet', 'remittance'],
-  admin: ['recharge', 'internet', 'mobilebanking', 'remittance'], superadmin: ['recharge', 'internet', 'mobilebanking', 'remittance'],
+  dealer: ['mobilebanking'], reseller: ['recharge', 'internet', 'remittance', 'billpayment'],
 };
 async function getActor(db, uid) {
   const snap = await db.collection('users').doc(uid).get();
@@ -17,14 +19,16 @@ async function getActor(db, uid) {
   const profile = snap.data();
   if (profile.suspended || profile.inactive || profile.disabled || profile.mergedInto) throw new HttpsError('permission-denied', 'Your staff account is not active.');
   const role = String(profile.role || '');
-  if (!ROLE_SERVICES[role]) throw new HttpsError('permission-denied', 'Only authorized staff can reject an order.');
-  return { uid, role, dealerId: profile.dealerId || null, resellerId: profile.resellerId || null };
+  let services = ROLE_SERVICES[role];
+  if (!services && await hasCapability(db, uid, profile, 'orders')) services = ALL_SERVICES;
+  if (!services) throw new HttpsError('permission-denied', 'Only authorized staff can reject an order.');
+  return { uid, role, services, dealerId: profile.dealerId || null, resellerId: profile.resellerId || null };
 }
 function makeRejectCallable(service) {
   return onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
     const db = admin.firestore(); const actor = await getActor(db, request.auth.uid);
-    if (!ROLE_SERVICES[actor.role].includes(service)) throw new HttpsError('permission-denied', 'Your role cannot reject this service.');
+    if (!actor.services.includes(service)) throw new HttpsError('permission-denied', 'Your role cannot reject this service.');
     const transactionId = String(request.data?.transactionId || '').trim(); const reason = String(request.data?.reason || '').trim();
     if (!transactionId) throw new HttpsError('invalid-argument', 'transactionId is required.');
     if (reason.length > 500) throw new HttpsError('invalid-argument', 'Rejection reason is too long.');
@@ -62,3 +66,4 @@ exports.rejectRechargeTransaction = makeRejectCallable('recharge');
 exports.rejectInternetPackageTransaction = makeRejectCallable('internet');
 exports.rejectMobileBankingTransaction = makeRejectCallable('mobilebanking');
 exports.rejectRemittanceTransaction = makeRejectCallable('remittance');
+exports.rejectBillPaymentTransaction = makeRejectCallable('billpayment');

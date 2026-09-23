@@ -17,12 +17,24 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../firebase/config';
 import type { AdminRole } from '../contexts/AuthContext';
 
-export type UserRole = 'user' | 'dealer' | 'reseller' | AdminRole;
-export const ALL_ROLES: UserRole[] = ['user', 'dealer', 'reseller', 'admin', 'superadmin'];
-export const ROLE_RANK: Record<UserRole, number> = { user: 0, dealer: 1, reseller: 2, admin: 3, superadmin: 4 };
+export type UserRole = 'customer' | 'dealer' | 'reseller' | AdminRole;
+// Appointing staff is a superadmin act, matching functions/userManagement.js's
+// ROLE_PERMISSIONS - an admin manages customers and operators only.
+const SUPERADMIN_ONLY_ROLES: UserRole[] = ['support', 'finance', 'admin'];
+export const ALL_ROLES: UserRole[] = ['customer', 'dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin'];
+export const ROLE_RANK: Record<UserRole, number> = { customer: 0, dealer: 1, reseller: 2, support: 3, finance: 3, admin: 4, superadmin: 5 };
+
+/** Older user documents wrote the customer role as 'user'. */
+function normalizeRole(value: unknown): UserRole {
+  const role = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (role === 'user' || role === '') return 'customer';
+  return (ALL_ROLES as string[]).includes(role) ? (role as UserRole) : 'customer';
+}
 
 export function assignableRoles(actingRole: AdminRole): UserRole[] {
-  return ALL_ROLES.filter((r) => actingRole === 'superadmin' ? r !== 'superadmin' : ROLE_RANK[r] < ROLE_RANK.admin);
+  if (actingRole === 'superadmin') return ALL_ROLES.filter((r) => r !== 'superadmin');
+  if (actingRole !== 'admin') return [];
+  return ALL_ROLES.filter((r) => r !== 'superadmin' && !SUPERADMIN_ONLY_ROLES.includes(r));
 }
 
 export function canEditTarget(actingRole: AdminRole, targetRole: UserRole): boolean {
@@ -41,9 +53,14 @@ export interface FeatureAccess {
 
 export const FEATURE_LABELS: Record<keyof FeatureAccess, string> = {
   mobileBanking: 'Mobile Banking', recharge: 'Recharge / Top-Up', remittance: 'Remittance',
+  travel: 'Travel & Tickets', ticketReseller: 'Ticket Reseller',
 };
 
-const DEFAULT_FEATURES: FeatureAccess = {};
+// A user with no `features` map keeps every module; access is revoked by
+// switching a module off, never by the field being absent.
+const DEFAULT_FEATURES: FeatureAccess = {
+  mobileBanking: true, recharge: true, remittance: true, travel: true, ticketReseller: true,
+};
 
 export interface AdminUserRow {
   uid: string;
@@ -66,7 +83,7 @@ function mapDoc(d: QueryDocumentSnapshot<DocumentData>): AdminUserRow {
     name: data.name ?? data.displayName ?? '(no name)',
     email: data.email ?? null,
     phone: data.phone ?? data.phoneNumber ?? null,
-    role: (data.role as UserRole) ?? 'user',
+    role: normalizeRole(data.role),
     disabled: Boolean(data.disabled),
     verificationStatus: ['pending', 'approved', 'rejected'].includes(rawVerification) ? rawVerification : 'unknown',
     dealerCode: data.dealerCode,
@@ -107,15 +124,15 @@ export async function updateUserRole(uid: string, role: UserRole): Promise<void>
   if (typeof uid !== 'string' || !uid || uid.length > 128) throw new Error('Invalid user ID.');
   const targetSnap = await getDoc(doc(db, 'users', uid));
   if (!targetSnap.exists()) throw new Error('That user does not exist.');
-  const currentRole = String(targetSnap.data().role || 'customer');
+  const currentRole = normalizeRole(targetSnap.data().role);
   const callable = httpsCallable(functions, 'manageUser');
 
   if (role === currentRole) return;
-  if (role === 'customer' && ['dealer', 'admin', 'reseller'].includes(currentRole)) {
+  if (role === 'customer' && ['dealer', 'admin', 'reseller', 'support', 'finance'].includes(currentRole)) {
     await callable({ action: 'downgradeRole', targetUid: uid });
     return;
   }
-  if (['customer', 'user'].includes(currentRole) && ['dealer', 'admin', 'reseller'].includes(role)) {
+  if (currentRole === 'customer' && ['dealer', 'admin', 'reseller', 'support', 'finance'].includes(role)) {
     await callable({ action: 'setRole', targetUid: uid, newRole: role });
     return;
   }

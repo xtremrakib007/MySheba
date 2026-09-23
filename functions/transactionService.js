@@ -2,10 +2,10 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logAudit } = require('./logService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+const { hasCapability } = require('./accessControl');
 
 const DEALER_SERVICES = ['Mobile Banking'];
-const RESELLER_SERVICES = ['Recharge', 'Internet', 'Remittance'];
-const APPROVER_ROLES = ['admin', 'superadmin'];
+const RESELLER_SERVICES = ['Recharge', 'Internet', 'Remittance', 'Bill Payment'];
 const OPERATOR_ROLES = ['dealer', 'reseller'];
 const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
 
@@ -15,7 +15,7 @@ async function getActor(uid) {
   if (!snap.exists) throw new HttpsError('permission-denied', 'Your staff profile was not found.');
   const p = snap.data();
   if (p.suspended || p.inactive || p.disabled || p.mergedInto) throw new HttpsError('permission-denied', 'Your staff account is not active.');
-  return { uid, role: p.role || '', name: p.fullName || p.name || p.displayName || p.phone || uid };
+  return { uid, role: p.role || '', name: p.fullName || p.name || p.displayName || p.phone || uid, profile: p };
 }
 function assertOperatorCanHandle(actor, order) {
   if (!OPERATOR_ROLES.includes(actor.role)) throw new HttpsError('permission-denied', 'Only a dealer or reseller can accept an approved order.');
@@ -67,7 +67,9 @@ async function validateOrderReceipt(receiptUrl, transactionId) {
 
 exports.approveTransaction = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   requireAuth(request); const actor = await getActor(request.auth.uid);
-  if (!APPROVER_ROLES.includes(actor.role)) throw new HttpsError('permission-denied', 'Only an admin or superadmin can approve an order.');
+  if (!(await hasCapability(admin.firestore(), actor.uid, actor.profile, 'orders'))) {
+    throw new HttpsError('permission-denied', 'Your account does not manage orders.');
+  }
   const id = String(request.data?.transactionId || ''); if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
   const db = admin.firestore(), ref = db.collection('transactions').doc(id);
   let order;
@@ -87,10 +89,11 @@ exports.acceptTransaction = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async
   const db = admin.firestore(), ref = db.collection('transactions').doc(id);
   let order;
   let action = 'transaction_claimed';
+  const approvesOrders = !OPERATOR_ROLES.includes(actor.role) && await hasCapability(db, actor.uid, actor.profile, 'orders');
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref); if (!snap.exists) throw new HttpsError('not-found', 'That order no longer exists.');
     order = snap.data();
-    if (APPROVER_ROLES.includes(actor.role)) {
+    if (approvesOrders) {
       if (order.status !== 'pending') throw new HttpsError('failed-precondition', 'Only pending orders can be approved.');
       if (order.approved === true) throw new HttpsError('already-exists', 'This order is already approved.');
       tx.update(ref, { approved: true, approvedBy: actor.uid, approvedByName: actor.name, approvedByRole: actor.role, approvedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });

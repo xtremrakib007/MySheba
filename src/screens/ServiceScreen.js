@@ -10,6 +10,7 @@ import HeaderDecor from '../components/HeaderDecor';
 import SmartAd from '../components/SmartAd';
 
 import RechargeStep, { validateStep as validateRecharge } from '../steps/RechargeSteps';
+import BillPaymentStep, { validateStep as validateBillPayment } from '../steps/BillPaymentSteps';
 import MobileBankingStep, { validateStep as validateMobileBanking } from '../steps/MobileBankingSteps';
 import InternetStep, { validateStep as validateInternet } from '../steps/InternetSteps';
 import RemittanceStep, { validateStep as validateRemittance } from '../steps/RemittanceSteps';
@@ -23,6 +24,7 @@ const SERVICE_TITLES = {
   mobilebanking: 'Mobile Banking',
   internet: 'Internet',
   remittance: 'Remittance',
+  billpayment: 'Bill Payment',
   bus: 'Bus',
   train: 'Train',
   flight: 'Flight',
@@ -30,6 +32,7 @@ const SERVICE_TITLES = {
 
 const STEP_COMPONENTS = {
   recharge: RechargeStep,
+  billpayment: BillPaymentStep,
   mobilebanking: MobileBankingStep,
   internet: InternetStep,
   remittance: RemittanceStep,
@@ -42,6 +45,7 @@ const STEP_COMPONENTS = {
 // when the step is complete, or a message to show the user when it isn't.
 const VALIDATORS = {
   recharge: validateRecharge,
+  billpayment: validateBillPayment,
   mobilebanking: validateMobileBanking,
   internet: validateInternet,
   remittance: validateRemittance,

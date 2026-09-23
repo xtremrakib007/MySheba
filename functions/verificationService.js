@@ -4,6 +4,7 @@ const admin = require('firebase-admin');
 const { logAudit, logServerError } = require('./logService');
 const { finalizeKycFaceTemplate } = require('./faceVerificationService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+const { hasCapability } = require('./accessControl');
 
 function requireAuth(request) {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
@@ -17,8 +18,8 @@ function activeAccount(user) {
 async function requireAdmin(db, callerUid) {
   const snap = await db.collection('users').doc(callerUid).get();
   const caller = snap.exists ? snap.data() : null;
-  if (!caller || !['admin', 'superadmin'].includes(caller.role)) throw new HttpsError('permission-denied', 'Only an admin can review verification requests.');
-  if (!activeAccount(caller)) throw new HttpsError('permission-denied', 'This admin account is not active.');
+  if (!caller || !activeAccount(caller)) throw new HttpsError('permission-denied', 'This account is not active.');
+  if (!(await hasCapability(db, callerUid, caller, 'users'))) throw new HttpsError('permission-denied', 'Your account cannot review verification requests.');
   return caller;
 }
 

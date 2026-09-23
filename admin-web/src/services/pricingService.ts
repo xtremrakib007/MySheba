@@ -8,7 +8,7 @@ import { db } from '../firebase/config';
 
 const SETTINGS_DOC = doc(db, 'settings', 'pricing');
 
-export const ROLE_PRICE_ROLES = ['customer', 'subdealer', 'dealer', 'reseller', 'admin'] as const;
+export const ROLE_PRICE_ROLES = ['customer', 'dealer', 'reseller', 'admin'] as const;
 export type PricingRole = (typeof ROLE_PRICE_ROLES)[number];
 
 export const ROLE_PRICE_KEYS = [

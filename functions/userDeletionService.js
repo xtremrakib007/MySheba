@@ -2,8 +2,11 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logAudit, logServerError } = require('./logService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+const { hasCapability } = require('./accessControl');
 
-function activeAdmin(profile) { return profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto && ['admin', 'superadmin'].includes(profile.role); }
+function activeAccount(profile) { return profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto; }
+// Staff accounts are appointed by a superadmin, so only a superadmin removes one.
+const STAFF_ROLES = ['admin', 'support', 'finance'];
 
 async function deleteStoragePrefix(bucket, prefix) {
   const [files] = await bucket.getFiles({ prefix });
@@ -17,7 +20,7 @@ exports.deleteManagedUser = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async
   const db = admin.firestore();
   const callerSnap = await db.collection('users').doc(callerUid).get();
   const caller = callerSnap.exists ? callerSnap.data() : null;
-  if (!activeAdmin(caller)) throw new HttpsError('permission-denied', 'Only an active admin can delete accounts.');
+  if (!activeAccount(caller) || !(await hasCapability(db, callerUid, caller, 'users'))) throw new HttpsError('permission-denied', 'Your account cannot delete accounts.');
 
   const targetUid = typeof request.data?.targetUid === 'string' ? request.data.targetUid.trim() : '';
   if (!targetUid || targetUid.length > 128 || targetUid === callerUid) throw new HttpsError('invalid-argument', 'A valid target account is required.');
@@ -26,7 +29,7 @@ exports.deleteManagedUser = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async
   if (!targetSnap.exists) throw new HttpsError('not-found', 'That user does not exist.');
   const target = targetSnap.data() || {};
 
-  if (target.role === 'superadmin' || (target.role === 'admin' && caller.role !== 'superadmin')) throw new HttpsError('permission-denied', 'You cannot delete that staff account.');
+  if (target.role === 'superadmin' || (STAFF_ROLES.includes(target.role) && caller.role !== 'superadmin')) throw new HttpsError('permission-denied', 'You cannot delete that staff account.');
   if (target.mergedInto) throw new HttpsError('failed-precondition', 'Merged accounts cannot be deleted from this screen.');
   const balance = Number(target.walletBalance || 0);
   if (!Number.isFinite(balance) || Math.abs(balance) > 0.000001) throw new HttpsError('failed-precondition', 'The account must have a zero wallet balance before deletion.');

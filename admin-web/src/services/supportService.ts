@@ -6,7 +6,7 @@
 // 'open' | 'in_progress' | 'resolved').
 //
 // Permission model (see firestore.rules match /supportTickets/{id}):
-// superadmin reads the full incoming queue; a plain admin/dealer/subdealer
+// superadmin reads the full incoming queue; a plain admin/support/dealer
 // only ever sees tickets already assigned to them (assignedToUid == their
 // uid) - there's no "browse everything" for non-superadmin staff. This
 // matters for getCountFromServer especially: Firestore aggregation
@@ -75,7 +75,7 @@ function mapTicket(d: QueryDocumentSnapshot<DocumentData>): SupportTicket {
 
 /**
  * `mode: 'queue'` is the superadmin-only full incoming queue, filterable
- * by status. `mode: 'assigned'` is what a plain admin/dealer/subdealer
+ * by status. `mode: 'assigned'` is what a plain admin/support/dealer
  * gets instead — only tickets handed to them — and ignores rules-side
  * blanket access entirely, matching AdminSupportScreen.js's split with
  * the regular Support screen's "Assigned to You" queue.
@@ -138,14 +138,14 @@ export interface AssignableStaff {
 }
 
 /** Same picker source as chatService.subscribeAssignableStaff on mobile -
- * every admin/superadmin/dealer/subdealer, for the "Assign to" list.
+ * every admin/superadmin/support/dealer, for the "Assign to" list.
  * Superadmin-only in the UI (see SupportTicketsPage.tsx), matching
  * AdminSupportScreen.js's canAssign gate. */
 export function subscribeAssignableStaff(
   onUpdate: (staff: AssignableStaff[]) => void,
   onError: (err: Error) => void
 ) {
-  const q = query(collection(db, 'users'), where('role', 'in', ['admin', 'superadmin', 'dealer', 'subdealer']));
+  const q = query(collection(db, 'users'), where('role', 'in', ['admin', 'superadmin', 'support', 'dealer']));
   return onSnapshot(
     q,
     (snap) => {

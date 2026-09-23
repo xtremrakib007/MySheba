@@ -11,6 +11,7 @@ const CUSTOMER_SERVICES = [
   { key: 'mobilebanking', icon: '🏦', name: 'Mobile Banking', kind: 'service' },
   { key: 'internet', icon: '📡', name: 'Internet', kind: 'service' },
   { key: 'remittance', icon: '💸', name: 'Remittance', kind: 'service' },
+  { key: 'billpayment', icon: '🧾', name: 'Bill Payment', kind: 'service' },
   { key: 'bus', icon: '🚌', name: 'Bus', kind: 'buspicker' },
   { key: 'train', icon: '🚆', name: 'Train', kind: 'webview' },
   { key: 'flight', icon: '✈️', name: 'Flight', kind: 'service' },
@@ -74,7 +75,7 @@ export function Tile({ s, onPress, disabled }) {
 }
 
 export function useServiceAction() {
-  const { startService, openWebView, openBusPicker, openSalary, openMyDocuments, setScreen } = useApp();
+  const { startService, openWebView, openBusPicker, openSalary, openMyDocuments, setScreen, setAdminTab, setAdminViewingSection } = useApp();
   return (s) => {
     if (!s) return;
     if (s.kind === 'webview') return openWebView(s.key);
@@ -93,19 +94,43 @@ export function useServiceAction() {
     if (s.kind === 'dealerFeatures') return setScreen('dealerFeatures');
     if (s.kind === 'resellerFeatures') return setScreen('resellerFeatures');
     if (s.kind === 'adminFeatures') return setScreen('adminFeatures');
+    if (s.kind === 'staffSupport') return setScreen('adminSupport');
+    if (s.kind === 'staffInquiries') { setAdminTab('inquiries'); setAdminViewingSection(true); return setScreen('adminHome'); }
+    if (s.kind === 'staffReports') return setScreen('reports');
     return startService(s.key);
   };
 }
+
+// Support Agent and Finance tiles come from what the person can actually do
+// - their role defaults plus any overrides - so a finance user granted
+// support gets the Support Inbox too. `needs` is any-of.
+const STAFF_CAPABILITY_TILES = [
+  { key: 'adminSupport', icon: '🎧', name: 'Support Inbox', kind: 'staffSupport', needs: ['support'] },
+  { key: 'inquiries', icon: '🗺️', name: 'Inquiries', kind: 'staffInquiries', needs: ['support'] },
+  { key: 'history', icon: '📋', name: 'Transactions', kind: 'history', needs: ['orders', 'finance'] },
+  { key: 'topup', icon: '💰', name: 'Top-Ups', kind: 'adminTopup', needs: ['finance'] },
+  { key: 'reports', icon: '📊', name: 'Reports', kind: 'staffReports', needs: ['reports'] },
+  { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount' },
+  { key: 'profile', icon: '🪪', name: 'Profile', kind: 'profile' },
+];
+
+// Admin keeps its hub; the money tiles appear only with finance/orders.
+const ADMIN_TILE_NEEDS = { topup: ['finance'], history: ['orders', 'finance'] };
 
 export const PRIMARY_SERVICES = CUSTOMER_SERVICES;
 
 export default function ServiceGrid() {
   const { colors } = useTheme();
-  const { webViewBusy, profile } = useApp();
+  const { webViewBusy, profile, can } = useApp();
   const handlePress = useServiceAction();
   const role = profile?.role || 'customer';
-  const isStaff = ['dealer', 'reseller', 'admin', 'superadmin'].includes(role);
-  const services = isStaff ? (STAFF_SERVICES[role] || STAFF_SERVICES.admin) : CUSTOMER_SERVICES;
+  const isStaff = ['dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin'].includes(role);
+  const services = !isStaff ? CUSTOMER_SERVICES
+    : role === 'support' || role === 'finance'
+      ? STAFF_CAPABILITY_TILES.filter((t) => !t.needs || t.needs.some((cap) => can(cap)))
+      : role === 'admin'
+        ? STAFF_SERVICES.admin.filter((t) => !ADMIN_TILE_NEEDS[t.key] || ADMIN_TILE_NEEDS[t.key].some((cap) => can(cap)))
+        : (STAFF_SERVICES[role] || STAFF_SERVICES.admin);
   return <View>
     <View style={styles.sectionHead}><Text style={[styles.sectionTitle, { color: colors.text || '#222' }]}>{isStaff ? 'Management Dashboard' : 'Services'}</Text><Text style={[styles.sectionSubtitle, { color: colors.muted || '#6B7280' }]}>{isStaff ? 'Manage transactions, accounts and operations' : 'Banking • Remittance • Payments • Travel'}</Text></View>
     <View style={[styles.gridCanvas, { backgroundColor: colors.canvasBg }]}><View style={styles.grid}>{services.map((service) => <Tile key={service.key} s={service} disabled={service.kind === 'webview' && !!webViewBusy} onPress={() => handlePress(service)} />)}</View></View>

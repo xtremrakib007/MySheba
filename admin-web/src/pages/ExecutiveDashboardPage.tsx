@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Activity, AlertTriangle, BarChart3, BadgeCheck, Headphones, RefreshCw, ShieldAlert, Users, WalletCards } from 'lucide-react';
+import { Activity, AlertTriangle, BarChart3, BadgeCheck, Headphones, RefreshCw, Users, WalletCards } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchOpsOverview, type OpsOverview } from '../services/reportsService';
 import { subscribeTransactions, type Transaction } from '../services/transactionService';
@@ -40,14 +40,14 @@ export default function ExecutiveDashboardPage() {
     ['Chat reports', overview?.pendingChatReports ?? null, '/chat-reports', AlertTriangle],
   ].filter((x) => x[1] !== null && Number(x[1]) > 0) as [string, number, string, typeof AlertTriangle][];
 
-  const cards = [
+  const cards = ([
     ['Users', overview?.totalUsers, 'Registered accounts', Users, '/users'],
     ['Verified', overview?.verifiedUsers, 'Identity verified', BadgeCheck, '/users'],
     ['KYC Queue', overview?.pendingVerifications, 'Awaiting review', BadgeCheck, '/kyc-operations'],
     ['Support', overview?.openTickets, 'Open / in progress', Headphones, '/support-operations'],
     ['Completed Value', money(financial.completedValue), 'Loaded transactions', WalletCards, '/financial'],
     ['Pending Value', money(financial.pendingValue), `${financial.pendingCount} transactions`, Activity, '/transactions'],
-  ];
+  ] as const);
 
   return (
     <div className="mx-auto max-w-[1500px] space-y-6 pb-10">

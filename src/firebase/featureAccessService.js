@@ -23,7 +23,7 @@ const FEATURE_ACCESS_DOC = doc(db, 'settings', 'featureAccess');
 // ADMIN_TOOL_DEFS/DEALER_TOOL_DEFS `roles` arrays) - a superadmin only
 // needs to touch Feature Access if they want to deviate from these.
 export const FEATURE_DEFS = [
-  { key: 'userManagement', icon: '🧑‍💼', bg: '#E3F2FD', name: 'User Mgmt', defaultRoles: ['dealer', 'admin', 'superadmin'] },
+  { key: 'userManagement', icon: '🧑‍💼', bg: '#E3F2FD', name: 'User Mgmt', defaultRoles: ['admin', 'superadmin'] },
   { key: 'transferPoints', icon: '💸', bg: '#E8F5E9', name: 'Transfer Pts', defaultRoles: ['dealer', 'admin', 'superadmin'] },
   { key: 'verificationManagement', icon: '🪪', bg: '#E0F7FA', name: 'Verify Requests', defaultRoles: ['admin', 'superadmin'] },
   { key: 'adminBusinessManagement', icon: '🏢', bg: '#F3E5F5', name: 'Business Profiles', defaultRoles: ['admin', 'superadmin'] },
@@ -35,9 +35,11 @@ export const FEATURE_DEFS = [
 // something that should be toggleable off by accident. customer is left
 // out too - customer features are a separate grid (ServiceGrid) that this
 // screen never touches.
-export const TOGGLEABLE_ROLES = ['dealer', 'reseller', 'admin'];
+// Operators only. Staff access (admin, support, finance) is role defaults +
+// per-user overrides in Access Control - see accessControlService.js.
+export const TOGGLEABLE_ROLES = ['dealer', 'reseller'];
 
-export const ROLE_LABEL = { dealer: 'Dealer', reseller: 'Reseller', admin: 'Admin' };
+export const ROLE_LABEL = { dealer: 'Dealer', reseller: 'Reseller' };
 
 function defaultAccessFor(key) {
   const def = FEATURE_DEFS.find((f) => f.key === key);

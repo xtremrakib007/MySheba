@@ -10,6 +10,7 @@ export interface OpsOverview {
   verifiedUsers: number | null;
   pendingVerifications: number | null;
   openTickets: number | null;
+  pendingChatReports: number | null;
 }
 
 async function count(coll: string, field?: string, value?: unknown): Promise<number | null> {
@@ -34,12 +35,13 @@ async function countOpenTickets(): Promise<number | null> {
 }
 
 export async function fetchOpsOverview(): Promise<OpsOverview> {
-  const [totalUsers, verifiedUsers, pendingVerifications, openTickets] = await Promise.all([
+  const [totalUsers, verifiedUsers, pendingVerifications, openTickets, pendingChatReports] = await Promise.all([
     count('users'),
     count('users', 'verified', true),
     count('verificationRequests', 'status', 'pending'),
     countOpenTickets(),
+    count('chatReports', 'status', 'open'),
   ]);
 
-  return { totalUsers, verifiedUsers, pendingVerifications, openTickets };
+  return { totalUsers, verifiedUsers, pendingVerifications, openTickets, pendingChatReports };
 }

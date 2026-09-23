@@ -4,9 +4,10 @@ const admin = require('firebase-admin');
 const { logAudit, logServerError } = require('./logService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+const { hasCapability } = require('./accessControl');
 
 const ADMIN_ROLES = ['admin', 'superadmin'];
-const AUDIENCES = ['all', 'customer', 'dealer', 'reseller', 'admin', 'superadmin'];
+const AUDIENCES = ['all', 'customer', 'dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin'];
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const MAX_TITLE_LENGTH = 120;
 const MAX_BODY_LENGTH = 2000;
@@ -30,7 +31,8 @@ exports.sendAnnouncement = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async 
   const callerUid = request.auth.uid;
   const callerSnap = await db.collection('users').doc(callerUid).get();
   const callerProfile = callerSnap.exists ? callerSnap.data() : null;
-  if (!callerProfile || !ADMIN_ROLES.includes(callerProfile.role) || !activeAccount(callerProfile)) throw new HttpsError('permission-denied', 'Only an active admin can send announcements.');
+  if (!callerProfile || !activeAccount(callerProfile)) throw new HttpsError('permission-denied', 'This account is not active.');
+  if (!(await hasCapability(db, callerUid, callerProfile, 'support'))) throw new HttpsError('permission-denied', 'Your account cannot send announcements.');
   await checkVelocity(db, callerUid, 'announcement_send', { ip: getClientIp(request) });
 
   const { title, body, audience } = request.data || {};
@@ -43,7 +45,7 @@ exports.sendAnnouncement = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async 
   try {
     const latestCallerSnap = await db.collection('users').doc(callerUid).get();
     const latestCaller = latestCallerSnap.exists ? latestCallerSnap.data() : null;
-    if (!latestCaller || !ADMIN_ROLES.includes(latestCaller.role) || !activeAccount(latestCaller)) throw new HttpsError('permission-denied', 'This admin account is not active.');
+    if (!latestCaller || !['admin', 'superadmin', 'support', 'finance'].includes(latestCaller.role) || !activeAccount(latestCaller)) throw new HttpsError('permission-denied', 'This account is not active.');
     const usersQuery = audience === 'all' ? db.collection('users') : db.collection('users').where('role', '==', audience);
     const usersSnap = await usersQuery.get();
     const messages = [];

@@ -62,6 +62,7 @@ export default function SettingsScreen() {
         <LinkRow icon="🔒" label={t('settings.changePassword')} onPress={() => setPwModalVisible(true)} />
         <View style={styles.divider} /><LinkRow icon="🔢" label={profile?.securityPinSet ? t('settings.changeSecurityPin') : t('settings.setUpSecurityPin')} sub={t('settings.securityPinSub')} onPress={() => setPinModalVisible(true)} /><View style={styles.divider} />
         <ToggleRow icon="🔐" label={t('settings.appLock')} sub={t('settings.appLockSub')} value={appLockEnabled} onValueChange={onToggleAppLock} />
+        <View style={styles.divider} /><LinkRow icon="🖨️" label={t('settings.printer', 'Printer')} sub={t('settings.printerSub', 'Choose the printer used for receipts and reports')} onPress={() => setScreen('printerSettings')} />
         {(profile?.role === 'admin' || profile?.role === 'superadmin') && <><View style={styles.divider} /><LinkRow icon="📱" label={t('settings.trustedDevices')} sub={t('settings.trustedDevicesSub')} onPress={() => setScreen('trustedDevices')} /></>}
       </View>
       <TouchableOpacity style={styles.logoutBtn} onPress={() => showAlert('Log Out', 'Are you sure you want to log out?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Log Out', style: 'destructive', onPress: logout }])}><Text style={styles.logoutText}>{t('settings.logout')}</Text></TouchableOpacity>
