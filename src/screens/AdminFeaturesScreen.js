@@ -4,6 +4,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import HeaderDecor from '../components/HeaderDecor';
+import AppHeader from '../components/AppHeader';
+import WalletCard from '../components/WalletCard';
+import ControlCenterBanner from '../components/ControlCenterBanner';
 import FeatureGrid from '../components/FeatureGrid';
 import PromptModal from '../components/PromptModal';
 import * as ratesService from '../firebase/ratesService';
@@ -146,14 +149,21 @@ export default function AdminFeaturesScreen() {
     </View>;
   }
 
+  // The staff landing the mockup draws: shared header, the Control Center
+  // banner as the way into management, the balance card, then the section
+  // grid. The welcome card it replaces only restated what the banner says,
+  // and pointed at a hamburger this header no longer shows.
+  const balance = profile?.balance ?? profile?.walletBalance ?? profile?.wallet?.balance ?? 0;
   return <View style={styles.screen}>
-    <LinearGradient colors={brandGradient} start={{x:0,y:0}} end={{x:1,y:0}} style={styles.header}>
-      <HeaderDecor /><TouchableOpacity style={styles.backBtn} onPress={goBackOrHome}><Text style={styles.backText}>←</Text></TouchableOpacity>
-      <View style={styles.headerTitleWrap}><Text style={styles.headerTitle}>{isSuperadmin ? 'Superadmin Control Center' : 'Admin Control Center'}</Text><Text style={styles.headerSub}>Finance management</Text></View>
-      <TouchableOpacity style={styles.menuBtn} onPress={openSidebar} accessibilityLabel="Open menu"><Text style={styles.menuText}>☰</Text></TouchableOpacity>
-    </LinearGradient>
+    <AppHeader onPressRole={openSidebar} />
     <ScrollView contentContainerStyle={styles.homeContent}>
-      <View style={styles.welcomeCard}><Text style={styles.welcomeTitle}>{isSuperadmin ? 'Superadmin' : 'Admin'} Home</Text><Text style={styles.welcomeText}>Select a section. Use ☰ for the full management menu.</Text></View>
+      <ControlCenterBanner
+        title={isSuperadmin ? 'Superadmin Control Center' : 'Admin Control Center'}
+        subtitle={isSuperadmin ? 'Full system access and governance.' : 'Manage operations, users, finance and more.'}
+        icon={isSuperadmin ? '✦' : '◆'}
+        onPress={() => setSection(isSuperadmin ? 'system' : 'operations')}
+      />
+      <WalletCard balance={balance} variant="surface" onAddMoney={() => setScreen('superAdminTopup')} onTransfer={() => setScreen('transferPoints')} />
       <FeatureGrid items={CATEGORIES.filter((x) => x.key !== 'system' || isSuperadmin)} onPress={setSection} />
     </ScrollView>
   </View>;

@@ -74,12 +74,34 @@ import PayslipDetailsScreen from './src/screens/PayslipDetailsScreen';
 import RatePopup from './src/components/RatePopup';
 import ResultModal from './src/components/ResultModal';
 import Sidebar from './src/components/Sidebar';
+import BottomNav from './src/components/BottomNav';
 import AppAlertHost from './src/components/AppAlertHost';
 import SecurityPinGate from './src/components/SecurityPinGate';
 import AppLockScreen from './src/components/AppLockScreen';
 import BiometricOptInPrompt from './src/components/BiometricOptInPrompt';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import AnimatedSplash from './src/components/AnimatedSplash';
+
+const NAV_SCREENS = [
+  'customerHome',
+  'dealerHome',
+  'resellerHome',
+  'adminHome',
+  'support',
+  'help',
+  'adminSupport',
+  'history',
+  'topup',
+  'superAdminTopup',
+  'profile',
+  'settings',
+  'myAccount',
+  'moreFeatures',
+  'adminFeatures',
+  'dealerFeatures',
+  'resellerFeatures',
+  'notifications',
+];
 
 function Root() {
   const { screen, authLoading, handleDeepLink, profile, adminViewingSection } = useApp();
@@ -94,7 +116,7 @@ function Root() {
   return <SafeAreaView style={styles.app} edges={['top', 'bottom']}><StatusBar style={isDark ? 'light' : 'dark'} /><View style={styles.body}>
     {renderedScreen === 'login' && <LoginScreen />}{renderedScreen === 'register' && <RegisterScreen />}{renderedScreen === 'forgotPassword' && <ForgotPasswordScreen />}{renderedScreen === 'deviceVerify' && <DeviceVerifyScreen />}{renderedScreen === 'googlePhone' && <GooglePhoneScreen />}{renderedScreen === 'customerHome' && <CustomerHomeScreen />}{renderedScreen === 'service' && <ServiceScreen />}{renderedScreen === 'dealerHome' && <DealerHomeScreen />}{renderedScreen === 'resellerHome' && <ResellerHomeScreen />}{renderedScreen === 'adminHome' && ((profile?.role === 'admin' || profile?.role === 'superadmin') && !adminViewingSection ? <AdminFeaturesScreen /> : <AdminHomeScreen />)}{renderedScreen === 'webview' && <WebViewScreen />}{renderedScreen === 'buspicker' && <BusPickerScreen />}{renderedScreen === 'support' && <SupportScreen />}{renderedScreen === 'help' && <HelpScreen />}{renderedScreen === 'adminSupport' && <AdminSupportScreen />}{renderedScreen === 'chatList' && <ChatListScreen />}{renderedScreen === 'chat' && <SupportChatScreen />}{renderedScreen === 'history' && <HistoryScreen />}{renderedScreen === 'topup' && <TopUpScreen />}{renderedScreen === 'superAdminTopup' && <SuperAdminTopUpScreen />}{renderedScreen === 'settings' && <SettingsScreen />}{renderedScreen === 'printer' && <PrinterScreen />}
       {renderedScreen === 'rechargePin' && <RechargePinScreen />}{renderedScreen === 'profile' && <ProfileScreen />}{renderedScreen === 'myAccount' && <MyAccountScreen />}{renderedScreen === 'reports' && <ReportsScreen />}{renderedScreen === 'userManagement' && <UserManagementScreen />}{renderedScreen === 'transferPoints' && <TransferPointsScreen />}{renderedScreen === 'notifications' && <NotificationsScreen />}{renderedScreen === 'verifyIdentity' && <VerifyIdentityScreen />}{renderedScreen === 'verificationManagement' && <VerificationManagementScreen />}{renderedScreen === 'adminAnalytics' && <AdminAnalyticsScreen />}{renderedScreen === 'myDocuments' && <MyDocumentsScreen />}{renderedScreen === 'notepad' && <NotepadScreen />}{renderedScreen === 'addNote' && <AddNoteScreen />}{renderedScreen === 'noteDetail' && <NoteDetailScreen />}{renderedScreen === 'moreFeatures' && <MoreFeaturesScreen />}{renderedScreen === 'adminFeatures' && <AdminFeaturesScreen />}{renderedScreen === 'tierPromotions' && <TierPromotionsScreen />}{renderedScreen === 'apiProviderManagement' && <ApiProviderManagementScreen />}{renderedScreen === 'dealerFeatures' && <DealerFeaturesScreen />}{renderedScreen === 'resellerFeatures' && <ResellerFeaturesScreen />}{renderedScreen === 'featureAccess' && <FeatureAccessScreen />}{renderedScreen === 'gridManagement' && <GridManagementScreen />}{renderedScreen === 'adFeatureControls' && <AdFeatureControlsScreen />}{renderedScreen === 'adAnalytics' && <AdAnalyticsScreen />}{renderedScreen === 'bannerManagement' && <BannerManagementScreen />}{renderedScreen === 'advertiserManagement' && <AdvertiserManagementScreen />}{renderedScreen === 'advertiserDetail' && <AdvertiserDetailScreen />}{renderedScreen === 'adPackagesManagement' && <AdPackagesManagementScreen />}{renderedScreen === 'adPaymentsManagement' && <AdPaymentsManagementScreen />}{renderedScreen === 'trustedDevices' && <TrustedDevicesScreen />}{renderedScreen === 'documentType' && <DocumentTypeScreen />}{renderedScreen === 'addDocument' && <AddDocumentScreen />}{renderedScreen === 'documentDetails' && <DocumentDetailsScreen />}{renderedScreen === 'documentViewer' && <DocumentViewerScreen />}{renderedScreen === 'salaryDashboard' && <SalaryDashboardScreen />}{renderedScreen === 'salarySettings' && <SalarySettingsScreen />}{renderedScreen === 'salaryCalculator' && <SalaryCalculatorScreen />}{renderedScreen === 'salaryWorkLog' && <WorkLogScreen />}{renderedScreen === 'salaryReports' && <SalaryReportsScreen />}{renderedScreen === 'salaryMonthlySummary' && <MonthlySummaryScreen />}{renderedScreen === 'salaryHistory' && <SalaryHistoryScreen />}{renderedScreen === 'createPayslip' && <CreatePayslipScreen />}{renderedScreen === 'payslipHistory' && <PayslipHistoryScreen />}{renderedScreen === 'payslipDetails' && <PayslipDetailsScreen />}
-  </View><RatePopup /><ResultModal /><Sidebar /><AppAlertHost /><SecurityPinGate /><AppLockScreen /><BiometricOptInPrompt /></SafeAreaView>;
+  </View>{NAV_SCREENS.includes(renderedScreen) && <BottomNav />}<RatePopup /><ResultModal /><Sidebar /><AppAlertHost /><SecurityPinGate /><AppLockScreen /><BiometricOptInPrompt /></SafeAreaView>;
 }
-export default function App() { return <SafeAreaProvider><LanguageProvider><ThemeProvider><AppProvider><ErrorBoundary><Root /></ErrorBoundary></AppProvider></ThemeProvider></LanguageProvider></SafeAreaProvider>; }
+export default function App() { return <SafeAreaProvider><LanguageProvider><AppProvider><ThemeProvider><ErrorBoundary><Root /></ErrorBoundary></ThemeProvider></AppProvider></LanguageProvider></SafeAreaProvider>; }
 function createStyles(colors) { return StyleSheet.create({ app: { flex: 1, backgroundColor: colors.bg }, body: { flex: 1 } }); }
