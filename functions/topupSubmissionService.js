@@ -53,7 +53,7 @@ function validMoney(value) {
   return Number.isFinite(n) && n > 0 && n <= MAX_AMOUNT ? n : null;
 }
 
-exports.submitTopupRequest = onCall({ enforceAppCheck: true }, async request => {
+exports.submitTopupRequest = onCall({ enforceAppCheck: false }, async request => {
   const { uid, requestId } = requireAuth(request);
   const db = admin.firestore();
   const data = request.data || {};

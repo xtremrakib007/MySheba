@@ -17,7 +17,7 @@ function getRequestId(request) {
   return id;
 }
 
-exports.walletTransfer = onCall({ enforceAppCheck: true }, async (request) => {
+exports.walletTransfer = onCall({ enforceAppCheck: false }, async (request) => {
   const uid = requireAuth(request);
   const requestId = getRequestId(request);
   const db = admin.firestore();

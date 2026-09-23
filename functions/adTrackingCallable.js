@@ -17,7 +17,7 @@ const MAX = { adId:128, campaignId:128, placementId:64, feature:64, sessionId:12
 function text(value, max) { return typeof value === 'string' ? value.trim().slice(0, max) : ''; }
 function activeProfile(profile) { return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && profile.active !== false && !profile.mergedInto; }
 
-exports.recordAdEvent = onCall({ enforceAppCheck: true }, async (request) => {
+exports.recordAdEvent = onCall({ enforceAppCheck: false }, async (request) => {
   const data = request.data || {};
   const kind = data.kind === 'click' ? 'click' : data.kind === 'impression' ? 'impression' : null;
   if (!kind) throw new HttpsError('invalid-argument', 'Invalid ad event type.');

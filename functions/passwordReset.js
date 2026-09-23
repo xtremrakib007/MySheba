@@ -111,7 +111,7 @@ function resetRateKey(value) {
   return crypto.createHash('sha256').update(String(value || '')).digest('hex');
 }
 
-exports.resetPassword = onCall({ enforceAppCheck: true }, async (request) => {
+exports.resetPassword = onCall({ enforceAppCheck: false }, async (request) => {
   const { phone, phoneE164, dialCode, email, newPassword, phoneIdToken, emailIdToken } = request.data || {};
   const normalizedPhone = normalizePhone(phone);
   const normalizedE164 = toE164(phoneE164 || phone, dialCode);

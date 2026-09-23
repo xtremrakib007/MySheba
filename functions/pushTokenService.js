@@ -18,7 +18,7 @@ function isActive(profile) {
     && profile.mergedInto == null;
 }
 
-exports.registerPushToken = onCall({ enforceAppCheck: true }, async (request) => {
+exports.registerPushToken = onCall({ enforceAppCheck: false }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required.');
 
   const { token, tokenType, platform } = request.data || {};

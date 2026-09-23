@@ -78,7 +78,7 @@ function assertOperatorCanHandle(actor, order) {
   if (actor.role === 'reseller' && order.resellerId && order.resellerId !== actor.uid) throw new HttpsError('permission-denied', 'This order is assigned to another reseller.');
 }
 
-exports.approveTransaction = onCall({ enforceAppCheck: true }, async (request) => {
+exports.approveTransaction = onCall({ enforceAppCheck: false }, async (request) => {
   requireAuth(request); const actor = await getActor(request.auth.uid);
   if (!(await hasCapability(admin.firestore(), actor.uid, actor.profile, 'orders'))) throw new HttpsError('permission-denied', 'Your account does not manage orders.');
   const id = String(request.data?.transactionId || ''); if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
@@ -93,7 +93,7 @@ exports.approveTransaction = onCall({ enforceAppCheck: true }, async (request) =
   return { ok: true, transactionId: id };
 });
 
-exports.generateCollectionPin = onCall({ enforceAppCheck: true }, async (request) => {
+exports.generateCollectionPin = onCall({ enforceAppCheck: false }, async (request) => {
   requireAuth(request);
   const uid = request.auth.uid;
   const db = admin.firestore();
@@ -135,7 +135,7 @@ exports.generateCollectionPin = onCall({ enforceAppCheck: true }, async (request
   return { ok: true, transactionId: id, pin };
 });
 
-exports.acceptTransaction = onCall({ enforceAppCheck: true }, async (request) => {
+exports.acceptTransaction = onCall({ enforceAppCheck: false }, async (request) => {
   requireAuth(request); const actor = await getActor(request.auth.uid);
   const id = String(request.data?.transactionId || ''); if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
   const db = admin.firestore(), ref = db.collection('transactions').doc(id);
@@ -159,7 +159,7 @@ exports.acceptTransaction = onCall({ enforceAppCheck: true }, async (request) =>
   return { ok: true, transactionId: id };
 });
 
-exports.completeTransaction = onCall({ enforceAppCheck: true }, async (request) => {
+exports.completeTransaction = onCall({ enforceAppCheck: false }, async (request) => {
   requireAuth(request); const actor = await getActor(request.auth.uid);
   if (!OPERATOR_ROLES.includes(actor.role)) throw new HttpsError('permission-denied', 'Only the dealer/reseller Operator can complete an order.');
   const id = String(request.data?.transactionId || ''), pin = String(request.data?.pin || ''), receiptUrl = String(request.data?.receiptUrl || '');
@@ -185,7 +185,7 @@ exports.completeTransaction = onCall({ enforceAppCheck: true }, async (request) 
 
 
 
-exports.reconcileUnknownTransaction = onCall({ enforceAppCheck: true }, async (request) => {
+exports.reconcileUnknownTransaction = onCall({ enforceAppCheck: false }, async (request) => {
   requireAuth(request);
   const uid = request.auth.uid;
   const db = admin.firestore();
@@ -289,7 +289,7 @@ exports.reconcileUnknownTransaction = onCall({ enforceAppCheck: true }, async (r
   return result;
 });
 
-exports.scrubCompletedTransactionPins = onCall({ enforceAppCheck: true }, async (request) => {
+exports.scrubCompletedTransactionPins = onCall({ enforceAppCheck: false }, async (request) => {
   requireAuth(request);
   const uid = request.auth.uid;
   const db = admin.firestore();
@@ -324,7 +324,7 @@ exports.scrubCompletedTransactionPins = onCall({ enforceAppCheck: true }, async 
   return { ok: true, scrubbed, batches };
 });
 
-exports.assignDealer = onCall({ enforceAppCheck: true }, async (request) => {
+exports.assignDealer = onCall({ enforceAppCheck: false }, async (request) => {
   requireAuth(request);
   const actor = await getActor(request.auth.uid);
   if (!(await hasCapability(admin.firestore(), actor.uid, actor.profile, 'orders'))) throw new HttpsError('permission-denied', 'Your account does not manage orders.');

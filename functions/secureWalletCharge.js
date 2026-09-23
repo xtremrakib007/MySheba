@@ -58,7 +58,7 @@ function priceForRole(pricing, key, role) {
   return roleValue != null ? roleValue : pricing[key];
 }
 
-exports.chargeWallet = onCall({ enforceAppCheck: true }, async (request) => {
+exports.chargeWallet = onCall({ enforceAppCheck: false }, async (request) => {
   const uid = auth(request);
   const rid = requestId(request);
   const { kind, key } = request.data || {};

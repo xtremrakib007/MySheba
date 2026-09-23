@@ -19,7 +19,7 @@ async function getActiveActor(db, uid) {
   return profile;
 }
 
-exports.createSupportTicket = onCall({ enforceAppCheck: true }, async (request) => {
+exports.createSupportTicket = onCall({ enforceAppCheck: false }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const db = admin.firestore();
@@ -76,5 +76,5 @@ async function setAssignment(request, clear) {
   return { ok: true, ticketId, assignedToUid: staffUid };
 }
 
-exports.assignSupportTicket = onCall({ enforceAppCheck: true }, async (request) => setAssignment(request, false));
-exports.unassignSupportTicket = onCall({ enforceAppCheck: true }, async (request) => setAssignment(request, true));
+exports.assignSupportTicket = onCall({ enforceAppCheck: false }, async (request) => setAssignment(request, false));
+exports.unassignSupportTicket = onCall({ enforceAppCheck: false }, async (request) => setAssignment(request, true));

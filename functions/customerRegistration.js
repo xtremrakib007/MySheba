@@ -24,7 +24,7 @@ function isValidPhone(phone) { return normalizePhone(phone).length >= 8; }
 function isValidEmail(email) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email)); }
 function isValidPin(pin) { const value = String(pin || ''); return value.length >= 6 && value.length <= 20; }
 
-exports.registerWithDealerCode = onCall({ enforceAppCheck: true }, async (request) => {
+exports.registerWithDealerCode = onCall({ enforceAppCheck: false }, async (request) => {
   const data = request.data || {};
   if (data.action === 'sendEmailVerificationOtp') return emailOtpService.sendEmailVerificationOtpInternal(data);
   if (data.action === 'verifyEmailVerificationOtp') return emailOtpService.verifyEmailVerificationOtpInternal(data);

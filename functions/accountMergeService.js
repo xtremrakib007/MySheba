@@ -21,7 +21,7 @@ async function getProfile(db, uid) { const snap = await db.collection('users').d
 function activeAccount(profile) { return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto && profile.active !== false; }
 function walletBalance(profile) { const value = Number(profile?.walletBalance || 0); if (!Number.isFinite(value) || value < 0 || !Number.isSafeInteger(Math.round(value * 100))) throw new HttpsError('failed-precondition', 'One of the account wallet balances is invalid.'); return value; }
 
-exports.startAccountMerge = onCall({ enforceAppCheck: true }, async (request) => {
+exports.startAccountMerge = onCall({ enforceAppCheck: false }, async (request) => {
   const callerUid = requireAuth(request);
   const db = admin.firestore();
   const caller = await getProfile(db, callerUid);
@@ -60,7 +60,7 @@ exports.startAccountMerge = onCall({ enforceAppCheck: true }, async (request) =>
   return { sent: true, emailMasked: maskEmail(email), yourWalletBalance, targetWalletBalance, combinedWalletBalance };
 });
 
-exports.confirmAccountMerge = onCall({ enforceAppCheck: true }, async (request) => {
+exports.confirmAccountMerge = onCall({ enforceAppCheck: false }, async (request) => {
   const callerUid = requireAuth(request); const db = admin.firestore();
   const code = String(request.data?.code || '').trim();
   if (!/^\d{6}$/.test(code)) throw new HttpsError('invalid-argument', 'Please enter the 6-digit code we sent.');

@@ -19,7 +19,7 @@ function activeAccount(profile) {
   return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && profile.active !== false && profile.mergedInto == null;
 }
 
-exports.adminTopUpPoints = onCall({ enforceAppCheck: true }, async request => {
+exports.adminTopUpPoints = onCall({ enforceAppCheck: false }, async request => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
 
   const db = admin.firestore();

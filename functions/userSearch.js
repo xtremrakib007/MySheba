@@ -37,7 +37,7 @@ async function rateLimit(db, uid, action, max, windowMs) {
   }
 }
 
-exports.searchUsers = onCall({ enforceAppCheck: true }, async (request) => {
+exports.searchUsers = onCall({ enforceAppCheck: false }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const callerUid = request.auth.uid;
   const term = String((request.data && request.data.query) || '').trim().slice(0, 100);
@@ -83,7 +83,7 @@ exports.searchUsers = onCall({ enforceAppCheck: true }, async (request) => {
 
 // QR lookup returns the same public-safe fields as searchUsers and never trusts
 // the name/phone/userId embedded in a QR payload.
-exports.getUserByUid = onCall({ enforceAppCheck: true }, async (request) => {
+exports.getUserByUid = onCall({ enforceAppCheck: false }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const callerUid = request.auth.uid;
   const targetUid = String((request.data && request.data.uid) || '').trim();

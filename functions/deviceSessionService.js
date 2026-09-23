@@ -191,7 +191,7 @@ function verifyStaffEmailOtp(challenge, code, deviceId, email) {
   if (!/^\d{6}$/.test(String(code || '').trim()) || otpHash(code) !== challenge.codeHash) throw new HttpsError('invalid-argument', 'Incorrect verification code.');
 }
 
-exports.checkDeviceSession = onCall({ enforceAppCheck: true }, async (request) => {
+exports.checkDeviceSession = onCall({ enforceAppCheck: false }, async (request) => {
   const db = getFirestore();
   const data = request.data || {};
   const hasVerificationToken = Boolean(data.phoneIdToken || data.emailIdToken);
@@ -294,7 +294,7 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: true }, async (request) =
   }
 });
 
-exports.confirmDeviceSwitch = onCall({ enforceAppCheck: true }, async (request) => {
+exports.confirmDeviceSwitch = onCall({ enforceAppCheck: false }, async (request) => {
   const db = getFirestore();
   const data = request.data || {};
   const hasVerificationToken = Boolean(data.phoneIdToken || data.emailIdToken);
@@ -342,7 +342,7 @@ exports.confirmDeviceSwitch = onCall({ enforceAppCheck: true }, async (request) 
   }
 });
 
-exports.clearActiveSession = onCall({ enforceAppCheck: true }, async (request) => {
+exports.clearActiveSession = onCall({ enforceAppCheck: false }, async (request) => {
   const uid = requireAuth(request);
   const deviceId = requireDeviceId(request);
   const db = getFirestore();
@@ -361,7 +361,7 @@ exports.clearActiveSession = onCall({ enforceAppCheck: true }, async (request) =
   } catch (error) { await logServerError('clearActiveSession', error, { userId: uid }); return { ok: false }; }
 });
 
-exports.listTrustedDevices = onCall({ enforceAppCheck: true }, async (request) => {
+exports.listTrustedDevices = onCall({ enforceAppCheck: false }, async (request) => {
   const uid = requireAuth(request);
   const currentDeviceId = request.data?.currentDeviceId || null;
   const db = getFirestore();
@@ -387,7 +387,7 @@ exports.listTrustedDevices = onCall({ enforceAppCheck: true }, async (request) =
   }
 });
 
-exports.revokeTrustedDevice = onCall({ enforceAppCheck: true }, async (request) => {
+exports.revokeTrustedDevice = onCall({ enforceAppCheck: false }, async (request) => {
   const uid = requireAuth(request);
   const deviceId = requireDeviceId(request);
   const db = getFirestore();
@@ -427,7 +427,7 @@ exports.revokeTrustedDevice = onCall({ enforceAppCheck: true }, async (request) 
 // existing verification/link flow intact while making the five-attempt limit
 // effective against repeated guesses.
 const originalCheckDeviceSession = exports.checkDeviceSession;
-exports.checkDeviceSession = onCall({ enforceAppCheck: true }, async (request) => {
+exports.checkDeviceSession = onCall({ enforceAppCheck: false }, async (request) => {
   const data = request.data || {};
   if (!data.emailOtp) return originalCheckDeviceSession(request);
 
@@ -457,7 +457,7 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: true }, async (request) =
 // Count every email-OTP attempt atomically before verification, with the same
 // five-attempt ceiling and challenge/device binding.
 const originalConfirmDeviceSwitch = exports.confirmDeviceSwitch;
-exports.confirmDeviceSwitch = onCall({ enforceAppCheck: true }, async (request) => {
+exports.confirmDeviceSwitch = onCall({ enforceAppCheck: false }, async (request) => {
   const data = request.data || {};
   if (!data.emailOtp) return originalConfirmDeviceSwitch(request);
 
@@ -488,7 +488,7 @@ exports.confirmDeviceSwitch = onCall({ enforceAppCheck: true }, async (request) 
 // The reconciliation is transactional, preventing two concurrent successful
 // device logins from losing each other through stale trustedDevices snapshots.
 const originalCheckDeviceSessionWithMfa = exports.checkDeviceSession;
-exports.checkDeviceSession = onCall({ enforceAppCheck: true }, async (request) => {
+exports.checkDeviceSession = onCall({ enforceAppCheck: false }, async (request) => {
   const result = await originalCheckDeviceSessionWithMfa(request);
   if (result?.requiresOtp) return result;
   const data = request.data || {};
@@ -519,7 +519,7 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: true }, async (request) =
 // This clears the server-side active session/device binding and revokes
 // Firebase refresh tokens so a forced logout cannot be bypassed by reusing
 // an existing refresh token.
-exports.adminForceLogout = onCall({ enforceAppCheck: true }, async (request) => {
+exports.adminForceLogout = onCall({ enforceAppCheck: false }, async (request) => {
   const callerUid = requireAuth(request);
   const targetUid = String(request.data?.targetUid || '').trim();
   if (!targetUid || targetUid.length > 128) {

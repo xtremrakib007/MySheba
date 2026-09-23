@@ -24,7 +24,7 @@ function activeProfile(profile) {
     profile.mergedInto == null;
 }
 
-exports.validateActiveSession = onCall({ enforceAppCheck: true }, async (request) => {
+exports.validateActiveSession = onCall({ enforceAppCheck: false }, async (request) => {
   const uid = requireAuth(request);
   const deviceId = requireString(request.data?.deviceId, MAX_DEVICE_ID_LENGTH, 'Missing or invalid device id.');
   const sessionId = requireString(request.data?.sessionId, MAX_SESSION_ID_LENGTH, 'Missing or invalid session id.');

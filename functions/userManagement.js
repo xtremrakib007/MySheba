@@ -15,7 +15,7 @@ async function getCallerProfile(uid) { const snap = await admin.firestore().coll
 async function getCustomerTarget(db, targetUid) { const ref = db.collection('users').doc(targetUid); const snap = await ref.get(); if (!snap.exists) throw new HttpsError('not-found', 'That user does not exist.'); if (snap.data().role !== 'customer') throw new HttpsError('invalid-argument', 'Only a customer account can be changed here.'); return { ref, snap }; }
 function assertActiveAssignment(profile, expectedRole, label) { if (!profile || profile.role !== expectedRole) throw new HttpsError('invalid-argument', `That ${label} was not found.`); if (!active(profile)) throw new HttpsError('failed-precondition', `That ${label} is not active.`); }
 
-exports.manageUser = onCall({ enforceAppCheck: true }, async (request) => {
+exports.manageUser = onCall({ enforceAppCheck: false }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const callerUid = request.auth.uid;
   const callerProfile = await getCallerProfile(callerUid);

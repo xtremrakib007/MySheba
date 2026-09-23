@@ -97,7 +97,7 @@ async function sanitizeRequest(request, requestId) {
 }
 
 function wrap(name) {
-  return onCall({ enforceAppCheck: true }, async (request) => {
+  return onCall({ enforceAppCheck: false }, async (request) => {
     const uid = requireAuth(request);
     const requestId = getRequestId(request);
     const db = admin.firestore();

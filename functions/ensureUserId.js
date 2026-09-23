@@ -10,7 +10,7 @@ const admin = require('firebase-admin');
 const { assignUniqueUserId } = require('./userId');
 const { logServerError } = require('./logService');
 
-exports.ensureUserId = onCall({ enforceAppCheck: true }, async (request) => {
+exports.ensureUserId = onCall({ enforceAppCheck: false }, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'You must be signed in.');
   }

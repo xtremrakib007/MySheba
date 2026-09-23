@@ -26,7 +26,7 @@ function hash(code) { return crypto.createHash('sha256').update(String(code).tri
 function code() { return String(crypto.randomInt(100000, 1000000)); }
 function ref(db, uid) { return db.collection('users').doc(uid); }
 
-exports.sendDeviceVerification = onCall({ enforceAppCheck: true }, async (request) => {
+exports.sendDeviceVerification = onCall({ enforceAppCheck: false }, async (request) => {
   const uid = requireAuth(request);
   const deviceId = String(request.data?.deviceId || '').trim();
   if (!deviceId || deviceId.length > 100) throw new HttpsError('invalid-argument', 'Missing or invalid device id.');
@@ -110,7 +110,7 @@ exports.sendDeviceVerification = onCall({ enforceAppCheck: true }, async (reques
   return { sent: true, email };
 });
 
-exports.confirmDeviceEmailOtp = onCall({ enforceAppCheck: true }, async (request) => {
+exports.confirmDeviceEmailOtp = onCall({ enforceAppCheck: false }, async (request) => {
   const uid = requireAuth(request);
   const deviceId = String(request.data?.deviceId || '').trim();
   const otp = String(request.data?.code || '').trim();

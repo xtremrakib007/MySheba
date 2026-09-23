@@ -43,7 +43,7 @@ function requestIdOf(request) {
   return id;
 }
 
-exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) => {
+exports.purchaseRechargePin = onCall({ enforceAppCheck: false }, async (request) => {
   const uid = requireAuth(request);
   const requestId = requestIdOf(request);
   const db = admin.firestore();
@@ -168,7 +168,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
   }
 });
 
-exports.getRechargePin = onCall({ enforceAppCheck: true }, async (request) => {
+exports.getRechargePin = onCall({ enforceAppCheck: false }, async (request) => {
   const uid = requireAuth(request);
   const transactionId = typeof request.data?.transactionId === 'string' ? request.data.transactionId.trim() : '';
   if (!/^[A-Za-z0-9_-]{1,100}$/.test(transactionId)) throw new HttpsError('invalid-argument', 'Invalid transaction ID.');
