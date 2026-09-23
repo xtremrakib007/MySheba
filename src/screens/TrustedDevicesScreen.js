@@ -7,6 +7,7 @@ import { radius, spacing } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import HeaderDecor from '../components/HeaderDecor';
 import * as deviceSessionService from '../firebase/deviceSessionService';
+import { friendlyMessage } from '../utils/signInErrorCopy';
 
 function formatWhen(ms) {
   if (!ms) return '';
@@ -40,7 +41,7 @@ export default function TrustedDevicesScreen() {
       const list = await deviceSessionService.listTrustedDevices();
       setDevices(list);
     } catch (e) {
-      setError(e.message || 'Could not load trusted devices.');
+      setError(friendlyMessage(e, 'Could not load trusted devices.'));
     } finally {
       setLoading(false);
     }

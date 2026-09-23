@@ -11,6 +11,7 @@ import PhoneCountryPicker from '../components/PhoneCountryPicker';
 import { DEFAULT_PHONE_COUNTRY } from '../data/phoneCountries';
 import * as emailVerification from '../firebase/emailVerification';
 import * as authService from '../firebase/authService';
+import { friendlyMessage } from '../utils/signInErrorCopy';
 
 export default function ForgotPasswordScreen() {
   const { colors, brandGradient } = useTheme();
@@ -39,14 +40,14 @@ export default function ForgotPasswordScreen() {
   const onSendSms = async () => {
     setError(''); setBusy(true);
     try { setPhoneConfirmation(await phoneVerification.sendPhoneOtp(phone, phoneCountry.dial)); setStep('sms'); }
-    catch (e) { setError(e.message || 'Could not send the verification code. Please try again.'); }
+    catch (e) { setError(friendlyMessage(e, 'Could not send the verification code. Please try again.')); }
     finally { setBusy(false); }
   };
   const completeEmailLink = async (url) => {
     if (!emailVerification.isEmailSignInLink(url)) return false;
     setBusy(true); setError('');
     try { const result = await emailVerification.confirmEmailLink(url, email); setEmailIdToken(result.idToken); setStep('newPassword'); }
-    catch (e) { setError(e.message || 'Could not verify your email address. Please try again.'); }
+    catch (e) { setError(friendlyMessage(e, 'Could not verify your email address. Please try again.')); }
     finally { setBusy(false); }
     return true;
   };
@@ -55,7 +56,7 @@ export default function ForgotPasswordScreen() {
     if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setError('Please enter a valid email address.');
     setBusy(true);
     try { await emailVerification.sendPasswordResetEmail(phoneVerification.phoneToE164(phone, phoneCountry.dial), email); setStep('email'); }
-    catch (e) { setError(e.message || 'Could not send the verification email. Please try again.'); }
+    catch (e) { setError(friendlyMessage(e, 'Could not send the verification email. Please try again.')); }
     finally { setBusy(false); }
   };
   useEffect(() => {
@@ -69,7 +70,7 @@ export default function ForgotPasswordScreen() {
     if (!code.trim()) return setError('Please enter the code we sent you.');
     setBusy(true);
     try { const result = await phoneVerification.confirmPhoneOtp(phoneConfirmation, code.trim()); setPhoneIdToken(result.idToken); setStep('newPassword'); }
-    catch (e) { setError(e.message || 'Incorrect code. Please try again.'); }
+    catch (e) { setError(friendlyMessage(e, 'Incorrect code. Please try again.')); }
     finally { setBusy(false); }
   };
   const onSubmitNewPassword = async () => {
@@ -80,7 +81,7 @@ export default function ForgotPasswordScreen() {
     try {
       await authService.resetPassword({ phone, phoneE164: phoneVerification.phoneToE164(phone, phoneCountry.dial), dialCode: phoneCountry.dial, email, newPassword, phoneIdToken, emailIdToken });
       showAlert('Password Reset', 'Your password has been reset. Please sign in with your new password.', [{ text: 'OK', onPress: backToLogin }]);
-    } catch (e) { setError(e.message || 'Could not reset your password. Please try again.'); }
+    } catch (e) { setError(friendlyMessage(e, 'Could not reset your password. Please try again.')); }
     finally { setBusy(false); }
   };
 

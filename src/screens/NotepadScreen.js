@@ -10,6 +10,7 @@ import {
   NOTE_TYPES, NOTE_TYPE_LABELS, NOTE_TYPE_SHORT_LABELS, NOTE_TYPE_ICONS, NOTE_TYPE_COLORS,
   MONEY_NOTE_TYPES, NOTE_STATUS, NOTE_FILTERS,
 } from '../data/notepadConstants';
+import { friendlyMessage } from '../utils/signInErrorCopy';
 
 /**
  * Notepad - a private per-user notes space. Plain notes (title + text)
@@ -61,7 +62,7 @@ export default function NotepadScreen() {
         setLoading(false);
       },
       (err) => {
-        setError(err.message);
+        setError(friendlyMessage(err, 'Could not load your notes. Please try again.'));
         setLoading(false);
       }
     );
