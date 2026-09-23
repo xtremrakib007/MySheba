@@ -156,3 +156,4 @@ function friendlyPhoneAuthError(err) {
   if (code.includes('network')) return 'Network error. Check your connection and try again.';
   return 'Could not verify your phone number. Please try again.';
 
+}
