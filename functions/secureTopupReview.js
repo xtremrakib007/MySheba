@@ -1,6 +1,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { inferWalletCurrency } = require('./walletCurrencyService');
+const ZERO_DECIMAL_CURRENCIES = new Set(['IDR', 'KHR', 'MMK']);
 const { logAudit, logServerError } = require('./logService');
 
 const ADMIN_ROLES = ['admin', 'superadmin'];
@@ -78,7 +79,10 @@ exports.approveTopup = onCall({ enforceAppCheck: true }, async request => {
       const user = userSnap.data() || {};
       if (!activeAccount(user)) throw new HttpsError('failed-precondition', 'The recipient account is not active.');
       if (!ALLOWED_RECIPIENT_ROLES.includes(user.role)) throw new HttpsError('failed-precondition', 'That account cannot receive wallet top-ups.');
-      const points = validMoney(topup.points ?? topup.amount);
+      const currency = inferWalletCurrency(user);
+      const requestedCurrency = String(topup.currency || '').toUpperCase();
+      if (requestedCurrency && requestedCurrency !== currency) throw new HttpsError('failed-precondition', `Top-up currency ${requestedCurrency} does not match the user's wallet currency ${currency}.`);
+      const points = validMoney(topup.walletAmount ?? topup.points ?? topup.amount);
       const balance = validBalance(user.walletBalance);
       if (points === null) throw new HttpsError('failed-precondition', 'Top-up amount is invalid.');
       if (balance === null) throw new HttpsError('failed-precondition', 'User wallet balance is invalid.');
@@ -87,8 +91,8 @@ exports.approveTopup = onCall({ enforceAppCheck: true }, async request => {
       const newBalanceCents = balanceCents + pointsCents;
       if (!Number.isSafeInteger(newBalanceCents)) throw new HttpsError('failed-precondition', 'Wallet balance is too large.');
       const newBalance = newBalanceCents / 100;
-      tx.update(userRef, { walletBalance: newBalance, walletCurrency: user.walletCurrency || user.walletBalanceCurrency || 'MYR' });
-      tx.update(ref, { status: 'approved', approvedBy: uid, approvedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp(), creditedPoints: points });
+      tx.update(userRef, { walletBalance: newBalance, walletCurrency: currency, walletBalanceCurrency: currency });
+      tx.update(ref, { status: 'approved', approvedBy: uid, approvedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp(), creditedAmount: points, creditedCurrency: currency, creditedPoints: points });
       return { userId, points };
     });
     await logAudit({ action: 'topup_approved', targetUid: out.userId, performedBy: uid, performedByRole: caller.role, details: { topupId, points: out.points } });
