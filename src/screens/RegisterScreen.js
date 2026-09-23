@@ -111,7 +111,7 @@ export default function RegisterScreen() {
     if (registrationFinishedRef.current) return;
     registrationFinishedRef.current = true;
     try {
-      const registerFn = httpsCallable(functions, 'registerCustomer');
+      const registerFn = httpsCallable(functions, 'registerWithDealerCode');
       await registerFn({
         name: name.trim(),
         phone,

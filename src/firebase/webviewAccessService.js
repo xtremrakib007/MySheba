@@ -15,6 +15,7 @@
 // own even if it tried - the Cloud Function is the only path.
 import { httpsCallable } from 'firebase/functions';
 import { functions } from './config';
+import { getSessionProof } from './deviceSessionService';
 import { WEBVIEW_ACCESS_COST, WEBVIEW_SUBMIT_COST } from '../data/countries';
 
 const chargeWalletFn = httpsCallable(functions, 'chargeWallet');
@@ -30,7 +31,8 @@ const chargeWalletFn = httpsCallable(functions, 'chargeWallet');
  */
 export async function ensureWebviewAccess(uid, key) {
   try {
-    const { data } = await chargeWalletFn({ kind: 'webview_access', key });
+    const session = await getSessionProof();
+    const { data } = await chargeWalletFn({ kind: 'webview_access', key, ...session });
     return data;
   } catch (err) {
     throw new Error(err.message || `You need ${WEBVIEW_ACCESS_COST} pts to check this - top up your wallet first.`);
@@ -47,7 +49,8 @@ export async function ensureWebviewAccess(uid, key) {
  */
 export async function chargeWebviewSubmission(uid, key) {
   try {
-    const { data } = await chargeWalletFn({ kind: 'webview_submit', key });
+    const session = await getSessionProof();
+    const { data } = await chargeWalletFn({ kind: 'webview_submit', key, ...session });
     return data;
   } catch (err) {
     throw new Error(err.message || `You need ${WEBVIEW_SUBMIT_COST} pts to confirm this - top up your wallet first.`);

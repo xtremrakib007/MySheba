@@ -27,12 +27,12 @@ import * as bannerService from '../firebase/bannerService';
 import * as announcementService from '../firebase/announcementService';
 import * as topupService from '../firebase/topupService';
 import * as transactionService from '../firebase/transactionService';
-import * as rechargePinService from '../firebase/rechargePinService';
 import { internetPackagesByOperator, countries } from '../data/countries';
 import CountryModal from '../components/CountryModal';
 import * as homepageConfigService from '../firebase/homepageConfigService';
 import { getHomepageModules } from '../firebase/homepageConfigService';
 import { getMergedPackages } from '../utils/internetPackages';
+import * as gridManagementService from '../firebase/gridManagementService';
 
 const FEATURES = [
   { key: 'all', icon: '📋', bg: '#E3F2FD', name: 'All Tx' },
@@ -135,14 +135,7 @@ const ACCESS_WINDOW_FIELDS = [
   { key: 'webviewAccessWindowHours', label: '⏱️ FOMEMA / Visa Free Access Window (hours)' },
 ];
 
-// PRD section 15) - actually charged in the boostListing Cloud Function
-// (functions/walletService.js). listingBoostCost reuses the pts editor,
-// listingBoostDurationDays gets its own "days" unit below.
-const BOOST_COST_FIELDS = [
-];
-const BOOST_DURATION_FIELDS = [
-  { key: 'listingBoostDurationDays', label: '📅 Boost Duration (days)' },
-];
+const BOOST_COST_FIELDS = [];
 
 // Recharge / Internet Package points multiplier - unlike every other
 // entry above, this isn't a flat pts price; it's what a role's own
@@ -200,17 +193,6 @@ const SUPPORT_FIELDS = [
 // Meta developer App ID (free to create, no App Review needed) that
 // Instagram/Facebook Story sharing requires for attribution; kept in this
 // same doc purely to avoid a second settings read.
-const SOCIAL_FIELDS = [
-  { key: 'facebook', label: '📘 Facebook Page URL', placeholder: 'https://facebook.com/yourpage' },
-  { key: 'instagram', label: '📷 Instagram URL', placeholder: 'https://instagram.com/yourhandle' },
-  { key: 'tiktok', label: '🎵 TikTok URL', placeholder: 'https://tiktok.com/@yourhandle' },
-  { key: 'linkedin', label: '💼 LinkedIn URL', placeholder: 'https://linkedin.com/company/yourcompany' },
-  { key: 'x', label: '✖️ X (Twitter) URL', placeholder: 'https://x.com/yourhandle' },
-];
-const SOCIAL_TECHNICAL_FIELDS = [
-  { key: 'facebookAppId', label: '🔧 Facebook App ID', placeholder: 'e.g. 1234567890123456' },
-];
-
 // Every operator that has an editable internet package list (see
 // data/countries.js) - flattened + deduped across all countries, so the
 // Pricing tab's operator picker doesn't need to know about countries at all.
@@ -260,29 +242,6 @@ function formatInquiryCopy(inq) {
 // queue (admin calls the customer back to confirm), and live exchange
 // rates. Everything reads/writes Firestore directly - no mock data.
 export default function AdminHomeScreen() {
-  const {
-    authUser,
-    profile,
-    dealerTxs,
-    inquiries,
-    topups,
-    banners,
-    announcements,
-    adminTab,
-    setAdminTab,
-    rates,
-    pricing,
-    internetPricing,
-    supportContact,
-    paymentSettings,
-    logout,
-    setScreen,
-    openSidebar,
-    setHomeBackInterceptor,
-    adminViewingSection: viewingSection,
-    setAdminViewingSection: setViewingSection,
-    homepageConfig,
-  } = useApp();
   const {
     colors,
     brandGradient
@@ -466,31 +425,9 @@ export default function AdminHomeScreen() {
     setReceiptTxId({ id: tx.id, pin });
   };
 
-  // Same e-PIN stock the resellers draw from (functions/rechargePinService.js).
-  const issuePinFromStock = async (tx) => {
-    setBusyTxId(tx.id);
-    try {
-      const issued = await rechargePinService.issueRechargePin(tx.id);
-      setReceiptTxId({ id: tx.id, pin: issued.pin });
-      showAlert('Recharge PIN issued', `PIN: ${issued.pin}${issued.serial ? `\nSerial: ${issued.serial}` : ''}\n\nAttach the receipt to finish the order.`);
-    } catch (e) {
-      showAlert('MySheba', e.message || 'Could not issue a recharge PIN.');
-    } finally {
-      setBusyTxId(null);
-    }
-  };
-
   const onCompleteTx = (tx) => {
     if (tx.claimedBy !== authUser?.uid) {
       showAlert('MySheba', 'This order was accepted by another staff member.');
-      return;
-    }
-    if (tx.service === 'Recharge') {
-      showAlert('Complete recharge', 'Use a PIN from the uploaded stock, or type a collection code yourself.', [
-        { text: 'Enter code', onPress: () => setPinTxId({ id: tx.id, service: tx.service }) },
-        { text: 'Use PIN from stock', onPress: () => issuePinFromStock(tx) },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
       return;
     }
     setPinTxId({ id: tx.id, service: tx.service });
@@ -517,7 +454,7 @@ export default function AdminHomeScreen() {
     inquiries: inquiries.filter((i) => (i.status || 'new') === 'new').length || undefined,
     topups: topups.filter((t) => t.status === 'pending').length || undefined,
   };
-  const features = FEATURES.map((f) => ({ ...f, badge: featureBadges[f.key] }));
+  const features = FEATURES.filter((f) => gridManagementService.isGridActive(gridManagement, f.key === 'all' ? 'history' : f.key)).map((f) => ({ ...f, badge: featureBadges[f.key] }));
   // Section header (icon + name) for whichever Dashboard tile the user
   // opened from AdminFeaturesScreen - the grid itself now lives there.
   const activeFeature = features.find((f) => f.key === adminTab);
@@ -915,32 +852,6 @@ export default function AdminHomeScreen() {
                 price to 0 to keep that module free.
               </Text>
             </View>
-
-            <View style={styles.card}>
-              {BOOST_COST_FIELDS.map((r) => (
-                <View key={r.key} style={styles.rateRow}>
-                  <Text style={{ flex: 1 }}>{r.label}</Text>
-                  <Text style={styles.rateValue}>{pricing[r.key]} pts</Text>
-                  <TouchableOpacity style={styles.editBtn} onPress={() => setEditPointCostKey(r.key)}>
-                    <Text style={styles.editBtnText}>Edit</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-              {BOOST_DURATION_FIELDS.map((r) => (
-                <View key={r.key} style={styles.rateRow}>
-                  <Text style={{ flex: 1 }}>{r.label}</Text>
-                  <Text style={styles.rateValue}>{pricing[r.key]} days</Text>
-                  <TouchableOpacity style={styles.editBtn} onPress={() => setEditPointCostKey(r.key)}>
-                    <Text style={styles.editBtnText}>Edit</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-              <Text style={styles.hintText}>
-                for this many days (see the listing detail screen's Boost button). Re-boosting an
-                already-featured listing extends it rather than restarting the clock.
-              </Text>
-            </View>
-
             {profile && profile.role === 'superadmin' && (
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>🎭 Role-Based Pricing</Text>
@@ -1404,13 +1315,11 @@ export default function AdminHomeScreen() {
         visible={!!editPointCostKey}
         title={
           ACCESS_WINDOW_FIELDS.some((f) => f.key === editPointCostKey) ? 'New value (hours):'
-          : BOOST_DURATION_FIELDS.some((f) => f.key === editPointCostKey) ? 'New value (days):'
           : MODULE_SUBSCRIPTION_DAYS_FIELDS.some((f) => f.key === editPointCostKey) ? 'New value (days):'
           : 'New cost (points):'
         }
         placeholder={
           ACCESS_WINDOW_FIELDS.some((f) => f.key === editPointCostKey) ? 'e.g. 1'
-          : BOOST_DURATION_FIELDS.some((f) => f.key === editPointCostKey) ? 'e.g. 7'
           : MODULE_SUBSCRIPTION_DAYS_FIELDS.some((f) => f.key === editPointCostKey) ? 'e.g. 30'
           : 'e.g. 2'
         }

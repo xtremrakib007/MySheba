@@ -5,9 +5,7 @@ import { db, functions } from '../firebase/config';
 const COLLECTION = 'pointTransfers';
 
 function createRequestId() {
-  const uuid = globalThis.crypto?.randomUUID?.();
-  if (!uuid) throw new Error('Secure request ID generation is unavailable. Please reload the app.');
-  return `pt_${uuid.replace(/-/g, '')}`;
+  return `pt_${Date.now()}_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}`;
 }
 
 export interface TransferResult {

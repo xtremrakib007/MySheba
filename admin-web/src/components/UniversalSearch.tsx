@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Command, Search, Sparkles } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
-import { canAccess } from '../routes/navConfig';
 
 type SearchItem = { label: string; description: string; path: string; keywords?: string; group: string };
 
@@ -30,7 +28,6 @@ const ITEMS: SearchItem[] = [
   { label: 'Pricing', description: 'Service pricing configuration', path: '/config/pricing', keywords: 'price fee charges', group: 'Configuration' },
   { label: 'Payment Settings', description: 'Payment configuration', path: '/config/payments', keywords: 'payment gateway', group: 'Configuration' },
   { label: 'Feature Access', description: 'Enable or control modules', path: '/feature-access', keywords: 'modules services access', group: 'Configuration' },
-  { label: 'Chat Reports', description: 'Review reported direct chat content', path: '/chat-reports', keywords: 'chat report moderation', group: 'Moderation' },
   { label: 'Inquiries', description: 'Flight, bus, train and service inquiries', path: '/inquiries', keywords: 'flight bus train visa passport', group: 'Services' },
   { label: 'Service Operations', description: 'Monitor platform service modules', path: '/service-operations', keywords: 'mobile banking recharge remittance flight bus train', group: 'Services' },
   { label: 'System Health', description: 'Backend health and operational logs', path: '/system-health', keywords: 'health errors firestore activity', group: 'Governance' },
@@ -41,18 +38,16 @@ const ITEMS: SearchItem[] = [
 
 export default function UniversalSearch() {
   const navigate = useNavigate();
-  const { access } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
 
   const results = useMemo(() => {
-    const allowed = ITEMS.filter((item) => canAccess(item.path, access));
     const q = query.trim().toLowerCase();
-    if (!q) return allowed.slice(0, 10);
-    return allowed.filter((item) => `${item.label} ${item.description} ${item.keywords ?? ''} ${item.group}`.toLowerCase().includes(q)).slice(0, 12);
-  }, [query, access]);
+    if (!q) return ITEMS.slice(0, 10);
+    return ITEMS.filter((item) => `${item.label} ${item.description} ${item.keywords ?? ''} ${item.group}`.toLowerCase().includes(q)).slice(0, 12);
+  }, [query]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

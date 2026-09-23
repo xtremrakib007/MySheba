@@ -1,0 +1,22 @@
+Add inside your existing `match /users/{uid} { ... }` block in firestore.rules:
+
+    match /trustedDevices/{deviceId} {
+      // Client only ever needs to READ its own trusted-device list (to
+      // check "is this browser trusted?"). Writes happen exclusively in
+      // verifyLoginOtp via the Admin SDK, which bypasses rules entirely -
+      // so writes are denied here on purpose, same reasoning as
+      // walletBalance being frozen against direct client writes.
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    match /loginOtp/{docId} {
+      // Fully server-only - the client never reads or writes OTP state
+      // directly, only via requestLoginOtp / verifyLoginOtp callables.
+      allow read, write: if false;
+    }
+
+If your rules structure users/{uid} subcollections differently (e.g. rules
+per top-level collection rather than nested matches), place these with the
+same read/write posture: trustedDevices readable by its own owner only,
+loginOtp fully closed to clients.

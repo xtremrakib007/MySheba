@@ -2,15 +2,33 @@ const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/
 const admin = require('firebase-admin');
 
 const DEALER_SERVICE = 'Mobile Banking';
-const RESELLER_SERVICES = new Set(['Recharge', 'Internet', 'Remittance', 'Bill Payment']);
-const OPERATIONAL_RAW_FIELDS = [
-  'phone', 'senderName', 'senderPhone', 'senderCompany', 'senderPassportNo', 'senderPassportExpiry',
-  'senderAddress', 'receiverFirstName', 'receiverLastName', 'receiverRelationship', 'receiverPhone',
-  'receiverBankName', 'receiverAccountNumber', 'receiverBranch', 'receiverRoutingNumber',
-  'receiverPickupNetwork', 'receiverIdType', 'receiverIdNumber', 'receiverPickupCity',
-  'receiverWalletProvider', 'receiverWalletNumber', 'country', 'method',
-  'biller', 'billerName', 'billerCategory', 'accountNumber', 'accountLabel',
-];
+const RESELLER_SERVICES = new Set(['Recharge', 'Internet', 'Bill Payment', 'Remittance']);
+const SERVICE_ALIASES = {
+  recharge: 'Recharge',
+  internet: 'Internet',
+  billpayment: 'Bill Payment',
+  'bill payment': 'Bill Payment',
+  mobilebanking: 'Mobile Banking',
+  'mobile banking': 'Mobile Banking',
+  remittance: 'Remittance',
+};
+function normalizeService(value) {
+  const raw = String(value || '').trim();
+  return SERVICE_ALIASES[raw.toLowerCase()] || raw;
+}
+const OPERATIONAL_RAW_FIELDS = {
+  Recharge: new Set(['phone', 'country', 'amount']),
+  Internet: new Set(['phone', 'country', 'amount', 'provider']),
+  'Bill Payment': new Set(['phone', 'country', 'amount', 'provider', 'category', 'accountNumber']),
+  'Mobile Banking': new Set(['phone', 'country', 'amount', 'provider', 'category', 'accountNumber']),
+  Remittance: new Set([
+    'phone', 'senderName', 'senderPhone', 'senderCompany', 'senderPassportNo', 'senderPassportExpiry',
+    'senderAddress', 'receiverFirstName', 'receiverLastName', 'receiverRelationship', 'receiverPhone',
+    'receiverBankName', 'receiverAccountNumber', 'receiverBranch', 'receiverRoutingNumber',
+    'receiverPickupNetwork', 'receiverIdType', 'receiverIdNumber', 'receiverPickupCity',
+    'receiverWalletProvider', 'receiverWalletNumber', 'country', 'method', 'provider',
+  ]),
+};
 
 function queueRole(service) {
   if (service === DEALER_SERVICE) return 'dealer';
@@ -18,10 +36,11 @@ function queueRole(service) {
   return null;
 }
 
-function sanitizeRaw(raw) {
+function sanitizeRaw(raw, service) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
   const out = {};
-  for (const key of OPERATIONAL_RAW_FIELDS) {
+  const allowed = OPERATIONAL_RAW_FIELDS[service] || new Set(['phone', 'country', 'amount', 'provider', 'category']);
+  for (const key of allowed) {
     const value = raw[key];
     if (typeof value === 'string') out[key] = value.slice(0, 500);
     else if (typeof value === 'number' && Number.isFinite(value)) out[key] = value;
@@ -31,20 +50,20 @@ function sanitizeRaw(raw) {
 }
 
 function sanitizeTransaction(id, tx) {
-  const operatorRole = queueRole(tx.service);
+  const service = normalizeService(tx.service || tx.chargedServiceKind);
+  const operatorRole = queueRole(service);
   if (!operatorRole) return null;
-
   return {
     transactionId: id,
     operatorRole,
-    service: String(tx.service || ''),
+    service,
     status: String(tx.status || 'pending'),
     approved: tx.approved === true,
     amount: Number.isFinite(Number(tx.amount)) ? Number(tx.amount) : 0,
     total: Number.isFinite(Number(tx.total)) ? Number(tx.total) : 0,
     customerPhone: typeof tx.customerPhone === 'string' ? tx.customerPhone.slice(0, 64) : '',
     details: typeof tx.details === 'string' ? tx.details.slice(0, 2000) : '',
-    raw: sanitizeRaw(tx.raw),
+    raw: sanitizeRaw(tx.raw, service),
     receiptUrl: typeof tx.receiptUrl === 'string' ? tx.receiptUrl.slice(0, 2048) : '',
     dealerId: tx.dealerId || null,
     resellerId: tx.resellerId || null,
@@ -59,27 +78,23 @@ function sanitizeTransaction(id, tx) {
 async function syncQueue(id, tx) {
   const ref = admin.firestore().collection('transactionQueue').doc(id);
   const queue = sanitizeTransaction(id, tx);
-
   if (!queue || tx.rejected === true || !['pending', 'processing', 'completed'].includes(queue.status)) {
     await ref.delete().catch(() => {});
     return;
   }
-
   if (queue.status === 'completed' && !queue.claimedBy) {
     await ref.delete().catch(() => {});
     return;
   }
-
   await ref.set(queue, { merge: false });
 }
 
 exports.sanitizeTransaction = sanitizeTransaction;
-exports.onTransactionQueueCreated = onDocumentCreated('transactions/{id}', async event => {
+exports.onTransactionQueueCreated = onDocumentCreated('transactions/{id}', async (event) => {
   const tx = event.data?.data();
   if (tx) await syncQueue(event.params.id, tx);
 });
-
-exports.onTransactionQueueUpdated = onDocumentUpdated('transactions/{id}', async event => {
+exports.onTransactionQueueUpdated = onDocumentUpdated('transactions/{id}', async (event) => {
   const tx = event.data?.after?.data();
   if (tx) await syncQueue(event.params.id, tx);
 });

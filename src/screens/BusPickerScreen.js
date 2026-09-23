@@ -5,7 +5,7 @@ import { useApp } from '../context/AppContext';
 import { useTheme } from "../theme/ThemeContext";
 import { busTicketPartners } from '../data/countries';
 import HeaderDecor from '../components/HeaderDecor';
-import { Tile } from '../components/ServiceGrid';
+import { Tile, GRID_PADDING, COLUMN_GAP } from '../components/ServiceGrid';
 
 // Bus is 3 real ticketing sites rather than one in-app flow - tapping
 // any card runs the same lock/deduct-warning gate as any other paid
@@ -67,8 +67,9 @@ function createStyles(colors) {
     headerTitle: { color: 'white', fontWeight: '600', fontSize: 16, marginLeft: 10, flexShrink: 1 },
     hint: { textAlign: 'center', fontSize: 13, fontWeight: '600', color: colors.navy, marginTop: 20 },
     subHint: { textAlign: 'center', fontSize: 11, color: colors.textSecondary, marginTop: 4, marginBottom: 20, paddingHorizontal: 30 },
-    // Same padding/gap as the home grid so tiles line up identically -
+    // Same fixed-width, 4-per-row math as the home grid (GRID_PADDING /
+    // COLUMN_GAP imported from ServiceGrid) so tiles line up identically -
     // only 3 partners exist today so this simply wraps to one short row.
-    grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10, gap: 6, justifyContent: 'center', marginTop: 4 },
+    grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: GRID_PADDING, gap: COLUMN_GAP, justifyContent: 'center', marginTop: 4 },
   });
 }

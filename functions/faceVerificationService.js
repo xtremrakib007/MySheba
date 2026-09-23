@@ -5,21 +5,31 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
-const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const PENDING = 'pendingBiometricTemplates';
 const VERIFIED = 'biometricTemplates';
 const DIMENSIONS = 512;
 const DUPLICATE_THRESHOLD = 0.82;
-const PENDING_TTL_MS = 30 * 60 * 1000;
 
 function requireAuth(request) {
-  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
+  if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   return request.auth.uid;
 }
 
-function isActiveUser(user) {
-  return user && user.suspended !== true && user.inactive !== true && user.disabled !== true && !user.mergedInto;
+function activeProfile(profile) {
+  return !!profile
+    && profile.suspended !== true
+    && profile.inactive !== true
+    && profile.disabled !== true
+    && profile.active !== false
+    && profile.mergedInto == null;
+}
+
+async function requireActiveAccount(db, uid) {
+  const snap = await db.collection('users').doc(uid).get();
+  if (!snap.exists || !activeProfile(snap.data())) {
+    throw new HttpsError('permission-denied', 'Your account is not active.');
+  }
 }
 
 function cleanEmbedding(value) {
@@ -43,16 +53,11 @@ function cosine(a, b) {
   return dot;
 }
 
-exports.verifyKycFace = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+exports.verifyKycFace = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireAuth(request);
   const db = admin.firestore();
-  const userSnap = await db.collection('users').doc(uid).get();
-  if (!userSnap.exists || !isActiveUser(userSnap.data() || {})) {
-    throw new HttpsError('permission-denied', 'This account is not active.');
-  }
-
-  await checkVelocity(db, uid, 'verifyKycFace', { ip: getClientIp(request) });
-
+  await requireActiveAccount(db, uid);
+  await checkVelocity(db, uid, 'kyc_face', { ip: getClientIp(request) });
   const embedding = cleanEmbedding(request.data?.embedding);
   if (request.data?.livenessPassed !== true) {
     throw new HttpsError('failed-precondition', 'Complete the live face movement check first.');
@@ -73,33 +78,35 @@ exports.verifyKycFace = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (re
     }
   });
 
-  const pendingRef = db.collection(PENDING).doc(uid);
-  const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + PENDING_TTL_MS);
-
   if (best && best.score >= DUPLICATE_THRESHOLD) {
-    await pendingRef.set({
-      uid,
-      status: 'duplicate',
-      duplicateOf: best.uid,
-      similarity: best.score,
-      expiresAt,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
-    // Do not expose the matched UID or similarity score to the client.
-    return { ok: false, duplicate: true };
+    await db.runTransaction(async (tx) => {
+      const userSnap = await tx.get(db.collection('users').doc(uid));
+      if (!userSnap.exists || !activeProfile(userSnap.data())) throw new HttpsError('permission-denied', 'Your account is not active.');
+      tx.set(db.collection(PENDING).doc(uid), {
+        uid,
+        status: 'duplicate',
+        duplicateOf: best.uid,
+        similarity: best.score,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    });
+    return { ok: false, duplicate: true, similarity: best.score };
   }
 
-  await pendingRef.set({
-    uid,
-    status: 'pending',
-    embedding,
-    model: 'mobilefacenet-512',
-    livenessPassed: true,
-    expiresAt,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  }, { merge: true });
+  await db.runTransaction(async (tx) => {
+    const userSnap = await tx.get(db.collection('users').doc(uid));
+    if (!userSnap.exists || !activeProfile(userSnap.data())) throw new HttpsError('permission-denied', 'Your account is not active.');
+    tx.set(db.collection(PENDING).doc(uid), {
+      uid,
+      status: 'pending',
+      embedding,
+      model: 'mobilefacenet-512',
+      livenessPassed: true,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
 
-  return { ok: true, duplicate: false };
+  return { ok: true, duplicate: false, similarity: best?.score || 0 };
 });
 
 // Called only after an admin approves the KYC request. Keeping templates in
@@ -113,13 +120,32 @@ exports.finalizeKycFaceTemplate = async (tx, db, uid) => {
     throw new HttpsError('failed-precondition', 'A validated face template is required before approval.');
   }
   const data = pending.data();
-  if (!data.expiresAt || data.expiresAt.toMillis() < Date.now()) {
-    tx.delete(pendingRef);
-    throw new HttpsError('failed-precondition', 'The face verification has expired. Please verify your face again.');
+  const embedding = cleanEmbedding(data.embedding);
+
+  // Re-check inside the same approval transaction. The earlier submission-time
+  // check only compared against templates that were already verified; without
+  // this second check, two pending applicants could both pass that check and
+  // later be approved with the same biometric identity.
+  const verifiedSnap = await tx.get(db.collection(VERIFIED));
+  let best = null;
+  verifiedSnap.forEach((doc) => {
+    if (doc.id === uid) return;
+    const candidate = doc.data()?.embedding;
+    if (!Array.isArray(candidate) || candidate.length !== DIMENSIONS) return;
+    try {
+      const score = cosine(embedding, cleanEmbedding(candidate));
+      if (!best || score > best.score) best = { uid: doc.id, score };
+    } catch (_) {
+      // Ignore malformed legacy templates.
+    }
+  });
+  if (best && best.score >= DUPLICATE_THRESHOLD) {
+    throw new HttpsError('failed-precondition', 'This identity matches an existing verified account and cannot be approved.');
   }
+
   tx.set(templateRef, {
     uid,
-    embedding: data.embedding,
+    embedding,
     model: data.model || 'mobilefacenet-512',
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),

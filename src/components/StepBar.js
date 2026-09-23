@@ -22,7 +22,7 @@ export default function StepBar({ totalSteps, currentStep }) {
 
 function createStyles(colors) {
   return StyleSheet.create({
-    bar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.border },
+    bar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, backgroundColor: colors.card },
     dot: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center' },
     active: { backgroundColor: colors.primary },
     done: { backgroundColor: colors.success },

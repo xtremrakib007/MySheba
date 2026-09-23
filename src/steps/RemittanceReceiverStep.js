@@ -65,21 +65,21 @@ export default function RemittanceReceiverStep({ serviceData, updateServiceData,
         <FormLabel>Bank Details</FormLabel>
         <SearchPicker placeholder="1. Select Bank Name" title="Select Bank Name" value={serviceData.receiverBankName} items={banks.map((b)=>b.name).concat('Other / Not Listed')} onSelect={selectBank}/>
 
-        {bankIsOther && <FormInput placeholder="Enter Bank Name" value={serviceData.receiverBankName||''} onChangeText={(v)=>updateServiceData({receiverBankName:v,receiverBankIsOther:true})}/>} 
+        {bankIsOther && <FormInput placeholder="Enter Bank Name" value={serviceData.receiverBankName||''} onChangeText={(v)=>updateServiceData({receiverBankName:v,receiverBankIsOther:true})}/>}
 
-        {(bankSelected || bankIsOther) && <FormInput placeholder="2. Account Number" keyboardType="number-pad" value={serviceData.receiverAccountNumber||''} onChangeText={(v)=>updateServiceData({receiverAccountNumber:v,receiverBranch:'',receiverBranchIsOther:false,receiverRoutingNumber:''})}/>} 
+        {(bankSelected || bankIsOther) && <FormInput placeholder="2. Account Number" keyboardType="number-pad" value={serviceData.receiverAccountNumber||''} onChangeText={(v)=>updateServiceData({receiverAccountNumber:v,receiverBranch:'',receiverBranchIsOther:false,receiverRoutingNumber:''})}/>}
 
         {((bankSelected || bankIsOther) && accountEntered) && (bankIsOther ? (
           <>
             <FormInput placeholder="3. Enter Branch Name" value={serviceData.receiverBranch||''} onChangeText={(v)=>updateServiceData({receiverBranch:v,receiverBranchIsOther:true,receiverRoutingNumber:''})}/>
-            {branchSelected && <FormInput placeholder="4. Routing Number" keyboardType="number-pad" value={serviceData.receiverRoutingNumber||''} onChangeText={(v)=>updateServiceData({receiverRoutingNumber:v})}/>} 
+            {branchSelected && <FormInput placeholder="4. Routing Number" keyboardType="number-pad" value={serviceData.receiverRoutingNumber||''} onChangeText={(v)=>updateServiceData({receiverRoutingNumber:v})}/>}
           </>
         ) : (
           <>
             <SearchPicker placeholder="3. Select Branch" title="Select Bank Branch" value={serviceData.receiverBranch} items={branchOptions.map((b)=>b.name||b).concat('Other / Not Listed')} onSelect={selectBranch}/>
             {branchSelected && !branchIsOther && routingAvailable && <View style={{padding:12,borderRadius:10,backgroundColor:colors.card,borderWidth:1,borderColor:colors.border,marginBottom:12}}><Text style={{color:colors.textSecondary,fontSize:12}}>4. Routing Number</Text><Text style={{color:colors.text,fontSize:15,fontWeight:'700',marginTop:3}}>{serviceData.receiverRoutingNumber}</Text><Text style={{color:colors.textSecondary,fontSize:11,marginTop:3}}>Automatically selected from the branch</Text></View>}
-            {branchIsOther && branchSelected && <FormInput placeholder="4. Routing Number" keyboardType="number-pad" value={serviceData.receiverRoutingNumber||''} onChangeText={(v)=>updateServiceData({receiverRoutingNumber:v})}/>} 
-            {branchSelected && !routingAvailable && !branchIsOther && <FormInput placeholder="4. Routing Number" keyboardType="number-pad" value={serviceData.receiverRoutingNumber||''} onChangeText={(v)=>updateServiceData({receiverRoutingNumber:v})}/>} 
+            {branchIsOther && branchSelected && <FormInput placeholder="4. Routing Number" keyboardType="number-pad" value={serviceData.receiverRoutingNumber||''} onChangeText={(v)=>updateServiceData({receiverRoutingNumber:v})}/>}
+            {branchSelected && !routingAvailable && !branchIsOther && <FormInput placeholder="4. Routing Number" keyboardType="number-pad" value={serviceData.receiverRoutingNumber||''} onChangeText={(v)=>updateServiceData({receiverRoutingNumber:v})}/>}
           </>
         ))}
       </>}
@@ -92,7 +92,61 @@ export default function RemittanceReceiverStep({ serviceData, updateServiceData,
     </View>;
   }
 
-  return <View><FormLabel>Saved Receivers</FormLabel>{loading&&<ActivityIndicator color={colors.primary} style={{marginVertical:20}} />}{!loading&&saved.length===0&&<Text style={{color:colors.textSecondary,textAlign:'center',marginVertical:20}}>No saved receivers yet.</Text>}{!loading&&saved.map((r)=><TxOptionCard key={r.id} title={`${r.firstName||''} ${r.lastName||''}`.trim()} detail={[r.relationship,r.phone,r.bankName,r.pickupNetwork,r.walletProvider].filter(Boolean).join('  •  ')} selected={serviceData.selectedReceiverId===r.id} onPress={()=>updateServiceData({selectedReceiverId:r.id,receiverMode:'saved',recipientType:'other',receiverFirstName:r.firstName,receiverLastName:r.lastName,receiverPhone:r.phone,receiverRelationship:r.relationship,receiverNationality:r.nationality||'',receiverDateOfBirth:r.dateOfBirth||'',receiverAddress:r.address||'',receiverBankName:r.bankName,receiverAccountNumber:r.accountNumber,receiverBranch:r.branch,receiverRoutingNumber:r.routingNumber,receiverPickupNetwork:r.pickupNetwork,receiverIdType:r.idType,receiverIdNumber:r.idNumber,receiverPickupCity:r.pickupCity,receiverWalletProvider:r.walletProvider,receiverWalletNumber:r.walletNumber})}/>)}<OutlineButton label="+ Add a new receiver instead" onPress={()=>updateServiceData({receiverMode:'new',recipientType:'other'})}/><OutlineButton label="← Change recipient type" onPress={()=>updateServiceData({recipientType:null,receiverMode:null})}/></View>;
+  return (
+    <View>
+      <FormLabel>Saved Receivers</FormLabel>
+      {loading && (
+        <ActivityIndicator
+          color={colors.primary}
+          style={{ marginVertical: 20 }}
+        />
+      )}
+      {!loading && saved.length === 0 && (
+        <Text style={{ color: colors.textSecondary, textAlign: 'center', marginVertical: 20 }}>
+          No saved receivers yet.
+        </Text>
+      )}
+      {!loading && saved.map((r) => (
+        <TxOptionCard
+          key={r.id}
+          title={`${r.firstName || ''} ${r.lastName || ''}`.trim()}
+          detail={[r.relationship, r.phone, r.bankName, r.pickupNetwork, r.walletProvider].filter(Boolean).join('  •  ')}
+          selected={serviceData.selectedReceiverId === r.id}
+          onPress={() => updateServiceData({
+            selectedReceiverId: r.id,
+            receiverMode: 'saved',
+            recipientType: 'other',
+            receiverFirstName: r.firstName,
+            receiverLastName: r.lastName,
+            receiverPhone: r.phone,
+            receiverRelationship: r.relationship,
+            receiverNationality: r.nationality || '',
+            receiverDateOfBirth: r.dateOfBirth || '',
+            receiverAddress: r.address || '',
+            receiverBankName: r.bankName,
+            receiverAccountNumber: r.accountNumber,
+            receiverBranch: r.branch,
+            receiverRoutingNumber: r.routingNumber,
+            receiverPickupNetwork: r.pickupNetwork,
+            receiverIdType: r.idType,
+            receiverIdNumber: r.idNumber,
+            receiverPickupCity: r.pickupCity,
+            receiverWalletProvider: r.walletProvider,
+            receiverWalletNumber: r.walletNumber,
+          })}
+        />
+      ))}
+      <OutlineButton
+        label="+ Add a new receiver instead"
+        onPress={() => updateServiceData({ receiverMode: 'new', recipientType: 'other' })}
+      />
+      <OutlineButton
+        label="← Change recipient type"
+        onPress={() => updateServiceData({ recipientType: null, receiverMode: null })}
+      />
+    </View>
+  );
+
 }
 
 function ReceiverPreview({serviceData}) {

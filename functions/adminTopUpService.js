@@ -1,28 +1,34 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logAudit, logServerError } = require('./logService');
-const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
-const { hasCapability } = require('./accessControl');
 
 const MAX_AMOUNT = 100000;
-const STAFF_ROLES = ['admin', 'superadmin', 'support', 'finance'];
+const ADMIN_ROLES = ['admin', 'superadmin'];
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
-
-function activeAccount(user) {
-  return user && user.suspended !== true && user.inactive !== true && user.disabled !== true && !user.mergedInto;
+const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
+const DEVICE_ID_RE = /^[A-Za-z0-9-]{16,100}$/;
+function requireSessionMatch(request, user) {
+  const sessionId=request.data?.sessionId, deviceId=request.data?.deviceId;
+  if(typeof sessionId!=='string'||!SESSION_ID_RE.test(sessionId)||typeof deviceId!=='string'||!DEVICE_ID_RE.test(deviceId)) throw new HttpsError('failed-precondition','Your secure session is missing. Please sign in again.');
+  if(user.activeSessionId!==sessionId||user.activeDeviceId!==deviceId) throw new HttpsError('permission-denied','This device session is no longer active. Please sign in again.');
 }
 
-exports.adminTopUpPoints = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
+function activeAccount(profile) {
+  return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && profile.active !== false && profile.mergedInto == null;
+}
+
+exports.adminTopUpPoints = onCall({ enforceAppCheck: true }, async request => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
 
   const db = admin.firestore();
   const callerUid = request.auth.uid;
-  const callerRef = db.collection('users').doc(callerUid);
-  const callerSnap = await callerRef.get();
+  const callerSnap = await db.collection('users').doc(callerUid).get();
   const caller = callerSnap.exists ? callerSnap.data() : null;
-  if (!caller || !activeAccount(caller)) throw new HttpsError('permission-denied', 'This account is not active.');
-  if (!(await hasCapability(db, callerUid, caller, 'finance'))) {
-    throw new HttpsError('permission-denied', 'Your account does not handle payments.');
+  if (!caller || !ADMIN_ROLES.includes(caller.role)) {
+    throw new HttpsError('permission-denied', 'Only admin/superadmin can top up points.');
+  }
+  if (!activeAccount(caller)) {
+    throw new HttpsError('permission-denied', 'This account is not active.');
   }
 
   const data = request.data || {};
@@ -32,8 +38,9 @@ exports.adminTopUpPoints = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async 
   const requestId = String(data.requestId || '').trim();
 
   if (!targetUid) throw new HttpsError('invalid-argument', 'targetUid is required.');
-  if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_AMOUNT || !Number.isSafeInteger(Math.round(amount * 100))) {
-    throw new HttpsError('invalid-argument', 'Enter a valid top-up amount.');
+  const amountCents = Math.round(amount * 100);
+  if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_AMOUNT || !Number.isSafeInteger(amountCents) || Math.abs(amount * 100 - amountCents) > 1e-9) {
+    throw new HttpsError('invalid-argument', 'Enter a valid top-up amount with at most 2 decimal places.');
   }
   if (!REQUEST_ID_RE.test(requestId)) {
     throw new HttpsError('invalid-argument', 'requestId is required and must be 16-128 safe characters.');
@@ -44,6 +51,17 @@ exports.adminTopUpPoints = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async 
 
   try {
     const result = await db.runTransaction(async tx => {
+      // Revalidate the caller's live role/session before exposing even an idempotent replay.
+      const callerTxSnap = await tx.get(db.collection('users').doc(callerUid));
+      if (!callerTxSnap.exists) {
+        throw new HttpsError('permission-denied', 'Your admin privileges are no longer active.');
+      }
+      const callerTx = callerTxSnap.data() || {};
+      requireSessionMatch(request, callerTx);
+      if (!activeAccount(callerTx) || !ADMIN_ROLES.includes(callerTx.role)) {
+        throw new HttpsError('permission-denied', 'Your admin privileges are no longer active.');
+      }
+
       const opSnap = await tx.get(operationRef);
       if (opSnap.exists) {
         const op = opSnap.data() || {};
@@ -53,43 +71,40 @@ exports.adminTopUpPoints = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async 
         return { id: op.auditId, credited: false, replay: true };
       }
 
-      const [latestCallerSnap, targetSnap] = await Promise.all([tx.get(callerRef), tx.get(targetRef)]);
-      if (!latestCallerSnap.exists || !activeAccount(latestCallerSnap.data() || {})) {
-        throw new HttpsError('permission-denied', 'This admin account is not active.');
-      }
-      const latestCaller = latestCallerSnap.data() || {};
-      if (!STAFF_ROLES.includes(latestCaller.role)) {
-        throw new HttpsError('permission-denied', 'Your account does not handle payments.');
-      }
+      const targetSnap = await tx.get(targetRef);
       if (!targetSnap.exists) throw new HttpsError('not-found', 'Target user does not exist.');
 
-      const target = targetSnap.data() || {};
+      const target = targetSnap.data();
       if (!['dealer', 'reseller'].includes(target.role)) {
         throw new HttpsError('failed-precondition', 'Only dealer/reseller accounts can receive admin point top-ups.');
       }
-      if (!activeAccount(target)) throw new HttpsError('failed-precondition', 'Target account is not active.');
+      if (!activeAccount(target)) {
+        throw new HttpsError('failed-precondition', 'The target account is not active.');
+      }
 
-      const currentBalance = Number(target.walletBalance || 0);
-      if (!Number.isFinite(currentBalance) || currentBalance < 0 || !Number.isSafeInteger(Math.round(currentBalance * 100))) {
+      const currentBalance = target.walletBalance == null ? 0 : Number(target.walletBalance);
+      const currentBalanceCents = Math.round(currentBalance * 100);
+      if (!Number.isFinite(currentBalance) || currentBalance < 0 || !Number.isSafeInteger(currentBalanceCents) || Math.abs(currentBalance * 100 - currentBalanceCents) > 1e-9) {
         throw new HttpsError('failed-precondition', 'Target wallet balance is invalid.');
       }
 
-      const newBalance = currentBalance + amount;
-      if (!Number.isSafeInteger(Math.round(newBalance * 100))) {
+      const newBalanceCents = currentBalanceCents + amountCents;
+      if (!Number.isSafeInteger(newBalanceCents)) {
         throw new HttpsError('failed-precondition', 'Wallet balance is too large.');
       }
+      const newBalance = newBalanceCents / 100;
 
       const auditRef = db.collection('pointTopUps').doc();
       tx.update(targetRef, { walletBalance: newBalance });
       tx.set(auditRef, {
         userId: targetUid,
-        userName: String(target.name || target.displayName || '').slice(0, 160),
+        userName: String(target.name || target.displayName || ''),
         userRole: String(target.role || ''),
         amount,
         note,
         adminUid: callerUid,
-        adminName: String(latestCaller.name || latestCaller.displayName || '').slice(0, 160),
-        adminRole: String(latestCaller.role),
+        adminName: String(caller.name || caller.displayName || ''),
+        adminRole: String(callerTxSnap.data().role),
         requestId,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });

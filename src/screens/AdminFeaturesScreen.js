@@ -7,6 +7,8 @@ import HeaderDecor from '../components/HeaderDecor';
 import FeatureGrid from '../components/FeatureGrid';
 import PromptModal from '../components/PromptModal';
 import * as ratesService from '../firebase/ratesService';
+import { canAccessFeature } from '../firebase/featureAccessService';
+import * as gridManagementService from '../firebase/gridManagementService';
 
 const CATEGORIES = [
   { key: 'operations', icon: '⚙️', bg: '#E3F2FD', name: 'Operations' },
@@ -33,26 +35,12 @@ const USERS = [
   { key: 'userManagement', icon: '👥', bg: '#E3F2FD', name: 'Users' },
   { key: 'verificationManagement', icon: '🪪', bg: '#E0F7FA', name: 'KYC Verification' },
 ];
-// Feature keys that App.js renders as their own screen. Everything else is
-// a tab within AdminHomeScreen - see openItem below.
-const SCREEN_FEATURES = ['adminAnalytics', 'transferPoints', 'userManagement', 'verificationManagement', 'featureAccess'];
-
-// Which capability opens each hub item (any one is enough). Staff access is
-// role defaults + per-user overrides (accessControlService); a superadmin
-// has every capability.
-const CAPABILITY_FOR = {
-  all: ['orders', 'finance'], pending: ['orders'], inquiries: ['support'], topups: ['finance'],
-  support: ['support'], adminAnalytics: ['reports'],
-  rates: ['settings'], pricing: ['settings'], payments: ['settings'], categories: ['settings'], banners: ['settings'],
-  transferPoints: ['finance'],
-  userManagement: ['users'], verificationManagement: ['users'],
-  announcements: ['support'],
-};
-
 const SYSTEM = [
   { key: 'featureAccess', icon: '🔐', bg: '#EDE7F6', name: 'Feature Access' },
+  { key: 'gridManagement', icon: '🧩', bg: '#E0F7FA', name: 'Grid Management' },
   { key: 'banners', icon: '🖼️', bg: '#FFF0F0', name: 'Banners' },
   { key: 'announcements', icon: '📣', bg: '#E0F7FA', name: 'Announcements' },
+  { key: 'apiManagement', icon: '🔌', bg: '#E0F7FA', name: 'API Management' },
 ];
 
 const MOBILE_RATE_FIELDS = [{ key: 'mobileBanking', label: 'Mobile Banking — 1 MYR = BDT' }];
@@ -75,16 +63,18 @@ const RECHARGE_RATE_FIELDS = [
 export default function AdminFeaturesScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { profile, goBackOrHome, setScreen, openSidebar, dealerTxs, inquiries, topups, setAdminTab, setAdminViewingSection, rates, can } = useApp();
+  const { profile, goBackOrHome, setScreen, openSidebar, dealerTxs, inquiries, topups, setAdminTab, setAdminViewingSection, featureAccess, rates, gridManagement } = useApp();
   const [section, setSection] = useState(null);
   const [rateView, setRateView] = useState(false);
   const [editRateKey, setEditRateKey] = useState(null);
   const isSuperadmin = profile?.role === 'superadmin';
 
   const allow = (items) => items.filter((item) => {
-    if (item.key === 'featureAccess') return isSuperadmin;
-    const need = CAPABILITY_FOR[item.key];
-    return need ? need.some((cap) => can(cap)) : isSuperadmin;
+    const gridKey = item.key === 'all' ? 'history' : item.key;
+    if (gridKey === 'gridManagement') return isSuperadmin;
+    if (!gridManagementService.isGridActive(gridManagement, gridKey)) return false;
+    const always = ['all','pending','inquiries','topups','support','rates','pricing','payments','banners','announcements'];
+    return always.includes(item.key) || canAccessFeature(featureAccess, item.key, profile?.role, profile?.uid);
   });
   const badges = {
     pending: dealerTxs.filter((t) => t.status === 'pending').length || undefined,
@@ -93,11 +83,8 @@ export default function AdminFeaturesScreen() {
   };
   const openItem = (key) => {
     if (key === 'rates') { setRateView(true); return; }
-    // These are screens of their own in App.js, not tabs inside
-    // AdminHomeScreen. Sending them down the setAdminTab path landed on
-    // adminHome with a tab nothing renders for, so every one of them opened
-    // to an empty dashboard.
-    if (SCREEN_FEATURES.includes(key)) { setScreen(key); return; }
+    if (key === 'gridManagement') { setScreen('gridManagement'); return; }
+    if (key === 'apiManagement') { setScreen('apiProviderManagement'); return; }
     setAdminTab(key); setAdminViewingSection(true); setScreen('adminHome');
   };
   const itemsForSection = () => {

@@ -9,7 +9,7 @@ export default function FraudRiskPage() {
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => subscribeTransactions(setTxs, (e) => setError(e.message)), []);
-  async function loadUsers() { setLoadingUsers(true); try { setUsers((await fetchUsersPage({})).rows); } catch (e) { console.error(e); setError('Could not load account risk data.'); } finally { setLoadingUsers(false); } }
+  async function loadUsers() { setLoadingUsers(true); try { setUsers((await fetchUsersPage({ pageSize: 100 })).items); } catch (e) { console.error(e); setError('Could not load account risk data.'); } finally { setLoadingUsers(false); } }
   useEffect(() => { loadUsers(); }, []);
 
   const risks = useMemo(() => {

@@ -6,6 +6,7 @@ import { radius } from '../theme/theme';
 import { useTheme } from "../theme/ThemeContext";
 import HeaderDecor from '../components/HeaderDecor';
 import VerifiedBadge from '../components/VerifiedBadge';
+import { formatWalletAmount } from '../firebase/walletExchangeRateService';
 
 const ROLE_LABEL = { customer: 'Customer', dealer: 'Dealer', reseller: 'Reseller', admin: 'Admin', superadmin: 'Super Admin' };
 
@@ -31,8 +32,9 @@ function Row({ label, value, verified }) {
 export default function MyAccountScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { goBackOrHome, setScreen, profile, authUser, openBusinessProfile } = useApp();
+  const { goBackOrHome, setScreen, profile } = useApp();
 
+  const walletCurrency = profile?.walletCurrency || profile?.walletBalanceCurrency || 'MYR';
   const walletBalance = profile && typeof profile.walletBalance === 'number' ? profile.walletBalance : 0;
   const isCustomer = !profile || profile.role === 'customer';
 
@@ -50,7 +52,7 @@ export default function MyAccountScreen() {
         {isCustomer && (
           <View style={styles.balanceCard}>
             <Text style={styles.balanceLabel}>Wallet Balance</Text>
-            <Text style={styles.balanceValue}>MYR {walletBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+            <Text style={styles.balanceValue}>{formatWalletAmount(walletBalance, walletCurrency)}</Text>
             <TouchableOpacity style={styles.topupBtn} onPress={() => setScreen('topup')}>
               <Text style={styles.topupBtnText}>+ Top Up</Text>
             </TouchableOpacity>
@@ -85,12 +87,6 @@ export default function MyAccountScreen() {
           <TouchableOpacity style={styles.linkRow} onPress={() => setScreen('verifyIdentity')}>
             <Text style={styles.linkIcon}>🪪</Text>
             <Text style={styles.linkLabel}>{profile?.verified ? 'Verified ✓' : 'Get Verified'}</Text>
-            <Text style={styles.chevron}>›</Text>
-          </TouchableOpacity>
-          <View style={styles.divider} />
-          <TouchableOpacity style={styles.linkRow} onPress={() => authUser && openBusinessProfile(authUser.uid)}>
-            <Text style={styles.linkIcon}>🏢</Text>
-            <Text style={styles.linkLabel}>My Business Profile</Text>
             <Text style={styles.chevron}>›</Text>
           </TouchableOpacity>
         </View>

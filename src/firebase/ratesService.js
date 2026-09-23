@@ -3,6 +3,10 @@ import { auth, db } from './config';
 
 const RATES_DOC = doc(db, 'rates', 'current');
 
+// Wallet FX is a separate table from service/remittance rates. It stores
+// provider reference rates plus Superadmin-controlled buy/sell rates.
+export const WALLET_CURRENCIES = ['MYR', 'BDT', 'INR', 'NPR', 'PKR', 'IDR', 'PHP', 'MMK', 'KHR'];
+
 // Customer-facing/service rates are intentionally independent:
 // - mobileBanking: Mobile Banking payout rate
 // - remittance*: Remittance payout rates

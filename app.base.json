@@ -17,6 +17,7 @@
     "android": {
       "package": "com.satulink.mysheba",
       "googleServicesFile": "./google-services.json",
+      "versionCode": 45,
       "blockedPermissions": [
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_MEDIA_VIDEO"
@@ -30,6 +31,7 @@
         "android.permission.ACCESS_NETWORK_STATE",
         "android.permission.INTERNET",
         "android.permission.POST_NOTIFICATIONS",
+        "android.permission.VIBRATE",
         "com.google.android.gms.permission.AD_ID"
       ],
       "intentFilters": [
@@ -51,7 +53,7 @@
     },
     "ios": {
       "infoPlist": {
-        "NSCameraUsageDescription": "Allow MySheba to access your camera for KYC identity verification and QR scanning."
+        "NSCameraUsageDescription": "Allow MySheba to access your camera for KYC identity verification and video calls."
       }
     },
     "notification": {
@@ -69,19 +71,17 @@
       [
         "expo-notifications",
         {
-          "color": "#1A73E8"
+          "color": "#1A73E8",
+          "sounds": [
+            "./assets/sounds/ringtone.mp3",
+            "./assets/sounds/soft.mp3"
+          ]
         }
       ],
       [
         "expo-contacts",
         {
           "contactsPermission": "Allow MySheba to access your contacts so it can show which of your saved numbers are on MySheba, like WhatsApp does."
-        }
-      ],
-      [
-        "expo-camera",
-        {
-          "cameraPermission": "Allow MySheba to access your camera for KYC identity verification and QR scanning."
         }
       ],
       "@react-native-firebase/app",
@@ -113,14 +113,20 @@
         }
       ],
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow MySheba to access your camera for KYC identity verification and QR scanning."
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {
             "compileSdkVersion": 36,
             "targetSdkVersion": 36,
             "buildToolsVersion": "36.0.0",
-            "enableMinifyInReleaseBuilds": false,
-            "enableShrinkResourcesInReleaseBuilds": false
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
           }
         }
       ],

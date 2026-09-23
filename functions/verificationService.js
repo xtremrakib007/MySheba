@@ -3,49 +3,52 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logAudit, logServerError } = require('./logService');
 const { finalizeKycFaceTemplate } = require('./faceVerificationService');
-const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
-const { hasCapability } = require('./accessControl');
 
 function requireAuth(request) {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   return request.auth.uid;
 }
 
-function activeAccount(user) {
-  return user && user.suspended !== true && user.inactive !== true && user.disabled !== true && !user.mergedInto;
-}
-
 async function requireAdmin(db, callerUid) {
   const snap = await db.collection('users').doc(callerUid).get();
   const caller = snap.exists ? snap.data() : null;
-  if (!caller || !activeAccount(caller)) throw new HttpsError('permission-denied', 'This account is not active.');
-  if (!(await hasCapability(db, callerUid, caller, 'users'))) throw new HttpsError('permission-denied', 'Your account cannot review verification requests.');
+  if (!caller || !['admin', 'superadmin'].includes(caller.role) || caller.suspended === true || caller.inactive === true || caller.disabled === true || caller.active === false || caller.mergedInto) {
+    throw new HttpsError('permission-denied', 'Your account cannot review verification requests.');
+  }
   return caller;
 }
 
 function validStorageUrl(url, uid) {
-  if (typeof url !== 'string' || url.length > 2048) return false;
+  if (typeof url !== 'string' || url.length > 4096) return false;
   let parsed;
   try { parsed = new URL(url); } catch (_) { return false; }
-  if (parsed.protocol !== 'https:') return false;
-  if (!['firebasestorage.googleapis.com', 'storage.googleapis.com'].includes(parsed.hostname)) return false;
-
+  if (parsed.protocol !== 'https:' || parsed.hostname !== 'firebasestorage.googleapis.com') return false;
   const bucket = admin.storage().bucket().name;
-  let objectPath = '';
-  if (parsed.hostname === 'firebasestorage.googleapis.com') {
-    const match = parsed.pathname.match(/^\/v0\/b\/([^/]+)\/o\/(.+)$/);
-    if (!match || decodeURIComponent(match[1]) !== bucket) return false;
-    objectPath = decodeURIComponent(match[2]);
-  } else {
-    const prefix = `/${bucket}/`;
-    if (!parsed.pathname.startsWith(prefix)) return false;
-    objectPath = decodeURIComponent(parsed.pathname.slice(prefix.length));
-  }
-
+  const prefix = `/v0/b/${bucket}/o/`;
+  if (!parsed.pathname.startsWith(prefix)) return false;
+  let objectPath;
+  try { objectPath = decodeURIComponent(parsed.pathname.slice(prefix.length)); } catch (_) { return false; }
   const expectedPrefix = `verification-documents/${uid}/`;
-  if (!objectPath.startsWith(expectedPrefix) || objectPath.length <= expectedPrefix.length) return false;
-  if (objectPath.split('/').includes('..')) return false;
-  return true;
+  if (!objectPath.startsWith(expectedPrefix)) return false;
+  const fileName = objectPath.slice(expectedPrefix.length);
+  return !!fileName && !fileName.includes('\\0') && !fileName.split('/').some((part) => part === '..');
+}
+
+async function assertVerificationObject(url, uid) {
+  if (!validStorageUrl(url, uid)) throw new HttpsError('failed-precondition', 'The identity document upload is invalid.');
+  const bucket = admin.storage().bucket();
+  let objectPath;
+  try {
+    const parsed = new URL(url);
+    objectPath = decodeURIComponent(parsed.pathname.slice(("/v0/b/" + bucket.name + "/o/").length));
+    if (!objectPath || objectPath.includes('\\\\') || objectPath.split('/').some((part) => part === '..')) throw new Error('invalid path');
+    const [metadata] = await bucket.file(objectPath).getMetadata();
+    const size = Number(metadata?.size);
+    const contentType = String(metadata?.contentType || '');
+    if (!Number.isFinite(size) || size <= 0 || size >= 10 * 1024 * 1024 || !contentType.startsWith('image/')) throw new Error('invalid metadata');
+  } catch (_) {
+    throw new HttpsError('failed-precondition', 'The uploaded identity document could not be verified.');
+  }
 }
 
 function validateRequestData(data, uid) {
@@ -69,7 +72,7 @@ function validateRequestData(data, uid) {
   if (data.liveFaceVerified !== true) throw new HttpsError('failed-precondition', 'Live face verification is required.');
 }
 
-exports.approveVerification = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+exports.approveVerification = onCall({ enforceAppCheck: true }, async (request) => {
   const callerUid = requireAuth(request);
   const db = admin.firestore();
   const caller = await requireAdmin(db, callerUid);
@@ -78,16 +81,29 @@ exports.approveVerification = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
   const reqRef = db.collection('verificationRequests').doc(targetUid);
   const userRef = db.collection('users').doc(targetUid);
   try {
+    const requestSnap = await reqRef.get();
+    if (!requestSnap.exists) throw new HttpsError('not-found', 'That verification request does not exist.');
+    const requestData = requestSnap.data();
+    validateRequestData(requestData, targetUid);
+    const urls = [requestData.frontDocumentUrl, requestData.documentUrl, requestData.selfieUrl];
+    if (requestData.documentType !== 'Passport') urls.push(requestData.backDocumentUrl);
+    for (const url of urls) await assertVerificationObject(url, targetUid);
+
+    let reviewedByRole = '';
     await db.runTransaction(async (tx) => {
+      const callerSnap = await tx.get(db.collection('users').doc(callerUid));
+      const currentCaller = callerSnap.exists ? callerSnap.data() : null;
+      if (!currentCaller || !['admin', 'superadmin'].includes(currentCaller.role) || currentCaller.suspended === true || currentCaller.inactive === true || currentCaller.disabled === true || currentCaller.active === false || currentCaller.mergedInto) {
+        throw new HttpsError('permission-denied', 'Your account can no longer review verification requests.');
+      }
+      reviewedByRole = currentCaller.role;
       const reqSnap = await tx.get(reqRef);
       if (!reqSnap.exists) throw new HttpsError('not-found', 'That verification request does not exist.');
       const reqData = reqSnap.data();
       validateRequestData(reqData, targetUid);
       const userSnap = await tx.get(userRef);
       if (!userSnap.exists) throw new HttpsError('not-found', 'That user account no longer exists.');
-      const user = userSnap.data() || {};
-      if (!activeAccount(user)) throw new HttpsError('failed-precondition', 'The user account is not active.');
-      if (user.verificationStatus === 'approved' || user.verified === true) throw new HttpsError('failed-precondition', 'This user is already verified.');
+      if (userSnap.data()?.verificationStatus === 'approved' || userSnap.data()?.verified === true) throw new HttpsError('failed-precondition', 'This user is already verified.');
       await finalizeKycFaceTemplate(tx, db, targetUid);
       tx.update(reqRef, { status: 'approved', note: '', rejectionReason: '', reviewedBy: callerUid, reviewedAt: admin.firestore.FieldValue.serverTimestamp(), biometricVerified: true });
       tx.update(userRef, { verified: true, verificationStatus: 'approved' });
@@ -97,11 +113,11 @@ exports.approveVerification = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
     await logServerError('approveVerification', err, { userId: callerUid, targetUid });
     throw new HttpsError('internal', 'Could not approve this request.');
   }
-  await logAudit({ action: 'verification_approved', targetUid, performedBy: callerUid, performedByRole: caller.role });
+  await logAudit({ action: 'verification_approved', targetUid, performedBy: callerUid, performedByRole: reviewedByRole });
   return { ok: true };
 });
 
-exports.rejectVerification = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+exports.rejectVerification = onCall({ enforceAppCheck: true }, async (request) => {
   const callerUid = requireAuth(request);
   const db = admin.firestore();
   const caller = await requireAdmin(db, callerUid);
@@ -111,14 +127,20 @@ exports.rejectVerification = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asyn
   const userRef = db.collection('users').doc(targetUid);
   const cleanReason = String(reason || '').trim().slice(0, 500);
   if (!cleanReason) throw new HttpsError('invalid-argument', 'A rejection reason is required.');
+  let reviewedByRole = '';
   try {
     await db.runTransaction(async (tx) => {
+      const callerSnap = await tx.get(db.collection('users').doc(callerUid));
+      const currentCaller = callerSnap.exists ? callerSnap.data() : null;
+      if (!currentCaller || !['admin', 'superadmin'].includes(currentCaller.role) || currentCaller.suspended === true || currentCaller.inactive === true || currentCaller.disabled === true || currentCaller.active === false || currentCaller.mergedInto) {
+        throw new HttpsError('permission-denied', 'Your account can no longer review verification requests.');
+      }
+      reviewedByRole = currentCaller.role;
       const reqSnap = await tx.get(reqRef);
       if (!reqSnap.exists) throw new HttpsError('not-found', 'That verification request does not exist.');
       if (reqSnap.data().status !== 'pending') throw new HttpsError('failed-precondition', 'That request has already been reviewed.');
       const userSnap = await tx.get(userRef);
       if (!userSnap.exists) throw new HttpsError('not-found', 'That user account no longer exists.');
-      if (!activeAccount(userSnap.data() || {})) throw new HttpsError('failed-precondition', 'The user account is not active.');
       tx.update(reqRef, { status: 'rejected', note: cleanReason, rejectionReason: cleanReason, reviewedBy: callerUid, reviewedAt: admin.firestore.FieldValue.serverTimestamp() });
       tx.update(userRef, { verified: false, verificationStatus: 'rejected' });
       tx.delete(db.collection('pendingBiometricTemplates').doc(targetUid));
@@ -128,6 +150,6 @@ exports.rejectVerification = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asyn
     await logServerError('rejectVerification', err, { userId: callerUid, targetUid });
     throw new HttpsError('internal', 'Could not reject this request.');
   }
-  await logAudit({ action: 'verification_rejected', targetUid, performedBy: callerUid, performedByRole: caller.role, details: { reason: cleanReason } });
+  await logAudit({ action: 'verification_rejected', targetUid, performedBy: callerUid, performedByRole: reviewedByRole, details: { reason: cleanReason } });
   return { ok: true };
 });

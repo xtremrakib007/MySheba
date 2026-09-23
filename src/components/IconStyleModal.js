@@ -3,13 +3,8 @@ import { Modal, View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'rea
 import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import AppModalHeader from './AppModalHeader';
-import { iconFor, iconRenderFor } from '../theme/iconSets';
 
-// The swatch shows the glyph the style will actually draw, taken from the
-// Recharge tile, rather than a hand-picked sample that can drift from the
-// real set. Recharge is the first service on the customer home grid, so
-// this is a glyph the user is about to see.
-const PREVIEW_KEY = 'recharge';
+const PREVIEW = { classic: '📱', modern: '🌐', filled: '💳', outline: '◇', playful: '🎮', compact: '•', business: '💼', colorful: '🌈', thin: '⌁', bold: '⚡' };
 
 export default function IconStyleModal({ visible, selected, onSelect, onClose }) {
   const { colors, isDark, iconStyles, iconStyleList } = useTheme();
@@ -23,7 +18,7 @@ export default function IconStyleModal({ visible, selected, onSelect, onClose })
           {iconStyleList.map((key) => {
             const chosen = key === selected;
             return <TouchableOpacity key={key} style={[styles.row, chosen && styles.selected]} onPress={() => onSelect(key)} activeOpacity={0.78} accessibilityRole="radio" accessibilityState={{ selected: chosen }}>
-              <View style={[styles.preview, chosen && styles.previewSelected]}><Text style={[styles.previewIcon, { fontWeight: iconRenderFor(key).weight }]}>{iconFor(PREVIEW_KEY, key, '📱')}</Text></View>
+              <View style={[styles.preview, chosen && styles.previewSelected]}><Text style={styles.previewIcon}>{PREVIEW[key]}</Text></View>
               <View style={styles.textWrap}><Text style={[styles.label, chosen && styles.selectedLabel]}>{iconStyles[key].label}</Text><Text style={styles.description}>{iconStyles[key].description}</Text></View>
               <View style={[styles.radio, chosen && styles.radioSelected]}>{chosen && <View style={styles.dot} />}</View>
             </TouchableOpacity>;

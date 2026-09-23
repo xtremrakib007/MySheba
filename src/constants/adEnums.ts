@@ -43,7 +43,7 @@ export type ClickActionType = (typeof CLICK_ACTION_TYPES)[keyof typeof CLICK_ACT
  * Advertisement.status - the full lifecycle. Deliberately kept as one flat
  * list rather than a state machine in this phase (no transition-validation
  * logic exists yet - see adService.js's updateAdvertisementStatus stub for
- * where that belongs in a later phase).
+ * where that belongs in the current ad pipeline).
  */
 export const AD_STATUSES = {
   DRAFT: 'draft',

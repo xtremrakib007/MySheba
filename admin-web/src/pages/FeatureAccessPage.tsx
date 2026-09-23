@@ -21,7 +21,7 @@ export default function FeatureAccessPage() {
     (async () => {
       setLoading(true);
       try {
-        const { rows: page } = await fetchUsersPage({ roleFilter: 'customer' });
+        const { rows: page } = await fetchUsersPage({ roleFilter: 'user' });
         setRows(page);
       } catch (err) {
         console.error(err);

@@ -8,7 +8,12 @@
 // personal data.
 //
 // Used for:
-//   - src/firebase/config.js - legacy Firebase Auth persistence migration.
+//   - src/firebase/config.js - Firebase Auth's persisted session. Without
+//     this, the ID/refresh tokens that let someone stay signed in across
+//     app restarts would sit in AsyncStorage as plain JSON - anyone who
+//     pulled them off the device could impersonate the signed-in user
+//     indefinitely (until confirmDeviceSwitch's revokeRefreshTokens or a
+//     manual logout, see functions/deviceSessionService.js).
 //   - src/screens/LoginScreen.js - the "Remember Me" phone number (PII).
 //
 // The encrypted blob itself still lives in AsyncStorage (SecureStore alone

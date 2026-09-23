@@ -3,13 +3,14 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
+import RoyalIcon from './RoyalIcon';
 
 const TABS = [
-  { key: 'account', icon: '👤', label: 'Account', gradient: (c) => [c.secondary, c.primary] },
-  { key: 'topup', icon: '💰', label: 'Top-Up', gradient: (c) => [c.primary, c.gold] },
-  { key: 'home', icon: '⌂', label: 'Home', gradient: (c) => [c.secondary, c.primary, c.gold] },
-  { key: 'history', icon: '📋', label: 'History', gradient: (c) => [c.primaryDark, c.secondary] },
-  { key: 'support', icon: '🎧', label: 'Support', gradient: (c) => [c.goldDeep, c.primary] },
+  { key: 'account', icon: 'account', label: 'Account', colors: ['#1481B5', '#12A9A6'] },
+  { key: 'topup', icon: 'topup', label: 'Top-Up', colors: ['#19C39B', '#0E9E8C'] },
+  { key: 'home', icon: 'home', label: 'Home', colors: ['#A6F5D2', '#19C39B', '#0E9E8C'] },
+  { key: 'history', icon: 'history', label: 'History', colors: ['#0F6FA8', '#0FA0A0'] },
+  { key: 'support', icon: 'support', label: 'Support', colors: ['#1481B5', '#25D48F'] },
 ];
 
 function screenForRole(key, role) {
@@ -45,12 +46,12 @@ export default function BottomNav() {
         return (
           <TouchableOpacity key={tab.key} style={[styles.btn, isHome && styles.btnHome]} onPress={() => onPressTab(tab.key)}>
             {isActive ? (
-              <LinearGradient colors={tab.gradient(colors)} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.iconCircle, isHome && styles.iconCircleHome]}>
-                <Text style={[styles.iconActive, isHome && styles.iconHomeText]}>{tab.icon}</Text>
+              <LinearGradient colors={tab.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.iconCircle, isHome && styles.iconCircleHome]}>
+                <RoyalIcon name={tab.icon} size={isHome ? 40 : 24} color="#FFFFFF" />
               </LinearGradient>
             ) : (
               <View style={[styles.iconCircle, isHome && styles.iconCircleHome]}>
-                <Text style={[styles.icon, isHome && styles.iconHomeText]}>{tab.icon}</Text>
+                <RoyalIcon name={tab.icon} size={isHome ? 40 : 24} color={colors.placeholder || colors.textSecondary} />
               </View>
             )}
             <Text style={[styles.label, isActive && { color: colors.primary, fontWeight: '700' }]}>{tab.label}</Text>
@@ -61,22 +62,16 @@ export default function BottomNav() {
   );
 }
 
-// The divider uses colors.border, not colors.accentLine. accentLine is a
-// highlight token: #D9FFF0 on a near-white card in light and #A6F5D2 on
-// #0B2226 in dark, which measures 1.07:1 one way and 13.07:1 the other. As
-// the nav's top edge that reads as invisible in light and as a glowing
-// hairline in dark. border is defined per mode and lands at 1.34:1 and
-// 3.07:1 - present in both, loud in neither.
 function createStyles(colors) {
   return StyleSheet.create({
-    nav: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-end', paddingTop: 6, paddingBottom: 10, paddingHorizontal: 4, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border },
+    nav: { flexDirection: 'row', justifyContent: 'space-around', paddingTop: 6, paddingBottom: 18, backgroundColor: colors.card, borderTopWidth: 1.5, borderTopColor: colors.accentLine || colors.border },
     btn: { alignItems: 'center', paddingVertical: 4, paddingHorizontal: 6, flex: 1 },
     btnHome: { marginTop: -12 },
-    iconCircle: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', marginBottom: 2, backgroundColor: colors.surface },
-    iconCircleHome: { width: 50, height: 50, borderRadius: 25, borderWidth: 3, borderColor: colors.card, elevation: 5 },
+    iconCircle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 2, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.tileBorder || colors.border },
+    iconCircleHome: { width: 66, height: 66, borderRadius: 33, borderWidth: 3, borderColor: colors.card, elevation: 5 },
     icon: { fontSize: 18, color: colors.placeholder },
     iconActive: { fontSize: 18 },
-    iconHomeText: { fontSize: 25 },
+    iconHomeText: { fontSize: 30 },
     label: { fontSize: 10, color: colors.textSecondary, fontWeight: '500' },
   });
 }

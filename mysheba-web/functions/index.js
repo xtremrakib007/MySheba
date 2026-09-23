@@ -55,23 +55,27 @@ function hashIdentifier(value) {
 async function isRateLimited(identifier) {
   const key = hashIdentifier(identifier);
   const ref = db.collection('contactRateLimits').doc(key);
+  const snap = await ref.get();
   const now = Date.now();
-  return db.runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
-    const data = snap.exists ? snap.data() || {} : {};
-    const windowStart = Number(data.windowStart || 0);
-    const count = Number(data.count || 0);
 
-    if (!snap.exists || now - windowStart >= RATE_LIMIT_WINDOW_MS) {
-      tx.set(ref, { count: 1, windowStart: now, updatedAt: FieldValue.serverTimestamp() });
-      return false;
-    }
-
-    if (count >= MAX_REQUESTS_PER_HOUR) return true;
-
-    tx.update(ref, { count: count + 1, updatedAt: FieldValue.serverTimestamp() });
+  if (!snap.exists) {
+    await ref.set({ count: 1, windowStart: now, updatedAt: FieldValue.serverTimestamp() });
     return false;
-  });
+  }
+
+  const data = snap.data() || {};
+  const windowStart = Number(data.windowStart || 0);
+  const count = Number(data.count || 0);
+
+  if (now - windowStart >= RATE_LIMIT_WINDOW_MS) {
+    await ref.set({ count: 1, windowStart: now, updatedAt: FieldValue.serverTimestamp() });
+    return false;
+  }
+
+  if (count >= MAX_REQUESTS_PER_HOUR) return true;
+
+  await ref.update({ count: count + 1, updatedAt: FieldValue.serverTimestamp() });
+  return false;
 }
 
 function response(res, status, body) {

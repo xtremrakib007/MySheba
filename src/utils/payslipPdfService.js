@@ -7,7 +7,6 @@
 // job" spirit as salaryCalculationService.js - this only turns a Payslip
 // object into a file on disk.
 import * as Print from 'expo-print';
-import { printUri } from './printService';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import { PAYSLIP_TEMPLATES, GENERATED_BY_NOTICE, USER_GENERATED_DISCLAIMER } from '../data/payslipConstants';
@@ -182,7 +181,7 @@ export async function sharePayslipPdf(uri) {
  * error if the platform/device has no printing capability. */
 export async function printPayslipPdf(uri) {
   try {
-    await printUri(uri);
+    await Print.printAsync({ uri });
   } catch (err) {
     throw new Error('Printing is not available on this device. You can share or save the PDF instead.');
   }

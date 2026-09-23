@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Modal, View, Text, TouchableOpacity, ScrollView, Linking, Image, StyleSheet } from 'react-native';
+import * as Print from 'expo-print';
+import { showAlert } from '../utils/appAlert';
 import { radius } from '../theme/theme';
 import { useTheme } from "../theme/ThemeContext";
-import { showAlert } from '../utils/appAlert';
 import CopyButton from './CopyButton';
-import { printTransactionReceipt } from '../utils/printService';
 import DownloadButton from './DownloadButton';
 import * as topupService from '../firebase/topupService';
 import * as supportTicketService from '../firebase/supportTicketService';
+import * as transactionService from '../firebase/transactionService';
 
 const BADGE_COLORS = {
   pending: { bg: '#FFF8E1', text: '#F57F17' },
@@ -100,7 +101,7 @@ function formatTicketCopy(t) {
   return lines.join('\n');
 }
 
-function TxBody({ item, showCost }) {
+function TxBody({ item, showCost, pinOverride, onGeneratePin, generatingPin }) {
   const {
     colors
   } = useTheme();
@@ -142,18 +143,24 @@ function TxBody({ item, showCost }) {
           <Row label="Profit" value={`MYR ${Number(item.profit || 0).toFixed(2)}`} />
         </>
       )}
-      {!!item.pin && (
+      {!!(pinOverride || item.pin) && (
         <View style={styles.pinBlock}>
-          {/* A voucher PIN is a real operator reload code, so it is labelled
-              and detailed differently from the 4-digit collection code. */}
-          <Text style={styles.pinLabel}>{item.pinSource === 'voucher' ? 'RECHARGE PIN' : 'COLLECTION PIN'}</Text>
+          <Text style={styles.pinLabel}>COLLECTION PIN</Text>
           <View style={styles.pinRow}>
-            <Text style={styles.pinValue}>{item.pin}</Text>
-            <CopyButton value={item.pin} label="Copy PIN" />
+            <Text style={styles.pinValue}>{pinOverride || item.pin}</Text>
+            <CopyButton value={pinOverride || item.pin} label="Copy PIN" />
           </View>
-          {!!item.pinSerial && <Text style={styles.pinMeta}>Serial: {item.pinSerial}</Text>}
-          {!!item.pinExpiresAt && <Text style={styles.pinMeta}>Valid until: {formatDate(item.pinExpiresAt)}</Text>}
+          {item.status === 'pending' && (
+            <TouchableOpacity style={styles.generatePinBtn} onPress={onGeneratePin} disabled={generatingPin}>
+              <Text style={styles.generatePinText}>{generatingPin ? 'Generating…' : (pinOverride || item.pin ? 'Generate New PIN' : 'Generate PIN')}</Text>
+            </TouchableOpacity>
+          )}
         </View>
+      )}
+      {item.status === 'pending' && !(pinOverride || item.pin) && (
+        <TouchableOpacity style={styles.generatePinStandalone} onPress={onGeneratePin} disabled={generatingPin}>
+          <Text style={styles.generatePinStandaloneText}>{generatingPin ? 'Generating collection PIN…' : 'Generate Collection PIN'}</Text>
+        </TouchableOpacity>
       )}
       <Row label="Order ID" value={item.id} />
       <Row label="Created" value={formatDate(item.createdAt)} />
@@ -266,24 +273,12 @@ function TicketBody({ item }) {
  * `type` selects which fields to render and which copy-block to build;
  * `item` is the raw Firestore-backed record for that row. */
 export default function TransactionDetailModal({ visible, type, item, onClose, showCost }) {
-  const {
-    colors
-  } = useTheme();
+  const { colors } = useTheme();
+  const [pinOverride, setPinOverride] = React.useState('');
+  const [generatingPin, setGeneratingPin] = React.useState(false);
+  React.useEffect(() => { setPinOverride(''); }, [item?.id, item?.pin]);
 
   const styles = createStyles(colors);
-  const [printing, setPrinting] = useState(false);
-
-  const onPrint = async () => {
-    setPrinting(true);
-    try {
-      await printTransactionReceipt(item, {});
-    } catch (e) {
-      showAlert('MySheba', e?.message || 'Could not start printing. Check that a printer is set up on this device.');
-    } finally {
-      setPrinting(false);
-    }
-  };
-
   if (!item) return null;
 
   const title = type === 'inquiry' ? `${TYPE_ICON[item.type] || '🗺️'} Travel Inquiry`
@@ -316,16 +311,32 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
             {type === 'inquiry' ? <InquiryBody item={item} />
               : type === 'topup' ? <TopupBody item={item} />
               : type === 'supportTicket' ? <TicketBody item={item} />
-              : <TxBody item={item} showCost={showCost} />}
+              : <TxBody item={item} showCost={showCost} pinOverride={pinOverride} generatingPin={generatingPin} onGeneratePin={async () => {
+                if (generatingPin || !item?.id) return;
+                setGeneratingPin(true);
+                try {
+                  const result = await transactionService.generateCollectionPin(item.id);
+                  setPinOverride(String(result?.pin || ''));
+                  showAlert('Collection PIN', `Your new collection PIN is ${result?.pin || ''}. Give this PIN to the MySheba operator when the order is collected.`);
+                } catch (err) { showAlert('MySheba', err?.message || 'Could not generate the collection PIN.'); }
+                finally { setGeneratingPin(false); }
+              }} />}
           </ScrollView>
 
           <View style={styles.footer}>
-            <CopyButton value={copyValue} label="Copy Details" />
-            {type !== 'supportTicket' && (
-              <TouchableOpacity style={styles.printBtn} disabled={printing} onPress={onPrint}>
-                <Text style={styles.printText}>{printing ? 'Printing…' : '🖨️ Print'}</Text>
+            {type === 'tx' && (
+              <TouchableOpacity style={styles.printBtn} onPress={async () => {
+                try {
+                  const safe = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                  const pin = pinOverride || item.pin || 'Not generated';
+                  const html = `<html><body style="font-family:Arial;padding:18px"><h2 style="text-align:center">MySheba</h2><p style="text-align:center">Transaction Receipt</p><hr/><p><b>Service:</b> ${safe(item.service)}</p><p><b>Order ID:</b> ${safe(item.id)}</p><p><b>Amount:</b> MYR ${Number(item.total || 0).toFixed(2)}</p><p><b>Status:</b> ${safe(item.status)}</p><div style="margin-top:18px;padding:14px;border:2px solid #0B8A94;text-align:center"><div style="font-size:11px">COLLECTION PIN</div><div style="font-size:28px;font-weight:bold;letter-spacing:6px">${safe(pin)}</div></div><p style="margin-top:20px;font-size:11px;text-align:center">Keep this receipt and collection PIN safe.</p></body></html>`;
+                  await Print.printAsync({ html });
+                } catch (err) { showAlert('Printer', err?.message || 'Printing is not available on this device.'); }
+              }}>
+                <Text style={styles.printText}>🖨 Print</Text>
               </TouchableOpacity>
             )}
+            <CopyButton value={copyValue} label="Copy Details" />
             <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
               <Text style={styles.closeText}>Close</Text>
             </TouchableOpacity>
@@ -352,12 +363,15 @@ function createStyles(colors) {
     pdfLink: { color: colors.primary, fontWeight: '600', fontSize: 13, marginTop: 10 },
     pinBlock: { backgroundColor: '#FFF8E1', borderRadius: radius.md, padding: 12, marginVertical: 8, borderWidth: 1, borderColor: '#FFE9A8' },
     pinLabel: { fontSize: 10, fontWeight: '700', color: '#B8860B', letterSpacing: 0.5, marginBottom: 6 },
-    pinMeta: { fontSize: 11, color: '#8A6D1B', marginTop: 6 },
     pinRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     pinValue: { fontSize: 22, fontWeight: '700', color: colors.text, letterSpacing: 4 },
-    footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
-    printBtn: { backgroundColor: '#EEF4FF', paddingVertical: 9, paddingHorizontal: 14, borderRadius: radius.md },
-    printText: { color: '#1A4FBF', fontSize: 12, fontWeight: '700' },
+    generatePinBtn: { marginTop: 9, borderRadius: radius.md, paddingVertical: 9, backgroundColor: colors.primary, alignItems: 'center' },
+    generatePinText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
+    generatePinStandalone: { marginVertical: 8, borderRadius: radius.md, paddingVertical: 11, borderWidth: 1, borderColor: colors.primary, alignItems: 'center' },
+    generatePinStandaloneText: { color: colors.primary, fontSize: 12, fontWeight: '700' },
+    footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+    printBtn: { paddingVertical: 10, paddingHorizontal: 10, borderRadius: radius.md, backgroundColor: '#EAF7F2' },
+    printText: { color: colors.primaryDark, fontWeight: '700', fontSize: 12 },
     closeBtn: { flex: 1, paddingVertical: 10, borderRadius: radius.md, backgroundColor: colors.primary, alignItems: 'center' },
     closeText: { color: 'white', fontWeight: '600', fontSize: 13 },
   });

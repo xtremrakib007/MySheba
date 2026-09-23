@@ -4,37 +4,70 @@ service firebase.storage {
   match /b/{bucket}/o {
     function signedIn() { return request.auth != null; }
     function profile() { return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data; }
-    function activeProfile() { return signedIn() && profile().get('suspended', false) != true && profile().get('inactive', false) != true && profile().get('disabled', false) != true && !profile().get('mergedInto', null); }
-    function role() { return profile().get('role', 'customer'); }
+    function activeProfile() { return signedIn() && profile().suspended != true && profile().inactive != true && profile().disabled != true && profile().active != false && profile().mergedInto == null; }
+    function role() { return activeProfile() ? profile().get('role', 'customer') : null; }
     function isAdmin() { return activeProfile() && role() in ['admin', 'superadmin']; }
     function isStaff() { return activeProfile() && role() in ['dealer', 'reseller', 'admin', 'superadmin']; }
-    function transactionOwner(txId) { return activeProfile() && firestore.get(/databases/(default)/documents/transactions/$(txId)).data.customerId == request.auth.uid; }
+    function transactionOwner(txId) { return firestore.get(/databases/(default)/documents/transactions/$(txId)).data.customerId == request.auth.uid; }
     function transactionStaff(txId) {
-      let tx = firestore.get(/databases/(default)/documents/transactionQueue/$(txId)).data;
-      return isAdmin() || (isStaff() && role() in ['dealer', 'reseller'] && tx.get('operatorRole', null) == role() && tx.get('claimedBy', null) == request.auth.uid);
+      let tx = firestore.get(/databases/(default)/documents/transactions/$(txId)).data;
+      return isAdmin() || ((role() in ['dealer', 'reseller']) && tx.get('claimedBy', null) == request.auth.uid);
     }
-    function inquiryOwner(inquiryId) { return activeProfile() && firestore.get(/databases/(default)/documents/inquiries/$(inquiryId)).data.customerId == request.auth.uid; }
-    function safeImageType() {
-      return request.resource.contentType in ['image/jpeg', 'image/png', 'image/webp'];
+    function inquiryOwner(inquiryId) { return firestore.get(/databases/(default)/documents/inquiries/$(inquiryId)).data.customerId == request.auth.uid; }
+
+    // Advertisement creatives are uploaded by the Super Admin UI.
+    // Keep the entire ads prefix server-owned by role; deletion is routed through
+    // the hardened Cloud Function rather than allowing client deletes.
+    match /ads/banners/{fileName} {
+      allow read: if activeProfile();
+      allow create, update: if activeProfile() && role() == 'superadmin' && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
+      allow delete: if false;
     }
-    function safeImageOrPdfType() {
-      return safeImageType() || request.resource.contentType == 'application/pdf';
+    match /ads/native/{fileName} {
+      allow read: if activeProfile();
+      allow create, update: if activeProfile() && role() == 'superadmin' && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
+      allow delete: if false;
+    }
+    match /ads/interstitial/{fileName} {
+      allow read: if activeProfile();
+      allow create, update: if activeProfile() && role() == 'superadmin' && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
+      allow delete: if false;
+    }
+    match /ads/advertisers/{fileName} {
+      allow read: if activeProfile();
+      allow create, update: if activeProfile() && role() == 'superadmin' && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
+      allow delete: if false;
     }
 
-    match /topup-receipts/{uid}/{fileName} { allow read: if activeProfile() && (request.auth.uid == uid || isAdmin()); allow write: if activeProfile() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && safeImageType(); allow delete: if false; }
-    match /remittance-passports/{uid}/{fileName} { allow read: if activeProfile() && (request.auth.uid == uid || isAdmin()); allow write: if activeProfile() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && safeImageType(); allow delete: if false; }
-    match /verification-documents/{uid}/{fileName} { allow read: if activeProfile() && (request.auth.uid == uid || isAdmin()); allow write: if activeProfile() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && safeImageType(); allow delete: if false; }
-    match /passport-copies/{uid}/{fileName} { allow read: if activeProfile() && (request.auth.uid == uid || role() == 'superadmin'); allow write: if activeProfile() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && safeImageOrPdfType(); allow delete: if false; }
-    match /avatars/{uid}/{fileName} { allow read: if activeProfile(); allow write: if activeProfile() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && safeImageType(); allow delete: if false; }
-    match /business-logos/{uid}/{fileName} { allow read: if activeProfile(); allow write: if activeProfile() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && safeImageType(); allow delete: if false; }
+    match /topup-receipts/{uid}/{fileName} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow create: if signedIn() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*'); allow delete: if false; }
+    match /remittance-passports/{uid}/{fileName} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if signedIn() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*'); allow delete: if false; }
 
-    match /banner-images/{fileName} { allow read: if activeProfile(); allow write: if activeProfile() && isAdmin() && request.resource.size < 10 * 1024 * 1024 && safeImageType(); allow delete: if false; }
-    match /payment-settings/{fileName} { allow read: if activeProfile(); allow write: if activeProfile() && role() == 'superadmin' && request.resource.size < 10 * 1024 * 1024 && safeImageType(); allow delete: if false; }
-    match /order-receipts/{txId}/{fileName} { allow read: if transactionOwner(txId) || transactionStaff(txId); allow write: if transactionStaff(txId) && request.resource.size < 10 * 1024 * 1024 && safeImageType(); allow delete: if false; }
-    match /remittance-receipts/{txId}/{fileName} { allow read: if transactionOwner(txId) || transactionStaff(txId); allow write: if transactionStaff(txId) && request.resource.size < 10 * 1024 * 1024 && safeImageType(); allow delete: if false; }
-    match /flight-tickets/{inquiryId}/{fileName} { allow read: if activeProfile() && (inquiryOwner(inquiryId) || isAdmin()); allow write: if activeProfile() && isAdmin() && request.resource.size < 10 * 1024 * 1024 && safeImageOrPdfType(); allow delete: if false; }
-    match /my-documents/{uid}/{documentId}/{fileName} { allow read: if activeProfile() && request.auth.uid == uid; allow write: if activeProfile() && request.auth.uid == uid && request.resource.size < 15 * 1024 * 1024 && safeImageOrPdfType(); allow delete: if activeProfile() && request.auth.uid == uid; }
-    match /salary-payslips/{uid}/{recordId}/{fileName} { allow read: if activeProfile() && (request.auth.uid == uid || isAdmin()); allow write: if activeProfile() && request.auth.uid == uid && request.resource.size < 15 * 1024 * 1024 && safeImageOrPdfType(); allow delete: if false; }
+    match /verification-documents/{uid}/{fileName} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow write: if signedIn() && request.auth.uid == uid && resource == null && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
+      allow delete: if false;
+    }
+
+    match /passport-copies/{uid}/{fileName} { allow read: if signedIn() && (request.auth.uid == uid || role() == 'superadmin'); allow write: if signedIn() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf'); allow delete: if false; }
+    match /avatars/{uid}/{fileName} { allow read: if signedIn(); allow write: if signedIn() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*'); allow delete: if false; }
+    match /business-logos/{uid}/{fileName} { allow read: if signedIn(); allow write: if signedIn() && request.auth.uid == uid && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*'); allow delete: if false; }
+
+    // Support attachments are user-scoped. Do not allow arbitrary staff members
+    // to read another user's files by guessing the UID in the Storage path.
+    // Legacy chat-thread authorization is intentionally removed.
+    match /chat-media/support/{uid}/{fileName} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow write: if signedIn() && request.auth.uid == uid && request.resource.size < 50 * 1024 * 1024 && request.resource.contentType.matches('(image|video|audio)/.*');
+      allow delete: if false;
+    }
+
+    match /banner-images/{fileName} { allow read: if signedIn(); allow write: if signedIn() && isAdmin() && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*'); allow delete: if false; }
+    match /payment-settings/{fileName} { allow read: if signedIn(); allow write: if signedIn() && role() == 'superadmin' && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*'); allow delete: if false; }
+    match /order-receipts/{txId}/{fileName} { allow read: if signedIn() && (transactionOwner(txId) || transactionStaff(txId)); allow create: if signedIn() && transactionStaff(txId) && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*'); allow delete: if false; }
+    match /remittance-receipts/{txId}/{fileName} { allow read: if signedIn() && (transactionOwner(txId) || transactionStaff(txId)); allow create: if signedIn() && transactionStaff(txId) && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*'); allow delete: if false; }
+    match /flight-tickets/{inquiryId}/{fileName} { allow read: if signedIn() && (inquiryOwner(inquiryId) || isAdmin()); allow write: if signedIn() && isAdmin() && request.resource.size < 10 * 1024 * 1024 && (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf'); allow delete: if false; }
+    match /my-documents/{uid}/{documentId}/{fileName} { allow read: if signedIn() && request.auth.uid == uid; allow write: if signedIn() && request.auth.uid == uid && request.resource.size < 15 * 1024 * 1024 && (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf'); allow delete: if signedIn() && request.auth.uid == uid; }
+    match /salary-payslips/{uid}/{recordId}/{fileName} { allow read: if signedIn() && (request.auth.uid == uid || isAdmin()); allow write: if signedIn() && request.auth.uid == uid && request.resource.size < 15 * 1024 * 1024 && (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf'); allow delete: if false; }
 
     match /{allPaths=**} { allow read, write: if false; }
   }

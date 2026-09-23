@@ -10,6 +10,7 @@ import { FormLabel, FormInput, PrimaryButton } from '../components/ui';
 import HeaderDecor from '../components/HeaderDecor';
 import CopyButton from '../components/CopyButton';
 import * as topupService from '../firebase/topupService';
+import { formatWalletAmount } from '../firebase/walletExchangeRateService';
 
 const METHOD_OPTIONS = [
   { key: 'transfer', label: 'Bank Transfer', icon: '🏦' },
@@ -37,6 +38,7 @@ export default function TopUpScreen() {
   const [receiptUri, setReceiptUri] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const walletCurrency = profile?.walletCurrency || profile?.walletBalanceCurrency || 'MYR';
   const walletBalance = profile && typeof profile.walletBalance === 'number' ? profile.walletBalance : 0;
   const amountNum = parseFloat(amount) || 0;
   const isBankMethod = method === 'transfer' || method === 'deposit';
@@ -98,10 +100,10 @@ export default function TopUpScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.balanceCard}>
           <Text style={styles.balanceLabel}>Current Balance</Text>
-          <Text style={styles.balanceValue}>MYR {formatAmount(walletBalance)}</Text>
+          <Text style={styles.balanceValue}>{formatWalletAmount(walletBalance, walletCurrency)}</Text>
         </View>
 
-        <FormLabel>Amount (RM)</FormLabel>
+        <FormLabel>Amount ({walletCurrency})</FormLabel>
         <FormInput
           placeholder="e.g. 100"
           keyboardType="decimal-pad"

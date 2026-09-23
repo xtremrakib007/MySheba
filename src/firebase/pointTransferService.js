@@ -1,19 +1,19 @@
-// Point (wallet balance) transfers - lets staff send points to accounts in
+// Wallet transfers - lets staff send points to accounts in
 // their permitted scope. The actual balance move is server-side.
-import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, limit } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import * as Crypto from 'expo-crypto';
 import { db, functions } from './config';
 import { logActivity, logError } from './logService';
+import { getSessionProof } from './deviceSessionService';
 
 const COLLECTION = 'pointTransfers';
 
 function createRequestId() {
-  if (typeof Crypto.randomUUID !== 'function') throw new Error('Secure request ID generation is unavailable.');
   return `pt_${Crypto.randomUUID().replace(/-/g, '')}`;
 }
 
-export async function transferPoints({ to, amount, note }) {
+export async function transferPoints({ to, amount, note, securityPin }) {
   if (!to?.uid) throw new Error('Missing recipient.');
   const amt = Number(amount);
   if (!Number.isFinite(amt) || amt <= 0) throw new Error('Enter a valid amount.');
@@ -22,10 +22,11 @@ export async function transferPoints({ to, amount, note }) {
   // out after the server committed, a retry of this same operation should
   // reuse the same requestId rather than creating a second transfer.
   const requestId = createRequestId();
+  const session = await getSessionProof();
   const fn = httpsCallable(functions, 'transferPoints');
   try {
-    const { data } = await fn({ requestId, toUid: to.uid, amount: amt, note: note || '' });
-    logActivity('points_transferred', { toUid: to.uid, amount: amt });
+    const { data } = await fn({ requestId, toUid: to.uid, amount: amt, note: note || '', securityPin: String(securityPin || ''), ...session });
+    logActivity('wallet_transferred', { toUid: to.uid, amount: amt });
     return data;
   } catch (err) {
     logError('pointTransferService.transferPoints', err);
@@ -34,7 +35,7 @@ export async function transferPoints({ to, amount, note }) {
 }
 
 export function subscribeMyTransfers(uid, onUpdate, onError) {
-  const q = query(collection(db, COLLECTION), where('participants', 'array-contains', uid));
+  const q = query(collection(db, COLLECTION), where('participants', 'array-contains', uid), limit(100));
   return onSnapshot(q, (snap) => {
     const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
@@ -43,7 +44,7 @@ export function subscribeMyTransfers(uid, onUpdate, onError) {
 }
 
 export function subscribePoolTransfers(dealerScope, onUpdate, onError) {
-  const q = query(collection(db, COLLECTION), where('dealerId', '==', dealerScope));
+  const q = query(collection(db, COLLECTION), where('dealerId', '==', dealerScope), limit(100));
   return onSnapshot(q, (snap) => {
     const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
@@ -52,6 +53,6 @@ export function subscribePoolTransfers(dealerScope, onUpdate, onError) {
 }
 
 export function subscribeAllTransfers(onUpdate, onError) {
-  const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'));
+  const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'), limit(100));
   return onSnapshot(q, (snap) => onUpdate(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), onError);
 }

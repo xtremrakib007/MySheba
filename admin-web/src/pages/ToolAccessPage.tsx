@@ -9,7 +9,12 @@ import {
   type FeatureAccessMap,
   type FeatureKey,
   type ToggleableRole,
+  setFeatureAccessForUser,
+  canAccessUserFeature,
+  STAFF_ROLES,
 } from '../services/toolAccessService';
+import { collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { db } from '../firebase/config';
 
 export default function ToolAccessPage() {
   const { profile } = useAuth();
@@ -18,9 +23,12 @@ export default function ToolAccessPage() {
   const [access, setAccess] = useState<FeatureAccessMap | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyCell, setBusyCell] = useState<string | null>(null);
+  const [users, setUsers] = useState<Array<{uid:string;name:string;role:string}>>([]);
+  const [userSearch, setUserSearch] = useState('');
 
   useEffect(() => {
     const unsub = subscribeFeatureAccess(setAccess, (err) => setError(err.message));
+    getDocs(query(collection(db, 'users'), orderBy('name'))).then(snap => setUsers(snap.docs.map(d => ({ uid:d.id, name:d.data().name ?? d.data().displayName ?? '(no name)', role:d.data().role ?? 'customer' })))).catch(err => setError(err.message || 'Could not load users.'));
     return unsub;
   }, []);
 
@@ -37,6 +45,16 @@ export default function ToolAccessPage() {
       setBusyCell(null);
     }
   }
+
+  async function toggleUser(uid: string, key: FeatureKey, enabled: boolean) {
+    const cell = `user:${uid}:${key}`;
+    setBusyCell(cell); setError(null);
+    try { await setFeatureAccessForUser(uid, key, enabled); }
+    catch (err) { setError((err as Error).message || 'Could not update user permission.'); }
+    finally { setBusyCell(null); }
+  }
+
+  const staffUsers = users.filter(u => (STAFF_ROLES as readonly string[]).includes(u.role) && `${u.name} ${u.role} ${u.uid}`.toLowerCase().includes(userSearch.trim().toLowerCase()));
 
   if (!isSuperadmin) {
     return (
@@ -66,6 +84,7 @@ export default function ToolAccessPage() {
       {!access ? (
         <p className="mt-6 text-sm text-[var(--color-ink-soft)]">Loading…</p>
       ) : (
+        <>
         <div className="mt-6 overflow-x-auto">
           <table className="w-full min-w-[600px] border-separate border-spacing-y-2">
             <thead>
@@ -114,6 +133,13 @@ export default function ToolAccessPage() {
             </tbody>
           </table>
         </div>
+        <div className="mt-6 rounded-2xl border border-[var(--color-line)] bg-[var(--color-card)] p-4">
+          <h2 className="text-lg font-bold">Individual user access</h2>
+          <p className="mt-1 text-xs text-[var(--color-ink-soft)]">Override tool access for a specific staff user. Superadmin always has full access.</p>
+          <input value={userSearch} onChange={e => setUserSearch(e.target.value)} placeholder="Search staff user…" className="mt-4 w-full rounded-lg border border-[var(--color-line)] px-3 py-2 text-sm" />
+          <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[700px] text-sm"><thead><tr><th className="p-2 text-left">User</th>{FEATURE_DEFS.map(f => <th key={f.key} className="p-2 text-center">{f.name}</th>)}</tr></thead><tbody>{staffUsers.map(u => <tr key={u.uid} className="border-t border-[var(--color-line)]"><td className="p-2"><b>{u.name}</b><div className="text-xs text-[var(--color-ink-soft)]">{u.role}</div></td>{FEATURE_DEFS.map(f => { const override = access.userOverrides?.[u.uid]?.[f.key]; const checked = typeof override === 'boolean' ? override : canAccessUserFeature(access, f.key, u.role, u.uid); const busy = busyCell === `user:${u.uid}:${f.key}`; return <td key={f.key} className="p-2 text-center"><button disabled={busy} onClick={() => toggleUser(u.uid, f.key, !checked)} className={`h-6 w-10 rounded-full ${checked ? 'bg-[var(--color-primary)]' : 'bg-black/15'} disabled:opacity-40`}>{checked ? '✓' : ''}</button></td>; })}</tr>)}</tbody></table></div>
+        </div>
+        </>
       )}
     </div>
   );

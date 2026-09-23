@@ -10,7 +10,7 @@ import AppModalHeader from './AppModalHeader';
 // ThemeContext) rather than a one-time guess - selecting it here means the
 // app will keep tracking the OS setting going forward, including changes
 // made while the app stays open.
-export const DISPLAY_OPTIONS = [
+const DISPLAY_OPTIONS = [
   { key: 'light', icon: '☀️', label: 'Light', sub: 'Always use light theme' },
   { key: 'dark', icon: '🌙', label: 'Dark', sub: 'Always use dark theme' },
   { key: 'system', icon: '📱', label: 'System Default', sub: 'Match your device setting' },

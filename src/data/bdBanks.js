@@ -9877,7 +9877,6 @@ export const bdBanks = [
     { key: "190261117", name: "UTTARKHAN", subtitle: "DHAKA-NORTH", routing: "190261117" },
     { key: "190157768", name: "WASA MOOR", subtitle: "", routing: "190157768" },
   ] },
-  { name: "Social Islami Bank PLC", branches: [
     { key: "195270608", name: "AGENT BANKING", subtitle: "DHAKA-SOUTH", routing: "195270608" },
     { key: "195150131", name: "AGRABAD", subtitle: "Chittagong", routing: "195150131" },
     { key: "195120040", name: "AKHAURA", subtitle: "", routing: "195120040" },
@@ -10063,7 +10062,6 @@ export const bdBanks = [
     { key: "195270008", name: "TRUNCATION POINT", subtitle: "Dhaka", routing: "195270008" },
     { key: "195910089", name: "TUKER BAZAR", subtitle: "SYLHET", routing: "195910089" },
     { key: "195264630", name: "UTTARA", subtitle: "Dhaka", routing: "195264630" },
-  ] },
   { name: "Sonali Bank PLC", branches: [
     { key: "200640044", name: "ABADPUKURHAT", subtitle: "Naogaon", routing: "200640044" },
     { key: "200100047", name: "ADAMDIGHI", subtitle: "Bogra", routing: "200100047" },

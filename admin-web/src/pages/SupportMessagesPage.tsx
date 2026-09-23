@@ -1,146 +1,178 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Mail, MailCheck, MailX, RefreshCw } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import {
-  CONTACT_STATUSES,
-  CONTACT_STATUS_LABELS,
-  fetchContactMessages,
-  setContactStatus,
-  type ContactMessage,
-  type ContactStatus,
-} from '../services/contactMessageService';
+  markChatReadByStaff,
+  sendStaffMessage,
+  subscribeAllChats,
+  subscribeMessages,
+  type ChatThread,
+  type ChatThreadMessage,
+} from '../services/supportChatService';
 
-const STATUS_STYLES: Record<ContactStatus, string> = {
-  new: 'bg-blue-50 text-blue-700',
-  read: 'bg-slate-100 text-slate-700',
-  replied: 'bg-emerald-50 text-emerald-700',
-  closed: 'bg-slate-100 text-slate-500',
-};
+function ThreadRow({ thread, active, onClick }: { thread: ChatThread; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full rounded-xl px-3 py-3 text-left transition ${
+        active ? 'bg-[var(--color-primary)]/10' : 'hover:bg-black/5'
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate font-semibold">{thread.customerName || thread.customerId}</span>
+        {thread.unreadForStaff > 0 && (
+          <span className="rounded-full bg-[var(--color-danger)] px-2 py-0.5 text-[10px] font-bold text-white">
+            {thread.unreadForStaff}
+          </span>
+        )}
+      </div>
+      <p className="mt-0.5 truncate text-xs text-[var(--color-ink-soft)]">
+        {thread.lastSenderRole === 'staff' ? 'You: ' : ''}
+        {thread.lastMessage || 'No messages yet'}
+      </p>
+      {thread.assignedToName && (
+        <p className="mt-1 text-[11px] text-[var(--color-primary)]">Assigned: {thread.assignedToName}</p>
+      )}
+    </button>
+  );
+}
 
 export default function SupportMessagesPage() {
-  const [messages, setMessages] = useState<ContactMessage[]>([]);
-  const [filter, setFilter] = useState<ContactStatus | 'all'>('all');
-  const [loading, setLoading] = useState(true);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { chatId } = useParams();
+  const navigate = useNavigate();
+  const { firebaseUser, profile } = useAuth();
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setMessages(await fetchContactMessages(filter));
-    } catch (err) {
-      console.error(err);
-      setError('Could not load contact messages. This queue needs admin read access to contactMessages.');
-    } finally {
-      setLoading(false);
+  const [threads, setThreads] = useState<ChatThread[]>([]);
+  const [threadsError, setThreadsError] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatThreadMessage[]>([]);
+  const [messagesError, setMessagesError] = useState<string | null>(null);
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    const unsub = subscribeAllChats(setThreads, (err) => setThreadsError(err.message));
+    return unsub;
+  }, []);
+
+  const activeThread = useMemo(() => threads.find((t) => t.id === chatId) ?? null, [threads, chatId]);
+
+  useEffect(() => {
+    if (!chatId) {
+      setMessages([]);
+      return;
     }
-  }, [filter]);
+    setMessagesError(null);
+    const unsub = subscribeMessages(chatId, setMessages, (err) => setMessagesError(err.message));
+    markChatReadByStaff(chatId).catch(() => {});
+    return unsub;
+  }, [chatId]);
 
-  useEffect(() => { void load(); }, [load]);
-
-  const counts = useMemo(() => ({
-    total: messages.length,
-    unhandled: messages.filter((m) => m.status === 'new').length,
-    undelivered: messages.filter((m) => m.emailStatus === 'failed').length,
-  }), [messages]);
-
-  async function changeStatus(message: ContactMessage, status: ContactStatus) {
-    setBusyId(message.id);
+  async function handleSend() {
+    if (!chatId || !draft.trim() || !firebaseUser) return;
+    setSending(true);
     try {
-      await setContactStatus(message.id, status);
-      setMessages((prev) => (filter === 'all'
-        ? prev.map((m) => (m.id === message.id ? { ...m, status } : m))
-        : prev.filter((m) => m.id !== message.id)));
+      await sendStaffMessage(chatId, { uid: firebaseUser.uid, name: profile?.name }, draft);
+      setDraft('');
     } catch (err) {
       console.error(err);
-      setError('Could not update that message.');
+      setMessagesError('Could not send the message.');
     } finally {
-      setBusyId(null);
+      setSending(false);
     }
   }
 
   return (
     <div>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Support Messages</h1>
-          <p className="mt-1 text-sm text-[var(--color-ink-soft)]">
-            Messages sent from the mysheba.top contact forms. Replies go out from your own mail client — this queue tracks what has been handled.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value as ContactStatus | 'all')}
-            className="rounded-xl border border-[var(--color-line)] bg-white px-3 py-2 text-sm"
-          >
-            <option value="all">All messages</option>
-            {CONTACT_STATUSES.map((s) => <option key={s} value={s}>{CONTACT_STATUS_LABELS[s]}</option>)}
-          </select>
-          <button onClick={() => void load()} disabled={loading} className="flex items-center gap-2 rounded-xl bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> Refresh
-          </button>
-        </div>
-      </div>
+      <h1 className="text-2xl font-bold">Support Messages</h1>
+      <p className="mt-1 text-sm text-[var(--color-ink-soft)]">
+        Live 1:1 support chat threads — separate from the trackable Support Tickets queue.
+      </p>
 
-      {error && (
-        <div className="mt-4 flex items-start gap-2 rounded-lg border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/5 px-4 py-3 text-sm text-[var(--color-danger)]">
-          <AlertTriangle size={16} className="mt-0.5 shrink-0" />{error}
+      {threadsError && (
+        <div className="mt-4 rounded-lg border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/5 px-4 py-3 text-sm text-[var(--color-danger)]">
+          Could not load message threads.
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {([['Messages', counts.total, Mail], ['Awaiting handling', counts.unhandled, MailX], ['Email not delivered', counts.undelivered, MailCheck]] as const).map(([label, value, Icon]) => (
-          <div key={label} className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-card)] p-5">
-            <div className="flex items-center justify-between text-sm text-[var(--color-ink-soft)]"><span>{label}</span><Icon size={18} /></div>
-            <p className="mt-2 text-2xl font-extrabold">{value}</p>
-          </div>
-        ))}
+      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-[320px_1fr]">
+        <div className="max-h-[70vh] overflow-y-auto rounded-2xl border border-[var(--color-line)] bg-[var(--color-card)] p-2">
+          {threads.length === 0 ? (
+            <p className="p-4 text-sm text-[var(--color-ink-soft)]">No conversations yet.</p>
+          ) : (
+            threads.map((t) => (
+              <ThreadRow
+                key={t.id}
+                thread={t}
+                active={t.id === chatId}
+                onClick={() => navigate(`/support-messages/${t.id}`)}
+              />
+            ))
+          )}
+        </div>
+
+        <div className="flex min-h-[70vh] flex-col rounded-2xl border border-[var(--color-line)] bg-[var(--color-card)]">
+          {!chatId ? (
+            <div className="flex flex-1 items-center justify-center text-sm text-[var(--color-ink-soft)]">
+              Select a conversation to view messages.
+            </div>
+          ) : (
+            <>
+              <div className="border-b border-[var(--color-line)] p-4">
+                <p className="font-semibold">{activeThread?.customerName || chatId}</p>
+                {activeThread?.customerPhone && (
+                  <p className="text-xs text-[var(--color-ink-soft)]">{activeThread.customerPhone}</p>
+                )}
+              </div>
+
+              <div className="flex-1 space-y-3 overflow-y-auto p-4">
+                {messagesError ? (
+                  <p className="text-sm text-[var(--color-danger)]">{messagesError}</p>
+                ) : messages.length === 0 ? (
+                  <p className="text-sm text-[var(--color-ink-soft)]">No messages yet.</p>
+                ) : (
+                  messages.map((m) => (
+                    <div key={m.id} className={`flex ${m.senderRole === 'staff' ? 'justify-end' : 'justify-start'}`}>
+                      <div
+                        className={`max-w-sm rounded-2xl px-3 py-2 text-sm ${
+                          m.senderRole === 'staff'
+                            ? 'bg-[var(--color-primary)] text-white'
+                            : 'bg-black/5 text-[var(--color-ink)]'
+                        }`}
+                      >
+                        <p>{m.text || (m.type ? `[${m.type}]` : '')}</p>
+                        <p
+                          className={`mt-1 text-[10px] ${
+                            m.senderRole === 'staff' ? 'text-white/70' : 'text-[var(--color-ink-soft)]'
+                          }`}
+                        >
+                          {m.createdAt ?? ''}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="flex gap-2 border-t border-[var(--color-line)] p-3">
+                <input
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                  placeholder="Reply as support…"
+                  className="flex-1 rounded-lg border border-[var(--color-line)] px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]"
+                />
+                <button
+                  disabled={sending || !draft.trim()}
+                  onClick={handleSend}
+                  className="rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+                >
+                  Send
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
-
-      {loading ? (
-        <p className="mt-6 text-sm text-[var(--color-ink-soft)]">Loading…</p>
-      ) : messages.length === 0 ? (
-        <div className="mt-6 rounded-2xl border border-dashed border-[var(--color-line)] bg-[var(--color-card)] p-10 text-center text-sm text-[var(--color-ink-soft)]">
-          No contact messages in this view.
-        </div>
-      ) : (
-        <div className="mt-6 space-y-4">
-          {messages.map((m) => (
-            <article key={m.id} className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-card)] p-5">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-semibold">{m.subjectLabel}</p>
-                  <p className="mt-0.5 text-xs text-[var(--color-ink-soft)]">
-                    {m.name} · <a className="underline" href={`mailto:${m.email}`}>{m.email}</a>{m.phone ? ` · ${m.phone}` : ''} · {m.createdAt ?? 'Unknown date'} · {m.language.toUpperCase()}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${STATUS_STYLES[m.status]}`}>{CONTACT_STATUS_LABELS[m.status]}</span>
-                  {m.emailStatus === 'failed' && <span className="rounded-full bg-[var(--color-danger)]/10 px-2.5 py-1 text-[10px] font-bold uppercase text-[var(--color-danger)]" title={m.emailError ?? undefined}>Email failed</span>}
-                  {m.emailStatus === 'pending' && <span className="rounded-full bg-[var(--color-warning)]/10 px-2.5 py-1 text-[10px] font-bold uppercase text-[var(--color-warning)]">Email pending</span>}
-                </div>
-              </div>
-
-              <p className="mt-3 whitespace-pre-wrap text-sm text-[var(--color-ink)]">{m.message}</p>
-
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <a href={`mailto:${m.email}?subject=${encodeURIComponent(`Re: ${m.subjectLabel}`)}`} className="rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-semibold text-white">Reply by email</a>
-                {CONTACT_STATUSES.filter((s) => s !== m.status).map((s) => (
-                  <button
-                    key={s}
-                    disabled={busyId === m.id}
-                    onClick={() => void changeStatus(m, s)}
-                    className="rounded-lg border border-[var(--color-line)] px-3 py-1.5 text-xs font-semibold disabled:opacity-40"
-                  >
-                    Mark {CONTACT_STATUS_LABELS[s].toLowerCase()}
-                  </button>
-                ))}
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

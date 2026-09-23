@@ -3,7 +3,6 @@ import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-nati
 import { LinearGradient } from 'expo-linear-gradient';
 import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
-import { iconFor, iconRenderFor } from '../theme/iconSets';
 
 const GRID_PADDING = 10;
 const COLUMN_GAP = 8;
@@ -31,17 +30,11 @@ function gridCanvas(gridStyle, colors, isDark) {
 }
 
 export default function FeatureGrid({ title, items, activeKey, onPress, numColumns = 4 }) {
-  const { colors, isDark, gridStyle, iconStyle } = useTheme();
+  const { colors, isDark, gridStyle } = useTheme();
   const styles = createStyles(colors);
   const width = itemWidth(numColumns);
   const gradientColors = [colors.primary, colors.secondary];
   const gradientText = contrastText(gradientColors[0]);
-  const iconRender = iconRenderFor(iconStyle);
-  // Emoji carry their own colour, so iconText never needed one. The symbol
-  // styles are monochrome and inherit it, and the default is black - which
-  // on the translucent-white icon wrap in dark mode is all but invisible.
-  // Follow whatever the label does for this grid style.
-  const iconColor = gridStyle === 'neon' ? '#FFFFFF' : gridStyle === 'gradient' ? gradientText : colors.text;
   return (
     <View>
       {!!title && <View style={styles.sectionHead}><Text style={styles.sectionTitle}>{title}</Text></View>}
@@ -74,7 +67,7 @@ export default function FeatureGrid({ title, items, activeKey, onPress, numColum
                   <View style={styles.badge}><Text style={styles.badgeText}>{String(it.badge)}</Text></View>
                 )}
                 <View style={[styles.iconWrap, { backgroundColor: iconBg }, (gridStyle === 'neon' || gridStyle === 'gradient') && styles.iconWrapBright]}>
-                  <Text style={[styles.iconText, { color: iconColor, fontSize: 27 * iconRender.scale, fontWeight: iconRender.weight }]}>{iconFor(it.key, iconStyle, it.icon)}</Text>
+                  <Text style={styles.iconText}>{it.icon}</Text>
                 </View>
                 <Text style={labelStyle} numberOfLines={2}>{String(it.name || '')}</Text>
               </>

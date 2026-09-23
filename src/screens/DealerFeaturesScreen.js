@@ -6,6 +6,7 @@ import { useTheme } from "../theme/ThemeContext";
 import HeaderDecor from '../components/HeaderDecor';
 import FeatureGrid from '../components/FeatureGrid';
 import { FEATURE_DEFS, canAccessFeature } from '../firebase/featureAccessService';
+import * as gridManagementService from '../firebase/gridManagementService';
 
 // Dealer/dealer-only management tools. Previously an inline "Tools"
 // grid on DealerHomeScreen itself - moved to its own page (same pattern
@@ -39,15 +40,16 @@ export default function DealerFeaturesScreen() {
     dealerTxs,
     setDealerTab, setDealerViewingSection,
     featureAccess,
+    gridManagement,
   } = useApp();
-  const tools = FEATURE_DEFS.filter((t) => profile && canAccessFeature(featureAccess, t.key, profile.role));
+  const tools = FEATURE_DEFS.filter((t) => profile && gridManagementService.isGridActive(gridManagement, t.key) && canAccessFeature(featureAccess, t.key, profile.role, profile.uid));
 
   const dashboardBadges = {
     pending: dealerTxs.filter((t) => t.status === 'pending').length || undefined,
     processing: dealerTxs.filter((t) => t.status === 'processing').length || undefined,
   };
   const dashboardTools = DASHBOARD_TOOL_DEFS
-    .filter((t) => profile && t.roles.includes(profile.role))
+    .filter((t) => profile && t.roles.includes(profile.role) && gridManagementService.isGridActive(gridManagement, t.key === 'processing' || t.key === 'completed' ? 'history' : t.key))
     .map((t) => ({ ...t, badge: dashboardBadges[t.key] }));
 
   const openDashboardTile = (key) => {

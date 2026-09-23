@@ -5,7 +5,6 @@
 // different documents with different data shapes (a date-range table of
 // daily entries vs a single period's earnings/deductions breakdown).
 import * as Print from 'expo-print';
-import { printUri } from './printService';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import { CURRENCY } from '../data/salaryConstants';
@@ -156,7 +155,7 @@ export async function shareReportPdf(uri) {
  * payslipPdfService.printPayslipPdf. */
 export async function printReportPdf(uri) {
   try {
-    await printUri(uri);
+    await Print.printAsync({ uri });
   } catch (err) {
     throw new Error('Printing is not available on this device. You can share or save the PDF instead.');
   }

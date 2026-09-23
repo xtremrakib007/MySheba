@@ -12,12 +12,10 @@ import { db } from '../firebase/config';
 const DOC_REF = doc(db, 'settings', 'featureAccess');
 
 export const FEATURE_DEFS = [
-  { key: 'userManagement', icon: '🧑‍💼', name: 'User Mgmt', defaultRoles: ['dealer', 'admin', 'superadmin'] },
+  { key: 'userManagement', icon: '🧑‍💼', name: 'User Mgmt', defaultRoles: ['admin', 'superadmin'] },
   { key: 'transferPoints', icon: '💸', name: 'Transfer Pts', defaultRoles: ['admin', 'superadmin'] },
-  { key: 'chatReports', icon: '🚩', name: 'Chat Reports', defaultRoles: ['admin', 'superadmin'] },
   { key: 'verificationManagement', icon: '🪪', name: 'Verify Requests', defaultRoles: ['admin', 'superadmin'] },
-  { key: 'adminBusinessManagement', icon: '🏢', name: 'Business Profiles', defaultRoles: ['admin', 'superadmin'] },
-  { key: 'adminAnalytics', icon: '📊', name: 'Analytics', defaultRoles: ['admin', 'superadmin'] },
+  { key: 'adminAnalytics', icon: '📊', name: 'Analytics', defaultRoles: ['admin', 'superadmin', 'finance'] },
 ] as const;
 
 export type FeatureKey = (typeof FEATURE_DEFS)[number]['key'];
@@ -25,17 +23,29 @@ export type FeatureKey = (typeof FEATURE_DEFS)[number]['key'];
 // superadmin excluded on purpose (always has full access, never
 // toggleable off by accident); customer excluded (separate grid this
 // screen never touches).
-// Operators only. Staff access (admin, support, finance) is managed in Access
-// Control as role defaults + per-user overrides.
-export const TOGGLEABLE_ROLES = ['dealer', 'reseller'] as const;
+export const TOGGLEABLE_ROLES = ['dealer', 'reseller', 'support', 'finance', 'admin'] as const;
 export type ToggleableRole = (typeof TOGGLEABLE_ROLES)[number];
 
-export const ROLE_LABEL: Record<ToggleableRole, string> = {
+export const ROLE_LABEL: Record<ToggleableRole | 'customer' | 'superadmin', string> = {
+  customer: 'Customer',
   dealer: 'Dealer',
   reseller: 'Reseller',
+  support: 'Support Agent',
+  finance: 'Finance',
+  admin: 'Admin',
+  superadmin: 'Super Admin',
 };
 
-export type FeatureAccessMap = Record<FeatureKey, string[]>;
+export type UserFeatureOverrides = Record<string, Partial<Record<FeatureKey, boolean>>>;
+export type FeatureAccessMap = Record<FeatureKey, string[]> & { userOverrides?: UserFeatureOverrides };
+export const STAFF_ROLES = ['dealer', 'reseller', 'support', 'finance', 'admin'] as const;
+
+export function canAccessUserFeature(access: FeatureAccessMap | null, key: FeatureKey, role: string | null | undefined, uid: string | null | undefined): boolean {
+  if (role === 'superadmin') return true;
+  const override = uid ? access?.userOverrides?.[uid]?.[key] : undefined;
+  if (typeof override === 'boolean') return override;
+  return access?.[key]?.includes(role || '') ?? false;
+}
 
 function defaultAccessFor(key: FeatureKey): string[] {
   return [...(FEATURE_DEFS.find((f) => f.key === key)?.defaultRoles ?? [])];
@@ -47,10 +57,11 @@ export const DEFAULT_FEATURE_ACCESS: FeatureAccessMap = FEATURE_DEFS.reduce((acc
 }, {} as FeatureAccessMap);
 
 function mergeWithDefaults(data: any): FeatureAccessMap {
-  const merged = { ...DEFAULT_FEATURE_ACCESS };
+  const merged = { ...DEFAULT_FEATURE_ACCESS, userOverrides: {} as UserFeatureOverrides };
   FEATURE_DEFS.forEach((f) => {
     if (data && Array.isArray(data[f.key])) merged[f.key] = data[f.key];
   });
+  if (data?.userOverrides && typeof data.userOverrides === 'object') merged.userOverrides = data.userOverrides;
   return merged;
 }
 
@@ -68,6 +79,14 @@ export function subscribeFeatureAccess(
 /** Superadmin-only in the UI, and enforced the same way server-side -
  * see firestore.rules' settings/{id} match block, which requires
  * isSuperadmin() specifically to touch settings/featureAccess. */
+export async function setFeatureAccessForUser(uid: string, featureKey: FeatureKey, enabled: boolean): Promise<void> {
+  if (!uid || !FEATURE_DEFS.some((f) => f.key === featureKey)) throw new Error('Invalid user or feature.');
+  const snap = await getDoc(DOC_REF);
+  const data = snap.exists() ? snap.data() : {};
+  const overrides = data.userOverrides && typeof data.userOverrides === 'object' ? data.userOverrides : {};
+  await setDoc(DOC_REF, { userOverrides: { ...overrides, [uid]: { ...(overrides[uid] || {}), [featureKey]: enabled } }, updatedAt: serverTimestamp() }, { merge: true });
+}
+
 export async function setFeatureAccessForRole(
   featureKey: FeatureKey,
   role: ToggleableRole,
