@@ -1,6 +1,7 @@
 // Admin approve/reject of identity verification requests - server-side review.
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { hasCapability } = require('./accessControl');
 const { logAudit, logServerError } = require('./logService');
 const { finalizeKycFaceTemplate } = require('./faceVerificationService');
 
@@ -9,12 +10,17 @@ function requireAuth(request) {
   return request.auth.uid;
 }
 
+// Staff who may hold the 'users' capability (functions/accessControl.js).
+const STAFF_ROLES = ['admin', 'superadmin', 'support', 'finance'];
+
 async function requireAdmin(db, callerUid) {
   const snap = await db.collection('users').doc(callerUid).get();
   const caller = snap.exists ? snap.data() : null;
-  if (!caller || !['admin', 'superadmin'].includes(caller.role) || caller.suspended === true || caller.inactive === true || caller.disabled === true || caller.active === false || caller.mergedInto) {
+  if (!caller || !STAFF_ROLES.includes(caller.role) || caller.suspended === true || caller.inactive === true || caller.disabled === true || caller.active === false || caller.mergedInto) {
     throw new HttpsError('permission-denied', 'Your account cannot review verification requests.');
   }
+  // KYC review is user administration.
+  if (!(await hasCapability(db, callerUid, caller, 'users'))) throw new HttpsError('permission-denied', 'Your account cannot review verification requests.');
   return caller;
 }
 
@@ -93,7 +99,7 @@ exports.approveVerification = onCall({ enforceAppCheck: true }, async (request) 
     await db.runTransaction(async (tx) => {
       const callerSnap = await tx.get(db.collection('users').doc(callerUid));
       const currentCaller = callerSnap.exists ? callerSnap.data() : null;
-      if (!currentCaller || !['admin', 'superadmin'].includes(currentCaller.role) || currentCaller.suspended === true || currentCaller.inactive === true || currentCaller.disabled === true || currentCaller.active === false || currentCaller.mergedInto) {
+      if (!currentCaller || !STAFF_ROLES.includes(currentCaller.role) || currentCaller.suspended === true || currentCaller.inactive === true || currentCaller.disabled === true || currentCaller.active === false || currentCaller.mergedInto) {
         throw new HttpsError('permission-denied', 'Your account can no longer review verification requests.');
       }
       reviewedByRole = currentCaller.role;
@@ -132,7 +138,7 @@ exports.rejectVerification = onCall({ enforceAppCheck: true }, async (request) =
     await db.runTransaction(async (tx) => {
       const callerSnap = await tx.get(db.collection('users').doc(callerUid));
       const currentCaller = callerSnap.exists ? callerSnap.data() : null;
-      if (!currentCaller || !['admin', 'superadmin'].includes(currentCaller.role) || currentCaller.suspended === true || currentCaller.inactive === true || currentCaller.disabled === true || currentCaller.active === false || currentCaller.mergedInto) {
+      if (!currentCaller || !STAFF_ROLES.includes(currentCaller.role) || currentCaller.suspended === true || currentCaller.inactive === true || currentCaller.disabled === true || currentCaller.active === false || currentCaller.mergedInto) {
         throw new HttpsError('permission-denied', 'Your account can no longer review verification requests.');
       }
       reviewedByRole = currentCaller.role;
