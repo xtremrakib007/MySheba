@@ -1,9 +1,11 @@
 // Admin-triggered push broadcast.
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { hasCapability } = require('./accessControl');
 const { logAudit, logServerError } = require('./logService');
-const ADMIN_ROLES=['admin','superadmin'];
-const AUDIENCES=['all','customer','dealer','reseller','admin','superadmin'];
+// Staff who may hold the 'support' capability (functions/accessControl.js).
+const ADMIN_ROLES=['admin','superadmin','support','finance'];
+const AUDIENCES=['all','customer','dealer','reseller','support','finance','admin','superadmin'];
 const EXPO_PUSH_URL='https://exp.host/--/api/v2/push/send';
 function chunk(arr,size){const out=[];for(let i=0;i<arr.length;i+=size)out.push(arr.slice(i,i+size));return out;}
 function clean(v,max){return typeof v==='string'?v.trim().slice(0,max):'';}
@@ -11,8 +13,9 @@ async function sendExpoPush(messages){const valid=messages.filter(m=>m&&m.to);fo
 exports.sendAnnouncement=onCall({enforceAppCheck:true},async(request)=>{
  if(!request.auth)throw new HttpsError('unauthenticated','You must be signed in.');
  const db=admin.firestore(),callerUid=request.auth.uid,callerSnap=await db.collection('users').doc(callerUid).get(),callerProfile=callerSnap.exists?callerSnap.data():null;
- if(!callerProfile||!ADMIN_ROLES.includes(callerProfile.role))throw new HttpsError('permission-denied','Only an admin can send announcements.');
+ if(!callerProfile||!ADMIN_ROLES.includes(callerProfile.role))throw new HttpsError('permission-denied','Your account cannot send announcements.');
  if(callerProfile.suspended===true||callerProfile.inactive===true||callerProfile.disabled===true||callerProfile.active===false||callerProfile.mergedInto)throw new HttpsError('permission-denied','Your account is not active.');
+ if(!(await hasCapability(db,callerUid,callerProfile,'support')))throw new HttpsError('permission-denied','Your account cannot send announcements.');
  const freshCallerSnap=await db.collection('users').doc(callerUid).get();const freshCaller=freshCallerSnap.exists?freshCallerSnap.data():null;
  if(!freshCaller||!ADMIN_ROLES.includes(freshCaller.role)||freshCaller.suspended===true||freshCaller.inactive===true||freshCaller.disabled===true||freshCaller.active===false||freshCaller.mergedInto)throw new HttpsError('permission-denied','Your account is no longer authorized to send announcements.');
  const {title,body,audience}=request.data||{};const safeTitle=clean(title,120),safeBody=clean(body,2000);
