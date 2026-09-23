@@ -264,10 +264,24 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: false }, async (request) 
         return { requiresOtp: true, reason: 'new_device', email, availableMfaMethods: ['email'] };
       }
 
-      if (!current.activeDeviceId || current.activeDeviceId === deviceId) {
+      // A device this account has already verified stays verified.
+      // confirmDeviceSwitch writes trustedDevices for every role, but only
+      // the staff path above reads it back, so for everyone else the entry
+      // is dead data and the decision falls to activeDeviceId alone - a
+      // single slot. That makes the rule "one device at a time" rather than
+      // "a device you have verified": any account whose last sign-in was on
+      // another phone is challenged again, every time. The staff branch
+      // above still runs first, so this does not weaken staff MFA.
+      const deviceTrusted = Boolean(current.trustedDevices?.[deviceId]);
+      if (!current.activeDeviceId || current.activeDeviceId === deviceId || deviceTrusted) {
         const id = sessionId();
-        tx.update(ref, { activeSessionId: id, activeDeviceId: deviceId, pendingDeviceApproval: null, lastLoginAt: FieldValue.serverTimestamp() });
-        return { requiresOtp: false, sessionId: id };
+        const patch = { activeSessionId: id, activeDeviceId: deviceId, pendingDeviceApproval: null, lastLoginAt: FieldValue.serverTimestamp() };
+        // Keep lastSeenAt current so the Trusted Devices list stays
+        // meaningful and trustedMap evicts the genuinely stale entry at the
+        // cap rather than an active one.
+        if (deviceTrusted) patch.trustedDevices = trustedMap(current.trustedDevices, deviceId, ip, label);
+        tx.update(ref, patch);
+        return { requiresOtp: false, sessionId: id, trustedDevice: deviceTrusted };
       }
 
       const email = normalizeEmail(current.email);
@@ -284,6 +298,21 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: false }, async (request) 
       if (isStaffRole(profile.role)) await logAudit({ action: 'staff_login', targetUid: uid, performedBy: uid, performedByRole: profile.role, details: { deviceId, ip, newDevice: verifiedNewStaffDevice } });
       await checkIpAnomaly(db, uid, ip, { action: 'login', role: profile.role });
     } else {
+      // Actually send the code. resendEmailChallenge is handled only inside
+      // the staff branch above, and sendDeviceVerification - the one other
+      // function that mails a device code - is exported from index.js and
+      // called from nowhere in the app. So a non-staff account raised a
+      // challenge it was never sent: DeviceVerifyScreen reported the mail as
+      // sent, none existed, and confirmDeviceSwitch had no challenge to
+      // match a code against. There was no path through.
+      //
+      // sendStaffEmailChallenge is staff-only in its name; it writes
+      // pendingAdminEmailChallenge, which confirmDeviceSwitch's emailOtp
+      // path already validates for every role.
+      if (data.resendEmailChallenge && !isStaffRole(profile.role) && result.email) {
+        await sendStaffEmailChallenge({ db, uid, email: result.email, deviceId, displayName: profile.name || profile.displayName });
+        result.emailChallengeSent = true;
+      }
       await logAudit({ action: 'device_switch_requested', targetUid: uid, performedBy: uid, performedByRole: profile.role, details: { deviceId, ip } });
     }
     return result;
