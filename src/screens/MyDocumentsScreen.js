@@ -10,6 +10,7 @@ import DocumentFilter from '../components/DocumentFilter';
 import EmptyDocumentsState from '../components/EmptyDocumentsState';
 import { subscribeToDocuments } from '../firebase/documentService';
 import { DOCUMENT_STATUS, DOCUMENT_TYPES, DOCUMENT_TYPE_LABELS } from '../data/documentConstants';
+import { friendlyMessage } from '../utils/signInErrorCopy';
 
 /**
  * "My Documents" - private per-user vault for passport, visa, work
@@ -60,7 +61,7 @@ export default function MyDocumentsScreen() {
         setLoading(false);
       },
       (err) => {
-        setError(err.message);
+        setError(friendlyMessage(err, 'Could not load your documents. Please try again.'));
         setLoading(false);
       }
     );

@@ -2,6 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Linking, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
+import { friendlyMessage, authErrorMessage } from '../utils/signInErrorCopy';
+
+// AppContext stores the raw err.message in authError; this is what is
+// shown in its place, so a callable's UNAUTHENTICATED never reaches the screen.
+const AUTH_ERROR_FALLBACK = 'Could not verify this device. Please try again.';
 import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import HeaderDecor from '../components/HeaderDecor';
@@ -49,7 +54,7 @@ export default function DeviceVerifyScreen() {
       await deviceSessionService.setLocalSessionId(data.sessionId);
       const refreshed = await authService.fetchProfile(uid);
       setScreen(homeForRole(refreshed?.role || role));
-    } catch (e) { setLocalError(e.message || 'Could not complete device verification. Please try again.'); }
+    } catch (e) { setLocalError(friendlyMessage(e, 'Could not complete device verification. Please try again.')); }
     finally { setBusy(false); }
   };
 
@@ -61,7 +66,7 @@ export default function DeviceVerifyScreen() {
       const { data } = await fn({ uid, deviceId, deviceLabel: deviceSessionService.getDeviceLabel(), resendEmailChallenge: true });
       if (!data?.requiresOtp) throw new Error('This device no longer needs verification. Please sign in again.');
       setSent(true); setCode('');
-    } catch (e) { setLocalError(e.message || 'Could not send the verification email. Please try again.'); }
+    } catch (e) { setLocalError(friendlyMessage(e, 'Could not send the verification email. Please try again.')); }
     finally { setBusy(false); }
   };
 
@@ -70,7 +75,7 @@ export default function DeviceVerifyScreen() {
     try {
       const confirmation = await phoneVerification.sendPhoneOtp(phone);
       setPhoneConfirmation(confirmation); setSent(true); setCode('');
-    } catch (e) { setLocalError(e.message || 'Could not send the SMS verification code. Please try again.'); }
+    } catch (e) { setLocalError(friendlyMessage(e, 'Could not send the SMS verification code. Please try again.')); }
     finally { setBusy(false); }
   };
 
@@ -82,7 +87,7 @@ export default function DeviceVerifyScreen() {
   const verifyEmailLink = async (url) => {
     setLocalError(''); setBusy(true);
     try { const result = await emailVerification.confirmEmailLink(url, email); await finish({ emailIdToken: result.idToken }); }
-    catch (e) { setLocalError(e.message || 'Could not verify your email link. Please try again.'); }
+    catch (e) { setLocalError(friendlyMessage(e, 'Could not verify your email link. Please try again.')); }
     finally { setBusy(false); }
   };
 
@@ -90,7 +95,7 @@ export default function DeviceVerifyScreen() {
     if (!/^\d{6}$/.test(code.trim())) { setLocalError('Enter the 6-digit SMS verification code.'); return; }
     setLocalError(''); setBusy(true);
     try { const result = await phoneVerification.confirmPhoneOtp(phoneConfirmation, code.trim()); await finish({ phoneIdToken: result.idToken }); }
-    catch (e) { setLocalError(e.message || 'Could not verify the SMS code. Please try again.'); }
+    catch (e) { setLocalError(friendlyMessage(e, 'Could not verify the SMS code. Please try again.')); }
     finally { setBusy(false); }
   };
 
@@ -128,7 +133,7 @@ export default function DeviceVerifyScreen() {
           <TouchableOpacity style={styles.resendBtn} onPress={sendSms} disabled={busy}><Text style={styles.resendText}>Resend SMS</Text></TouchableOpacity>
         </>}
       </>}
-      {!!(localError || authError) && <Text style={styles.errorText}>{localError || authError}</Text>}
+      {!!(localError || authError) && <Text style={styles.errorText}>{localError || authErrorMessage(authError, AUTH_ERROR_FALLBACK)}</Text>}
       <TouchableOpacity style={styles.cancelBtn} onPress={cancelDeviceVerification} disabled={busy}><Text style={styles.cancelText}>Cancel and sign out</Text></TouchableOpacity>
     </ScrollView>
   </View>;

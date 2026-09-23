@@ -3,6 +3,11 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator,
 import { LinearGradient } from 'expo-linear-gradient';
 import { httpsCallable } from 'firebase/functions';
 import { useApp } from '../context/AppContext';
+import { friendlyMessage, authErrorMessage } from '../utils/signInErrorCopy';
+
+// AppContext stores the raw err.message in authError; this is what is
+// shown in its place, so a callable's UNAUTHENTICATED never reaches the screen.
+const AUTH_ERROR_FALLBACK = 'Could not complete sign-up. Please check your details and try again.';
 import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import { useLanguage } from '../i18n/LanguageContext';
@@ -76,7 +81,7 @@ export default function RegisterScreen() {
     try {
       await emailVerification.sendEmailOtp(email.trim());
       setEmailCode(''); setStep('email');
-    } catch (e) { setLocalError(e.message || 'Could not send the verification email. Please try again.'); }
+    } catch (e) { setLocalError(friendlyMessage(e, 'Could not send the verification email. Please try again.')); }
     finally { setOtpBusy(false); }
   };
 
@@ -87,7 +92,7 @@ export default function RegisterScreen() {
     try {
       const confirmation = await phoneVerification.sendPhoneOtp(phone, phoneCountry.dial);
       setPhoneConfirmation(confirmation); setPhoneCode(''); setStep('phone');
-    } catch (e) { setLocalError(e.message || 'Could not send the SMS code. Please try again.'); }
+    } catch (e) { setLocalError(friendlyMessage(e, 'Could not send the SMS code. Please try again.')); }
     finally { setOtpBusy(false); }
   };
 
@@ -96,14 +101,14 @@ export default function RegisterScreen() {
     try {
       const confirmation = await phoneVerification.sendPhoneOtp(phone, phoneCountry.dial);
       setPhoneConfirmation(confirmation); setPhoneCode('');
-    } catch (e) { setLocalError(e.message || 'Could not resend the SMS code. Please try again.'); }
+    } catch (e) { setLocalError(friendlyMessage(e, 'Could not resend the SMS code. Please try again.')); }
     finally { setOtpBusy(false); }
   };
 
   const resendEmail = async () => {
     setLocalError(''); setOtpBusy(true);
     try { await emailVerification.sendEmailOtp(email.trim()); setEmailCode(''); }
-    catch (e) { setLocalError(e.message || 'Could not resend the email verification. Please try again.'); }
+    catch (e) { setLocalError(friendlyMessage(e, 'Could not resend the email verification. Please try again.')); }
     finally { setOtpBusy(false); }
   };
 
@@ -142,7 +147,7 @@ export default function RegisterScreen() {
       await finishRegistration({ phoneToken: idToken });
     } catch (e) {
       phoneVerificationCompletedRef.current = false;
-      setLocalError(e.message || 'Could not complete phone verification. Please try again.');
+      setLocalError(friendlyMessage(e, 'Could not complete phone verification. Please try again.'));
     } finally { verificationInProgressRef.current = false; setOtpBusy(false); }
   };
 
@@ -156,7 +161,7 @@ export default function RegisterScreen() {
       await finishRegistration({ emailToken: result.idToken });
     } catch (e) {
       emailVerificationCompletedRef.current = false;
-      setLocalError(e.message || 'Could not verify your email address. Please try again.');
+      setLocalError(friendlyMessage(e, 'Could not verify your email address. Please try again.'));
     } finally { verificationInProgressRef.current = false; setOtpBusy(false); }
   };
 
@@ -171,7 +176,7 @@ export default function RegisterScreen() {
       await finishRegistration({ emailProof: result.verificationId });
     } catch (e) {
       emailVerificationCompletedRef.current = false;
-      setLocalError(e.message || 'Could not verify the email code. Please try again.');
+      setLocalError(friendlyMessage(e, 'Could not verify the email code. Please try again.'));
     } finally { verificationInProgressRef.current = false; setOtpBusy(false); }
   };
 
@@ -205,14 +210,14 @@ export default function RegisterScreen() {
           <Field label={t('register.confirmPassword')} value={confirmPassword} setValue={setConfirmPassword} placeholder={t('register.confirmPasswordPlaceholder')} secureTextEntry maxLength={20} styles={styles} />
           <Text style={styles.verifyTitle}>Choose verification method</Text>
           <Text style={styles.verifyHint}>Verify your account by email or SMS. Either method can complete registration.</Text>
-          {!!(localError || authError) && <Text style={styles.errorText}>{localError || authError}</Text>}
+          {!!(localError || authError) && <Text style={styles.errorText}>{localError || authErrorMessage(authError, AUTH_ERROR_FALLBACK)}</Text>}
           <TouchableOpacity style={[styles.btn, busy && styles.btnDisabled]} onPress={startEmailVerification} disabled={busy}>{busy ? <ActivityIndicator color={styles.onPrimaryColor} /> : <Text style={styles.btnText}>Verify by Email</Text>}</TouchableOpacity>
           <TouchableOpacity style={[styles.secondaryBtn, busy && styles.btnDisabled]} onPress={startPhoneVerification} disabled={busy}><Text style={styles.secondaryBtnText}>Verify by SMS</Text></TouchableOpacity>
         </> : step === 'phone' ? <>
           <Text style={styles.stepTitle}>{t('register.verifyPhone')}</Text>
           <Text style={styles.otpHint}>{t('register.otpHintSms', { phone: `${phoneCountry.dial} ${phone.replace(/[^0-9]/g, '').replace(/^0+/, '')}` })}</Text>
           <Field label={t('register.smsCode')} value={phoneCode} setValue={setPhoneCode} placeholder="123456" keyboardType="number-pad" maxLength={6} styles={styles} otp />
-          {!!(localError || authError) && <Text style={styles.errorText}>{localError || authError}</Text>}
+          {!!(localError || authError) && <Text style={styles.errorText}>{localError || authErrorMessage(authError, AUTH_ERROR_FALLBACK)}</Text>}
           <TouchableOpacity style={[styles.btn, busy && styles.btnDisabled]} onPress={onVerifyPhone} disabled={busy}>{busy ? <ActivityIndicator color={styles.onPrimaryColor} /> : <Text style={styles.btnText}>Verify SMS & Create Account</Text>}</TouchableOpacity>
           <TouchableOpacity style={styles.resendBtn} onPress={resendPhoneCode} disabled={busy}><Text style={styles.resendText}>{t('register.resend')}</Text></TouchableOpacity>
         </> : <>
@@ -220,7 +225,7 @@ export default function RegisterScreen() {
           <Text style={styles.otpHint}>{t('register.emailLinkHint', { email })}</Text>
           <Text style={styles.methodHint}>The email contains both a verification link and a 6-digit OTP. Either one can complete registration.</Text>
           <Field label="Email verification code" value={emailCode} setValue={setEmailCode} placeholder="123456" keyboardType="number-pad" maxLength={6} styles={styles} otp />
-          {!!(localError || authError) && <Text style={styles.errorText}>{localError || authError}</Text>}
+          {!!(localError || authError) && <Text style={styles.errorText}>{localError || authErrorMessage(authError, AUTH_ERROR_FALLBACK)}</Text>}
           <TouchableOpacity style={[styles.btn, busy && styles.btnDisabled]} onPress={onConfirmEmailOtp} disabled={busy}>{busy ? <ActivityIndicator color={styles.onPrimaryColor} /> : <Text style={styles.btnText}>Verify Email OTP & Create Account</Text>}</TouchableOpacity>
           <Text style={styles.orText}>OR</Text>
           <TouchableOpacity style={styles.resendBtn} onPress={resendEmail} disabled={busy}><Text style={styles.resendText}>Send link + OTP again</Text></TouchableOpacity>
