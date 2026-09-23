@@ -48,18 +48,6 @@ async function countOpenTickets(): Promise<number | null> {
   return (open ?? 0) + (inProgress ?? 0);
 }
 
-// all yet (legacy docs predating the status field) - there's no
-// 'pending' value written anywhere, so counting status=='pending'
-// (the old version of this function) always silently returned 0.
-// "Open" has to be computed as total minus resolved instead of matched
-// directly, since Firestore can't count "field is missing OR == x" in
-// one query.
-  const [total, resolved] = await Promise.all([
-  ]);
-  if (total === null) return null;
-  return total - (resolved ?? 0);
-}
-
 export async function fetchOpsOverview(): Promise<OpsOverview> {
   const [
     totalUsers,

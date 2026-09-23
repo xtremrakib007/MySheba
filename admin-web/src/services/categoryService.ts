@@ -9,15 +9,6 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
 export const DEFAULT_CATEGORIES: Record<string, string[]> = {
-    'Electronics',
-    'Mobile Phones',
-    'Computers',
-    'Vehicles',
-    'Furniture',
-    'Appliances',
-    'Clothing',
-    'Other',
-  ],
   services: [
     'Cleaning',
     'Moving',
