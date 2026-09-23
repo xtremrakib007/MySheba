@@ -112,14 +112,78 @@ export function useServiceAction() {
 
 export const PRIMARY_SERVICES = CUSTOMER_SERVICES;
 
-export default function ServiceGrid() {
-  const { colors } = useTheme(); const { webViewBusy, profile, gridManagement } = useApp();
-  const handlePress = useServiceAction(); const role = profile?.role || 'customer';
+export default function ServiceGrid({ extraTiles = [] }) {
+  const { colors } = useTheme();
+  const { webViewBusy, profile, gridManagement } = useApp();
+  const handlePress = useServiceAction();
+  const role = profile?.role || 'customer';
   const isStaff = ['dealer', 'reseller', 'admin', 'superadmin'].includes(role);
-  const allServices = isStaff ? (STAFF_SERVICES[role] || STAFF_SERVICES.admin) : CUSTOMER_SERVICES;
-  const gridKeyFor = (service) => ({ buspicker: 'bus', webview: service.key, adminFeatures: 'adminFeatures', dealerFeatures: 'dealerFeatures', resellerFeatures: 'resellerFeatures', adminTopup: 'topup' }[service.kind] || service.key);
-  const services = allServices.filter((service) => gridManagementService.isGridActive(gridManagement, gridKeyFor(service)));
-  return <View><View style={styles.sectionHead}><Text style={[styles.sectionTitle, { color: colors.navy || colors.text }]}>{isStaff ? 'Management Dashboard' : 'Quick Services'}</Text><Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>{isStaff ? 'Manage transactions, accounts and operations' : 'Money, remittance and travel'}</Text></View><View style={[styles.gridCanvas, { backgroundColor: colors.canvasBg || colors.surface }]}><View style={styles.grid}>{services.map((service) => <Tile key={service.key} s={service} disabled={service.kind === 'webview' && !!webViewBusy} onPress={() => handlePress(service)} />)}</View></View></View>;
+
+  const gridKeyFor = (service) => ({
+    buspicker: 'bus',
+    webview: service.key,
+    adminFeatures: 'adminFeatures',
+    dealerFeatures: 'dealerFeatures',
+    resellerFeatures: 'resellerFeatures',
+    adminTopup: 'topup',
+  }[service.kind] || service.key);
+
+  // Admin/Superadmin and other staff keep the full MySheba service catalogue.
+  // Their role-specific operational tools are displayed in a separate section.
+  const serviceItems = CUSTOMER_SERVICES.filter((service) =>
+    gridManagementService.isGridActive(gridManagement, gridKeyFor(service))
+  );
+
+  const managementItems = isStaff
+    ? [
+        ...(STAFF_SERVICES[role] || STAFF_SERVICES.admin),
+        ...extraTiles.map((tile) => ({ ...tile, kind: tile.kind || 'adminFeatures' })),
+      ].filter((service, index, arr) =>
+        arr.findIndex((item) => item.key === service.key) === index &&
+        gridManagementService.isGridActive(gridManagement, gridKeyFor(service))
+      )
+    : [];
+
+  const renderGrid = (items) => (
+    <View style={[styles.gridCanvas, { backgroundColor: colors.canvasBg || colors.surface }]}>
+      <View style={styles.grid}>
+        {items.map((service) => (
+          <Tile
+            key={service.key}
+            s={service}
+            disabled={service.kind === 'webview' && !!webViewBusy}
+            onPress={() => service.onPress ? service.onPress() : handlePress(service)}
+          />
+        ))}
+      </View>
+    </View>
+  );
+
+  return (
+    <View>
+      <View style={styles.sectionHead}>
+        <Text style={[styles.sectionTitle, { color: colors.navy || colors.text }]}>
+          {isStaff ? 'MySheba Services' : 'Quick Services'}
+        </Text>
+        <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
+          {isStaff ? 'Top-up, Internet & Voice, Bill Payment, Remittance and more' : 'Money, remittance and travel'}
+        </Text>
+      </View>
+      {renderGrid(serviceItems)}
+
+      {isStaff && managementItems.length > 0 && (
+        <>
+          <View style={styles.sectionHead}>
+            <Text style={[styles.sectionTitle, { color: colors.navy || colors.text }]}>Management Dashboard</Text>
+            <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
+              Manage transactions, accounts and operations
+            </Text>
+          </View>
+          {renderGrid(managementItems)}
+        </>
+      )}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({ sectionHead: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8 }, sectionTitle: { fontFamily: 'serif', fontSize: 22, fontWeight: '700' }, sectionSubtitle: { fontSize: 11, marginTop: 2 }, gridCanvas: { marginHorizontal: 4, padding: 12, borderRadius: 22 }, grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }, item: { width: '31.5%', minHeight: 124, marginBottom: 10, paddingHorizontal: 4, paddingVertical: 12, borderWidth: 1.5, borderRadius: 22, alignItems: 'center', justifyContent: 'center', shadowColor: '#0A5C78', shadowOpacity: 0.16, shadowRadius: 4, shadowOffset: { width: 0, height: 3 }, elevation: 2 }, itemDisabled: { opacity: 0.45 }, iconWrap: { width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center', marginBottom: 8, borderWidth: 1.5, borderColor: '#19C39B' }, iconText: { fontSize: 28 }, name: { fontSize: 11.5, lineHeight: 15, fontWeight: '600', textAlign: 'center' } });
