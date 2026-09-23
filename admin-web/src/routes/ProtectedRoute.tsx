@@ -1,24 +1,19 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { canAccess, landingPathFor } from '../routes/navConfig';
 import AppShell from '../layouts/AppShell';
 
-// These screens read superadmin-scoped operational/governance data. Keep the
-// route-level check here as defense-in-depth even if a route is accidentally
-// moved outside the nested SuperadminRoute group in App.tsx.
-const SUPERADMIN_ONLY_PATHS = new Set([
-  '/activity-center',
-  '/governance',
-]);
-const ROLE_PATHS: Record<string, Set<string>> = {
-  support: new Set(['/support-operations', '/support', '/support-messages', '/reports']),
-  finance: new Set(['/financial', '/wallet-settlement', '/fraud-risk', '/reports', '/analytics']),
-};
-
+// Every screen is gated by navConfig's PATH_ACCESS against the signed-in
+// person's effective capabilities (role defaults + their overrides), so
+// someone who opens a URL they may not use is sent to their own landing page
+// instead of a screen that would fail on permission-denied reads. Cloud
+// Functions and firestore.rules enforce the same model server-side.
 export default function ProtectedRoute() {
-  const { profile, loading } = useAuth();
+  const { profile, loading, access, accessLoading } = useAuth();
   const location = useLocation();
 
-  if (loading) {
+  // Wait for capabilities too, or a deep link would bounce before they load.
+  if (loading || (profile && accessLoading)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--color-bg)]">
         <p className="text-sm text-[var(--color-ink-soft)]">Loading…</p>
@@ -30,8 +25,11 @@ export default function ProtectedRoute() {
     return <Navigate to="/login" replace />;
   }
 
-  if (SUPERADMIN_ONLY_PATHS.has(location.pathname) && profile.role !== 'superadmin') return <Navigate to="/" replace />;
-  const allowed = ROLE_PATHS[profile.role];
-  if (allowed && !allowed.has(location.pathname) && location.pathname !== '/') return <Navigate to="/" replace />;
+  if (!canAccess(location.pathname, access)) {
+    const landing = landingPathFor(access);
+    // Never redirect to the page we are already refusing.
+    return landing === location.pathname ? <AppShell /> : <Navigate to={landing} replace />;
+  }
+
   return <AppShell />;
 }
