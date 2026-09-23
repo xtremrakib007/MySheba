@@ -12,7 +12,8 @@
     "build:aab": "npm run bump-version && eas build -p android --profile production",
     "audit:functions": "node --check functions/*.js",
     "test:api-provider": "node scripts/test-api-provider-service.js",
-    "production:check": "node scripts/production-readiness-check.js"
+    "production:check": "node scripts/production-readiness-check.js",
+    "test:rules": "node scripts/test-firestore-rules.mjs"
   },
   "dependencies": {
     "expo": "~53.0.0",
@@ -60,7 +61,8 @@
     "@babel/core": "^7.24.0",
     "@types/react": "~19.0.10",
     "babel-plugin-transform-remove-console": "^6.9.4",
-    "typescript": "~5.8.3"
+    "typescript": "~5.8.3",
+    "@firebase/rules-unit-testing": "^5.0.0"
   },
   "expo": {
     "doctor": {

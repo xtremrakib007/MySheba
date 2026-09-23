@@ -30,7 +30,9 @@ export async function createTransaction(payload, customer) {
   catch (err) { throw new Error(err.message || 'Could not submit this order right now.'); }
 }
 
-export function subscribeBroadcastTransactions(callback, onError) {
+// `fullStream` is true for staff whose access includes orders or finance
+// (see accessControlService); everyone else gets their operator queue.
+export function subscribeBroadcastTransactions(callback, onError, { fullStream = false } = {}) {
   let stopped = false;
   const unsubs = [];
   let pending = [];
@@ -44,7 +46,7 @@ export function subscribeBroadcastTransactions(callback, onError) {
     const uid = auth.currentUser?.uid; if (!uid) return;
     const profileSnap = await getDoc(doc(db, 'users', uid)); if (stopped) return;
     const role = profileSnap.exists() ? profileSnap.data()?.role : null;
-    if (role === 'admin' || role === 'superadmin') { attach(query(collection(db, COLLECTION), where('status', 'in', ['pending', 'processing', 'completed', 'rejected']), limit(100)), pending); return; }
+    if (fullStream) { attach(query(collection(db, COLLECTION), where('status', 'in', ['pending', 'processing', 'completed', 'rejected']), limit(100)), pending); return; }
     if (role !== 'dealer' && role !== 'reseller') return;
     if (role === 'dealer') {
       attach(query(collection(db, QUEUE_COLLECTION), where('service', '==', 'Mobile Banking'), where('status', '==', 'pending'), where('dealerId', '==', null), limit(100)), pending);

@@ -41,7 +41,7 @@ const otp = () => String(crypto.randomInt(100000, 1000000));
 const otpHash = (value) => crypto.createHash('sha256').update(String(value).trim()).digest('hex');
 const sessionId = () => crypto.randomBytes(24).toString('hex');
 const userRef = (db, uid) => db.collection('users').doc(uid);
-const isStaffRole = (role) => ['admin', 'superadmin', 'dealer', 'reseller'].includes(role);
+const isStaffRole = (role) => ['admin', 'superadmin', 'support', 'finance', 'dealer', 'reseller'].includes(role);
 const isActiveAccount = (profile) => !!profile
   && profile.mergedInto == null
   && profile.suspended !== true

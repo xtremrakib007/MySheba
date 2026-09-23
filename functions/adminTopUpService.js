@@ -1,9 +1,11 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { hasCapability } = require('./accessControl');
 const { logAudit, logServerError } = require('./logService');
 
 const MAX_AMOUNT = 100000;
-const ADMIN_ROLES = ['admin', 'superadmin'];
+// Staff who may hold the 'finance' capability (functions/accessControl.js).
+const ADMIN_ROLES = ['admin', 'superadmin', 'support', 'finance'];
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const DEVICE_ID_RE = /^[A-Za-z0-9-]{16,100}$/;
@@ -24,8 +26,8 @@ exports.adminTopUpPoints = onCall({ enforceAppCheck: true }, async request => {
   const callerUid = request.auth.uid;
   const callerSnap = await db.collection('users').doc(callerUid).get();
   const caller = callerSnap.exists ? callerSnap.data() : null;
-  if (!caller || !ADMIN_ROLES.includes(caller.role)) {
-    throw new HttpsError('permission-denied', 'Only admin/superadmin can top up points.');
+  if (!caller || !ADMIN_ROLES.includes(caller.role) || !(await hasCapability(db, callerUid, caller, 'finance'))) {
+    throw new HttpsError('permission-denied', 'Your account does not handle payments.');
   }
   if (!activeAccount(caller)) {
     throw new HttpsError('permission-denied', 'This account is not active.');

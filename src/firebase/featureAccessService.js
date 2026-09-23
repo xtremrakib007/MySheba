@@ -35,9 +35,11 @@ export const FEATURE_DEFS = [
 // something that should be toggleable off by accident. customer is left
 // out too - customer features are a separate grid (ServiceGrid) that this
 // screen never touches.
-export const TOGGLEABLE_ROLES = ['dealer', 'reseller', 'support', 'finance', 'admin'];
+// Operators only. Staff access (admin, support, finance) is role defaults +
+// per-user overrides in Access Control - see accessControlService.js.
+export const TOGGLEABLE_ROLES = ['dealer', 'reseller'];
 
-export const ROLE_LABEL = { dealer: 'Dealer', reseller: 'Reseller', support: 'Support Agent', finance: 'Finance', admin: 'Admin' };
+export const ROLE_LABEL = { dealer: 'Dealer', reseller: 'Reseller' };
 
 function defaultAccessFor(key) {
   const def = FEATURE_DEFS.find((f) => f.key === key);

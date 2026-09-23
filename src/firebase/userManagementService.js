@@ -6,13 +6,13 @@ import { functions, db } from './config';
 export const ROLE_PERMISSIONS = {
   dealer: { canCreate: ['customer'], canUpgradeTo: [] },
   admin: { canCreate: ['customer', 'dealer', 'reseller'], canUpgradeTo: ['dealer', 'reseller'] },
-  superadmin: { canCreate: ['customer', 'dealer', 'admin', 'reseller'], canUpgradeTo: ['dealer', 'admin', 'reseller'] },
+  superadmin: { canCreate: ['customer', 'dealer', 'admin', 'reseller', 'support', 'finance'], canUpgradeTo: ['dealer', 'admin', 'reseller', 'support', 'finance'] },
 };
 
 export const DOWNGRADE_PERMISSIONS = {
   dealer: { dealer: 'customer' },
   admin: { dealer: 'customer', reseller: 'customer' },
-  superadmin: { dealer: 'customer', admin: 'dealer', reseller: 'customer' },
+  superadmin: { dealer: 'customer', admin: 'dealer', reseller: 'customer', support: 'customer', finance: 'customer' },
 };
 
 export function canManageUsers(role) { return !!ROLE_PERMISSIONS[role]; }
@@ -60,7 +60,7 @@ export function subscribeManageableUsers(role, dealerScope, onUpdate, onError) {
 
   let q;
   if (role === 'superadmin') {
-    q = query(collection(db, 'users'), where('role', 'in', ['admin', 'dealer', 'reseller', 'customer']));
+    q = query(collection(db, 'users'), where('role', 'in', ['admin', 'dealer', 'reseller', 'support', 'finance', 'customer']));
   } else if (role === 'admin') {
     q = query(collection(db, 'users'), where('role', 'in', ['dealer', 'reseller', 'customer']));
   } else {

@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { landingPathFor } from '../routes/navConfig';
 
 export default function LoginPage() {
-  const { profile, loading, accessDenied, deviceVerificationRequired, signIn, signInWithGoogle } =
+  const { profile, loading, access, accessLoading, accessDenied, deviceVerificationRequired, signIn, signInWithGoogle } =
     useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -11,8 +12,10 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
 
-  if (!loading && profile) {
-    return <Navigate to="/" replace />;
+  // Each role starts on its own work: support on tickets, finance on
+  // transactions, admins and superadmins on the dashboard.
+  if (!loading && profile && !accessLoading) {
+    return <Navigate to={landingPathFor(access)} replace />;
   }
 
   if (deviceVerificationRequired) {

@@ -12,6 +12,8 @@ export const ANNOUNCEMENT_AUDIENCES = [
   { key: 'all', label: 'Everyone' },
   { key: 'customer', label: 'Customers' },
   { key: 'dealer', label: 'Dealers' },
+  { key: 'support', label: 'Support Agents' },
+  { key: 'finance', label: 'Finance' },
   { key: 'reseller', label: 'Resellers' },
   { key: 'admin', label: 'Admins' },
   { key: 'superadmin', label: 'Superadmins' },

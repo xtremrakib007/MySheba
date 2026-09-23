@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Bell, CheckCheck, CheckCircle2, ExternalLink, RefreshCw, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { subscribeAnnouncements, type AnnouncementLogEntry } from '../services/announcementService';
+import { useAuth } from '../contexts/AuthContext';
+import { canAccess } from '../routes/navConfig';
 import { fetchOpsOverview, type OpsOverview } from '../services/reportsService';
 
 const READ_KEY = 'mysheba-admin-notification-read';
@@ -12,6 +14,7 @@ function readIds(): string[] { try { const value = JSON.parse(localStorage.getIt
 
 export default function NotificationCenter() {
   const navigate = useNavigate();
+  const { access } = useAuth();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<AnnouncementLogEntry[]>([]);
   const [overview, setOverview] = useState<OpsOverview | null>(null);
@@ -24,10 +27,10 @@ export default function NotificationCenter() {
   useEffect(() => { const load = async () => { try { setOverview(await fetchOpsOverview()); } catch { /* announcements remain available */ } }; void load(); const timer = window.setInterval(() => void load(), 30000); return () => window.clearInterval(timer); }, []);
   useEffect(() => { const handler = () => setOpen(true); window.addEventListener('mysheba:notifications', handler); return () => window.removeEventListener('mysheba:notifications', handler); }, []);
 
-  const alerts = useMemo<AlertItem[]>(() => [
+  const alerts = useMemo<AlertItem[]>(() => ([
     { key: 'kyc', title: 'Pending KYC reviews', value: Number(overview?.pendingVerifications || 0), severity: 'warning', path: '/kyc-operations' },
     { key: 'support', title: 'Open support workload', value: Number(overview?.openTickets || 0), severity: 'warning', path: '/support-operations' },
-  ].filter((item) => item.value > 0), [overview]);
+  ] as AlertItem[]).filter((item) => item.value > 0 && canAccess(item.path, access)), [overview, access]);
   const unreadItems = useMemo(() => items.filter((item) => !read.includes(item.id)), [items, read]);
   const unreadCount = unreadItems.length + alerts.length;
   const markRead = (id: string) => setRead((current) => current.includes(id) ? current : [...current, id].slice(-MAX_READ_IDS));

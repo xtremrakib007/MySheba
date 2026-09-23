@@ -2,17 +2,31 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
-    function myProfile() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
-    function activeProfile() { return signedIn() && myProfile().suspended != true && myProfile().inactive != true && myProfile().disabled != true && myProfile().active != false && myProfile().mergedInto == null; }
-    function myRole() { return activeProfile() ? myProfile().role : null; }
+    function userDoc() { return /databases/$(database)/documents/users/$(request.auth.uid); }
+    function myProfile() { return get(userDoc()).data; }
+    // Missing fields read as their defaults so older profiles are not locked out.
+    function profileActive(p) { return p.get('suspended', false) != true && p.get('inactive', false) != true && p.get('disabled', false) != true && p.get('active', true) != false && p.get('mergedInto', null) == null; }
+    function activeProfile() { return signedIn() && exists(userDoc()) && profileActive(myProfile()); }
+    function myRole() { return activeProfile() ? myProfile().get('role', null) : null; }
     function isStaff() { return activeProfile() && myRole() in ['dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin']; }
     function isAdmin() { return activeProfile() && myRole() in ['admin', 'superadmin']; }
     function isSuperadmin() { return activeProfile() && myRole() == 'superadmin'; }
     function isDealerTier() { return myRole() == 'dealer'; }
     function isReseller() { return myRole() == 'reseller'; }
+    // Staff access = role defaults (settings/accessControl, else built-in) + this person's
+    // grants - their revokes (accessOverrides/{uid}). Superadmin has everything. Keep in step
+    // with functions/accessControl.js and both accessControlService files.
+    function accessDoc() { return /databases/$(database)/documents/settings/accessControl; }
+    function overrideDoc() { return /databases/$(database)/documents/accessOverrides/$(request.auth.uid); }
+    function builtInCaps(r) { return r == 'admin' ? ['support', 'orders', 'finance', 'users', 'settings', 'reports'] : r == 'support' ? ['support'] : r == 'finance' ? ['finance', 'reports'] : []; }
+    function roleCapsFrom(defaults, r) { return defaults.get(r, null) != null ? defaults[r] : builtInCaps(r); }
+    function roleCaps(r) { return exists(accessDoc()) ? roleCapsFrom(get(accessDoc()).data.get('roleDefaults', {}), r) : builtInCaps(r); }
+    function overrideAllows(o, cap, r) { return !(cap in o.get('revoke', [])) && (cap in roleCaps(r) || cap in o.get('grant', [])); }
+    function staffCan(p, cap) { return profileActive(p) && (p.get('role', null) == 'superadmin' || (p.get('role', null) in ['admin', 'support', 'finance'] && (exists(overrideDoc()) ? overrideAllows(get(overrideDoc()).data, cap, p.get('role', null)) : cap in roleCaps(p.get('role', null))))); }
+    function can(cap) { return signedIn() && exists(userDoc()) && staffCan(myProfile(), cap); }
     function myDealerScope() { return request.auth.uid; }
-    function canHandleTransaction(s) { return isAdmin() || (isDealerTier() && s == 'Mobile Banking') || (isReseller() && s in ['Recharge', 'Internet', 'Bill Payment', 'Remittance']); }
-    function activeStaff(uid, expectedRole) { let p = get(/databases/$(database)/documents/users/$(uid)).data; return p.role == expectedRole && p.suspended != true && p.inactive != true && p.disabled != true && p.active != false && p.mergedInto == null; }
+    function canHandleTransaction(s) { return can('orders') || (isDealerTier() && s == 'Mobile Banking') || (isReseller() && s in ['Recharge', 'Internet', 'Bill Payment', 'Remittance']); }
+    function activeStaff(uid, expectedRole) { let p = get(/databases/$(database)/documents/users/$(uid)).data; return p.get('role', null) == expectedRole && p.get('suspended', false) != true && p.get('inactive', false) != true && p.get('disabled', false) != true && p.get('active', true) != false && p.get('mergedInto', null) == null; }
     // Advertisement configuration is managed only by the Super Admin UI.
     // Raw tracking/payment/analytics records are server-owned; clients never write them.
     match /advertisements/{id} { allow read, create, update, delete: if isSuperadmin(); }
@@ -28,32 +42,40 @@ service cloud.firestore {
     match /ad_audit_logs/{id} { allow read: if isSuperadmin(); allow write: if false; }
     match /ad_settings/{id} { allow read, create, update, delete: if isSuperadmin(); }
     match /ad_feature_controls/{id} { allow read, create, update, delete: if isSuperadmin(); }
-    match /rates/current { allow read: if activeProfile(); allow create: if isSuperadmin(); allow update: if isSuperadmin() || (myRole() == 'admin' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mobileBanking','BD_ACC','BD_CASH','NP','PK','PH','IN','ID','MM','updatedAt'])); allow delete: if false; }
-    match /internetPricing/{operator} { allow read: if activeProfile(); allow create, update: if isAdmin(); allow delete: if false; }
+    match /rates/current { allow read: if activeProfile(); allow create: if isSuperadmin(); allow update: if isSuperadmin() || (can('settings') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mobileBanking','remittanceFee','remittanceBD_ACC','remittanceBD_CASH','remittanceNP','remittancePK','remittancePH','remittanceLK','remittanceIN','remittanceID','remittanceMM','BD_ACC','BD_CASH','NP','PK','PH','LK','IN','ID','MM','updatedAt'])); allow delete: if false; }
+    match /internetPricing/{operator} { allow read: if activeProfile(); allow create, update: if can('settings'); allow delete: if false; }
     match /settings/walletExchangeRates { allow read: if activeProfile(); allow create, update: if isSuperadmin() && request.resource.data.keys().hasOnly(['baseCurrency','provider','providerUrl','liveRates','pairs','liveUpdatedAt','updatedAt','updatedBy']); allow delete: if false; }
-    match /settings/pricing { allow read: if activeProfile(); allow create: if isSuperadmin() && request.resource.data.keys().hasOnly(['dealerEarningPercent','rechargeCostPercent','rechargeProfitPercent','rechargePointCostPerUnit','internetPointCostPerUnit','billPaymentPointCostPerUnit','webviewAccessCost','webviewSubmitCost','paymentSuccessCost','notepadCost','myDocumentsCost','salaryOtCost','moduleSubscriptionDays','webviewAccessWindowHours','rolePricing','updatedAt']); allow update: if isSuperadmin() || (myRole() == 'admin' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dealerEarningPercent','webviewAccessCost','webviewSubmitCost','paymentSuccessCost','notepadCost','myDocumentsCost','salaryOtCost','moduleSubscriptionDays','webviewAccessWindowHours','updatedAt'])); allow delete: if false; }
+    match /settings/pricing { allow read: if activeProfile(); allow create: if isSuperadmin() && request.resource.data.keys().hasOnly(['dealerEarningPercent','rechargeCostPercent','rechargeProfitPercent','rechargePointCostPerUnit','internetPointCostPerUnit','billPaymentPointCostPerUnit','webviewAccessCost','webviewSubmitCost','paymentSuccessCost','notepadCost','myDocumentsCost','salaryOtCost','moduleSubscriptionDays','webviewAccessWindowHours','rolePricing','updatedAt']); allow update: if isSuperadmin() || (can('settings') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dealerEarningPercent','webviewAccessCost','webviewSubmitCost','paymentSuccessCost','notepadCost','myDocumentsCost','salaryOtCost','moduleSubscriptionDays','webviewAccessWindowHours','updatedAt'])); allow delete: if false; }
     match /settings/paymentMethods { allow read: if activeProfile(); allow create, update: if isSuperadmin() && request.resource.data.keys().hasOnly(['jompayBillerId','jompayRefNo','duitnowQrUrl','bankAccounts','updatedAt']); allow delete: if false; }
     match /settings/featureAccess { allow read: if activeProfile(); allow create, update: if isSuperadmin() && request.resource.data.keys().hasOnly(['userManagement','transferPoints','verificationManagement','adminAnalytics','userOverrides','updatedAt']); allow delete: if false; }
-    match /settings/support { allow read: if activeProfile(); allow create, update: if isAdmin() && request.resource.data.keys().hasOnly(['phone','whatsapp','updatedAt']); allow delete: if false; }
+    match /settings/support { allow read: if activeProfile(); allow create, update: if can('settings') && request.resource.data.keys().hasOnly(['phone','whatsapp','updatedAt']); allow delete: if false; }
     match /settings/progression { allow read: if activeProfile(); allow create, update: if isSuperadmin() && request.resource.data.keys().hasOnly(['tiers','levelStep','promotions','updatedAt']); allow delete: if false; }
     match /settings/homepageConfig { allow read: if activeProfile(); allow create, update: if isSuperadmin(); allow delete: if false; }
     match /settings/gridManagement { allow read: if activeProfile(); allow create: if isSuperadmin() && request.resource.data.keys().hasOnly(['recharge','rechargePin','mobilebanking','internet','billpayment','remittance','bus','train','flight','entertainment','topup','history','support','myAccount','profile','dealerFeatures','resellerFeatures','adminFeatures','moreFeaturesTile','walletTransfer','myDocuments','salary','kyc','businessProfile','fomema','visa','mydigital','passport','adminAnalytics','inquiries','pending','topups','rates','pricing','payments','transferPoints','apiManagement','userManagement','verificationManagement','featureAccess','banners','announcements','updatedAt']); allow update: if isSuperadmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['recharge','rechargePin','mobilebanking','internet','billpayment','remittance','bus','train','flight','entertainment','topup','history','support','myAccount','profile','dealerFeatures','resellerFeatures','adminFeatures','moreFeaturesTile','walletTransfer','myDocuments','salary','kyc','fomema','visa','mydigital','passport','adminAnalytics','inquiries','pending','topups','rates','pricing','payments','transferPoints','apiManagement','userManagement','verificationManagement','featureAccess','banners','announcements','updatedAt']); allow delete: if false; }
-    match /verificationRequests/{uid} { allow read: if activeProfile() && (request.auth.uid == uid || isAdmin()); allow create, update, delete: if false; }
-    match /users/{uid} { allow read: if activeProfile() && (request.auth.uid == uid || isAdmin()); allow create: if false; allow update: if activeProfile() && request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','firstName','lastName','avatarUrl','lastSeenAnnouncementAt','pushToken','pushTokenPlatform','pushTokenUpdatedAt','fcmToken','fcmTokenUpdatedAt','notifPrefs']); allow delete: if false;
+    // Role defaults are written only by the setRoleDefaults callable (audit-logged).
+    match /settings/accessControl { allow read: if activeProfile() && myRole() in ['admin', 'support', 'finance', 'superadmin']; allow write: if false; }
+    // Per-person grants/revokes, written only by the setUserAccessOverride callable.
+    match /accessOverrides/{uid} { allow read: if activeProfile() && (request.auth.uid == uid || isSuperadmin()); allow write: if false; }
+    // Admin-edited category lists, one doc per module: { items: string[] }.
+    match /categories/{module} { allow read: if activeProfile(); allow create, update: if can('settings') && request.resource.data.keys().hasOnly(['items','updatedAt']) && request.resource.data.items is list; allow delete: if false; }
+    // Audit trail written by adminTopUpPoints.
+    match /pointTopUps/{id} { allow read: if can('finance'); allow write: if false; }
+    match /verificationRequests/{uid} { allow read: if activeProfile() && (request.auth.uid == uid || can('users')); allow create, update, delete: if false; }
+    match /users/{uid} { allow read: if activeProfile() && (request.auth.uid == uid || can('users') || can('finance')); allow create: if false; allow update: if activeProfile() && request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','firstName','lastName','avatarUrl','lastSeenAnnouncementAt','pushToken','pushTokenPlatform','pushTokenUpdatedAt','fcmToken','fcmTokenUpdatedAt','notifPrefs']); allow delete: if false;
       match /receivers/{receiverId} { allow read, create, update, delete: if activeProfile() && request.auth.uid == uid; }
       match /friends/{friendId} { allow read, create, update, delete: if activeProfile() && request.auth.uid == uid; }
-      match /workLogs/{workLogId} { allow read: if activeProfile() && (request.auth.uid == uid || isAdmin()); allow create, update, delete: if false; }
-      match /payslips/{payslipId} { allow read: if activeProfile() && (request.auth.uid == uid || isAdmin()); allow write: if false; }
-      match /salaryRecords/{recordId} { allow read: if activeProfile() && (request.auth.uid == uid || isAdmin()); allow write: if false; }
-      match /allowances/{allowanceId} { allow read: if activeProfile() && (request.auth.uid == uid || isAdmin()); allow write: if false; }
-      match /deductions/{deductionId} { allow read: if activeProfile() && (request.auth.uid == uid || isAdmin()); allow write: if false; }
-      match /trustedDevices/{deviceId} { allow read: if activeProfile() && (request.auth.uid == uid || isAdmin()); allow create, update, delete: if false; }
+      match /workLogs/{workLogId} { allow read: if activeProfile() && (request.auth.uid == uid || can('users')); allow create, update, delete: if false; }
+      match /payslips/{payslipId} { allow read: if activeProfile() && (request.auth.uid == uid || can('users')); allow write: if false; }
+      match /salaryRecords/{recordId} { allow read: if activeProfile() && (request.auth.uid == uid || can('users')); allow write: if false; }
+      match /allowances/{allowanceId} { allow read: if activeProfile() && (request.auth.uid == uid || can('users')); allow write: if false; }
+      match /deductions/{deductionId} { allow read: if activeProfile() && (request.auth.uid == uid || can('users')); allow write: if false; }
+      match /trustedDevices/{deviceId} { allow read: if activeProfile() && (request.auth.uid == uid || can('users')); allow create, update, delete: if false; }
     }
     match /myDocuments/{id} { allow read: if activeProfile() && resource.data.get('userId', null) == request.auth.uid; allow create: if activeProfile() && request.resource.data.get('userId', null) == request.auth.uid && request.resource.data.keys().hasOnly(['userId','documentType','documentName','documentNumber','issueDate','expiryDate','notes','files','reminderSettings','status','createdAt','updatedAt']); allow update: if activeProfile() && resource.data.get('userId', null) == request.auth.uid && request.resource.data.get('userId', null) == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['documentType','documentName','documentNumber','issueDate','expiryDate','notes','files','reminderSettings','status','updatedAt']); allow delete: if activeProfile() && resource.data.get('userId', null) == request.auth.uid; }
     match /notes/{id} { allow read: if activeProfile() && resource.data.get('userId', null) == request.auth.uid; allow create: if activeProfile() && request.resource.data.get('userId', null) == request.auth.uid && request.resource.data.keys().hasOnly(['userId','noteType','title','content','personName','amount','transactionDate','dueDate','status','createdAt','updatedAt']); allow update: if activeProfile() && resource.data.get('userId', null) == request.auth.uid && request.resource.data.get('userId', null) == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['noteType','title','content','personName','amount','transactionDate','dueDate','status','updatedAt']); allow delete: if activeProfile() && resource.data.get('userId', null) == request.auth.uid; }
     match /users/{uid}/payslipSettings/{settingId} { allow read: if activeProfile() && request.auth.uid == uid; allow create, update: if activeProfile() && request.auth.uid == uid && settingId == 'current' && request.resource.data.keys().hasOnly(['employer','updatedAt']); allow delete: if false; }
     match /users/{uid}/payslips/{payslipId} { allow read: if activeProfile() && request.auth.uid == uid; allow create: if activeProfile() && request.auth.uid == uid && request.resource.data.keys().hasOnly(['employer','employee','payPeriod','paymentDate','earnings','deductions','grossSalary','totalDeductions','netSalary','currency','template','sourceSalaryRecordId','fileReference','savedToSalaryHistory','createdAt','updatedAt']); allow update: if activeProfile() && request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['employer','employee','payPeriod','paymentDate','earnings','deductions','grossSalary','totalDeductions','netSalary','currency','template','sourceSalaryRecordId','fileReference','savedToSalaryHistory','updatedAt']); allow delete: if activeProfile() && request.auth.uid == uid; }
-    match /banners/{id} { allow read: if activeProfile(); allow create: if isAdmin() && request.resource.data.keys().hasOnly(['title','body','icon','colorStart','colorEnd','imageUrl','linkTo','photoLinkTo','order','active','createdAt','updatedAt']); allow update: if isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title','body','icon','colorStart','colorEnd','imageUrl','linkTo','photoLinkTo','order','active','updatedAt']); allow delete: if isAdmin(); }
+    match /banners/{id} { allow read: if activeProfile(); allow create: if can('settings') && request.resource.data.keys().hasOnly(['title','body','icon','colorStart','colorEnd','imageUrl','linkTo','photoLinkTo','order','active','createdAt','updatedAt']); allow update: if can('settings') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title','body','icon','colorStart','colorEnd','imageUrl','linkTo','photoLinkTo','order','active','updatedAt']); allow delete: if can('settings'); }
     match /serviceRequests/{id} { allow create: if activeProfile() && request.resource.data.customerId == request.auth.uid && request.resource.data.keys().hasOnly(['customerId','customerName','providerId','providerName','providerOwnerId','message','status','createdAt','updatedAt']) && request.resource.data.status == 'new'; allow read: if activeProfile() && (resource.data.customerId == request.auth.uid || resource.data.providerOwnerId == request.auth.uid); allow update: if activeProfile() && resource.data.providerOwnerId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']) && request.resource.data.status in ['new','contacted','closed']; allow delete: if false; }
     // API provider credentials, templates, and execution state are server-owned.
     // Clients must use the protected callable API; never allow direct Firestore access.
@@ -63,18 +85,18 @@ service cloud.firestore {
     match /activityLog/{id} { allow create: if activeProfile() && request.resource.data.userId == request.auth.uid; allow read: if activeProfile() && isSuperadmin(); allow update, delete: if false; }
     match /userAuditLog/{id} { allow read: if activeProfile() && isSuperadmin(); allow write: if false; }
     match /errorLog/{id} { allow create: if activeProfile() && request.resource.data.source == 'client' && request.resource.data.userId == request.auth.uid; allow read: if activeProfile() && isSuperadmin(); allow update: if activeProfile() && isSuperadmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resolved','resolvedBy','resolvedAt']); allow delete: if false; }
-    match /inquiries/{id} { allow create: if activeProfile() && request.resource.data.customerId == request.auth.uid && request.resource.data.status == 'new' && request.resource.data.type in ['flight','bus','train'] && request.resource.data.keys().hasOnly(['customerId','type','from','to','date','time','passengers','name','phone','email','notes','status','createdAt','updatedAt']); allow read: if activeProfile() && (resource.data.customerId == request.auth.uid || isAdmin()); allow update: if activeProfile() && isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','ticketUrl','updatedAt']) && request.resource.data.status in ['new','contacted','closed']; allow delete: if false; }
-    match /transactions/{id} { allow create, update, delete: if false; allow read: if activeProfile() && (resource.data.customerId == request.auth.uid || isAdmin()); }
+    match /inquiries/{id} { allow create: if activeProfile() && request.resource.data.customerId == request.auth.uid && request.resource.data.status == 'new' && request.resource.data.type in ['flight','bus','train'] && request.resource.data.keys().hasOnly(['customerId','type','from','to','date','time','passengers','name','phone','email','notes','status','createdAt','updatedAt']); allow read: if activeProfile() && (resource.data.customerId == request.auth.uid || can('support')); allow update: if activeProfile() && can('support') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','ticketUrl','updatedAt']) && request.resource.data.status in ['new','contacted','closed']; allow delete: if false; }
+    match /transactions/{id} { allow create, update, delete: if false; allow read: if activeProfile() && (resource.data.customerId == request.auth.uid || (can('orders') || can('finance'))); }
     // Recharge PIN documents contain the real telco voucher secret. Never expose them through
     // direct Firestore reads; the callable getRechargePin enforces ownership and returns
     // only the requested voucher after App Check/auth/session controls.
     match /rechargePins/{id} { allow read, create, update, delete: if false; }
-    match /transactionQueue/{id} { allow read: if activeProfile() && (isAdmin() || (isDealerTier() && resource.data.operatorRole == 'dealer' && resource.data.service == 'Mobile Banking' && (resource.data.get('dealerId', null) == null || resource.data.dealerId == request.auth.uid) && (resource.data.status == 'pending' || resource.data.get('claimedBy', null) == request.auth.uid)) || (isReseller() && resource.data.operatorRole == 'reseller' && resource.data.service in ['Recharge', 'Internet', 'Bill Payment', 'Remittance'] && (resource.data.get('resellerId', null) == null || resource.data.resellerId == request.auth.uid) && (resource.data.status == 'pending' || resource.data.get('claimedBy', null) == request.auth.uid))); allow create, update, delete: if false; }
-    match /topups/{id} { allow create, update, delete: if false; allow read: if activeProfile() && (resource.data.userId == request.auth.uid || isAdmin()); }
+    match /transactionQueue/{id} { allow read: if activeProfile() && (can('orders') || (isDealerTier() && resource.data.operatorRole == 'dealer' && resource.data['service'] == 'Mobile Banking' && (resource.data.get('dealerId', null) == null || resource.data.dealerId == request.auth.uid) && (resource.data.status == 'pending' || resource.data.get('claimedBy', null) == request.auth.uid)) || (isReseller() && resource.data.operatorRole == 'reseller' && resource.data['service'] in ['Recharge', 'Internet', 'Bill Payment', 'Remittance'] && (resource.data.get('resellerId', null) == null || resource.data.resellerId == request.auth.uid) && (resource.data.status == 'pending' || resource.data.get('claimedBy', null) == request.auth.uid))); allow create, update, delete: if false; }
+    match /topups/{id} { allow create, update, delete: if false; allow read: if activeProfile() && (resource.data.userId == request.auth.uid || can('finance')); }
     match /selfTopups/{id} { allow read: if activeProfile() && resource.data.userId == request.auth.uid; allow create, update, delete: if false; }
-    match /pointTransfers/{id} { allow read: if activeProfile() && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid || isAdmin()); allow create, update, delete: if false; }
+    match /pointTransfers/{id} { allow read: if activeProfile() && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid || can('finance')); allow create, update, delete: if false; }
     match /recommendationViews/{id} { allow read, write: if false; }
-    match /announcements/{id} { allow read: if activeProfile() && isAdmin(); allow write: if false; }
+    match /announcements/{id} { allow read: if activeProfile() && can('support'); allow write: if false; }
     // Staff support chat remains active for the admin/support inbox. Customer-facing chat UI is retired,
     // but existing support threads must remain readable/writable by the authenticated customer and staff.
     match /chats/{chatId} {
@@ -94,6 +116,39 @@ service cloud.firestore {
         allow update, delete: if false;
       }
     }
-    match /supportTickets/{id} { allow read: if activeProfile() && (isAdmin() || resource.data.get('userId', null) == request.auth.uid || resource.data.get('assignedToUid', '') == request.auth.uid); allow create: if false; allow update: if activeProfile() && ((isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['open','in_progress','resolved']) || (isSuperadmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['assignedToUid','assignedToName','assignedToRole','updatedAt']) && ((request.resource.data.assignedToUid == '' && request.resource.data.assignedToName == '' && request.resource.data.assignedToRole == '') || (request.resource.data.assignedToUid != '' && request.resource.data.assignedToRole in ['admin','superadmin','support'] && activeStaff(request.resource.data.assignedToUid, request.resource.data.assignedToRole) && request.resource.data.assignedToName == get(/databases/$(database)/documents/users/$(request.resource.data.assignedToUid)).data.name)) || (resource.data.get('assignedToUid', '') == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['in_progress','resolved']) || (resource.data.get('userId', null) == request.auth.uid && resource.data.status == 'resolved' && request.resource.data.status == 'open' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']))); allow delete: if false; }
+    // Public website account-deletion form (mysheba-web deploys these same rules).
+    match /accountDeletionRequests/{requestId} {
+      // Public website may submit a deletion request, but the client cannot
+      // read, update, or delete requests. The document ID must match the
+      // requestId field and all accepted fields/values are constrained.
+      allow create: if request.resource.data.keys().hasOnly([
+        'requestId', 'fullName', 'phone', 'email', 'reason', 'details',
+        'language', 'status', 'source', 'page', 'createdAt'
+      ])
+      && request.resource.id == request.resource.data.requestId
+      && request.resource.data.requestId is string
+      && request.resource.data.fullName is string
+      && request.resource.data.phone is string
+      && request.resource.data.email is string
+      && request.resource.data.reason is string
+      && request.resource.data.details is string
+      && request.resource.data.language in ['en', 'bn']
+      && request.resource.data.status == 'pending'
+      && request.resource.data.source == 'website-account-deletion'
+      && request.resource.data.page in ['/delete-account/', '/bn/delete-account/']
+      && request.resource.data.reason in ['', 'Not using MySheba anymore', 'Privacy concern', 'Duplicate account', 'Other', 'আর MySheba ব্যবহার করছি না', 'গোপনীয়তা সংক্রান্ত উদ্বেগ', 'ডুপ্লিকেট অ্যাকাউন্ট', 'অন্যান্য']
+      && request.resource.data.fullName.size() >= 2
+      && request.resource.data.fullName.size() <= 120
+      && request.resource.data.phone.size() >= 5
+      && request.resource.data.phone.size() <= 40
+      && request.resource.data.email.size() <= 160
+      && request.resource.data.reason.size() <= 120
+      && request.resource.data.details.size() <= 2000
+      && request.resource.data.createdAt is timestamp
+      && request.resource.data.createdAt == request.time;
+
+      allow read, update, delete: if false;
+    }
+    match /supportTickets/{id} { allow read: if activeProfile() && (can('support') || resource.data.get('userId', null) == request.auth.uid || resource.data.get('assignedToUid', '') == request.auth.uid); allow create: if false; allow update: if activeProfile() && ((can('support') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['open','in_progress','resolved']) || (isSuperadmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['assignedToUid','assignedToName','assignedToRole','updatedAt']) && ((request.resource.data.assignedToUid == '' && request.resource.data.assignedToName == '' && request.resource.data.assignedToRole == '') || (request.resource.data.assignedToUid != '' && request.resource.data.assignedToRole in ['admin','superadmin','support'] && activeStaff(request.resource.data.assignedToUid, request.resource.data.assignedToRole) && request.resource.data.assignedToName == get(/databases/$(database)/documents/users/$(request.resource.data.assignedToUid)).data.name))) || (resource.data.get('assignedToUid', '') == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']) && request.resource.data.status in ['in_progress','resolved']) || (resource.data.get('userId', null) == request.auth.uid && resource.data.status == 'resolved' && request.resource.data.status == 'open' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']))); allow delete: if false; }
   }
 }

@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { hasCapability } = require('./accessControl');
 const { assignUniqueUserId } = require('./userId');
 const { logAudit, logServerError } = require('./logService');
 const { inferWalletCurrency } = require('./walletCurrencyService');
@@ -23,6 +24,8 @@ exports.manageUser = onCall({ enforceAppCheck: true }, async (request) => {
   const perms = ROLE_PERMISSIONS[callerRole];
   if (!perms) throw new HttpsError('permission-denied', 'Your account cannot manage users.');
   const db = admin.firestore();
+  // Admins manage users only while their access includes 'users'.
+  if (callerRole === 'admin' && !(await hasCapability(db, callerUid, callerProfile, 'users'))) throw new HttpsError('permission-denied', 'Your account does not manage users.');
   const action = request.data?.action;
 
   if (action === 'create') {

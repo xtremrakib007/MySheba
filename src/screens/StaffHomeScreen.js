@@ -1,0 +1,87 @@
+import React from 'react';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Image } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useApp } from '../context/AppContext';
+import { useTheme } from '../theme/ThemeContext';
+import { radius } from '../theme/theme';
+import BannerSlider from '../components/BannerSlider';
+import ServiceGrid from '../components/ServiceGrid';
+import HeaderDecor from '../components/HeaderDecor';
+
+// Home for the staff roles that work a queue rather than a wallet: Support
+// Agents and Finance. Both see only the tiles their role owns - ServiceGrid
+// picks the set from STAFF_SERVICES - which is the app-side half of the same
+// boundary firestore.rules enforces on the data.
+const ROLE_COPY = {
+  support: {
+    title: 'Support Agent',
+    blurb: 'Customer support queues assigned to you.',
+    hint: 'Answer tickets and queries, and keep their status up to date.',
+  },
+  finance: {
+    title: 'Finance',
+    blurb: 'Payments, reconciliation and financial reporting.',
+    hint: 'Review transactions and top-ups. Order handling stays with operators.',
+  },
+};
+
+export default function StaffHomeScreen() {
+  const { colors, brandGradient } = useTheme();
+  const { openSidebar, setScreen, hasUnreadNotifications, profile } = useApp();
+  const styles = createStyles(colors);
+  const role = profile?.role || 'support';
+  const copy = ROLE_COPY[role] || ROLE_COPY.support;
+  const name = profile?.displayName || profile?.name || copy.title;
+
+  return (
+    <View style={styles.screen}>
+      <LinearGradient colors={brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
+        <HeaderDecor />
+        <View style={styles.logoArea}>
+          <TouchableOpacity style={styles.menuBtn} onPress={openSidebar}><Text style={styles.menuIcon}>☰</Text></TouchableOpacity>
+          <View style={styles.logoBox}><Image source={require('../../assets/icon.png')} style={styles.logoImage} resizeMode="cover" /></View>
+          <View><Text style={styles.brand}>MySheba</Text><Text style={styles.tagline}>{name}</Text></View>
+        </View>
+        <View style={styles.headerRight}>
+          <TouchableOpacity style={styles.bellBtn} onPress={() => setScreen('notifications')}>
+            <Text style={styles.bell}>🔔</Text>{hasUnreadNotifications && <View style={styles.bellDot} />}
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
+
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.roleCard}>
+          <Text style={styles.roleTitle}>{copy.title}</Text>
+          <Text style={styles.roleBlurb}>{copy.blurb}</Text>
+          <Text style={styles.roleHint}>{copy.hint}</Text>
+        </View>
+
+        <BannerSlider />
+        <ServiceGrid />
+      </ScrollView>
+    </View>
+  );
+}
+
+function createStyles(colors) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.bg },
+    header: { paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', overflow: 'hidden' },
+    logoArea: { flexDirection: 'row', alignItems: 'center' },
+    menuBtn: { padding: 4, marginRight: 10 },
+    menuIcon: { color: 'white', fontSize: 21 },
+    logoBox: { width: 38, height: 38, borderRadius: radius.md, overflow: 'hidden', marginRight: 10, backgroundColor: 'rgba(255,255,255,0.18)' },
+    logoImage: { width: '100%', height: '100%' },
+    brand: { color: 'white', fontWeight: '800', fontSize: 16 },
+    tagline: { color: 'rgba(255,255,255,0.85)', fontSize: 11, marginTop: 1 },
+    headerRight: { flexDirection: 'row', alignItems: 'center' },
+    bellBtn: { padding: 6 },
+    bell: { fontSize: 18 },
+    bellDot: { position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF5252' },
+    content: { padding: 16, paddingBottom: 40 },
+    roleCard: { backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: 16, marginBottom: 14, elevation: 2, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+    roleTitle: { fontSize: 17, fontWeight: '800', color: colors.text },
+    roleBlurb: { fontSize: 13, color: colors.textSecondary, marginTop: 4 },
+    roleHint: { fontSize: 11, color: colors.textSecondary, marginTop: 10, lineHeight: 16 },
+  });
+}

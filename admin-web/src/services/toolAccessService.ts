@@ -23,10 +23,12 @@ export type FeatureKey = (typeof FEATURE_DEFS)[number]['key'];
 // superadmin excluded on purpose (always has full access, never
 // toggleable off by accident); customer excluded (separate grid this
 // screen never touches).
-export const TOGGLEABLE_ROLES = ['dealer', 'reseller', 'support', 'finance', 'admin'] as const;
+// Operators only. Staff access (admin, support, finance) is managed in Access
+// Control as role defaults + per-user overrides.
+export const TOGGLEABLE_ROLES = ['dealer', 'reseller'] as const;
 export type ToggleableRole = (typeof TOGGLEABLE_ROLES)[number];
 
-export const ROLE_LABEL: Record<ToggleableRole | 'customer' | 'superadmin', string> = {
+export const ROLE_LABEL: Record<ToggleableRole | 'customer' | 'support' | 'finance' | 'admin' | 'superadmin', string> = {
   customer: 'Customer',
   dealer: 'Dealer',
   reseller: 'Reseller',
@@ -38,7 +40,8 @@ export const ROLE_LABEL: Record<ToggleableRole | 'customer' | 'superadmin', stri
 
 export type UserFeatureOverrides = Record<string, Partial<Record<FeatureKey, boolean>>>;
 export type FeatureAccessMap = Record<FeatureKey, string[]> & { userOverrides?: UserFeatureOverrides };
-export const STAFF_ROLES = ['dealer', 'reseller', 'support', 'finance', 'admin'] as const;
+// Per-user tool overrides are for operators too; staff use Access Control.
+export const STAFF_ROLES = ['dealer', 'reseller'] as const;
 
 export function canAccessUserFeature(access: FeatureAccessMap | null, key: FeatureKey, role: string | null | undefined, uid: string | null | undefined): boolean {
   if (role === 'superadmin') return true;

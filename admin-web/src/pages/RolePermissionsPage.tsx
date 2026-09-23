@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { ShieldCheck, Lock, Users, SlidersHorizontal, ExternalLink } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { FEATURE_DEFS, TOGGLEABLE_ROLES, ROLE_LABEL, subscribeFeatureAccess, type FeatureAccessMap } from '../services/toolAccessService';
+import { FEATURE_DEFS, ROLE_LABEL, subscribeFeatureAccess, type FeatureAccessMap } from '../services/toolAccessService';
 import { useEffect, useState } from 'react';
 
 const ROLE_ORDER = ['customer', 'dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin'] as const;
@@ -36,14 +36,14 @@ export default function RolePermissionsPage() {
   return (
     <div>
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div><h1 className="text-2xl font-bold">Role & Permission Center</h1><p className="mt-1 text-sm text-[var(--color-ink-soft)]">Review the current staff access model and manage tool-level permissions safely.</p></div>
+        <div><h1 className="text-2xl font-bold">Role & Permission Center</h1><p className="mt-1 text-sm text-[var(--color-ink-soft)]">Which operator tools dealers and resellers get. Staff access — admin, support and finance — is set in Access Control.</p></div>
         <a href="/tool-access" className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white"><SlidersHorizontal size={16}/> Manage Tool Access <ExternalLink size={14}/></a>
       </div>
 
       {error && <div className="mt-4 rounded-xl border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/5 px-4 py-3 text-sm text-[var(--color-danger)]">{error}</div>}
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        {ROLE_ORDER.map((role) => <div key={role} className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-card)] p-4"><div className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${ROLE_COLORS[role]}`}>{role === 'superadmin' ? 'Superadmin' : ROLE_LABEL[role as keyof typeof ROLE_LABEL]}</div><p className="mt-3 text-xs text-[var(--color-ink-soft)]">{role === 'superadmin' ? 'Full administrative access.' : role === 'admin' ? 'Administrative tools controlled by Tool Access.' : 'Operational access controlled by Tool Access.'}</p></div>)}
+        {ROLE_ORDER.map((role) => <div key={role} className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-card)] p-4"><div className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${ROLE_COLORS[role]}`}>{role === 'superadmin' ? 'Superadmin' : ROLE_LABEL[role as keyof typeof ROLE_LABEL]}</div><p className="mt-3 text-xs text-[var(--color-ink-soft)]">{role === 'superadmin' ? 'Full access. Staff roles are set in Access Control.' : 'Operator tools controlled by Tool Access.'}</p></div>)}
       </div>
 
       <section className="mt-6 rounded-2xl border border-[var(--color-line)] bg-[var(--color-card)] p-5">

@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { hasCapability } = require('./accessControl');
 const { logAudit, logServerError } = require('./logService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { checkIpAnomaly } = require('./anomalyService');
@@ -77,6 +78,8 @@ exports.transferPoints = onCall({ enforceAppCheck: true }, async (request) => {
 
   const caller = await profile(db, callerUid);
   if (!active(caller) || !['dealer', 'admin', 'superadmin'].includes(caller.role)) throw new HttpsError('permission-denied', 'Your account cannot transfer points.');
+  // Staff transfers are payment operations; dealers keep their own transfers.
+  if (caller.role !== 'dealer' && !(await hasCapability(db, callerUid, caller, 'finance'))) throw new HttpsError('permission-denied', 'Your account does not handle payments.');
   const recipient = await profile(db, toUid);
   if (!active(recipient)) throw new HttpsError('failed-precondition', 'The recipient account is not active.');
   if (!canTransferTo(caller.role, caller, recipient)) throw new HttpsError('permission-denied', 'You are not allowed to send points to that account.');

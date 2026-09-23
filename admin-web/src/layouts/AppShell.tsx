@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, LogOut, Menu, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { navGroups, type NavGroup } from '../routes/navConfig';
+import { canAccess, navGroups, ROLE_LABELS, type NavGroup } from '../routes/navConfig';
 import logo from '../assets/logo.png';
 import UniversalSearch from '../components/UniversalSearch';
 import NotificationCenter from '../components/NotificationCenter';
@@ -20,7 +20,7 @@ const COLLAPSE_KEY = 'mysheba-admin-sidebar-collapsed';
 const GROUPS_KEY = 'mysheba-admin-sidebar-groups';
 
 export default function AppShell() {
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, access } = useAuth();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_KEY) === '1');
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -28,14 +28,12 @@ export default function AppShell() {
     try { return JSON.parse(localStorage.getItem(GROUPS_KEY) || '{}'); } catch { return {}; }
   });
 
+  // One source of truth for access: navConfig's PATH_ROLES decides both what
+  // the sidebar offers and what ProtectedRoute lets through.
   const visibleGroups = useMemo(() => navGroups.map((group) => ({
     ...group,
-    items: group.items.filter((item) => {
-      if (item.superadminOnly && profile?.role !== 'superadmin') return false;
-      if (item.allowedRoles && !item.allowedRoles.includes(profile?.role as any)) return false;
-      return true;
-    }),
-  })).filter((group) => group.items.length > 0), [profile?.role]);
+    items: group.items.filter((item) => canAccess(item.path, access) && (!item.superadminOnly || access.role === 'superadmin')),
+  })).filter((group) => group.items.length > 0), [access]);
 
   useEffect(() => { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0'); }, [collapsed]);
   useEffect(() => { localStorage.setItem(GROUPS_KEY, JSON.stringify(openGroups)); }, [openGroups]);
@@ -82,7 +80,7 @@ export default function AppShell() {
       <div className={`mt-3 border-t border-white/10 pt-3 ${collapsed ? 'px-2' : 'px-3'}`}>
         {!collapsed && <div className="rounded-xl bg-white/5 px-3 py-2.5">
           <p className="truncate text-sm font-medium text-white">{profile?.name || profile?.email}</p>
-          <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-white/40">{profile?.role}</p>
+          <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-white/40">{profile ? ROLE_LABELS[profile.role] : ''}</p>
         </div>}
         <button onClick={() => signOut()} title={collapsed ? 'Sign out' : undefined} className={`mt-2 flex w-full items-center rounded-lg py-2 text-sm font-medium text-white/65 transition hover:bg-white/5 hover:text-white ${collapsed ? 'justify-center px-1' : 'gap-2.5 px-3 text-left'}`}><LogOut size={16} strokeWidth={2} />{!collapsed && 'Sign out'}</button>
         <button onClick={() => setCollapsed((c) => !c)} title={collapsed ? 'Expand sidebar' : undefined} className={`mt-1 hidden w-full items-center rounded-lg py-2 text-sm font-medium text-white/45 transition hover:bg-white/5 hover:text-white lg:flex ${collapsed ? 'justify-center px-1' : 'gap-2.5 px-3 text-left'}`}>{collapsed ? <PanelLeftOpen size={16} /> : <><PanelLeftClose size={16} />Compact mode</>}</button>
