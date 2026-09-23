@@ -9,14 +9,24 @@ import HeaderDecor from '../components/HeaderDecor';
 import { findWalletRecipient, walletTransfer } from '../firebase/walletTransferService';
 import LegacyTransferPointsScreen from './LegacyTransferPointsScreen';
 
-function fmt(n) {
-  return `MYR ${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const ZERO_DECIMAL_CURRENCIES = new Set(['IDR', 'KHR', 'MMK']);
+function walletCurrency(profile) {
+  return String(profile?.walletCurrency || profile?.walletBalanceCurrency || 'MYR').toUpperCase();
+}
+function currencyDigits(currency) {
+  return ZERO_DECIMAL_CURRENCIES.has(String(currency || '').toUpperCase()) ? 0 : 2;
+}
+function fmt(n, currency = 'MYR') {
+  const digits = currencyDigits(currency);
+  return `${currency} ${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
 }
 
 export default function TransferPointsScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
   const { goBackOrHome, profile } = useApp();
+  const currency = walletCurrency(profile);
+  const digits = currencyDigits(currency);
   const balance = Number(profile?.walletBalance || profile?.balance || 0);
   const isCustomer = !profile?.role || profile.role === 'customer';
 
@@ -34,7 +44,8 @@ export default function TransferPointsScreen() {
     const query = recipientQuery.trim();
     const value = Number(amount);
     if (!query) return showAlert('Wallet Transfer', 'Enter the recipient phone number or Customer ID.');
-    if (!Number.isFinite(value) || value < 0.01) return showAlert('Wallet Transfer', 'Enter a valid MYR amount.');
+    const minimum = digits === 0 ? 1 : 0.01;
+    if (!Number.isFinite(value) || value < minimum || (digits === 0 && !Number.isInteger(value))) return showAlert('Wallet Transfer', digits === 0 ? `Enter a whole-number ${currency} amount.` : `Enter a valid ${currency} amount.`);
     if (value > balance) return showAlert('Wallet Transfer', 'Insufficient wallet balance.');
 
     setReviewing(true);
@@ -53,7 +64,8 @@ export default function TransferPointsScreen() {
     if (!recipient || busy) return;
     if (!/^\d{4,8}$/.test(securityPin)) return showAlert('Wallet Transfer', 'Enter your 4-8 digit security PIN.');
     const value = Number(amount);
-    if (!Number.isFinite(value) || value < 0.01 || value > balance) {
+    const minimum = digits === 0 ? 1 : 0.01;
+    if (!Number.isFinite(value) || value < minimum || value > balance || (digits === 0 && !Number.isInteger(value))) {
       return showAlert('Wallet Transfer', 'Please check the transfer amount.');
     }
 
@@ -66,7 +78,7 @@ export default function TransferPointsScreen() {
       setAmount('');
       setNote('');
       setSecurityPin('');
-      showAlert('Transfer Successful', `${fmt(result.amount)} sent to ${result.recipient?.name || 'the recipient'}.`);
+      showAlert('Transfer Successful', `${fmt(result.amount, result.currency || currency)} sent to ${result.recipient?.name || 'the recipient'}.`);
     } catch (err) {
       showAlert('Wallet Transfer', err.message || 'Could not complete the transfer.');
     } finally {
@@ -92,13 +104,13 @@ export default function TransferPointsScreen() {
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.balanceCard}>
             <Text style={styles.balanceLabel}>Available Wallet Balance</Text>
-            <Text style={styles.balanceValue}>{fmt(balance)}</Text>
-            <Text style={styles.currency}>MYR wallet</Text>
+            <Text style={styles.balanceValue}>{fmt(balance, currency)}</Text>
+            <Text style={styles.currency}>{currency} wallet</Text>
           </View>
 
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Send Money</Text>
-            <Text style={styles.helper}>Transfer Malaysian Ringgit directly to another verified MySheba customer.</Text>
+            <Text style={styles.helper}>Transfer money directly to another verified MySheba customer. The recipient receives their wallet currency using the server-side exchange rate.</Text>
 
             <Text style={styles.label}>Recipient</Text>
             <TextInput
@@ -112,10 +124,10 @@ export default function TransferPointsScreen() {
 
             <Text style={styles.label}>Amount</Text>
             <View style={styles.amountRow}>
-              <Text style={styles.myrPrefix}>MYR</Text>
+              <Text style={styles.myrPrefix}>{currency}</Text>
               <TextInput
                 style={styles.amountInput}
-                placeholder="0.00"
+                placeholder={digits === 0 ? "0" : "0.00"}
                 placeholderTextColor="#9CA3AF"
                 value={amount}
                 onChangeText={setAmount}
@@ -134,8 +146,8 @@ export default function TransferPointsScreen() {
             />
 
             <View style={styles.limitRow}>
-              <Text style={styles.limitText}>Minimum MYR 0.01</Text>
-              <Text style={styles.limitText}>Maximum MYR 10,000</Text>
+              <Text style={styles.limitText}>Minimum {digits === 0 ? `1 ${currency}` : `0.01 ${currency}`}</Text>
+              <Text style={styles.limitText}>Maximum {currency} equivalent of MYR 10,000</Text>
             </View>
 
             <TouchableOpacity style={styles.reviewButton} onPress={review} disabled={reviewing}>
@@ -144,7 +156,7 @@ export default function TransferPointsScreen() {
           </View>
 
           <View style={styles.securityCard}>
-            <Text style={styles.securityTitle}>🔒 Secure MYR transfer</Text>
+            <Text style={styles.securityTitle}>🔒 Secure wallet transfer</Text>
             <Text style={styles.securityText}>Your balance is changed only by the secure server transaction after the transfer is confirmed.</Text>
           </View>
         </ScrollView>
@@ -154,7 +166,7 @@ export default function TransferPointsScreen() {
         <View style={styles.backdrop}>
           <View style={styles.confirmCard}>
             <Text style={styles.confirmTitle}>Confirm Transfer</Text>
-            <Text style={styles.confirmAmount}>{fmt(amount)}</Text>
+            <Text style={styles.confirmAmount}>{fmt(amount, currency)}</Text>
             <View style={styles.summaryRow}><Text style={styles.summaryLabel}>To</Text><Text style={styles.summaryValue}>{recipient?.name || 'MySheba Customer'}</Text></View>
             {!!recipient?.customerId && <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Customer ID</Text><Text style={styles.summaryValue}>{recipient.customerId}</Text></View>}
             {!!recipient?.phoneMasked && <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Phone</Text><Text style={styles.summaryValue}>{recipient.phoneMasked}</Text></View>}
@@ -172,7 +184,7 @@ export default function TransferPointsScreen() {
               editable={!busy}
             />
             <View style={styles.divider} />
-            <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Balance after</Text><Text style={styles.summaryValue}>{fmt(balance - Number(amount || 0))}</Text></View>
+            <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Balance after</Text><Text style={styles.summaryValue}>{fmt(balance - Number(amount || 0), currency)}</Text></View>
             <View style={styles.actions}>
               <TouchableOpacity style={styles.cancelButton} onPress={() => setConfirmVisible(false)} disabled={busy}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
               <TouchableOpacity style={styles.confirmButton} onPress={confirmTransfer} disabled={busy}><Text style={styles.confirmText}>{busy ? 'Sending…' : 'Confirm & Send'}</Text></TouchableOpacity>
