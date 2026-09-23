@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './routes/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
@@ -32,7 +32,6 @@ import FinancialControlPage from './pages/FinancialControlPage';
 import InquiriesPage from './pages/InquiriesPage';
 import AnnouncementsPage from './pages/AnnouncementsPage';
 import TransferPointsPage from './pages/TransferPointsPage';
-import BusinessProfilesPage from './pages/BusinessProfilesPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import ToolAccessPage from './pages/ToolAccessPage';
 import RolePermissionsPage from './pages/RolePermissionsPage';
@@ -42,6 +41,7 @@ import CategoriesPage from './pages/CategoriesPage';
 import ModuleSubscriptionsPage from './pages/ModuleSubscriptionsPage';
 import PaymentSettingsPage from './pages/PaymentSettingsPage';
 import PointTopUpPage from './pages/PointTopUpPage';
+import AccessControlPage from './pages/AccessControlPage';
 import DeviceSessionsPage from './pages/DeviceSessionsPage';
 import SecurityCenterPage from './pages/SecurityCenterPage';
 import GrowthCenterPage from './pages/GrowthCenterPage';
@@ -70,6 +70,7 @@ function AdminRoutes() {
         <Route path="/financial-risk" element={<FinancialRiskControlsPage />} />
         <Route path="/support" element={<SupportTicketsPage />} />
         <Route path="/support/messages" element={<SupportMessagesPage />} />
+        <Route path="/support/messages/:chatId" element={<SupportMessagesPage />} />
         <Route path="/support-operations" element={<SupportOperationsPage />} />
         <Route path="/service-operations" element={<ServiceOperationsPage />} />
         <Route path="/announcements" element={<AnnouncementsPage />} />
@@ -79,7 +80,6 @@ function AdminRoutes() {
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/growth" element={<GrowthCenterPage />} />
         <Route path="/inquiries" element={<InquiriesPage />} />
-        <Route path="/business-profiles" element={<BusinessProfilesPage />} />
         <Route path="/transfer-points" element={<TransferPointsPage />} />
         <Route path="/feature-access" element={<FeatureAccessPage />} />
         <Route path="/security" element={<SecurityCenterPage />} />
@@ -91,16 +91,17 @@ function AdminRoutes() {
         <Route path="/config/banners" element={<BannersPage />} />
         <Route path="/config/categories" element={<CategoriesPage />} />
         <Route path="/config/modules" element={<ModuleSubscriptionsPage />} />
+        <Route path="/topup" element={<PointTopUpPage />} />
         <Route element={<SuperadminRoute />}>
           <Route path="/governance" element={<SystemGovernanceCenterPage />} />
           <Route path="/platform-control" element={<PlatformControlCenterPage />} />
+          <Route path="/access-control" element={<AccessControlPage />} />
           <Route path="/role-permissions" element={<RolePermissionsPage />} />
           <Route path="/tool-access" element={<ToolAccessPage />} />
           <Route path="/audit" element={<AuditCompliancePage />} />
           <Route path="/activity-center" element={<AdminActivityCenterPage />} />
           <Route path="/system-health" element={<SystemHealthPage />} />
           <Route path="/devices" element={<DeviceSessionsPage />} />
-          <Route path="/topup" element={<PointTopUpPage />} />
         </Route>
       </Route>
       <Route path="*" element={<LoginPage />} />
