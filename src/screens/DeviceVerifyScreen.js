@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Linking, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { httpsCallable } from 'firebase/functions';
 import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import HeaderDecor from '../components/HeaderDecor';
-import * as emailVerification from '../firebase/emailVerification';
 import * as phoneVerification from '../firebase/phoneVerification';
 import * as authService from '../firebase/authService';
 import * as deviceSessionService from '../firebase/deviceSessionService';
@@ -59,7 +58,7 @@ export default function DeviceVerifyScreen() {
       const refreshed = await authService.fetchProfile(uid);
       setScreen(homeForRole(refreshed?.role || role));
     } catch (e) {
-      setLocalError(e.message || 'Could not complete device verification. Please try again.');
+      setLocalError(friendlyDeviceVerificationError(e, 'Could not complete device verification. Please try again.'));
     } finally { setBusy(false); }
   };
 
@@ -73,7 +72,7 @@ export default function DeviceVerifyScreen() {
         await httpsCallable(functions, 'sendDeviceVerification')({ deviceId });
       }
       setSent(true); setCode('');
-    } catch (e) { setLocalError(e.message || 'Could not send the verification email. Please try again.'); }
+    } catch (e) { setLocalError(friendlyDeviceVerificationError(e, 'Could not send the verification email. Please try again.')); }
     finally { setBusy(false); }
   };
 
@@ -82,7 +81,7 @@ export default function DeviceVerifyScreen() {
     try {
       const confirmation = await phoneVerification.sendPhoneOtp(phone);
       setPhoneConfirmation(confirmation); setSent(true); setCode('');
-    } catch (e) { setLocalError(e.message || 'Could not send the SMS verification code. Please try again.'); }
+    } catch (e) { setLocalError(friendlyDeviceVerificationError(e, 'Could not send the SMS verification code. Please try again.')); }
     finally { setBusy(false); }
   };
 
@@ -90,34 +89,6 @@ export default function DeviceVerifyScreen() {
     if (!/^\d{6}$/.test(code.trim())) { setLocalError('Enter the 6-digit email verification code.'); return; }
     await finish({ emailOtp: code.trim() });
   };
-
-  const verifyEmailLink = async (url) => {
-    setLocalError(''); setBusy(true);
-    try {
-      const result = await emailVerification.confirmEmailLink(url, email);
-      await finish({ emailIdToken: result.idToken });
-    } catch (e) { setLocalError(e.message || 'Could not verify your email link. Please try again.'); }
-    finally { setBusy(false); }
-  };
-
-  const verifySms = async () => {
-    if (!/^\d{6}$/.test(code.trim())) { setLocalError('Enter the 6-digit SMS verification code.'); return; }
-    setLocalError(''); setBusy(true);
-    try {
-      const result = await phoneVerification.confirmPhoneOtp(phoneConfirmation, code.trim());
-      await finish({ phoneIdToken: result.idToken });
-    } catch (e) { setLocalError(e.message || 'Could not verify the SMS code. Please try again.'); }
-    finally { setBusy(false); }
-  };
-
-  useEffect(() => {
-    const handleUrl = (url) => {
-      if (method === 'email' && sent && emailVerification.isEmailSignInLink(url)) verifyEmailLink(url);
-    };
-    Linking.getInitialURL().then((url) => { if (url) handleUrl(url); }).catch(() => {});
-    const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url));
-    return () => sub.remove();
-  }, [method, sent, email]);
 
   const switchMethod = (next) => {
     if (busy) return;
@@ -134,9 +105,9 @@ export default function DeviceVerifyScreen() {
         <TouchableOpacity style={[styles.methodBtn, method === 'sms' && styles.methodBtnActive]} onPress={() => switchMethod('sms')} disabled={busy}><Text style={[styles.methodBtnText, method === 'sms' && styles.methodBtnTextActive]}>SMS</Text></TouchableOpacity>
       </View>
       {method === 'email' ? <>
-        <Text style={styles.intro}>For a new device, we will send one verification email to {email || 'your email'}. Use the link or the 6-digit code. No security PIN is required.</Text>
+        <Text style={styles.intro}>For a new device, we will send one verification email to {email || 'your email'}. Use the 6-digit code. No security PIN is required.</Text>
         {!sent ? <TouchableOpacity style={[styles.btn, busy && styles.btnDisabled]} onPress={sendEmail} disabled={busy}>{busy ? <ActivityIndicator color="#fff"/> : <Text style={styles.btnText}>Send Email Verification</Text>}</TouchableOpacity> : <>
-          <Text style={styles.methodHint}>Tap the verification link in the email, or enter the 6-digit code below.</Text>
+          <Text style={styles.methodHint}>Enter the 6-digit code from the email below.</Text>
           <View style={styles.formGroup}><Text style={styles.label}>Email verification code</Text><TextInput style={styles.otpInput} placeholder="123456" placeholderTextColor="#999" keyboardType="number-pad" maxLength={6} value={code} onChangeText={setCode}/></View>
           <TouchableOpacity style={[styles.btn, busy && styles.btnDisabled]} onPress={verifyEmailOtp} disabled={busy}>{busy ? <ActivityIndicator color="#fff"/> : <Text style={styles.btnText}>Verify Email Code</Text>}</TouchableOpacity>
           <TouchableOpacity style={styles.resendBtn} onPress={sendEmail} disabled={busy}><Text style={styles.resendText}>Send link + code again</Text></TouchableOpacity>
@@ -153,6 +124,18 @@ export default function DeviceVerifyScreen() {
       <TouchableOpacity style={styles.cancelBtn} onPress={cancelDeviceVerification} disabled={busy}><Text style={styles.cancelText}>Cancel and sign out</Text></TouchableOpacity>
     </ScrollView>
   </View>;
+}
+
+function friendlyDeviceVerificationError(err, fallback) {
+  const code = String(err?.code || '').toLowerCase();
+  const message = String(err?.message || '').trim();
+  if (code.includes('resource-exhausted')) return message || fallback;
+  if (code.includes('failed-precondition') || code.includes('invalid-argument') || code.includes('permission-denied') || code.includes('deadline-exceeded')) {
+    return message.replace(/\s*\[(?:500|firebase:[^\]]+)\]\s*$/i, '') || fallback;
+  }
+  if (code.includes('network') || code.includes('unavailable')) return 'Network error. Please check your connection and try again.';
+  if (code.includes('internal') || /\[500\]|internal/i.test(message)) return fallback;
+  return message.replace(/\s*\[(?:500|firebase:[^\]]+)\]\s*$/i, '') || fallback;
 }
 
 function createStyles(colors){return StyleSheet.create({
