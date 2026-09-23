@@ -311,7 +311,10 @@ function friendlyAuthError(err) {
   if (code === 'auth/network-request-failed') return 'Network error. Check your connection and try again.';
   if (code === 'auth/weak-password') return 'New password is too weak. Please choose a stronger one.';
   if (code === 'auth/requires-recent-login') return 'Please sign out and sign back in, then try again.';
-  return err && err.message ? err.message : 'Sign in failed. Please try again.';
+  if (String(code || '').toLowerCase().includes('internal') || /\[500\]|internal server error/i.test(String(err?.message || ''))) {
+    return 'We could not complete that request right now. Please try again.';
+  }
+  return err && err.message ? String(err.message).replace(/\s*\[(?:500|firebase:[^\]]+)\]\s*$/i, '') : 'Sign in failed. Please try again.';
 }
 
 // Google Sign-In was intentionally retired from the mobile runtime.
