@@ -34,8 +34,7 @@ exports.sendDeviceVerification = onCall({ enforceAppCheck: true }, async (reques
   const userRef = ref(db, uid);
 
   const otp = code();
-  let link;
-  try {
+  {
     const snap = await userRef.get();
     if (!snap.exists) throw new HttpsError('not-found', 'No profile found for this account.');
     const data = snap.data();
@@ -45,11 +44,6 @@ exports.sendDeviceVerification = onCall({ enforceAppCheck: true }, async (reques
     }
     const email = String(pending.email || data.email || '').trim().toLowerCase();
     if (!validEmail(email)) throw new HttpsError('failed-precondition', 'No valid email address is available for verification.');
-    link = await admin.auth().generateSignInWithEmailLink(email, LINK_SETTINGS);
-  } catch (err) {
-    if (err instanceof HttpsError) throw err;
-    console.error('[deviceVerification] generate link failed', err);
-    throw new HttpsError('failed-precondition', 'Could not create the verification link. Please try again.');
   }
 
   const now = Date.now();
@@ -98,9 +92,10 @@ exports.sendDeviceVerification = onCall({ enforceAppCheck: true }, async (reques
   try {
     await mailerService.sendEmail({
       to: email,
-      subject: 'MySheba device verification — link + 6-digit code',
-      text: `We received a MySheba sign-in request from a new device.\n\nOpen this verification link on that device:\n${link}\n\nOr enter this 6-digit code in the MySheba app:\n${otp}\n\nThe code expires in 10 minutes. If you did not request this, ignore this email.`,
-      html: `<div style="font-family:Arial,sans-serif;line-height:1.6;max-width:600px;margin:auto"><h2>MySheba device verification</h2><p>We received a sign-in request from a new device.</p><p><b>Use the verification link:</b></p><p><a href="${link}" style="display:inline-block;padding:12px 18px;background:#08aaa0;color:#fff;text-decoration:none;border-radius:8px">Verify This Device</a></p><p><b>Or enter this 6-digit code:</b></p><div style="font-size:28px;font-weight:700;letter-spacing:8px;padding:14px 18px;background:#f3f4f6;border-radius:8px;text-align:center">${otp}</div><p>The code expires in 10 minutes.</p></div>`,
+      subject: 'MySheba device verification code',
+      text: `We received a MySheba sign-in request from a new device.\n\nYour 6-digit MySheba verification code is: ${otp}\n\nEnter this code in the MySheba app to verify this device.\n\nThe code expires in 10 minutes. If you did not request this, ignore this email.`,
+      html: `<div style="font-family:Arial,sans-serif;line-height:1.6;max-width:600px;margin:auto"><h2>MySheba device verification</h2><p>We received a MySheba sign-in request from a new device.</p><p>Your 6-digit verification code is:</p><div style="font-size:28px;font-weight:700;letter-spacing:8px;padding:14px 18px;background:#f3f4f6;border-radius:8px;text-align:center">${otp}</div><p>Enter this code in the MySheba app. The code expires in 10 minutes.</p></div>`,
+
       context: 'deviceVerificationService.sendDeviceVerification',
     });
   } catch (err) {
