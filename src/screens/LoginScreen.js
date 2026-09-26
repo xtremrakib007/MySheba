@@ -35,6 +35,7 @@ export default function LoginScreen() {
   // comes back from the server is a form-level failure instead.
   const [phoneError, setPhoneError] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [showErrorDetail, setShowErrorDetail] = useState(false);
 
   useEffect(() => {
     secureAsyncStorage.getItem(REMEMBER_KEY)
@@ -150,13 +151,30 @@ export default function LoginScreen() {
             </TouchableOpacity>
 
             {!!authError && !authBusy && (
-              <View style={styles.errorCard} accessibilityRole="alert" accessibilityLiveRegion="polite">
+              // Long-pressing the card reveals what actually failed. A normal
+              // tap does nothing, so nobody meets this by accident, and the
+              // copy above is still the only thing a user is shown - but when
+              // someone reports "it just says unable to sign in" there is a
+              // way to get the real reason off the device without a rebuild.
+              <TouchableOpacity
+                activeOpacity={1}
+                onLongPress={() => setShowErrorDetail((v) => !v)}
+                delayLongPress={900}
+                style={styles.errorCard}
+                accessibilityRole="alert"
+                accessibilityLiveRegion="polite"
+              >
                 <Text style={styles.errorTitle}>{signInErrorCopy(authError).title}</Text>
                 <Text style={styles.errorBody}>{signInErrorCopy(authError).message}</Text>
+                {showErrorDetail && (
+                  <Text style={styles.errorDetail} selectable>
+                    {`${authError?.reason || 'untagged'} · ${authError?.detail || 'no code'}`}
+                  </Text>
+                )}
                 <TouchableOpacity style={styles.retryBtn} onPress={onSignIn} accessibilityRole="button">
                   <Text style={styles.retryText}>{t('login.tryAgain', 'Try Again')}</Text>
                 </TouchableOpacity>
-              </View>
+              </TouchableOpacity>
             )}
 
             <TouchableOpacity activeOpacity={0.85} onPress={onSignIn} disabled={authBusy}>
@@ -226,7 +244,7 @@ function createStyles(colors) {
     // carries an action.
     errorCard: { backgroundColor: `${colors.error}14`, borderWidth: 1, borderColor: `${colors.error}40`, borderRadius: radius.md, padding: 12, marginTop: 14, marginBottom: 4 },
     errorTitle: { color: colors.error, fontSize: 13.5, fontWeight: '700' },
-    errorBody: { color: colors.text, fontSize: 12, lineHeight: 17, marginTop: 3 },
+    errorBody: { color: colors.text, fontSize: 12, lineHeight: 17, marginTop: 3 }, errorDetail: { fontSize: 11, color: colors.textSecondary, marginTop: 8, fontFamily: Platform.OS === 'android' ? 'monospace' : 'Courier' },
     retryBtn: { alignSelf: 'flex-start', marginTop: 10, paddingVertical: 7, paddingHorizontal: 14, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.error },
     retryText: { color: colors.error, fontSize: 12.5, fontWeight: '700' },
     loginBtnTextBusy: { marginLeft: 10 },
