@@ -11,6 +11,7 @@ import PhoneCountryPicker from '../components/PhoneCountryPicker';
 import { DEFAULT_PHONE_COUNTRY } from '../data/phoneCountries';
 import * as supportContactService from '../firebase/supportContactService';
 import { signInErrorCopy } from '../utils/signInErrorCopy';
+import { getLastTokenProbe } from '../firebase/authService';
 import { isValidPhone } from '../firebase/authService';
 
 const SUPPORT_EMAIL = 'info.mysheba@gmail.com';
@@ -168,7 +169,7 @@ export default function LoginScreen() {
                 <Text style={styles.errorBody}>{signInErrorCopy(authError).message}</Text>
                 {showErrorDetail && (
                   <Text style={styles.errorDetail} selectable>
-                    {`${authError?.reason || 'untagged'} · ${authError?.detail || 'no code'}`}
+                    {`${authError?.reason || 'untagged'} · ${authError?.detail || 'no code'}\n${getLastTokenProbe()}`}
                   </Text>
                 )}
                 <TouchableOpacity style={styles.retryBtn} onPress={onSignIn} accessibilityRole="button">

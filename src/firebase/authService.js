@@ -26,9 +26,24 @@ const APP_EMAIL_DOMAIN = 'mysheba.app';
 // A callable invoked immediately after Firebase sign-in must receive the
 // current ID token. Force-refreshing here prevents a stale/expired token from
 // being sent to checkDeviceSession and being rejected as UNAUTHENTICATED (401).
+// Records the token's length for the login screen's long-press diagnostic.
+// A missing or empty token here and a rejected callable are the same bug seen
+// from two ends; knowing which end failed is the whole question.
+let lastTokenProbe = 'not attempted';
+export function getLastTokenProbe() { return lastTokenProbe; }
+
 async function refreshCallableAuthToken() {
-  if (!auth.currentUser) throw new Error('Please sign in again.');
-  await auth.currentUser.getIdToken(true);
+  if (!auth.currentUser) {
+    lastTokenProbe = 'no currentUser';
+    throw new Error('Please sign in again.');
+  }
+  try {
+    const token = await auth.currentUser.getIdToken(true);
+    lastTokenProbe = `token ${String(token || '').length}`;
+  } catch (e) {
+    lastTokenProbe = `token failed: ${String(e?.code || e?.message || '').slice(0, 40)}`;
+    throw e;
+  }
 }
 
 export function normalizePhone(phone) {
@@ -114,8 +129,14 @@ function signInError(err) {
   // Kept for the login screen's long-press diagnostic only. Never rendered
   // on its own - signInErrorCopy still decides what a person reads, and
   // these fields are not part of that decision.
-  e.detail = [String(err?.code || ''), Number(err?.status || err?.httpStatus || 0) || '']
-    .filter(Boolean).join(' ') || 'no code';
+  // The message distinguishes who rejected the call, which the code alone
+  // cannot: the callable framework rejects an absent or invalid ID token
+  // with its own "unauthenticated", while our requireAuth throws "You must
+  // be signed in." Both surface to the client as functions/unauthenticated.
+  // Long-press only - signInErrorCopy never reads this.
+  const msg = String(err?.message || '').slice(0, 70);
+  e.detail = [String(err?.code || ''), Number(err?.status || err?.httpStatus || 0) || '', msg]
+    .filter(Boolean).join(' | ') || 'no code';
   return e;
 }
 
