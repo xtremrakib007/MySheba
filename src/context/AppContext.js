@@ -1015,6 +1015,24 @@ export function AppProvider({ children }) {
     // pending retry cannot write state into an unmounted tree.
     let cancelled = false;
     let retryTimer = null;
+    let firstRouteWatchdog = null;
+
+    // Nothing may leave the app holding on the splash. The splash waits on
+    // authLoading, and several paths out of the profile listener legitimately
+    // return without routing - a document missing from the local cache is
+    // ignored so the server can answer, and offline there may be no server
+    // answer and no cached profile either. That combination would hold the
+    // splash at 92% forever, which is indistinguishable from a hang and is
+    // the kind of thing people clear app data to escape.
+    const FIRST_ROUTE_TIMEOUT_MS = 8000;
+    const armFirstRouteWatchdog = () => {
+      if (firstRouteWatchdog) clearTimeout(firstRouteWatchdog);
+      firstRouteWatchdog = setTimeout(() => {
+        if (cancelled || initialRouteDone) return;
+        initialRouteDone = true;
+        setAuthLoading(false);
+      }, FIRST_ROUTE_TIMEOUT_MS);
+    };
 
     const routeForRole = (p) => {
       if (p && p.role === "dealer") setScreen("dealerHome");
@@ -1032,6 +1050,11 @@ export function AppProvider({ children }) {
         clearTimeout(retryTimer);
         retryTimer = null;
       }
+      if (firstRouteWatchdog) {
+        clearTimeout(firstRouteWatchdog);
+        firstRouteWatchdog = null;
+      }
+      if (user && !initialRouteDone) armFirstRouteWatchdog();
       if (profileUnsub) {
         profileUnsub();
         profileUnsub = null;
@@ -1240,6 +1263,7 @@ export function AppProvider({ children }) {
     return () => {
       cancelled = true;
       if (retryTimer) clearTimeout(retryTimer);
+      if (firstRouteWatchdog) clearTimeout(firstRouteWatchdog);
       unsub();
       if (profileUnsub) profileUnsub();
     };

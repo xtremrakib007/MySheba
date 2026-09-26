@@ -72,5 +72,22 @@ is('no active id on the profile -> nothing to compare',
 is('called with nothing -> no',
    shouldEndSessionForDevice(), false);
 
+console.log('\n-- the splash must never be able to hang --');
+// Structural, not behavioural: the watchdog lives inside a React effect and
+// cannot be imported. What is checked is that it still exists and is still
+// wired, because several paths out of the profile listener legitimately
+// return without routing (a document missing from the local cache is
+// ignored so the server can answer) and offline there may be no server
+// answer and no cached profile either - which would hold the splash at 92%
+// forever.
+const ctx = fs.readFileSync(path.join(__dirname, '..', 'src', 'context', 'AppContext.js'), 'utf8');
+is('a first-route watchdog is defined', /const armFirstRouteWatchdog = \(\) => \{/.test(ctx), true);
+is('it is armed when a signed-in user appears',
+   /if \(user && !initialRouteDone\) armFirstRouteWatchdog\(\);/.test(ctx), true);
+is('it clears authLoading when it fires',
+   /firstRouteWatchdog = setTimeout\([\s\S]{0,220}setAuthLoading\(false\)/.test(ctx), true);
+is('it is cleared on teardown',
+   /cancelled = true;[\s\S]{0,160}clearTimeout\(firstRouteWatchdog\)/.test(ctx), true);
+
 console.log(`\n${pass}/${pass + fail} passed`);
 process.exit(fail ? 1 : 0);
