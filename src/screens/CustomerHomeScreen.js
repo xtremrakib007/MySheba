@@ -68,7 +68,7 @@ export default function CustomerHomeScreen() {
 
         <InfoBar />
         <BannerSlider />
-        <ServiceGrid limit={6} />
+        <ServiceGrid homeOnly />
 
         <SectionCard style={styles.section}>
           <ListRow

@@ -7,19 +7,26 @@ import { useLanguage } from '../i18n/LanguageContext';
 import * as gridManagementService from '../firebase/gridManagementService';
 import RoyalIcon from './RoyalIcon';
 
+// `home: true` marks the tiles the customer home shows. Everything else is
+// one tap away on the Services tab, which renders this list in full.
+//
+// This replaced "the first N tiles", which cut Bus, Train and Flight off the
+// home screen purely because travel happens to be declared after money. The
+// home set is a decision, so it is written down as one: eight services plus
+// More Services, which is exactly three rows of three.
 const CUSTOMER_SERVICES = [
   // Money & connectivity
-  { key: 'recharge', icon: 'recharge', name: 'Mobile Top-Up', kind: 'service' },
-  { key: 'internet', icon: 'internet', name: 'Internet (Data & Voice)', kind: 'service' },
+  { key: 'recharge', icon: 'recharge', name: 'Mobile Top-Up', kind: 'service' , home: true },
+  { key: 'internet', icon: 'internet', name: 'Internet (Data & Voice)', kind: 'service' , home: true },
   { key: 'rechargePin', icon: 'recharge', name: 'PIN Generate', kind: 'rechargePin' },
-  { key: 'billpayment', icon: 'billpayment', name: 'Bill Payment', kind: 'service' },
-  { key: 'mobilebanking', icon: 'mobilebanking', name: 'Mobile Banking', kind: 'service' },
-  { key: 'remittance', icon: 'remittance', name: 'Remittance', kind: 'service' },
+  { key: 'billpayment', icon: 'billpayment', name: 'Bill Payment', kind: 'service' , home: true },
+  { key: 'mobilebanking', icon: 'mobilebanking', name: 'Mobile Banking', kind: 'service' , home: true },
+  { key: 'remittance', icon: 'remittance', name: 'Remittance', kind: 'service' , home: true },
 
   // Travel
-  { key: 'bus', icon: 'bus', name: 'Bus', kind: 'buspicker' },
-  { key: 'train', icon: 'train', name: 'Train', kind: 'webview' },
-  { key: 'flight', icon: 'flight', name: 'Flight', kind: 'service' },
+  { key: 'bus', icon: 'bus', name: 'Bus', kind: 'buspicker' , home: true },
+  { key: 'train', icon: 'train', name: 'Train', kind: 'webview' , home: true },
+  { key: 'flight', icon: 'flight', name: 'Flight', kind: 'service' , home: true },
 
   // Malaysia worker / immigration services
   { key: 'visa', icon: 'visa', name: 'Visa', kind: 'webview' },
@@ -135,13 +142,12 @@ const ADMIN_TILE_NEEDS = { topup: ['finance'], history: ['orders', 'finance'] };
 
 export const PRIMARY_SERVICES = CUSTOMER_SERVICES;
 
-// `limit` caps how many tiles are drawn, for the home screen. The customer
-// list is 17 tiles - the whole catalogue, every time, before anything else on
-// the page gets a look in. The Services tab already renders the full grid
-// (BottomNav maps 'services' to the moreFeatures screen), so home shows the
-// money services and hands off. When the list is cut, the last slot is always
-// the More Services tile, so nothing becomes unreachable.
-export default function ServiceGrid({ limit }) {
+// `homeOnly` draws just the tiles flagged `home: true`, for the home screen.
+// The customer list is 17 tiles - the whole catalogue, every time, before
+// anything else on the page gets a look in. The Services tab renders the full
+// grid (BottomNav maps 'services' to the moreFeatures screen), so home shows
+// the flagged set and hands off, always ending on More Services.
+export default function ServiceGrid({ homeOnly }) {
   const { colors } = useTheme(); const { webViewBusy, profile, gridManagement, can } = useApp();
   const handlePress = useServiceAction(); const role = profile?.role || 'customer';
   const isStaff = ['dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin'].includes(role);
@@ -154,13 +160,14 @@ export default function ServiceGrid({ limit }) {
   const gridKeyFor = (service) => ({ buspicker: 'bus', webview: service.key, adminFeatures: 'adminFeatures', dealerFeatures: 'dealerFeatures', resellerFeatures: 'resellerFeatures', adminTopup: 'topup' }[service.kind] || service.key);
   const active = allServices.filter((service) => gridManagementService.isGridActive(gridManagement, gridKeyFor(service)));
   const moreTile = active.find((service) => service.kind === 'moreFeaturesLink');
-  const truncated = Boolean(limit) && active.length > limit;
-  const services = !truncated
+  // homeOnly keeps the tiles flagged for the home screen, in declaration
+  // order, and always ends on More Services so nothing dropped is stranded.
+  // A staff list carries no home flags, so it falls back to the full set
+  // rather than rendering an empty grid.
+  const flagged = active.filter((service) => service.home);
+  const services = !homeOnly || flagged.length === 0
     ? active
-    : [
-        ...active.filter((service) => service.kind !== 'moreFeaturesLink').slice(0, moreTile ? limit - 1 : limit),
-        ...(moreTile ? [moreTile] : []),
-      ];
+    : [...flagged, ...(moreTile ? [moreTile] : [])];
   return <View><View style={styles.sectionHead}><Text style={[styles.sectionTitle, { color: colors.navy || colors.text }]}>{isStaff ? 'Management Dashboard' : 'Quick Services'}</Text><Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>{isStaff ? 'Manage transactions, accounts and operations' : 'Money, remittance and travel'}</Text></View><View style={[styles.gridCanvas, { backgroundColor: colors.canvasBg || colors.surface }]}><View style={styles.grid}>{services.map((service) => <Tile key={service.key} s={service} disabled={service.kind === 'webview' && !!webViewBusy} onPress={() => handlePress(service)} />)}</View></View></View>;
 }
 
