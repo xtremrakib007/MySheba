@@ -135,7 +135,13 @@ const ADMIN_TILE_NEEDS = { topup: ['finance'], history: ['orders', 'finance'] };
 
 export const PRIMARY_SERVICES = CUSTOMER_SERVICES;
 
-export default function ServiceGrid() {
+// `limit` caps how many tiles are drawn, for the home screen. The customer
+// list is 17 tiles - the whole catalogue, every time, before anything else on
+// the page gets a look in. The Services tab already renders the full grid
+// (BottomNav maps 'services' to the moreFeatures screen), so home shows the
+// money services and hands off. When the list is cut, the last slot is always
+// the More Services tile, so nothing becomes unreachable.
+export default function ServiceGrid({ limit }) {
   const { colors } = useTheme(); const { webViewBusy, profile, gridManagement, can } = useApp();
   const handlePress = useServiceAction(); const role = profile?.role || 'customer';
   const isStaff = ['dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin'].includes(role);
@@ -146,7 +152,15 @@ export default function ServiceGrid() {
         ? STAFF_SERVICES.admin.filter((t) => !ADMIN_TILE_NEEDS[t.key] || ADMIN_TILE_NEEDS[t.key].some((cap) => can(cap)))
         : (STAFF_SERVICES[role] || STAFF_SERVICES.admin);
   const gridKeyFor = (service) => ({ buspicker: 'bus', webview: service.key, adminFeatures: 'adminFeatures', dealerFeatures: 'dealerFeatures', resellerFeatures: 'resellerFeatures', adminTopup: 'topup' }[service.kind] || service.key);
-  const services = allServices.filter((service) => gridManagementService.isGridActive(gridManagement, gridKeyFor(service)));
+  const active = allServices.filter((service) => gridManagementService.isGridActive(gridManagement, gridKeyFor(service)));
+  const moreTile = active.find((service) => service.kind === 'moreFeaturesLink');
+  const truncated = Boolean(limit) && active.length > limit;
+  const services = !truncated
+    ? active
+    : [
+        ...active.filter((service) => service.kind !== 'moreFeaturesLink').slice(0, moreTile ? limit - 1 : limit),
+        ...(moreTile ? [moreTile] : []),
+      ];
   return <View><View style={styles.sectionHead}><Text style={[styles.sectionTitle, { color: colors.navy || colors.text }]}>{isStaff ? 'Management Dashboard' : 'Quick Services'}</Text><Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>{isStaff ? 'Manage transactions, accounts and operations' : 'Money, remittance and travel'}</Text></View><View style={[styles.gridCanvas, { backgroundColor: colors.canvasBg || colors.surface }]}><View style={styles.grid}>{services.map((service) => <Tile key={service.key} s={service} disabled={service.kind === 'webview' && !!webViewBusy} onPress={() => handlePress(service)} />)}</View></View></View>;
 }
 
