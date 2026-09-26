@@ -51,6 +51,12 @@ jobs:
       - name: Audit context usage
         run: npm run audit:context
 
+      # A \u escape in a JSX attribute string is not decoded - the app
+      # renders the literal characters where an icon should be. Parses fine,
+      # so only this catches it.
+      - name: Audit JSX attribute escapes
+        run: npm run audit:jsx
+
       - name: Install dependencies
         run: npm ci
 
