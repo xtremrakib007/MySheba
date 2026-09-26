@@ -8,7 +8,7 @@ import HeaderDecor from './HeaderDecor';
 import VerifiedBadge from './VerifiedBadge';
 import Constants from 'expo-constants';
 import { showAlert } from '../utils/appAlert';
-import RoyalIcon from './RoyalIcon';
+import ServiceIcon from './ServiceIcon';
 
 const APP_VERSION = (Constants.expoConfig?.version || '1.0.0').split('.').slice(0, 3).join('.');
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -154,7 +154,7 @@ export default function Sidebar() {
               </View>
             </View>
             <View style={styles.roleRow}>
-              <View style={styles.rolePill}><RoyalIcon name={isSuperadmin ? 'kyc' : isAdmin ? 'topup' : 'profile'} size={16} color="#FFFFFF" /><Text style={styles.rolePillText}>{roleLabel}</Text></View>
+              <View style={styles.rolePill}><ServiceIcon name={isSuperadmin ? 'kyc' : isAdmin ? 'topup' : 'profile'} size={16} color="#FFFFFF" /><Text style={styles.rolePillText}>{roleLabel}</Text></View>
               {isSuperadmin && <View style={styles.securePill}><Text style={styles.secureText}>SECURE CONSOLE</Text></View>}
             </View>
           </LinearGradient>
@@ -167,7 +167,7 @@ export default function Sidebar() {
                 <Text style={styles.consoleSub}>{isSuperadmin ? 'Full platform control & governance' : 'Operations & management'}</Text>
               </View>
               <TouchableOpacity style={styles.homeShortcut} onPress={() => goTo('adminHome')}>
-                <RoyalIcon name="home" size={21} color={colors.primary} />
+                <ServiceIcon name="home" size={21} color={colors.primary} />
               </TouchableOpacity>
             </View>
           )}
@@ -178,7 +178,7 @@ export default function Sidebar() {
               return (
                 <View key={group.title} style={styles.groupBlock}>
                   <TouchableOpacity style={[styles.groupHeader, { borderColor: colors[group.color] }]} onPress={() => toggleGroup(group.title)} activeOpacity={0.8}>
-                    <View style={[styles.groupIconBox, { backgroundColor: colors[group.color] }]}><RoyalIcon name={group.icon} size={20} /></View>
+                    <View style={[styles.groupIconBox, { backgroundColor: colors[group.color] }]}><ServiceIcon name={group.icon} size={18} color={colors.onPrimary} /></View>
                     <Text style={styles.groupHeaderText}>{group.title}</Text>
                     <View style={styles.groupLine} />
                     <Text style={styles.chevron}>{isCollapsed ? '›' : '⌄'}</Text>
@@ -190,7 +190,7 @@ export default function Sidebar() {
                         const active = screen === item.key;
                         return (
                           <TouchableOpacity key={`${group.title}-${item.key}`} style={[styles.gridItem, item.featured && styles.featuredItem, active && styles.gridItemActive]} onPress={() => goTo(item.key)} activeOpacity={0.78}>
-                            <View style={[styles.itemIconBox, active && styles.itemIconBoxActive]}><RoyalIcon name={item.icon} size={24} /></View>
+                            <View style={[styles.itemIconBox, active && styles.itemIconBoxActive]}><ServiceIcon name={item.icon} size={20} color={active ? colors.primary : colors.textSecondary} /></View>
                             <Text style={[styles.gridLabel, active && styles.gridLabelActive]} numberOfLines={2}>{item.label}</Text>
                             {active && <View style={styles.activeMark} />}
                           </TouchableOpacity>

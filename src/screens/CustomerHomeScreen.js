@@ -8,7 +8,7 @@ import ServiceGrid from '../components/ServiceGrid';
 import AppHeader from '../components/AppHeader';
 import WalletCard from '../components/WalletCard';
 import InfoBar from '../components/InfoBar';
-import RoyalIcon from '../components/RoyalIcon';
+import ServiceIcon from '../components/ServiceIcon';
 import { SectionCard, ListRow } from '../components/uiRows';
 
 // Mockup 08.
@@ -50,7 +50,7 @@ export default function CustomerHomeScreen() {
         />
 
         <View style={styles.statusCard}>
-          <View style={styles.statusIcon}><RoyalIcon name="kyc" size={26} /></View>
+          <View style={styles.statusIcon}><ServiceIcon name="kyc" size={24} color={colors.primary} /></View>
           <View style={styles.statusCopy}>
             <Text style={styles.statusTitle}>{kycVerified ? 'Identity verified' : 'Complete your KYC'}</Text>
             <Text style={styles.statusText}>
