@@ -30,6 +30,18 @@ export const SERVICE_EMOJI = {
   salary: '💰',
   documents: '📂',
 
+  // Personal tiles reached from More Services and the staff grids. These
+  // had no entry at all, so every one of them rendered the fallback
+  // diamond - eleven tiles across the app showing the same glyph.
+  myAccount: '👤',
+  profile: '🪪',
+  kyc: '🪪',
+  myDocuments: '📄',
+  walletTransfer: '💸',
+  businessProfile: '🏢',
+  adminSupport: '🎧',
+  inquiries: '💬',
+
   // staff and management tiles
   topup: '💵',
   history: '🧾',

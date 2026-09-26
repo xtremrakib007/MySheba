@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Modal, FlatList, Image } from 'react-native';
 import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
+import CountryFlag from './CountryFlag';
 
 export function FormLabel({ children, style }) { const { colors } = useTheme(); const styles = createStyles(colors); return <Text style={[styles.label, style]}>{children}</Text>; }
 export function FormInput(props) { const { colors } = useTheme(); const styles = createStyles(colors); return <TextInput style={[styles.input, props.style]} placeholderTextColor={colors.textSecondary} {...props} />; }
@@ -29,7 +30,7 @@ export function Grid3({ children }) { const { colors }=useTheme(); const styles=
 export function Grid2({ children }) { const { colors }=useTheme(); const styles=createStyles(colors); return <View style={styles.grid2}>{children}</View>; }
 
 // Country selector: deliberately uses the same crisp, logo-forward visual language as OperatorCard.
-export function SelectCard({ flag, name, selected, onPress }) { const { colors }=useTheme(); const styles=createStyles(colors); return <TouchableOpacity style={[styles.selectCard,selected&&styles.selectCardSelected]} onPress={onPress}><View style={styles.countryFlagWrap}><Text style={styles.countryFlag}>{flag}</Text></View><Text style={styles.selectName} numberOfLines={2}>{String(name||'')}</Text></TouchableOpacity>; }
+export function SelectCard({ code, flag, name, selected, onPress }) { const { colors }=useTheme(); const styles=createStyles(colors); return <TouchableOpacity style={[styles.selectCard,selected&&styles.selectCardSelected]} onPress={onPress}><View style={styles.countryFlagWrap}><CountryFlag code={code} emoji={flag} size={42} /></View><Text style={styles.selectName} numberOfLines={2}>{String(name||'')}</Text></TouchableOpacity>; }
 
 export function OperatorCard({ name, logo, color, initials, selected, onPress, wide }) { const { colors }=useTheme(); const styles=createStyles(colors); return <TouchableOpacity style={[styles.selectCard,wide&&styles.operatorCardWide,selected&&styles.selectCardSelected]} onPress={onPress}>{logo?<Image source={logo} style={wide?styles.operatorLogoWide:styles.operatorLogo} resizeMode="contain"/>:<View style={[styles.operatorBadge,wide&&styles.operatorBadgeWide,{backgroundColor:color||colors.primary}]}><Text style={styles.operatorBadgeText}>{initials}</Text></View>}<Text style={[styles.selectName,wide&&styles.operatorNameWide]} numberOfLines={1}>{String(name||'')}</Text></TouchableOpacity>; }
 export function AmountButton({ label, selected, onPress }) { const { colors }=useTheme(); const styles=createStyles(colors); return <TouchableOpacity style={[styles.amountBtn,selected&&styles.amountBtnSelected]} onPress={onPress}><Text style={[styles.amountBtnText,selected&&styles.amountBtnTextSelected]}>{label}</Text></TouchableOpacity>; }

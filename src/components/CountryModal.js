@@ -2,6 +2,7 @@ import React from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
+import CountryFlag from './CountryFlag';
 import { countries } from '../data/countries';
 import AppModalHeader from './AppModalHeader';
 
@@ -47,7 +48,7 @@ export default function CountryModal({ visible, onClose, value, onSelect }) {
                     onPress={() => { onSelect(c.code); onClose(); }}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.optionIcon}>{c.flag}</Text>
+                    <CountryFlag code={c.code} emoji={c.flag} size={30} style={styles.optionFlag} />
                     <View style={styles.optionTextWrap}>
                       <Text style={[styles.optionLabel, isSelected && { color: colors.primary, fontWeight: '700' }]}>{c.name}</Text>
                     </View>
@@ -86,7 +87,7 @@ function createStyles(colors) {
     },
     optionRowLast: { borderBottomWidth: 0 },
     optionRowSelected: { backgroundColor: `${colors.primary}14` },
-    optionIcon: { fontSize: 18, width: 22, textAlign: 'center' },
+    optionFlag: { marginRight: 4 },
     optionTextWrap: { flex: 1 },
     optionLabel: { fontSize: 14, fontWeight: '500', color: colors.text },
     check: { fontSize: 16, fontWeight: '700' },

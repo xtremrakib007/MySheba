@@ -2,6 +2,7 @@ import React from 'react';
 import { Modal, View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 import { phoneCountries } from '../data/phoneCountries';
 import { useTheme } from '../theme/ThemeContext';
+import CountryFlag from './CountryFlag';
 
 export default function PhoneCountryPicker({ visible, value, onSelect, onClose }) {
   const [q, setQ] = React.useState('');
@@ -39,7 +40,7 @@ export default function PhoneCountryPicker({ visible, value, onSelect, onClose }
                 onPress={() => { onSelect(item); setQ(''); }}
               >
                 <View style={styles.flagBox}>
-                  <Text style={styles.flag} allowFontScaling={false}>{item.flag}</Text>
+                  <CountryFlag code={item.code} emoji={item.flag} size={30} />
                 </View>
                 <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
                 <Text style={styles.dial}>{item.dial}</Text>

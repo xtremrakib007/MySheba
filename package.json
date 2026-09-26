@@ -17,7 +17,8 @@
     "test:rules": "node scripts/test-firestore-rules.mjs",
     "audit:repo": "node scripts/audit-repo.js",
     "audit:context": "node scripts/audit-context-usage.js",
-    "audit:jsx": "node scripts/audit-jsx-escapes.js"
+    "audit:jsx": "node scripts/audit-jsx-escapes.js",
+    "audit:icons": "node scripts/audit-tile-icons.js"
   },
   "dependencies": {
     "expo": "~53.0.0",
