@@ -248,6 +248,20 @@ export default function AdminHomeScreen() {
   } = useTheme();
 
   const styles = createStyles(colors);
+  // Restored. dce7a84 ("remove retired Marketplace and Social modules") deleted
+  // this whole line instead of just marketplaceCategories, socialLinks and
+  // openDirectChat from it, so every context value this screen reads has been
+  // undefined since 2026-09-16 and the screen threw
+  // "Property 'viewingSection' doesn't exist" on render. Nobody hit it because
+  // App Check enforcement was blocking sign-in, so no admin ever reached the
+  // dashboard. The three retired names are not reinstated - the context no
+  // longer provides them.
+  const {
+    authUser, profile, dealerTxs, inquiries, topups, banners, announcements,
+    adminTab, rates, pricing, internetPricing, supportContact, paymentSettings,
+    logout, setScreen, openSidebar, setHomeBackInterceptor, homepageConfig,
+    adminViewingSection: viewingSection, setAdminViewingSection: setViewingSection,
+  } = useApp();
   const [editRateKey, setEditRateKey] = useState(null);
   const [editPricingKey, setEditPricingKey] = useState(null);
   const [editPointCostKey, setEditPointCostKey] = useState(null);
@@ -291,8 +305,6 @@ export default function AdminHomeScreen() {
   const [busyBannerId, setBusyBannerId] = useState(null);
   const [announcementModalVisible, setAnnouncementModalVisible] = useState(false);
   const [sendingAnnouncement, setSendingAnnouncement] = useState(false);
-  // viewingSection/setViewingSection now come from context (adminViewingSection) -
-  // see AdminFeaturesScreen.js, which is the new entry point for these sections.
   const [detailItem, setDetailItem] = useState(null); // { type: 'tx'|'inquiry'|'topup', data }
 
   // Let the hardware back button close this sub-section instead of
