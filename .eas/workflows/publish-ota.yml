@@ -16,11 +16,23 @@
 # and no GitHub minutes are involved.
 #
 # Run it with:
-#   npx eas-cli@latest workflow:run .eas/workflows/publish-ota.yml --ref main
+#   npm run publish:ota
 #
-# --ref runs from the pushed commit rather than the local tree, so what
-# ships is what is on the branch - the same guarantee the versionCode
-# mix-up cost us when a build ran from a stale local checkout.
+# NOT with --ref. That would be the right answer - it runs from the pushed
+# commit rather than the local tree - but it needs the Expo project linked
+# to a GitHub repository, and this one is not:
+#
+#   [GraphQL] No repository found for appId 5f0bbeb3-e2d9-4a46-af9f-...
+#
+# So `workflow:run` uploads THE LOCAL DIRECTORY, and the local directory is
+# what ships. That cost two published updates: the checkout sat at bcbe5d5
+# while main had moved six merges ahead, so both publishes shipped code
+# from before the fixes they were meant to deliver and the app looked
+# unchanged.
+#
+# scripts/publish-ota.js therefore checks the tree before uploading it, and
+# refuses unless HEAD is origin/main with nothing uncommitted. Linking the
+# repository at expo.dev would make --ref work and retire that check.
 
 name: Publish production OTA
 
