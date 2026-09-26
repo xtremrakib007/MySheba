@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Image, ScrollView, KeyboardAvoidingView, Platform, Linking } from 'react-native';
 import { showAlert } from '../utils/appAlert';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -8,7 +8,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { useLanguage } from '../i18n/LanguageContext';
 import { secureAsyncStorage } from '../firebase/secureLocalStorage';
 import PhoneCountryPicker from '../components/PhoneCountryPicker';
-import { DEFAULT_PHONE_COUNTRY } from '../data/phoneCountries';
+import { DEFAULT_PHONE_COUNTRY, phoneCountries } from '../data/phoneCountries';
 import * as supportContactService from '../firebase/supportContactService';
 import { signInErrorCopy } from '../utils/signInErrorCopy';
 import { getLastTokenProbe } from '../firebase/authService';
@@ -38,11 +38,50 @@ export default function LoginScreen() {
   const [passwordError, setPasswordError] = useState('');
   const [showErrorDetail, setShowErrorDetail] = useState(false);
 
+  // Restore the remembered number.
+  //
+  // What was stored was a bare phone string, written only when Login was
+  // pressed, and the country was never stored at all - so a number typed but
+  // not submitted was lost, and anyone not on the default country got their
+  // dial code reset under a number that no longer matched it. The value is a
+  // JSON blob now; a bare string from an older build still reads correctly.
+  const restored = useRef(false);
   useEffect(() => {
+    let cancelled = false;
     secureAsyncStorage.getItem(REMEMBER_KEY)
-      .then((saved) => { if (saved) setPhone(saved); })
-      .catch(() => {});
+      .then((saved) => {
+        if (cancelled || !saved) return;
+        let value = { phone: saved, dial: null, remember: true };
+        if (saved.startsWith('{')) {
+          try { value = { ...value, ...JSON.parse(saved) }; } catch (_) { /* keep the bare-string reading */ }
+        }
+        if (value.phone) setPhone(value.phone);
+        if (value.dial) {
+          const match = phoneCountries.find((c) => c.dial === value.dial);
+          if (match) setPhoneCountry(match);
+        }
+        if (value.remember === false) setRememberMe(false);
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) restored.current = true; });
+    return () => { cancelled = true; };
   }, []);
+
+  // Persist as they type rather than only on submit, so closing the app
+  // mid-entry does not lose the number. Debounced because every write is an
+  // AES encrypt plus an AsyncStorage round trip, and `restored` guards the
+  // first pass so the empty initial state cannot overwrite a stored value
+  // before the read above has come back.
+  useEffect(() => {
+    if (!restored.current) return;
+    const id = setTimeout(() => {
+      const value = rememberMe
+        ? JSON.stringify({ phone: phone.trim(), dial: phoneCountry?.dial || null, remember: true })
+        : JSON.stringify({ phone: '', dial: null, remember: false });
+      secureAsyncStorage.setItem(REMEMBER_KEY, value).catch(() => {});
+    }, 700);
+    return () => clearTimeout(id);
+  }, [phone, phoneCountry, rememberMe]);
 
   // Validate before calling out, so an empty or malformed field is answered
   // under that field rather than as a round trip and a generic failure.
@@ -60,7 +99,6 @@ export default function LoginScreen() {
 
   const onSignIn = () => {
     if (!validate()) return;
-    secureAsyncStorage.setItem(REMEMBER_KEY, rememberMe ? phone : '').catch(() => {});
     doLogin(phone, password, phoneCountry.dial);
   };
 
