@@ -45,6 +45,12 @@ jobs:
       - name: Audit navigation targets
         run: npm run audit:nav
 
+      # Catches a screen that imports useApp but never calls it - the shape of
+      # bug that left AdminHomeScreen throwing "Property 'viewingSection'
+      # doesn't exist" for ten days. Dependency-free, so it runs before npm ci.
+      - name: Audit context usage
+        run: npm run audit:context
+
       - name: Install dependencies
         run: npm ci
 
