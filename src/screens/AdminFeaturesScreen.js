@@ -166,7 +166,7 @@ export default function AdminFeaturesScreen() {
   // and pointed at a hamburger this header no longer shows.
   const balance = profile?.balance ?? profile?.walletBalance ?? profile?.wallet?.balance ?? 0;
   return <View style={styles.screen}>
-    <AppHeader onPressRole={openSidebar} />
+    <AppHeader onPressMenu={openSidebar} />
     <ScrollView contentContainerStyle={styles.homeContent}>
       <ControlCenterBanner
         title={isSuperadmin ? 'Superadmin Control Center' : 'Admin Control Center'}
