@@ -18,7 +18,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db, functions } from './config';
 import { logActivity } from './logService';
-import { getDeviceId, getDeviceLabel, setLocalSessionId, clearLocalSessionId } from './deviceSessionService';
+import { getDeviceId, getDeviceLabel, setLocalSessionId, setDeviceCheckDeferred, clearDeviceCheckDeferred, isDeviceCheckUnreachable, clearLocalSessionId } from './deviceSessionService';
 import { toE164 as phoneToE164 } from '../data/phoneCountries';
 
 const APP_EMAIL_DOMAIN = 'mysheba.app';
@@ -171,25 +171,51 @@ export async function login(phone, pin, dialCode = '+60') {
     await signOut(auth);
     throw inputError('No profile found for this account. Please register first.', 'no-profile');
   }
-  let profileData = snap.data();
+  const profileData = snap.data();
   if (!profileData.userId) {
-    try {
-      const ensureFn = httpsCallable(functions, 'ensureUserId');
-      const { data } = await ensureFn({});
-      profileData = { ...profileData, userId: data.userId };
-    } catch (e) {}
+    // Fire and forget. This is a backfill for profiles written before userId
+    // existed, and its failure was already swallowed - so awaiting it only
+    // ever added a round trip to every sign-in for a value nothing on the
+    // login path reads. The callable writes to the user document, so the id
+    // is there on the next profile load; ProfileScreen already guards on its
+    // absence.
+    httpsCallable(functions, 'ensureUserId')({}).catch(() => {});
   }
 
-  await refreshCallableAuthToken();
+  // The forced getIdToken(true) that used to sit here was added to rule out a
+  // stale token causing UNAUTHENTICATED. It was not the cause - App Check
+  // enforcement was - and the SDK refreshes the token on its own, so it was
+  // one more blocking round trip buying nothing.
   const deviceId = await getDeviceId();
+  // Records the token for the login screen's long-press diagnostic. Unlike
+  // the forced refresh this replaced, getIdToken() with no argument returns
+  // the cached token and makes no network call, so the probe costs nothing.
+  try {
+    lastTokenProbe = `token ${String(await cred.user.getIdToken()).length}`;
+  } catch (e) {
+    lastTokenProbe = `token failed: ${String(e?.code || e?.message || '').slice(0, 40)}`;
+  }
   const sessionFn = httpsCallable(functions, 'checkDeviceSession');
   let sessionResult;
   try {
     const res = await sessionFn({ deviceId, deviceLabel: getDeviceLabel() });
     sessionResult = res.data;
+    await clearDeviceCheckDeferred();
   } catch (err) {
-    await signOut(auth);
-    throw signInError(err);
+    // An answer of "no" blocks. No answer at all does not.
+    //
+    // This callable used to veto a sign-in Firebase Auth had already
+    // accepted, for any reason at all - so a misconfigured deploy, a cold
+    // start timing out, or Cloud Functions having a bad afternoon locked out
+    // every user of the app with no fallback. That is not hypothetical: it is
+    // what App Check enforcement did here for ten days.
+    if (!isDeviceCheckUnreachable(err)) {
+      await signOut(auth);
+      throw signInError(err);
+    }
+    await setDeviceCheckDeferred();
+    logActivity('loginDeviceCheckUnreachable', { method: 'phone', code: String(err?.code || '') });
+    return { uid: cred.user.uid, ...profileData };
   }
 
   if (sessionResult.requiresOtp) {

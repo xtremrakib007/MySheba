@@ -7,6 +7,11 @@ import { functions } from './config';
 
 const DEVICE_ID_KEY = 'mysheba_device_id';
 const LOCAL_SESSION_ID_KEY = 'mysheba_local_session_id';
+// Set when checkDeviceSession could not be reached during sign-in and the
+// user was let through anyway. It means "this device has not been checked
+// yet", not "this device is trusted", and it is cleared the moment a check
+// does complete.
+const DEVICE_CHECK_DEFERRED_KEY = 'mysheba_device_check_deferred';
 
 function bytesToHex(bytes) {
   return Array.from(bytes).map((byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -48,6 +53,49 @@ export async function clearLocalSessionId() {
   await AsyncStorage.removeItem(LOCAL_SESSION_ID_KEY);
 }
 
+export async function setDeviceCheckDeferred() {
+  await AsyncStorage.setItem(DEVICE_CHECK_DEFERRED_KEY, '1').catch(() => {});
+}
+
+export async function isDeviceCheckDeferred() {
+  try {
+    return (await AsyncStorage.getItem(DEVICE_CHECK_DEFERRED_KEY)) === '1';
+  } catch (_) {
+    return false;
+  }
+}
+
+export async function clearDeviceCheckDeferred() {
+  await AsyncStorage.removeItem(DEVICE_CHECK_DEFERRED_KEY).catch(() => {});
+}
+
+// A callable failure that means "no answer", as opposed to an answer of no.
+//
+// The distinction is the whole point of failing open: "this device needs
+// verifying" is the feature working and must block, while "the function
+// could not be reached" is an outage and must not. functions/unauthenticated
+// belongs in this list because the framework returns it when the callable
+// itself is misconfigured - App Check enforced against a client that sends
+// no App Check token, which is exactly what locked every user out of this
+// app between 2026-09-16 and 2026-09-26. The user's own credentials were
+// already accepted by Firebase Auth moments earlier, so it cannot mean
+// their sign-in was invalid.
+const UNREACHABLE_CODES = [
+  'functions/unavailable',
+  'functions/deadline-exceeded',
+  'functions/internal',
+  'functions/cancelled',
+  'functions/unauthenticated',
+  'functions/aborted',
+];
+
+export function isDeviceCheckUnreachable(error) {
+  const code = String(error?.code || '').toLowerCase();
+  if (UNREACHABLE_CODES.includes(code)) return true;
+  const raw = `${code} ${String(error?.message || '')}`.toLowerCase();
+  return ['network', 'failed to fetch', 'timeout', 'timed out'].some((h) => raw.includes(h));
+}
+
 export function getDeviceLabel() {
   try {
     const model = Device.modelName || Device.deviceName;
@@ -73,7 +121,16 @@ export function getDeviceLabel() {
 export async function validateActiveSession() {
   const deviceId = await getDeviceId();
   const sessionId = await getLocalSessionId();
-  if (!sessionId) return false;
+  if (!sessionId) {
+    // No session id, because the sign-in that should have created one could
+    // not reach checkDeviceSession and was let through anyway. Returning
+    // false here would sign the user out at the lock screen and hand them a
+    // login screen that is just as likely to be unable to reach the server -
+    // turning a degraded state into the lockout that failing open exists to
+    // avoid. They have just passed the PIN or biometric on this device, so
+    // let the unlock through; the next sign-in re-runs the real check.
+    return isDeviceCheckDeferred();
+  }
   const fn = httpsCallable(functions, 'validateActiveSession');
   try {
     const { data } = await fn({ deviceId, sessionId });
