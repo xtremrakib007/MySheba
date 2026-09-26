@@ -169,7 +169,7 @@ export default function LoginScreen() {
                 <Text style={styles.errorBody}>{signInErrorCopy(authError).message}</Text>
                 {showErrorDetail && (
                   <Text style={styles.errorDetail} selectable>
-                    {`${authError?.reason || 'untagged'} · ${authError?.detail || 'no code'}\n${getLastTokenProbe()}`}
+                    {`${authError?.reason || 'untagged'} · ${authError?.detail || authError?.code || 'no code'}\n${getLastTokenProbe()}`}
                   </Text>
                 )}
                 <TouchableOpacity style={styles.retryBtn} onPress={onSignIn} accessibilityRole="button">
