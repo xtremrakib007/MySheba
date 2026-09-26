@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
-import { radius, shadows } from '../theme/theme';
+import { radius } from '../theme/theme';
 import BannerSlider from '../components/BannerSlider';
 import ServiceGrid from '../components/ServiceGrid';
 import AppHeader from '../components/AppHeader';
@@ -11,8 +11,17 @@ import InfoBar from '../components/InfoBar';
 import RoyalIcon from '../components/RoyalIcon';
 import { SectionCard, ListRow } from '../components/uiRows';
 
-// Mockup 08. The structure was already right - balance card, quick actions,
-// promo, service grid - so this is about colour, not layout.
+// Mockup 08.
+//
+// The four quick actions that sat under the KYC card are gone: Top Up is the
+// first grid tile, Activity is History in the bottom nav, and Support and
+// More are both behind More. Four buttons that each duplicated something one
+// tap away, taking a full row above the fold.
+//
+// The grid is capped at six. The customer list is 17 tiles - the entire
+// catalogue on the home page, pushing everything else below the fold - and
+// the Services tab already shows all of them, so home keeps the money
+// services and the More Services tile.
 //
 // Every surface here used to be a hardcoded teal: #A6F5D2 borders, #D9F6EA
 // card fills, #0A5C78 and #0E9E8C text, #19C39B rings, #374151 labels, with
@@ -27,13 +36,6 @@ export default function CustomerHomeScreen() {
   const styles = createStyles(colors);
   const balance = profile?.balance ?? profile?.walletBalance ?? profile?.wallet?.balance ?? 0;
   const kycVerified = profile?.verified === true || profile?.verificationStatus === 'approved';
-
-  const quickActions = [
-    { icon: 'topup', label: 'Top Up', screen: 'topup' },
-    { icon: 'history', label: 'Activity', screen: 'history' },
-    { icon: 'support', label: 'Support', screen: 'support' },
-    { icon: 'more', label: 'More', screen: 'moreFeatures' },
-  ];
 
   return (
     <View style={styles.screen}>
@@ -64,25 +66,9 @@ export default function CustomerHomeScreen() {
           )}
         </View>
 
-        <View style={styles.quickRow}>
-          {quickActions.map((a) => (
-            <TouchableOpacity
-              key={a.screen}
-              style={styles.quickAction}
-              onPress={() => setScreen(a.screen)}
-              activeOpacity={0.82}
-              accessibilityRole="button"
-              accessibilityLabel={a.label}
-            >
-              <RoyalIcon name={a.icon} size={28} />
-              <Text style={styles.quickLabel} numberOfLines={1}>{a.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
         <InfoBar />
         <BannerSlider />
-        <ServiceGrid />
+        <ServiceGrid limit={6} />
 
         <SectionCard style={styles.section}>
           <ListRow
@@ -127,17 +113,6 @@ function createStyles(colors) {
     statusText: { color: colors.textSecondary, fontSize: 11.5, marginTop: 2 },
     statusAction: { backgroundColor: colors.primary, paddingVertical: 8, paddingHorizontal: 16, borderRadius: radius.pill },
     statusActionText: { color: colors.onPrimary, fontWeight: '800', fontSize: 13 },
-
-    quickRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-    quickAction: {
-      flex: 1, minHeight: 68,
-      borderRadius: radius.tile,
-      borderWidth: 1, borderColor: colors.border,
-      backgroundColor: colors.card,
-      alignItems: 'center', justifyContent: 'center', gap: 5,
-      ...shadows.card,
-    },
-    quickLabel: { fontSize: 10.5, fontWeight: '700', color: colors.text },
 
     section: { marginTop: 12 },
   });
