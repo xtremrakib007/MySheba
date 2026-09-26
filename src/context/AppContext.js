@@ -1110,7 +1110,20 @@ export function AppProvider({ children }) {
             }
           })();
         },
-        () => {
+        (error) => {
+          // The users/{uid} listener failed. Until now this set profile to
+          // null and said nothing, and the hard auth boundary below then
+          // sent the person back to Login with no alert and no error card -
+          // the "loading, then back to the Login button" report, with
+          // nothing in the Cloud Functions log because no function was
+          // involved. A denied read here is a Firestore rules decision:
+          // firestore.rules:64 requires activeProfile(), which is false when
+          // the profile is suspended, inactive, disabled, active:false or
+          // mergedInto another account.
+          //
+          // Surfacing it as authError means the Login screen shows its
+          // normal safe copy, and a long press on that card names the code.
+          setAuthError(error || 'Could not load your profile.');
           setProfile(null);
           if (!initialRouteDone) {
             initialRouteDone = true;
