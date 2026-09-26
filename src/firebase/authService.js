@@ -302,8 +302,17 @@ export async function fetchProfile(uid) {
   return snap.exists() ? snap.data() : null;
 }
 
+// The second callback argument says where the snapshot came from. A missing
+// document served from the local cache means "not cached yet", not "this
+// account was deleted" - only a server answer can say the profile is gone,
+// and treating the two the same is what signed people out on a cold start
+// with no network.
 export function subscribeProfile(uid, callback, onError) {
-  return onSnapshot(doc(db, 'users', uid), (snap) => callback(snap.exists() ? snap.data() : null), onError);
+  return onSnapshot(
+    doc(db, 'users', uid),
+    (snap) => callback(snap.exists() ? snap.data() : null, { fromCache: !!snap.metadata?.fromCache }),
+    onError,
+  );
 }
 
 export async function updateUserName(uid, name) {

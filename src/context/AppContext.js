@@ -10,8 +10,18 @@ import React, {
 import { Platform, BackHandler, ToastAndroid, AppState } from "react-native";
 import { showAlert } from "../utils/appAlert";
 import { crossesFeature } from "../utils/featureGroups";
+import {
+  classifyProfileError,
+  classifyProfileSnapshot,
+  shouldEndSessionForDevice,
+} from "../utils/profileGate";
 
 import * as authService from "../firebase/authService";
+import {
+  readCachedProfile,
+  writeCachedProfile,
+  clearCachedProfile,
+} from "../firebase/profileCache";
 import * as securityPinService from "../firebase/securityPinService";
 import {
   getAppLockEnabled,
@@ -1001,9 +1011,27 @@ export function AppProvider({ children }) {
   useEffect(() => {
     let profileUnsub = null;
     let initialRouteDone = false;
+    // Set when the effect tears down, so an in-flight cache read or a
+    // pending retry cannot write state into an unmounted tree.
+    let cancelled = false;
+    let retryTimer = null;
+
+    const routeForRole = (p) => {
+      if (p && p.role === "dealer") setScreen("dealerHome");
+      else if (p && p.role === "reseller") setScreen("resellerHome");
+      else if (p && (p.role === "support" || p.role === "finance"))
+        setScreen("staffHome");
+      else if (p && (p.role === "admin" || p.role === "superadmin"))
+        setScreen("adminHome");
+      else setScreen("customerHome");
+    };
 
     const unsub = authService.subscribeAuth((user) => {
       setAuthUser(user);
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+        retryTimer = null;
+      }
       if (profileUnsub) {
         profileUnsub();
         profileUnsub = null;
@@ -1027,9 +1055,29 @@ export function AppProvider({ children }) {
         return;
       }
 
-      profileUnsub = authService.subscribeProfile(
+      // Open on the last known-good profile straight away. Without this the
+      // app has nothing to render until Firestore answers, and every reason
+      // it might not answer - no network, a dropped listener, a cold start
+      // on a train - ended at the Login screen even though Firebase Auth had
+      // a perfectly valid persisted session. That is the "login not saved"
+      // report: the session was saved, the profile read was not.
+      (async () => {
+        const cached = await readCachedProfile(user.uid);
+        if (!cached || cancelled || initialRouteDone) return;
+        // A cached profile may never be used to walk past a pending device
+        // approval: the live listener is what clears that, so opening on a
+        // home screen from cache would skip the check for as long as the
+        // snapshot takes to arrive. Let the listener route this one.
+        if (cached.pendingDeviceApproval) return;
+        setProfile(cached);
+        initialRouteDone = true;
+        routeForRole(cached);
+        setAuthLoading(false);
+      })();
+
+      const attachProfile = (isRetry) => authService.subscribeProfile(
         user.uid,
-        (p) => {
+        (p, meta) => {
           // Single-device-login enforcement (functions/deviceSessionService.js) -
           // runs on every live profile update, not just the first, so a
           // device that's been displaced by a newer login elsewhere signs
@@ -1044,9 +1092,17 @@ export function AppProvider({ children }) {
           //      saved locally after its own last successful
           //      login/verification) -> sign out immediately.
           // Wrapped in try/catch and fails open into the normal routing
-          // below on any error - a device-check hiccup shouldn't brick          // login for everyone, it just skips this extra hardening once.
+          // below on any error - a device-check hiccup shouldn't brick
+          // login for everyone, it just skips this extra hardening once.
           (async () => {
-            if (!p) {
+            if (cancelled) return;
+
+            const verdict = classifyProfileSnapshot(p, meta);
+            // 'ignore' is a document missing from the local cache, which
+            // means "not cached yet" rather than "deleted".
+            if (verdict === "ignore") return;
+            if (verdict === "gone") {
+              await clearCachedProfile(user.uid);
               setProfile(null);
               if (!initialRouteDone) {
                 initialRouteDone = true;
@@ -1077,10 +1133,16 @@ export function AppProvider({ children }) {
 
               const localSessionId =
                 await deviceSessionService.getLocalSessionId();
+              const deviceCheckDeferred = await deviceSessionService
+                .isDeviceCheckDeferred()
+                .catch(() => false);
               if (
-                localSessionId &&
-                p.activeSessionId &&
-                p.activeSessionId !== localSessionId
+                shouldEndSessionForDevice({
+                  localSessionId,
+                  activeSessionId: p.activeSessionId,
+                  initialRouteDone,
+                  deviceCheckDeferred,
+                })
               ) {
                 // Do not sign the user out merely because the app was closed,
                 // backgrounded, or restored after a device-session refresh.
@@ -1089,64 +1151,95 @@ export function AppProvider({ children }) {
                 // While the app is actively running, a changed active session
                 // is handled on the next profile update rather than destroying
                 // the persisted login during bootstrap.
-                if (initialRouteDone) {
-                  await authService.logout();
-                  setProfile(null);
-                  screenHistoryRef.current = [];
-                  setScreen("login");
-                  showAlert(
-                    "Signed Out",
-                    "Your account was signed in on another device, so you were signed out here.",
-                  );
-                  return;
-                }
+                //
+                // Nor when this device never got an authoritative session id:
+                // a login that went through while checkDeviceSession was
+                // unreachable is recorded as deferred and leaves the local id
+                // stale, so the mismatch below says nothing about another
+                // device having taken over - it only says we never asked.
+                await clearCachedProfile(user.uid);
+                await authService.logout();
+                setProfile(null);
+                screenHistoryRef.current = [];
+                setScreen("login");
+                showAlert(
+                  "Signed Out",
+                  "Your account was signed in on another device, so you were signed out here.",
+                );
+                return;
               }
             } catch (e) {
               // fall through to normal routing below
             }
 
             setProfile(p);
+            setAuthError("");
+            writeCachedProfile(user.uid, p);
             if (!initialRouteDone) {
               initialRouteDone = true;
               // Restoring a persisted session on app launch - jump straight
               // to the right home screen for this account's role instead of
               // showing Login again.
-              if (p && p.role === "dealer")
-                setScreen("dealerHome");
-              else if (p && p.role === "reseller") setScreen("resellerHome");
-              else if (p && (p.role === "support" || p.role === "finance"))
-                setScreen("staffHome");
-              else if (p && (p.role === "admin" || p.role === "superadmin"))
-                setScreen("adminHome");
-              else setScreen("customerHome");
+              routeForRole(p);
               setAuthLoading(false);
             }
           })();
         },
         (error) => {
-          // The users/{uid} listener failed. Until now this set profile to
-          // null and said nothing, and the hard auth boundary below then
-          // sent the person back to Login with no alert and no error card -
-          // the "loading, then back to the Login button" report, with
-          // nothing in the Cloud Functions log because no function was
-          // involved. A denied read here is a Firestore rules decision:
-          // firestore.rules:64 requires activeProfile(), which is false when
-          // the profile is suspended, inactive, disabled, active:false or
-          // mergedInto another account.
+          // The users/{uid} listener failed. A failure to READ the profile is
+          // not a decision to sign anyone out, so this no longer discards the
+          // profile and drops the person at Login. Only two answers end a
+          // session: the person tapping Log Out, or Firebase Auth itself
+          // reporting no user.
           //
-          // Surfacing it as authError means the Login screen shows its
-          // normal safe copy, and a long press on that card names the code.
-          setAuthError(error || 'Could not load your profile.');
-          setProfile(null);
+          // permission-denied is the one answer that means this account may
+          // not use the app - firestore.rules:64 requires activeProfile(),
+          // which is false when the profile is suspended, inactive, disabled,
+          // active:false or mergedInto another account. Even that is retried
+          // once, because a listener that attaches a moment before the auth
+          // token propagates is denied for reasons that have nothing to do
+          // with the account.
+          //
+          // Everything else - unavailable, deadline-exceeded, a dropped
+          // connection - keeps the cached profile and the current screen.
+          if (cancelled) return;
+          const action = classifyProfileError(error, { isRetry });
+
+          if (action === "retry") {
+            if (profileUnsub) profileUnsub();
+            retryTimer = setTimeout(() => {
+              if (!cancelled) profileUnsub = attachProfile(true);
+            }, 1500);
+            return;
+          }
+
+          if (action === "fatal") {
+            clearCachedProfile(user.uid);
+            setAuthError(error || "Could not load your profile.");
+            setProfile(null);
+            if (!initialRouteDone) {
+              initialRouteDone = true;
+              setAuthLoading(false);
+            }
+            return;
+          }
+
+          // Transient. Keep whatever profile is on screen; the listener
+          // reconnects on its own.
           if (!initialRouteDone) {
             initialRouteDone = true;
+            setAuthError(error || "Could not load your profile.");
             setAuthLoading(false);
           }
         },
       );
+
+      profileUnsub = attachProfile(false);
     });
 
     return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
       unsub();
       if (profileUnsub) profileUnsub();
     };
@@ -1997,9 +2090,16 @@ export function AppProvider({ children }) {
   );
 
   const logout = useCallback(async () => {
+    // Captured before sign-out clears it. A deliberate logout is one of the
+    // only two things that may discard the cached profile - the other is the
+    // server saying the account may no longer use the app - and leaving
+    // someone's name, phone and balance on the device afterwards would be
+    // wrong regardless.
+    const uid = authUser?.uid;
     try {
       await authService.logout();
     } finally {
+      await clearCachedProfile(uid);
       // Biometric opt-in resets on every logout - the person's own rule:
       // clicking logout clears it, so the next sign-in (same account or a
       // different one on this device) shows BiometricOptInPrompt again
@@ -2019,7 +2119,10 @@ export function AppProvider({ children }) {
       exitArmedRef.current = false;
       setScreen("login");
     }
-  }, []);
+    // authUser is read above to clear that account's cached profile, so it
+    // has to be a dependency - with an empty array the closure keeps the
+    // first render's value (null) and the cache is never cleared.
+  }, [authUser]);
 
   const startService = useCallback((service) => {
     if (!gridManagementService.isGridActive(gridManagement, service)) {
