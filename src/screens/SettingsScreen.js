@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Switch, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { showAlert } from '../utils/appAlert';
 import { useApp } from '../context/AppContext';
@@ -7,19 +7,11 @@ import { radius } from '../theme/theme';
 import { useTheme } from "../theme/ThemeContext";
 import { useLanguage, LANGUAGES } from '../i18n/LanguageContext';
 import HeaderDecor from '../components/HeaderDecor';
+import { SectionCard, ListRow, ToggleRow } from '../components/uiRows';
 import ChangePasswordModal from '../components/ChangePasswordModal';
 import ResetSecurityPinModal from '../components/ResetSecurityPinModal';
 import DisplayModeModal from '../components/DisplayModeModal';
 import LanguageModal from '../components/LanguageModal';
-
-function ToggleRow({ icon, label, sub, value, onValueChange }) {
-  const { colors } = useTheme(); const styles = createStyles(colors);
-  return <View style={styles.row}><Text style={styles.rowIcon}>{icon}</Text><View style={styles.rowTextWrap}><Text style={styles.rowLabel}>{label}</Text>{!!sub && <Text style={styles.rowSub}>{sub}</Text>}</View><Switch value={value} onValueChange={onValueChange} trackColor={{ false: '#DDD', true: colors.primary }} thumbColor={Platform.OS === 'android' ? 'white' : undefined} /></View>;
-}
-function LinkRow({ icon, label, sub, onPress }) {
-  const { colors } = useTheme(); const styles = createStyles(colors);
-  return <TouchableOpacity style={styles.row} onPress={onPress}><Text style={styles.rowIcon}>{icon}</Text><View style={styles.rowTextWrap}><Text style={styles.rowLabel}>{label}</Text>{!!sub && <Text style={styles.rowSub}>{sub}</Text>}</View><Text style={styles.chevron}>›</Text></TouchableOpacity>;
-}
 
 export default function SettingsScreen() {
   const { colors, brandGradient, isDark, mode, isSystemMode, setMode } = useTheme();
@@ -35,22 +27,28 @@ export default function SettingsScreen() {
   const submitPinReset = async (currentPassword, newPin) => { await resetSecurityPin(currentPassword, newPin); setPinModalVisible(false); showAlert('MySheba', t('settings.pinSaved')); };
   return <View style={styles.screen}>
     <LinearGradient colors={brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}><HeaderDecor /><TouchableOpacity style={styles.backBtn} onPress={goBackOrHome}><Text style={styles.backText}>←</Text></TouchableOpacity><Text style={styles.headerTitle}>{t('settings.title')}</Text></LinearGradient>
-    <ScrollView contentContainerStyle={{ paddingBottom: 30 }}>
-      <Text style={styles.sectionTitle}>{t('settings.sectionNotifications')}</Text><View style={styles.card}>
-        <ToggleRow icon="🔔" label={t('settings.pushNotifications')} sub={t('settings.pushNotificationsSub')} value={pushEnabled} onValueChange={onTogglePush} /><View style={styles.divider} />
-        <ToggleRow icon="✉️" label={t('settings.emailNotifications')} sub={t('settings.emailNotificationsSub')} value={emailEnabled} onValueChange={onToggleEmail} /><View style={styles.divider} />
-        <ToggleRow icon="💱" label={t('settings.rateAlerts')} sub={t('settings.rateAlertsSub')} value={rateAlerts} onValueChange={onToggleRateAlerts} />
-      </View>
-      <Text style={styles.sectionTitle}>{t('settings.sectionGeneral')}</Text><View style={styles.card}>
-        <LinkRow icon="🌙" label={t('settings.displayMode')} sub={isSystemMode ? `System Default (${isDark ? 'Dark' : 'Light'})` : (isDark ? 'Dark' : 'Light')} onPress={() => setDisplayModalVisible(true)} /><View style={styles.divider} />
-        <LinkRow icon="🌐" label={t('settings.language')} sub={LANGUAGES[language]?.label || 'English'} onPress={() => setLanguageModalVisible(true)} /><View style={styles.divider} />
-        <LinkRow icon="🖨️" label="Printer" sub="Connect or select a supported printer" onPress={() => setScreen('printer')} /><View style={styles.divider} />
-        <LinkRow icon="🔒" label={t('settings.changePassword')} onPress={() => setPwModalVisible(true)} />
-        <View style={styles.divider} /><LinkRow icon="🔢" label={profile?.securityPinSet ? t('settings.changeSecurityPin') : t('settings.setUpSecurityPin')} sub={t('settings.securityPinSub')} onPress={() => setPinModalVisible(true)} /><View style={styles.divider} />
-        <ToggleRow icon="🔐" label={t('settings.appLock')} sub={t('settings.appLockSub')} value={appLockEnabled} onValueChange={onToggleAppLock} />
-        {(profile?.role === 'admin' || profile?.role === 'superadmin') && <><View style={styles.divider} /><LinkRow icon="📱" label={t('settings.trustedDevices')} sub={t('settings.trustedDevicesSub')} onPress={() => setScreen('trustedDevices')} /></>}
-      </View>
-      <TouchableOpacity style={styles.logoutBtn} onPress={() => showAlert('Log Out', 'Are you sure you want to log out?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Log Out', style: 'destructive', onPress: logout }])}><Text style={styles.logoutText}>{t('settings.logout')}</Text></TouchableOpacity>
+    <ScrollView contentContainerStyle={styles.body}>
+      <SectionCard title={t('settings.sectionNotifications')}>
+        <ToggleRow icon="\u{1F514}" title={t('settings.pushNotifications')} subtitle={t('settings.pushNotificationsSub')} value={pushEnabled} onValueChange={onTogglePush} />
+        <ToggleRow icon="\u2709\uFE0F" title={t('settings.emailNotifications')} subtitle={t('settings.emailNotificationsSub')} value={emailEnabled} onValueChange={onToggleEmail} />
+        <ToggleRow icon="\u{1F4B1}" title={t('settings.rateAlerts')} subtitle={t('settings.rateAlertsSub')} value={rateAlerts} onValueChange={onToggleRateAlerts} last />
+      </SectionCard>
+
+      <SectionCard title={t('settings.sectionGeneral')} style={styles.section}>
+        <ListRow icon="\u{1F319}" title={t('settings.displayMode')} subtitle={isSystemMode ? `System Default (${isDark ? 'Dark' : 'Light'})` : (isDark ? 'Dark' : 'Light')} onPress={() => setDisplayModalVisible(true)} />
+        <ListRow icon="\u{1F310}" title={t('settings.language')} subtitle={LANGUAGES[language]?.label || 'English'} onPress={() => setLanguageModalVisible(true)} />
+        <ListRow icon="\u{1F5A8}\uFE0F" title="Printer" subtitle="Connect or select a supported printer" onPress={() => setScreen('printer')} />
+        <ListRow icon="\u{1F512}" title={t('settings.changePassword')} onPress={() => setPwModalVisible(true)} />
+        <ListRow icon="\u{1F522}" title={profile?.securityPinSet ? t('settings.changeSecurityPin') : t('settings.setUpSecurityPin')} subtitle={t('settings.securityPinSub')} onPress={() => setPinModalVisible(true)} />
+        <ToggleRow icon="\u{1F510}" title={t('settings.appLock')} subtitle={t('settings.appLockSub')} value={appLockEnabled} onValueChange={onToggleAppLock} last={!(profile?.role === 'admin' || profile?.role === 'superadmin')} />
+        {(profile?.role === 'admin' || profile?.role === 'superadmin') && (
+          <ListRow icon="\u{1F4F1}" title={t('settings.trustedDevices')} subtitle={t('settings.trustedDevicesSub')} onPress={() => setScreen('trustedDevices')} last />
+        )}
+      </SectionCard>
+
+      <TouchableOpacity style={styles.logoutBtn} onPress={() => showAlert('Log Out', 'Are you sure you want to log out?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Log Out', style: 'destructive', onPress: logout }])}>
+        <Text style={styles.logoutText}>{t('settings.logout')}</Text>
+      </TouchableOpacity>
     </ScrollView>
     <DisplayModeModal visible={displayModalVisible} selected={mode} onSelect={(key) => { setMode(key); setDisplayModalVisible(false); }} onClose={() => setDisplayModalVisible(false)} />
     <ChangePasswordModal visible={pwModalVisible} onSubmit={submitPasswordChange} onCancel={() => setPwModalVisible(false)} />
@@ -58,6 +56,19 @@ export default function SettingsScreen() {
     <LanguageModal visible={languageModalVisible} onClose={() => setLanguageModalVisible(false)} />
   </View>;
 }
-function createStyles(colors) { return StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg }, header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, backgroundColor: colors.primary, overflow: 'hidden' }, backBtn: { padding: 4 }, backText: { color: 'white', fontSize: 20 }, headerTitle: { color: 'white', fontWeight: '600', fontSize: 16, marginLeft: 10 }, sectionTitle: { fontSize: 12, fontWeight: '700', color: '#999', textTransform: 'uppercase', marginTop: 20, marginBottom: 8, marginHorizontal: 16 }, card: { backgroundColor: colors.card, marginHorizontal: 16, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }, row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 14, gap: 12 }, rowIcon: { fontSize: 18, width: 22, textAlign: 'center' }, rowTextWrap: { flex: 1 }, rowLabel: { fontSize: 14, fontWeight: '500', color: colors.text }, rowSub: { fontSize: 11, color: '#999', marginTop: 2 }, chevron: { fontSize: 16, color: '#CCC' }, divider: { height: 1, backgroundColor: colors.border, marginLeft: 48 }, logoutBtn: { marginTop: 26, marginHorizontal: 16, backgroundColor: '#FDECEA', paddingVertical: 13, borderRadius: radius.md, alignItems: 'center' }, logoutText: { color: colors.error, fontWeight: '700', fontSize: 14 },
-}); }
+function createStyles(colors) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.bg },
+    header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, backgroundColor: colors.primary, overflow: 'hidden' },
+    backBtn: { padding: 4 },
+    backText: { color: colors.onPrimary, fontSize: 20 },
+    headerTitle: { color: colors.onPrimary, fontWeight: '600', fontSize: 16, marginLeft: 10 },
+    body: { padding: 16, paddingBottom: 30 },
+    section: { marginTop: 22 },
+    // Was '#FDECEA' and colors.error on top of it, which stayed a pale pink
+    // block in dark mode. Tinting the role palette's error keeps the same
+    // look in light and follows the surface in dark.
+    logoutBtn: { marginTop: 26, backgroundColor: `${colors.error}1A`, paddingVertical: 13, borderRadius: radius.md, alignItems: 'center' },
+    logoutText: { color: colors.error, fontWeight: '700', fontSize: 14 },
+  });
+}
