@@ -142,6 +142,25 @@ const FLAGS = {
     </>
   ),
 
+  // Sri Lanka. The lion is stylised rather than heraldic - at the 16px the
+  // homepage rate chips use, the real figure is a smudge either way, and
+  // what identifies this flag at a glance is its layout: gold frame, green
+  // and orange bands at the hoist, maroon panel, four corner leaves.
+  LK: () => (
+    <>
+      <Rect x="0" y="0" width="60" height="40" fill="#FFB700" />
+      <Rect x="2.5" y="2.5" width="7" height="35" fill="#00534E" />
+      <Rect x="10.8" y="2.5" width="7" height="35" fill="#EB7400" />
+      <Rect x="19.6" y="2.5" width="37.9" height="35" fill="#8D153A" />
+      <Circle cx="23.6" cy="7" r="1.9" fill="#FFB700" />
+      <Circle cx="53.4" cy="7" r="1.9" fill="#FFB700" />
+      <Circle cx="23.6" cy="33" r="1.9" fill="#FFB700" />
+      <Circle cx="53.4" cy="33" r="1.9" fill="#FFB700" />
+      <Path d="M35.5,12.5c3.4,0,6,2.6,6,6.2c0,3.4-1.6,6-4.2,7.6l1.4,3.4l-3.6-1.6l-3.4,1.6l1.4-3.4c-2.6-1.6-4.2-4.2-4.2-7.6C28.9,15.1,32.1,12.5,35.5,12.5Z" fill="#FFB700" />
+      <Path d="M44,11.5 46.4,17.5 44,28" stroke="#FFB700" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+
   // Nepal is two stacked pennons, not a rectangle. The blue border is the
   // path's own stroke, which is what keeps the notch and the tips clean.
   NP: () => (

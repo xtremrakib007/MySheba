@@ -106,5 +106,23 @@ is('a sign-in performed just now skips the launch lock',
 is('locking never signs anyone out',
    /setAppLocked\(true\);?[\s\S]{0,40}\}\);/.test(ctx) && !/setAppLocked\(true\)[^\n]{0,80}logout/.test(ctx), true);
 
+console.log('\n-- a signed-in person must never be stranded on Login --');
+// The watchdog clears authLoading after 8s with no profile, the hard auth
+// boundary then routes to Login, and the profile arriving afterwards used
+// to skip routing because initialRouteDone was already true. The result was
+// a login form in front of someone with a perfectly good session, which is
+// what "closed the app and it logged me out" actually was.
+is('a late profile still routes when stuck on login',
+   /else if \(screenRef\.current === "login"\)[\s\S]{0,900}routeForRole\(p\)/.test(ctx), true);
+is('it reads the screen through a ref, not a stale closure',
+   /const screenRef = useRef\(null\);\s*\n\s*screenRef\.current = screen;/.test(ctx), true);
+
+console.log('\n-- Remember Me must survive the sign-in that unmounts the screen --');
+const login = fs.readFileSync(path.join(__dirname, '..', 'src', 'screens', 'LoginScreen.js'), 'utf8');
+is('the debounced value is held where a flush can find it',
+   /pendingWrite\.current = value;/.test(login), true);
+is('an unmount flushes it instead of dropping it',
+   /useEffect\(\(\) => \(\) => \{[\s\S]{0,300}setItem\(REMEMBER_KEY, value\)/.test(login), true);
+
 console.log(`\n${pass}/${pass + fail} passed`);
 process.exit(fail ? 1 : 0);
