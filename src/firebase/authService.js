@@ -111,6 +111,11 @@ function signInError(err) {
   const e = new Error(friendlyAuthError(err));
   e.isUserFacing = true;
   e.reason = reasonFor(err);
+  // Kept for the login screen's long-press diagnostic only. Never rendered
+  // on its own - signInErrorCopy still decides what a person reads, and
+  // these fields are not part of that decision.
+  e.detail = [String(err?.code || ''), Number(err?.status || err?.httpStatus || 0) || '']
+    .filter(Boolean).join(' ') || 'no code';
   return e;
 }
 
