@@ -47,6 +47,8 @@ export default function LoginScreen() {
   // dial code reset under a number that no longer matched it. The value is a
   // JSON blob now; a bare string from an older build still reads correctly.
   const restored = useRef(false);
+  // Latest value the debounce has not yet written, flushed if we unmount first.
+  const pendingWrite = useRef(null);
   useEffect(() => {
     let cancelled = false;
     secureAsyncStorage.getItem(REMEMBER_KEY)
@@ -74,15 +76,31 @@ export default function LoginScreen() {
   // first pass so the empty initial state cannot overwrite a stored value
   // before the read above has come back.
   useEffect(() => {
-    if (!restored.current) return;
+    if (!restored.current) return undefined;
+    const value = rememberMe
+      ? JSON.stringify({ phone: phone.trim(), dial: phoneCountry?.dial || null, remember: true })
+      : JSON.stringify({ phone: '', dial: null, remember: false });
+    pendingWrite.current = value;
     const id = setTimeout(() => {
-      const value = rememberMe
-        ? JSON.stringify({ phone: phone.trim(), dial: phoneCountry?.dial || null, remember: true })
-        : JSON.stringify({ phone: '', dial: null, remember: false });
+      pendingWrite.current = null;
       secureAsyncStorage.setItem(REMEMBER_KEY, value).catch(() => {});
     }, 700);
     return () => clearTimeout(id);
   }, [phone, phoneCountry, rememberMe]);
+
+  // The debounce above was being thrown away on the way out.
+  //
+  // A successful sign-in unmounts this screen, the cleanup ran clearTimeout,
+  // and any write still inside its 700ms window died with it. Typing a
+  // number and signing straight in - which is the whole flow - therefore
+  // saved nothing, and Remember Me looked like it did nothing at all. The
+  // pending value is flushed on unmount instead.
+  useEffect(() => () => {
+    if (pendingWrite.current == null) return;
+    const value = pendingWrite.current;
+    pendingWrite.current = null;
+    secureAsyncStorage.setItem(REMEMBER_KEY, value).catch(() => {});
+  }, []);
 
   // Validate before calling out, so an empty or malformed field is answered
   // under that field rather than as a round trip and a generic failure.

@@ -557,6 +557,10 @@ export function AppProvider({ children }) {
   // straight to a screen instead of asking for a PIN or biometric.
   const authUserRef = useRef(null);
   authUserRef.current = authUser;
+  // The profile listener outlives any one render, so it reads the current
+  // screen through a ref rather than closing over a stale value.
+  const screenRef = useRef(null);
+  screenRef.current = screen;
   // A cold launch locks a *restored* session. Someone who just typed their
   // password does not want to be asked for a PIN two seconds later, so a
   // sign-in performed in this process sets this and skips the launch lock.
@@ -1257,6 +1261,19 @@ export function AppProvider({ children }) {
               // showing Login again.
               routeForRole(p);
               setAuthLoading(false);
+            } else if (screenRef.current === "login") {
+              // Signed in, profile in hand, and still sitting on Login. That
+              // is what the first-route watchdog leaves behind when Firestore
+              // takes longer than its 8s to answer: it clears authLoading
+              // with no profile, the hard auth boundary routes to Login, and
+              // this branch used to skip routing because initialRouteDone was
+              // already true. The person then saw a login form despite having
+              // a perfectly good session - which is exactly "closed the app
+              // and it logged me out".
+              //
+              // Only 'login'. register, deviceVerify and googlePhone are
+              // places the app puts people on purpose.
+              routeForRole(p);
             }
           })();
         },
