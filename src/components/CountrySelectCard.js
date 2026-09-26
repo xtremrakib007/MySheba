@@ -2,9 +2,13 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
+import CountryFlag from './CountryFlag';
 
 // Country selector: flags stay large, full-color and bright in both themes.
-export default function CountrySelectCard({ flag, name, selected, onPress }) {
+//
+// The flag is drawn, not typed. At fontSize 40 an emoji flag is an upscaled
+// bitmap on Android and looks soft; CountryFlag draws the same flag as paths.
+export default function CountrySelectCard({ code, flag, name, selected, onPress }) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   return (
@@ -14,7 +18,7 @@ export default function CountrySelectCard({ flag, name, selected, onPress }) {
       activeOpacity={0.8}
     >
       <View style={styles.flagWrap}>
-        <Text style={styles.flag} allowFontScaling={false}>{flag}</Text>
+        <CountryFlag code={code} emoji={flag} size={46} />
       </View>
       <Text style={styles.name} numberOfLines={2}>{String(name || '')}</Text>
     </TouchableOpacity>
@@ -56,12 +60,6 @@ function createStyles(colors) {
       backgroundColor: '#FFFFFF',
       borderWidth: 1,
       borderColor: '#E2E8F0',
-    },
-    flag: {
-      fontSize: 40,
-      lineHeight: 46,
-      textAlign: 'center',
-      opacity: 1,
     },
     name: {
       fontSize: 12,

@@ -5,6 +5,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { useLanguage } from '../i18n/LanguageContext';
 import * as gridManagementService from '../firebase/gridManagementService';
 import { serviceEmoji } from './serviceEmoji';
+import BusOperatorLogo, { hasBusLogo } from './BusOperatorLogo';
 
 // `home: true` marks the tiles the customer home shows. Everything else is
 // one tap away on the Services tab, which renders this list in full.
@@ -89,8 +90,12 @@ export function Tile({ s, onPress, disabled }) {
   // The reference outlines every card in the one brand colour rather than
   // per service, so nothing here reads serviceColor any more - the emoji
   // carries the colour, and the outline carries the brand.
+  // A bus partner gets its own mark; everything else gets its emoji.
+  const artKey = asSafeText(s?.key, icon);
   return <TouchableOpacity style={[styles.item, { borderColor: `${colors.primary}66`, backgroundColor: colors.card }, disabled && styles.itemDisabled]} activeOpacity={0.82} disabled={!!disabled} onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
-    <Text style={styles.emoji} numberOfLines={1}>{serviceEmoji(asSafeText(s?.key, icon))}</Text>
+    {hasBusLogo(artKey)
+      ? <View style={styles.logoWrap}><BusOperatorLogo operatorKey={artKey} size={32} /></View>
+      : <Text style={styles.emoji} numberOfLines={1}>{serviceEmoji(artKey)}</Text>}
     <Text style={[styles.name, { color: colors.text || '#222' }]} numberOfLines={2}>{label}</Text>
   </TouchableOpacity>;
 }
@@ -173,4 +178,4 @@ export default function ServiceGrid({ homeOnly }) {
   return <View><View style={styles.sectionHead}><Text style={[styles.sectionTitle, { color: colors.navy || colors.text }]}>{isStaff ? 'Management Dashboard' : 'Quick Services'}</Text><Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>{isStaff ? 'Manage transactions, accounts and operations' : 'Money, remittance and travel'}</Text></View><View style={[styles.gridCanvas, { backgroundColor: colors.canvasBg || colors.surface }]}><View style={styles.grid}>{services.map((service) => <Tile key={service.key} s={service} disabled={service.kind === 'webview' && !!webViewBusy} onPress={() => handlePress(service)} />)}</View></View></View>;
 }
 
-const styles = StyleSheet.create({ sectionHead: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8 }, sectionTitle: { fontSize: 17, fontWeight: '800', letterSpacing: 0.2 }, sectionSubtitle: { fontSize: 11, marginTop: 2 }, gridCanvas: { marginHorizontal: 4, padding: 10, borderRadius: 18 }, grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }, item: { width: '23%', minHeight: 88, marginBottom: 10, paddingHorizontal: 2, paddingVertical: 10, borderWidth: 1.5, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 1 }, itemDisabled: { opacity: 0.45 }, emoji: { fontSize: 30, lineHeight: 36, marginBottom: 6, textAlign: 'center' }, iconText: { fontSize: 28 }, name: { fontSize: 10.5, lineHeight: 13, fontWeight: '700', textAlign: 'center' } });
+const styles = StyleSheet.create({ sectionHead: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8 }, sectionTitle: { fontSize: 17, fontWeight: '800', letterSpacing: 0.2 }, sectionSubtitle: { fontSize: 11, marginTop: 2 }, gridCanvas: { marginHorizontal: 4, padding: 10, borderRadius: 18 }, grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }, item: { width: '23%', minHeight: 88, marginBottom: 10, paddingHorizontal: 2, paddingVertical: 10, borderWidth: 1.5, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 1 }, itemDisabled: { opacity: 0.45 }, emoji: { fontSize: 30, lineHeight: 36, marginBottom: 6, textAlign: 'center' }, logoWrap: { height: 36, marginBottom: 6, alignItems: 'center', justifyContent: 'center' }, iconText: { fontSize: 28 }, name: { fontSize: 10.5, lineHeight: 13, fontWeight: '700', textAlign: 'center' } });

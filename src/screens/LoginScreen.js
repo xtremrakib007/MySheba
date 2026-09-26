@@ -8,6 +8,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { useLanguage } from '../i18n/LanguageContext';
 import { secureAsyncStorage } from '../firebase/secureLocalStorage';
 import PhoneCountryPicker from '../components/PhoneCountryPicker';
+import CountryFlag from '../components/CountryFlag';
 import { DEFAULT_PHONE_COUNTRY, phoneCountries } from '../data/phoneCountries';
 import * as supportContactService from '../firebase/supportContactService';
 import { signInErrorCopy } from '../utils/signInErrorCopy';
@@ -158,7 +159,7 @@ export default function LoginScreen() {
             <Text style={styles.label}>{t('login.phoneNumber')}</Text>
             <View style={styles.phoneRow}>
               <TouchableOpacity style={styles.countryChip} onPress={() => setCountryPicker(true)} disabled={authBusy}>
-                <Text style={styles.flagEmoji}>{phoneCountry.flag}</Text>
+                <CountryFlag code={phoneCountry.code} emoji={phoneCountry.flag} size={24} />
                 <Text style={styles.countryCode}>{phoneCountry.dial}</Text>
                 <Text style={{ fontSize: 10, marginLeft: 3 }}>▾</Text>
               </TouchableOpacity>
@@ -263,7 +264,6 @@ function createStyles(colors) {
     forgotLink: { color: colors.primary, fontSize: 12, fontWeight: '600' },
     phoneRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: 'white', marginBottom: 18, paddingHorizontal: 12 },
     countryChip: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 6 },
-    flagEmoji: { fontSize: 16 },
     countryCode: { fontSize: 14, fontWeight: '600', color: BRAND_NAVY },
     fieldDivider: { width: 1, height: 22, backgroundColor: colors.border, marginHorizontal: 10 },
     phoneInput: { flex: 1, paddingVertical: 12, fontSize: 14, color: BRAND_NAVY },

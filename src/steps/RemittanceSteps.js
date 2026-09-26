@@ -37,7 +37,7 @@ export default function RemittanceStep({ step }) {
     if (Object.keys(patch).length) updateServiceData(patch);
   }, [profile?.name, profile?.displayName, profile?.phone, profile?.customerId, authUser?.phoneNumber]);
 
-  if (step === 0) return <View><FormLabel>Select Destination Country</FormLabel><Grid3>{destinationCountries.map((c) => <SelectCard key={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country:c.code }); nextStep(); }} />)}</Grid3></View>;
+  if (step === 0) return <View><FormLabel>Select Destination Country</FormLabel><Grid3>{destinationCountries.map((c) => <SelectCard key={c.code} code={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country:c.code }); nextStep(); }} />)}</Grid3></View>;
 
   if (step === 1) return <View><FormLabel>Select Receiving Method</FormLabel>{RECEIVING_METHODS.map((m) => { const rate = getRate(serviceData.country, m.key, rates); return <MethodCard key={m.key} icon={m.icon} bg={m.bg} name={m.name} detail={`${m.speed}  •  1.00 MYR = ${rate} ${curr}`} onPress={() => { updateServiceData({ method:m.key, receivingRate:rate, receivingSpeed:m.speed }); nextStep(); }} />; })}</View>;
 

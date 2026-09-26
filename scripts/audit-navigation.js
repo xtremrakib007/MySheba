@@ -33,12 +33,24 @@ function resolveFrom(base) {
   }
   return null;
 }
+// A commented-out import is not an import. Without this the audit reads
+// example code in comments - src/data/busLogos.js documents how to wire a
+// licensed logo in with three commented `require` lines - and reports the
+// files they name as broken imports.
+function stripComments(src) {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .map((line) => (/^\s*\/\//.test(line) ? '' : line))
+    .join('\n');
+}
+
 function reachableFiles() {
   const seen = new Set();
   const walk = (file) => {
     if (seen.has(file) || !/\.(js|jsx|ts|tsx)$/.test(file)) return;
     seen.add(file);
-    const src = fs.readFileSync(file, 'utf8');
+    const src = stripComments(fs.readFileSync(file, 'utf8'));
     for (const m of src.matchAll(/(?:from\s+|require\(\s*|import\(\s*)['"](\.[^'"]+)['"]/g)) {
       const target = resolveFrom(path.resolve(path.dirname(file), m[1]));
       if (target) walk(target);
@@ -160,7 +172,7 @@ for (const dir of ['src/components', 'src/screens']) {
 //
 // A failure, not a note: nothing in this list can ship.
 for (const file of [...reachable]) {
-  const src = fs.readFileSync(file, 'utf8');
+  const src = stripComments(fs.readFileSync(file, 'utf8'));
   for (const m of src.matchAll(/(?:from\s+|require\(\s*|import\(\s*)['"](\.[^'"]+)['"]/g)) {
     checked += 1;
     if (!resolveFrom(path.resolve(path.dirname(file), m[1]))) {
