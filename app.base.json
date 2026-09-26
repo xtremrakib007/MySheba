@@ -7,7 +7,9 @@
       "policy": "sdkVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/5f0bbeb3-e2d9-4a46-af9f-66379fada1c8"
+      "url": "https://u.expo.dev/5f0bbeb3-e2d9-4a46-af9f-66379fada1c8",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 4000
     },
     "newArchEnabled": false,
     "scheme": "mysheba",

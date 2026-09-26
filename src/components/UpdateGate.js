@@ -18,6 +18,15 @@ import { showAlert } from '../utils/appAlert';
 
 const CHECK_INTERVAL_MS = 15 * 60 * 1000; // not on every app switch
 
+// How long after launch an update may apply itself without asking.
+//
+// Inside this window the person has not started anything, so reloading
+// costs them nothing and they simply land on the new version - which is
+// what "it should update itself" means. After it, they may be mid-top-up
+// or mid-form, and a silent reload would throw that away, so the prompt
+// stays.
+const AUTO_APPLY_WINDOW_MS = 20 * 1000;
+
 export default function UpdateGate() {
   // Safe to call unconditionally: the hook only reads the updates state
   // machine's context and subscribes to a plain listener set, neither of
@@ -30,6 +39,8 @@ export default function UpdateGate() {
   const prompting = useRef(false);
   const declined = useRef(false);
   const lastCheck = useRef(0);
+  const mountedAt = useRef(Date.now());
+  const autoApplied = useRef(false);
 
   const offerRestart = useCallback(() => {
     if (prompting.current || declined.current) return;
@@ -54,12 +65,26 @@ export default function UpdateGate() {
     );
   }, []);
 
+  // Apply it without asking when the app has only just opened; otherwise ask.
+  // Guarded by a ref so a bundle that somehow keeps reporting itself as
+  // pending cannot put the app in a reload loop - at most one automatic
+  // reload per launch, and the prompt from then on.
+  const applyOrOffer = useCallback(() => {
+    const justLaunched = Date.now() - mountedAt.current < AUTO_APPLY_WINDOW_MS;
+    if (justLaunched && !autoApplied.current) {
+      autoApplied.current = true;
+      Updates.reloadAsync().catch(() => { offerRestart(); });
+      return;
+    }
+    offerRestart();
+  }, [offerRestart]);
+
   const active = !__DEV__ && Updates.isEnabled;
 
   useEffect(() => {
     if (!active) return;
-    if (isUpdatePending) offerRestart();
-  }, [active, isUpdatePending, offerRestart]);
+    if (isUpdatePending) applyOrOffer();
+  }, [active, isUpdatePending, applyOrOffer]);
 
   useEffect(() => {
     if (!active) return undefined;
@@ -75,7 +100,7 @@ export default function UpdateGate() {
         const { isNew } = await Updates.fetchUpdateAsync();
         // The fetch flips isUpdatePending too; offerRestart is idempotent,
         // so whichever lands first wins and the other is a no-op.
-        if (!cancelled && isNew) offerRestart();
+        if (!cancelled && isNew) applyOrOffer();
       } catch {
         // Offline, unreachable server, a rollback - none of it is the
         // user's problem. They keep a working bundle and we try again on
@@ -83,11 +108,17 @@ export default function UpdateGate() {
       }
     };
 
+    // Check on mount as well as on resume. Waiting for a resume meant a
+    // cold start - the case where an update is most welcome and cheapest to
+    // apply - checked nothing at all, so a freshly published bundle sat
+    // unnoticed until the app happened to be backgrounded and reopened.
+    check();
+
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') check();
     });
     return () => { cancelled = true; sub.remove(); };
-  }, [active, offerRestart]);
+  }, [active, applyOrOffer]);
 
   return null;
 }
