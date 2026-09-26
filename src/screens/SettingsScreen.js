@@ -7,6 +7,7 @@ import { radius } from '../theme/theme';
 import { useTheme } from "../theme/ThemeContext";
 import { useLanguage, LANGUAGES } from '../i18n/LanguageContext';
 import HeaderDecor from '../components/HeaderDecor';
+import BuildStamp from '../components/BuildStamp';
 import { SectionCard, ListRow, ToggleRow } from '../components/uiRows';
 import ChangePasswordModal from '../components/ChangePasswordModal';
 import ResetSecurityPinModal from '../components/ResetSecurityPinModal';
@@ -49,6 +50,8 @@ export default function SettingsScreen() {
       <TouchableOpacity style={styles.logoutBtn} onPress={() => showAlert('Log Out', 'Are you sure you want to log out?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Log Out', style: 'destructive', onPress: logout }])}>
         <Text style={styles.logoutText}>{t('settings.logout')}</Text>
       </TouchableOpacity>
+
+      <BuildStamp />
     </ScrollView>
     <DisplayModeModal visible={displayModalVisible} selected={mode} onSelect={(key) => { setMode(key); setDisplayModalVisible(false); }} onClose={() => setDisplayModalVisible(false)} />
     <ChangePasswordModal visible={pwModalVisible} onSubmit={submitPasswordChange} onCancel={() => setPwModalVisible(false)} />
