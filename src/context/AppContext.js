@@ -1712,7 +1712,10 @@ export function AppProvider({ children }) {
       } else setScreen("customerHome");
       return true;
     } catch (err) {
-      setAuthError(err.message || "Sign in failed.");
+      // Keep the error object, not just its text: authService tags sign-in
+      // failures with a `reason`, and LoginScreen needs it to tell a rate
+      // limit from a wrong password. Storing err.message threw that away.
+      setAuthError(err || "Sign in failed.");
       return false;
     } finally {
       setAuthBusy(false);

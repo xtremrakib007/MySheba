@@ -34,8 +34,44 @@ function looksOffline(error) {
   return OFFLINE_HINTS.some((hint) => raw.includes(hint));
 }
 
+// authService tags what it throws with a stable `reason`. Honour it.
+//
+// Flattening every failure to GENERIC was wrong in a way that misleads:
+// friendlyAuthError already distinguishes eight cases, and collapsing them
+// meant a rate-limited user was told to check a password that was never
+// wrong, and a disabled account looked like a typo. The credential case
+// keeps the copy that was asked for; the rest say what actually happened.
+// Anything unrecognised still falls through to GENERIC, so an untagged or
+// raw error can never reach the screen.
+const BY_REASON = {
+  credentials: GENERIC,
+  network: OFFLINE,
+  'rate-limited': {
+    title: 'Too many attempts',
+    message: 'Please wait a few minutes before trying again.',
+  },
+  disabled: {
+    title: 'Account unavailable',
+    message: 'This account is not active. Please contact support.',
+  },
+  'no-profile': {
+    title: 'No account found',
+    message: 'This number is not registered yet. Please sign up first.',
+  },
+  'invalid-phone': {
+    title: 'Check your phone number',
+    message: 'Please enter a valid phone number.',
+  },
+  'missing-password': {
+    title: 'Password required',
+    message: 'Please enter your password.',
+  },
+};
+
 export function signInErrorCopy(error) {
-  return looksOffline(error) ? OFFLINE : GENERIC;
+  if (looksOffline(error)) return OFFLINE;
+  const byReason = error?.isUserFacing && BY_REASON[error.reason];
+  return byReason || GENERIC;
 }
 
 // For the catch blocks that used to read `e.message || 'Could not ...'`.

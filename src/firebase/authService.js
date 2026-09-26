@@ -80,9 +80,50 @@ export async function registerCustomer({ name, phone, phoneE164, dialCode, email
   return { uid: cred.user.uid, ...snap.data() };
 }
 
+// Sign-in failures carry a stable `reason` so the UI can pick copy without
+// parsing a message, and `isUserFacing` to say the text was written for a
+// person rather than thrown by Firebase. Without that flag the login screen
+// cannot tell "Too many attempts" from a raw SDK string, so it has to assume
+// the worst and show one generic line - which is how a rate-limited user
+// ended up being told to check a password that was never wrong.
+function reasonFor(err) {
+  const code = String(err?.code || '').toLowerCase();
+  const status = Number(err?.status || err?.httpStatus || 0);
+  const raw = String(err?.message || '').toLowerCase();
+  if (
+    code === 'auth/user-not-found' || code === 'auth/invalid-credential' ||
+    code === 'auth/wrong-password' || code === 'functions/unauthenticated' ||
+    status === 401 || raw.includes('unauthenticated') ||
+    raw.includes('[401]') || raw.includes('http 401')
+  ) return 'credentials';
+  if (code === 'auth/user-disabled' || code === 'functions/permission-denied') return 'disabled';
+  if (code === 'auth/too-many-requests' || code === 'functions/resource-exhausted') return 'rate-limited';
+  if (
+    code === 'auth/network-request-failed' || code === 'functions/unavailable' ||
+    code === 'functions/deadline-exceeded' || code === 'functions/internal' ||
+    raw.includes('network') || raw.includes('failed to fetch') ||
+    raw.includes('timeout') || raw.includes('timed out')
+  ) return 'network';
+  return 'unknown';
+}
+
+function signInError(err) {
+  const e = new Error(friendlyAuthError(err));
+  e.isUserFacing = true;
+  e.reason = reasonFor(err);
+  return e;
+}
+
+function inputError(message, reason) {
+  const e = new Error(message);
+  e.isUserFacing = true;
+  e.reason = reason;
+  return e;
+}
+
 export async function login(phone, pin, dialCode = '+60') {
-  if (!isValidPhone(phone)) throw new Error('Please enter a valid phone number.');
-  if (!pin) throw new Error('Please enter your password.');
+  if (!isValidPhone(phone)) throw inputError('Please enter a valid phone number.', 'invalid-phone');
+  if (!pin) throw inputError('Please enter your password.', 'missing-password');
   const email = phoneToEmail(phone, dialCode);
   let cred;
   try {
@@ -92,17 +133,17 @@ export async function login(phone, pin, dialCode = '+60') {
       try {
         cred = await signInWithEmailAndPassword(auth, legacyPhoneToEmail(phone), pin);
       } catch (_) {
-        throw new Error(friendlyAuthError(err));
+        throw signInError(err);
       }
     } else {
-      throw new Error(friendlyAuthError(err));
+      throw signInError(err);
     }
   }
 
   const snap = await getDoc(doc(db, 'users', cred.user.uid));
   if (!snap.exists()) {
     await signOut(auth);
-    throw new Error('No profile found for this account. Please register first.');
+    throw inputError('No profile found for this account. Please register first.', 'no-profile');
   }
   let profileData = snap.data();
   if (!profileData.userId) {
@@ -122,7 +163,7 @@ export async function login(phone, pin, dialCode = '+60') {
     sessionResult = res.data;
   } catch (err) {
     await signOut(auth);
-    throw new Error(friendlyAuthError(err));
+    throw signInError(err);
   }
 
   if (sessionResult.requiresOtp) {
