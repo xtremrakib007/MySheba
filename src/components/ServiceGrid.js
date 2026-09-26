@@ -5,7 +5,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { serviceColor } from '../theme/serviceColors';
 import { useLanguage } from '../i18n/LanguageContext';
 import * as gridManagementService from '../firebase/gridManagementService';
-import RoyalIcon from './RoyalIcon';
+import ServiceIcon from './ServiceIcon';
 
 // `home: true` marks the tiles the customer home shows. Everything else is
 // one tap away on the Services tab, which renders this list in full.
@@ -84,11 +84,12 @@ export function Tile({ s, onPress, disabled }) {
   const translated = typeof t === 'function' ? t(`service.${safeKey}`, s?.name) : null;
   const label = asSafeText(translated, asSafeText(s?.name, safeKey));
   const icon = asSafeText(s?.icon, 'more');
-  // Fixed colour per service, as the mockup draws the grid. RoyalIcon takes
-  // the stroke colour, so this drives the glyph itself, not just the wash.
+  // Fixed colour per service. ServiceIcon actually strokes in this colour,
+  // which RoyalIcon did not - its paths hardcoded gold and green, so the
+  // accent only ever tinted the wash behind an identical illustration.
   const accent = asSafeText(serviceColor(safeKey, isDark, s?.accent), colors.primary || '#1A73E8');
   return <TouchableOpacity style={[styles.item, { borderColor: colors.tileBorder || `${accent}45`, backgroundColor: colors.tileBg || colors.card }, disabled && styles.itemDisabled]} activeOpacity={0.82} disabled={!!disabled} onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
-    <View style={[styles.iconWrap, { backgroundColor: `${accent}2E` }]}><RoyalIcon name={icon} size={52} color={accent} /></View>
+    <View style={[styles.iconWrap, { backgroundColor: `${accent}2E` }]}><ServiceIcon name={icon} size={22} color={accent} /></View>
     <Text style={[styles.name, { color: colors.text || '#222' }]} numberOfLines={2}>{label}</Text>
   </TouchableOpacity>;
 }
@@ -171,4 +172,4 @@ export default function ServiceGrid({ homeOnly }) {
   return <View><View style={styles.sectionHead}><Text style={[styles.sectionTitle, { color: colors.navy || colors.text }]}>{isStaff ? 'Management Dashboard' : 'Quick Services'}</Text><Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>{isStaff ? 'Manage transactions, accounts and operations' : 'Money, remittance and travel'}</Text></View><View style={[styles.gridCanvas, { backgroundColor: colors.canvasBg || colors.surface }]}><View style={styles.grid}>{services.map((service) => <Tile key={service.key} s={service} disabled={service.kind === 'webview' && !!webViewBusy} onPress={() => handlePress(service)} />)}</View></View></View>;
 }
 
-const styles = StyleSheet.create({ sectionHead: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8 }, sectionTitle: { fontFamily: 'serif', fontSize: 22, fontWeight: '700' }, sectionSubtitle: { fontSize: 11, marginTop: 2 }, gridCanvas: { marginHorizontal: 4, padding: 12, borderRadius: 22 }, grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }, item: { width: '31.5%', minHeight: 124, marginBottom: 10, paddingHorizontal: 4, paddingVertical: 12, borderWidth: 1.5, borderRadius: 22, alignItems: 'center', justifyContent: 'center', shadowColor: '#0A5C78', shadowOpacity: 0.16, shadowRadius: 4, shadowOffset: { width: 0, height: 3 }, elevation: 2 }, itemDisabled: { opacity: 0.45 }, iconWrap: { width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center', marginBottom: 8, borderWidth: 1.5, borderColor: '#19C39B' }, iconText: { fontSize: 28 }, name: { fontSize: 11.5, lineHeight: 15, fontWeight: '600', textAlign: 'center' } });
+const styles = StyleSheet.create({ sectionHead: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8 }, sectionTitle: { fontSize: 17, fontWeight: '800', letterSpacing: 0.2 }, sectionSubtitle: { fontSize: 11, marginTop: 2 }, gridCanvas: { marginHorizontal: 4, padding: 10, borderRadius: 18 }, grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }, item: { width: '31.5%', minHeight: 92, marginBottom: 8, paddingHorizontal: 4, paddingVertical: 10, borderWidth: 1, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.05, shadowRadius: 5, shadowOffset: { width: 0, height: 2 }, elevation: 1 }, itemDisabled: { opacity: 0.45 }, iconWrap: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 7 }, iconText: { fontSize: 28 }, name: { fontSize: 11, lineHeight: 14, fontWeight: '600', textAlign: 'center' } });
