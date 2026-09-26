@@ -29,20 +29,20 @@ export default function SettingsScreen() {
     <LinearGradient colors={brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}><HeaderDecor /><TouchableOpacity style={styles.backBtn} onPress={goBackOrHome}><Text style={styles.backText}>←</Text></TouchableOpacity><Text style={styles.headerTitle}>{t('settings.title')}</Text></LinearGradient>
     <ScrollView contentContainerStyle={styles.body}>
       <SectionCard title={t('settings.sectionNotifications')}>
-        <ToggleRow icon="\u{1F514}" title={t('settings.pushNotifications')} subtitle={t('settings.pushNotificationsSub')} value={pushEnabled} onValueChange={onTogglePush} />
-        <ToggleRow icon="\u2709\uFE0F" title={t('settings.emailNotifications')} subtitle={t('settings.emailNotificationsSub')} value={emailEnabled} onValueChange={onToggleEmail} />
-        <ToggleRow icon="\u{1F4B1}" title={t('settings.rateAlerts')} subtitle={t('settings.rateAlertsSub')} value={rateAlerts} onValueChange={onToggleRateAlerts} last />
+        <ToggleRow icon="🔔" title={t('settings.pushNotifications')} subtitle={t('settings.pushNotificationsSub')} value={pushEnabled} onValueChange={onTogglePush} />
+        <ToggleRow icon="✉️" title={t('settings.emailNotifications')} subtitle={t('settings.emailNotificationsSub')} value={emailEnabled} onValueChange={onToggleEmail} />
+        <ToggleRow icon="💱" title={t('settings.rateAlerts')} subtitle={t('settings.rateAlertsSub')} value={rateAlerts} onValueChange={onToggleRateAlerts} last />
       </SectionCard>
 
       <SectionCard title={t('settings.sectionGeneral')} style={styles.section}>
-        <ListRow icon="\u{1F319}" title={t('settings.displayMode')} subtitle={isSystemMode ? `System Default (${isDark ? 'Dark' : 'Light'})` : (isDark ? 'Dark' : 'Light')} onPress={() => setDisplayModalVisible(true)} />
-        <ListRow icon="\u{1F310}" title={t('settings.language')} subtitle={LANGUAGES[language]?.label || 'English'} onPress={() => setLanguageModalVisible(true)} />
-        <ListRow icon="\u{1F5A8}\uFE0F" title="Printer" subtitle="Connect or select a supported printer" onPress={() => setScreen('printer')} />
-        <ListRow icon="\u{1F512}" title={t('settings.changePassword')} onPress={() => setPwModalVisible(true)} />
-        <ListRow icon="\u{1F522}" title={profile?.securityPinSet ? t('settings.changeSecurityPin') : t('settings.setUpSecurityPin')} subtitle={t('settings.securityPinSub')} onPress={() => setPinModalVisible(true)} />
-        <ToggleRow icon="\u{1F510}" title={t('settings.appLock')} subtitle={t('settings.appLockSub')} value={appLockEnabled} onValueChange={onToggleAppLock} last={!(profile?.role === 'admin' || profile?.role === 'superadmin')} />
+        <ListRow icon="🌙" title={t('settings.displayMode')} subtitle={isSystemMode ? `System Default (${isDark ? 'Dark' : 'Light'})` : (isDark ? 'Dark' : 'Light')} onPress={() => setDisplayModalVisible(true)} />
+        <ListRow icon="🌐" title={t('settings.language')} subtitle={LANGUAGES[language]?.label || 'English'} onPress={() => setLanguageModalVisible(true)} />
+        <ListRow icon="🖨️" title="Printer" subtitle="Connect or select a supported printer" onPress={() => setScreen('printer')} />
+        <ListRow icon="🔒" title={t('settings.changePassword')} onPress={() => setPwModalVisible(true)} />
+        <ListRow icon="🔢" title={profile?.securityPinSet ? t('settings.changeSecurityPin') : t('settings.setUpSecurityPin')} subtitle={t('settings.securityPinSub')} onPress={() => setPinModalVisible(true)} />
+        <ToggleRow icon="🔐" title={t('settings.appLock')} subtitle={t('settings.appLockSub')} value={appLockEnabled} onValueChange={onToggleAppLock} last={!(profile?.role === 'admin' || profile?.role === 'superadmin')} />
         {(profile?.role === 'admin' || profile?.role === 'superadmin') && (
-          <ListRow icon="\u{1F4F1}" title={t('settings.trustedDevices')} subtitle={t('settings.trustedDevicesSub')} onPress={() => setScreen('trustedDevices')} last />
+          <ListRow icon="📱" title={t('settings.trustedDevices')} subtitle={t('settings.trustedDevicesSub')} onPress={() => setScreen('trustedDevices')} last />
         )}
       </SectionCard>
 
