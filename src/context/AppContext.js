@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import { Platform, BackHandler, ToastAndroid, AppState } from "react-native";
 import { showAlert } from "../utils/appAlert";
+import { crossesFeature } from "../utils/featureGroups";
 
 import * as authService from "../firebase/authService";
 import * as securityPinService from "../firebase/securityPinService";
@@ -227,6 +228,10 @@ export function AppProvider({ children }) {
   const isPoppingRef = useRef(false);
   const prevScreenRef = useRef(screen);
   const exitArmedRef = useRef(false);
+  // goHome is defined below this effect, so it cannot go in its dependency
+  // array without a TDZ error. The ref is read at press time, by which point
+  // it is assigned.
+  const goHomeRef = useRef(null);
 
   // Lets a home screen (Customer/Dealer/Admin) register a callback that
   // intercepts the hardware back button while it's showing a local
@@ -261,7 +266,15 @@ export function AppProvider({ children }) {
     const prev = prevScreenRef.current;
     if (prev !== screen) {
       if (!isPoppingRef.current && !PRE_AUTH_SCREENS.includes(prev)) {
-        screenHistoryRef.current.push(prev);
+        // Leaving one feature for another drops the trail instead of adding
+        // to it. Without this the stack accumulated across features and back
+        // stepped sideways - out of Salary and into Documents, because
+        // Documents happened to be open earlier.
+        if (crossesFeature(prev, screen)) {
+          screenHistoryRef.current = [];
+        } else {
+          screenHistoryRef.current.push(prev);
+        }
       }
       isPoppingRef.current = false;
       prevScreenRef.current = screen;
@@ -1576,9 +1589,16 @@ export function AppProvider({ children }) {
         }, 2000);
         return true;
       }
-      const wentBack = goBack();
-      if (wentBack) return true;
+      if (goBack()) return true;
 
+      // Nothing left inside this feature. Go Home rather than returning
+      // false, which hands the press to Android and closes the app - the
+      // old behaviour for any feature opened straight from the home grid,
+      // since those start with an empty trail.
+      if (goHomeRef.current) {
+        goHomeRef.current();
+        return true;
+      }
       return false;
     };
     const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
@@ -1608,6 +1628,7 @@ export function AppProvider({ children }) {
     else if (r === "admin" || r === "superadmin") setScreen("adminHome");
     else setScreen("customerHome");
   }, [profile]);
+  goHomeRef.current = goHome;
 
   // Used by every screen's own "←" header button - prefers the real
   // previous screen from history so on-screen back navigation is one
