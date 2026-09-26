@@ -89,5 +89,22 @@ is('it clears authLoading when it fires',
 is('it is cleared on teardown',
    /cancelled = true;[\s\S]{0,160}clearTimeout\(firstRouteWatchdog\)/.test(ctx), true);
 
+console.log('\n-- App Lock must actually lock --');
+// It did not. appLocked was declared, read by AppLockScreen and set to
+// false in two places, but setAppLocked(true) existed nowhere in the app,
+// and there was no AppState listener in AppContext at all - so the Settings
+// toggle did nothing and reopening the app never asked for anything.
+is('something sets appLocked true', /setAppLocked\(true\)/.test(ctx), true);
+is('a restored session locks on cold launch',
+   /launchLockDoneRef\.current \|\| signedInThisSessionRef\.current[\s\S]{0,120}setAppLocked\(true\)/.test(ctx), true);
+is('an AppState listener exists to re-lock on return',
+   /AppState\.addEventListener\(\s*["']change["']/.test(ctx), true);
+is('the grace period is honoured before re-locking',
+   /APP_LOCK_GRACE_MS\) return;[\s\S]{0,500}setAppLocked\(true\)/.test(ctx), true);
+is('a sign-in performed just now skips the launch lock',
+   /signedInThisSessionRef\.current = true;/.test(ctx), true);
+is('locking never signs anyone out',
+   /setAppLocked\(true\);?[\s\S]{0,40}\}\);/.test(ctx) && !/setAppLocked\(true\)[^\n]{0,80}logout/.test(ctx), true);
+
 console.log(`\n${pass}/${pass + fail} passed`);
 process.exit(fail ? 1 : 0);

@@ -546,6 +546,58 @@ export function AppProvider({ children }) {
 
   const unlockApp = useCallback(() => setAppLocked(false), []);
 
+  // App Lock never actually locked anything.
+  //
+  // appLocked was declared, read by AppLockScreen, and set to false in two
+  // places - but setAppLocked(true) did not exist anywhere in the app. Nor
+  // did the AppState listener the comments above describe: there was no
+  // AppState listener in this file at all, so the private vault never
+  // re-locked on backgrounding either. Turning App Lock on in Settings did
+  // nothing at all, which is why closing and reopening the app went
+  // straight to a screen instead of asking for a PIN or biometric.
+  const authUserRef = useRef(null);
+  authUserRef.current = authUser;
+  // A cold launch locks a *restored* session. Someone who just typed their
+  // password does not want to be asked for a PIN two seconds later, so a
+  // sign-in performed in this process sets this and skips the launch lock.
+  const signedInThisSessionRef = useRef(false);
+  const launchLockDoneRef = useRef(false);
+
+  useEffect(() => {
+    if (!authUser || !appLockEnabled) return;
+    if (launchLockDoneRef.current || signedInThisSessionRef.current) return;
+    launchLockDoneRef.current = true;
+    setAppLocked(true);
+  }, [authUser, appLockEnabled]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "background" || state === "inactive") {
+        // Only the first transition counts - Android fires 'inactive' then
+        // 'background', and overwriting would reset the clock each time.
+        if (backgroundedAtRef.current == null) {
+          backgroundedAtRef.current = Date.now();
+        }
+        return;
+      }
+      if (state !== "active") return;
+
+      const since = backgroundedAtRef.current;
+      backgroundedAtRef.current = null;
+      if (since == null) return;
+      if (Date.now() - since < APP_LOCK_GRACE_MS) return;
+
+      // Away long enough to count as leaving the app: the vault always
+      // re-locks, and the whole app does too when App Lock is on. Neither
+      // touches the session - this is a lock screen, never a sign-out.
+      setPrivateVaultUnlocked(false);
+      if (appLockEnabledRef.current && authUserRef.current) setAppLocked(true);
+    });
+    return () => sub.remove();
+    // APP_LOCK_GRACE_MS is a module-level constant in all but name.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ---- Biometric opt-in (separate from App Lock's PIN, and from the
   // device's own biometric enrollment - see appLockPrefs.js's
   // BIOMETRIC_KEY comment for the three-state reasoning). null means
@@ -1832,6 +1884,9 @@ export function AppProvider({ children }) {
     setAuthError("");
     try {
       const p = await authService.login(phone, pin, dialCode);
+      // Authenticated by hand just now, so the cold-launch App Lock does not
+      // then ask for a PIN on top of the password that was just typed.
+      signedInThisSessionRef.current = true;
       if (p.pendingDeviceApproval) {
         // A different device is already active on this account, OR (for
         // admin/superadmin) this login just needs its per-login MFA code -
@@ -1882,6 +1937,7 @@ export function AppProvider({ children }) {
     setAuthError("");
     try {
       const p = await authService.signInWithGoogle();
+      signedInThisSessionRef.current = true;
       if (p.pendingDeviceApproval) {
         setPendingDeviceVerification({
           uid: p.uid,
@@ -2141,6 +2197,8 @@ export function AppProvider({ children }) {
       isPoppingRef.current = false;
       prevScreenRef.current = "login";
       exitArmedRef.current = false;
+      signedInThisSessionRef.current = false;
+      launchLockDoneRef.current = false;
       setScreen("login");
     }
     // authUser is read above to clear that account's cached profile, so it
