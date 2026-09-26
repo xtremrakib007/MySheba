@@ -1,0 +1,33 @@
+# Publish a production OTA update from EAS servers.
+#
+# This exists because neither of the other two routes works from the phone
+# this project is maintained on:
+#
+#   eas update (Termux)  - @expo/metro-config throws "Unsupported host
+#                          platform for Hermes compiler: android", because
+#                          os.platform() is 'android' there and React Native
+#                          ships hermesc only for x86_64 linux/mac/windows.
+#                          No aarch64 build exists to install.
+#   GitHub Actions       - runner allocation is blocked at the account level;
+#                          runs fail in 1-3 seconds with zero steps.
+#
+# `eas workflow:run` uploads the project (or runs from --ref) and does the
+# work on Expo's x86_64 infrastructure, where hermesc is the bundled binary
+# and no GitHub minutes are involved.
+#
+# Run it with:
+#   npx eas-cli@latest workflow:run .eas/workflows/publish-ota.yml --ref main
+#
+# --ref runs from the pushed commit rather than the local tree, so what
+# ships is what is on the branch - the same guarantee the versionCode
+# mix-up cost us when a build ran from a stale local checkout.
+
+name: Publish production OTA
+
+jobs:
+  publish_update:
+    name: Publish Android OTA to the production channel
+    type: update
+    params:
+      platform: android
+      channel: production
