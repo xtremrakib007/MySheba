@@ -10,11 +10,10 @@ import { busLogoImage } from '../data/busLogos';
 // the `icon: '🚍' / '🚌' / '🎫'` written next to them in busTicketPartners
 // was never read by anything.
 //
-// A monogram in the partner's own brand colour is the fix that does not
-// need their trademark: three different colours and three different letter
-// pairs are told apart at a glance, which is the whole job of the tile.
-// Drop real artwork into assets/bus/ and wire it in src/data/busLogos.js
-// and that takes over instead.
+// Each partner's own mark now sits in assets/bus/ and is what renders. The
+// monograms below stay as the fallback: they are what draws if a logo file
+// is ever removed or fails to resolve, so the tile degrades to three
+// distinguishable badges rather than back to three identical diamonds.
 const MARKS = {
   'bus-redbus': { mono: 'rB', bg: '#D32F2F' },
   'bus-busonlineticket': { mono: 'BOT', bg: '#1565C0' },
@@ -29,9 +28,18 @@ export default function BusOperatorLogo({ operatorKey, size = 34 }) {
   const mark = MARKS[operatorKey];
   if (!mark) return null;
 
+  // Rounded to match the tile's own corners - all three marks are square
+  // with their own full-bleed background, so square corners inside a
+  // rounded card look like a mistake.
   const image = busLogoImage(operatorKey);
   if (image) {
-    return <Image source={image} style={{ width: size, height: size }} resizeMode="contain" />;
+    return (
+      <Image
+        source={image}
+        style={{ width: size, height: size, borderRadius: size * 0.26 }}
+        resizeMode="contain"
+      />
+    );
   }
 
   // Three letters need to fit the same box two letters do.

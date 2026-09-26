@@ -1,18 +1,16 @@
-// Licensed bus-operator artwork, if you have it.
+// Bus-operator artwork, supplied by the app owner.
 //
-// Left empty on purpose: redBus, Bus Online Ticket and Easybook logos are
-// their owners' trademarks, so they are not vendored into this repo. The
-// app ships drawn monogram badges instead (see BusOperatorLogo), which are
-// ours and need no permission.
+// `require` paths have to be literal for the bundler to see them, which is
+// why this is a written-out map rather than a lookup built from the key.
 //
-// If you do obtain the real marks, drop the files in assets/bus/ and
-// uncomment the matching line - the tile picks the image up with no other
-// change. `require` paths have to be literal, which is why this is a map
-// rather than a lookup built from the key.
+// redbus.png was cropped from a source with a white surround: the mark is
+// the red rounded square, and letterboxing it inside the tile would have
+// left it noticeably smaller than the other two. All three are 256x256,
+// which is plenty for a 34px tile on a 3x screen.
 export const BUS_LOGOS = {
-  // 'bus-redbus': require('../../assets/bus/redbus.png'),
-  // 'bus-busonlineticket': require('../../assets/bus/busonlineticket.png'),
-  // 'bus-easybook': require('../../assets/bus/easybook.png'),
+  'bus-redbus': require('../../assets/bus/redbus.png'),
+  'bus-busonlineticket': require('../../assets/bus/busonlineticket.png'),
+  'bus-easybook': require('../../assets/bus/easybook.png'),
 };
 
 export function busLogoImage(key) {
