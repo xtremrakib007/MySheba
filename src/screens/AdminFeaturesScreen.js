@@ -46,7 +46,7 @@ const CAPABILITY_FOR = {
   rates: ['settings'], pricing: ['settings'], payments: ['settings'], categories: ['settings'], banners: ['settings'],
   transferPoints: ['finance'],
   userManagement: ['users'], verificationManagement: ['users'],
-  announcements: ['support'],
+  announcements: ['support'], adFeatureControls: ['settings'],
 };
 
 const SYSTEM = [
@@ -54,6 +54,7 @@ const SYSTEM = [
   { key: 'gridManagement', icon: '🧩', bg: '#E0F7FA', name: 'Grid Management' },
   { key: 'banners', icon: '🖼️', bg: '#FFF0F0', name: 'Banners' },
   { key: 'announcements', icon: '📣', bg: '#E0F7FA', name: 'Announcements' },
+  { key: 'adFeatureControls', icon: '🛡️', bg: '#EDE7F6', name: 'Ad Controls' },
   { key: 'apiManagement', icon: '🔌', bg: '#E0F7FA', name: 'API Management' },
 ];
 
