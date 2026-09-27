@@ -111,7 +111,7 @@ const screenFeatures = new Set(
 const screenFor = Object.fromEntries(
   [...((adminFeat.match(/SCREEN_FOR = \{([^}]*)\}/) || [, ''])[1]).matchAll(/([a-zA-Z]+)\s*:\s*'([a-zA-Z]+)'/g)].map((m) => [m[1], m[2]])
 );
-for (const group of ['OPERATIONS', 'FINANCE', 'USERS', 'SYSTEM']) {
+for (const group of ['OPERATIONS', 'FINANCE', 'USERS', 'PLATFORM', 'SYSTEM']) {
   for (const key of arrayKeys(adminFeat, group)) {
     if (key === 'rates') { checked += 1; continue; } // openItem intercepts it
     const target = screenFor[key] || key;
@@ -134,6 +134,32 @@ for (const key of arrayKeys(read('src/screens/ResellerFeaturesScreen.js'), 'DASH
 for (const key of arrayKeys(read('src/firebase/featureAccessService.js'), 'FEATURE_DEFS')) {
   check('tools (dealer+reseller)', key, 'setScreen, but no such screen', screens.has(key));
 }
+
+// ---- 4b. the dashboard and common-account grids mounted on role homepages ----
+const roleHomeGrid = read('src/components/RoleToolsGrid.js');
+for (const key of arrayKeys(roleHomeGrid, 'DEALER_DASHBOARD')) {
+  if (key === 'topup') { check('dealer/home-grid', key, 'setScreen, but no such screen', screens.has('topup')); continue; }
+  check('dealer/home-grid', key, 'dealerTab, but DealerHomeScreen has no such status', dealerTabs.has(key));
+}
+for (const key of arrayKeys(roleHomeGrid, 'RESELLER_DASHBOARD')) {
+  check('reseller/home-grid', key, 'resellerTab, but ResellerHomeScreen has no such status', resellerTabs.has(key));
+}
+for (const key of arrayKeys(read('src/components/AccountToolsGrid.js'), 'ITEMS')) {
+  check('account/home-grid', key, 'setScreen, but no such screen', screens.has(key));
+}
+
+// ---- 4c. every managed grid key is allowed by the Firestore rules whitelist ----
+const gridDefs = read('src/firebase/gridManagementService.js');
+const rules = read('firestore.rules');
+for (const key of matches(gridDefs, /\\['([a-zA-Z]+)','[^']+'\\]/g)) {
+  check('grid-management', key, 'missing Firestore rules whitelist entry', rules.includes(`'${key}'`));
+}
+
+// ---- 4d. the shared date field must not reference an undefined native picker ----
+const sharedUi = read('src/components/ui.js');
+const pickerReferenced = /\\bDateTimePicker\\b/.test(sharedUi);
+const pickerImported = /import\\s+DateTimePicker\\s+from\\s+['"][^'"]+['"]/.test(sharedUi);
+check('shared-ui', 'DateTimePicker', 'referenced without an import', !pickerReferenced || pickerImported);
 
 // ---- 5. customer tiles: every kind has a branch, or falls through to a service flow ----
 const grid = read('src/components/ServiceGrid.js');
