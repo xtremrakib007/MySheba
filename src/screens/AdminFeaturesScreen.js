@@ -16,6 +16,7 @@ const CATEGORIES = [
   { key: 'operations', icon: '⚙️', bg: '#E3F2FD', name: 'Operations' },
   { key: 'finance', icon: '💰', bg: '#E8F5E9', name: 'Finance' },
   { key: 'users', icon: '👥', bg: '#E0F7FA', name: 'Users & KYC' },
+  { key: 'platform', icon: '📣', bg: '#FFF0F0', name: 'Platform & Content' },
   { key: 'system', icon: '🛡️', bg: '#EDE7F6', name: 'System Control' },
 ];
 
@@ -37,6 +38,10 @@ const USERS = [
   { key: 'userManagement', icon: '👥', bg: '#E3F2FD', name: 'Users' },
   { key: 'verificationManagement', icon: '🪪', bg: '#E0F7FA', name: 'KYC Verification' },
 ];
+const PLATFORM = [
+  { key: 'banners', icon: '🖼️', bg: '#FFF0F0', name: 'Home Banners' },
+  { key: 'announcements', icon: '📣', bg: '#E0F7FA', name: 'Announcements' },
+];
 // Which capability opens each hub item (any one is enough). Staff access is
 // role defaults + per-user overrides (accessControlService); a superadmin
 // has every capability.
@@ -52,9 +57,7 @@ const CAPABILITY_FOR = {
 const SYSTEM = [
   { key: 'featureAccess', icon: '🔐', bg: '#EDE7F6', name: 'Feature Access' },
   { key: 'gridManagement', icon: '🧩', bg: '#E0F7FA', name: 'Grid Management' },
-  { key: 'banners', icon: '🖼️', bg: '#FFF0F0', name: 'Home Banners' },
   { key: 'bannerManagement', icon: '📢', bg: '#E0F7FA', name: 'Ad Banners' },
-  { key: 'announcements', icon: '📣', bg: '#E0F7FA', name: 'Announcements' },
   { key: 'adFeatureControls', icon: '🛡️', bg: '#EDE7F6', name: 'Ad Controls' },
   { key: 'apiManagement', icon: '🔌', bg: '#E0F7FA', name: 'API Management' },
 ];
@@ -116,7 +119,7 @@ export default function AdminFeaturesScreen() {
     setAdminTab(key); setAdminViewingSection(true); setScreen('adminHome');
   };
   const itemsForSection = () => {
-    let items = section === 'operations' ? OPERATIONS : section === 'finance' ? FINANCE : section === 'users' ? USERS : SYSTEM;
+    let items = section === 'operations' ? OPERATIONS : section === 'finance' ? FINANCE : section === 'users' ? USERS : section === 'platform' ? PLATFORM : SYSTEM;
     if (section === 'system' && !isSuperadmin) return [];
     return allow(items).map((item) => ({ ...item, badge: badges[item.key] }));
   };
@@ -180,6 +183,7 @@ export default function AdminFeaturesScreen() {
       <FeatureGrid title="Operations" items={allow(OPERATIONS).map((item) => ({ ...item, badge: badges[item.key] }))} onPress={openItem} />
       <FeatureGrid title="Finance & Pricing" items={allow(FINANCE).map((item) => ({ ...item, badge: badges[item.key] }))} onPress={openItem} />
       <FeatureGrid title="Users & Verification" items={allow(USERS).map((item) => ({ ...item, badge: badges[item.key] }))} onPress={openItem} />
+      <FeatureGrid title="Platform & Content" items={allow(PLATFORM).map((item) => ({ ...item, badge: badges[item.key] }))} onPress={openItem} />
       {isSuperadmin && <FeatureGrid title="System Control" items={allow(SYSTEM).map((item) => ({ ...item, badge: badges[item.key] }))} onPress={openItem} />}
       {isSuperadmin && <FeatureGrid title="Risk, Advertising & Staff" items={[
         { key: 'trustedDevices', icon: '📱', bg: '#E3F2FD', name: 'Trusted Devices' },
