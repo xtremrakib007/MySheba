@@ -115,7 +115,7 @@ export function useServiceAction() {
     if (s.kind === 'support') return setScreen('support');
     if (s.kind === 'businessProfile') return setScreen('profile');
     if (s.kind === 'billPayment') return startService('billpayment');
-    if (s.kind === 'billpayment') return setScreen('billPayment');
+    if (s.kind === 'billpayment') return startService('billpayment');
     if (s.kind === 'history') return setScreen('history');
     if (s.kind === 'myaccount') return setScreen('myAccount');
     if (s.kind === 'profile') return setScreen('profile');
