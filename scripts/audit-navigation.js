@@ -89,6 +89,9 @@ const adminTabs = new Set(matches(read('src/screens/AdminHomeScreen.js'), /admin
 const dealerTabs = new Set(arrayKeys(read('src/screens/DealerHomeScreen.js'), 'FEATURES'));
 const resellerTabs = new Set(arrayKeys(read('src/screens/ResellerHomeScreen.js'), 'FEATURES'));
 
+// ---- 0. every role landing screen is mounted by App.js ----
+check('role/home', 'staffHome', 'Support Agent and Finance home screen is not mounted', /renderedScreen === 'staffHome'\s*&&\s*<StaffHomeScreen\s*\/>/.test(app) && /import StaffHomeScreen from '\.\/src\/screens\/StaffHomeScreen'/.test(app));
+
 // ---- 1. every setScreen() target is a screen App.js renders ----
 for (const file of fs.readdirSync(path.join(root, 'src/screens'))) {
   if (!file.endsWith('.js')) continue;
