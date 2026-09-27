@@ -16,7 +16,7 @@ const ITEMS = [
 ];
 
 export default function AccountToolsGrid() {
-  const { setScreen, gridManagement, profile, can } = useApp();
+  const { setScreen, gridManagement, profile, can, openSalary, openMyDocuments } = useApp();
   const GRID_KEY_FOR = { salaryDashboard: 'salary' };
   const items = ITEMS.filter((item) => {
     if (!gridManagementService.isGridActive(gridManagement, GRID_KEY_FOR[item.key] || item.key)) return false;
@@ -24,5 +24,10 @@ export default function AccountToolsGrid() {
     return true;
   });
   if (!items.length) return null;
-  return <FeatureGrid title="Account & Tools" items={items} onPress={setScreen} />;
+  const openItem = (key) => {
+    if (key === 'salaryDashboard') return openSalary();
+    if (key === 'myDocuments') return openMyDocuments();
+    return setScreen(key);
+  };
+  return <FeatureGrid title="Account & Tools" items={items} onPress={openItem} />;
 }
