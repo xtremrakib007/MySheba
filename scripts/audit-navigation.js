@@ -220,6 +220,11 @@ check(
   /s\.kind === 'adminTopup'\)\s*\{\s*setAdminTab\('topups'\);\s*setAdminViewingSection\(true\);\s*return setScreen\('adminHome'\);/.test(serviceGridSource)
 );
 
+// ---- 4g. Support and Finance must have sidebar shortcuts for their queues ----
+check('sidebar/staff-queues', 'role groups', 'Support/Finance queue group is missing', /if \(role === 'support' \|\| role === 'finance'\) return \[\.\.\.STAFF_GROUPS, \.\.\.COMMON_GROUPS\]/.test(sidebarSource));
+check('sidebar/staff-queues', 'Support Inbox', 'Support Inbox does not require the support capability', /adminSupport: \['support'\]/.test(sidebarSource));
+check('sidebar/staff-queues', 'queue navigation', 'Support/Finance queue tabs do not route through AdminHomeScreen', /\(\['support', 'finance'\]\.includes\(profile\?\.role\) && staffQueueTabs\.includes\(key\)\)/.test(sidebarSource));
+
 // ---- 4g. staff tiles must use the matching Grid Management setting ----
 check('staff/home-grid', 'Top-Ups visibility', 'staff Top-Ups tile uses the personal Top-Up setting instead of the request queue setting', /adminTopup:\s*'topups'/.test(serviceGridSource));
 check('staff/home-grid', 'Support Inbox visibility', 'Support Inbox tile bypasses the Support grid setting', /staffSupport:\s*'support'/.test(serviceGridSource));
