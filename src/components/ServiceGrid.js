@@ -164,7 +164,7 @@ export default function ServiceGrid({ homeOnly }) {
       : role === 'admin'
         ? STAFF_SERVICES.admin.filter((t) => !ADMIN_TILE_NEEDS[t.key] || ADMIN_TILE_NEEDS[t.key].some((cap) => can(cap)))
         : (STAFF_SERVICES[role] || STAFF_SERVICES.admin);
-  const gridKeyFor = (service) => ({ buspicker: 'bus', webview: service.key, adminFeatures: 'adminFeatures', dealerFeatures: 'dealerFeatures', resellerFeatures: 'resellerFeatures', adminTopup: 'topup' }[service.kind] || service.key);
+  const gridKeyFor = (service) => ({ buspicker: 'bus', webview: service.key, adminFeatures: 'adminFeatures', dealerFeatures: 'dealerFeatures', resellerFeatures: 'resellerFeatures', adminTopup: 'topups', staffSupport: 'support' }[service.kind] || service.key);
   const active = allServices.filter((service) => gridManagementService.isGridActive(gridManagement, gridKeyFor(service)));
   const moreTile = active.find((service) => service.kind === 'moreFeaturesLink');
   // homeOnly keeps the tiles flagged for the home screen, in declaration
