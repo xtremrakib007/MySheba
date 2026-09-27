@@ -184,6 +184,17 @@ const pickerReferenced = /\bDateTimePicker\b/.test(sharedUi);
 const pickerImported = /import\s+DateTimePicker\s+from\s+['"][^'"]+['"]/.test(sharedUi);
 check('shared-ui', 'DateTimePicker', 'referenced without an import', !pickerReferenced || pickerImported);
 
+// ---- 4d. shared Salary and Documents shortcuts must retain subscription gates ----
+const accountToolsSource = read('src/components/AccountToolsGrid.js');
+check('account/home-grid', 'salary', 'Salary & OT bypasses openSalary module access gate', /key === 'salaryDashboard'\) return openSalary\(\)/.test(accountToolsSource));
+check('account/home-grid', 'documents', 'My Documents bypasses openMyDocuments module access gate', /key === 'myDocuments'\) return openMyDocuments\(\)/.test(accountToolsSource));
+const adminFeaturesSource = read('src/screens/AdminFeaturesScreen.js');
+check('admin/home-grid', 'salary', 'Salary & OT bypasses openSalary module access gate', /key === 'salaryDashboard'\) \{ openSalary\(\); return; \}/.test(adminFeaturesSource));
+check('admin/home-grid', 'documents', 'My Documents bypasses openMyDocuments module access gate', /key === 'myDocuments'\) \{ openMyDocuments\(\); return; \}/.test(adminFeaturesSource));
+const sidebarAccessSource = read('src/components/Sidebar.js');
+check('sidebar/access', 'salary', 'Salary & OT bypasses openSalary module access gate', /key === 'salaryDashboard'\) \{\s*openSalary\(\)/.test(sidebarAccessSource));
+check('sidebar/access', 'documents', 'My Documents bypasses openMyDocuments module access gate', /key === 'myDocuments'\) \{\s*openMyDocuments\(\)/.test(sidebarAccessSource));
+
 // ---- 4e. staff service shortcuts must land on the correct operational tab ----
 const serviceGridSource = read('src/components/ServiceGrid.js');
 check(
