@@ -102,7 +102,7 @@ export default function FeatureGrid({ title, items, activeKey, onPress, numColum
             return (
               <TouchableOpacity key={it.key} style={itemStyle} activeOpacity={0.82} onPress={() => onPress(it.key)}>
                 {gridStyle === 'classic' && <View style={[styles.classicBar, { backgroundColor: it.accent || colors.primary }]} />}
-                {gridStyle === 'adaptive' && adaptive && <View style={[styles.adaptiveBar, { backgroundColor: colors.primary }]} />}
+                {!!(gridStyle === 'adaptive' && adaptive) && <View style={[styles.adaptiveBar, { backgroundColor: colors.primary }]} />}
                 {content}
               </TouchableOpacity>
             );

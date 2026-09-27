@@ -125,8 +125,8 @@ export default function PayslipDetailsScreen() {
       <ScrollView contentContainerStyle={styles.body}>
         <PayslipPreview payslip={payslip} />
 
-        {payslip.fileReference && <Text style={styles.savedNote}>✓ Saved to My Documents</Text>}
-        {payslip.savedToSalaryHistory && <Text style={styles.savedNote}>✓ Linked to Salary History</Text>}
+        {!!payslip.fileReference && <Text style={styles.savedNote}>✓ Saved to My Documents</Text>}
+        {!!payslip.savedToSalaryHistory && <Text style={styles.savedNote}>✓ Linked to Salary History</Text>}
 
         <PayslipActionButtons
           onOpen={handleShare}
@@ -134,7 +134,7 @@ export default function PayslipDetailsScreen() {
           onPrint={handlePrint}
         />
 
-        {generating && <ActivityIndicator style={{ marginTop: 12 }} color={colors.primary} />}
+        {!!generating && <ActivityIndicator style={{ marginTop: 12 }} color={colors.primary} />}
 
         <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
           <Text style={styles.deleteBtnText}>Delete Payslip</Text>

@@ -44,7 +44,7 @@ export default function StaffHomeScreen() {
         </View>
         <View style={styles.headerRight}>
           <TouchableOpacity style={styles.bellBtn} onPress={() => setScreen('notifications')}>
-            <Text style={styles.bell}>🔔</Text>{hasUnreadNotifications && <View style={styles.bellDot} />}
+            <Text style={styles.bell}>🔔</Text>{!!hasUnreadNotifications && <View style={styles.bellDot} />}
           </TouchableOpacity>
         </View>
       </LinearGradient>

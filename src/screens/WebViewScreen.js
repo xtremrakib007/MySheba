@@ -227,7 +227,7 @@ export default function WebViewScreen() {
       <View style={styles.toolbar}>
         <TouchableOpacity onPress={goHome}><Text style={styles.toolbarIcon}>🏠</Text></TouchableOpacity>
         <TouchableOpacity onPress={() => webviewRef.current?.reload()}><Text style={styles.toolbarIcon}>🔄</Text></TouchableOpacity>
-        {isFomema && (
+        {!!isFomema && (
           <TouchableOpacity
             style={styles.clinicToggle}
             onPress={() => { setShowClinicFinder((v) => !v); setLoading(true); setFailed(false); setCanGoBack(false); }}
@@ -241,11 +241,11 @@ export default function WebViewScreen() {
 
       {!failed ? (
         <View style={{ flex: 1 }}>
-          {(loading || retrying) && (
+          {(!!(loading || retrying)) && (
             <View style={styles.loadingOverlay}>
               <ActivityIndicator size="large" color={colors.primary} />
-              {retrying && <Text style={styles.retryingText}>Reconnecting…</Text>}
-              {retrying && retryAttempts >= 5 && (
+              {!!retrying && <Text style={styles.retryingText}>Reconnecting…</Text>}
+              {!!(retrying && retryAttempts >= 5) && (
                 <TouchableOpacity onPress={() => Linking.openURL(activeUrl)}>
                   <Text style={styles.retryEscapeText}>Taking longer than usual · Open in browser instead</Text>
                 </TouchableOpacity>
@@ -329,7 +329,7 @@ export default function WebViewScreen() {
           submitWebviewApplication fires automatically from that message
           (see handleWebViewMessage above). Nothing shows here until it's
           actually confirmed. */}
-      {isSubmitFlow && alreadySubmitted && (
+      {!!(isSubmitFlow && alreadySubmitted) && (
         <View style={styles.submitBar}>
           <Text style={styles.submitDoneText}>✓ Submitted - points deducted</Text>
         </View>
@@ -340,7 +340,7 @@ export default function WebViewScreen() {
           click-watch script and charges automatically; there's no
           "already done" state to show here since every search charges
           again. */}
-      {isAccessClickFlow && (
+      {!!isAccessClickFlow && (
         <View style={styles.submitBar}>
           <Text style={styles.autoChargeHintText}>
             {webViewBusy ? 'Confirming…' : 'Points deduct automatically when you tap Search/Carian on this page.'}
@@ -352,7 +352,7 @@ export default function WebViewScreen() {
           automatically the instant handleNavigationStateChange sees the
           site's own receipt/confirmation URL (see PAYMENT_SUCCESS_URL_MARKERS
           in data/countries.js). Nothing shows here until that fires. */}
-      {isPaymentFlow && webViewPaymentCharged && (
+      {!!(isPaymentFlow && webViewPaymentCharged) && (
         <View style={styles.submitBar}>
           <Text style={styles.submitDoneText}>✓ Payment confirmed - {pointCosts[webViewKey]} pts deducted</Text>
         </View>

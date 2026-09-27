@@ -70,7 +70,7 @@ export default function BuildStamp() {
         </Text>
       </TouchableOpacity>
 
-      {open && (
+      {!!open && (
         <View style={[styles.detail, { borderColor: colors.border }]}>
           <Text style={[styles.row, { color: colors.textSecondary }]}>
             Bundle: {embedded ? 'EMBEDDED (no update applied)' : `OTA ${shortId(updateId)}`}

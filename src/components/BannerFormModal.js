@@ -80,7 +80,7 @@ const result = await ImagePicker.launchImageLibraryAsync({
                   <Text style={styles.uploadText}>Tap to upload a photo background</Text>
                 </>
               )}
-              {uploading && (
+              {!!uploading && (
                 <View style={styles.uploadOverlay}>
                   <ActivityIndicator color="white" />
                 </View>

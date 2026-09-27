@@ -300,7 +300,7 @@ export default function VerifyIdentityScreen() {
             </Field>
           )}
           <UploadCard label={form.documentType === 'Passport' ? 'Passport main page' : 'Identity document front'} required uri={files.front} onPick={() => pickDocument('front')} styles={styles} hint="All four corners visible" />
-          {documentNeedsBack && <UploadCard label="Identity document back" required uri={files.back} onPick={() => pickDocument('back')} styles={styles} hint="All four corners visible" />}
+          {!!documentNeedsBack && <UploadCard label="Identity document back" required uri={files.back} onPick={() => pickDocument('back')} styles={styles} hint="All four corners visible" />}
           <View style={styles.tipCard}><Text style={styles.tipIcon}>✓</Text><Text style={styles.tipText}>Avoid glare, blur, cropped edges and screenshots. The document must be readable by our verification team.</Text></View>
         </>
       );
@@ -366,7 +366,7 @@ export default function VerifyIdentityScreen() {
         <Text style={styles.headerTitle}>KYC Verification</Text>
       </LinearGradient>
 
-      {alreadyVerified && (
+      {!!alreadyVerified && (
         <ScrollView contentContainerStyle={styles.body}>
           <View style={styles.statusCard}><Text style={styles.statusIcon}>{STATUS_COPY.approved.icon}</Text><Text style={styles.statusTitle}>{STATUS_COPY.approved.title}</Text><Text style={styles.statusBody}>{STATUS_COPY.approved.body}</Text><VerifiedBadge verified size="md" /></View>
         </ScrollView>
@@ -383,7 +383,7 @@ export default function VerifyIdentityScreen() {
         </ScrollView>
       )}
 
-      {!alreadyVerified && canEdit && (
+      {!!(!alreadyVerified && canEdit) && (
         <>
           <ProgressHeader step={step} colors={colors} styles={styles} />
           <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">

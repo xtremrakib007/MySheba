@@ -123,7 +123,7 @@ export default function MyDocumentsScreen() {
         <Text style={styles.errorText}>Couldn't load your documents. Pull to refresh or try again.</Text>
       ) : (
         <>
-          {hasAnyReal && (
+          {!!hasAnyReal && (
             <View style={styles.summaryRow}>
               <Text style={styles.summaryTotal}>{summary.total} Total</Text>
               <View style={styles.summaryChips}>

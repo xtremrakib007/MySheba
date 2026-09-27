@@ -143,7 +143,7 @@ function TxBody({ item, showCost, pinOverride, onGeneratePin, generatingPin }) {
       {!!raw.receiverWalletProvider && <Row label="Wallet Provider" value={raw.receiverWalletProvider} />}
       {!!raw.receiverWalletNumber && <Row label="Wallet Number" value={raw.receiverWalletNumber} />}
       <Row label="Amount" value={txAmount(item.total, currency)} />
-      {showCost && !!(item.cost || item.profit) && (
+      {!!(showCost && !!(item.cost || item.profit)) && (
         <>
           <Row label="Cost" value={txAmount(item.cost, currency)} />
           <Row label="Profit" value={txAmount(item.profit, currency)} />
@@ -171,7 +171,7 @@ function TxBody({ item, showCost, pinOverride, onGeneratePin, generatingPin }) {
       <Row label="Order ID" value={item.id} />
       <Row label="Created" value={formatDate(item.createdAt)} />
       <Row label="Updated" value={formatDate(item.updatedAt)} />
-      {item.rejected && <Row label="Reject reason" value={item.rejectReason} />}
+      {!!item.rejected && <Row label="Reject reason" value={item.rejectReason} />}
       {!!item.receiptUrl && (
         <>
           <Text style={styles.rowLabel}>TRANSFER RECEIPT</Text>

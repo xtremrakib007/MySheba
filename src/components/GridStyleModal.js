@@ -54,7 +54,7 @@ export default function GridStyleModal({ visible, selected, onSelect, onClose })
                       </Text>
                     </View>
                     <View style={[styles.radio, isSelected && styles.radioSelected]}>
-                      {isSelected && <View style={styles.radioDot} />}
+                      {!!isSelected && <View style={styles.radioDot} />}
                     </View>
                   </TouchableOpacity>
                 );

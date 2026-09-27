@@ -332,7 +332,7 @@ export default function UserManagementScreen() {
           <Text style={styles.userName}>{u.name || '—'}</Text>
           <Text style={styles.userPhone}>{u.phone || '—'}{u.userId ? ` · ID ${u.userId}` : ''}</Text>
           <View style={{ flexDirection: 'row', gap: 6, marginTop: 2 }}>
-            {u.suspended && (
+            {!!u.suspended && (
               <View style={styles.suspendedBadge}>
                 <Text style={styles.suspendedBadgeText}>Suspended</Text>
               </View>
@@ -347,22 +347,22 @@ export default function UserManagementScreen() {
                 <Text style={styles.upgradeBtnText}>Upgrade</Text>
               </TouchableOpacity>
             )}
-            {canSetReseller && (
+            {!!canSetReseller && (
               <TouchableOpacity style={styles.downgradeBtn} onPress={() => setResellerAssignTarget(u)}>
                 <Text style={styles.downgradeBtnText}>{u.resellerId ? 'Change Reseller' : 'Set Reseller'}</Text>
               </TouchableOpacity>
             )}
-            {canDowngrade && (
+            {!!canDowngrade && (
               <TouchableOpacity style={styles.downgradeBtn} onPress={() => onDowngrade(u)}>
                 <Text style={styles.downgradeBtnText}>Downgrade</Text>
               </TouchableOpacity>
             )}
-            {canModerate && (
+            {!!canModerate && (
               <TouchableOpacity style={styles.suspendBtn} onPress={() => onToggleSuspend(u)}>
                 <Text style={styles.suspendBtnText}>{u.suspended ? 'Reactivate' : 'Suspend'}</Text>
               </TouchableOpacity>
             )}
-            {canModerate && (
+            {!!canModerate && (
               <TouchableOpacity style={styles.deleteBtn} onPress={() => onDeleteUser(u)}>
                 <Text style={styles.deleteBtnText}>Delete</Text>
               </TouchableOpacity>
@@ -404,7 +404,7 @@ export default function UserManagementScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 8, paddingBottom: 30 }}>
-        {isAdminTier && unassigned.length > 0 && (
+        {!!(isAdminTier && unassigned.length > 0) && (
           <Section
             title="Users Not Under Any Dealer"
             count={filteredUnassigned.length}
@@ -511,7 +511,7 @@ export default function UserManagementScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-            {isAdminTier && newRole === 'customer' && (
+            {!!(isAdminTier && newRole === 'customer') && (
               <>
                 <Text style={styles.modalLabel}>Assign to dealer (optional)</Text>
                 <View style={styles.roleRow}>

@@ -88,7 +88,7 @@ export default function FeatureAccessScreen() {
                       disabled={busyCell === cellId}
                       onPress={() => toggle(feature.key, role, enabled)}
                     >
-                      {enabled && <Text style={styles.checkMark}>✓</Text>}
+                      {!!enabled && <Text style={styles.checkMark}>✓</Text>}
                     </TouchableOpacity>
                   </View>
                 );

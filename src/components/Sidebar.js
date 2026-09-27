@@ -155,11 +155,11 @@ export default function Sidebar() {
             </View>
             <View style={styles.roleRow}>
               <View style={styles.rolePill}><ServiceIcon name={isSuperadmin ? 'kyc' : isAdmin ? 'topup' : 'profile'} size={16} color="#FFFFFF" /><Text style={styles.rolePillText}>{roleLabel}</Text></View>
-              {isSuperadmin && <View style={styles.securePill}><Text style={styles.secureText}>SECURE CONSOLE</Text></View>}
+              {!!isSuperadmin && <View style={styles.securePill}><Text style={styles.secureText}>SECURE CONSOLE</Text></View>}
             </View>
           </LinearGradient>
 
-          {isAdmin && (
+          {!!isAdmin && (
             <View style={styles.consoleBar}>
               <View style={styles.consoleDot} />
               <View style={styles.consoleCopy}>
@@ -192,7 +192,7 @@ export default function Sidebar() {
                           <TouchableOpacity key={`${group.title}-${item.key}`} style={[styles.gridItem, item.featured && styles.featuredItem, active && styles.gridItemActive]} onPress={() => goTo(item.key)} activeOpacity={0.78}>
                             <View style={[styles.itemIconBox, active && styles.itemIconBoxActive]}><ServiceIcon name={item.icon} size={20} color={active ? colors.primary : colors.textSecondary} /></View>
                             <Text style={[styles.gridLabel, active && styles.gridLabelActive]} numberOfLines={2}>{item.label}</Text>
-                            {active && <View style={styles.activeMark} />}
+                            {!!active && <View style={styles.activeMark} />}
                           </TouchableOpacity>
                         );
                       })}
@@ -203,7 +203,7 @@ export default function Sidebar() {
               );
             })}
 
-            {isAdmin && (
+            {!!isAdmin && (
               <View style={styles.protectedCard}>
                 <View style={styles.protectedIcon}><Text>kyc</Text></View>
                 <View style={styles.protectedCopy}><Text style={styles.protectedTitle}>Protected access</Text><Text style={styles.protectedText}>Role and feature permissions remain enforced by the destination screens and backend rules.</Text></View>

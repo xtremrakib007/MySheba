@@ -166,7 +166,7 @@ export default function AddDocumentScreen() {
           </>
         )}
 
-        {saving && (
+        {!!saving && (
           <View style={styles.savingRow}>
             <ActivityIndicator color={colors.primary} />
             <Text style={styles.savingText}>{isEditing ? 'Saving…' : `Uploading… ${Math.round(uploadProgress)}%`}</Text>

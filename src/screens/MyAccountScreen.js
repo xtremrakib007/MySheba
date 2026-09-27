@@ -23,7 +23,7 @@ function Row({ label, value, verified }) {
       <Text style={styles.rowLabel}>{label}</Text>
       <View style={styles.rowValueGroup}>
         <Text style={styles.rowValue}>{value}</Text>
-        {verified && <VerifiedBadge verified size="sm" />}
+        {!!verified && <VerifiedBadge verified size="sm" />}
       </View>
     </View>
   );
@@ -49,7 +49,7 @@ export default function MyAccountScreen() {
       </LinearGradient>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 30 }}>
-        {isCustomer && (
+        {!!isCustomer && (
           <View style={styles.balanceCard}>
             <Text style={styles.balanceLabel}>Wallet Balance</Text>
             <Text style={styles.balanceValue}>{formatWalletAmount(walletBalance, walletCurrency)}</Text>

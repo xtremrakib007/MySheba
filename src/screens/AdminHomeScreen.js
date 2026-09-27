@@ -750,7 +750,7 @@ export default function AdminHomeScreen() {
           </>
         )}
 
-        {viewingSection && (
+        {!!viewingSection && (
         <>
         <View style={styles.sectionHeaderRow}>
           <TouchableOpacity style={styles.backBtn} onPress={() => setViewingSection(false)}>
@@ -869,7 +869,7 @@ export default function AdminHomeScreen() {
                 price to 0 to keep that module free.
               </Text>
             </View>
-            {profile && profile.role === 'superadmin' && (
+            {!!(profile && profile.role === 'superadmin') && (
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>🎭 Role-Based Pricing</Text>
                 <Text style={styles.hintText}>
@@ -888,7 +888,7 @@ export default function AdminHomeScreen() {
                           <Text style={[styles.rateValue, hasOverride && styles.rateValueOverridden]}>
                             {hasOverride ? override : pricing[field.key]}{rolePriceUnitFor(field.key) === '×' ? '×' : ' pts'}{hasOverride ? '' : ' (default)'}
                           </Text>
-                          {hasOverride && (
+                          {!!hasOverride && (
                             <TouchableOpacity onPress={() => resetRolePrice(role, field.key)}>
                               <Text style={styles.resetLink}>Reset</Text>
                             </TouchableOpacity>
@@ -971,7 +971,7 @@ export default function AdminHomeScreen() {
                       <Text>{acc.accountNumber}</Text>
                       <Text style={{ fontSize: 11, color: '#999' }}>{acc.accountHolder}</Text>
                     </View>
-                    {profile && profile.role === 'superadmin' && (
+                    {!!(profile && profile.role === 'superadmin') && (
                       <View style={{ gap: 6 }}>
                         <TouchableOpacity style={styles.editBtn} onPress={() => setBankAccountModal({ visible: true, account: acc })}>
                           <Text style={styles.editBtnText}>Edit</Text>
@@ -984,7 +984,7 @@ export default function AdminHomeScreen() {
                   </View>
                 ))
               )}
-              {profile && profile.role === 'superadmin' && (
+              {!!(profile && profile.role === 'superadmin') && (
                 <TouchableOpacity style={styles.addBannerBtn} onPress={() => setBankAccountModal({ visible: true, account: null })}>
                   <Text style={styles.addBannerBtnText}>+ Add Bank Account</Text>
                 </TouchableOpacity>
@@ -1006,7 +1006,7 @@ export default function AdminHomeScreen() {
                     )}
                   </View>
                   <Text style={styles.rateValue}>{paymentSettings[r.key] || 'Not set'}</Text>
-                  {profile && profile.role === 'superadmin' && (
+                  {!!(profile && profile.role === 'superadmin') && (
                     <TouchableOpacity style={styles.editBtn} onPress={() => setEditPaymentKey(r.key)}>
                       <Text style={styles.editBtnText}>Edit</Text>
                     </TouchableOpacity>
@@ -1026,7 +1026,7 @@ export default function AdminHomeScreen() {
               ) : (
                 <Text style={styles.hintText}>No QR code uploaded yet.</Text>
               )}
-              {profile && profile.role === 'superadmin' && (
+              {!!(profile && profile.role === 'superadmin') && (
                 <TouchableOpacity style={styles.addBannerBtn} onPress={() => setQrModalVisible(true)}>
                   <Text style={styles.addBannerBtnText}>{paymentSettings.duitnowQrUrl ? 'Change QR Code' : '+ Upload QR Code'}</Text>
                 </TouchableOpacity>
@@ -1303,7 +1303,7 @@ export default function AdminHomeScreen() {
               {tx.status === 'completed' && !!tx.pin && (
                 <Text style={styles.txDetail}>🔐 Collection PIN: {tx.pin}</Text>
               )}
-              {tx.status === 'completed' && tx.rejected && (
+              {!!(tx.status === 'completed' && tx.rejected) && (
                 <Text style={[styles.txDetail, { color: colors.error }]}>Rejected: {tx.rejectReason}</Text>
               )}
             </TouchableOpacity>

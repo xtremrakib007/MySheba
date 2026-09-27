@@ -83,7 +83,7 @@ const result = await ImagePicker.launchImageLibraryAsync({
               <TouchableOpacity style={styles.pickBtn} onPress={pickImage}>
                 <Text style={styles.pickBtnText}>📷 Photo</Text>
               </TouchableOpacity>
-              {allowPdf && (
+              {!!allowPdf && (
                 <TouchableOpacity style={styles.pickBtn} onPress={pickPdf}>
                   <Text style={styles.pickBtnText}>📄 PDF</Text>
                 </TouchableOpacity>

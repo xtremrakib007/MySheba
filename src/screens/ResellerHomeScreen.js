@@ -268,7 +268,7 @@ export default function ResellerHomeScreen() {
           </>
         )}
 
-        {viewingSection && (
+        {!!viewingSection && (
         <>
         <View style={styles.sectionHeaderRow}>
           <TouchableOpacity style={styles.backBtn} onPress={() => setViewingSection(false)}>
@@ -366,7 +366,7 @@ export default function ResellerHomeScreen() {
                 {resellerTab === 'completed' && !!tx.pin && (
                   <Text style={styles.txDetail}>🔐 Collection PIN: {tx.pin}</Text>
                 )}
-                {resellerTab === 'completed' && tx.rejected && (
+                {!!(resellerTab === 'completed' && tx.rejected) && (
                   <Text style={[styles.txDetail, { color: colors.error }]}>Rejected: {tx.rejectReason}</Text>
                 )}
               </TouchableOpacity>

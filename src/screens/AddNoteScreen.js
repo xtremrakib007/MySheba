@@ -141,7 +141,7 @@ export default function AddNoteScreen() {
             </TouchableOpacity>
           ))}
         </View>
-        {isEditing && <Text style={styles.typeLockedHint}>Note type can't be changed after creation.</Text>}
+        {!!isEditing && <Text style={styles.typeLockedHint}>Note type can't be changed after creation.</Text>}
 
         {isMoneyNote ? (
           <>
