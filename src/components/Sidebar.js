@@ -166,7 +166,7 @@ export default function Sidebar() {
 
   const goTo = (key) => {
     const always = ['adminHome','adminFeatures','gridManagement'];
-    const gridKey = key === 'salaryDashboard' ? 'salary' : key === 'apiProviderManagement' ? 'apiManagement' : key === 'all' ? 'history' : key;
+    const gridKey = key === 'salaryDashboard' ? 'salary' : key === 'apiProviderManagement' ? 'apiManagement' : key === 'adminSupport' ? 'support' : key === 'all' ? 'history' : key;
     if (!always.includes(key) && gridManagement?.[gridKey] === false) { showAlert('MySheba', 'This feature is currently unavailable.'); return; }
     const required = requiredCapabilityFor(key);
     if (required && !required.some((capability) => can(capability))) { showAlert('MySheba', 'Your account does not have access to this feature.'); return; }
