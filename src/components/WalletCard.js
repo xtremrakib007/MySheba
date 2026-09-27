@@ -34,14 +34,14 @@ export default function WalletCard({ balance = 0, currency = 'MYR', variant = 's
         </TouchableOpacity>
       </View>
 
-      <View style={styles.actions}>
-        <TouchableOpacity style={styles.action} onPress={onAddMoney} accessibilityRole="button" accessibilityLabel="Add money">
+      {(onAddMoney || onTransfer) && <View style={styles.actions}>
+        {!!onAddMoney && <TouchableOpacity style={styles.action} onPress={onAddMoney} accessibilityRole="button" accessibilityLabel="Add money">
           <Text style={styles.actionIcon}>+</Text><Text style={styles.actionText}>Add Money</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.action} onPress={onTransfer} accessibilityRole="button" accessibilityLabel="Transfer">
+        </TouchableOpacity>}
+        {!!onTransfer && <TouchableOpacity style={styles.action} onPress={onTransfer} accessibilityRole="button" accessibilityLabel="Transfer">
           <Text style={styles.actionIcon}>⇄</Text><Text style={styles.actionText}>Transfer</Text>
-        </TouchableOpacity>
-      </View>
+        </TouchableOpacity>}
+      </View>}
     </View>
   );
 }
