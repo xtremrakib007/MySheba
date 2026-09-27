@@ -85,6 +85,11 @@ await check("customer CANNOT read another's document", 'deny', () => getDoc(doc(
 await check('superadmin CANNOT read recharge PINs', 'deny', () => getDoc(doc(as('super1'), 'rechargePins/p1')));
 await check('admin CANNOT write recharge PINs', 'deny', () => setDoc(doc(as('admin1'), 'rechargePins/p2'), { pin: '9' }));
 
+// Superadmin homepage feature-grid visibility: create and update both accept all managed keys.
+await check('superadmin creates grid settings for banners and Recharge PIN', 'allow', () => setDoc(doc(as('super1'), 'settings/gridManagement'), { rechargePin: false, bannerManagement: false, updatedAt: new Date() }));
+await check('superadmin updates ad, salary, and device grid settings', 'allow', () => updateDoc(doc(as('super1'), 'settings/gridManagement'), { adFeatureControls: false, salarySettings: false, trustedDevices: false, updatedAt: new Date() }));
+await check('customer CANNOT change Superadmin grid settings', 'deny', () => updateDoc(doc(as('customer1'), 'settings/gridManagement'), { bannerManagement: true, updatedAt: new Date() }));
+
 // Settings: everyone reads, admin writes, paymentMethods superadmin-only
 await check('customer reads pricing', 'allow', () => getDoc(doc(as('customer1'), 'settings/pricing')));
 await check('admin writes pricing', 'allow', () => setDoc(doc(as('admin1'), 'settings/pricing'), { notepadCost: 2 }, { merge: true }));
