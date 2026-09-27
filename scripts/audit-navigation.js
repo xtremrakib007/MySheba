@@ -220,6 +220,10 @@ check(
   /s\.kind === 'adminTopup'\)\s*\{\s*setAdminTab\('topups'\);\s*setAdminViewingSection\(true\);\s*return setScreen\('adminHome'\);/.test(serviceGridSource)
 );
 
+// ---- 4g. staff tiles must use the matching Grid Management setting ----
+check('staff/home-grid', 'Top-Ups visibility', 'staff Top-Ups tile uses the personal Top-Up setting instead of the request queue setting', /adminTopup:\s*'topups'/.test(serviceGridSource));
+check('staff/home-grid', 'Support Inbox visibility', 'Support Inbox tile bypasses the Support grid setting', /staffSupport:\s*'support'/.test(serviceGridSource));
+
 // ---- 4f. the sidebar must respect capability and managed-grid visibility ----
 const sidebarSource = read('src/components/Sidebar.js');
 check('sidebar/access', 'capability', 'sidebar does not filter items by effective capability', /required && !required\.some\(\(capability\) => can\(capability\)\)/.test(sidebarSource));
