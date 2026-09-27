@@ -27,11 +27,18 @@ const SOURCES = [
   'src/data/countries.js',
 ];
 
-// Keys drawn by a dedicated component rather than the emoji map.
+// Keys drawn by a component rather than taken from the emoji map: the bus
+// partners' brand marks, and the ServiceArt icon set with its aliases.
 const drawn = new Set(
   [...fs.readFileSync(path.join(root, 'src/components/BusOperatorLogo.js'), 'utf8')
     .matchAll(/'(bus-[a-z]+)':/g)].map((m) => m[1]),
 );
+const art = fs.readFileSync(path.join(root, 'src/components/ServiceArt.js'), 'utf8');
+const artBody = art.slice(art.indexOf('const ART = {'), art.indexOf('const ALIASES'));
+for (const m of artBody.matchAll(/^  ([a-zA-Z]+): \(\) => \(<>/gm)) drawn.add(m[1]);
+for (const m of art.slice(art.indexOf('const ALIASES = {')).matchAll(/^  ([a-zA-Z]+): '([a-zA-Z]+)',/gm)) {
+  if (drawn.has(m[2])) drawn.add(m[1]);
+}
 
 const keys = new Map();
 for (const file of SOURCES) {
@@ -55,4 +62,6 @@ if (missing.length) {
   process.exit(1);
 }
 
-console.log(`Tile icon audit: all ${keys.size} tile(s) have artwork (${drawn.size} drawn, rest emoji).`);
+const stillEmoji = [...keys].filter(([key]) => !drawn.has(key)).map(([key]) => key);
+console.log(`Tile icon audit: all ${keys.size} tile(s) have artwork - ${keys.size - stillEmoji.length} drawn, ${stillEmoji.length} still emoji.`);
+if (stillEmoji.length) console.log(`  still emoji: ${stillEmoji.join(', ')}`);

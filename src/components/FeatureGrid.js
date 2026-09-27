@@ -5,6 +5,7 @@ import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import { iconFor, iconRenderFor } from '../theme/iconSets';
 import { serviceColor } from '../theme/serviceColors';
+import ServiceArt, { hasServiceArt } from './ServiceArt';
 
 const GRID_PADDING = 10;
 const COLUMN_GAP = 8;
@@ -79,7 +80,12 @@ export default function FeatureGrid({ title, items, activeKey, onPress, numColum
                   <View style={styles.badge}><Text style={styles.badgeText}>{String(it.badge)}</Text></View>
                 )}
                 <View style={[styles.iconWrap, { backgroundColor: iconBg }, (gridStyle === 'neon' || gridStyle === 'gradient') && styles.iconWrapBright]}>
-                  <Text style={[styles.iconText, { color: tileTint || iconColor, fontSize: 27 * iconRender.scale, fontWeight: iconRender.weight }]}>{iconFor(it.key, iconStyle, it.icon)}</Text>
+                  {/* A drawing when there is one - crisp at any size and the
+                      same on every device - and the emoji only for keys that
+                      have none yet. */}
+                  {hasServiceArt(it.key)
+                    ? <ServiceArt name={it.key} size={28 * iconRender.scale} />
+                    : <Text style={[styles.iconText, { color: tileTint || iconColor, fontSize: 27 * iconRender.scale, fontWeight: iconRender.weight }]}>{iconFor(it.key, iconStyle, it.icon)}</Text>}
                 </View>
                 <Text style={labelStyle} numberOfLines={2}>{String(it.name || '')}</Text>
               </>

@@ -6,6 +6,7 @@ import { useLanguage } from '../i18n/LanguageContext';
 import * as gridManagementService from '../firebase/gridManagementService';
 import { serviceEmoji } from './serviceEmoji';
 import BusOperatorLogo, { hasBusLogo } from './BusOperatorLogo';
+import ServiceArt, { hasServiceArt } from './ServiceArt';
 
 // `home: true` marks the tiles the customer home shows. Everything else is
 // one tap away on the Services tab, which renders this list in full.
@@ -112,12 +113,15 @@ export function Tile({ s, onPress, disabled }) {
   // The reference outlines every card in the one brand colour rather than
   // per service, so nothing here reads serviceColor any more - the emoji
   // carries the colour, and the outline carries the brand.
-  // A bus partner gets its own mark; everything else gets its emoji.
+  // A bus partner gets its own brand mark, anything with a drawing gets
+  // that, and the emoji map is the fallback for whatever is left.
   const artKey = asSafeText(s?.key, icon);
   return <TouchableOpacity style={[styles.item, { borderColor: `${colors.primary}66`, backgroundColor: colors.card }, disabled && styles.itemDisabled]} activeOpacity={0.82} disabled={!!disabled} onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
     {hasBusLogo(artKey)
       ? <View style={styles.logoWrap}><BusOperatorLogo operatorKey={artKey} size={32} /></View>
-      : <Text style={styles.emoji} numberOfLines={1}>{serviceEmoji(artKey)}</Text>}
+      : hasServiceArt(artKey)
+        ? <View style={styles.logoWrap}><ServiceArt name={artKey} size={32} /></View>
+        : <Text style={styles.emoji} numberOfLines={1}>{serviceEmoji(artKey)}</Text>}
     <Text style={[styles.name, { color: colors.text || '#222' }]} numberOfLines={2}>{label}</Text>
   </TouchableOpacity>;
 }
