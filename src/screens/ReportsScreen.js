@@ -286,6 +286,44 @@ function AdminReports({ dealerTxs, inquiries, topups }) {
   );
 }
 
+function ResellerReports({ resellerTxs }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+  const pending = resellerTxs.filter((t) => t.status === 'pending' && !t.rejected).length;
+  const processing = resellerTxs.filter((t) => t.status === 'processing').length;
+  const completed = resellerTxs.filter((t) => t.status === 'completed' && !t.rejected);
+  const rejected = resellerTxs.filter((t) => t.rejected || t.status === 'rejected').length;
+  const completedValue = completed.reduce((sum, t) => sum + Number(t.total || 0), 0);
+  const breakdown = useMemo(() => groupByService(resellerTxs), [resellerTxs]);
+
+  return (
+    <>
+      <View style={styles.statsGrid}>
+        <StatCard label="Pending" value={pending} color={colors.warning} />
+        <StatCard label="Processing" value={processing} color={colors.primary} />
+        <StatCard label="Completed" value={completed.length} color={colors.success} />
+        <StatCard label="Rejected" value={rejected} color={colors.error} />
+      </View>
+      <Text style={styles.sectionTitle}>Reseller Summary</Text>
+      <View style={styles.card}>
+        <View style={styles.breakdownRow}>
+          <Text style={styles.breakdownLabel}>Completed transaction value</Text>
+          <Text style={styles.breakdownAmount}>MYR {fmt(completedValue)}</Text>
+        </View>
+      </View>
+      <Text style={styles.sectionTitle}>By Service</Text>
+      <View style={styles.card}>
+        {breakdown.length === 0 ? <Text style={styles.emptyText}>No reseller transactions yet.</Text> : breakdown.map((item, index) => (
+          <React.Fragment key={item.label}>
+            {index > 0 && <View style={styles.divider} />}
+            <BreakdownRow label={item.label} count={item.count} amount={item.amount} />
+          </React.Fragment>
+        ))}
+      </View>
+    </>
+  );
+}
+
 function FinanceReports({ transactions, topups }) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
@@ -398,7 +436,7 @@ function SupportReports({ inquiries }) {
 export default function ReportsScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { goBackOrHome, authUser, profile, dealerTxs, inquiries, topups } = useApp();
+  const { goBackOrHome, authUser, profile, dealerTxs, resellerTxs, inquiries, topups, can } = useApp();
   const role = profile ? profile.role : 'customer';
 
   return (
@@ -411,11 +449,18 @@ export default function ReportsScreen() {
         <Text style={styles.headerTitle}>Reports</Text>
       </LinearGradient>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 30 }}>
-        {role === 'dealer' && <DealerReports dealerTxs={dealerTxs} />}
-        {(role === 'admin' || role === 'superadmin') && <AdminReports dealerTxs={dealerTxs} inquiries={inquiries} topups={topups} />}
-        {role === 'finance' && <FinanceReports transactions={dealerTxs} topups={topups} />}
-        {role === 'support' && <SupportReports inquiries={inquiries} />}
-        {role === 'customer' && <CustomerReports authUser={authUser} />}
+        {['admin', 'superadmin', 'support', 'finance'].includes(role) && !can('reports') ? (
+          <View style={styles.card}><Text style={styles.emptyText}>Reports access is not enabled for your account. Contact your Superadmin.</Text></View>
+        ) : (
+          <>
+            {role === 'dealer' && <DealerReports dealerTxs={dealerTxs} />}
+            {role === 'reseller' && <ResellerReports resellerTxs={resellerTxs} />}
+            {(role === 'admin' || role === 'superadmin') && <AdminReports dealerTxs={dealerTxs} inquiries={inquiries} topups={topups} />}
+            {role === 'finance' && <FinanceReports transactions={dealerTxs} topups={topups} />}
+            {role === 'support' && <SupportReports inquiries={inquiries} />}
+            {role === 'customer' && <CustomerReports authUser={authUser} />}
+          </>
+        )}
       </ScrollView>
     </View>
   );
