@@ -19,6 +19,7 @@
     "audit:context": "node scripts/audit-context-usage.js",
     "audit:jsx": "node scripts/audit-jsx-escapes.js",
     "audit:icons": "node scripts/audit-tile-icons.js",
+    "audit:tiles": "node scripts/audit-tile-destinations.js",
     "test:auth": "node scripts/test-profile-gate.js",
     "publish:ota": "node scripts/publish-ota.js",
     "test:otp": "node scripts/test-otp-challenge.js",
