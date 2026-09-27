@@ -13,7 +13,7 @@ import ServiceIcon from './ServiceIcon';
 const APP_VERSION = (Constants.expoConfig?.version || '1.0.0').split('.').slice(0, 3).join('.');
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DRAWER_WIDTH = Math.min(360, SCREEN_WIDTH * 0.9);
-const ROLE_LABEL = { customer: 'Customer', dealer: 'Dealer', reseller: 'Reseller', admin: 'Admin', superadmin: 'Super Admin' };
+const ROLE_LABEL = { customer: 'Customer', dealer: 'Dealer', reseller: 'Reseller', support: 'Support Agent', finance: 'Finance', admin: 'Admin', superadmin: 'Super Admin' };
 
 const COMMON_GROUPS = [
   { title: 'Account', icon: 'profile', color: 'secondary', items: [
