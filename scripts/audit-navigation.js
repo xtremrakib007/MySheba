@@ -184,6 +184,20 @@ const pickerReferenced = /\bDateTimePicker\b/.test(sharedUi);
 const pickerImported = /import\s+DateTimePicker\s+from\s+['"][^'"]+['"]/.test(sharedUi);
 check('shared-ui', 'DateTimePicker', 'referenced without an import', !pickerReferenced || pickerImported);
 
+// ---- 4e. staff service shortcuts must land on the correct operational tab ----
+const serviceGridSource = read('src/components/ServiceGrid.js');
+check(
+  'staff/home-grid',
+  'topup',
+  'Top-Ups tile routes to the request review queue, not self top-up',
+  /s\.kind === 'adminTopup'\)\s*\{\s*setAdminTab\('topups'\);\s*setAdminViewingSection\(true\);\s*return setScreen\('adminHome'\);/.test(serviceGridSource)
+);
+
+// ---- 4f. the sidebar must respect capability and managed-grid visibility ----
+const sidebarSource = read('src/components/Sidebar.js');
+check('sidebar/access', 'capability', 'sidebar does not filter items by effective capability', /required && !required\.some\(\(capability\) => can\(capability\)\)/.test(sidebarSource));
+check('sidebar/access', 'grid-management', 'sidebar does not hide disabled managed-grid items', /gridManagement\?\.\[gridKey\] === false/.test(sidebarSource));
+
 // ---- 5. customer tiles: every kind has a branch, or falls through to a service flow ----
 const grid = read('src/components/ServiceGrid.js');
 const handledKinds = new Set(matches(grid, /s\.kind === '([a-zA-Z]+)'/g));
