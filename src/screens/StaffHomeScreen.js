@@ -6,6 +6,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { radius, shadows } from '../theme/theme';
 import BannerSlider from '../components/BannerSlider';
 import ServiceGrid from '../components/ServiceGrid';
+import AccountToolsGrid from '../components/AccountToolsGrid';
 import HeaderDecor from '../components/HeaderDecor';
 
 // Home for the staff roles that work a queue rather than a wallet: Support
@@ -58,6 +59,7 @@ export default function StaffHomeScreen() {
 
         <BannerSlider />
         <ServiceGrid />
+        <AccountToolsGrid />
       </ScrollView>
     </View>
   );
