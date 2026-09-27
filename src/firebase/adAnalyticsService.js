@@ -268,6 +268,53 @@ export async function getAdvertiserPerformance(filterKey, customRange) {
   });
 }
 
+/**
+ * One advertiser's totals, for AdvertiserDetailScreen.
+ *
+ * The screen has always called this and getAdvertiserCampaignPerformance
+ * below, and neither existed. Both calls sit inside a Promise.all with a
+ * .catch() fallback, which does not help: `undefined(...)` throws a
+ * TypeError synchronously, before any promise is created, so the .catch is
+ * never reached and the whole screen went down with it.
+ *
+ * Built on getAdvertiserPerformance, which already returns exactly the
+ * fields the summary cards read.
+ */
+export async function getAdvertiserSummary(advertiserId, filterKey, customRange) {
+  const empty = { impressions: 0, clicks: 0, ctr: 0, revenue: 0 };
+  if (!advertiserId) return empty;
+  const rows = await getAdvertiserPerformance(filterKey, customRange);
+  const row = rows.find((r) => r.advertiserId === advertiserId);
+  if (!row) return empty;
+  return { impressions: row.impressions, clicks: row.clicks, ctr: row.ctr, revenue: row.revenue };
+}
+
+/**
+ * That advertiser's campaigns only.
+ *
+ * getCampaignPerformance covers every advertiser and its rows carry no
+ * advertiserId, so it cannot be filtered after the fact. The daily stats
+ * underneath carry both ids, so this groups the same way from there.
+ */
+export async function getAdvertiserCampaignPerformance(advertiserId, filterKey, customRange) {
+  if (!advertiserId) return [];
+  const { startKey, endKey } = resolveDateRange(filterKey, Date.now(), customRange);
+  const dailyStats = await getDailyStatsInRange(startKey, endKey);
+  const mine = dailyStats.filter((r) => r.advertiserId === advertiserId && r.campaignId);
+  const grouped = aggregateBy(mine, (r) => r.campaignId);
+  if (grouped.length === 0) return [];
+
+  const campaigns = await Promise.all(grouped.map((g) => getDocById(AD_COLLECTIONS.CAMPAIGNS, g.key)));
+  return grouped.map((g, i) => ({
+    campaignId: g.key,
+    name: campaigns[i]?.name || g.key,
+    status: campaigns[i] ? getEffectiveAdStatus(campaigns[i]) : null,
+    impressions: g.impressions,
+    clicks: g.clicks,
+    ctr: g.ctr,
+  }));
+}
+
 async function getPaidRevenueForAdvertiser(advertiserId) {
   const paid = await getAllDocs(
     AD_COLLECTIONS.PAYMENTS,
