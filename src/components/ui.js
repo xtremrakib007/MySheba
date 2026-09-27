@@ -26,7 +26,7 @@ function dateKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 function dateFromKey(value) {
-  if (!value || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return null;
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
   const [year, month, day] = value.split('-').map(Number);
   const date = new Date(year, month - 1, day);
   return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day ? date : null;
@@ -160,7 +160,7 @@ export function TimeField({ placeholder, value, onChange }) {
 }
 function parseDisplayTime(str) {
   if (!str) return null;
-  const match = /^(\\d{1,2}):(\\d{2})\\s*(AM|PM)$/i.exec(str.trim());
+  const match = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(str.trim());
   if (!match) return null;
   let hours = Number(match[1]);
   const minutes = Number(match[2]);
