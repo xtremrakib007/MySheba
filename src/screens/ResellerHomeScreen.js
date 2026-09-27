@@ -6,6 +6,7 @@ import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
 import { useTheme } from "../theme/ThemeContext";
 import ServiceGrid from '../components/ServiceGrid';
+import AccountToolsGrid from '../components/AccountToolsGrid';
 import BannerSlider from '../components/BannerSlider';
 import CopyButton from '../components/CopyButton';
 import TransactionDetailModal from '../components/TransactionDetailModal';
@@ -265,6 +266,7 @@ export default function ResellerHomeScreen() {
                 { key: 'resellerFeaturesTile', icon: '🛠️', bg: '#EDE7F6', accent: '#5E35B1', name: 'Reseller Features', onPress: () => setScreen('resellerFeatures') },
               ]}
             />
+            <AccountToolsGrid />
           </>
         )}
 
