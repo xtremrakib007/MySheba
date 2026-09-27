@@ -16,11 +16,13 @@ const ITEMS = [
 ];
 
 export default function AccountToolsGrid() {
-  const { setScreen, gridManagement } = useApp();
+  const { setScreen, gridManagement, profile, can } = useApp();
   const GRID_KEY_FOR = { salaryDashboard: 'salary' };
-  const items = ITEMS.filter((item) =>
-    gridManagementService.isGridActive(gridManagement, GRID_KEY_FOR[item.key] || item.key)
-  );
+  const items = ITEMS.filter((item) => {
+    if (!gridManagementService.isGridActive(gridManagement, GRID_KEY_FOR[item.key] || item.key)) return false;
+    if (item.key === 'reports' && ['admin', 'superadmin', 'support', 'finance'].includes(profile?.role) && !can('reports')) return false;
+    return true;
+  });
   if (!items.length) return null;
   return <FeatureGrid title="Account & Tools" items={items} onPress={setScreen} />;
 }
