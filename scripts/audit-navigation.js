@@ -133,6 +133,10 @@ check(
 const reportsScreen = read('src/screens/ReportsScreen.js');
 check('reports/support', 'support', 'Reports screen has no Support Agent renderer', /role === 'support'\s*&&\s*<SupportReports/.test(reportsScreen));
 check('reports/finance', 'finance', 'Reports screen has no Finance renderer', /role === 'finance'\s*&&\s*<FinanceReports/.test(reportsScreen));
+check('reports/reseller', 'reseller', 'Reports screen has no Reseller renderer', /role === 'reseller'\s*&&\s*<ResellerReports/.test(reportsScreen));
+check('reports/access', 'staff', 'Reports screen does not enforce staff reports capability', /\['admin', 'superadmin', 'support', 'finance'\]\.includes\(role\)\s*&&\s*!can\('reports'\)/.test(reportsScreen));
+const accountGridSource = read('src/components/AccountToolsGrid.js');
+check('account/home-grid', 'reports', 'staff Reports tile ignores capability revocation', /item\.key === 'reports'[\s\S]*?\['admin', 'superadmin', 'support', 'finance'\]\.includes\(profile\?\.role\)[\s\S]*?!can\('reports'\)/.test(accountGridSource));
 
 // ---- 3. dealer + reseller dashboards ----
 for (const key of arrayKeys(read('src/screens/DealerFeaturesScreen.js'), 'DASHBOARD_TOOL_DEFS')) {
