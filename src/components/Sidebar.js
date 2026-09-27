@@ -118,7 +118,8 @@ export default function Sidebar() {
 
   const goTo = (key) => {
     const always = ['adminHome','adminFeatures','gridManagement'];
-    if (!always.includes(key) && gridManagement?.[key] === false) { showAlert('MySheba', 'This feature is currently unavailable.'); return; }
+    const gridKey = key === 'salaryDashboard' ? 'salary' : key === 'apiProviderManagement' ? 'apiManagement' : key;
+    if (!always.includes(key) && gridManagement?.[gridKey] === false) { showAlert('MySheba', 'This feature is currently unavailable.'); return; }
 
     // These entries are tabs inside AdminHomeScreen, not standalone screens.
     // Sending them to setScreen(key) rendered no screen for keys such as
