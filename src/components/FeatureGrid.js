@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { radius } from '../theme/theme';
@@ -9,9 +9,18 @@ import ServiceArt, { hasServiceArt } from './ServiceArt';
 
 const GRID_PADDING = 10;
 const COLUMN_GAP = 8;
+// Only a first guess, for the frame before onLayout reports the real width.
+// It used to be the actual number, measured off the window - which ignored
+// every inset between the window and the row. On the admin landing that is
+// the page's own padding (14 each side), the canvas margin (4) and the row
+// padding (10): 56px the window does not know about. Tiles sized for
+// SCREEN-20 could not fit four across in SCREEN-56, so the fourth wrapped
+// and every row rendered three tiles and a hole. Measuring the row is the
+// only thing that survives a parent changing its padding, a tablet, a
+// rotation or split screen.
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const CONTAINER_WIDTH = Math.min(SCREEN_WIDTH, 480) - GRID_PADDING * 2;
-function itemWidth(numColumns) { return (CONTAINER_WIDTH - COLUMN_GAP * (numColumns - 1)) / numColumns; }
+const FALLBACK_WIDTH = Math.min(SCREEN_WIDTH, 480) - GRID_PADDING * 2;
+function itemWidth(available, numColumns) { return (available - COLUMN_GAP * (numColumns - 1)) / numColumns; }
 function isLight(colors) { return colors && colors.bg === '#FFFFFF'; }
 function luminance(hex) {
   const raw = String(hex || '').replace('#', '');
@@ -35,7 +44,13 @@ function gridCanvas(gridStyle, colors, isDark) {
 export default function FeatureGrid({ title, items, activeKey, onPress, numColumns = 4 }) {
   const { colors, isDark, gridStyle, iconStyle } = useTheme();
   const styles = createStyles(colors);
-  const width = itemWidth(numColumns);
+  const [rowWidth, setRowWidth] = useState(0);
+  const width = itemWidth(rowWidth || FALLBACK_WIDTH, numColumns);
+  // layout.width includes the row's own padding; the tiles sit inside it.
+  const measure = (e) => {
+    const inner = e.nativeEvent.layout.width - GRID_PADDING * 2;
+    if (inner > 0 && Math.abs(inner - rowWidth) > 0.5) setRowWidth(inner);
+  };
   const gradientColors = [colors.primary, colors.secondary];
   const gradientText = contrastText(gradientColors[0]);
   const iconRender = iconRenderFor(iconStyle);
@@ -48,7 +63,7 @@ export default function FeatureGrid({ title, items, activeKey, onPress, numColum
     <View>
       {!!title && <View style={styles.sectionHead}><Text style={styles.sectionTitle}>{title}</Text></View>}
       <View style={[styles.gridCanvas, { backgroundColor: gridCanvas(gridStyle, colors, isDark) }, gridStyle === 'minimal' && styles.gridCanvasMinimal]}>
-        <View style={styles.grid}>
+        <View style={styles.grid} onLayout={measure}>
           {items.map((it, index) => {
             const active = it.key === activeKey;
             const bento = gridStyle === 'bento' && index % 6 === 0;

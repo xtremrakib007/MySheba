@@ -345,6 +345,121 @@ const ART = {
     {p('M24 6l3.6 9.4L37 19l-9.4 3.6L24 32l-3.6-9.4L11 19l9.4-3.6L24 6z', C.gold)}
     {p('M37 30l1.8 4.7L43.5 36.5l-4.7 1.8L37 43l-1.8-4.7L30.5 36.5l4.7-1.8L37 30z', C.goldLight)}
   </>),
+
+  // ---- sidebar menu ----
+  // The sidebar had 37 rows sharing 12 icons - seven different rows drew the
+  // same clock, six the same person - so the menu was hard to scan. These
+  // give the rows that were doubling up something of their own.
+
+  settings: () => (<>
+    {r(21.5, 4, 5, 8, C.blue, 1.5)}
+    {r(21.5, 36, 5, 8, C.blue, 1.5)}
+    {r(4, 21.5, 8, 5, C.blue, 1.5)}
+    {r(36, 21.5, 8, 5, C.blue, 1.5)}
+    {c(24, 24, 13, C.blue)}
+    {c(24, 24, 5.5, C.white)}
+  </>),
+
+  adminHome: () => (<>
+    {r(6, 6, 16, 16, C.blue, 2.5)}
+    {r(26, 6, 16, 10, C.blueLight, 2.5)}
+    {r(26, 20, 16, 22, C.green, 2.5)}
+    {r(6, 26, 16, 16, C.gold, 2.5)}
+  </>),
+
+  rates: () => (<>
+    {c(24, 24, 18, C.greenLight)}
+    {stroke('M13 19h18m-6-6 6 6-6 6', C.green, 3)}
+    {stroke('M35 30H17m6-6-6 6 6 6', C.blueDark, 3)}
+  </>),
+
+  payments: () => (<>
+    {r(5, 12, 38, 24, C.blue, 3)}
+    {r(5, 18, 38, 5, C.navy)}
+    {r(10, 28, 12, 3.5, C.blueLight, 1.5)}
+    {c(35, 31, 7, C.green)}
+    {stroke('M32 31l2.5 2.5 4.5-4.5', C.white, 2.6)}
+  </>),
+
+  adFeatureControls: () => (<>
+    {c(24, 24, 18, C.bluePale)}
+    {stroke('M12 17h24M12 24h24M12 31h24', C.navy, 2.6)}
+    {c(19, 17, 4, C.blue)}
+    {c(30, 24, 4, C.green)}
+    {c(24, 31, 4, C.gold)}
+  </>),
+
+  trustedDevices: () => (<>
+    {r(13, 4, 22, 40, C.navy, 4)}
+    {r(16, 9, 16, 24, C.bluePale, 2)}
+    {c(24, 39, 2.5, C.blueLight)}
+    {p('M24 14l8 3v6c0 5-4 8.5-8 10-4-1.5-8-5-8-10v-6l8-3z', C.green)}
+    {stroke('M21 23l2.5 2.5 5-5', C.white, 2.4)}
+  </>),
+
+  tierPromotions: () => (<>
+    {p('M16 4h16l-4 13h-8L16 4z', C.blueLight)}
+    {c(24, 31, 12, C.gold)}
+    {c(24, 31, 8.5, C.goldLight)}
+    {p('M24 25.5l2 4.2 4.6.7-3.3 3.2.8 4.6-4.1-2.2-4.1 2.2.8-4.6-3.3-3.2 4.6-.7 2-4.2z', C.navy)}
+  </>),
+
+  superAdminTopup: () => (<>
+    {r(5, 12, 38, 26, C.blue, 4)}
+    {r(5, 12, 38, 7, C.blueDark, 4)}
+    {c(34, 28, 8, C.gold)}
+    {stroke('M34 24v8M30 28h8', C.white, 3)}
+  </>),
+
+  adAnalytics: () => (<>
+    {r(6, 9, 36, 31, C.bluePale, 3)}
+    {r(12, 26, 5, 9, C.blue, 1.2)}
+    {r(21, 20, 5, 15, C.green, 1.2)}
+    {r(30, 15, 5, 20, C.gold, 1.2)}
+    {c(37, 12, 7, C.purple)}
+    {p('M33.5 12l5-2.5v5l-5-2.5z', C.white)}
+  </>),
+
+  advertiserManagement: () => (<>
+    {c(24, 24, 18, C.purpleLight)}
+    {p('M13 21l15-7v20l-15-7v-6z', C.purple)}
+    {r(9, 21, 4, 6, C.navy, 1)}
+    {stroke('M32 18c3 3 3 9 0 12', C.purple, 2.8)}
+  </>),
+
+  adPackagesManagement: () => (<>
+    {p('M24 6l17 8-17 8-17-8 17-8z', C.blueLight)}
+    {p('M7 14v20l17 8V22L7 14z', C.blue)}
+    {p('M41 14v20l-17 8V22l17-8z', C.blueDark)}
+  </>),
+
+  adPaymentsManagement: () => (<>
+    {r(5, 13, 38, 23, C.purple, 3)}
+    {r(5, 19, 38, 5, C.navy)}
+    {r(10, 28, 11, 3.5, C.purpleLight, 1.5)}
+    {c(35, 30, 7, C.gold)}
+    {p('M32 30l5-2.5v5L32 30z', C.navy)}
+  </>),
+
+  salarySettings: () => (<>
+    {r(18.5, 5, 5, 7, C.green, 1.5)}
+    {r(18.5, 29, 5, 7, C.green, 1.5)}
+    {r(4, 18, 7, 5, C.green, 1.5)}
+    {r(31, 18, 7, 5, C.green, 1.5)}
+    {c(21, 20.5, 12, C.green)}
+    {c(21, 20.5, 5, C.white)}
+    {c(35, 34, 9, C.gold)}
+    {c(35, 34, 5.5, C.goldLight)}
+  </>),
+
+  salaryReports: () => (<>
+    {p('M11 5h17l9 9v29a2 2 0 0 1-2 2H11a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z', C.greenLight)}
+    {p('M28 5l9 9h-9V5z', C.green)}
+    {r(14, 31, 4.5, 7, C.green, 1.2)}
+    {r(21.5, 27, 4.5, 11, C.blue, 1.2)}
+    {c(31, 31, 6.5, C.gold)}
+    {c(31, 31, 4, C.goldLight)}
+  </>),
 };
 
 // Keys that mean the same thing to a person, so they get the same drawing.
@@ -366,10 +481,9 @@ const ALIASES = {
   documentsTile: 'documents',
   all: 'history',
   orders: 'history',
-  rates: 'pricing',
-  payments: 'topup',
   staffReports: 'reports',
   staffInquiries: 'inquiries',
+  apiProviderManagement: 'apiManagement',
   operations: 'adminFeatures',
   system: 'adminFeatures',
 };

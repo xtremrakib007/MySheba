@@ -9,77 +9,87 @@ import VerifiedBadge from './VerifiedBadge';
 import Constants from 'expo-constants';
 import { showAlert } from '../utils/appAlert';
 import ServiceIcon from './ServiceIcon';
+// Rows draw from the same set the grids use, so the menu and the grid agree
+// and there are enough icons to give each row its own. Group headers and the
+// role pill stay on ServiceIcon: those sit on a filled colour and want a flat
+// white glyph, not a colour illustration.
+import ServiceArt from './ServiceArt';
 
 const APP_VERSION = (Constants.expoConfig?.version || '1.0.0').split('.').slice(0, 3).join('.');
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DRAWER_WIDTH = Math.min(360, SCREEN_WIDTH * 0.9);
 const ROLE_LABEL = { customer: 'Customer', dealer: 'Dealer', reseller: 'Reseller', admin: 'Admin', superadmin: 'Super Admin' };
 
+// `tab: true` means the key is an AdminHomeScreen tab, not a screen App.js
+// renders. goTo() has to open those through setAdminTab, because passing a
+// tab key straight to setScreen matches no branch in App.js and renders a
+// blank white page - which is what all nine did. audit:nav checks both halves:
+// an unflagged key must be a real screen, a flagged one a real adminTab.
 const COMMON_GROUPS = [
   { title: 'Account', icon: 'profile', color: 'secondary', items: [
     { key: 'profile', icon: 'profile', label: 'Profile' },
-    { key: 'myAccount', icon: 'profile', label: 'My Account' },
+    { key: 'myAccount', icon: 'myAccount', label: 'My Account' },
     { key: 'settings', icon: 'settings', label: 'Settings' },
   ] },
   { title: 'Work & Documents', icon: 'profile', color: 'primary', items: [
-    { key: 'salaryDashboard', icon: 'topup', label: 'Salary & OT' },
-    { key: 'reports', icon: 'history', label: 'Reports' },
-    { key: 'myDocuments', icon: 'profile', label: 'My Documents' },
+    { key: 'salaryDashboard', icon: 'salary', label: 'Salary & OT' },
+    { key: 'reports', icon: 'reports', label: 'Reports' },
+    { key: 'myDocuments', icon: 'myDocuments', label: 'My Documents' },
   ] },
 ];
 
 const ADMIN_GROUPS = [
   { title: 'Admin Overview', icon: 'home', color: 'primary', items: [
-    { key: 'adminHome', icon: 'home', label: 'Control Center', featured: true },
-    { key: 'adminAnalytics', icon: 'history', label: 'Analytics' },
-    { key: 'reports', icon: 'history', label: 'Reports' },
+    { key: 'adminHome', icon: 'adminHome', label: 'Control Center', featured: true },
+    { key: 'adminAnalytics', icon: 'adminAnalytics', label: 'Analytics' },
+    { key: 'reports', icon: 'reports', label: 'Reports' },
   ] },
   { title: 'Operations', icon: 'settings', color: 'secondary', items: [
-    { key: 'all', icon: 'history', label: 'Transactions' },
-    { key: 'pending', icon: 'history', label: 'Pending' },
-    { key: 'inquiries', icon: 'profile', label: 'Inquiries' },
-    { key: 'topups', icon: 'topup', label: 'Top-Ups' },
+    { key: 'all', icon: 'history', label: 'Transactions', tab: true },
+    { key: 'pending', icon: 'pending', label: 'Pending', tab: true },
+    { key: 'inquiries', icon: 'inquiries', label: 'Inquiries', tab: true },
+    { key: 'topups', icon: 'topup', label: 'Top-Ups', tab: true },
     { key: 'support', icon: 'support', label: 'Support' },
   ] },
   { title: 'Finance & Pricing', icon: 'topup', color: 'primary', items: [
-    { key: 'rates', icon: 'remittance', label: 'Rates' },
-    { key: 'pricing', icon: 'billpayment', label: 'Pricing' },
-    { key: 'payments', icon: 'topup', label: 'Payments' },
-    { key: 'transferPoints', icon: 'remittance', label: 'Transfer Points' },
+    { key: 'rates', icon: 'rates', label: 'Rates', tab: true },
+    { key: 'pricing', icon: 'pricing', label: 'Pricing', tab: true },
+    { key: 'payments', icon: 'payments', label: 'Payments', tab: true },
+    { key: 'transferPoints', icon: 'walletTransfer', label: 'Transfer Points' },
       ] },
   { title: 'Users & Verification', icon: 'profile', color: 'secondary', items: [
-    { key: 'userManagement', icon: 'profile', label: 'User Management' },
-    { key: 'verificationManagement', icon: 'kyc', label: 'KYC Verification' },
+    { key: 'userManagement', icon: 'userManagement', label: 'User Management' },
+    { key: 'verificationManagement', icon: 'verificationManagement', label: 'KYC Verification' },
   ] },
   { title: 'Platform', icon: 'more', color: 'primary', items: [
-    { key: 'featureAccess', icon: 'kyc', label: 'Feature Access' },
-    { key: 'banners', icon: 'more', label: 'Banners' },
-    { key: 'announcements', icon: 'support', label: 'Announcements' },
-    { key: 'adFeatureControls', icon: 'more', label: 'Ad Controls' },
+    { key: 'featureAccess', icon: 'featureAccess', label: 'Feature Access' },
+    { key: 'banners', icon: 'banners', label: 'Banners', tab: true },
+    { key: 'announcements', icon: 'announcements', label: 'Announcements', tab: true },
+    { key: 'adFeatureControls', icon: 'adFeatureControls', label: 'Ad Controls' },
   ] },
 ];
 
 const SUPERADMIN_GROUPS = [
   { title: 'Superadmin Governance', icon: 'kyc', color: 'secondary', items: [
-    { key: 'adminFeatures', icon: 'kyc', label: 'System Control', featured: true },
-    { key: 'trustedDevices', icon: 'recharge', label: 'Trusted Devices' },
-    { key: 'featureAccess', icon: 'kyc', label: 'Tool Access' },
-    { key: 'apiProviderManagement', icon: 'internet', label: 'API Providers' },
-    { key: 'tierPromotions', icon: 'more', label: 'Tier Promotions' },
-    { key: 'superAdminTopup', icon: 'topup', label: 'Point Top-Up' },
+    { key: 'adminFeatures', icon: 'adminFeatures', label: 'System Control', featured: true },
+    { key: 'trustedDevices', icon: 'trustedDevices', label: 'Trusted Devices' },
+    { key: 'featureAccess', icon: 'featureAccess', label: 'Tool Access' },
+    { key: 'apiProviderManagement', icon: 'apiProviderManagement', label: 'API Providers' },
+    { key: 'tierPromotions', icon: 'tierPromotions', label: 'Tier Promotions' },
+    { key: 'superAdminTopup', icon: 'superAdminTopup', label: 'Point Top-Up' },
   ] },
   { title: 'Risk & Moderation', icon: 'kyc', color: 'primary', items: [
-    { key: 'verificationManagement', icon: 'kyc', label: 'Verification Queue' },
+    { key: 'verificationManagement', icon: 'verificationManagement', label: 'Verification Queue' },
   ] },
   { title: 'Advertising', icon: 'more', color: 'secondary', items: [
-    { key: 'adAnalytics', icon: 'history', label: 'Ad Analytics' },
-    { key: 'advertiserManagement', icon: 'profile', label: 'Advertisers' },
-    { key: 'adPackagesManagement', icon: 'more', label: 'Ad Packages' },
-    { key: 'adPaymentsManagement', icon: 'topup', label: 'Ad Payments' },
+    { key: 'adAnalytics', icon: 'adAnalytics', label: 'Ad Analytics' },
+    { key: 'advertiserManagement', icon: 'advertiserManagement', label: 'Advertisers' },
+    { key: 'adPackagesManagement', icon: 'adPackagesManagement', label: 'Ad Packages' },
+    { key: 'adPaymentsManagement', icon: 'adPaymentsManagement', label: 'Ad Payments' },
   ] },
   { title: 'Staff & Salary', icon: 'profile', color: 'primary', items: [
-    { key: 'salarySettings', icon: 'settings', label: 'Salary Settings' },
-    { key: 'salaryReports', icon: 'history', label: 'Salary Reports' },
+    { key: 'salarySettings', icon: 'salarySettings', label: 'Salary Settings' },
+    { key: 'salaryReports', icon: 'salaryReports', label: 'Salary Reports' },
   ] },
 ];
 
@@ -92,7 +102,7 @@ function roleGroups(role) {
 export default function Sidebar() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { sidebarVisible, closeSidebar, setScreen, screen, profile, logout, gridManagement } = useApp();
+  const { sidebarVisible, closeSidebar, setScreen, screen, profile, logout, gridManagement, adminTab, adminViewingSection, setAdminTab, setAdminViewingSection } = useApp();
   const translateX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const [collapsed, setCollapsed] = useState({});
@@ -116,10 +126,14 @@ export default function Sidebar() {
 
   if (!sidebarVisible) return null;
 
-  const goTo = (key) => {
+  const goTo = (key, asTab) => {
     const always = ['adminHome','adminFeatures','gridManagement'];
     if (!always.includes(key) && gridManagement?.[key] === false) { showAlert('MySheba', 'This feature is currently unavailable.'); return; }
-    setScreen(key); closeSidebar();
+    closeSidebar();
+    // Same three steps AdminFeaturesScreen's openItem uses for a section:
+    // pick the tab, tell AdminHomeScreen it is showing one, then go there.
+    if (asTab) { setAdminTab(key); setAdminViewingSection(true); setScreen('adminHome'); return; }
+    setScreen(key);
   };
   const toggleGroup = (title) => setCollapsed((prev) => ({ ...prev, [title]: !prev[title] }));
   const onLogout = () => {
@@ -187,10 +201,12 @@ export default function Sidebar() {
                   {!isCollapsed && (
                     <View style={styles.grid}>
                       {group.items.map((item) => {
-                        const active = screen === item.key;
+                        const active = item.tab
+                          ? screen === 'adminHome' && adminViewingSection && adminTab === item.key
+                          : screen === item.key;
                         return (
-                          <TouchableOpacity key={`${group.title}-${item.key}`} style={[styles.gridItem, item.featured && styles.featuredItem, active && styles.gridItemActive]} onPress={() => goTo(item.key)} activeOpacity={0.78}>
-                            <View style={[styles.itemIconBox, active && styles.itemIconBoxActive]}><ServiceIcon name={item.icon} size={20} color={active ? colors.primary : colors.textSecondary} /></View>
+                          <TouchableOpacity key={`${group.title}-${item.key}`} style={[styles.gridItem, item.featured && styles.featuredItem, active && styles.gridItemActive]} onPress={() => goTo(item.key, item.tab)} activeOpacity={0.78}>
+                            <View style={[styles.itemIconBox, active && styles.itemIconBoxActive]}><ServiceArt name={item.icon} size={22} /></View>
                             <Text style={[styles.gridLabel, active && styles.gridLabelActive]} numberOfLines={2}>{item.label}</Text>
                             {!!active && <View style={styles.activeMark} />}
                           </TouchableOpacity>
@@ -218,7 +234,7 @@ export default function Sidebar() {
             </View>
             <Text style={styles.brandVersion}>v{APP_VERSION}</Text>
           </View>
-          <View style={styles.footer}><TouchableOpacity style={styles.logoutRow} onPress={onLogout} activeOpacity={0.8}><View style={styles.logoutIcon}><Text>profile</Text></View><Text style={styles.logoutLabel}>Logout</Text><Text style={styles.logoutArrow}>→</Text></TouchableOpacity></View>
+          <View style={styles.footer}><TouchableOpacity style={styles.logoutRow} onPress={onLogout} activeOpacity={0.8}><View style={styles.logoutIcon}><ServiceIcon name="profile" size={18} color={colors.danger || '#B00020'} /></View><Text style={styles.logoutLabel}>Logout</Text><Text style={styles.logoutArrow}>→</Text></TouchableOpacity></View>
         </Animated.View>
       </View>
     </Modal>

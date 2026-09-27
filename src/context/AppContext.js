@@ -15,6 +15,8 @@ import {
   classifyProfileSnapshot,
   shouldEndSessionForDevice,
 } from "../utils/profileGate";
+import { noteSignOut, flushSignOutTrace } from "../utils/authTrace";
+import { logError } from "../firebase/logService";
 
 import * as authService from "../firebase/authService";
 import {
@@ -842,8 +844,14 @@ export function AppProvider({ children }) {
       screen === 'gridManagement' && role === 'superadmin'
     ) && !gridManagementService.isGridActive(gridManagement, gridKey);
 
+    // No role yet means the profile has not arrived, which is not a denial.
+    // Sending someone to Login for it is indistinguishable from being logged
+    // out, and it happened on any guarded screen during the window before the
+    // profile resolved. Wait instead: the auth listener routes once it knows,
+    // and Firebase reporting no user is the only thing that ends a session.
+    if (!role) return;
     if (roleDenied || gridDenied) {
-      setScreenState(role ? getHomeForRole(role) : 'login');
+      setScreenState(getHomeForRole(role));
     }
   }, [screen, gridManagement, profile?.role, getHomeForRole]);
 
@@ -1125,6 +1133,10 @@ export function AppProvider({ children }) {
       }
 
       if (!user) {
+        // Firebase itself says there is no session. This is the one
+        // legitimate sign-out, but it is also what a persistence failure
+        // looks like, so record which of the two it was.
+        noteSignOut("firebase-no-user", initialRouteDone ? "while running" : "at launch");
         setProfile(null);
         setAppLocked(false);
         setPendingDeviceVerification(null);
@@ -1190,6 +1202,7 @@ export function AppProvider({ children }) {
             if (verdict === "ignore") return;
             if (verdict === "gone") {
               await clearCachedProfile(user.uid);
+              await noteSignOut("profile-gone", "server says users/" + user.uid + " does not exist");
               setProfile(null);
               if (!initialRouteDone) {
                 initialRouteDone = true;
@@ -1245,6 +1258,8 @@ export function AppProvider({ children }) {
                 // stale, so the mismatch below says nothing about another
                 // device having taken over - it only says we never asked.
                 await clearCachedProfile(user.uid);
+                await noteSignOut("device-takeover",
+                  "local=" + String(localSessionId) + " active=" + String(p.activeSessionId));
                 await authService.logout();
                 setProfile(null);
                 screenHistoryRef.current = [];
@@ -1262,6 +1277,13 @@ export function AppProvider({ children }) {
             setProfile(p);
             setAuthError("");
             writeCachedProfile(user.uid, p);
+            // Signed in with a profile, so there is a uid to attach last
+            // time's breadcrumb to. Fire and forget.
+            flushSignOutTrace((entry) => logError(
+              "signedOut:" + entry.reason,
+              new Error(entry.detail || entry.reason),
+              { signedOutAt: entry.at, signedOutReason: entry.reason },
+            )).catch(() => {});
             if (!initialRouteDone) {
               initialRouteDone = true;
               // Restoring a persisted session on app launch - jump straight
@@ -1316,6 +1338,7 @@ export function AppProvider({ children }) {
           if (action === "fatal") {
             clearCachedProfile(user.uid);
             setAuthError(error || "Could not load your profile.");
+            noteSignOut("profile-fatal", error || "profile listener gave up");
             setProfile(null);
             if (!initialRouteDone) {
               initialRouteDone = true;
