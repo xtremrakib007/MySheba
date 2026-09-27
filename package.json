@@ -15,6 +15,7 @@
     "test:api-provider": "node scripts/test-api-provider-service.js",
     "production:check": "node scripts/production-readiness-check.js",
     "test:rules": "node scripts/test-firestore-rules.mjs",
+    "audit:rules": "node scripts/audit-rules-keys.js",
     "audit:repo": "node scripts/audit-repo.js",
     "audit:context": "node scripts/audit-context-usage.js",
     "audit:jsx": "node scripts/audit-jsx-escapes.js",

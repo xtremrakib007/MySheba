@@ -9,7 +9,9 @@ export const GRID_DEFS = [
   ['topup','Top-Up'],['history','Transactions'],['support','Support'],['myAccount','My Account'],['profile','Profile'],
   ['dealerFeatures','Dealer Features'],['resellerFeatures','Reseller Features'],['adminFeatures','Admin Features'],
   ['moreFeaturesTile','More Services'],['walletTransfer','Wallet Transfer'],['myDocuments','My Documents'],
-  ['salary','Salary & OT'],['kyc','Profile & KYC'],['businessProfile','My Business'],
+  // 'My Business' is gone: the tile was removed when its screen turned out
+  // not to exist, so a toggle for it controlled nothing.
+  ['salary','Salary & OT'],['kyc','Profile & KYC'],
   ['fomema','FOMEMA'],['visa','Visa Malaysia'],['mydigital','Malaysia Arrival Card'],['passport','Passport'],
   ['adminAnalytics','Analytics'],['inquiries','Inquiries'],['pending','Pending'],['topups','Top-Ups'],
   ['rates','Rates'],['pricing','Pricing'],['payments','Payments'],['transferPoints','Transfers'],['apiManagement','API Management'],
