@@ -46,13 +46,14 @@ const CAPABILITY_FOR = {
   rates: ['settings'], pricing: ['settings'], payments: ['settings'], categories: ['settings'], banners: ['settings'],
   transferPoints: ['finance'],
   userManagement: ['users'], verificationManagement: ['users'],
-  announcements: ['support'], adFeatureControls: ['settings'],
+  announcements: ['support'], adFeatureControls: ['settings'], bannerManagement: ['settings'],
 };
 
 const SYSTEM = [
   { key: 'featureAccess', icon: '🔐', bg: '#EDE7F6', name: 'Feature Access' },
   { key: 'gridManagement', icon: '🧩', bg: '#E0F7FA', name: 'Grid Management' },
-  { key: 'banners', icon: '🖼️', bg: '#FFF0F0', name: 'Banners' },
+  { key: 'banners', icon: '🖼️', bg: '#FFF0F0', name: 'Home Banners' },
+  { key: 'bannerManagement', icon: '📢', bg: '#E0F7FA', name: 'Ad Banners' },
   { key: 'announcements', icon: '📣', bg: '#E0F7FA', name: 'Announcements' },
   { key: 'adFeatureControls', icon: '🛡️', bg: '#EDE7F6', name: 'Ad Controls' },
   { key: 'apiManagement', icon: '🔌', bg: '#E0F7FA', name: 'API Management' },
@@ -83,7 +84,7 @@ const RECHARGE_RATE_FIELDS = [
 // a tab that does not exist. gridManagement and apiManagement were already
 // special-cased by hand in openItem; folding them in gives one path, so the
 // navigation audit reads a single list instead of chasing special cases.
-const SCREEN_FEATURES = ['adminAnalytics', 'transferPoints', 'userManagement', 'verificationManagement', 'featureAccess', 'gridManagement', 'apiManagement', 'trustedDevices', 'tierPromotions', 'superAdminTopup', 'adFeatureControls', 'adAnalytics', 'advertiserManagement', 'adPackagesManagement', 'adPaymentsManagement', 'salarySettings', 'salaryReports', 'profile', 'myAccount', 'settings', 'reports', 'myDocuments', 'salaryDashboard'];
+const SCREEN_FEATURES = ['adminAnalytics', 'transferPoints', 'userManagement', 'verificationManagement', 'featureAccess', 'gridManagement', 'apiManagement', 'trustedDevices', 'tierPromotions', 'superAdminTopup', 'adFeatureControls', 'adAnalytics', 'advertiserManagement', 'adPackagesManagement', 'adPaymentsManagement', 'bannerManagement', 'salarySettings', 'salaryReports', 'profile', 'myAccount', 'settings', 'reports', 'myDocuments', 'salaryDashboard'];
 // Where the tile key and the screen name differ.
 const SCREEN_FOR = { apiManagement: 'apiProviderManagement' };
 
@@ -100,7 +101,7 @@ export default function AdminFeaturesScreen() {
     const gridKey = item.key === 'all' ? 'history' : item.key;
     if (gridKey === 'gridManagement') return isSuperadmin;
     if (!gridManagementService.isGridActive(gridManagement, gridKey)) return false;
-    if (item.key === 'featureAccess') return isSuperadmin;
+    if (['featureAccess', 'bannerManagement', 'adFeatureControls'].includes(item.key)) return isSuperadmin;
     const need = CAPABILITY_FOR[item.key];
     return need ? need.some((cap) => can(cap)) : isSuperadmin;
   });
