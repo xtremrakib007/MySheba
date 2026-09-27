@@ -20,6 +20,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const LEGACY_KEY = 'mysheba_app_lock_enabled_v1';
 const keyFor = (uid) => `mysheba_app_lock_enabled_v2:${uid}`;
 
+export const DEFAULT_APP_LOCK_ENABLED = true;
+
 export async function getAppLockEnabled(uid) {
   if (!uid) return false;
   try {
@@ -32,7 +34,18 @@ export async function getAppLockEnabled(uid) {
     // for the person who switched it on is the worse of the two mistakes.
     // Inheriting it wrongly only costs them a PIN prompt they can turn off.
     const legacy = await AsyncStorage.getItem(LEGACY_KEY);
-    if (legacy === null) return false;
+    // Never chosen on this device, for this account: on.
+    //
+    // App Lock protects a wallet, a transaction history and other people's
+    // KYC documents, and the app deliberately keeps everyone signed in
+    // until they log out by hand - so an unlocked reopen is the whole
+    // session, not one screen. Defaulting off meant that protection existed
+    // only for whoever went looking for the toggle.
+    //
+    // It only takes effect once the account has a security PIN. Locking an
+    // account that cannot unlock would strand it, so AppContext gates on
+    // profile.securityPinSet - see the launch-lock effect there.
+    if (legacy === null) return DEFAULT_APP_LOCK_ENABLED;
     await AsyncStorage.setItem(keyFor(uid), legacy);
     await AsyncStorage.removeItem(LEGACY_KEY);
     return legacy === '1';

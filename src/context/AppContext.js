@@ -529,9 +529,16 @@ export function AppProvider({ children }) {
   const APP_LOCK_GRACE_MS = 2 * 60 * 1000;
   const backgroundedAtRef = useRef(null);
 
+  // Both of these take a uid - the pref is per account, not per device -
+  // and both were being called without one. getAppLockEnabled returned
+  // false every time and setAppLockEnabledPref saved nothing, so App Lock
+  // read as off on every launch no matter what the Settings toggle said.
+  // Re-read on the account rather than once on mount, for the same reason.
   useEffect(() => {
-    getAppLockEnabled().then(setAppLockEnabledState);
-  }, []);
+    const uid = authUser?.uid;
+    if (!uid) { setAppLockEnabledState(false); return; }
+    getAppLockEnabled(uid).then(setAppLockEnabledState);
+  }, [authUser?.uid]);
 
   const setAppLockEnabled = useCallback(
     async (value) => {
@@ -539,9 +546,9 @@ export function AppProvider({ children }) {
         await requireSecurityPin("App Lock");
       }
       setAppLockEnabledState(value);
-      await setAppLockEnabledPref(value);
+      await setAppLockEnabledPref(authUser?.uid, value);
     },
-    [requireSecurityPin, profile],
+    [requireSecurityPin, profile, authUser],
   );
 
   const unlockApp = useCallback(() => setAppLocked(false), []);
@@ -557,6 +564,7 @@ export function AppProvider({ children }) {
   // straight to a screen instead of asking for a PIN or biometric.
   const authUserRef = useRef(null);
   authUserRef.current = authUser;
+  const canUnlockRef = useRef(false);
   // The profile listener outlives any one render, so it reads the current
   // screen through a ref rather than closing over a stale value.
   const screenRef = useRef(null);
@@ -567,12 +575,19 @@ export function AppProvider({ children }) {
   const signedInThisSessionRef = useRef(false);
   const launchLockDoneRef = useRef(false);
 
+  // A lock nobody can open is worse than no lock. The PIN this gate checks
+  // is the account's security PIN, and biometric unlock cannot be enabled
+  // without one either, so an account with no PIN set is never locked - it
+  // would have nothing to unlock with but "Forgot PIN? Log out".
+  const canUnlock = !!profile?.securityPinSet;
+  canUnlockRef.current = canUnlock;
+
   useEffect(() => {
-    if (!authUser || !appLockEnabled) return;
+    if (!authUser || !appLockEnabled || !canUnlock) return;
     if (launchLockDoneRef.current || signedInThisSessionRef.current) return;
     launchLockDoneRef.current = true;
     setAppLocked(true);
-  }, [authUser, appLockEnabled]);
+  }, [authUser, appLockEnabled, canUnlock]);
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
@@ -595,7 +610,7 @@ export function AppProvider({ children }) {
       // re-locks, and the whole app does too when App Lock is on. Neither
       // touches the session - this is a lock screen, never a sign-out.
       setPrivateVaultUnlocked(false);
-      if (appLockEnabledRef.current && authUserRef.current) setAppLocked(true);
+      if (appLockEnabledRef.current && authUserRef.current && canUnlockRef.current) setAppLocked(true);
     });
     return () => sub.remove();
     // APP_LOCK_GRACE_MS is a module-level constant in all but name.
