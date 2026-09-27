@@ -339,13 +339,6 @@ export function AppProvider({ children }) {
   // ---- Profile navigation state ----
   // These ids are navigation-only; the destination screens load the actual
   // profile documents themselves.
-  const [activeBusinessProfileUid, setActiveBusinessProfileUid] = useState(null);
-  const openBusinessProfile = useCallback((uid) => {
-    if (!uid) return;
-    setActiveBusinessProfileUid(uid);
-    setScreen("businessProfile");
-  }, []);
-
   const [activeContactProfileUid, setActiveContactProfileUid] = useState(null);
   const openContactProfile = useCallback((uid) => {
     if (!uid) return;
