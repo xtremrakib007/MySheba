@@ -120,7 +120,7 @@ export function useServiceAction() {
     if (s.kind === 'myaccount') return setScreen('myAccount');
     if (s.kind === 'profile') return setScreen('profile');
     if (s.kind === 'topup') return setScreen('topup');
-    if (s.kind === 'adminTopup') return setScreen('superAdminTopup');
+    if (s.kind === 'adminTopup') { setAdminTab('topups'); setAdminViewingSection(true); return setScreen('adminHome'); }
     if (s.kind === 'dealerFeatures') return setScreen('dealerFeatures');
     if (s.kind === 'resellerFeatures') return setScreen('resellerFeatures');
     if (s.kind === 'adminFeatures') return setScreen('adminFeatures');
