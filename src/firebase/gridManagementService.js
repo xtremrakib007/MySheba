@@ -13,6 +13,9 @@ export const GRID_DEFS = [
   ['fomema','FOMEMA'],['visa','Visa Malaysia'],['mydigital','Malaysia Arrival Card'],['passport','Passport'],
   ['adminAnalytics','Analytics'],['inquiries','Inquiries'],['pending','Pending'],['topups','Top-Ups'],
   ['rates','Rates'],['pricing','Pricing'],['payments','Payments'],['transferPoints','Transfers'],['apiManagement','API Management'],
+  ['trustedDevices','Trusted Devices'],['tierPromotions','Tier Promotions'],['superAdminTopup','Point Top-Up'],
+  ['adFeatureControls','Ad Controls'],['adAnalytics','Ad Analytics'],['advertiserManagement','Advertisers'],
+  ['adPackagesManagement','Ad Packages'],['adPaymentsManagement','Ad Payments'],['salarySettings','Salary Settings'],['salaryReports','Salary Reports'],
   ['userManagement','Users'],['verificationManagement','KYC Verification'],['featureAccess','Feature Access'],['banners','Home Banners'],['bannerManagement','Ad Banners'],['announcements','Announcements']
 ].map(([key,name]) => ({ key, name }));
 
