@@ -28,6 +28,24 @@ export const billerBrand = {
   TIME: { logo: require('../../assets/billers/time.png'), color: '#EC268F', initials: 'TI' },
   Astro: { logo: require('../../assets/billers/astro.jpg'), color: '#EC008C', initials: 'AS' },
   Maxis: { logo: require('../../assets/billers/maxis.png'), color: '#00A94F', initials: 'MX' },
+
+  // Bangladesh. No assets supplied for these yet, so they show a coloured
+  // initials badge - each in the board's own colour rather than one grey
+  // default, so the list still reads at a glance. Drop a file in
+  // assets/billers and point `logo` at it to switch any of them over.
+  'Palli Bidyut': { logo: null, color: '#1B3A6B', initials: 'PB' },
+  DESCO: { logo: null, color: '#1A4D9C', initials: 'DE' },
+  NESCO: { logo: null, color: '#D6122A', initials: 'NE' },
+  DPDC: { logo: null, color: '#123C7A', initials: 'DP' },
+  BPDB: { logo: null, color: '#0F6E3F', initials: 'BP' },
+  WZPDCL: { logo: null, color: '#14657A', initials: 'WZ' },
+  'Titas Gas': { logo: null, color: '#E8541E', initials: 'TG' },
+  'Karnaphuli Gas': { logo: null, color: '#1C7FC4', initials: 'KG' },
+  'Jalalabad Gas': { logo: null, color: '#D32027', initials: 'JG' },
+  'Sundarban Gas': { logo: null, color: '#28A745', initials: 'SG' },
+  'Bakhrabad Gas': { logo: null, color: '#5B2D8E', initials: 'BG' },
+  'Dhaka WASA': { logo: null, color: '#0072BC', initials: 'DW' },
+  'Amber IT': { logo: null, color: '#C8102E', initials: 'AI' },
 };
 
 /**
@@ -36,5 +54,11 @@ export const billerBrand = {
  * like CelcomDigi, and that logo is already bundled.
  */
 export function getBillerBrand(name) {
-  return billerBrand[name] || getOperatorBrand(name);
+  if (billerBrand[name]) return billerBrand[name];
+  // "DESCO (Prepaid)" and "DESCO (Postpaid)" are separate billers but one
+  // brand, so a trailing qualifier falls back to the name in front of it
+  // rather than to two-letter initials of the same word twice.
+  const base = String(name || '').replace(/\s*\([^)]*\)\s*$/, '').trim();
+  if (base && billerBrand[base]) return billerBrand[base];
+  return getOperatorBrand(base || name);
 }
