@@ -42,6 +42,23 @@ const otpHash = (value) => crypto.createHash('sha256').update(String(value).trim
 const sessionId = () => crypto.randomBytes(24).toString('hex');
 const userRef = (db, uid) => db.collection('users').doc(uid);
 const isStaffRole = (role) => ['admin', 'superadmin', 'dealer', 'reseller'].includes(role);
+
+/**
+ * Does a staff sign-in still need the new-device email/SMS challenge?
+ *
+ * Three ways to be past it: not staff at all, this is already the active
+ * device, or this device is in trustedDevices - which is the record written
+ * once the email/SMS challenge has been passed. Missing the last of those
+ * turned the rule into "one device at a time" and re-challenged a verified
+ * phone every time its owner had last used their laptop.
+ *
+ * Pure, and exported, so the decision can be tested without a transaction.
+ */
+const staffNeedsDeviceChallenge = (profile, deviceId) => (
+  isStaffRole(profile && profile.role)
+  && (profile && profile.activeDeviceId) !== deviceId
+  && !(profile && profile.trustedDevices && profile.trustedDevices[deviceId])
+);
 const isActiveAccount = (profile) => !!profile
   && profile.mergedInto == null
   && profile.suspended !== true
@@ -313,9 +330,24 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: false }, async (request) 
       }
 
       // Staff accounts must not get a password-only first/new-browser login merely
-      // because no activeDeviceId exists yet. A staff browser is trusted only after
-      // the email/SMS verification above (or when it is already the active device).
-      if (isStaffRole(current.role) && current.activeDeviceId !== deviceId) {
+      // because no activeDeviceId exists yet. A staff device is trusted only after
+      // the email/SMS verification above - which is what trustedDevices records -
+      // or when it is already the active device.
+      //
+      // That trustedDevices check used to be missing here, and activeDeviceId is a
+      // single slot, so the rule came out as "one device at a time" rather than "a
+      // device you have verified". A staff member with a phone and a laptop was
+      // challenged on every single switch: the branch at the top of this function
+      // sees the device IS trusted and correctly skips the challenge, which leaves
+      // verifiedNewStaffDevice false, and then this line challenged it anyway. The
+      // code was sent, entered, and the next switch asked again.
+      //
+      // Reaching here with verifiedNewStaffDevice false already implies the device
+      // is trusted - the branch above returns the challenge otherwise - so reading
+      // trustedDevices back is what that branch decided, not a weaker rule. It is
+      // re-read inside the transaction rather than taken from the earlier snapshot
+      // so a revoked device cannot slip through on a stale read.
+      if (staffNeedsDeviceChallenge(current, deviceId)) {
         const email = normalizeEmail(current.email);
         if (!validEmail(email)) throw new HttpsError('failed-precondition', 'This account has no email for new-device verification. Please contact support.');
         tx.update(ref, { pendingDeviceApproval: { deviceId, email, requestedAt: FieldValue.serverTimestamp() } });
