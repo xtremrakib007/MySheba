@@ -109,46 +109,15 @@ export function getDeviceLabel() {
   }
 }
 
-// AppLockScreen awaits this before letting an unlock through. The client
-// half went missing while the callable stayed deployed, so the call
-// resolved to undefined and threw a TypeError the moment someone tried to
-// unlock - not a failed check, a crash.
+// validateActiveSession lived here, and AppLockScreen called it before
+// letting an unlock through. It no longer does: unlocking must never sign
+// anyone out, and a server round-trip at unlock time also made the lock
+// unopenable offline. Single-device enforcement runs at sign-in
+// (checkDeviceSession) and on every live profile update while the app is
+// open (shouldEndSessionForDevice), which is where it belongs.
 //
-// The server throws rather than returning false when the session is no
-// longer the active one, so those cases are caught and reported as invalid;
-// anything else is re-thrown, since a network blip should not silently read
-// as "this session is fine".
-export async function validateActiveSession() {
-  const deviceId = await getDeviceId();
-  const sessionId = await getLocalSessionId();
-  // When the device check was deferred, the local session id is whatever an
-  // earlier login left behind - it was never refreshed, because the sign-in
-  // that should have refreshed it could not reach checkDeviceSession. A
-  // "no" from the server about that id therefore says nothing about this
-  // device, and the reasoning below for a missing id applies just as much
-  // to a stale one: the person has already passed PIN or biometric here.
-  const deferred = await isDeviceCheckDeferred().catch(() => false);
-  if (!sessionId) {
-    // No session id, because the sign-in that should have created one could
-    // not reach checkDeviceSession and was let through anyway. Returning
-    // false here would sign the user out at the lock screen and hand them a
-    // login screen that is just as likely to be unable to reach the server -
-    // turning a degraded state into the lockout that failing open exists to
-    // avoid. They have just passed the PIN or biometric on this device, so
-    // let the unlock through; the next sign-in re-runs the real check.
-    return deferred;
-  }
-  const fn = httpsCallable(functions, 'validateActiveSession');
-  try {
-    const { data } = await fn({ deviceId, sessionId });
-    if (data?.valid === true) return true;
-    return deferred;
-  } catch (error) {
-    const code = String(error?.code || '');
-    if (['functions/failed-precondition', 'functions/permission-denied', 'functions/not-found', 'functions/unauthenticated'].includes(code)) return deferred;
-    throw error;
-  }
-}
+// The callable itself is still deployed and unchanged; nothing in the app
+// calls it now.
 
 export async function listTrustedDevices() {
   const currentDeviceId = await getDeviceId();

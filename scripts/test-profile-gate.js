@@ -132,6 +132,27 @@ is('the launch lock honours it',
 is('the return-from-background lock honours it too',
    /appLockEnabledRef\.current && authUserRef\.current && canUnlockRef\.current/.test(ctx), true);
 
+console.log('\n-- unlocking must never sign anyone out --');
+// Both unlock paths called validateActiveSession on the server and logged
+// the person out when it said no, so reopening the app could end the
+// session of someone who had just passed their own PIN or biometric on
+// their own device. It also made the lock unopenable offline: a network
+// failure is not one of the codes that reads as "invalid", so it was
+// re-thrown into the error line instead of letting them in.
+const lock = fs.readFileSync(path.join(__dirname, '..', 'src', 'components', 'AppLockScreen.js'), 'utf8');
+is('the unlock path does not call logout', /await logout\(\)/.test(lock), false);
+is('no server session check stands between PIN and unlock',
+   /validateActiveSession\(\)/.test(lock), false);
+is('a correct PIN unlocks directly',
+   /verifySecurityPin\(pin\);\s*\n\s*unlockApp\(\);/.test(lock), true);
+is('biometric unlocks directly',
+   /if \(!ok\) return;\s*\n\s*unlockApp\(\);/.test(lock), true);
+is('Forgot PIN is still the one way out', /Forgot PIN\? Log out/.test(lock), true);
+
+const dss = fs.readFileSync(path.join(__dirname, '..', 'src', 'firebase', 'deviceSessionService.js'), 'utf8');
+is('the dead client wrapper is gone',
+   /export async function validateActiveSession/.test(dss), false);
+
 console.log('\n-- a signed-in person must never be stranded on Login --');
 // The watchdog clears authLoading after 8s with no profile, the hard auth
 // boundary then routes to Login, and the profile arriving afterwards used
