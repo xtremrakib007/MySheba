@@ -103,23 +103,25 @@ export default function Sidebar() {
     .map((group) => ({ ...group, items: group.items.filter((item) => {
       const gridKey = item.key === 'salaryDashboard' ? 'salary' : item.key === 'apiProviderManagement' ? 'apiManagement' : item.key === 'all' ? 'history' : item.key;
       if (!['adminHome', 'adminFeatures', 'gridManagement'].includes(item.key) && gridManagement?.[gridKey] === false) return false;
-      const required = {
-        adminAnalytics: ['reports'],
-        reports: ['reports'],
-        all: ['orders', 'finance'],
-        pending: ['orders'],
-        inquiries: ['support'],
-        topups: ['finance'],
-        support: ['support'],
-        rates: ['settings'],
-        pricing: ['settings'],
-        payments: ['settings'],
-        transferPoints: ['finance'],
-        userManagement: ['users'],
-        verificationManagement: ['users'],
-        banners: ['settings'],
-        announcements: ['support'],
-      }[item.key];
+      const required = item.key === 'reports' && !['admin', 'superadmin', 'support', 'finance'].includes(profile?.role)
+        ? null
+        : {
+          adminAnalytics: ['reports'],
+          reports: ['reports'],
+          all: ['orders', 'finance'],
+          pending: ['orders'],
+          inquiries: ['support'],
+          topups: ['finance'],
+          support: ['support'],
+          rates: ['settings'],
+          pricing: ['settings'],
+          payments: ['settings'],
+          transferPoints: ['finance'],
+          userManagement: ['users'],
+          verificationManagement: ['users'],
+          banners: ['settings'],
+          announcements: ['support'],
+        }[item.key];
       if (required && !required.some((capability) => can(capability))) return false;
       return true;
     }) }))
@@ -140,13 +142,16 @@ export default function Sidebar() {
 
   if (!sidebarVisible) return null;
 
-  const requiredCapabilityFor = (key) => ({
-    adminAnalytics: ['reports'], reports: ['reports'], all: ['orders', 'finance'],
-    pending: ['orders'], inquiries: ['support'], topups: ['finance'], support: ['support'],
-    rates: ['settings'], pricing: ['settings'], payments: ['settings'],
-    transferPoints: ['finance'], userManagement: ['users'], verificationManagement: ['users'],
-    banners: ['settings'], announcements: ['support'],
-  })[key];
+  const requiredCapabilityFor = (key) => {
+    if (key === 'reports' && !['admin', 'superadmin', 'support', 'finance'].includes(profile?.role)) return null;
+    return ({
+      adminAnalytics: ['reports'], reports: ['reports'], all: ['orders', 'finance'],
+      pending: ['orders'], inquiries: ['support'], topups: ['finance'], support: ['support'],
+      rates: ['settings'], pricing: ['settings'], payments: ['settings'],
+      transferPoints: ['finance'], userManagement: ['users'], verificationManagement: ['users'],
+      banners: ['settings'], announcements: ['support'],
+    })[key];
+  };
 
   const goTo = (key) => {
     const always = ['adminHome','adminFeatures','gridManagement'];
