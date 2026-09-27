@@ -28,6 +28,40 @@ export const billerBrand = {
   TIME: { logo: require('../../assets/billers/time.png'), color: '#EC268F', initials: 'TI' },
   Astro: { logo: require('../../assets/billers/astro.jpg'), color: '#EC008C', initials: 'AS' },
   Maxis: { logo: require('../../assets/billers/maxis.png'), color: '#00A94F', initials: 'MX' },
+  'Telekom Malaysia (TM)': { logo: null, color: '#00539F', initials: 'TM' },
+  // Malaysia - the state water boards and the two east-Malaysian grids
+  'Sabah Electricity (SESB)': { logo: null, color: '#E01F26', initials: 'SB' },
+  'Sarawak Energy (SESCO)': { logo: null, color: '#0F8A4C', initials: 'SC' },
+  'SAJ Ranhill Air Johor': { logo: null, color: '#00833E', initials: 'SJ' },
+  'Syarikat Air Melaka (SAMB)': { logo: null, color: '#0057A8', initials: 'SM' },
+  'Kuching Water Board': { logo: null, color: '#0E7C86', initials: 'KW' },
+  'Syarikat Air Darul Aman (SADA)': { logo: null, color: '#1C6FB8', initials: 'SD' },
+  'Syarikat Air Terengganu (SATU)': { logo: null, color: '#143C8C', initials: 'TG' },
+  'Syarikat Air Negeri Sembilan (SAINS)': { logo: null, color: '#E8821E', initials: 'SN' },
+  'Air Kelantan': { logo: null, color: '#0B7A3B', initials: 'AK' },
+  'Sibu Water Board': { logo: null, color: '#1CA8C4', initials: 'SW' },
+  'Syarikat Air Perlis (SAP)': { logo: null, color: '#1E63A8', initials: 'SP' },
+  'Air Pahang (PAIP)': { logo: null, color: '#1878BE', initials: 'PA' },
+
+  // Nepal
+  NEA: { logo: null, color: '#14479B', initials: 'NE' },
+  'Nepal Water Supply': { logo: null, color: '#1B72B8', initials: 'NW' },
+  Khanepani: { logo: null, color: '#0E6BA8', initials: 'KP' },
+  Vianet: { logo: null, color: '#E21B23', initials: 'VN' },
+  'Sky Internet': { logo: null, color: '#1B9CD8', initials: 'SI' },
+  'Sky TV': { logo: null, color: '#2B3A8C', initials: 'SV' },
+  Websurfer: { logo: null, color: '#F07C22', initials: 'WS' },
+  Arrownet: { logo: null, color: '#E4572E', initials: 'AN' },
+  'Dish Home': { logo: null, color: '#D6202A', initials: 'DH' },
+  'Sim TV': { logo: null, color: '#2E9E4B', initials: 'ST' },
+  'Mero TV': { logo: null, color: '#1D4E9C', initials: 'MT' },
+
+  // Indonesia and the Philippines. One entry each covers every denomination,
+  // because getBillerBrand falls back to the longest known name the biller
+  // starts with - "PLN Meter 50000 IDR" is still PLN.
+  PLN: { logo: null, color: '#1B7FC4', initials: 'PL' },
+  'BPJS Insurance': { logo: null, color: '#1B9E4B', initials: 'BJ' },
+  Meralco: { logo: null, color: '#F47B20', initials: 'ML' },
 
   // Bangladesh. No assets supplied for these yet, so they show a coloured
   // initials badge - each in the board's own colour rather than one grey
@@ -60,5 +94,13 @@ export function getBillerBrand(name) {
   // rather than to two-letter initials of the same word twice.
   const base = String(name || '').replace(/\s*\([^)]*\)\s*$/, '').trim();
   if (base && billerBrand[base]) return billerBrand[base];
+  // A denomination is part of the name - "PLN Meter 50000 IDR", "Meralco
+  // Load 100" - so fall back to the longest brand the name starts with,
+  // rather than giving each voucher its own duplicate entry. Longest first,
+  // so "Sky TV" is never mistaken for a "Sky" that does not exist.
+  const prefix = Object.keys(billerBrand)
+    .filter((k) => base.startsWith(k + ' '))
+    .sort((a, b) => b.length - a.length)[0];
+  if (prefix) return billerBrand[prefix];
   return getOperatorBrand(base || name);
 }
