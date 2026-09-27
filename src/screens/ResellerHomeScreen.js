@@ -7,6 +7,7 @@ import { radius } from '../theme/theme';
 import { useTheme } from "../theme/ThemeContext";
 import ServiceGrid from '../components/ServiceGrid';
 import AccountToolsGrid from '../components/AccountToolsGrid';
+import RoleToolsGrid from '../components/RoleToolsGrid';
 import BannerSlider from '../components/BannerSlider';
 import CopyButton from '../components/CopyButton';
 import TransactionDetailModal from '../components/TransactionDetailModal';
@@ -267,6 +268,7 @@ export default function ResellerHomeScreen() {
               ]}
             />
             <AccountToolsGrid />
+            <RoleToolsGrid role="reseller" />
           </>
         )}
 
