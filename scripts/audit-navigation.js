@@ -151,7 +151,7 @@ for (const key of arrayKeys(read('src/components/AccountToolsGrid.js'), 'ITEMS')
 // ---- 4c. every managed grid key is allowed by the Firestore rules whitelist ----
 const gridDefs = read('src/firebase/gridManagementService.js');
 const rules = read('firestore.rules');
-const gridRuleLines = rules.split('\\n').filter((line) => line.includes('match /settings/gridManagement'));
+const gridRuleLines = rules.split('\n').filter((line) => line.includes('match /settings/gridManagement'));
 for (const key of matches(gridDefs, /\['([a-zA-Z]+)','[^']+'\]/g)) {
   check('grid-management', key, 'missing Firestore rules whitelist entry', gridRuleLines.length === 1 && gridRuleLines[0].includes(`'${key}'`));
 }
