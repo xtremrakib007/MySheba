@@ -82,7 +82,7 @@ const RECHARGE_RATE_FIELDS = [
 // a tab that does not exist. gridManagement and apiManagement were already
 // special-cased by hand in openItem; folding them in gives one path, so the
 // navigation audit reads a single list instead of chasing special cases.
-const SCREEN_FEATURES = ['adminAnalytics', 'transferPoints', 'userManagement', 'verificationManagement', 'featureAccess', 'gridManagement', 'apiManagement'];
+const SCREEN_FEATURES = ['adminAnalytics', 'transferPoints', 'userManagement', 'verificationManagement', 'featureAccess', 'gridManagement', 'apiManagement', 'trustedDevices', 'tierPromotions', 'superAdminTopup', 'adFeatureControls', 'adAnalytics', 'advertiserManagement', 'adPackagesManagement', 'adPaymentsManagement', 'salarySettings', 'salaryReports'];
 // Where the tile key and the screen name differ.
 const SCREEN_FOR = { apiManagement: 'apiProviderManagement' };
 
@@ -175,7 +175,30 @@ export default function AdminFeaturesScreen() {
         onPress={() => setSection(isSuperadmin ? 'system' : 'operations')}
       />
       <WalletCard balance={balance} variant="surface" onAddMoney={() => setScreen('superAdminTopup')} onTransfer={() => setScreen('transferPoints')} />
-      <FeatureGrid items={CATEGORIES.filter((x) => x.key !== 'system' || isSuperadmin)} onPress={setSection} />
+      <FeatureGrid title="Operations" items={allow(OPERATIONS).map((item) => ({ ...item, badge: badges[item.key] }))} onPress={openItem} />
+      <FeatureGrid title="Finance & Pricing" items={allow(FINANCE).map((item) => ({ ...item, badge: badges[item.key] }))} onPress={openItem} />
+      <FeatureGrid title="Users & Verification" items={allow(USERS).map((item) => ({ ...item, badge: badges[item.key] }))} onPress={openItem} />
+      {isSuperadmin && <FeatureGrid title="System Control" items={allow(SYSTEM).map((item) => ({ ...item, badge: badges[item.key] }))} onPress={openItem} />}
+      {isSuperadmin && <FeatureGrid title="Risk, Advertising & Staff" items={[
+        { key: 'trustedDevices', icon: '📱', bg: '#E3F2FD', name: 'Trusted Devices' },
+        { key: 'tierPromotions', icon: '🏆', bg: '#FFF3E0', name: 'Tier Promotions' },
+        { key: 'superAdminTopup', icon: '💳', bg: '#E8F5E9', name: 'Point Top-Up' },
+        { key: 'adFeatureControls', icon: '🛡️', bg: '#EDE7F6', name: 'Ad Controls' },
+        { key: 'adAnalytics', icon: '📊', bg: '#E3F2FD', name: 'Ad Analytics' },
+        { key: 'advertiserManagement', icon: '👥', bg: '#E0F7FA', name: 'Advertisers' },
+        { key: 'adPackagesManagement', icon: '📦', bg: '#FFF3E0', name: 'Ad Packages' },
+        { key: 'adPaymentsManagement', icon: '💰', bg: '#E8F5E9', name: 'Ad Payments' },
+        { key: 'salarySettings', icon: '⚙️', bg: '#EDE7F6', name: 'Salary Settings' },
+        { key: 'salaryReports', icon: '📈', bg: '#E3F2FD', name: 'Salary Reports' },
+      ].filter((item) => gridManagementService.isGridActive(gridManagement, item.key))} onPress={openItem} />}
+      <FeatureGrid title="Account & Work" items={[
+        { key: 'profile', icon: '👤', bg: '#E3F2FD', name: 'Profile' },
+        { key: 'myAccount', icon: '🪪', bg: '#E0F7FA', name: 'My Account' },
+        { key: 'settings', icon: '⚙️', bg: '#EDE7F6', name: 'Settings' },
+        { key: 'reports', icon: '📄', bg: '#FFF3E0', name: 'Reports' },
+        { key: 'myDocuments', icon: '📁', bg: '#E0F7FA', name: 'My Documents' },
+        { key: 'salaryDashboard', icon: '💵', bg: '#E8F5E9', name: 'Salary & OT' },
+      ].filter((item) => gridManagementService.isGridActive(gridManagement, item.key))} onPress={openItem} />
     </ScrollView>
   </View>;
 }
