@@ -190,7 +190,7 @@ export default function AdminFeaturesScreen() {
         icon={isSuperadmin ? '✦' : '◆'}
         onPress={() => setSection(isSuperadmin ? 'system' : 'operations')}
       />
-      <WalletCard balance={balance} variant="surface" onAddMoney={() => setScreen('superAdminTopup')} onTransfer={() => setScreen('transferPoints')} />
+      <WalletCard balance={balance} variant="surface" onAddMoney={isSuperadmin ? () => setScreen('superAdminTopup') : undefined} onTransfer={() => setScreen('transferPoints')} />
       <FeatureGrid title="Operations" items={allow(OPERATIONS).map((item) => ({ ...item, badge: badges[item.key] }))} onPress={openItem} />
       <FeatureGrid title="Finance & Pricing" items={allow(FINANCE).map((item) => ({ ...item, badge: badges[item.key] }))} onPress={openItem} />
       <FeatureGrid title="Users & Verification" items={allow(USERS).map((item) => ({ ...item, badge: badges[item.key] }))} onPress={openItem} />
@@ -206,7 +206,7 @@ export default function AdminFeaturesScreen() {
         { key: 'adPaymentsManagement', icon: '💰', bg: '#E8F5E9', name: 'Ad Payments' },
         { key: 'salarySettings', icon: '⚙️', bg: '#EDE7F6', name: 'Salary Settings' },
         { key: 'salaryReports', icon: '📈', bg: '#E3F2FD', name: 'Salary Reports' },
-      ].filter((item) => gridManagementService.isGridActive(gridManagement, item.key))} onPress={openItem} />}
+      ].filter((item) => gridManagementService.isGridActive(gridManagement, item.key === 'salaryDashboard' ? 'salary' : item.key))} onPress={openItem} />}
       <FeatureGrid title="Account & Work" items={[
         { key: 'profile', icon: '👤', bg: '#E3F2FD', name: 'Profile' },
         { key: 'myAccount', icon: '🪪', bg: '#E0F7FA', name: 'My Account' },
