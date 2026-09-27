@@ -4,7 +4,6 @@ import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import * as securityPinService from '../firebase/securityPinService';
-import * as deviceSessionService from '../firebase/deviceSessionService';
 import { isBiometricAvailable, authenticateWithBiometric } from '../firebase/biometricAuth';
 
 export default function AppLockScreen() {
@@ -43,17 +42,24 @@ export default function AppLockScreen() {
 
   if (!appLocked) return null;
 
-  const validateSessionBeforeUnlock = async () => {
-    const valid = await deviceSessionService.validateActiveSession();
-    if (!valid) {
-      setPin('');
-      setError('This device session has expired or was replaced. Please sign in again.');
-      await deviceSessionService.clearLocalSessionId().catch(() => {});
-      await logout();
-      return false;
-    }
-    return true;
-  };
+  // Unlocking never signs anyone out.
+  //
+  // Both paths below used to call validateActiveSession on the server and
+  // log the person out when it said no - so reopening the app could end the
+  // session of someone who had just passed their own PIN or biometric on
+  // their own device. That is the automatic logout this app is not supposed
+  // to have, and it fired at the worst moment: after a close and reopen,
+  // which is exactly when the locally stored session id is most likely to
+  // be stale. It also made the lock unopenable offline, because a network
+  // failure is not one of the codes that reads as "invalid" and was
+  // re-thrown into the error line instead.
+  //
+  // Single-device enforcement is not weakened by this. It still runs where
+  // it belongs: at sign-in (checkDeviceSession), and on every live profile
+  // update while the app is open, where shouldEndSessionForDevice catches a
+  // genuine takeover and says so in plain words. This screen only has to
+  // answer "is this the right person holding the phone", and the PIN or the
+  // biometric is that answer.
 
   const tryBiometric = async () => {
     if (busy) return;
@@ -62,10 +68,9 @@ export default function AppLockScreen() {
     try {
       const ok = await authenticateWithBiometric('Unlock MySheba');
       if (!ok) return;
-      const valid = await validateSessionBeforeUnlock();
-      if (valid) unlockApp();
+      unlockApp();
     } catch (err) {
-      setError(err?.message || 'Could not verify this device session.');
+      setError(err?.message || 'Could not read your fingerprint. Enter your PIN instead.');
     } finally {
       setBusy(false);
     }
@@ -79,8 +84,7 @@ export default function AppLockScreen() {
     setBusy(true);
     try {
       await securityPinService.verifySecurityPin(pin);
-      const valid = await validateSessionBeforeUnlock();
-      if (valid) unlockApp();
+      unlockApp();
     } catch (err) {
       setError(err?.message || 'Incorrect PIN.');
       setPin('');
