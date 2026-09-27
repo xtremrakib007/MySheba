@@ -82,7 +82,7 @@ const RECHARGE_RATE_FIELDS = [
 // a tab that does not exist. gridManagement and apiManagement were already
 // special-cased by hand in openItem; folding them in gives one path, so the
 // navigation audit reads a single list instead of chasing special cases.
-const SCREEN_FEATURES = ['adminAnalytics', 'transferPoints', 'userManagement', 'verificationManagement', 'featureAccess', 'gridManagement', 'apiManagement', 'trustedDevices', 'tierPromotions', 'superAdminTopup', 'adFeatureControls', 'adAnalytics', 'advertiserManagement', 'adPackagesManagement', 'adPaymentsManagement', 'salarySettings', 'salaryReports'];
+const SCREEN_FEATURES = ['adminAnalytics', 'transferPoints', 'userManagement', 'verificationManagement', 'featureAccess', 'gridManagement', 'apiManagement', 'trustedDevices', 'tierPromotions', 'superAdminTopup', 'adFeatureControls', 'adAnalytics', 'advertiserManagement', 'adPackagesManagement', 'adPaymentsManagement', 'salarySettings', 'salaryReports', 'profile', 'myAccount', 'settings', 'reports', 'myDocuments', 'salaryDashboard'];
 // Where the tile key and the screen name differ.
 const SCREEN_FOR = { apiManagement: 'apiProviderManagement' };
 
