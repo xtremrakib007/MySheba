@@ -206,7 +206,7 @@ export default function Sidebar() {
                           : screen === item.key;
                         return (
                           <TouchableOpacity key={`${group.title}-${item.key}`} style={[styles.gridItem, item.featured && styles.featuredItem, active && styles.gridItemActive]} onPress={() => goTo(item.key, item.tab)} activeOpacity={0.78}>
-                            <View style={[styles.itemIconBox, active && styles.itemIconBoxActive]}><ServiceArt name={item.icon} size={22} /></View>
+                            <View style={[styles.itemIconBox, active && styles.itemIconBoxActive]}><ServiceArt name={item.icon} size={22} color={active ? colors.primary : colors.textSecondary} /></View>
                             <Text style={[styles.gridLabel, active && styles.gridLabelActive]} numberOfLines={2}>{item.label}</Text>
                             {!!active && <View style={styles.activeMark} />}
                           </TouchableOpacity>

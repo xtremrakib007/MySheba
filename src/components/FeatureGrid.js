@@ -99,7 +99,7 @@ export default function FeatureGrid({ title, items, activeKey, onPress, numColum
                       same on every device - and the emoji only for keys that
                       have none yet. */}
                   {hasServiceArt(it.key)
-                    ? <ServiceArt name={it.key} size={28 * iconRender.scale} />
+                    ? <ServiceArt name={it.key} size={28 * iconRender.scale} color={tileTint || iconColor} />
                     : <Text style={[styles.iconText, { color: tileTint || iconColor, fontSize: 27 * iconRender.scale, fontWeight: iconRender.weight }]}>{iconFor(it.key, iconStyle, it.icon)}</Text>}
                 </View>
                 <Text style={labelStyle} numberOfLines={2}>{String(it.name || '')}</Text>

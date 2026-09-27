@@ -35,7 +35,7 @@ const drawn = new Set(
 );
 const art = fs.readFileSync(path.join(root, 'src/components/ServiceArt.js'), 'utf8');
 const artBody = art.slice(art.indexOf('const ART = {'), art.indexOf('const ALIASES'));
-for (const m of artBody.matchAll(/^  ([a-zA-Z]+): \(\) => \(<>/gm)) drawn.add(m[1]);
+for (const m of artBody.matchAll(/^  ([a-zA-Z]+): \(c\) => \(<>/gm)) drawn.add(m[1]);
 for (const m of art.slice(art.indexOf('const ALIASES = {')).matchAll(/^  ([a-zA-Z]+): '([a-zA-Z]+)',/gm)) {
   if (drawn.has(m[2])) drawn.add(m[1]);
 }

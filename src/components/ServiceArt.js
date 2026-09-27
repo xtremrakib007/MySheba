@@ -1,468 +1,442 @@
 import React from 'react';
-import Svg, { Rect, Circle, Path, Polygon, Line, Ellipse, G } from 'react-native-svg';
+import Svg, { Rect, Circle, Path, G } from 'react-native-svg';
 
-// Drawn service icons.
+// Drawn service icons - one outline set, on a 48x48 grid.
 //
-// The grid used emoji, which meant the artwork was whatever font the phone
-// happened to ship: blurry where it was scaled up (the same bitmap problem
-// the flags had), a different style on every Android version, and nothing
-// the app could actually art-direct. These are paths on one 48x48 grid, so
-// they are crisp at any size and identical on every device.
+// The grid used emoji first, which meant the artwork was whatever font the
+// phone happened to ship: blurry where it was scaled up (the same bitmap
+// problem the flags had), a different style on every Android version, and
+// nothing the app could art-direct. These are paths, so they are crisp at
+// any size and identical on every device.
 //
-// One flat palette across the set, and two or three colours per icon. That
-// is what makes a set read as a set - the emoji never did, because each one
-// came from a different illustrator.
+// They are line art in ONE colour, passed in, rather than flat multi-colour
+// illustrations. That is what makes the set read as a set, and it is what
+// lets a tile tint its icon: the grid styles already recolour their labels
+// (neon goes white, gradient flips to whatever contrasts with the gradient),
+// and an icon with its own fixed palette could only ignore them. Callers
+// pass the colour they are using for the label; nothing here decides it.
+//
+// Keep new icons to a handful of strokes at this weight. An icon that needs
+// more detail than that will be mud at 22px, which is the size the sidebar
+// draws them at.
 
-const C = {
-  blue: '#2F80ED',
-  blueDark: '#1B4F9C',
-  blueLight: '#A9CEF7',
-  bluePale: '#DCEAFB',
-  navy: '#1B3A6B',
-  green: '#27AE60',
-  greenLight: '#9BE0B8',
-  gold: '#F2B705',
-  goldLight: '#FFE08A',
-  red: '#EB5757',
-  purple: '#9B51E0',
-  purpleLight: '#D9BBF5',
-  grey: '#B9C6D4',
-  greyLight: '#E3EAF2',
-  white: '#FFFFFF',
-};
+const DEFAULT_COLOR = '#3DDC97';
+const W = 2.4;
 
-// Shorthand keeps each icon to a readable handful of shapes.
-//  rather than : a parameter named h shadows the JSX factory under
-// a jsxFactory:"h" transform, which is how these get rendered for review.
-const r = (x, y, w, ht, fill, rx = 0) => <Rect x={x} y={y} width={w} height={ht} rx={rx} fill={fill} />;
-const c = (cx, cy, rad, fill) => <Circle cx={cx} cy={cy} r={rad} fill={fill} />;
-const p = (d, fill) => <Path d={d} fill={fill} />;
-const stroke = (d, col, w = 2.6) => (
-  <Path d={d} stroke={col} strokeWidth={w} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+// Shorthand keeps each icon to a readable handful of shapes. `ht` rather
+// than `h`: a parameter named h shadows the JSX factory under a
+// jsxFactory:"h" transform, which is how these get rendered for review.
+const s = (d, c, w = W) => (
+  <Path d={d} stroke={c} strokeWidth={w} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+);
+const box = (x, y, w, ht, c, rx = 3, sw = W) => (
+  <Rect x={x} y={y} width={w} height={ht} rx={rx} stroke={c} strokeWidth={sw} fill="none" />
+);
+const ring = (cx, cy, r, c, sw = W) => (
+  <Circle cx={cx} cy={cy} r={r} stroke={c} strokeWidth={sw} fill="none" />
+);
+const dot = (cx, cy, r, c) => <Circle cx={cx} cy={cy} r={r} fill={c} />;
+
+// A sheet of paper with the corner folded over - the base for every
+// document-ish icon, so they all fold the same way.
+const sheet = (c) => (
+  <>
+    {s('M13 6h14l8 8v26a2 2 0 0 1-2 2H15a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z', c)}
+    {s('M27 6v8h8', c)}
+  </>
 );
 
 const ART = {
-  // ---- money ----
-  recharge: () => (<>
-    {r(15, 5, 18, 38, C.navy, 4)}
-    {r(17.5, 9, 13, 26, C.blueLight, 2)}
-    {c(24, 39, 1.8, C.white)}
-    {stroke('M35 14a9 9 0 0 1 0 12', C.green, 2.4)}
-    {stroke('M38.5 10a14 14 0 0 1 0 20', C.greenLight, 2.4)}
+  // ---- money and connectivity ----
+  recharge: (c) => (<>
+    {box(11, 5, 17, 38, c, 4)}
+    {dot(19.5, 38, 1.5, c)}
+    {s('M33 18a8 8 0 0 1 0 12', c)}
+    {s('M38 13a15 15 0 0 1 0 22', c)}
   </>),
 
-  topup: () => (<>
-    {r(5, 13, 38, 24, C.blue, 4)}
-    {r(5, 19, 38, 5, C.blueDark)}
-    {r(9, 29, 9, 3, C.blueLight, 1.5)}
-    {c(35, 31, 7, C.green)}
-    {stroke('M35 27.5v7M31.5 31h7', C.white, 2.4)}
+  internet: (c) => (<>
+    {ring(21, 21, 14, c)}
+    {s('M7 21h28', c)}
+    {s('M21 7c5 5 5 23 0 28M21 7c-5 5-5 23 0 28', c)}
+    {ring(37, 37, 5, c)}
+    {s('M30 30l3.5 3.5', c)}
   </>),
 
-  remittance: () => (<>
-    {r(4, 13, 30, 19, C.greenLight, 3)}
-    {r(4, 13, 30, 19, 'none', 3)}
-    {c(19, 22.5, 5, C.green)}
-    {stroke('M19 19.5v6M17 21.5h4M17 23.5h4', C.white, 1.6)}
-    {p('M33 36l11-6-11-6v4H22v4h11z', C.blue)}
+  rechargePin: (c) => (<>
+    {box(6, 14, 36, 20, c, 4)}
+    {s('M19 14v3M19 22v4M19 31v3', c)}
+    {ring(30, 24, 3.5, c)}
+    {s('M34 24h6M38 24v3', c)}
   </>),
 
-  mobilebanking: () => (<>
-    {p('M24 6L43 16H5L24 6z', C.blue)}
-    {r(9, 19, 4, 15, C.blueLight, 1)}
-    {r(17, 19, 4, 15, C.blueLight, 1)}
-    {r(27, 19, 4, 15, C.blueLight, 1)}
-    {r(35, 19, 4, 15, C.blueLight, 1)}
-    {r(5, 36, 38, 5, C.navy, 2)}
-    {c(24, 12, 2.4, C.white)}
+  billpayment: (c) => (<>
+    {s('M13 6h13l7 7v13', c)}
+    {s('M13 6a2 2 0 0 0-2 2v32a2 2 0 0 0 2 2h9', c)}
+    {s('M26 6v7h7', c)}
+    {s('M17 19h11M17 25h7', c)}
+    {ring(33, 33, 8, c)}
+    {s('M29.5 33l2.5 2.5 5-5', c)}
   </>),
 
-  billpayment: () => (<>
-    {p('M9 5h30v38l-5-3-5 3-5-3-5 3-5-3-5 3V5z', C.white)}
-    {p('M9 5h30v38l-5-3-5 3-5-3-5 3-5-3-5 3V5z', C.bluePale)}
-    {r(14, 13, 20, 3, C.blue, 1.5)}
-    {r(14, 20, 14, 3, C.blueLight, 1.5)}
-    {r(14, 27, 17, 3, C.blueLight, 1.5)}
-    {c(34, 35, 6, C.green)}
-    {stroke('M31 35l2.2 2.2L37 33', C.white, 2.2)}
+  mobilebanking: (c) => (<>
+    {s('M7 19L24 9l17 10', c)}
+    {s('M13 23v12M21 23v12M27 23v12M35 23v12', c)}
+    {s('M8 39h32', c)}
   </>),
 
-  rechargePin: () => (<>
-    {p('M5 14h38v7a3 3 0 0 0 0 6v7H5v-7a3 3 0 0 0 0-6v-7z', C.gold)}
-    {r(21, 17, 2.5, 4, C.white, 1)}
-    {r(21, 24, 2.5, 4, C.white, 1)}
-    {r(21, 31, 2.5, 4, C.white, 1)}
-    {r(28, 21, 9, 2.6, C.white, 1.3)}
-    {r(28, 26.5, 6, 2.6, C.white, 1.3)}
+  remittance: (c) => (<>
+    {box(8, 16, 32, 16, c, 3)}
+    {ring(24, 24, 4, c)}
+    {s('M13 11h17m-4-3.5 4 3.5-4 3.5', c)}
+    {s('M35 37H18m4 3.5-4-3.5 4-3.5', c)}
   </>),
 
-  salary: () => (<>
-    {p('M7 16c0-3 2-5 5-5h24c3 0 5 2 5 5v20c0 3-2 5-5 5H12c-3 0-5-2-5-5V16z', C.blue)}
-    {p('M7 16c0-3 2-5 5-5h17v30H12c-3 0-5-2-5-5V16z', C.blueDark)}
-    {c(34, 26, 6.5, C.gold)}
-    {stroke('M34 22.5v7M31.8 24.5h4M31.8 27.5h4', C.white, 1.7)}
+  topup: (c) => (<>
+    {box(7, 12, 34, 24, c, 4)}
+    {s('M7 20h34', c)}
+    {s('M30 28h7', c)}
   </>),
 
-  walletTransfer: () => (<>
-    {c(24, 24, 18, C.bluePale)}
-    {p('M13 19h17v-4l7 6-7 6v-4H13v-4z', C.blue)}
-    {p('M35 29H18v-4l-7 6 7 6v-4h17v-4z', C.green)}
+  walletTransfer: (c) => (<>
+    {box(7, 11, 34, 26, c, 4)}
+    {s('M15 20h17m-4-3.5 4 3.5-4 3.5', c)}
+    {s('M33 29H16m4 3.5-4-3.5 4-3.5', c)}
   </>),
 
-  finance: () => (<>
-    {p('M19 9h10l-2.5 5h-5L19 9z', C.navy)}
-    {p('M21.5 14h5c7 0 12 6 12 13s-5 12-14.5 12S9.5 34 9.5 27s5-13 12-13z', C.gold)}
-    {stroke('M24 20v14M20.5 23.5h7M20.5 29.5h7', C.white, 2.3)}
+  salary: (c) => (<>
+    {box(7, 14, 34, 20, c, 3)}
+    {ring(24, 24, 4.5, c)}
+    {s('M24 17v14', c)}
+    {s('M12 20v8M36 20v8', c)}
   </>),
 
-  pricing: () => (<>
-    {p('M6 6h18l18 18-18 18L6 24V6z', C.purple)}
-    {c(14, 14, 3.4, C.white)}
-    {stroke('M24 26l6 6', C.purpleLight, 2.4)}
+  finance: (c) => (<>
+    {box(7, 7, 34, 34, c, 4)}
+    {s('M15 32v-7M23 32V16M31 32v-11', c)}
+  </>),
+
+  pricing: (c) => (<>
+    {s('M7 7h14l20 20-14 14L7 21V7z', c)}
+    {ring(14.5, 14.5, 2.6, c)}
+  </>),
+
+  rates: (c) => (<>
+    {ring(24, 24, 16, c)}
+    {s('M15 20h16m-4-4 4 4-4 4', c)}
+    {s('M33 28H17m4-4-4 4 4 4', c)}
+  </>),
+
+  payments: (c) => (<>
+    {box(6, 12, 36, 24, c, 3)}
+    {s('M6 20h36', c)}
+    {s('M12 29h8', c)}
+    {s('M30 29h6', c)}
+  </>),
+
+  superAdminTopup: (c) => (<>
+    {box(7, 12, 34, 24, c, 4)}
+    {s('M7 20h34', c)}
+    {s('M34 25v8M30 29h8', c)}
   </>),
 
   // ---- travel ----
-  bus: () => (<>
-    {r(6, 8, 36, 25, C.gold, 5)}
-    {r(9.5, 12, 12, 9, C.blueLight, 2)}
-    {r(26.5, 12, 12, 9, C.blueLight, 2)}
-    {r(6, 25, 36, 4, C.navy)}
-    {c(14, 36, 4.5, C.navy)}
-    {c(34, 36, 4.5, C.navy)}
-    {c(14, 36, 1.8, C.greyLight)}
-    {c(34, 36, 1.8, C.greyLight)}
+  bus: (c) => (<>
+    {box(11, 8, 26, 27, c, 4)}
+    {s('M15 15h18', c)}
+    {s('M11 24h26', c)}
+    {ring(17, 38, 2.6, c)}
+    {ring(31, 38, 2.6, c)}
+    {s('M9 17v5M39 17v5', c)}
   </>),
 
-  train: () => (<>
-    {p('M11 8h26v20a6 6 0 0 1-6 6H17a6 6 0 0 1-6-6V8z', C.blue)}
-    {r(14.5, 12, 8, 8, C.blueLight, 1.5)}
-    {r(25.5, 12, 8, 8, C.blueLight, 1.5)}
-    {c(17, 27, 2.2, C.gold)}
-    {c(31, 27, 2.2, C.gold)}
-    {stroke('M16 35l-4 6M32 35l4 6M9 43h30', C.navy, 2.6)}
+  train: (c) => (<>
+    {box(13, 6, 22, 28, c, 4)}
+    {box(17, 11, 14, 9, c, 2)}
+    {dot(19, 27, 1.6, c)}
+    {dot(29, 27, 1.6, c)}
+    {s('M10 41h28', c)}
+    {s('M18 34l-4 6M30 34l4 6', c)}
   </>),
 
-  flight: () => (<>
-    {p('M42 22.5c1.2 0 2 .9 2 2s-.8 2-2 2l-11 .8-7.5 12.6c-.3.5-.8.8-1.4.8h-2.6l3.4-13-7.6.6-3 4.3c-.3.4-.7.6-1.2.6H8l2.4-7.9L8 17.4h3.1c.5 0 .9.2 1.2.6l3 4.3 7.6.6-3.4-13h2.6c.6 0 1.1.3 1.4.8L31 22.3l11 .2z', C.blue)}
+  flight: (c) => (<>
+    {s('M24 5c2.2 0 3.6 3.2 3.6 8.4v5.8l12.4 7.2v3.4l-12.4-3.3v7.2l4.2 3.1v2.6L24 37.8l-7.8 1.6v-2.6l4.2-3.1v-7.2L8 29.8v-3.4l12.4-7.2v-5.8C20.4 8.2 21.8 5 24 5z', c)}
   </>),
 
-  // ---- documents / immigration ----
-  passport: () => (<>
-    {r(9, 5, 30, 38, C.navy, 3)}
-    {r(12.5, 5, 26.5, 38, C.blueDark, 3)}
-    {c(26, 18, 7, 'none')}
-    {stroke('M26 11a7 7 0 1 0 0 14 7 7 0 0 0 0-14z', C.goldLight, 1.8)}
-    {stroke('M26 11c-3 3.5-3 10.5 0 14M19 18h14', C.goldLight, 1.5)}
-    {r(19, 30, 14, 2.4, C.goldLight, 1.2)}
-    {r(21.5, 35, 9, 2.4, C.goldLight, 1.2)}
+  visa: (c) => (<>
+    {box(12, 5, 24, 38, c, 4)}
+    {ring(24, 20, 7, c)}
+    {s('M17 20h14M24 13c3.2 3 3.2 11 0 14M24 13c-3.2 3-3.2 11 0 14', c)}
+    {s('M18 35h12', c)}
   </>),
 
-  visa: () => (<>
-    {r(4, 11, 40, 26, C.blue, 4)}
-    {r(4, 11, 40, 26, 'none', 4)}
-    {c(15, 24, 7.5, C.white)}
-    {stroke('M15 16.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z', C.blue, 1.4)}
-    {stroke('M15 16.5c-3 4-3 11 0 15M7.5 24h15', C.blue, 1.3)}
-    {r(27, 19, 13, 3, C.white, 1.5)}
-    {r(27, 26, 9, 3, C.blueLight, 1.5)}
+  passport: (c) => (<>
+    {box(11, 5, 26, 38, c, 4)}
+    {s('M11 36h26', c)}
+    {ring(24, 19, 6.5, c)}
+    {s('M17.5 19h13M24 12.5c3 3 3 10 0 13M24 12.5c-3 3-3 10 0 13', c)}
   </>),
 
-  mydigital: () => (<>
-    {r(8, 9, 32, 22, C.navy, 2.5)}
-    {r(10.5, 11.5, 27, 17, C.blueLight, 1.5)}
-    {p('M31 15.5l-3.5 7-6.5-1.5-1.5 3 5.5 2.5 1.5-3 5 1 1.5-3-2-6z', C.blue)}
-    {r(5, 33, 38, 4, C.grey, 2)}
+  fomema: (c) => (<>
+    {sheet(c)}
+    {s('M24 20v10M19 25h10', c)}
+    {s('M18 36h12', c)}
   </>),
 
-  fomema: () => (<>
-    {r(8, 11, 32, 30, C.white, 3)}
-    {r(8, 11, 32, 30, C.bluePale, 3)}
-    {p('M24 4l14 7H10l14-7z', C.blue)}
-    {r(21, 18, 6, 17, C.red, 1.5)}
-    {r(15.5, 23.5, 17, 6, C.red, 1.5)}
+  mydigital: (c) => (<>
+    {box(9, 10, 30, 21, c, 3)}
+    {s('M5 35h38', c)}
+    {s('M15 21l9-3.5-2 4 4 1.5-8 3 1.5-2.5-4.5-2.5z', c)}
+    {s('M29 19h6M29 25h4', c)}
   </>),
 
-  documents: () => (<>
-    {p('M5 12a3 3 0 0 1 3-3h10l4 4h15a3 3 0 0 1 3 3v20a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V12z', C.blue)}
-    {p('M5 20h38v16a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V20z', C.blueLight)}
+  // ---- documents and people ----
+  documents: (c) => (<>
+    {sheet(c)}
+    {s('M18 22h12M18 28h12M18 34h8', c)}
   </>),
 
-  myDocuments: () => (<>
-    {p('M11 5h17l9 9v29a2 2 0 0 1-2 2H11a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z', C.white)}
-    {p('M11 5h17l9 9v29a2 2 0 0 1-2 2H11a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z', C.bluePale)}
-    {p('M28 5l9 9h-9V5z', C.blueLight)}
-    {r(14, 21, 19, 2.6, C.blue, 1.3)}
-    {r(14, 27, 19, 2.6, C.blueLight, 1.3)}
-    {r(14, 33, 12, 2.6, C.blueLight, 1.3)}
+  myDocuments: (c) => (<>
+    {s('M18 4h11l7 7v20a2 2 0 0 1-2 2H18a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z', c)}
+    {s('M29 4v7h7', c)}
+    {s('M30 37a2 2 0 0 1-2 2H14a2 2 0 0 1-2-2V14', c)}
   </>),
 
-  // ---- people ----
-  myAccount: () => (<>
-    {c(24, 24, 19, C.bluePale)}
-    {c(24, 19, 7, C.blue)}
-    {p('M11 39a13 13 0 0 1 26 0 19 19 0 0 1-26 0z', C.blue)}
+  profile: (c) => (<>
+    {ring(24, 17, 7.5, c)}
+    {s('M10 40c0-7.2 6.3-11 14-11s14 3.8 14 11', c)}
   </>),
 
-  profile: () => (<>
-    {r(4, 10, 40, 28, C.blue, 4)}
-    {r(4, 10, 40, 8, C.blueDark, 4)}
-    {c(16, 27, 5, C.white)}
-    {p('M8 37a8 8 0 0 1 16 0H8z', C.white)}
-    {r(28, 24, 12, 2.8, C.white, 1.4)}
-    {r(28, 30, 8, 2.8, C.blueLight, 1.4)}
+  myAccount: (c) => (<>
+    {ring(24, 24, 17, c)}
+    {ring(24, 19, 5.5, c)}
+    {s('M13.5 36c2.2-4.2 6-6.2 10.5-6.2S32.3 31.8 34.5 36', c)}
   </>),
 
-  userManagement: () => (<>
-    {c(17, 18, 6.5, C.blue)}
-    {p('M6 34a11 11 0 0 1 22 0 14 14 0 0 1-22 0z', C.blue)}
-    {c(33, 20, 5, C.blueLight)}
-    {p('M24 33a9 9 0 0 1 18 0 12 12 0 0 1-18 0z', C.blueLight)}
+  userManagement: (c) => (<>
+    {ring(19, 16, 6.5, c)}
+    {s('M7 38c0-6.6 5.4-10 12-10s12 3.4 12 10', c)}
+    {ring(34, 15, 5, c)}
+    {s('M34 25c4.6 0 7 3 7 8', c)}
   </>),
 
-  verificationManagement: () => (<>
-    {r(4, 10, 40, 28, C.white, 4)}
-    {r(4, 10, 40, 28, C.bluePale, 4)}
-    {c(16, 22, 5.5, C.blue)}
-    {p('M7 33a9 9 0 0 1 18 0H7z', C.blue)}
-    {r(29, 19, 11, 2.6, C.blueLight, 1.3)}
-    {r(29, 25, 8, 2.6, C.blueLight, 1.3)}
-    {c(36, 34, 8, C.green)}
-    {stroke('M32.5 34l2.6 2.6L40 32', C.white, 2.4)}
+  verificationManagement: (c) => (<>
+    {box(5, 11, 38, 26, c, 3)}
+    {ring(16, 21, 4.2, c)}
+    {s('M10 31c1.6-3 3.6-4.2 6-4.2s4.4 1.2 6 4.2', c)}
+    {s('M28 19h9M28 25h7', c)}
   </>),
 
-  // ---- support / admin ----
-  support: () => (<>
-    {stroke('M10 28v-4a14 14 0 0 1 28 0v4', C.blue, 3.2)}
-    {r(5, 26, 9, 13, C.blue, 4)}
-    {r(34, 26, 9, 13, C.blue, 4)}
-    {p('M38.5 39c0 3-3 5-8 5', 'none')}
-    {stroke('M38.5 39.5c0 3-3.5 4.5-8 4.5', C.blueLight, 2.6)}
+  businessProfile: (c) => (<>
+    {box(8, 9, 19, 31, c, 3)}
+    {box(27, 20, 13, 20, c, 3)}
+    {s('M13 16h3M21 16h3M13 23h3M21 23h3M13 30h3M21 30h3M32 27h3M32 34h3', c, 2)}
   </>),
 
-  inquiries: () => (<>
-    {p('M6 12a4 4 0 0 1 4-4h28a4 4 0 0 1 4 4v16a4 4 0 0 1-4 4H20l-9 8v-8h-1a4 4 0 0 1-4-4V12z', C.blue)}
-    {r(13, 16, 22, 3, C.white, 1.5)}
-    {r(13, 23, 14, 3, C.blueLight, 1.5)}
+  // ---- support and activity ----
+  support: (c) => (<>
+    {s('M11 28v-5a13 13 0 0 1 26 0v5', c)}
+    {box(6, 25, 8, 11, c, 3)}
+    {box(34, 25, 8, 11, c, 3)}
+    {s('M38 36c0 4-3 6-7 6h-4', c)}
   </>),
 
-  adminAnalytics: () => (<>
-    {r(6, 8, 36, 34, C.white, 3)}
-    {r(6, 8, 36, 34, C.bluePale, 3)}
-    {r(12, 24, 6, 12, C.blue, 1.5)}
-    {r(21, 18, 6, 18, C.green, 1.5)}
-    {r(30, 13, 6, 23, C.gold, 1.5)}
+  inquiries: (c) => (<>
+    {s('M10 8h28a3 3 0 0 1 3 3v17a3 3 0 0 1-3 3H22l-9 7v-7h-3a3 3 0 0 1-3-3V11a3 3 0 0 1 3-3z', c)}
+    {s('M21 16.5a3.6 3.6 0 1 1 3.6 3.6v2.4', c)}
+    {dot(24.6, 26.5, 1.5, c)}
   </>),
 
-  reports: () => (<>
-    {p('M11 5h17l9 9v29a2 2 0 0 1-2 2H11a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z', C.bluePale)}
-    {p('M28 5l9 9h-9V5z', C.blueLight)}
-    {r(14, 30, 4.5, 8, C.blue, 1.2)}
-    {r(21.5, 25, 4.5, 13, C.green, 1.2)}
-    {r(29, 20, 4.5, 18, C.gold, 1.2)}
+  history: (c) => (<>
+    {ring(24, 24, 16, c)}
+    {s('M24 14v10l7 4', c)}
   </>),
 
-  history: () => (<>
-    {c(24, 24, 18, C.bluePale)}
-    {stroke('M24 12a12 12 0 1 1-11.5 8.6', C.blue, 3)}
-    {stroke('M12 13v6h6', C.blue, 3)}
-    {stroke('M24 17v8l6 3', C.navy, 2.8)}
+  pending: (c) => (<>
+    {s('M14 6h20M14 42h20', c)}
+    {s('M17 6v5c0 5.5 7 8.5 7 13s-7 7.5-7 13v5', c)}
+    {s('M31 6v5c0 5.5-7 8.5-7 13s7 7.5 7 13v5', c)}
   </>),
 
-  adminFeatures: () => (<>
-    {r(6, 6, 15, 15, C.blue, 3)}
-    {r(27, 6, 15, 15, C.blueLight, 3)}
-    {r(6, 27, 15, 15, C.blueLight, 3)}
-    {r(27, 27, 15, 15, C.green, 3)}
+  reports: (c) => (<>
+    {sheet(c)}
+    {s('M18 35v-6M24 35v-12M30 35v-9', c)}
   </>),
 
-  businessProfile: () => (<>
-    {r(7, 14, 20, 28, C.blue, 2)}
-    {r(27, 22, 14, 20, C.blueLight, 2)}
-    {r(11, 19, 4, 4, C.white, 1)}
-    {r(19, 19, 4, 4, C.white, 1)}
-    {r(11, 27, 4, 4, C.white, 1)}
-    {r(19, 27, 4, 4, C.white, 1)}
-    {r(31, 27, 4, 4, C.white, 1)}
-    {r(31, 34, 4, 4, C.white, 1)}
+  adminAnalytics: (c) => (<>
+    {box(7, 7, 34, 34, c, 4)}
+    {s('M13 31l7-7 5 5 10-11', c)}
+    {dot(20, 24, 1.8, c)}
+    {dot(25, 29, 1.8, c)}
   </>),
 
-  internet: () => (<>
-    {c(24, 24, 17, C.blue)}
-    {stroke('M24 7c-5 5-5 29 0 34M24 7c5 5 5 29 0 34', C.white, 1.8)}
-    {stroke('M8 18h32M8 30h32', C.white, 1.8)}
-    {stroke('M24 7a17 17 0 1 0 0 34 17 17 0 0 0 0-34z', C.white, 1.8)}
+  adAnalytics: (c) => (<>
+    {box(6, 11, 30, 30, c, 3)}
+    {s('M13 33v-6M21 33V21M29 33v-9', c)}
+    {ring(38, 10, 5, c)}
+    {s('M36 10h4', c)}
   </>),
 
-  entertainment: () => (<>
-    {r(5, 12, 38, 26, C.navy, 3)}
-    {r(5, 12, 38, 6, C.blueDark)}
-    {p('M20 22l11 6-11 6V22z', C.white)}
+  salaryReports: (c) => (<>
+    {sheet(c)}
+    {s('M18 35v-5M24 35v-9', c)}
+    {ring(31, 31, 5, c)}
   </>),
 
-  pending: () => (<>
-    {c(24, 24, 18, C.goldLight)}
-    {stroke('M24 12a12 12 0 1 1-8.5 3.5', C.gold, 3)}
-    {stroke('M24 16v9l6 3.5', C.navy, 2.8)}
-    {c(37, 13, 5, C.red)}
+  // ---- admin and system ----
+  adminHome: (c) => (<>
+    {box(7, 7, 15, 15, c, 3)}
+    {box(26, 7, 15, 9, c, 3)}
+    {box(26, 20, 15, 21, c, 3)}
+    {box(7, 26, 15, 15, c, 3)}
   </>),
 
-  featureAccess: () => (<>
-    {r(10, 21, 28, 21, C.blue, 4)}
-    {stroke('M17 21v-5a7 7 0 0 1 14 0v5', C.navy, 3.4)}
-    {c(24, 30, 3.4, C.white)}
-    {r(22.6, 31, 2.8, 6, C.white, 1.4)}
+  adminFeatures: (c) => (<>
+    {s('M24 5l15 6v12c0 9.6-6.4 16.4-15 20-8.6-3.6-15-10.4-15-20V11l15-6z', c)}
+    {s('M18 24l4.5 4.5L31 20', c)}
   </>),
 
-  gridManagement: () => (<>
-    {r(6, 6, 15, 15, C.blueLight, 3)}
-    {r(27, 6, 15, 15, C.blue, 3)}
-    {r(6, 27, 15, 15, C.blue, 3)}
-    {r(27, 27, 15, 15, C.greyLight, 3)}
-    {stroke('M30 34.5h9M34.5 30v9', C.blue, 2.6)}
+  gridManagement: (c) => (<>
+    {box(8, 8, 14, 14, c, 3)}
+    {box(26, 8, 14, 14, c, 3)}
+    {box(8, 26, 14, 14, c, 3)}
+    {s('M33 26v14M26 33h14', c)}
   </>),
 
-  banners: () => (<>
-    {r(5, 10, 38, 28, C.bluePale, 3)}
-    {c(16, 20, 4, C.gold)}
-    {p('M9 34l10-11 7 8 6-5 7 8H9z', C.green)}
-    {r(5, 10, 38, 28, 'none', 3)}
+  featureAccess: (c) => (<>
+    {ring(15, 24, 8, c)}
+    {s('M23 24h18M37 24v6M31 24v4', c)}
   </>),
 
-  announcements: () => (<>
-    {p('M10 20h7l16-9v26l-16-9h-7a3 3 0 0 1-3-3v-2a3 3 0 0 1 3-3z', C.blue)}
-    {stroke('M38 18a9 9 0 0 1 0 12', C.green, 2.6)}
-    {r(13, 31, 6, 10, C.blueLight, 2)}
+  settings: (c) => (<>
+    {ring(24, 24, 13, c)}
+    {ring(24, 24, 5, c)}
+    {s('M24 5v6M24 37v6M5 24h6M37 24h6M10.6 10.6l4.2 4.2M33.2 33.2l4.2 4.2M37.4 10.6l-4.2 4.2M14.8 33.2l-4.2 4.2', c)}
   </>),
 
-  apiManagement: () => (<>
-    {c(12, 14, 5, C.blue)}
-    {c(36, 14, 5, C.green)}
-    {c(24, 34, 5, C.gold)}
-    {stroke('M12 19v6h24v-6M24 25v4', C.grey, 2.6)}
+  apiManagement: (c) => (<>
+    {ring(11, 12, 5, c)}
+    {ring(37, 12, 5, c)}
+    {ring(24, 37, 5, c)}
+    {s('M11 17v7h26v-7M24 24v8', c)}
   </>),
 
-  moreFeaturesTile: () => (<>
-    {p('M24 6l3.6 9.4L37 19l-9.4 3.6L24 32l-3.6-9.4L11 19l9.4-3.6L24 6z', C.gold)}
-    {p('M37 30l1.8 4.7L43.5 36.5l-4.7 1.8L37 43l-1.8-4.7L30.5 36.5l4.7-1.8L37 30z', C.goldLight)}
+  trustedDevices: (c) => (<>
+    {box(13, 5, 22, 38, c, 4)}
+    {s('M24 15l7.5 2.7v5.4c0 4.8-3.7 8-7.5 9.1-3.8-1.1-7.5-4.3-7.5-9.1v-5.4L24 15z', c)}
   </>),
 
-  // ---- sidebar menu ----
-  // The sidebar had 37 rows sharing 12 icons - seven different rows drew the
-  // same clock, six the same person - so the menu was hard to scan. These
-  // give the rows that were doubling up something of their own.
-
-  settings: () => (<>
-    {r(21.5, 4, 5, 8, C.blue, 1.5)}
-    {r(21.5, 36, 5, 8, C.blue, 1.5)}
-    {r(4, 21.5, 8, 5, C.blue, 1.5)}
-    {r(36, 21.5, 8, 5, C.blue, 1.5)}
-    {c(24, 24, 13, C.blue)}
-    {c(24, 24, 5.5, C.white)}
+  tierPromotions: (c) => (<>
+    {s('M16 20L13 5l11 5 11-5-3 15', c)}
+    {ring(24, 31, 10, c)}
+    {s('M24 26.5l1.9 3.8 4.2.6-3 3 .7 4.2-3.8-2-3.8 2 .7-4.2-3-3 4.2-.6 1.9-3.8z', c)}
   </>),
 
-  adminHome: () => (<>
-    {r(6, 6, 16, 16, C.blue, 2.5)}
-    {r(26, 6, 16, 10, C.blueLight, 2.5)}
-    {r(26, 20, 16, 22, C.green, 2.5)}
-    {r(6, 26, 16, 16, C.gold, 2.5)}
+  banners: (c) => (<>
+    {box(6, 10, 36, 28, c, 3)}
+    {ring(16, 20, 3.4, c)}
+    {s('M9 35l9-9 6 6 5-4 9 8', c)}
   </>),
 
-  rates: () => (<>
-    {c(24, 24, 18, C.greenLight)}
-    {stroke('M13 19h18m-6-6 6 6-6 6', C.green, 3)}
-    {stroke('M35 30H17m6-6-6 6 6 6', C.blueDark, 3)}
+  announcements: (c) => (<>
+    {s('M13 20l17-8v24l-17-8v-8z', c)}
+    {s('M13 20h-3a4 4 0 0 0 0 8h3', c)}
+    {s('M18 29v7a3.5 3.5 0 0 0 7 0v-4', c)}
+    {s('M35 20h5M35 14l4-2M35 26l4 2', c)}
   </>),
 
-  payments: () => (<>
-    {r(5, 12, 38, 24, C.blue, 3)}
-    {r(5, 18, 38, 5, C.navy)}
-    {r(10, 28, 12, 3.5, C.blueLight, 1.5)}
-    {c(35, 31, 7, C.green)}
-    {stroke('M32 31l2.5 2.5 4.5-4.5', C.white, 2.6)}
+  adFeatureControls: (c) => (<>
+    {s('M10 15h28M10 24h28M10 33h28', c)}
+    {ring(18, 15, 4, c)}
+    {ring(30, 24, 4, c)}
+    {ring(23, 33, 4, c)}
   </>),
 
-  adFeatureControls: () => (<>
-    {c(24, 24, 18, C.bluePale)}
-    {stroke('M12 17h24M12 24h24M12 31h24', C.navy, 2.6)}
-    {c(19, 17, 4, C.blue)}
-    {c(30, 24, 4, C.green)}
-    {c(24, 31, 4, C.gold)}
+  advertiserManagement: (c) => (<>
+    {ring(24, 24, 16, c)}
+    {s('M16 22l12-6v16l-12-6v-4z', c)}
+    {s('M16 22h-1.5a2.5 2.5 0 0 0 0 5H16', c)}
   </>),
 
-  trustedDevices: () => (<>
-    {r(13, 4, 22, 40, C.navy, 4)}
-    {r(16, 9, 16, 24, C.bluePale, 2)}
-    {c(24, 39, 2.5, C.blueLight)}
-    {p('M24 14l8 3v6c0 5-4 8.5-8 10-4-1.5-8-5-8-10v-6l8-3z', C.green)}
-    {stroke('M21 23l2.5 2.5 5-5', C.white, 2.4)}
+  adPackagesManagement: (c) => (<>
+    {s('M24 6l16 8v20l-16 8-16-8V14l16-8z', c)}
+    {s('M8 14l16 8 16-8M24 22v20', c)}
   </>),
 
-  tierPromotions: () => (<>
-    {p('M16 4h16l-4 13h-8L16 4z', C.blueLight)}
-    {c(24, 31, 12, C.gold)}
-    {c(24, 31, 8.5, C.goldLight)}
-    {p('M24 25.5l2 4.2 4.6.7-3.3 3.2.8 4.6-4.1-2.2-4.1 2.2.8-4.6-3.3-3.2 4.6-.7 2-4.2z', C.navy)}
+  adPaymentsManagement: (c) => (<>
+    {box(5, 12, 38, 23, c, 3)}
+    {s('M5 20h38', c)}
+    {s('M11 29h8', c)}
+    {s('M28 29l7-3.5v7L28 29z', c)}
   </>),
 
-  superAdminTopup: () => (<>
-    {r(5, 12, 38, 26, C.blue, 4)}
-    {r(5, 12, 38, 7, C.blueDark, 4)}
-    {c(34, 28, 8, C.gold)}
-    {stroke('M34 24v8M30 28h8', C.white, 3)}
+  salarySettings: (c) => (<>
+    {ring(18, 18, 8.5, c)}
+    {ring(18, 18, 3.2, c)}
+    {s('M18 6v3.5M18 26.5V30M6 18h3.5M26.5 18H30M10.2 10.2l2.5 2.5M23.3 23.3l2.5 2.5M25.8 10.2l-2.5 2.5M12.7 23.3l-2.5 2.5', c, 2)}
+    {box(24, 28, 18, 12, c, 2, 2.2)}
+    {ring(33, 34, 2.8, c, 2)}
   </>),
 
-  adAnalytics: () => (<>
-    {r(6, 9, 36, 31, C.bluePale, 3)}
-    {r(12, 26, 5, 9, C.blue, 1.2)}
-    {r(21, 20, 5, 15, C.green, 1.2)}
-    {r(30, 15, 5, 20, C.gold, 1.2)}
-    {c(37, 12, 7, C.purple)}
-    {p('M33.5 12l5-2.5v5l-5-2.5z', C.white)}
+  entertainment: (c) => (<>
+    {box(6, 12, 36, 24, c, 3)}
+    {s('M14 12v24M34 12v24', c)}
+    {s('M22 19l7 5-7 5z', c)}
   </>),
 
-  advertiserManagement: () => (<>
-    {c(24, 24, 18, C.purpleLight)}
-    {p('M13 21l15-7v20l-15-7v-6z', C.purple)}
-    {r(9, 21, 4, 6, C.navy, 1)}
-    {stroke('M32 18c3 3 3 9 0 12', C.purple, 2.8)}
+  moreFeaturesTile: (c) => (<>
+    {s('M20 7l3.2 8.8L32 19l-8.8 3.2L20 31l-3.2-8.8L8 19l8.8-3.2L20 7z', c)}
+    {s('M35 27l1.7 4.3 4.3 1.7-4.3 1.7L35 39l-1.7-4.3L29 33l4.3-1.7L35 27z', c)}
   </>),
 
-  adPackagesManagement: () => (<>
-    {p('M24 6l17 8-17 8-17-8 17-8z', C.blueLight)}
-    {p('M7 14v20l17 8V22L7 14z', C.blue)}
-    {p('M41 14v20l-17 8V22l17-8z', C.blueDark)}
+  // ---- bill categories ----
+  // Drawn inside a ring, because the Bill Payment step shows them as one row
+  // of choices rather than as service tiles.
+  billElectricity: (c) => (<>
+    {ring(24, 24, 16, c)}
+    {s('M26 13l-9 13h7l-2 9 9-13h-7l2-9z', c)}
   </>),
 
-  adPaymentsManagement: () => (<>
-    {r(5, 13, 38, 23, C.purple, 3)}
-    {r(5, 19, 38, 5, C.navy)}
-    {r(10, 28, 11, 3.5, C.purpleLight, 1.5)}
-    {c(35, 30, 7, C.gold)}
-    {p('M32 30l5-2.5v5L32 30z', C.navy)}
+  billWater: (c) => (<>
+    {ring(24, 24, 16, c)}
+    {s('M24 13c4 5 7 8.6 7 12.6a7 7 0 0 1-14 0c0-4 3-7.6 7-12.6z', c)}
   </>),
 
-  salarySettings: () => (<>
-    {r(18.5, 5, 5, 7, C.green, 1.5)}
-    {r(18.5, 29, 5, 7, C.green, 1.5)}
-    {r(4, 18, 7, 5, C.green, 1.5)}
-    {r(31, 18, 7, 5, C.green, 1.5)}
-    {c(21, 20.5, 12, C.green)}
-    {c(21, 20.5, 5, C.white)}
-    {c(35, 34, 9, C.gold)}
-    {c(35, 34, 5.5, C.goldLight)}
+  billGas: (c) => (<>
+    {ring(24, 24, 16, c)}
+    {s('M24 12c1 5-3 6-3 10a3 3 0 0 0 6 0c0-1.4-.5-2.4-.5-3 3 2 5 5 5 8.2a7.5 7.5 0 0 1-15 0C16.5 21 21 18 24 12z', c)}
   </>),
 
-  salaryReports: () => (<>
-    {p('M11 5h17l9 9v29a2 2 0 0 1-2 2H11a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z', C.greenLight)}
-    {p('M28 5l9 9h-9V5z', C.green)}
-    {r(14, 31, 4.5, 7, C.green, 1.2)}
-    {r(21.5, 27, 4.5, 11, C.blue, 1.2)}
-    {c(31, 31, 6.5, C.gold)}
-    {c(31, 31, 4, C.goldLight)}
+  billInternet: (c) => (<>
+    {ring(24, 24, 16, c)}
+    {s('M15 22a13 13 0 0 1 18 0', c)}
+    {s('M19 26.5a7.5 7.5 0 0 1 10 0', c)}
+    {dot(24, 31, 1.8, c)}
+  </>),
+
+  billTv: (c) => (<>
+    {ring(24, 24, 16, c)}
+    {box(14, 17, 20, 14, c, 2.5, 2.2)}
+    {s('M20 35h8', c, 2.2)}
+  </>),
+
+  billMobile: (c) => (<>
+    {ring(24, 24, 16, c)}
+    {box(18, 13, 12, 22, c, 3, 2.2)}
+    {dot(24, 31, 1.5, c)}
+  </>),
+
+  billUtilities: (c) => (<>
+    {ring(24, 24, 16, c)}
+    {box(16, 16, 6.5, 6.5, c, 1.5, 2.2)}
+    {box(25.5, 16, 6.5, 6.5, c, 1.5, 2.2)}
+    {box(16, 25.5, 6.5, 6.5, c, 1.5, 2.2)}
+    {box(25.5, 25.5, 6.5, 6.5, c, 1.5, 2.2)}
   </>),
 };
 
-// Keys that mean the same thing to a person, so they get the same drawing.
+// One drawing can stand for several keys. Anything not listed falls through
+// to its own name.
 const ALIASES = {
   adminSupport: 'support',
   staffSupport: 'support',
@@ -483,9 +457,10 @@ const ALIASES = {
   orders: 'history',
   staffReports: 'reports',
   staffInquiries: 'inquiries',
-  apiProviderManagement: 'apiManagement',
   operations: 'adminFeatures',
   system: 'adminFeatures',
+  apiProviderManagement: 'apiManagement',
+  home: 'adminHome',
 };
 
 export function hasServiceArt(key) {
@@ -494,13 +469,13 @@ export function hasServiceArt(key) {
 }
 
 /** A drawn icon for a service key, or null when there is no drawing yet. */
-export default function ServiceArt({ name, size = 30 }) {
+export default function ServiceArt({ name, size = 30, color }) {
   const key = ALIASES[name] || name;
-  const Draw = ART[key];
-  if (!Draw) return null;
+  const draw = ART[key];
+  if (!draw) return null;
   return (
     <Svg width={size} height={size} viewBox="0 0 48 48">
-      <G><Draw /></G>
+      <G>{draw(color || DEFAULT_COLOR)}</G>
     </Svg>
   );
 }
