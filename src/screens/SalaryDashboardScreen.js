@@ -46,7 +46,10 @@ export default function SalaryDashboardScreen() {
   } = useTheme();
 
   const styles = createStyles(colors);
-  const { goBackOrHome, authUser, setScreen, openCreatePayslip, openPayslipHistory } = useApp();
+  // gridManagement gates the Salary Settings button below and was not
+  // destructured, so opening the salary dashboard threw "Property
+  // 'gridManagement' doesn't exist" - the same omission as AdminHomeScreen.
+  const { goBackOrHome, authUser, setScreen, openCreatePayslip, openPayslipHistory, gridManagement } = useApp();
 
   const [settings, setSettings] = useState(undefined); // undefined = still loading, null = none saved yet
   const [workLogEntries, setWorkLogEntries] = useState([]);

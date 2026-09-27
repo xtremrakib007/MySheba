@@ -88,6 +88,16 @@ async function getDailyStatsInRange(startKey, endKey) {
  * campaigns/advertisers is nowhere near the "millions of raw impression
  * documents" scale the PERFORMANCE section is about; this is the same
  * "small config collection, just read it" posture analyticsService.js's
+ * own dashboard read takes.
+ *
+ * The terminator on this comment was missing, and the sentence above was
+ * cut off mid-phrase - so the comment ran on and swallowed all of
+ * getCountsSummary below it, all the way to the next comment's close 29
+ * lines later. The function simply did not exist, and getAdDashboard's
+ * call to it threw ReferenceError. Its .catch() fallback never ran, because
+ * calling an undefined identifier throws synchronously before any promise
+ * is created - so the whole ad dashboard failed, not just its counts.
+ */
 async function getCountsSummary() {
   const [campaigns, ads, advertiserCount] = await Promise.all([
     getAllDocs(AD_COLLECTIONS.CAMPAIGNS),

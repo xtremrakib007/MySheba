@@ -86,6 +86,15 @@ exports.approveVerification = onCall({ enforceAppCheck: false }, async (request)
   if (!targetUid || typeof targetUid !== 'string') throw new HttpsError('invalid-argument', 'targetUid is required.');
   const reqRef = db.collection('verificationRequests').doc(targetUid);
   const userRef = db.collection('users').doc(targetUid);
+  // Declared before the try, not inside it. `let` is block-scoped, so the
+  // declaration that used to sit inside the try was out of scope by the time
+  // logAudit read it after the catch - and that read is AFTER the
+  // transaction commits. Approving a verification therefore wrote the
+  // approval, then threw ReferenceError on the way out: the admin saw a
+  // failure, retried, and got "This user is already verified." The person
+  // was approved the whole time. rejectVerification already declares it
+  // here, which is why only approve was broken.
+  let reviewedByRole = '';
   try {
     const requestSnap = await reqRef.get();
     if (!requestSnap.exists) throw new HttpsError('not-found', 'That verification request does not exist.');
@@ -95,7 +104,6 @@ exports.approveVerification = onCall({ enforceAppCheck: false }, async (request)
     if (requestData.documentType !== 'Passport') urls.push(requestData.backDocumentUrl);
     for (const url of urls) await assertVerificationObject(url, targetUid);
 
-    let reviewedByRole = '';
     await db.runTransaction(async (tx) => {
       const callerSnap = await tx.get(db.collection('users').doc(callerUid));
       const currentCaller = callerSnap.exists ? callerSnap.data() : null;

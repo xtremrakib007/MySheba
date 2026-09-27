@@ -26,7 +26,8 @@
     "audit:jsxdefs": "node scripts/audit-undefined-jsx.js",
     "deploy:functions": "node scripts/deploy-functions.js",
     "test:face": "node scripts/test-face-event.js",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "lint": "eslint src App.js scripts functions"
   },
   "dependencies": {
     "expo": "~53.0.0",
@@ -75,6 +76,9 @@
     "@firebase/rules-unit-testing": "^5.0.0",
     "@types/react": "~19.0.10",
     "babel-plugin-transform-remove-console": "^6.9.4",
+    "esbuild": "^0.28.2",
+    "eslint": "^9.39.5",
+    "globals": "^16.5.0",
     "patch-package": "^8.0.1",
     "typescript": "~5.8.3"
   },
