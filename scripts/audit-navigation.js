@@ -90,13 +90,20 @@ const dealerTabs = new Set(arrayKeys(read('src/screens/DealerHomeScreen.js'), 'F
 const resellerTabs = new Set(arrayKeys(read('src/screens/ResellerHomeScreen.js'), 'FEATURES'));
 
 // ---- 1. every setScreen() target is a screen App.js renders ----
-for (const file of fs.readdirSync(path.join(root, 'src/screens'))) {
-  if (!file.endsWith('.js')) continue;
-  const rel = `src/screens/${file}`;
-  for (const target of new Set(matches(read(rel), /setScreen\('([a-zA-Z]+)'\)/g))) {
-    if (screens.has(target)) { checked += 1; continue; }
-    if (isReachable(rel)) check('setScreen', `${file} -> '${target}'`, 'App.js renders no such screen', false);
-    else notes.push(`${file} -> setScreen('${target}') has no screen, but nothing imports ${file}`);
+// components and steps as well as screens. This used to read src/screens
+// only, and the grid does its routing from src/components/ServiceGrid.js -
+// so two tiles pointing at screens App.js does not render ('billPayment'
+// and a 'businessProfile' left behind by a retired feature) sat here
+// passing the check that exists to catch exactly that.
+for (const dir of ['src/screens', 'src/components', 'src/steps']) {
+  for (const file of fs.readdirSync(path.join(root, dir))) {
+    if (!file.endsWith('.js')) continue;
+    const rel = `${dir}/${file}`;
+    for (const target of new Set(matches(read(rel), /setScreen\('([a-zA-Z]+)'\)/g))) {
+      if (screens.has(target)) { checked += 1; continue; }
+      if (isReachable(rel)) check('setScreen', `${file} -> '${target}'`, 'App.js renders no such screen', false);
+      else notes.push(`${file} -> setScreen('${target}') has no screen, but nothing imports ${file}`);
+    }
   }
 }
 

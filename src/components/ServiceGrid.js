@@ -19,8 +19,8 @@ const CUSTOMER_SERVICES = [
   // Money & connectivity
   { key: 'recharge', icon: 'recharge', name: 'Mobile Top-Up', kind: 'service' , home: true },
   { key: 'internet', icon: 'internet', name: 'Internet (Data & Voice)', kind: 'service' , home: true },
-  { key: 'rechargePin', icon: 'recharge', name: 'PIN Generate', kind: 'rechargePin' },
-  { key: 'billpayment', icon: 'billpayment', name: 'Bill Payment', kind: 'service' },
+  { key: 'rechargePin', icon: 'recharge', name: 'PIN Generate', kind: 'rechargePin' , home: true },
+  { key: 'billpayment', icon: 'billpayment', name: 'Bill Payment', kind: 'service' , home: true },
   { key: 'mobilebanking', icon: 'mobilebanking', name: 'Mobile Banking', kind: 'service' , home: true },
   { key: 'remittance', icon: 'remittance', name: 'Remittance', kind: 'service' , home: true },
 
@@ -36,7 +36,7 @@ const CUSTOMER_SERVICES = [
   { key: 'passport', icon: 'passport', name: 'Passport', kind: 'webview' , home: true },
 
   // Other services
-  { key: 'entertainment', icon: 'entertainment', name: 'Entertainment', kind: 'service' },
+  { key: 'entertainment', icon: 'entertainment', name: 'Entertainment', kind: 'service' , home: true },
   { key: 'salary', icon: 'salary', name: 'Salary & Payslip', kind: 'salary' },
   { key: 'documents', icon: 'passport', name: 'Documents', kind: 'documents' },
   { key: 'moreFeaturesTile', icon: 'more', name: 'More Services', kind: 'moreFeaturesLink' },
@@ -139,9 +139,6 @@ export function useServiceAction() {
     if (s.kind === 'walletTransfer') return setScreen('transferPoints');
     if (s.kind === 'kyc') return setScreen('verifyIdentity');
     if (s.kind === 'support') return setScreen('support');
-    if (s.kind === 'businessProfile') return setScreen('businessProfile');
-    if (s.kind === 'billPayment') return setScreen('billPayment');
-    if (s.kind === 'billpayment') return setScreen('billPayment');
     if (s.kind === 'history') return setScreen('history');
     if (s.kind === 'myaccount') return setScreen('myAccount');
     if (s.kind === 'profile') return setScreen('profile');
@@ -178,9 +175,16 @@ export const PRIMARY_SERVICES = CUSTOMER_SERVICES;
 
 // `homeOnly` draws just the tiles flagged `home: true`, for the home screen.
 // The customer list is 17 tiles - the whole catalogue, every time, before
-// anything else on the page gets a look in. The Services tab renders the full
-// grid (BottomNav maps 'services' to the moreFeatures screen), so home shows
-// the flagged set and hands off, always ending on More Services.
+// anything else on the page gets a look in, so home shows the flagged set
+// and ends on More Services.
+//
+// An unflagged tile is NOT automatically picked up somewhere else. This
+// comment used to claim the Services tab rendered the full grid; it does
+// not - MoreFeaturesScreen builds its own lists - and PIN Generate, Bill
+// Payment and Entertainment sat unflagged and unlisted, which made three
+// finished features unreachable. MoreFeaturesScreen now derives its
+// overflow section from this list, so dropping `home` moves a tile there
+// rather than deleting it from the app.
 export default function ServiceGrid({ homeOnly }) {
   const { colors } = useTheme(); const { webViewBusy, profile, gridManagement, can } = useApp();
   const handlePress = useServiceAction(); const role = profile?.role || 'customer';
