@@ -23,7 +23,8 @@
     "publish:ota": "node scripts/publish-ota.js",
     "test:otp": "node scripts/test-otp-challenge.js",
     "test:dates": "node scripts/test-date-field.js",
-    "audit:jsxdefs": "node scripts/audit-undefined-jsx.js"
+    "audit:jsxdefs": "node scripts/audit-undefined-jsx.js",
+    "deploy:functions": "node scripts/deploy-functions.js"
   },
   "dependencies": {
     "expo": "~53.0.0",
