@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-nati
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
+import { showAlert } from '../utils/appAlert';
 import HeaderDecor from '../components/HeaderDecor';
 import AppHeader from '../components/AppHeader';
 import WalletCard from '../components/WalletCard';
@@ -124,9 +125,19 @@ export default function AdminFeaturesScreen() {
     return allow(items).map((item) => ({ ...item, badge: badges[item.key] }));
   };
   const saveRate = async (value) => {
-    const key = editRateKey; setEditRateKey(null); const num = Number(value);
-    if (!key || !Number.isFinite(num) || num <= 0) return;
-    try { await ratesService.updateRate(key, num); } catch (e) {}
+    const key = editRateKey;
+    const num = Number(value);
+    if (!key) return;
+    if (!Number.isFinite(num) || num <= 0) {
+      showAlert('MySheba', 'Enter a valid rate greater than zero.');
+      return;
+    }
+    try {
+      await ratesService.updateRate(key, num);
+      setEditRateKey(null);
+    } catch (e) {
+      showAlert('MySheba', e?.message || 'Could not update rate. Please try again.');
+    }
   };
   const renderRateRows = (fields) => fields.map((field) => (
     <View key={field.key} style={styles.rateRow}>
@@ -189,7 +200,6 @@ export default function AdminFeaturesScreen() {
         { key: 'trustedDevices', icon: '📱', bg: '#E3F2FD', name: 'Trusted Devices' },
         { key: 'tierPromotions', icon: '🏆', bg: '#FFF3E0', name: 'Tier Promotions' },
         { key: 'superAdminTopup', icon: '💳', bg: '#E8F5E9', name: 'Point Top-Up' },
-        { key: 'adFeatureControls', icon: '🛡️', bg: '#EDE7F6', name: 'Ad Controls' },
         { key: 'adAnalytics', icon: '📊', bg: '#E3F2FD', name: 'Ad Analytics' },
         { key: 'advertiserManagement', icon: '👥', bg: '#E0F7FA', name: 'Advertisers' },
         { key: 'adPackagesManagement', icon: '📦', bg: '#FFF3E0', name: 'Ad Packages' },
