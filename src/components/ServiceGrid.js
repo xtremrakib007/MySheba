@@ -120,7 +120,7 @@ export function Tile({ s, onPress, disabled }) {
     {hasBusLogo(artKey)
       ? <View style={styles.logoWrap}><BusOperatorLogo operatorKey={artKey} size={32} /></View>
       : hasServiceArt(artKey)
-        ? <View style={styles.logoWrap}><ServiceArt name={artKey} size={32} /></View>
+        ? <View style={styles.logoWrap}><ServiceArt name={artKey} size={32} color={colors.primary} /></View>
         : <Text style={styles.emoji} numberOfLines={1}>{serviceEmoji(artKey)}</Text>}
     <Text style={[styles.name, { color: colors.text || '#222' }]} numberOfLines={2}>{label}</Text>
   </TouchableOpacity>;
