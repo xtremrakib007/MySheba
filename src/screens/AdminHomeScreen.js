@@ -261,6 +261,11 @@ export default function AdminHomeScreen() {
     adminTab, rates, pricing, internetPricing, supportContact, paymentSettings,
     logout, setScreen, openSidebar, setHomeBackInterceptor, homepageConfig,
     adminViewingSection: viewingSection, setAdminViewingSection: setViewingSection,
+    // Missed when the line above was restored, so the FEATURES filter threw
+    // "Property 'gridManagement' doesn't exist" and took the admin and
+    // superadmin dashboard down on render - the same regression as
+    // viewingSection, from the same deleted line.
+    gridManagement,
   } = useApp();
   const [editRateKey, setEditRateKey] = useState(null);
   const [editPricingKey, setEditPricingKey] = useState(null);
