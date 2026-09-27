@@ -9,6 +9,7 @@ import PromptModal from '../components/PromptModal';
 import BannerSlider from '../components/BannerSlider';
 import ServiceGrid from '../components/ServiceGrid';
 import AccountToolsGrid from '../components/AccountToolsGrid';
+import RoleToolsGrid from '../components/RoleToolsGrid';
 import CopyButton from '../components/CopyButton';
 import TransactionDetailModal from '../components/TransactionDetailModal';
 import AttachFileModal from '../components/AttachFileModal';
@@ -202,6 +203,7 @@ export default function DealerHomeScreen() {
               ]}
             />
             <AccountToolsGrid />
+            <RoleToolsGrid role="dealer" />
           </>
         )}
 
