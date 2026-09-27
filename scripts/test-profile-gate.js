@@ -58,19 +58,32 @@ is('present from server -> use it',
 
 console.log('\n-- single-device rule: fires when it should, never when it should not --');
 is('another device took over while running -> sign out (feature kept)',
-   shouldEndSessionForDevice({ localSessionId: 'a', activeSessionId: 'b', initialRouteDone: true, deviceCheckDeferred: false }), true);
+   shouldEndSessionForDevice({ localSessionId: 'a', activeSessionId: 'b', activeDeviceId: 'phone-2', deviceId: 'phone-1', initialRouteDone: true, deviceCheckDeferred: false }), true);
 is('same session -> no',
-   shouldEndSessionForDevice({ localSessionId: 'a', activeSessionId: 'a', initialRouteDone: true, deviceCheckDeferred: false }), false);
+   shouldEndSessionForDevice({ localSessionId: 'a', activeSessionId: 'a', activeDeviceId: 'phone-2', deviceId: 'phone-1', initialRouteDone: true, deviceCheckDeferred: false }), false);
 is('mismatch during first route after launch -> no',
-   shouldEndSessionForDevice({ localSessionId: 'a', activeSessionId: 'b', initialRouteDone: false, deviceCheckDeferred: false }), false);
+   shouldEndSessionForDevice({ localSessionId: 'a', activeSessionId: 'b', activeDeviceId: 'phone-2', deviceId: 'phone-1', initialRouteDone: false, deviceCheckDeferred: false }), false);
 is('mismatch but device check was deferred -> no (stale id, we never asked)',
-   shouldEndSessionForDevice({ localSessionId: 'a', activeSessionId: 'b', initialRouteDone: true, deviceCheckDeferred: true }), false);
+   shouldEndSessionForDevice({ localSessionId: 'a', activeSessionId: 'b', activeDeviceId: 'phone-2', deviceId: 'phone-1', initialRouteDone: true, deviceCheckDeferred: true }), false);
 is('no local id -> nothing to compare',
-   shouldEndSessionForDevice({ localSessionId: null, activeSessionId: 'b', initialRouteDone: true, deviceCheckDeferred: false }), false);
+   shouldEndSessionForDevice({ localSessionId: null, activeSessionId: 'b', activeDeviceId: 'phone-2', deviceId: 'phone-1', initialRouteDone: true, deviceCheckDeferred: false }), false);
 is('no active id on the profile -> nothing to compare',
-   shouldEndSessionForDevice({ localSessionId: 'a', activeSessionId: null, initialRouteDone: true, deviceCheckDeferred: false }), false);
+   shouldEndSessionForDevice({ localSessionId: 'a', activeSessionId: null, activeDeviceId: 'phone-2', deviceId: 'phone-1', initialRouteDone: true, deviceCheckDeferred: false }), false);
 is('called with nothing -> no',
    shouldEndSessionForDevice(), false);
+
+// Only another DEVICE signing in ends a session. The server mints a new
+// activeSessionId on every sign-in, so a re-login on this same phone moves
+// it with nobody else involved - ending the session on that alone is a
+// device signing itself out.
+is('session id moved but the active device is still this phone -> stay in',
+   shouldEndSessionForDevice({ localSessionId: 'a', activeSessionId: 'b', activeDeviceId: 'phone-1', deviceId: 'phone-1', initialRouteDone: true, deviceCheckDeferred: false }), false);
+is('another device is now active -> sign out',
+   shouldEndSessionForDevice({ localSessionId: 'a', activeSessionId: 'b', activeDeviceId: 'phone-2', deviceId: 'phone-1', initialRouteDone: true, deviceCheckDeferred: false }), true);
+is('profile has no activeDeviceId -> nothing to compare, stay in',
+   shouldEndSessionForDevice({ localSessionId: 'a', activeSessionId: 'b', activeDeviceId: null, deviceId: 'phone-1', initialRouteDone: true, deviceCheckDeferred: false }), false);
+is('this device has no id yet -> nothing to compare, stay in',
+   shouldEndSessionForDevice({ localSessionId: 'a', activeSessionId: 'b', activeDeviceId: 'phone-2', deviceId: null, initialRouteDone: true, deviceCheckDeferred: false }), false);
 
 console.log('\n-- the splash must never be able to hang --');
 // Structural, not behavioural: the watchdog lives inside a React effect and

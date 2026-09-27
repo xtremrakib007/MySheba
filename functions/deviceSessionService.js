@@ -382,7 +382,25 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: false }, async (request) 
 
     if (!result.requiresOtp) {
       if (verifiedNewStaffDevice) {
-        try { await admin.auth().revokeRefreshTokens(uid); } catch (error) { await logServerError('checkDeviceSession.revokeRefreshTokens', error, { userId: uid }); }
+        // No revokeRefreshTokens here. It used to sit on this line, and it
+        // ended the session it had just created.
+        //
+        // revokeRefreshTokens(uid) sets tokensValidAfterTime to now and kills
+        // every refresh token issued BEFORE that instant - including the one
+        // this device got from signInWithPassword a second or two ago. There
+        // is no way to exclude the caller; the API is all or nothing. The ID
+        // token already in memory stays good for up to an hour, so the app
+        // looked fine, and then the first time the SDK had to refresh - which
+        // is what closing and reopening the app forces - the refresh was
+        // rejected, Firebase reported no user, and the person was back on the
+        // login screen. That is the "closed the app and it logged me out"
+        // report, and no client change could have fixed it.
+        //
+        // Kicking the other devices is still done, by the activeDeviceId and
+        // activeSessionId written just above: shouldEndSessionForDevice ends
+        // a session whose device is no longer the active one. An admin who
+        // wants to force someone out immediately still has adminForceLogout,
+        // which revokes deliberately and is not signing anyone in.
         try { await sendNewDeviceAlert({ email: normalizeEmail(profile.email) || null, pushToken: profile.pushToken || null, deviceId, ip }); } catch (error) {}
       }
       if (isStaffRole(profile.role)) await logAudit({ action: 'staff_login', targetUid: uid, performedBy: uid, performedByRole: profile.role, details: { deviceId, ip, newDevice: verifiedNewStaffDevice } });
@@ -456,7 +474,9 @@ exports.confirmDeviceSwitch = onCall({ enforceAppCheck: false }, async (request)
       trustedDevices: trustedMap(profile.trustedDevices, deviceId, ip, null),
       lastLoginAt: FieldValue.serverTimestamp(),
     });
-    try { await admin.auth().revokeRefreshTokens(uid); } catch (error) { await logServerError('confirmDeviceSwitch.revokeRefreshTokens', error, { userId: uid }); }
+    // Same reason as checkDeviceSession above: revoking here would kill the
+    // refresh token this device was issued moments ago, and the sign-in it
+    // just confirmed would not survive the next app restart.
     await logAudit({ action: 'device_switch_confirmed', targetUid: uid, performedBy: uid, performedByRole: profile.role, details: { deviceId, ip, method: phoneIdToken ? 'sms' : 'email' } });
     await checkIpAnomaly(db, uid, ip, { action: 'device_switch', role: profile.role });
     try { await sendNewDeviceAlert({ email: normalizeEmail(profile.email) || null, pushToken: profile.pushToken || null, deviceId, ip }); } catch (error) {}

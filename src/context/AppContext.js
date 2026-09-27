@@ -1240,6 +1240,8 @@ export function AppProvider({ children }) {
                 shouldEndSessionForDevice({
                   localSessionId,
                   activeSessionId: p.activeSessionId,
+                  activeDeviceId: p.activeDeviceId,
+                  deviceId: await deviceSessionService.getDeviceId(),
                   initialRouteDone,
                   deviceCheckDeferred,
                 })

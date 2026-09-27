@@ -63,16 +63,29 @@ export function classifyProfileSnapshot(profile, meta) {
  *     deferred and leaves the local id stale, so a mismatch says nothing
  *     about another device taking over - only that we never asked.
  *   - either id is missing, which is the same "nothing to compare" case.
+ *   - the account's active device is still THIS device. A changed session id
+ *     on the same phone is not another device taking over, and it happens
+ *     routinely: the server mints a new activeSessionId on every sign-in,
+ *     so a re-login here moves it without anyone else being involved. Ending
+ *     the session on that alone is how a device signed itself out. The rule
+ *     is "someone else signed in", so it is the DEVICE that has to differ.
  */
 export function shouldEndSessionForDevice({
   localSessionId,
   activeSessionId,
+  activeDeviceId,
+  deviceId,
   initialRouteDone,
   deviceCheckDeferred,
 } = {}) {
-  if (!localSessionId || !activeSessionId) return false;
-  if (localSessionId === activeSessionId) return false;
   if (!initialRouteDone) return false;
   if (deviceCheckDeferred) return false;
+  if (!localSessionId || !activeSessionId) return false;
+  if (localSessionId === activeSessionId) return false;
+  // Nothing to compare, or the active device is still us: stay signed in.
+  // Erring towards staying in is deliberate - the cost of being wrong here
+  // is someone signed out for no reason they can see.
+  if (!activeDeviceId || !deviceId) return false;
+  if (activeDeviceId === deviceId) return false;
   return true;
 }
