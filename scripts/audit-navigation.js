@@ -151,11 +151,11 @@ for (const key of arrayKeys(read('src/components/AccountToolsGrid.js'), 'ITEMS')
 // ---- 4c. every managed grid key is allowed by the Firestore rules whitelist ----
 const gridDefs = read('src/firebase/gridManagementService.js');
 const rules = read('firestore.rules');
-const gridRuleLines = rules.split('\\n').filter((line) => line.includes('match /settings/gridManagement'));
+const gridRuleLines = rules.split('\n').filter((line) => line.includes('match /settings/gridManagement'));
 const gridRuleLine = gridRuleLines[0] || '';
-const createGridWhitelist = (gridRuleLine.match(/allow create:[\\s\\S]*?hasOnly\\(\\[([^\\]]*)\\]\\)/) || [, ''])[1];
-const updateGridWhitelist = (gridRuleLine.match(/allow update:[\\s\\S]*?hasOnly\\(\\[([^\\]]*)\\]\\)/) || [, ''])[1];
-for (const key of matches(gridDefs, /\\['([a-zA-Z]+)','[^']+'\\]/g)) {
+const createGridWhitelist = (gridRuleLine.match(/allow create:[\s\S]*?hasOnly\(\[([^\]]*)\]\)/) || [, ''])[1];
+const updateGridWhitelist = (gridRuleLine.match(/allow update:[\s\S]*?hasOnly\(\[([^\]]*)\]\)/) || [, ''])[1];
+for (const key of matches(gridDefs, /\['([a-zA-Z]+)','[^']+'\]/g)) {
   const allowedOnCreate = createGridWhitelist.includes("'" + key + "'");
   const allowedOnUpdate = updateGridWhitelist.includes("'" + key + "'");
   check('grid-management', key, 'missing Firestore create/update whitelist entry', gridRuleLines.length === 1 && allowedOnCreate && allowedOnUpdate);
