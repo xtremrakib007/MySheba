@@ -4,6 +4,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { auth } from '../firebase/config';
 import { verifyNativeKycFace } from '../firebase/verificationService';
 import { ExpoFaceRecognitionView } from '@rdnf-magiba/expo-face-recognition';
+import { readFaceEvent, FACE_STATES } from '../utils/faceEvent';
 
 /** Native KYC biometric capture with automatic selfie capture after the live face challenge. */
 export default function LiveFaceCapture({ onCaptured, onCancel }) {
@@ -14,38 +15,42 @@ export default function LiveFaceCapture({ onCaptured, onCancel }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('Look straight at the camera');
-  const [leftSeen, setLeftSeen] = useState(false);
-  const [rightSeen, setRightSeen] = useState(false);
+  // The models load asynchronously and can fail. Nothing listened for that,
+  // so a failure left the person staring at a frame that never responded
+  // with no idea why.
+  const [modelStatus, setModelStatus] = useState('LOADING');
   const lastVerification = useRef(0);
 
   useEffect(() => {
     if (permission && !permission.granted && permission.canAskAgain) requestPermission();
   }, [permission?.granted, permission?.canAskAgain, requestPermission]);
 
-  const getEmbedding = (value) => {
-    const candidate = value?.recognition?.embedding || value?.recognition || value?.embedding;
-    if (!Array.isArray(candidate)) return null;
-    const values = candidate.map(Number);
-    return values.length === 512 && values.every(Number.isFinite) ? values : null;
+  const onModelStatus = (event) => {
+    const next = event?.nativeEvent?.status;
+    if (!next) return;
+    setModelStatus(String(next));
+    const detail = String(event?.nativeEvent?.error || '');
+    // A failed model is a dead end, not a transient hiccup - say so rather
+    // than leaving the person turning their head at an unresponsive frame.
+    if (String(next) === 'FAILED') {
+      setError(detail
+        ? `Face verification is unavailable on this device: ${detail}`
+        : 'Face verification could not start on this device. Please try another device or contact support.');
+    }
   };
 
   const onFaceDetected = async (event) => {
     if (busy || phase !== 'recognition') return;
-    const value = event?.nativeEvent || event || {};
-    const faces = Array.isArray(value.faces) ? value.faces : [];
-    if (faces.length === 0) { setStatus('No face detected — move into the frame'); return; }
-    if (faces.length !== 1) { setStatus('Only one face is allowed'); return; }
 
-    const face = faces[0];
-    const yaw = Number(face?.headEulerAngleY ?? face?.rotationY ?? 0);
-    const embedding = getEmbedding(value);
-    if (yaw < -12) { setLeftSeen(true); setStatus('Good — now turn your face to the right'); }
-    else if (yaw > 12) { setRightSeen(true); setStatus('Good — now look straight at the camera'); }
-    else if (!leftSeen) setStatus('Slowly turn your face to the left');
-    else if (!rightSeen) setStatus('Slowly turn your face to the right');
-    else setStatus('Hold still — verifying your face');
+    // The event is a flat object, not a list of faces with head angles -
+    // see src/utils/faceEvent.js for what the native view actually sends.
+    const { state, message, embedding } = readFaceEvent(event?.nativeEvent || event);
+    setStatus(message);
+    if (state !== FACE_STATES.READY || !embedding) return;
 
-    if (!embedding || !leftSeen || !rightSeen || Math.abs(yaw) > 10) return;
+    // The library runs its own spoof check on every frame, so liveness is
+    // already established by the time an embedding arrives. Throttled so a
+    // steady face does not fire the callable on every frame.
     if (Date.now() - lastVerification.current < 2500) return;
     lastVerification.current = Date.now();
     setBusy(true); setError('');
@@ -60,7 +65,7 @@ export default function LiveFaceCapture({ onCaptured, onCancel }) {
       setStatus('Face verified — keep still');
     } catch (err) {
       setError(err?.message || 'Face verification failed. Please try again.');
-      setLeftSeen(false); setRightSeen(false); setStatus('Look straight at the camera');
+      setStatus('Look straight at the camera');
     } finally { setBusy(false); }
   };
 
@@ -78,7 +83,7 @@ export default function LiveFaceCapture({ onCaptured, onCancel }) {
       } catch (err) {
         captureStarted.current = false;
         setError(err?.message || 'Could not capture the selfie. Please try again.');
-        setPhase('recognition'); setLeftSeen(false); setRightSeen(false); setStatus('Look straight at the camera');
+        setPhase('recognition'); setStatus('Look straight at the camera');
       } finally { setBusy(false); }
     }, 900);
     return () => clearTimeout(timer);
@@ -104,10 +109,21 @@ export default function LiveFaceCapture({ onCaptured, onCancel }) {
   </View>;
 
   return <View style={styles.container}>
-    <ExpoFaceRecognitionView style={styles.camera} onFaceDetected={onFaceDetected} />
+    {/* isGPUEnabled is what triggers the native setIsGPUEnabled, and that
+        is the only path that calls specsDetector.initialize() and reports
+        model status. Without the prop the setter never runs, so the glasses
+        detector stayed uninitialised and detectSpecs was called on it for
+        every frame. CPU rather than GPU because it is the more compatible
+        of the two and this runs once per person, not continuously. */}
+    <ExpoFaceRecognitionView
+      style={styles.camera}
+      isGPUEnabled={false}
+      onFaceDetected={onFaceDetected}
+      onModelStatus={onModelStatus}
+    />
     <View style={styles.overlay} pointerEvents="box-none">
       <View style={styles.topBar}><Text style={styles.badge}>LIVE FACE VERIFICATION</Text><TouchableOpacity onPress={onCancel} style={styles.close}><Text style={styles.closeText}>✕</Text></TouchableOpacity></View>
-      <View style={styles.guideArea} pointerEvents="none"><View style={styles.faceGuide}><View style={styles.faceInner} /></View><Text style={styles.instruction}>{status}</Text><Text style={styles.subInstruction}>One face only • turn left • turn right • return straight</Text></View>
+      <View style={styles.guideArea} pointerEvents="none"><View style={styles.faceGuide}><View style={styles.faceInner} /></View><Text style={styles.instruction}>{status}</Text><Text style={styles.subInstruction}>{modelStatus === 'FAILED' ? 'Face models could not load on this device' : 'Hold your face inside the oval in good light'}</Text></View>
       <View style={styles.bottom} pointerEvents="none"><Text style={styles.security}>🔒 Live face recognition + duplicate check</Text>{error ? <Text style={styles.error}>{error}</Text> : null}{busy ? <ActivityIndicator color="#fff" size="large" /> : null}</View>
     </View>
   </View>;
