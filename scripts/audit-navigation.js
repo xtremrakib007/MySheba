@@ -121,6 +121,19 @@ for (const group of ['OPERATIONS', 'FINANCE', 'USERS', 'PLATFORM', 'SYSTEM']) {
   }
 }
 
+// ---- 2b. admin section selectors must render every category's own grid ----
+check(
+  'admin/section-routing',
+  'platform',
+  'Platform & Content selector falls through to System Control',
+  /section === 'platform'\s*\?\s*PLATFORM/.test(adminFeat)
+);
+
+// ---- 2c. support and finance Reports tiles must render role-specific content ----
+const reportsScreen = read('src/screens/ReportsScreen.js');
+check('reports/support', 'support', 'Reports screen has no Support Agent renderer', /role === 'support'\s*&&\s*<SupportReports/.test(reportsScreen));
+check('reports/finance', 'finance', 'Reports screen has no Finance renderer', /role === 'finance'\s*&&\s*<FinanceReports/.test(reportsScreen));
+
 // ---- 3. dealer + reseller dashboards ----
 for (const key of arrayKeys(read('src/screens/DealerFeaturesScreen.js'), 'DASHBOARD_TOOL_DEFS')) {
   if (key === 'topup') { check('dealer/dashboard', key, 'setScreen, but no such screen', screens.has('topup')); continue; }
