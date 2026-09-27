@@ -54,7 +54,6 @@ const ADMIN_GROUPS = [
   { title: 'Platform', icon: 'more', color: 'primary', items: [
     { key: 'banners', icon: 'more', label: 'Banners' },
     { key: 'announcements', icon: 'support', label: 'Announcements' },
-    { key: 'adFeatureControls', icon: 'more', label: 'Ad Controls' },
   ] },
 ];
 
@@ -71,6 +70,8 @@ const SUPERADMIN_GROUPS = [
     { key: 'verificationManagement', icon: 'kyc', label: 'Verification Queue' },
   ] },
   { title: 'Advertising', icon: 'more', color: 'secondary', items: [
+    { key: 'bannerManagement', icon: 'more', label: 'Ad Banners' },
+    { key: 'adFeatureControls', icon: 'more', label: 'Ad Controls' },
     { key: 'adAnalytics', icon: 'history', label: 'Ad Analytics' },
     { key: 'advertiserManagement', icon: 'profile', label: 'Advertisers' },
     { key: 'adPackagesManagement', icon: 'more', label: 'Ad Packages' },
