@@ -199,13 +199,17 @@ check('sidebar/access', 'salary', 'Salary & OT bypasses openSalary module access
 check('sidebar/access', 'documents', 'My Documents bypasses openMyDocuments module access gate', /key === 'myDocuments'\) \{\s*openMyDocuments\(\)/.test(sidebarAccessSource));
 
 // ---- 4d. ProfileScreen self-service fields must be allowed by Firestore rules ----
-const userRuleLine = rules.split('\n').find((line) => line.includes('match /users/{uid}')) || '';
-const userUpdateWhitelist = (userRuleLine.match(/allow update:[\s\S]*?hasOnly\(\[([^\]]*)\]\)/) || [, ''])[1];
+const userRuleStart = rules.indexOf('match /users/{uid}');
+const userRuleEnd = rules.indexOf('\n    match ', userRuleStart + 1);
+const userRuleBlock = userRuleStart >= 0
+  ? rules.slice(userRuleStart, userRuleEnd >= 0 ? userRuleEnd : undefined)
+  : '';
+const userUpdateWhitelist = (userRuleBlock.match(/allow update:[\s\S]*?hasOnly\(\[([^\]]*)\]\)/) || [, ''])[1];
 for (const field of ['mobileNumber', 'passportNumber', 'companyName', 'address', 'country', 'passportCopyUrl', 'passportCopyType']) {
   check('profile/firestore-rules', field, 'ProfileScreen field is blocked by the user update whitelist', userUpdateWhitelist.includes("'" + field + "'"));
 }
-check('profile/firestore-rules', 'passport-copy ownership', 'passport-copy URL is not restricted to the signed-in user path', /passport-copies%2F' \+ uid \+ '%2F/.test(userRuleLine) || rules.includes("passport-copies%2F' + uid + '%2F"));
-check('profile/firestore-rules', 'country validation', 'country edits do not enforce a two-character code', /request\.resource\.data\.country\.size\(\) == 2/.test(rules));
+check('profile/firestore-rules', 'passport-copy ownership', 'passport-copy URL is not restricted to the signed-in user path', /passport-copies%2F' \+ uid \+ '%2F/.test(userRuleBlock) || userRuleBlock.includes("passport-copies%2F' + uid + '%2F"));
+check('profile/firestore-rules', 'country validation', 'country edits do not enforce a two-character code', /request\.resource\.data\.country\.size\(\) == 2/.test(userRuleBlock));
 
 // ---- 4e. staff service shortcuts must land on the correct operational tab ----
 const serviceGridSource = read('src/components/ServiceGrid.js');
