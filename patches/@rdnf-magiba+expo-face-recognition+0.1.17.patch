@@ -1,0 +1,26 @@
+diff --git a/node_modules/@rdnf-magiba/expo-face-recognition/android/src/main/java/expo/modules/facerecognition/ExpoFaceRecognitionView.kt b/node_modules/@rdnf-magiba/expo-face-recognition/android/src/main/java/expo/modules/facerecognition/ExpoFaceRecognitionView.kt
+index 132724b..8089688 100644
+--- a/node_modules/@rdnf-magiba/expo-face-recognition/android/src/main/java/expo/modules/facerecognition/ExpoFaceRecognitionView.kt
++++ b/node_modules/@rdnf-magiba/expo-face-recognition/android/src/main/java/expo/modules/facerecognition/ExpoFaceRecognitionView.kt
+@@ -76,6 +76,21 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
+     private lateinit var frameBitmap: Bitmap
+ //    NEW
+ 
++    /**
++     * Without this, React Native never measures or lays out this view's
++     * children, so the PreviewView added in init() stays 0x0 and the camera
++     * preview renders as a black rectangle - even though CameraX binds
++     * successfully and image analysis keeps delivering frames. See
++     * ExpoView.shouldUseAndroidLayout in expo-modules-core, which documents
++     * exactly this: "without this setting, React Native will not re-render
++     * your view when requestLayout is triggered".
++     *
++     * The init() block's measure/layout hack runs once in a post() right
++     * after construction, when width and height are still 0, so it cannot
++     * cover this on its own.
++     */
++    override val shouldUseAndroidLayout: Boolean = true
++
+     init {
+         init()
+     }
