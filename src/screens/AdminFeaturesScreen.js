@@ -214,7 +214,7 @@ export default function AdminFeaturesScreen() {
         { key: 'reports', icon: '📄', bg: '#FFF3E0', name: 'Reports' },
         { key: 'myDocuments', icon: '📁', bg: '#E0F7FA', name: 'My Documents' },
         { key: 'salaryDashboard', icon: '💵', bg: '#E8F5E9', name: 'Salary & OT' },
-      ].filter((item) => gridManagementService.isGridActive(gridManagement, item.key))} onPress={openItem} />
+      ].filter((item) => gridManagementService.isGridActive(gridManagement, item.key === 'salaryDashboard' ? 'salary' : item.key))} onPress={openItem} />
     </ScrollView>
   </View>;
 }
