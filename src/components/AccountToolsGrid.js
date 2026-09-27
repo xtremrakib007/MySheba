@@ -1,7 +1,7 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
-import { useTheme } from '../theme/ThemeContext';
 import FeatureGrid from './FeatureGrid';
+import * as gridManagementService from '../firebase/gridManagementService';
 
 // Common shortcuts formerly available only from the navigation drawer.
 // Keep these on every role's home screen so users do not need the sidebar
@@ -17,8 +17,10 @@ const ITEMS = [
 
 export default function AccountToolsGrid() {
   const { setScreen, gridManagement } = useApp();
-  const { colors } = useTheme();
-  const items = ITEMS.filter((item) => gridManagement?.[item.key] !== false);
+  const GRID_KEY_FOR = { salaryDashboard: 'salary' };
+  const items = ITEMS.filter((item) =>
+    gridManagementService.isGridActive(gridManagement, GRID_KEY_FOR[item.key] || item.key)
+  );
   if (!items.length) return null;
   return <FeatureGrid title="Account & Tools" items={items} onPress={setScreen} />;
 }
