@@ -188,6 +188,46 @@ for (const file of [...reachable]) {
   }
 }
 
+// ---- every Sidebar item goes somewhere ----
+// The sidebar routes with setScreen(item.key) off a data table, so the regex
+// check above sees none of it - which is how nine admin items pointing at
+// AdminHomeScreen tabs instead of screens sat here rendering a blank white
+// page. An item is either a screen App.js renders, or `tab: true` and a tab
+// AdminHomeScreen actually branches on. Anything else opens nothing.
+{
+  const parser = require('@babel/parser');
+  const sidebar = read('src/components/Sidebar.js');
+  const ast = parser.parse(sidebar, { sourceType: 'module', plugins: ['jsx'] });
+  const groupNodes = [];
+  const walk = (n) => {
+    if (!n || typeof n !== 'object') return;
+    if (Array.isArray(n)) { n.forEach(walk); return; }
+    if (n.type === 'VariableDeclarator' && /GROUPS$/.test((n.id && n.id.name) || '')) groupNodes.push(n.init);
+    for (const k of Object.keys(n)) { if (k === 'loc') continue; walk(n[k]); }
+  };
+  walk(ast.program.body);
+  if (!groupNodes.length) check('sidebar', 'Sidebar.js', 'no *_GROUPS tables found - has it been restructured?', false);
+  const prop = (o, name) => {
+    const found = o.properties.find((x) => x.key && x.key.name === name);
+    return found ? found.value : undefined;
+  };
+  for (const node of groupNodes) {
+    for (const group of node.elements) {
+      const items = prop(group, 'items');
+      if (!items) continue;
+      for (const item of items.elements) {
+        const key = prop(item, 'key').value;
+        const isTab = !!prop(item, 'tab');
+        if (isTab) {
+          check('sidebar tab', key, 'AdminHomeScreen has no such adminTab branch', adminTabs.has(key));
+        } else {
+          check('sidebar', key, 'App.js renders no such screen - opens a blank page', screens.has(key));
+        }
+      }
+    }
+  }
+}
+
 // ---- report ----
 console.log(`Navigation audit: ${checked} target(s) checked\n`);
 for (const n of notes) console.log(`  note: ${n}`);
