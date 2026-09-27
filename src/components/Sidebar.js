@@ -52,7 +52,6 @@ const ADMIN_GROUPS = [
     { key: 'verificationManagement', icon: 'kyc', label: 'KYC Verification' },
   ] },
   { title: 'Platform', icon: 'more', color: 'primary', items: [
-    { key: 'featureAccess', icon: 'kyc', label: 'Feature Access' },
     { key: 'banners', icon: 'more', label: 'Banners' },
     { key: 'announcements', icon: 'support', label: 'Announcements' },
     { key: 'adFeatureControls', icon: 'more', label: 'Ad Controls' },
