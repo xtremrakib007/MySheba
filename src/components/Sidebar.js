@@ -92,14 +92,38 @@ function roleGroups(role) {
 export default function Sidebar() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { sidebarVisible, closeSidebar, setScreen, screen, profile, logout, gridManagement, setAdminTab, setAdminViewingSection } = useApp();
+  const { sidebarVisible, closeSidebar, setScreen, screen, profile, logout, gridManagement, setAdminTab, setAdminViewingSection, can } = useApp();
   const translateX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const [collapsed, setCollapsed] = useState({});
 
   const isSuperadmin = profile?.role === 'superadmin';
   const isAdmin = profile?.role === 'admin' || isSuperadmin;
-  const groups = roleGroups(profile?.role);
+  const groups = roleGroups(profile?.role)
+    .map((group) => ({ ...group, items: group.items.filter((item) => {
+      const gridKey = item.key === 'salaryDashboard' ? 'salary' : item.key === 'apiProviderManagement' ? 'apiManagement' : item.key === 'all' ? 'history' : item.key;
+      if (!['adminHome', 'adminFeatures', 'gridManagement'].includes(item.key) && gridManagement?.[gridKey] === false) return false;
+      const required = {
+        adminAnalytics: ['reports'],
+        reports: ['reports'],
+        all: ['orders', 'finance'],
+        pending: ['orders'],
+        inquiries: ['support'],
+        topups: ['finance'],
+        support: ['support'],
+        rates: ['settings'],
+        pricing: ['settings'],
+        payments: ['settings'],
+        transferPoints: ['finance'],
+        userManagement: ['users'],
+        verificationManagement: ['users'],
+        banners: ['settings'],
+        announcements: ['support'],
+      }[item.key];
+      if (required && !required.some((capability) => can(capability))) return false;
+      return true;
+    }) }))
+    .filter((group) => group.items.length > 0);
 
   useEffect(() => {
     if (!sidebarVisible) return;
@@ -116,10 +140,20 @@ export default function Sidebar() {
 
   if (!sidebarVisible) return null;
 
+  const requiredCapabilityFor = (key) => ({
+    adminAnalytics: ['reports'], reports: ['reports'], all: ['orders', 'finance'],
+    pending: ['orders'], inquiries: ['support'], topups: ['finance'], support: ['support'],
+    rates: ['settings'], pricing: ['settings'], payments: ['settings'],
+    transferPoints: ['finance'], userManagement: ['users'], verificationManagement: ['users'],
+    banners: ['settings'], announcements: ['support'],
+  })[key];
+
   const goTo = (key) => {
     const always = ['adminHome','adminFeatures','gridManagement'];
-    const gridKey = key === 'salaryDashboard' ? 'salary' : key === 'apiProviderManagement' ? 'apiManagement' : key;
+    const gridKey = key === 'salaryDashboard' ? 'salary' : key === 'apiProviderManagement' ? 'apiManagement' : key === 'all' ? 'history' : key;
     if (!always.includes(key) && gridManagement?.[gridKey] === false) { showAlert('MySheba', 'This feature is currently unavailable.'); return; }
+    const required = requiredCapabilityFor(key);
+    if (required && !required.some((capability) => can(capability))) { showAlert('MySheba', 'Your account does not have access to this feature.'); return; }
 
     // These entries are tabs inside AdminHomeScreen, not standalone screens.
     // Sending them to setScreen(key) rendered no screen for keys such as
