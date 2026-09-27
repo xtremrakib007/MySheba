@@ -41,6 +41,24 @@ const CUSTOMER_SERVICES = [
   { key: 'moreFeaturesTile', icon: 'more', name: 'More Services', kind: 'moreFeaturesLink' },
 ];
 
+// The services every role can actually use. A dealer still sells a top-up
+// and books a bus; the staff grids used to stop at six management tiles and
+// offered none of this, so the one grid the app has looked like two
+// different apps depending on who signed in.
+const SHARED_SERVICES = [
+  { key: 'recharge', icon: 'recharge', name: 'Recharge', kind: 'service' },
+  { key: 'remittance', icon: 'remittance', name: 'Remittance', kind: 'service' },
+  { key: 'mobilebanking', icon: 'mobilebanking', name: 'Mobile Banking', kind: 'service' },
+  { key: 'internet', icon: 'internet', name: 'Internet', kind: 'service' },
+  { key: 'flight', icon: 'flight', name: 'Flight', kind: 'service' },
+  { key: 'bus', icon: 'bus', name: 'Bus', kind: 'buspicker' },
+  { key: 'train', icon: 'train', name: 'Train', kind: 'webview' },
+  { key: 'visa', icon: 'visa', name: 'Visa', kind: 'webview' },
+  { key: 'mydigital', icon: 'mydigital', name: 'Malaysia Arrival Card', kind: 'webview' },
+  { key: 'passport', icon: 'passport', name: 'Passport', kind: 'webview' },
+  { key: 'moreFeaturesTile', icon: 'more', name: 'More Services', kind: 'moreFeaturesLink' },
+];
+
 const STAFF_SERVICES = {
   dealer: [
     { key: 'dealerFeatures', icon: 'more', name: 'Dealer Features', kind: 'dealerFeatures' },
@@ -49,6 +67,7 @@ const STAFF_SERVICES = {
     { key: 'support', icon: 'support', name: 'Support', kind: 'support' },
     { key: 'myAccount', icon: 'account', name: 'My Account', kind: 'myaccount' },
     { key: 'profile', icon: 'profile', name: 'Profile', kind: 'profile' },
+    ...SHARED_SERVICES,
   ],
   reseller: [
     { key: 'resellerFeatures', icon: 'more', name: 'Reseller Features', kind: 'resellerFeatures' },
@@ -57,6 +76,7 @@ const STAFF_SERVICES = {
     { key: 'support', icon: '🎧', name: 'Support', kind: 'support' },
     { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount' },
     { key: 'profile', icon: '🪪', name: 'Profile', kind: 'profile' },
+    ...SHARED_SERVICES,
   ],
   admin: [
     { key: 'adminFeatures', icon: 'more', name: 'Admin Features', kind: 'adminFeatures' },
@@ -65,6 +85,7 @@ const STAFF_SERVICES = {
     { key: 'support', icon: '🎧', name: 'Support', kind: 'support' },
     { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount' },
     { key: 'profile', icon: '🪪', name: 'Profile', kind: 'profile' },
+    ...SHARED_SERVICES,
   ],
   superadmin: [
     { key: 'adminFeatures', icon: '⚙️', name: 'Superadmin Features', kind: 'adminFeatures' },
@@ -73,6 +94,7 @@ const STAFF_SERVICES = {
     { key: 'support', icon: '🎧', name: 'Support', kind: 'support' },
     { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount' },
     { key: 'profile', icon: '🪪', name: 'Profile', kind: 'profile' },
+    ...SHARED_SERVICES,
   ],
 };
 
@@ -142,6 +164,7 @@ const STAFF_CAPABILITY_TILES = [
   { key: 'reports', icon: '📊', name: 'Reports', kind: 'staffReports', needs: ['reports'] },
   { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount' },
   { key: 'profile', icon: '🪪', name: 'Profile', kind: 'profile' },
+  ...SHARED_SERVICES,
 ];
 
 // Admin keeps its hub; the money tiles appear only with finance/orders.

@@ -6,8 +6,9 @@ import { useTheme } from '../theme/ThemeContext';
 import HeaderDecor from '../components/HeaderDecor';
 import AppHeader from '../components/AppHeader';
 import WalletCard from '../components/WalletCard';
-import ControlCenterBanner from '../components/ControlCenterBanner';
 import FeatureGrid from '../components/FeatureGrid';
+import InfoBar from '../components/InfoBar';
+import { useServiceAction } from '../components/ServiceGrid';
 import PromptModal from '../components/PromptModal';
 import * as ratesService from '../firebase/ratesService';
 import * as gridManagementService from '../firebase/gridManagementService';
@@ -17,6 +18,35 @@ const CATEGORIES = [
   { key: 'finance', icon: '💰', bg: '#E8F5E9', name: 'Finance' },
   { key: 'users', icon: '👥', bg: '#E0F7FA', name: 'Users & KYC' },
   { key: 'system', icon: '🛡️', bg: '#EDE7F6', name: 'System Control' },
+];
+
+// The admin landing, as one flat 4-column grid rather than four category
+// tiles that each needed a tap before anything useful appeared.
+//
+// Management first, then the same services every other role gets - an admin
+// still sells a top-up and books a bus. `section` opens one of the hubs
+// below, `screen` goes straight to a screen, and `service` runs the same
+// action the customer grid runs, through useServiceAction.
+const ADMIN_HOME = [
+  { key: 'finance', icon: '\uD83D\uDCB0', name: 'Financial Management', section: 'finance' },
+  { key: 'adminAnalytics', icon: '\uD83D\uDCCA', name: 'Reports & Analytics', screen: 'adminAnalytics' },
+  { key: 'userManagement', icon: '\uD83D\uDC65', name: 'User Management', screen: 'userManagement' },
+  { key: 'verificationManagement', icon: '\uD83E\uDEAA', name: 'KYC Management', screen: 'verificationManagement' },
+
+  { key: 'adminSupport', icon: '\uD83C\uDFA7', name: 'Support Inbox', screen: 'adminSupport' },
+  { key: 'recharge', icon: '\uD83D\uDCF1', name: 'Recharge', service: { key: 'recharge', kind: 'service' } },
+  { key: 'remittance', icon: '\uD83D\uDCB8', name: 'Remittance', service: { key: 'remittance', kind: 'service' } },
+  { key: 'mobilebanking', icon: '\uD83C\uDFE6', name: 'Mobile Banking', service: { key: 'mobilebanking', kind: 'service' } },
+
+  { key: 'internet', icon: '\uD83D\uDCE1', name: 'Internet', service: { key: 'internet', kind: 'service' } },
+  { key: 'flight', icon: '\u2708\uFE0F', name: 'Flight', service: { key: 'flight', kind: 'service' } },
+  { key: 'bus', icon: '\uD83D\uDE8C', name: 'Bus', service: { key: 'bus', kind: 'buspicker' } },
+  { key: 'train', icon: '\uD83D\uDE82', name: 'Train', service: { key: 'train', kind: 'webview' } },
+
+  { key: 'visa', icon: '\uD83D\uDEC2', name: 'Visa', service: { key: 'visa', kind: 'webview' } },
+  { key: 'mydigital', icon: '\uD83D\uDCBB', name: 'Malaysia Arrival Card', service: { key: 'mydigital', kind: 'webview' } },
+  { key: 'passport', icon: '\uD83D\uDCD9', name: 'Passport', service: { key: 'passport', kind: 'webview' } },
+  { key: 'moreFeaturesTile', icon: '\u2728', name: 'More Features', screen: 'moreFeatures' },
 ];
 
 const OPERATIONS = [
@@ -103,11 +133,23 @@ export default function AdminFeaturesScreen() {
     const need = CAPABILITY_FOR[item.key];
     return need ? need.some((cap) => can(cap)) : isSuperadmin;
   });
+  const runService = useServiceAction();
   const badges = {
     pending: dealerTxs.filter((t) => t.status === 'pending').length || undefined,
     inquiries: inquiries.filter((i) => (i.status || 'new') === 'new').length || undefined,
     topups: topups.filter((t) => t.status === 'pending').length || undefined,
   };
+  // A landing tile is one of three things, and each goes somewhere
+  // different: a hub section, a screen, or a service the customer grid
+  // already knows how to run.
+  const openHomeItem = (key) => {
+    const item = ADMIN_HOME.find((x) => x.key === key);
+    if (!item) return;
+    if (item.section) { setSection(item.section); return; }
+    if (item.screen) { setScreen(item.screen); return; }
+    if (item.service) runService(item.service);
+  };
+
   const openItem = (key) => {
     if (key === 'rates') { setRateView(true); return; }
     if (SCREEN_FEATURES.includes(key)) { setScreen(SCREEN_FOR[key] || key); return; }
@@ -165,17 +207,31 @@ export default function AdminFeaturesScreen() {
   // grid. The welcome card it replaces only restated what the banner says,
   // and pointed at a hamburger this header no longer shows.
   const balance = profile?.balance ?? profile?.walletBalance ?? profile?.wallet?.balance ?? 0;
+
+  // One flat grid, the same shape every other role gets. The four category
+  // tiles this replaces each cost a tap before anything useful appeared,
+  // and the two most-used destinations - users and KYC - were two levels
+  // down. The category hubs still exist; More Features and the sidebar
+  // reach them, and openHomeItem routes the tiles that live in one.
+  const homeItems = ADMIN_HOME.filter((item) => {
+    if (item.section === 'system' && !isSuperadmin) return false;
+    if (!gridManagementService.isGridActive(gridManagement, item.key)) return false;
+    const need = CAPABILITY_FOR[item.key];
+    // A service tile is not a management capability - every role may use it.
+    if (!need) return !item.section || isSuperadmin || item.service || item.screen;
+    return need.some((cap) => can(cap));
+  });
+
   return <View style={styles.screen}>
     <AppHeader onPressMenu={openSidebar} />
     <ScrollView contentContainerStyle={styles.homeContent}>
-      <ControlCenterBanner
-        title={isSuperadmin ? 'Superadmin Control Center' : 'Admin Control Center'}
-        subtitle={isSuperadmin ? 'Full system access and governance.' : 'Manage operations, users, finance and more.'}
-        icon={isSuperadmin ? '✦' : '◆'}
-        onPress={() => setSection(isSuperadmin ? 'system' : 'operations')}
-      />
+      <InfoBar />
       <WalletCard balance={balance} variant="surface" onAddMoney={() => setScreen('superAdminTopup')} onTransfer={() => setScreen('transferPoints')} />
-      <FeatureGrid items={CATEGORIES.filter((x) => x.key !== 'system' || isSuperadmin)} onPress={setSection} />
+      <FeatureGrid
+        title={isSuperadmin ? 'Superadmin Control Center' : 'Admin Control Center'}
+        items={homeItems}
+        onPress={openHomeItem}
+      />
     </ScrollView>
   </View>;
 }
