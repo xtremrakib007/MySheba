@@ -68,7 +68,7 @@ function FaqItem({ q, a }) {
         <Text style={styles.faqQ}>{q}</Text>
         <Text style={styles.faqChevron}>{open ? '\u25B4' : '\u25BE'}</Text>
       </View>
-      {open && <Text style={styles.faqA}>{a}</Text>}
+      {!!open && <Text style={styles.faqA}>{a}</Text>}
     </TouchableOpacity>
   );
 }
@@ -402,7 +402,7 @@ export default function SupportScreen() {
 
       {tab === 'tickets' && (
         <ScrollView contentContainerStyle={styles.body}>
-          {isAssignee && (assignedLoading || assignedTickets.length > 0) && (
+          {!!(isAssignee && (assignedLoading || assignedTickets.length > 0)) && (
             <>
               <Text style={styles.sectionTitle}>🧑‍💼 Assigned to You</Text>
               <Text style={styles.sectionSubtitle}>
@@ -450,7 +450,7 @@ export default function SupportScreen() {
             <PrimaryButton label="Submit Request" onPress={submitTicket} />
           )}
 
-          {(ticketsLoading || myTickets.length > 0) && (
+          {(!!(ticketsLoading || myTickets.length > 0)) && (
             <>
               <Text style={[styles.sectionTitle, { marginTop: 22 }]}>My Support Requests</Text>
               {ticketsLoading ? (

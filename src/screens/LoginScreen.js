@@ -203,7 +203,7 @@ export default function LoginScreen() {
 
             <TouchableOpacity style={styles.rememberRow} onPress={() => setRememberMe((r) => !r)} activeOpacity={0.7} disabled={authBusy}>
               <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
-                {rememberMe && <Text style={styles.checkboxTick}>✓</Text>}
+                {!!rememberMe && <Text style={styles.checkboxTick}>✓</Text>}
               </View>
               <Text style={styles.rememberText}>{t('login.rememberMe')}</Text>
             </TouchableOpacity>
@@ -224,7 +224,7 @@ export default function LoginScreen() {
               >
                 <Text style={styles.errorTitle}>{signInErrorCopy(authError).title}</Text>
                 <Text style={styles.errorBody}>{signInErrorCopy(authError).message}</Text>
-                {showErrorDetail && (
+                {!!showErrorDetail && (
                   <Text style={styles.errorDetail} selectable>
                     {`${authError?.reason || 'untagged'} · ${authError?.detail || authError?.code || 'no code'}\n${getLastTokenProbe()}`}
                   </Text>

@@ -133,7 +133,7 @@ export default function AdvertiserManagementScreen() {
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>🏢 Advertiser Management</Text>
-        {isSuperadmin && (
+        {!!isSuperadmin && (
           <TouchableOpacity style={styles.addBtn} onPress={openCreate}>
             <Text style={styles.addBtnText}>+ New</Text>
           </TouchableOpacity>

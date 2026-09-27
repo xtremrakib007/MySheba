@@ -25,7 +25,7 @@ export default function IconStyleModal({ visible, selected, onSelect, onClose })
             return <TouchableOpacity key={key} style={[styles.row, chosen && styles.selected]} onPress={() => onSelect(key)} activeOpacity={0.78} accessibilityRole="radio" accessibilityState={{ selected: chosen }}>
               <View style={[styles.preview, chosen && styles.previewSelected]}><Text style={[styles.previewIcon, { fontWeight: iconRenderFor(key).weight }]}>{iconFor(PREVIEW_KEY, key, '📱')}</Text></View>
               <View style={styles.textWrap}><Text style={[styles.label, chosen && styles.selectedLabel]}>{iconStyles[key].label}</Text><Text style={styles.description}>{iconStyles[key].description}</Text></View>
-              <View style={[styles.radio, chosen && styles.radioSelected]}>{chosen && <View style={styles.dot} />}</View>
+              <View style={[styles.radio, chosen && styles.radioSelected]}>{!!chosen && <View style={styles.dot} />}</View>
             </TouchableOpacity>;
           })}
         </ScrollView>

@@ -39,7 +39,7 @@ export default function LanguageModal({ visible, onClose }) {
                       <Text style={[styles.optionLabel, isSelected && { color: colors.primary, fontWeight: '700' }]}>{opt.nativeLabel}</Text>
                       <Text style={styles.optionSub}>{opt.label}</Text>
                     </View>
-                    {isSelected && <Text style={[styles.check, { color: colors.primary }]}>✓</Text>}
+                    {!!isSelected && <Text style={[styles.check, { color: colors.primary }]}>✓</Text>}
                   </TouchableOpacity>
                 );
               })}

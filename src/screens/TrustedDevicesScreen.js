@@ -104,7 +104,7 @@ export default function TrustedDevicesScreen() {
                 <View style={styles.cardTextWrap}>
                   <View style={styles.nameRow}>
                     <Text style={styles.deviceName} numberOfLines={1}>{device.label || 'Unknown device'}</Text>
-                    {device.isCurrent && (
+                    {!!device.isCurrent && (
                       <View style={styles.currentPill}><Text style={styles.currentPillText}>This device</Text></View>
                     )}
                   </View>

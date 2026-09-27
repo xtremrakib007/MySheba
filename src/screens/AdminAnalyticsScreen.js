@@ -320,7 +320,7 @@ export default function AdminAnalyticsScreen() {
         </TouchableOpacity>
       </LinearGradient>
 
-      {isSuperAdmin && (
+      {!!isSuperAdmin && (
         <View style={styles.mainTabRow}>
           <TouchableOpacity
             style={[styles.mainTab, mainTab === 'overview' && styles.mainTabActive]}

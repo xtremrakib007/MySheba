@@ -25,7 +25,7 @@ export default function RemittanceReceiverStep({ serviceData, updateServiceData,
   }, [mode, authUser?.uid]);
 
   if (!recipientType) return <View><FormLabel>Who are you sending to?</FormLabel><Text style={{color:colors.textSecondary,fontSize:12,lineHeight:18,marginBottom:12}}>Choose yourself to securely reuse your approved KYC information, or choose someone else and enter their required recipient details.</Text><MethodCard icon="👤" bg="#E8F5E9" name="Myself" detail={isKycVerified?'Use my approved KYC information':'KYC verification is required first'} onPress={() => {if(isKycVerified) useMyKyc();}}/><MethodCard icon="👥" bg="#E3F2FD" name="Someone else" detail="Enter the recipient's required information" onPress={() => updateServiceData({recipientType:'other',receiverMode:'new'})}/></View>;
-  if (recipientType === 'self') return <View><FormLabel>Recipient — Myself</FormLabel>{isKycVerified && <><View style={{padding:14,borderRadius:12,borderWidth:1,borderColor:colors.border,backgroundColor:colors.card,marginBottom:14}}><Text style={{fontSize:12,color:colors.textSecondary,marginBottom:4}}>Approved KYC information</Text><Text style={{color:colors.text,fontSize:16,fontWeight:'800'}}>{serviceData.receiverFirstName} {serviceData.receiverLastName}</Text><Text style={{color:colors.textSecondary,marginTop:4}}>{serviceData.receiverPhone}</Text><Text style={{color:colors.textSecondary,marginTop:3}}>{serviceData.receiverNationality}</Text></View><OutlineButton label="← Change to someone else" onPress={()=>updateServiceData({recipientType:'other',receiverMode:'new'})}/></>}</View>;
+  if (recipientType === 'self') return <View><FormLabel>Recipient — Myself</FormLabel>{!!isKycVerified && <><View style={{padding:14,borderRadius:12,borderWidth:1,borderColor:colors.border,backgroundColor:colors.card,marginBottom:14}}><Text style={{fontSize:12,color:colors.textSecondary,marginBottom:4}}>Approved KYC information</Text><Text style={{color:colors.text,fontSize:16,fontWeight:'800'}}>{serviceData.receiverFirstName} {serviceData.receiverLastName}</Text><Text style={{color:colors.textSecondary,marginTop:4}}>{serviceData.receiverPhone}</Text><Text style={{color:colors.textSecondary,marginTop:3}}>{serviceData.receiverNationality}</Text></View><OutlineButton label="← Change to someone else" onPress={()=>updateServiceData({recipientType:'other',receiverMode:'new'})}/></>}</View>;
 
   if (mode === 'new') {
     const method = serviceData.method;
@@ -65,21 +65,21 @@ export default function RemittanceReceiverStep({ serviceData, updateServiceData,
         <FormLabel>Bank Details</FormLabel>
         <SearchPicker placeholder="1. Select Bank Name" title="Select Bank Name" value={serviceData.receiverBankName} items={banks.map((b)=>b.name).concat('Other / Not Listed')} onSelect={selectBank}/>
 
-        {bankIsOther && <FormInput placeholder="Enter Bank Name" value={serviceData.receiverBankName||''} onChangeText={(v)=>updateServiceData({receiverBankName:v,receiverBankIsOther:true})}/>}
+        {!!bankIsOther && <FormInput placeholder="Enter Bank Name" value={serviceData.receiverBankName||''} onChangeText={(v)=>updateServiceData({receiverBankName:v,receiverBankIsOther:true})}/>}
 
-        {(bankSelected || bankIsOther) && <FormInput placeholder="2. Account Number" keyboardType="number-pad" value={serviceData.receiverAccountNumber||''} onChangeText={(v)=>updateServiceData({receiverAccountNumber:v,receiverBranch:'',receiverBranchIsOther:false,receiverRoutingNumber:''})}/>}
+        {(!!(bankSelected || bankIsOther)) && <FormInput placeholder="2. Account Number" keyboardType="number-pad" value={serviceData.receiverAccountNumber||''} onChangeText={(v)=>updateServiceData({receiverAccountNumber:v,receiverBranch:'',receiverBranchIsOther:false,receiverRoutingNumber:''})}/>}
 
         {((bankSelected || bankIsOther) && accountEntered) && (bankIsOther ? (
           <>
             <FormInput placeholder="3. Enter Branch Name" value={serviceData.receiverBranch||''} onChangeText={(v)=>updateServiceData({receiverBranch:v,receiverBranchIsOther:true,receiverRoutingNumber:''})}/>
-            {branchSelected && <FormInput placeholder="4. Routing Number" keyboardType="number-pad" value={serviceData.receiverRoutingNumber||''} onChangeText={(v)=>updateServiceData({receiverRoutingNumber:v})}/>}
+            {!!branchSelected && <FormInput placeholder="4. Routing Number" keyboardType="number-pad" value={serviceData.receiverRoutingNumber||''} onChangeText={(v)=>updateServiceData({receiverRoutingNumber:v})}/>}
           </>
         ) : (
           <>
             <SearchPicker placeholder="3. Select Branch" title="Select Bank Branch" value={serviceData.receiverBranch} items={branchOptions.map((b)=>b.name||b).concat('Other / Not Listed')} onSelect={selectBranch}/>
-            {branchSelected && !branchIsOther && routingAvailable && <View style={{padding:12,borderRadius:10,backgroundColor:colors.card,borderWidth:1,borderColor:colors.border,marginBottom:12}}><Text style={{color:colors.textSecondary,fontSize:12}}>4. Routing Number</Text><Text style={{color:colors.text,fontSize:15,fontWeight:'700',marginTop:3}}>{serviceData.receiverRoutingNumber}</Text><Text style={{color:colors.textSecondary,fontSize:11,marginTop:3}}>Automatically selected from the branch</Text></View>}
-            {branchIsOther && branchSelected && <FormInput placeholder="4. Routing Number" keyboardType="number-pad" value={serviceData.receiverRoutingNumber||''} onChangeText={(v)=>updateServiceData({receiverRoutingNumber:v})}/>}
-            {branchSelected && !routingAvailable && !branchIsOther && <FormInput placeholder="4. Routing Number" keyboardType="number-pad" value={serviceData.receiverRoutingNumber||''} onChangeText={(v)=>updateServiceData({receiverRoutingNumber:v})}/>}
+            {!!(branchSelected && !branchIsOther && routingAvailable) && <View style={{padding:12,borderRadius:10,backgroundColor:colors.card,borderWidth:1,borderColor:colors.border,marginBottom:12}}><Text style={{color:colors.textSecondary,fontSize:12}}>4. Routing Number</Text><Text style={{color:colors.text,fontSize:15,fontWeight:'700',marginTop:3}}>{serviceData.receiverRoutingNumber}</Text><Text style={{color:colors.textSecondary,fontSize:11,marginTop:3}}>Automatically selected from the branch</Text></View>}
+            {!!(branchIsOther && branchSelected) && <FormInput placeholder="4. Routing Number" keyboardType="number-pad" value={serviceData.receiverRoutingNumber||''} onChangeText={(v)=>updateServiceData({receiverRoutingNumber:v})}/>}
+            {!!(branchSelected && !routingAvailable && !branchIsOther) && <FormInput placeholder="4. Routing Number" keyboardType="number-pad" value={serviceData.receiverRoutingNumber||''} onChangeText={(v)=>updateServiceData({receiverRoutingNumber:v})}/>}
           </>
         ))}
       </>}
@@ -95,7 +95,7 @@ export default function RemittanceReceiverStep({ serviceData, updateServiceData,
   return (
     <View>
       <FormLabel>Saved Receivers</FormLabel>
-      {loading && (
+      {!!loading && (
         <ActivityIndicator
           color={colors.primary}
           style={{ marginVertical: 20 }}

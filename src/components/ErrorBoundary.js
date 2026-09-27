@@ -14,7 +14,7 @@ import { logError } from '../firebase/logService';
 export default class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { error: null };
+    this.state = { error: null, componentStack: '' };
   }
 
   static getDerivedStateFromError(error) {
@@ -24,11 +24,18 @@ export default class ErrorBoundary extends React.Component {
   componentDidCatch(error, info) {
     console.log('[ErrorBoundary] caught:', error?.message || error);
     if (info?.componentStack) console.log(info.componentStack);
+    // The component stack is the only part of a render crash that names the
+    // screen. A Hermes release stack is minified to `anonymous@1:12345`, so
+    // showing error.stack alone tells nobody - including us - which component
+    // threw; the component stack survives minification because React builds
+    // it from component names. Put it on screen and in the error log so a
+    // screenshot is enough to find the culprit.
+    this.setState({ componentStack: String(info?.componentStack || '') });
     // Fire-and-forget - same errorLog collection the call-start error and
     // every other manual logError() call feeds, so a render crash shows up
     // on the Admin > Error Logs screen (superadmin-only) exactly like any
     // other client error, instead of only being visible in device logs.
-    logError('ErrorBoundary', error);
+    logError('ErrorBoundary', error, { componentStack: String(info?.componentStack || '').slice(0, 4000) });
   }
 
   render() {
@@ -39,10 +46,16 @@ export default class ErrorBoundary extends React.Component {
             <Text style={styles.emoji}>⚠️</Text>
             <Text style={styles.title}>Something went wrong</Text>
             <Text style={styles.message}>{String(this.state.error?.message || this.state.error)}</Text>
-            {!!this.state.error?.stack && (
-              <Text style={styles.stack} selectable>{this.state.error.stack}</Text>
+            {!!this.state.componentStack && (
+              <>
+                <Text style={styles.stackLabel}>Where it happened</Text>
+                <Text style={styles.stack} selectable>{this.state.componentStack.trim()}</Text>
+              </>
             )}
-            <TouchableOpacity style={styles.btn} onPress={() => this.setState({ error: null })}>
+            {!!this.state.error?.stack && (
+              <Text style={styles.stack} selectable>{String(this.state.error.stack)}</Text>
+            )}
+            <TouchableOpacity style={styles.btn} onPress={() => this.setState({ error: null, componentStack: '' })}>
               <Text style={styles.btnText}>Try Again</Text>
             </TouchableOpacity>
           </ScrollView>
@@ -59,6 +72,7 @@ const styles = StyleSheet.create({
   emoji: { fontSize: 40, marginBottom: 10 },
   title: { fontSize: 17, fontWeight: '700', color: colors.text, marginBottom: 8 },
   message: { fontSize: 13, color: colors.textSecondary, textAlign: 'center', marginBottom: 14 },
+  stackLabel: { fontSize: 11, fontWeight: '700', color: colors.text, alignSelf: 'flex-start', marginBottom: 4 },
   stack: { fontSize: 10, color: '#B00020', backgroundColor: '#FDECEA', padding: 10, borderRadius: radius.md, marginBottom: 16, width: '100%' },
   btn: { backgroundColor: colors.primary, paddingVertical: 10, paddingHorizontal: 24, borderRadius: radius.pill },
   btnText: { color: 'white', fontWeight: '700', fontSize: 13 },

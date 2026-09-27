@@ -68,7 +68,7 @@ function TxRow({ item, onPress }) {
         <Text style={styles.cardDate}>{formatDate(item.createdAt)}</Text>
         <Text style={styles.cardAmount}>MYR {Number(item.total || 0).toFixed(2)}</Text>
       </View>
-      {showRejected && !!item.rejectReason && (
+      {!!(showRejected && !!item.rejectReason) && (
         <Text style={styles.rejectReason}>Reason: {item.rejectReason}</Text>
       )}
     </TouchableOpacity>

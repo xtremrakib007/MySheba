@@ -288,7 +288,7 @@ export default function AnimatedSplash({ ready, onFinished }) {
         </View>
       </Animated.View>
 
-      {showCheck && (
+      {!!showCheck && (
         <Animated.View style={[styles.checkWrap, { transform: [{ scale: checkScale }] }]}>
           <Text style={styles.checkMark}>✓</Text>
         </Animated.View>

@@ -69,7 +69,7 @@ export default function TravelInquirySteps({ step, hasTime, icon, routeLabel }) 
           minimumDate={new Date()}
         />
 
-        {hasTime && (
+        {!!hasTime && (
           <>
             <FormLabel>Preferred Time (optional)</FormLabel>
             <TimeField

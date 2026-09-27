@@ -71,7 +71,7 @@ export default function PackageFormModal({ visible, title, initial, onSubmit, on
               onChangeText={setPrice}
             />
 
-            {onDelete && (
+            {!!onDelete && (
               <TouchableOpacity style={styles.deleteBtn} onPress={onDelete}>
                 <Text style={styles.deleteText}>Delete Package</Text>
               </TouchableOpacity>

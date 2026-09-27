@@ -165,7 +165,7 @@ function RecordDetailModal({ record, onClose, onUseForPayslip }) {
             </>
           )}
 
-          {record.payslipFileReference && <Text style={styles.payslipNote}>✓ Payslip attached</Text>}
+          {!!record.payslipFileReference && <Text style={styles.payslipNote}>✓ Payslip attached</Text>}
 
           <TouchableOpacity
             style={styles.useForPayslipBtn}

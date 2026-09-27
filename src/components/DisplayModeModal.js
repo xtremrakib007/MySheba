@@ -48,7 +48,7 @@ export default function DisplayModeModal({ visible, selected, onSelect, onClose 
                       <Text style={[styles.optionLabel, isSelected && { color: colors.primary, fontWeight: '700' }]}>{opt.label}</Text>
                       <Text style={styles.optionSub}>{opt.sub}</Text>
                     </View>
-                    {isSelected && <Text style={[styles.check, { color: colors.primary }]}>✓</Text>}
+                    {!!isSelected && <Text style={[styles.check, { color: colors.primary }]}>✓</Text>}
                   </TouchableOpacity>
                 );
               })}

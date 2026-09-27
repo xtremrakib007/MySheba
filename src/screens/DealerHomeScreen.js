@@ -203,7 +203,7 @@ export default function DealerHomeScreen() {
           </>
         )}
 
-        {viewingSection && (
+        {!!viewingSection && (
         <>
         <View style={styles.sectionHeaderRow}>
           <TouchableOpacity style={styles.backBtn} onPress={() => setViewingSection(false)}>
@@ -267,7 +267,7 @@ export default function DealerHomeScreen() {
                 {tx.status === 'completed' && !!tx.pin && (
                   <Text style={styles.txDetail}>🔐 Collection PIN: {tx.pin}</Text>
                 )}
-                {tx.status === 'completed' && tx.rejected && (
+                {!!(tx.status === 'completed' && tx.rejected) && (
                   <Text style={[styles.txDetail, { color: colors.error }]}>Rejected: {tx.rejectReason}</Text>
                 )}
               </TouchableOpacity>

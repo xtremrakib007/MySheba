@@ -107,7 +107,7 @@ export default function NoteDetailScreen() {
           <View style={[styles.typeBadge, { backgroundColor: `${accent}1A` }]}>
             <Text style={[styles.typeBadgeText, { color: accent }]}>{NOTE_TYPE_ICONS[note.noteType]} {NOTE_TYPE_LABELS[note.noteType]}</Text>
           </View>
-          {isMoneyNote && (
+          {!!isMoneyNote && (
             <View style={[styles.statusBadge, note.status === NOTE_STATUS.PAID ? styles.statusPaid : styles.statusPending]}>
               <Text style={[styles.statusBadgeText, note.status === NOTE_STATUS.PAID ? styles.statusPaidText : styles.statusPendingText]}>
                 {note.status === NOTE_STATUS.PAID ? '✓ Settled' : 'Pending'}

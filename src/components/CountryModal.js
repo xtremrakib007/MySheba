@@ -52,7 +52,7 @@ export default function CountryModal({ visible, onClose, value, onSelect }) {
                     <View style={styles.optionTextWrap}>
                       <Text style={[styles.optionLabel, isSelected && { color: colors.primary, fontWeight: '700' }]}>{c.name}</Text>
                     </View>
-                    {isSelected && <Text style={[styles.check, { color: colors.primary }]}>✓</Text>}
+                    {!!isSelected && <Text style={[styles.check, { color: colors.primary }]}>✓</Text>}
                   </TouchableOpacity>
                 );
               })}

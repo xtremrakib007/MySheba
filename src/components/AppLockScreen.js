@@ -119,7 +119,7 @@ export default function AppLockScreen() {
             {busy ? <ActivityIndicator color="white" /> : <Text style={styles.unlockText}>Unlock</Text>}
           </TouchableOpacity>
 
-          {biometricReady && (
+          {!!biometricReady && (
             <TouchableOpacity style={styles.bioBtn} onPress={tryBiometric} disabled={busy}>
               <Text style={styles.bioText}>👆 Use Fingerprint / Face</Text>
             </TouchableOpacity>

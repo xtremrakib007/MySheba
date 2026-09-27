@@ -115,7 +115,7 @@ export default function NotepadScreen() {
         <Text style={styles.errorText}>Couldn't load your notes. Pull to refresh or try again.</Text>
       ) : (
         <>
-          {hasAnyMoneyNotes && (
+          {!!hasAnyMoneyNotes && (
             <View style={styles.summaryRow}>
               <SummaryChip icon="💰" label="Receivable" value={totals[NOTE_TYPES.CREDIT]} color={NOTE_TYPE_COLORS[NOTE_TYPES.CREDIT]} />
               <SummaryChip icon="💳" label="Payable" value={totals[NOTE_TYPES.DEBIT]} color={NOTE_TYPE_COLORS[NOTE_TYPES.DEBIT]} />

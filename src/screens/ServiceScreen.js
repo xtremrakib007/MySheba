@@ -123,9 +123,9 @@ export default function ServiceScreen() {
       {!isEntertainment && <StepBar totalSteps={totalSteps} currentStep={currentStep} />}
 
       <ScrollView style={styles.content} contentContainerStyle={{ padding: 16 }}>
-        {adSlot && <SmartAd placement={adSlot.top} feature={adSlot.feature} height={100} style={{ marginBottom: 12 }} />}
+        {!!adSlot && <SmartAd placement={adSlot.top} feature={adSlot.feature} height={100} style={{ marginBottom: 12 }} />}
         {StepComponent ? <StepComponent step={currentStep} /> : <Text>Service content</Text>}
-        {adSlot && <SmartAd placement={adSlot.bottom} feature={adSlot.feature} height={100} style={{ marginTop: 12 }} />}
+        {!!adSlot && <SmartAd placement={adSlot.bottom} feature={adSlot.feature} height={100} style={{ marginTop: 12 }} />}
       </ScrollView>
 
       {!isEntertainment && <View style={styles.navBar}>

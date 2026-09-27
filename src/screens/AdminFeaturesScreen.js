@@ -183,7 +183,7 @@ export default function AdminFeaturesScreen() {
         <View style={styles.infoCard}><Text style={styles.infoTitle}>Service-specific rates</Text><Text style={styles.infoText}>Mobile Banking, Remittance, and Recharge/Internet use separate rate tables.</Text></View>
         <View style={styles.card}><Text style={styles.cardTitle}>📱 Mobile Banking</Text>{renderRateRows(MOBILE_RATE_FIELDS)}</View>
         <View style={styles.card}><Text style={styles.cardTitle}>💸 Remittance</Text>{renderRateRows(REMITTANCE_RATE_FIELDS)}</View>
-        {isSuperadmin && <View style={styles.card}><Text style={styles.cardTitle}>🔄 Recharge / Internet</Text>{renderRateRows(RECHARGE_RATE_FIELDS)}</View>}
+        {!!isSuperadmin && <View style={styles.card}><Text style={styles.cardTitle}>🔄 Recharge / Internet</Text>{renderRateRows(RECHARGE_RATE_FIELDS)}</View>}
         {!isSuperadmin && <View style={styles.lockedCard}><Text style={styles.lockedTitle}>🔒 Recharge / Internet rates</Text><Text style={styles.infoText}>Superadmin controls these rates.</Text></View>}
       </ScrollView>
       <PromptModal visible={!!editRateKey} title="New rate value:" placeholder="e.g. 30.50" onSubmit={saveRate} onCancel={() => setEditRateKey(null)} />

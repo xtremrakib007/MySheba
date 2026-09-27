@@ -60,7 +60,7 @@ export async function logActivity(action, metadata) {
  * 'ChatScreen.sendMessage'. `error` is the caught Error object (or a
  * plain string/message). Wrap risky client code in try/catch and call
  * this from the catch block - it does not throw itself. */
-export async function logError(context, error) {
+export async function logError(context, error, extra) {
   const uid = (auth.currentUser && auth.currentUser.uid) || null;
   try {
     await addDoc(collection(db, 'errorLog'), {
@@ -68,6 +68,9 @@ export async function logError(context, error) {
       context,
       message: String((error && error.message) || error || 'Unknown error'),
       stack: String((error && error.stack) || '').slice(0, 2000),
+      // A render crash's minified Hermes stack names nothing useful, so
+      // ErrorBoundary passes React's component stack through here instead.
+      ...(extra && typeof extra === 'object' ? extra : null),
       userId: uid,
       platform: Platform.OS,
       appVersion: appVersion(),

@@ -125,7 +125,7 @@ export default function TopUpScreen() {
           ))}
         </View>
 
-        {isBankMethod && (
+        {!!isBankMethod && (
           <>
             {(paymentSettings.bankAccounts || []).length > 0 ? (
               <View style={styles.payDetailsCard}>

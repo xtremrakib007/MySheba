@@ -106,7 +106,7 @@ export default function FriendsListScreen() {
         <Text style={styles.headerTitle}>Friends</Text>
         <TouchableOpacity style={styles.addBtn} onPress={() => setScreen('addContact')}><Text style={styles.addBtnText}>+ Add</Text></TouchableOpacity>
       </LinearGradient>
-      {loadingDevice && <ActivityIndicator style={styles.loading} size="small" color={colors.primary} />}
+      {!!loadingDevice && <ActivityIndicator style={styles.loading} size="small" color={colors.primary} />}
       {permissionState === 'denied' && (
         <View style={styles.permissionCard}>
           <Text style={styles.permissionText}>Allow contacts access to see which of your saved numbers are already on MySheba.</Text>

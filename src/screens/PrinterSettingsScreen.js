@@ -105,7 +105,7 @@ export default function PrinterSettingsScreen() {
               </Text>
             </View>
 
-            {canSelectPrinter && (
+            {!!canSelectPrinter && (
               <TouchableOpacity style={styles.primaryBtn} disabled={busy === 'choose'} onPress={onChoose}>
                 {busy === 'choose'
                   ? <ActivityIndicator size="small" color="white" />
