@@ -95,7 +95,7 @@ const SCREEN_FOR = { apiManagement: 'apiProviderManagement' };
 export default function AdminFeaturesScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { profile, goBackOrHome, setScreen, openSidebar, dealerTxs, inquiries, topups, setAdminTab, setAdminViewingSection, rates, gridManagement, can } = useApp();
+  const { profile, goBackOrHome, setScreen, openSidebar, dealerTxs, inquiries, topups, setAdminTab, setAdminViewingSection, rates, gridManagement, can, openSalary, openMyDocuments } = useApp();
   const [section, setSection] = useState(null);
   const [rateView, setRateView] = useState(false);
   const [editRateKey, setEditRateKey] = useState(null);
@@ -116,6 +116,8 @@ export default function AdminFeaturesScreen() {
   };
   const openItem = (key) => {
     if (key === 'rates') { setRateView(true); return; }
+    if (key === 'salaryDashboard') { openSalary(); return; }
+    if (key === 'myDocuments') { openMyDocuments(); return; }
     if (SCREEN_FEATURES.includes(key)) { setScreen(SCREEN_FOR[key] || key); return; }
     setAdminTab(key); setAdminViewingSection(true); setScreen('adminHome');
   };
