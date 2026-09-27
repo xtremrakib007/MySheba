@@ -175,7 +175,7 @@ export default function Sidebar() {
     // Sending them to setScreen(key) rendered no screen for keys such as
     // "pending", "all", "rates" and "announcements".
     const adminTabs = ['all', 'pending', 'inquiries', 'topups', 'rates', 'pricing', 'support', 'payments', 'banners', 'announcements', 'homepage'];
-    const staffQueueTabs = ['inquiries', 'topups'];
+    const staffQueueTabs = ['all', 'inquiries', 'topups'];
     if ((isAdmin && adminTabs.includes(key)) || (['support', 'finance'].includes(profile?.role) && staffQueueTabs.includes(key))) {
       setAdminTab(key);
       setAdminViewingSection(true);
