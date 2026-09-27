@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Modal, FlatList, I
 import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import CountryFlag from './CountryFlag';
+import { DatePickerModal, TimePickerModal } from './DateTimePickerModal';
 
 export function FormLabel({ children, style }) { const { colors } = useTheme(); const styles = createStyles(colors); return <Text style={[styles.label, style]}>{children}</Text>; }
 export function FormInput(props) { const { colors } = useTheme(); const styles = createStyles(colors); return <TextInput style={[styles.input, props.style]} placeholderTextColor={colors.textSecondary} {...props} />; }
@@ -22,9 +23,65 @@ export function SearchPicker({ placeholder, title, value, onSelect, items, searc
 export function CityPicker({ placeholder, value, onSelect, cities }) { const { colors } = useTheme(); const styles = createStyles(colors); const [open, setOpen] = useState(false); const [query, setQuery] = useState(''); const filtered=(cities||[]).filter(c=>c.name.toLowerCase().includes(query.toLowerCase())||c.state.toLowerCase().includes(query.toLowerCase())); const onPick=c=>{onSelect(c.name);setQuery('');setOpen(false);}; return <><TouchableOpacity style={styles.fieldButton} onPress={()=>setOpen(true)}><Text style={value?styles.fieldButtonText:styles.fieldButtonPlaceholder}>{value||placeholder}</Text><Text style={styles.fieldButtonChevron}>▾</Text></TouchableOpacity><Modal visible={open} animationType="slide" transparent onRequestClose={()=>setOpen(false)}><View style={styles.modalOverlay}><View style={styles.modalSheet}><View style={styles.modalHeader}><Text style={styles.modalTitle}>Select City</Text><TouchableOpacity onPress={()=>setOpen(false)}><Text style={styles.modalClose}>✕</Text></TouchableOpacity></View><TextInput style={styles.modalSearch} placeholder="Search city or state" placeholderTextColor={colors.textSecondary} value={query} onChangeText={setQuery} autoFocus/><FlatList data={filtered} keyExtractor={item=>item.id} keyboardShouldPersistTaps="handled" ListEmptyComponent={<Text style={styles.modalEmpty}>No matching city.</Text>} renderItem={({item})=><TouchableOpacity style={styles.modalRow} onPress={()=>onPick(item)}><Text style={styles.modalRowName}>{item.name}</Text><Text style={styles.modalRowState}>{item.state}</Text></TouchableOpacity>}/></View></View></Modal></>; }
 export function AirportPicker({ placeholder, value, onSelect, airports }) { const { colors } = useTheme(); const styles=createStyles(colors); const [open,setOpen]=useState(false); const [query,setQuery]=useState(''); const filtered=(airports||[]).filter(a=>a.name.toLowerCase().includes(query.toLowerCase())||a.country.toLowerCase().includes(query.toLowerCase())); const onPick=a=>{onSelect(a.name);setQuery('');setOpen(false);}; return <><TouchableOpacity style={styles.fieldButton} onPress={()=>setOpen(true)}><Text style={value?styles.fieldButtonText:styles.fieldButtonPlaceholder}>{value||placeholder}</Text><Text style={styles.fieldButtonChevron}>▾</Text></TouchableOpacity><Modal visible={open} animationType="slide" transparent onRequestClose={()=>setOpen(false)}><View style={styles.modalOverlay}><View style={styles.modalSheet}><View style={styles.modalHeader}><Text style={styles.modalTitle}>Select Airport</Text><TouchableOpacity onPress={()=>setOpen(false)}><Text style={styles.modalClose}>✕</Text></TouchableOpacity></View><TextInput style={styles.modalSearch} placeholder="Search airport or country" placeholderTextColor={colors.textSecondary} value={query} onChangeText={setQuery} autoFocus/><FlatList data={filtered} keyExtractor={item=>item.id} keyboardShouldPersistTaps="handled" ListEmptyComponent={<Text style={styles.modalEmpty}>No matching airport.</Text>} renderItem={({item})=><TouchableOpacity style={styles.modalRow} onPress={()=>onPick(item)}><Text style={styles.modalRowName}>{item.name}</Text><Text style={styles.modalRowState}>{item.country}</Text></TouchableOpacity>}/></View></View></Modal></>; }
 
-export function DateField({ placeholder, value, onChange, minimumDate }) { const { colors }=useTheme(); const styles=createStyles(colors); const [open,setOpen]=useState(false); const dateValue=value?new Date(`${value}T00:00:00`):new Date(); const onNativeChange=(event,selected)=>{setOpen(false);if(event.type==='dismissed'||!selected)return;onChange(`${selected.getFullYear()}-${String(selected.getMonth()+1).padStart(2,'0')}-${String(selected.getDate()).padStart(2,'0')}`);}; return <><TouchableOpacity style={styles.fieldButton} onPress={()=>setOpen(true)}><Text style={value?styles.fieldButtonText:styles.fieldButtonPlaceholder}>{value||placeholder}</Text><Text style={styles.fieldButtonIcon}>📅</Text></TouchableOpacity>{open&&<DateTimePicker value={dateValue} mode="date" display="default" minimumDate={minimumDate} onChange={onNativeChange}/>}</>; }
-export function TimeField({ placeholder, value, onChange }) { const { colors }=useTheme(); const styles=createStyles(colors); const [open,setOpen]=useState(false); const timeValue=parseDisplayTime(value)||new Date(); const onNativeChange=(event,selected)=>{setOpen(false);if(event.type==='dismissed'||!selected)return;let hours=selected.getHours();const minutes=String(selected.getMinutes()).padStart(2,'0');const suffix=hours>=12?'PM':'AM';hours=hours%12||12;onChange(`${String(hours).padStart(2,'0')}:${minutes} ${suffix}`);}; return <><TouchableOpacity style={styles.fieldButton} onPress={()=>setOpen(true)}><Text style={value?styles.fieldButtonText:styles.fieldButtonPlaceholder}>{value||placeholder}</Text><Text style={styles.fieldButtonIcon}>🕐</Text></TouchableOpacity>{open&&<DateTimePicker value={timeValue} mode="time" display="default" onChange={onNativeChange}/>}</>; }
-function parseDisplayTime(str){if(!str)return null;const m=/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(str.trim());if(!m)return null;let h=parseInt(m[1],10);const min=parseInt(m[2],10);if(h===12)h=0;if(m[3].toUpperCase()==='PM')h+=12;const d=new Date();d.setHours(h,min,0,0);return d;}
+// Date and time fields.
+//
+// Both of these used to render `<DateTimePicker .../>` - a bare identifier
+// that was never imported, from a package that is not a dependency. Tapping
+// any date field in the app threw "Property 'DateTimePicker' doesn't exist"
+// and took the screen down with it: KYC, payslips, documents, notes, banner
+// ads, salary reports, ad analytics, the travel inquiry.
+//
+// They use the in-app pickers now, which are ordinary views. That also
+// matters for how the fix travels: a native module cannot ship over the
+// air, so adding the real package would have left everyone already on
+// 5.4.1.12 with the same crash until they installed a new build.
+//
+// DateField also accepts maximumDate now. Callers have always passed it -
+// VerifyIdentityScreen bounds a date of birth with it, RemittanceReceiverStep
+// too - and it was being dropped on the floor.
+export function DateField({ placeholder, value, onChange, minimumDate, maximumDate }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <TouchableOpacity style={styles.fieldButton} onPress={() => setOpen(true)}>
+        <Text style={value ? styles.fieldButtonText : styles.fieldButtonPlaceholder}>{value || placeholder}</Text>
+        <Text style={styles.fieldButtonIcon}>📅</Text>
+      </TouchableOpacity>
+      <DatePickerModal
+        visible={open}
+        value={value}
+        minimumDate={minimumDate}
+        maximumDate={maximumDate}
+        title={placeholder || 'Select date'}
+        onCancel={() => setOpen(false)}
+        onConfirm={(next) => { setOpen(false); onChange(next); }}
+      />
+    </>
+  );
+}
+
+export function TimeField({ placeholder, value, onChange }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <TouchableOpacity style={styles.fieldButton} onPress={() => setOpen(true)}>
+        <Text style={value ? styles.fieldButtonText : styles.fieldButtonPlaceholder}>{value || placeholder}</Text>
+        <Text style={styles.fieldButtonIcon}>🕐</Text>
+      </TouchableOpacity>
+      <TimePickerModal
+        visible={open}
+        value={value}
+        title={placeholder || 'Select time'}
+        onCancel={() => setOpen(false)}
+        onConfirm={(next) => { setOpen(false); onChange(next); }}
+      />
+    </>
+  );
+}
 
 export function Grid3({ children }) { const { colors }=useTheme(); const styles=createStyles(colors); return <View style={styles.grid3}>{children}</View>; }
 export function Grid2({ children }) { const { colors }=useTheme(); const styles=createStyles(colors); return <View style={styles.grid2}>{children}</View>; }

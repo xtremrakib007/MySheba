@@ -191,6 +191,38 @@ async function sendStaffEmailChallenge({ db, uid, email, deviceId, displayName }
   });
 }
 
+/**
+ * Send the new-device code unless one is already live for this device.
+ *
+ * Both callers used to gate this on `data.resendEmailChallenge`, and
+ * nothing sets that on a first sign-in: authService.login() does not pass
+ * it, and DeviceVerifyScreen only passes it when the person taps Resend.
+ * So the first challenge mailed nothing - the app showed "enter the code we
+ * emailed you" over an inbox with no email in it, and the only way through
+ * was to guess that Resend sent the first one.
+ *
+ * Returns whether an email actually went out, which is what the client
+ * reports on the verification screen.
+ */
+async function ensureEmailChallenge({ db, uid, email, deviceId, displayName, pending, force }) {
+  if (!email) return false;
+  const live =
+    pending?.deviceId === deviceId && pending?.expiresAt?.toMillis?.() > Date.now();
+  // A live code is left alone, so retrying a login does not invalidate the
+  // one already sitting in the inbox.
+  if (live && !force) return false;
+  try {
+    await sendStaffEmailChallenge({ db, uid, email, deviceId, displayName });
+    return true;
+  } catch (error) {
+    // resource-exhausted only means one went out moments ago, so the code
+    // they need is already on its way and the verification screen should
+    // still open. Anything else is a real failure and still throws.
+    if (error?.code === 'resource-exhausted') return false;
+    throw error;
+  }
+}
+
 function verifyStaffEmailOtp(challenge, code, deviceId, email) {
   if (!challenge || challenge.deviceId !== deviceId) throw new HttpsError('failed-precondition', 'No active verification challenge. Please request a new email.');
   if (normalizeEmail(challenge.email) !== normalizeEmail(email)) throw new HttpsError('failed-precondition', 'The verification email does not match this account.');
@@ -233,11 +265,29 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: false }, async (request) 
           verifyStaffEmailOtp(profile.pendingAdminEmailChallenge, data.emailOtp, deviceId, email);
           verifiedNewStaffDevice = true; verificationMethod = 'email_otp';
         } else {
-          if (data.resendEmailChallenge) {
-            await sendStaffEmailChallenge({ db, uid, email, deviceId, displayName: profile.name || profile.displayName });
-          }
-          await logAudit({ action: 'staff_mfa_challenge', targetUid: uid, performedBy: uid, performedByRole: profile.role, details: { deviceId, ip } });
-          return { requiresOtp: true, reason: 'new_device', email, phone, availableMfaMethods: [phone && 'sms', email && 'email'].filter(Boolean), emailChallengeSent: Boolean(data.resendEmailChallenge && email) };
+          // Send the code on the FIRST challenge, not only on a resend.
+          //
+          // This used to be `if (data.resendEmailChallenge)`, and nothing
+          // sets that on a first sign-in - authService.login() does not
+          // pass it, and DeviceVerifyScreen only passes it when the person
+          // taps Resend. So an admin signing in on a new device was shown a
+          // "enter the code we emailed you" screen and no email was ever
+          // sent. They had to guess that Resend was what sent the first one.
+          //
+          // A live challenge for this same device is left alone, so
+          // retrying a login does not invalidate the code already sitting
+          // in the inbox.
+          const emailChallengeSent = await ensureEmailChallenge({
+            db,
+            uid,
+            email,
+            deviceId,
+            displayName: profile.name || profile.displayName,
+            pending: profile.pendingAdminEmailChallenge,
+            force: Boolean(data.resendEmailChallenge),
+          });
+          await logAudit({ action: 'staff_mfa_challenge', targetUid: uid, performedBy: uid, performedByRole: profile.role, details: { deviceId, ip, emailChallengeSent } });
+          return { requiresOtp: true, reason: 'new_device', email, phone, availableMfaMethods: [phone && 'sms', email && 'email'].filter(Boolean), emailChallengeSent };
         }
       }
 
@@ -306,8 +356,8 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: false }, async (request) 
       if (isStaffRole(profile.role)) await logAudit({ action: 'staff_login', targetUid: uid, performedBy: uid, performedByRole: profile.role, details: { deviceId, ip, newDevice: verifiedNewStaffDevice } });
       await checkIpAnomaly(db, uid, ip, { action: 'login', role: profile.role });
     } else {
-      // Actually send the code. resendEmailChallenge is handled only inside
-      // the staff branch above, and sendDeviceVerification - the one other
+      // Actually send the code - on the first challenge, not only on a
+      // resend. sendDeviceVerification - the one other
       // function that mails a device code - is exported from index.js and
       // called from nowhere in the app. So a non-staff account raised a
       // challenge it was never sent: DeviceVerifyScreen reported the mail as
@@ -317,9 +367,16 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: false }, async (request) 
       // sendStaffEmailChallenge is staff-only in its name; it writes
       // pendingAdminEmailChallenge, which confirmDeviceSwitch's emailOtp
       // path already validates for every role.
-      if (data.resendEmailChallenge && !isStaffRole(profile.role) && result.email) {
-        await sendStaffEmailChallenge({ db, uid, email: result.email, deviceId, displayName: profile.name || profile.displayName });
-        result.emailChallengeSent = true;
+      if (!isStaffRole(profile.role) && result.email) {
+        result.emailChallengeSent = await ensureEmailChallenge({
+          db,
+          uid,
+          email: result.email,
+          deviceId,
+          displayName: profile.name || profile.displayName,
+          pending: profile.pendingAdminEmailChallenge,
+          force: Boolean(data.resendEmailChallenge),
+        });
       }
       await logAudit({ action: 'device_switch_requested', targetUid: uid, performedBy: uid, performedByRole: profile.role, details: { deviceId, ip } });
     }
