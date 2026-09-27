@@ -92,7 +92,7 @@ function roleGroups(role) {
 export default function Sidebar() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { sidebarVisible, closeSidebar, setScreen, screen, profile, logout, gridManagement, setAdminTab, setAdminViewingSection, can } = useApp();
+  const { sidebarVisible, closeSidebar, setScreen, screen, profile, logout, gridManagement, setAdminTab, setAdminViewingSection, can, openSalary, openMyDocuments } = useApp();
   const translateX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const [collapsed, setCollapsed] = useState({});
@@ -168,6 +168,10 @@ export default function Sidebar() {
       setAdminTab(key);
       setAdminViewingSection(true);
       setScreen('adminHome');
+    } else if (key === 'salaryDashboard') {
+      openSalary();
+    } else if (key === 'myDocuments') {
+      openMyDocuments();
     } else {
       setScreen(key);
     }
