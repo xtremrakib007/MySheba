@@ -92,7 +92,7 @@ function roleGroups(role) {
 export default function Sidebar() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { sidebarVisible, closeSidebar, setScreen, screen, profile, logout, gridManagement } = useApp();
+  const { sidebarVisible, closeSidebar, setScreen, screen, profile, logout, gridManagement, setAdminTab, setAdminViewingSection } = useApp();
   const translateX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const [collapsed, setCollapsed] = useState({});
@@ -119,7 +119,19 @@ export default function Sidebar() {
   const goTo = (key) => {
     const always = ['adminHome','adminFeatures','gridManagement'];
     if (!always.includes(key) && gridManagement?.[key] === false) { showAlert('MySheba', 'This feature is currently unavailable.'); return; }
-    setScreen(key); closeSidebar();
+
+    // These entries are tabs inside AdminHomeScreen, not standalone screens.
+    // Sending them to setScreen(key) rendered no screen for keys such as
+    // "pending", "all", "rates" and "announcements".
+    const adminTabs = ['all', 'pending', 'inquiries', 'topups', 'rates', 'pricing', 'support', 'payments', 'banners', 'announcements', 'homepage'];
+    if (isAdmin && adminTabs.includes(key)) {
+      setAdminTab(key);
+      setAdminViewingSection(true);
+      setScreen('adminHome');
+    } else {
+      setScreen(key);
+    }
+    closeSidebar();
   };
   const toggleGroup = (title) => setCollapsed((prev) => ({ ...prev, [title]: !prev[title] }));
   const onLogout = () => {
