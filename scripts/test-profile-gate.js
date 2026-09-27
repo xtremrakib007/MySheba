@@ -106,6 +106,32 @@ is('a sign-in performed just now skips the launch lock',
 is('locking never signs anyone out',
    /setAppLocked\(true\);?[\s\S]{0,40}\}\);/.test(ctx) && !/setAppLocked\(true\)[^\n]{0,80}logout/.test(ctx), true);
 
+console.log('\n-- App Lock: the pref is per account and must actually persist --');
+// It silently broke three ways at once: setAppLocked(true) existed nowhere,
+// and getAppLockEnabled/setAppLockEnabledPref both take a uid that the
+// context was not passing - so the pref read false on every launch and the
+// toggle saved nothing.
+is('the stored pref is read for the signed-in account',
+   /getAppLockEnabled\(uid\)\.then\(setAppLockEnabledState\)/.test(ctx), true);
+is('it is re-read when the account changes, not once on mount',
+   /\}, \[authUser\?\.uid\]\);/.test(ctx), true);
+is('the toggle saves against that account',
+   /setAppLockEnabledPref\(authUser\?\.uid, value\)/.test(ctx), true);
+
+const prefs = fs.readFileSync(path.join(__dirname, '..', 'src', 'firebase', 'appLockPrefs.js'), 'utf8');
+is('an account that never chose gets App Lock on',
+   /export const DEFAULT_APP_LOCK_ENABLED = true;/.test(prefs), true);
+is('   and that default is what an unset pref returns',
+   /if \(legacy === null\) return DEFAULT_APP_LOCK_ENABLED;/.test(prefs), true);
+
+console.log('\n-- but never lock an account that cannot unlock --');
+is('locking requires a security PIN on the profile',
+   /const canUnlock = !!profile\?\.securityPinSet;/.test(ctx), true);
+is('the launch lock honours it',
+   /if \(!authUser \|\| !appLockEnabled \|\| !canUnlock\) return;/.test(ctx), true);
+is('the return-from-background lock honours it too',
+   /appLockEnabledRef\.current && authUserRef\.current && canUnlockRef\.current/.test(ctx), true);
+
 console.log('\n-- a signed-in person must never be stranded on Login --');
 // The watchdog clears authLoading after 8s with no profile, the hard auth
 // boundary then routes to Login, and the profile arriving afterwards used
