@@ -1,0 +1,71 @@
+name: MySheba validation
+
+on:
+  push:
+    branches:
+      - feature/all-role-home-grids-audit
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mysheba-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Static checks, tests, and Android JS bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Set up Java for the Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Validate production configuration
+        run: npm run production:check
+
+      - name: Audit navigation and homepage grids
+        run: npm run audit:nav
+
+      - name: Audit Cloud Function JavaScript syntax
+        run: npm run audit:functions
+
+      - name: Test API provider validation
+        run: npm run test:api-provider
+
+      - name: Test authentication/profile gate
+        run: npm run test:auth
+
+      - name: Audit React context usage
+        run: npm run audit:context
+
+      - name: Audit JSX escapes
+        run: npm run audit:jsx
+
+      - name: Audit tile icons
+        run: npm run audit:icons
+
+      - name: Test Firestore security rules
+        run: npx --yes firebase-tools emulators:exec --only firestore --project rules-test "npm run test:rules"
+
+      - name: Export Android JavaScript bundle
+        run: npx expo export --platform android --no-bytecode
