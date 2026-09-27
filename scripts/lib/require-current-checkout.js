@@ -32,12 +32,42 @@ function requireCurrentCheckout(what, rerun) {
   console.log('Checking the tree before uploading it...\n');
 
   try {
-    execSync('git fetch origin main', { stdio: 'pipe' });
+    // GIT_TERMINAL_PROMPT=0 so a remote with no stored credentials fails
+    // immediately instead of printing "Username for ..." from inside a
+    // script and sitting there. The prompt is invisible behind the
+    // spawn and reads as a hang.
+    execSync('git fetch origin main', {
+      stdio: 'pipe',
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: 'echo' },
+    });
   } catch (e) {
+    const detail = String((e && e.stderr) || '');
+    // "Could not reach origin" was wrong often enough to be misleading: the
+    // usual cause is an https remote with nothing stored, which is an auth
+    // problem, not a network one, and "fix the network" sends you nowhere.
+    const isAuth = /could not read (Username|Password)|terminal prompts disabled|Authentication failed|Invalid username or password|could not read from remote repository/i.test(detail);
     die(
-      'Could not reach origin to check whether this checkout is current.',
+      isAuth
+        ? 'git could not authenticate to origin, so this checkout cannot be checked.'
+        : 'Could not reach origin to check whether this checkout is current.',
       `Publishing blind is how the last two updates shipped stale code, so ${what} stops here.`,
-      'Fix the network, or re-run once `git fetch origin main` works.',
+      '',
+      isAuth
+        ? [
+          'The remote is https and has no stored credentials, so every fetch asks',
+          'for a username and password. Store them once:',
+          '',
+          '  git config --global credential.helper store',
+          '  git fetch origin main',
+          '',
+          'Enter your GitHub username, and a personal access token as the password',
+          '(github.com/settings/tokens, scope: repo). GitHub stopped accepting account',
+          'passwords over https in 2021. The token is kept in ~/.git-credentials in',
+          'plain text, so use a token you can revoke rather than one you reuse.',
+        ].join('\n')
+        : 'Fix the network, or re-run once `git fetch origin main` works.',
+      '',
+      detail ? `git said:\n${detail.trim().split('\n').map((l) => `  ${l}`).join('\n')}` : '',
     );
   }
 
