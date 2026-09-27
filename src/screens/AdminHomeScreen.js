@@ -1405,7 +1405,8 @@ export default function AdminHomeScreen() {
         maxLength={4}
         onSubmit={confirmTxPin}
         onCancel={() => setPinTxId(null)}
-      />      <AttachFileModal
+      />
+      <AttachFileModal
         visible={!!receiptTxId}
         title="Attach the transfer receipt"
         uploadFn={(uri, mimeType) => mediaUpload.uploadOrderReceipt(receiptTxId?.id, uri, mimeType)}

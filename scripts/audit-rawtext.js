@@ -4,7 +4,8 @@
 //
 //   1. A string sitting directly in a <View>. Obvious when it is a literal,
 //      much less so when it comes back from a helper that returns a string.
-//   2. `{someString && <Thing />}`. When the guard is '' (or 0) the && hands
+//   2. Whitespace JSX keeps: `/>      <Thing` on one line is a text node.
+//   3. `{someString && <Thing />}`. When the guard is '' (or 0) the && hands
 //      the empty string straight to the parent view, so the crash only shows
 //      up for the one user whose field happens to be blank. `{!!x && ...}`
 //      makes it `false`, which React drops.
@@ -115,6 +116,16 @@ for (const file of jsFiles(path.join(ROOT, 'src')).concat([path.join(ROOT, 'App.
           if (ch.type === 'JSXText' && ch.value.trim()) {
             problems.push(rel + ':' + ch.loc.start.line + '  <' + self + '> is given the text '
               + JSON.stringify(ch.value.trim()) + ' - wrap it in <Text>');
+          } else if (ch.type === 'JSXText' && ch.value.length && !ch.value.includes('\n')) {
+            // Whitespace, and JSX keeps it. It drops a whitespace-only run
+            // that spans a newline, but a run on ONE line survives as a text
+            // node - so `/>      <Thing` (two elements, no line break between
+            // them) puts a string in the parent view and RN throws. This is
+            // invisible in review and it shipped twice, because the obvious
+            // check is `value.trim()` and that is '' for exactly this case.
+            problems.push(rel + ':' + ch.loc.start.line + '  <' + self + '> keeps '
+              + JSON.stringify(ch.value) + ' between two elements on one line'
+              + ' - put a line break between them');
           } else if (ch.type === 'JSXExpressionContainer') {
             const what = stringiness(ch.expression);
             if (what) {
