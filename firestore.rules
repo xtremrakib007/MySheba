@@ -61,7 +61,15 @@ service cloud.firestore {
     // Audit trail written by adminTopUpPoints.
     match /pointTopUps/{id} { allow read: if can('finance'); allow write: if false; }
     match /verificationRequests/{uid} { allow read: if activeProfile() && (request.auth.uid == uid || can('users')); allow create, update, delete: if false; }
-    match /users/{uid} { allow read: if activeProfile() && (request.auth.uid == uid || can('users') || can('finance')); allow create: if false; allow update: if activeProfile() && request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','firstName','lastName','avatarUrl','lastSeenAnnouncementAt','pushToken','pushTokenPlatform','pushTokenUpdatedAt','fcmToken','fcmTokenUpdatedAt','notifPrefs']); allow delete: if false;
+    match /users/{uid} { allow read: if activeProfile() && (request.auth.uid == uid || can('users') || can('finance')); allow create: if false; allow update: if activeProfile() && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','firstName','lastName','mobileNumber','passportNumber','companyName','address','country','passportCopyUrl','passportCopyType','avatarUrl','lastSeenAnnouncementAt','pushToken','pushTokenPlatform','pushTokenUpdatedAt','fcmToken','fcmTokenUpdatedAt','notifPrefs'])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['mobileNumber']) || (request.resource.data.mobileNumber is string && request.resource.data.mobileNumber.size() <= 32))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['passportNumber']) || (request.resource.data.passportNumber is string && request.resource.data.passportNumber.size() <= 64))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['companyName']) || (request.resource.data.companyName is string && request.resource.data.companyName.size() <= 160))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['address']) || (request.resource.data.address is string && request.resource.data.address.size() <= 500))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['country']) || (request.resource.data.country is string && request.resource.data.country.size() == 2))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['passportCopyUrl']) || (request.resource.data.passportCopyUrl is string && request.resource.data.passportCopyUrl.size() <= 2048 && request.resource.data.passportCopyUrl.matches('https://firebasestorage\\.googleapis\\.com/v0/b/[^/]+/o/passport-copies%2F' + uid + '%2F[^?]+\\?.*')))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['passportCopyType']) || request.resource.data.passportCopyType in ['image','pdf']); allow delete: if false;
       match /receivers/{receiverId} { allow read, create, update, delete: if activeProfile() && request.auth.uid == uid; }
       match /friends/{friendId} { allow read, create, update, delete: if activeProfile() && request.auth.uid == uid; }
       match /workLogs/{workLogId} { allow read: if activeProfile() && (request.auth.uid == uid || can('users')); allow create, update, delete: if false; }
