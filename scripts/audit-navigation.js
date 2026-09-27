@@ -151,14 +151,14 @@ for (const key of arrayKeys(read('src/components/AccountToolsGrid.js'), 'ITEMS')
 // ---- 4c. every managed grid key is allowed by the Firestore rules whitelist ----
 const gridDefs = read('src/firebase/gridManagementService.js');
 const rules = read('firestore.rules');
-for (const key of matches(gridDefs, /\\['([a-zA-Z]+)','[^']+'\\]/g)) {
+for (const key of matches(gridDefs, /\['([a-zA-Z]+)','[^']+'\]/g)) {
   check('grid-management', key, 'missing Firestore rules whitelist entry', rules.includes(`'${key}'`));
 }
 
 // ---- 4d. the shared date field must not reference an undefined native picker ----
 const sharedUi = read('src/components/ui.js');
-const pickerReferenced = /\\bDateTimePicker\\b/.test(sharedUi);
-const pickerImported = /import\\s+DateTimePicker\\s+from\\s+['"][^'"]+['"]/.test(sharedUi);
+const pickerReferenced = /\bDateTimePicker\b/.test(sharedUi);
+const pickerImported = /import\s+DateTimePicker\s+from\s+['"][^'"]+['"]/.test(sharedUi);
 check('shared-ui', 'DateTimePicker', 'referenced without an import', !pickerReferenced || pickerImported);
 
 // ---- 5. customer tiles: every kind has a branch, or falls through to a service flow ----
