@@ -83,9 +83,19 @@ const SUPERADMIN_GROUPS = [
   ] },
 ];
 
+const STAFF_GROUPS = [
+  { title: 'Work Queues', icon: 'support', color: 'primary', items: [
+    { key: 'adminSupport', icon: 'support', label: 'Support Inbox' },
+    { key: 'inquiries', icon: 'profile', label: 'Inquiries' },
+    { key: 'all', icon: 'history', label: 'Transactions' },
+    { key: 'topups', icon: 'topup', label: 'Top-Ups' },
+  ] },
+];
+
 function roleGroups(role) {
   if (role === 'superadmin') return [...ADMIN_GROUPS, ...SUPERADMIN_GROUPS];
   if (role === 'admin') return ADMIN_GROUPS;
+  if (role === 'support' || role === 'finance') return [...STAFF_GROUPS, ...COMMON_GROUPS];
   return COMMON_GROUPS;
 }
 
@@ -101,13 +111,14 @@ export default function Sidebar() {
   const isAdmin = profile?.role === 'admin' || isSuperadmin;
   const groups = roleGroups(profile?.role)
     .map((group) => ({ ...group, items: group.items.filter((item) => {
-      const gridKey = item.key === 'salaryDashboard' ? 'salary' : item.key === 'apiProviderManagement' ? 'apiManagement' : item.key === 'all' ? 'history' : item.key;
+      const gridKey = item.key === 'salaryDashboard' ? 'salary' : item.key === 'apiProviderManagement' ? 'apiManagement' : item.key === 'adminSupport' ? 'support' : item.key === 'all' ? 'history' : item.key;
       if (!['adminHome', 'adminFeatures', 'gridManagement'].includes(item.key) && gridManagement?.[gridKey] === false) return false;
       const required = item.key === 'reports' && !['admin', 'superadmin', 'support', 'finance'].includes(profile?.role)
         ? null
         : {
           adminAnalytics: ['reports'],
           reports: ['reports'],
+          adminSupport: ['support'],
           all: ['orders', 'finance'],
           pending: ['orders'],
           inquiries: ['support'],
@@ -145,7 +156,7 @@ export default function Sidebar() {
   const requiredCapabilityFor = (key) => {
     if (key === 'reports' && !['admin', 'superadmin', 'support', 'finance'].includes(profile?.role)) return null;
     return ({
-      adminAnalytics: ['reports'], reports: ['reports'], all: ['orders', 'finance'],
+      adminAnalytics: ['reports'], reports: ['reports'], adminSupport: ['support'], all: ['orders', 'finance'],
       pending: ['orders'], inquiries: ['support'], topups: ['finance'], support: ['support'],
       rates: ['settings'], pricing: ['settings'], payments: ['settings'],
       transferPoints: ['finance'], userManagement: ['users'], verificationManagement: ['users'],
@@ -164,7 +175,8 @@ export default function Sidebar() {
     // Sending them to setScreen(key) rendered no screen for keys such as
     // "pending", "all", "rates" and "announcements".
     const adminTabs = ['all', 'pending', 'inquiries', 'topups', 'rates', 'pricing', 'support', 'payments', 'banners', 'announcements', 'homepage'];
-    if (isAdmin && adminTabs.includes(key)) {
+    const staffQueueTabs = ['inquiries', 'topups'];
+    if ((isAdmin && adminTabs.includes(key)) || (['support', 'finance'].includes(profile?.role) && staffQueueTabs.includes(key))) {
       setAdminTab(key);
       setAdminViewingSection(true);
       setScreen('adminHome');
