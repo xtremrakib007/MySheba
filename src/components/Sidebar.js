@@ -9,6 +9,11 @@ import VerifiedBadge from './VerifiedBadge';
 import Constants from 'expo-constants';
 import { showAlert } from '../utils/appAlert';
 import ServiceIcon from './ServiceIcon';
+// Rows draw from the same set the grids use, so the menu and the grid agree
+// and there are enough icons to give each row its own. Group headers and the
+// role pill stay on ServiceIcon: those sit on a filled colour and want a flat
+// white glyph, not a colour illustration.
+import ServiceArt from './ServiceArt';
 
 const APP_VERSION = (Constants.expoConfig?.version || '1.0.0').split('.').slice(0, 3).join('.');
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -23,68 +28,68 @@ const ROLE_LABEL = { customer: 'Customer', dealer: 'Dealer', reseller: 'Reseller
 const COMMON_GROUPS = [
   { title: 'Account', icon: 'profile', color: 'secondary', items: [
     { key: 'profile', icon: 'profile', label: 'Profile' },
-    { key: 'myAccount', icon: 'profile', label: 'My Account' },
+    { key: 'myAccount', icon: 'myAccount', label: 'My Account' },
     { key: 'settings', icon: 'settings', label: 'Settings' },
   ] },
   { title: 'Work & Documents', icon: 'profile', color: 'primary', items: [
-    { key: 'salaryDashboard', icon: 'topup', label: 'Salary & OT' },
-    { key: 'reports', icon: 'history', label: 'Reports' },
-    { key: 'myDocuments', icon: 'profile', label: 'My Documents' },
+    { key: 'salaryDashboard', icon: 'salary', label: 'Salary & OT' },
+    { key: 'reports', icon: 'reports', label: 'Reports' },
+    { key: 'myDocuments', icon: 'myDocuments', label: 'My Documents' },
   ] },
 ];
 
 const ADMIN_GROUPS = [
   { title: 'Admin Overview', icon: 'home', color: 'primary', items: [
-    { key: 'adminHome', icon: 'home', label: 'Control Center', featured: true },
-    { key: 'adminAnalytics', icon: 'history', label: 'Analytics' },
-    { key: 'reports', icon: 'history', label: 'Reports' },
+    { key: 'adminHome', icon: 'adminHome', label: 'Control Center', featured: true },
+    { key: 'adminAnalytics', icon: 'adminAnalytics', label: 'Analytics' },
+    { key: 'reports', icon: 'reports', label: 'Reports' },
   ] },
   { title: 'Operations', icon: 'settings', color: 'secondary', items: [
     { key: 'all', icon: 'history', label: 'Transactions', tab: true },
-    { key: 'pending', icon: 'history', label: 'Pending', tab: true },
-    { key: 'inquiries', icon: 'profile', label: 'Inquiries', tab: true },
+    { key: 'pending', icon: 'pending', label: 'Pending', tab: true },
+    { key: 'inquiries', icon: 'inquiries', label: 'Inquiries', tab: true },
     { key: 'topups', icon: 'topup', label: 'Top-Ups', tab: true },
     { key: 'support', icon: 'support', label: 'Support' },
   ] },
   { title: 'Finance & Pricing', icon: 'topup', color: 'primary', items: [
-    { key: 'rates', icon: 'remittance', label: 'Rates', tab: true },
-    { key: 'pricing', icon: 'billpayment', label: 'Pricing', tab: true },
-    { key: 'payments', icon: 'topup', label: 'Payments', tab: true },
-    { key: 'transferPoints', icon: 'remittance', label: 'Transfer Points' },
+    { key: 'rates', icon: 'rates', label: 'Rates', tab: true },
+    { key: 'pricing', icon: 'pricing', label: 'Pricing', tab: true },
+    { key: 'payments', icon: 'payments', label: 'Payments', tab: true },
+    { key: 'transferPoints', icon: 'walletTransfer', label: 'Transfer Points' },
       ] },
   { title: 'Users & Verification', icon: 'profile', color: 'secondary', items: [
-    { key: 'userManagement', icon: 'profile', label: 'User Management' },
-    { key: 'verificationManagement', icon: 'kyc', label: 'KYC Verification' },
+    { key: 'userManagement', icon: 'userManagement', label: 'User Management' },
+    { key: 'verificationManagement', icon: 'verificationManagement', label: 'KYC Verification' },
   ] },
   { title: 'Platform', icon: 'more', color: 'primary', items: [
-    { key: 'featureAccess', icon: 'kyc', label: 'Feature Access' },
-    { key: 'banners', icon: 'more', label: 'Banners', tab: true },
-    { key: 'announcements', icon: 'support', label: 'Announcements', tab: true },
-    { key: 'adFeatureControls', icon: 'more', label: 'Ad Controls' },
+    { key: 'featureAccess', icon: 'featureAccess', label: 'Feature Access' },
+    { key: 'banners', icon: 'banners', label: 'Banners', tab: true },
+    { key: 'announcements', icon: 'announcements', label: 'Announcements', tab: true },
+    { key: 'adFeatureControls', icon: 'adFeatureControls', label: 'Ad Controls' },
   ] },
 ];
 
 const SUPERADMIN_GROUPS = [
   { title: 'Superadmin Governance', icon: 'kyc', color: 'secondary', items: [
-    { key: 'adminFeatures', icon: 'kyc', label: 'System Control', featured: true },
-    { key: 'trustedDevices', icon: 'recharge', label: 'Trusted Devices' },
-    { key: 'featureAccess', icon: 'kyc', label: 'Tool Access' },
-    { key: 'apiProviderManagement', icon: 'internet', label: 'API Providers' },
-    { key: 'tierPromotions', icon: 'more', label: 'Tier Promotions' },
-    { key: 'superAdminTopup', icon: 'topup', label: 'Point Top-Up' },
+    { key: 'adminFeatures', icon: 'adminFeatures', label: 'System Control', featured: true },
+    { key: 'trustedDevices', icon: 'trustedDevices', label: 'Trusted Devices' },
+    { key: 'featureAccess', icon: 'featureAccess', label: 'Tool Access' },
+    { key: 'apiProviderManagement', icon: 'apiProviderManagement', label: 'API Providers' },
+    { key: 'tierPromotions', icon: 'tierPromotions', label: 'Tier Promotions' },
+    { key: 'superAdminTopup', icon: 'superAdminTopup', label: 'Point Top-Up' },
   ] },
   { title: 'Risk & Moderation', icon: 'kyc', color: 'primary', items: [
-    { key: 'verificationManagement', icon: 'kyc', label: 'Verification Queue' },
+    { key: 'verificationManagement', icon: 'verificationManagement', label: 'Verification Queue' },
   ] },
   { title: 'Advertising', icon: 'more', color: 'secondary', items: [
-    { key: 'adAnalytics', icon: 'history', label: 'Ad Analytics' },
-    { key: 'advertiserManagement', icon: 'profile', label: 'Advertisers' },
-    { key: 'adPackagesManagement', icon: 'more', label: 'Ad Packages' },
-    { key: 'adPaymentsManagement', icon: 'topup', label: 'Ad Payments' },
+    { key: 'adAnalytics', icon: 'adAnalytics', label: 'Ad Analytics' },
+    { key: 'advertiserManagement', icon: 'advertiserManagement', label: 'Advertisers' },
+    { key: 'adPackagesManagement', icon: 'adPackagesManagement', label: 'Ad Packages' },
+    { key: 'adPaymentsManagement', icon: 'adPaymentsManagement', label: 'Ad Payments' },
   ] },
   { title: 'Staff & Salary', icon: 'profile', color: 'primary', items: [
-    { key: 'salarySettings', icon: 'settings', label: 'Salary Settings' },
-    { key: 'salaryReports', icon: 'history', label: 'Salary Reports' },
+    { key: 'salarySettings', icon: 'salarySettings', label: 'Salary Settings' },
+    { key: 'salaryReports', icon: 'salaryReports', label: 'Salary Reports' },
   ] },
 ];
 
@@ -201,7 +206,7 @@ export default function Sidebar() {
                           : screen === item.key;
                         return (
                           <TouchableOpacity key={`${group.title}-${item.key}`} style={[styles.gridItem, item.featured && styles.featuredItem, active && styles.gridItemActive]} onPress={() => goTo(item.key, item.tab)} activeOpacity={0.78}>
-                            <View style={[styles.itemIconBox, active && styles.itemIconBoxActive]}><ServiceIcon name={item.icon} size={20} color={active ? colors.primary : colors.textSecondary} /></View>
+                            <View style={[styles.itemIconBox, active && styles.itemIconBoxActive]}><ServiceArt name={item.icon} size={22} /></View>
                             <Text style={[styles.gridLabel, active && styles.gridLabelActive]} numberOfLines={2}>{item.label}</Text>
                             {!!active && <View style={styles.activeMark} />}
                           </TouchableOpacity>

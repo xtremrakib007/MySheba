@@ -62,6 +62,29 @@ if (missing.length) {
   process.exit(1);
 }
 
+// ---- sidebar rows ----
+// The sidebar is the one place that draws by the `icon:` written beside each
+// row rather than by the row's key, so it needs its own pass. It also used a
+// separate 23-name icon set, where 37 rows shared 12 icons - seven of them
+// the same clock. It draws from ServiceArt now, and a row naming a drawing
+// that does not exist renders nothing at all.
+const sidebar = fs.readFileSync(path.join(root, 'src/components/Sidebar.js'), 'utf8');
+const rows = [...sidebar.matchAll(/\{\s*key:\s*'[^']+',\s*icon:\s*'([^']+)',\s*label:\s*'([^']+)'/g)]
+  .map((m) => ({ icon: m[1], label: m[2] }));
+if (!rows.length) {
+  console.error('Tile icon audit: found no sidebar rows - the pattern has gone stale.');
+  process.exit(1);
+}
+const blankRows = rows.filter((row) => !drawn.has(row.icon));
+if (blankRows.length) {
+  console.error(`\nTile icon audit: ${blankRows.length} sidebar row(s) name a drawing that does not exist:\n`);
+  for (const row of blankRows) console.error(`  ${row.label}  ->  '${row.icon}'`);
+  console.error('\nDraw it in src/components/ServiceArt.js, or point the row at an existing drawing.\n');
+  process.exit(1);
+}
+
 const stillEmoji = [...keys].filter(([key]) => !drawn.has(key)).map(([key]) => key);
 console.log(`Tile icon audit: all ${keys.size} tile(s) have artwork - ${keys.size - stillEmoji.length} drawn, ${stillEmoji.length} still emoji.`);
 if (stillEmoji.length) console.log(`  still emoji: ${stillEmoji.join(', ')}`);
+const distinct = new Set(rows.map((row) => row.icon)).size;
+console.log(`  sidebar: all ${rows.length} row(s) drawn, ${distinct} distinct icon(s).`);
