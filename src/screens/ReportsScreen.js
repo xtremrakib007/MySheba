@@ -286,10 +286,157 @@ function AdminReports({ dealerTxs, inquiries, topups }) {
   );
 }
 
+function ResellerReports({ resellerTxs }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+  const pending = resellerTxs.filter((t) => t.status === 'pending' && !t.rejected).length;
+  const processing = resellerTxs.filter((t) => t.status === 'processing').length;
+  const completed = resellerTxs.filter((t) => t.status === 'completed' && !t.rejected);
+  const rejected = resellerTxs.filter((t) => t.rejected || t.status === 'rejected').length;
+  const completedValue = completed.reduce((sum, t) => sum + Number(t.total || 0), 0);
+  const breakdown = useMemo(() => groupByService(resellerTxs), [resellerTxs]);
+
+  return (
+    <>
+      <View style={styles.statsGrid}>
+        <StatCard label="Pending" value={pending} color={colors.warning} />
+        <StatCard label="Processing" value={processing} color={colors.primary} />
+        <StatCard label="Completed" value={completed.length} color={colors.success} />
+        <StatCard label="Rejected" value={rejected} color={colors.error} />
+      </View>
+      <Text style={styles.sectionTitle}>Reseller Summary</Text>
+      <View style={styles.card}>
+        <View style={styles.breakdownRow}>
+          <Text style={styles.breakdownLabel}>Completed transaction value</Text>
+          <Text style={styles.breakdownAmount}>MYR {fmt(completedValue)}</Text>
+        </View>
+      </View>
+      <Text style={styles.sectionTitle}>By Service</Text>
+      <View style={styles.card}>
+        {breakdown.length === 0 ? <Text style={styles.emptyText}>No reseller transactions yet.</Text> : breakdown.map((item, index) => (
+          <React.Fragment key={item.label}>
+            {index > 0 && <View style={styles.divider} />}
+            <BreakdownRow label={item.label} count={item.count} amount={item.amount} />
+          </React.Fragment>
+        ))}
+      </View>
+    </>
+  );
+}
+
+function FinanceReports({ transactions, topups }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+  const completed = transactions.filter((t) => t.status === 'completed' && !t.rejected);
+  const pending = transactions.filter((t) => t.status === 'pending').length;
+  const processing = transactions.filter((t) => t.status === 'processing').length;
+  const rejected = transactions.filter((t) => t.rejected || t.status === 'rejected').length;
+  const pendingTopups = topups.filter((t) => t.status === 'pending');
+  const approvedTopups = topups.filter((t) => t.status === 'approved');
+  const completedValue = completed.reduce((sum, t) => sum + Number(t.total || 0), 0);
+  const approvedTopupValue = approvedTopups.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+  const breakdown = useMemo(() => groupByService(transactions), [transactions]);
+
+  return (
+    <>
+      <View style={styles.statsGrid}>
+        <StatCard label="Transactions" value={transactions.length} />
+        <StatCard label="Completed" value={completed.length} color={colors.success} />
+        <StatCard label="Pending" value={pending} color={colors.warning} />
+        <StatCard label="Processing" value={processing} color={colors.primary} />
+      </View>
+      <Text style={styles.sectionTitle}>Finance Summary</Text>
+      <View style={styles.card}>
+        <View style={styles.breakdownRow}>
+          <Text style={styles.breakdownLabel}>Completed transaction value</Text>
+          <Text style={styles.breakdownAmount}>MYR {fmt(completedValue)}</Text>
+        </View>
+        <View style={styles.divider} />
+        <View style={styles.breakdownRow}>
+          <Text style={styles.breakdownLabel}>Pending top-up requests</Text>
+          <Text style={styles.breakdownCount}>{pendingTopups.length}</Text>
+        </View>
+        <View style={styles.divider} />
+        <View style={styles.breakdownRow}>
+          <Text style={styles.breakdownLabel}>Approved top-up value</Text>
+          <Text style={styles.breakdownAmount}>MYR {fmt(approvedTopupValue)}</Text>
+        </View>
+        <View style={styles.divider} />
+        <View style={styles.breakdownRow}>
+          <Text style={styles.breakdownLabel}>Rejected transactions</Text>
+          <Text style={styles.breakdownCount}>{rejected}</Text>
+        </View>
+      </View>
+      <Text style={styles.sectionTitle}>Completed Value by Service</Text>
+      <View style={styles.card}>
+        {breakdown.length === 0 ? <Text style={styles.emptyText}>No completed transactions yet.</Text> : breakdown.map((item, index) => (
+          <React.Fragment key={item.label}>
+            {index > 0 && <View style={styles.divider} />}
+            <BreakdownRow label={item.label} count={item.count} amount={item.amount} />
+          </React.Fragment>
+        ))}
+      </View>
+    </>
+  );
+}
+
+function SupportReports({ inquiries }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+  const open = inquiries.filter((item) => (item.status || 'new') !== 'closed');
+  const newItems = inquiries.filter((item) => (item.status || 'new') === 'new');
+  const contacted = inquiries.filter((item) => item.status === 'contacted');
+  const closed = inquiries.filter((item) => item.status === 'closed');
+  const byType = inquiries.reduce((counts, item) => {
+    const type = String(item.type || 'other');
+    counts[type] = (counts[type] || 0) + 1;
+    return counts;
+  }, {});
+
+  return (
+    <>
+      <View style={styles.statsGrid}>
+        <StatCard label="Total Inquiries" value={inquiries.length} />
+        <StatCard label="Open" value={open.length} color={colors.warning} />
+        <StatCard label="New" value={newItems.length} color={colors.primary} />
+        <StatCard label="Closed" value={closed.length} color={colors.success} />
+      </View>
+      <Text style={styles.sectionTitle}>Support Queue Summary</Text>
+      <View style={styles.card}>
+        {[
+          ['New inquiries', newItems.length],
+          ['Contacted', contacted.length],
+          ['Closed', closed.length],
+        ].map(([label, count], index) => (
+          <React.Fragment key={label}>
+            {index > 0 && <View style={styles.divider} />}
+            <View style={styles.breakdownRow}>
+              <Text style={styles.breakdownLabel}>{label}</Text>
+              <Text style={styles.breakdownCount}>{count}</Text>
+            </View>
+          </React.Fragment>
+        ))}
+      </View>
+      <Text style={styles.sectionTitle}>Inquiries by Type</Text>
+      <View style={styles.card}>
+        {Object.keys(byType).length === 0 ? <Text style={styles.emptyText}>No inquiries yet.</Text> : Object.entries(byType).map(([type, count], index) => (
+          <React.Fragment key={type}>
+            {index > 0 && <View style={styles.divider} />}
+            <View style={styles.breakdownRow}>
+              <Text style={styles.breakdownLabel}>{type.charAt(0).toUpperCase() + type.slice(1)}</Text>
+              <Text style={styles.breakdownCount}>{count}</Text>
+            </View>
+          </React.Fragment>
+        ))}
+      </View>
+    </>
+  );
+}
+
 export default function ReportsScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { goBackOrHome, authUser, profile, dealerTxs, inquiries, topups } = useApp();
+  const { goBackOrHome, authUser, profile, dealerTxs, resellerTxs, inquiries, topups, can } = useApp();
   const role = profile ? profile.role : 'customer';
 
   return (
@@ -302,9 +449,18 @@ export default function ReportsScreen() {
         <Text style={styles.headerTitle}>Reports</Text>
       </LinearGradient>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 30 }}>
-        {role === 'dealer' && <DealerReports dealerTxs={dealerTxs} />}
-        {(role === 'admin' || role === 'superadmin') && <AdminReports dealerTxs={dealerTxs} inquiries={inquiries} topups={topups} />}
-        {role === 'customer' && <CustomerReports authUser={authUser} />}
+        {['admin', 'superadmin', 'support', 'finance'].includes(role) && !can('reports') ? (
+          <View style={styles.card}><Text style={styles.emptyText}>Reports access is not enabled for your account. Contact your Superadmin.</Text></View>
+        ) : (
+          <>
+            {role === 'dealer' && <DealerReports dealerTxs={dealerTxs} />}
+            {role === 'reseller' && <ResellerReports resellerTxs={resellerTxs} />}
+            {(role === 'admin' || role === 'superadmin') && <AdminReports dealerTxs={dealerTxs} inquiries={inquiries} topups={topups} />}
+            {role === 'finance' && <FinanceReports transactions={dealerTxs} topups={topups} />}
+            {role === 'support' && <SupportReports inquiries={inquiries} />}
+            {role === 'customer' && <CustomerReports authUser={authUser} />}
+          </>
+        )}
       </ScrollView>
     </View>
   );

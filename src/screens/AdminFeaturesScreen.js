@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-nati
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
+import { showAlert } from '../utils/appAlert';
 import HeaderDecor from '../components/HeaderDecor';
 import AppHeader from '../components/AppHeader';
 import WalletCard from '../components/WalletCard';
@@ -16,6 +17,7 @@ const CATEGORIES = [
   { key: 'operations', icon: '⚙️', bg: '#E3F2FD', name: 'Operations' },
   { key: 'finance', icon: '💰', bg: '#E8F5E9', name: 'Finance' },
   { key: 'users', icon: '👥', bg: '#E0F7FA', name: 'Users & KYC' },
+  { key: 'platform', icon: '📣', bg: '#FFF0F0', name: 'Platform & Content' },
   { key: 'system', icon: '🛡️', bg: '#EDE7F6', name: 'System Control' },
 ];
 
@@ -37,6 +39,10 @@ const USERS = [
   { key: 'userManagement', icon: '👥', bg: '#E3F2FD', name: 'Users' },
   { key: 'verificationManagement', icon: '🪪', bg: '#E0F7FA', name: 'KYC Verification' },
 ];
+const PLATFORM = [
+  { key: 'banners', icon: '🖼️', bg: '#FFF0F0', name: 'Home Banners' },
+  { key: 'announcements', icon: '📣', bg: '#E0F7FA', name: 'Announcements' },
+];
 // Which capability opens each hub item (any one is enough). Staff access is
 // role defaults + per-user overrides (accessControlService); a superadmin
 // has every capability.
@@ -46,14 +52,14 @@ const CAPABILITY_FOR = {
   rates: ['settings'], pricing: ['settings'], payments: ['settings'], categories: ['settings'], banners: ['settings'],
   transferPoints: ['finance'],
   userManagement: ['users'], verificationManagement: ['users'],
-  announcements: ['support'],
+  announcements: ['support'], adFeatureControls: ['settings'], bannerManagement: ['settings'],
 };
 
 const SYSTEM = [
   { key: 'featureAccess', icon: '🔐', bg: '#EDE7F6', name: 'Feature Access' },
   { key: 'gridManagement', icon: '🧩', bg: '#E0F7FA', name: 'Grid Management' },
-  { key: 'banners', icon: '🖼️', bg: '#FFF0F0', name: 'Banners' },
-  { key: 'announcements', icon: '📣', bg: '#E0F7FA', name: 'Announcements' },
+  { key: 'bannerManagement', icon: '📢', bg: '#E0F7FA', name: 'Ad Banners' },
+  { key: 'adFeatureControls', icon: '🛡️', bg: '#EDE7F6', name: 'Ad Controls' },
   { key: 'apiManagement', icon: '🔌', bg: '#E0F7FA', name: 'API Management' },
 ];
 
@@ -82,14 +88,14 @@ const RECHARGE_RATE_FIELDS = [
 // a tab that does not exist. gridManagement and apiManagement were already
 // special-cased by hand in openItem; folding them in gives one path, so the
 // navigation audit reads a single list instead of chasing special cases.
-const SCREEN_FEATURES = ['adminAnalytics', 'transferPoints', 'userManagement', 'verificationManagement', 'featureAccess', 'gridManagement', 'apiManagement'];
+const SCREEN_FEATURES = ['adminAnalytics', 'transferPoints', 'userManagement', 'verificationManagement', 'featureAccess', 'gridManagement', 'apiManagement', 'trustedDevices', 'tierPromotions', 'superAdminTopup', 'adFeatureControls', 'adAnalytics', 'advertiserManagement', 'adPackagesManagement', 'adPaymentsManagement', 'bannerManagement', 'salarySettings', 'salaryReports', 'profile', 'myAccount', 'settings', 'reports', 'myDocuments', 'salaryDashboard'];
 // Where the tile key and the screen name differ.
 const SCREEN_FOR = { apiManagement: 'apiProviderManagement' };
 
 export default function AdminFeaturesScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { profile, goBackOrHome, setScreen, openSidebar, dealerTxs, inquiries, topups, setAdminTab, setAdminViewingSection, rates, gridManagement, can } = useApp();
+  const { profile, goBackOrHome, setScreen, openSidebar, dealerTxs, inquiries, topups, setAdminTab, setAdminViewingSection, rates, gridManagement, can, openSalary, openMyDocuments } = useApp();
   const [section, setSection] = useState(null);
   const [rateView, setRateView] = useState(false);
   const [editRateKey, setEditRateKey] = useState(null);
@@ -99,7 +105,7 @@ export default function AdminFeaturesScreen() {
     const gridKey = item.key === 'all' ? 'history' : item.key;
     if (gridKey === 'gridManagement') return isSuperadmin;
     if (!gridManagementService.isGridActive(gridManagement, gridKey)) return false;
-    if (item.key === 'featureAccess') return isSuperadmin;
+    if (['featureAccess', 'bannerManagement', 'adFeatureControls'].includes(item.key)) return isSuperadmin;
     const need = CAPABILITY_FOR[item.key];
     return need ? need.some((cap) => can(cap)) : isSuperadmin;
   });
@@ -110,18 +116,30 @@ export default function AdminFeaturesScreen() {
   };
   const openItem = (key) => {
     if (key === 'rates') { setRateView(true); return; }
+    if (key === 'salaryDashboard') { openSalary(); return; }
+    if (key === 'myDocuments') { openMyDocuments(); return; }
     if (SCREEN_FEATURES.includes(key)) { setScreen(SCREEN_FOR[key] || key); return; }
     setAdminTab(key); setAdminViewingSection(true); setScreen('adminHome');
   };
   const itemsForSection = () => {
-    let items = section === 'operations' ? OPERATIONS : section === 'finance' ? FINANCE : section === 'users' ? USERS : SYSTEM;
+    let items = section === 'operations' ? OPERATIONS : section === 'finance' ? FINANCE : section === 'users' ? USERS : section === 'platform' ? PLATFORM : SYSTEM;
     if (section === 'system' && !isSuperadmin) return [];
     return allow(items).map((item) => ({ ...item, badge: badges[item.key] }));
   };
   const saveRate = async (value) => {
-    const key = editRateKey; setEditRateKey(null); const num = Number(value);
-    if (!key || !Number.isFinite(num) || num <= 0) return;
-    try { await ratesService.updateRate(key, num); } catch (e) {}
+    const key = editRateKey;
+    const num = Number(value);
+    if (!key) return;
+    if (!Number.isFinite(num) || num <= 0) {
+      showAlert('MySheba', 'Enter a valid rate greater than zero.');
+      return;
+    }
+    try {
+      await ratesService.updateRate(key, num);
+      setEditRateKey(null);
+    } catch (e) {
+      showAlert('MySheba', e?.message || 'Could not update rate. Please try again.');
+    }
   };
   const renderRateRows = (fields) => fields.map((field) => (
     <View key={field.key} style={styles.rateRow}>
@@ -174,8 +192,31 @@ export default function AdminFeaturesScreen() {
         icon={isSuperadmin ? '✦' : '◆'}
         onPress={() => setSection(isSuperadmin ? 'system' : 'operations')}
       />
-      <WalletCard balance={balance} variant="surface" onAddMoney={() => setScreen('superAdminTopup')} onTransfer={() => setScreen('transferPoints')} />
-      <FeatureGrid items={CATEGORIES.filter((x) => x.key !== 'system' || isSuperadmin)} onPress={setSection} />
+      <WalletCard balance={balance} variant="surface" onAddMoney={isSuperadmin ? () => setScreen('superAdminTopup') : undefined} onTransfer={() => setScreen('transferPoints')} />
+      <FeatureGrid title="Operations" items={allow(OPERATIONS).map((item) => ({ ...item, badge: badges[item.key] }))} onPress={openItem} />
+      <FeatureGrid title="Finance & Pricing" items={allow(FINANCE).map((item) => ({ ...item, badge: badges[item.key] }))} onPress={openItem} />
+      <FeatureGrid title="Users & Verification" items={allow(USERS).map((item) => ({ ...item, badge: badges[item.key] }))} onPress={openItem} />
+      <FeatureGrid title="Platform & Content" items={allow(PLATFORM).map((item) => ({ ...item, badge: badges[item.key] }))} onPress={openItem} />
+      {isSuperadmin && <FeatureGrid title="System Control" items={allow(SYSTEM).map((item) => ({ ...item, badge: badges[item.key] }))} onPress={openItem} />}
+      {isSuperadmin && <FeatureGrid title="Risk, Advertising & Staff" items={[
+        { key: 'trustedDevices', icon: '📱', bg: '#E3F2FD', name: 'Trusted Devices' },
+        { key: 'tierPromotions', icon: '🏆', bg: '#FFF3E0', name: 'Tier Promotions' },
+        { key: 'superAdminTopup', icon: '💳', bg: '#E8F5E9', name: 'Point Top-Up' },
+        { key: 'adAnalytics', icon: '📊', bg: '#E3F2FD', name: 'Ad Analytics' },
+        { key: 'advertiserManagement', icon: '👥', bg: '#E0F7FA', name: 'Advertisers' },
+        { key: 'adPackagesManagement', icon: '📦', bg: '#FFF3E0', name: 'Ad Packages' },
+        { key: 'adPaymentsManagement', icon: '💰', bg: '#E8F5E9', name: 'Ad Payments' },
+        { key: 'salarySettings', icon: '⚙️', bg: '#EDE7F6', name: 'Salary Settings' },
+        { key: 'salaryReports', icon: '📈', bg: '#E3F2FD', name: 'Salary Reports' },
+      ].filter((item) => gridManagementService.isGridActive(gridManagement, item.key === 'salaryDashboard' ? 'salary' : item.key))} onPress={openItem} />}
+      <FeatureGrid title="Account & Work" items={[
+        { key: 'profile', icon: '👤', bg: '#E3F2FD', name: 'Profile' },
+        { key: 'myAccount', icon: '🪪', bg: '#E0F7FA', name: 'My Account' },
+        { key: 'settings', icon: '⚙️', bg: '#EDE7F6', name: 'Settings' },
+        { key: 'reports', icon: '📄', bg: '#FFF3E0', name: 'Reports' },
+        { key: 'myDocuments', icon: '📁', bg: '#E0F7FA', name: 'My Documents' },
+        { key: 'salaryDashboard', icon: '💵', bg: '#E8F5E9', name: 'Salary & OT' },
+      ].filter((item) => gridManagementService.isGridActive(gridManagement, item.key === 'salaryDashboard' ? 'salary' : item.key))} onPress={openItem} />
     </ScrollView>
   </View>;
 }

@@ -5,6 +5,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { radius } from '../theme/theme';
 import BannerSlider from '../components/BannerSlider';
 import ServiceGrid from '../components/ServiceGrid';
+import AccountToolsGrid from '../components/AccountToolsGrid';
 import AppHeader from '../components/AppHeader';
 import WalletCard from '../components/WalletCard';
 import InfoBar from '../components/InfoBar';
@@ -69,6 +70,7 @@ export default function CustomerHomeScreen() {
         <InfoBar />
         <BannerSlider />
         <ServiceGrid homeOnly />
+        <AccountToolsGrid />
 
         <SectionCard style={styles.section}>
           <ListRow

@@ -8,6 +8,8 @@ import { useTheme } from "../theme/ThemeContext";
 import PromptModal from '../components/PromptModal';
 import BannerSlider from '../components/BannerSlider';
 import ServiceGrid from '../components/ServiceGrid';
+import AccountToolsGrid from '../components/AccountToolsGrid';
+import RoleToolsGrid from '../components/RoleToolsGrid';
 import CopyButton from '../components/CopyButton';
 import TransactionDetailModal from '../components/TransactionDetailModal';
 import AttachFileModal from '../components/AttachFileModal';
@@ -200,6 +202,8 @@ export default function DealerHomeScreen() {
                 { key: 'dealerFeaturesTile', icon: '🛠️', bg: '#EDE7F6', accent: '#5E35B1', name: 'Dealer Features', onPress: () => setScreen('dealerFeatures') },
               ]}
             />
+            <AccountToolsGrid />
+            <RoleToolsGrid role="dealer" />
           </>
         )}
 

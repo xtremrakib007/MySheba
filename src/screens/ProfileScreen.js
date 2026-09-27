@@ -15,7 +15,7 @@ import { countries } from '../data/countries';
 import * as authService from '../firebase/authService';
 import { uploadAvatar, uploadPassportCopy } from '../firebase/mediaUpload';
 
-const ROLE_LABEL = { customer: 'Customer', dealer: 'Dealer', reseller: 'Reseller', admin: 'Admin', superadmin: 'Super Admin' };
+const ROLE_LABEL = { customer: 'Customer', dealer: 'Dealer', reseller: 'Reseller', support: 'Support Agent', finance: 'Finance', admin: 'Admin', superadmin: 'Super Admin' };
 
 // Every editable field below goes straight onto the Firestore profile doc
 // under this key via authService.updateUserFields, EXCEPT firstName/lastName

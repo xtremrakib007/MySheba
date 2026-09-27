@@ -20,7 +20,7 @@ const PERSONAL_FEATURES = [
   { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount' },
   { key: 'kyc', icon: '🪪', name: 'Profile & KYC', kind: 'kyc' },
   { key: 'support', icon: '🎧', name: 'Support', kind: 'support' },
-  { key: 'businessProfile', icon: '🏢', name: 'My Business', kind: 'businessProfile' },
+  { key: 'businessProfile', icon: '🏢', name: 'Company Details', kind: 'businessProfile' },
 ];
 
 const STAFF_FEATURES = [

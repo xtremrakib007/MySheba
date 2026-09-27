@@ -6,14 +6,17 @@ const DOC = doc(db, 'settings', 'gridManagement');
 export const GRID_DEFS = [
   ['recharge','Recharge'],['rechargePin','Recharge PIN'],['mobilebanking','Mobile Banking'],['internet','Internet'],['billpayment','Bill Payment'],
   ['remittance','Remittance'],['bus','Bus'],['train','Train'],['flight','Flight'],['entertainment','Entertainment'],
-  ['topup','Top-Up'],['history','Transactions'],['support','Support'],['myAccount','My Account'],['profile','Profile'],
+  ['topup','Top-Up'],['history','Transactions'],['support','Support'],['settings','Settings'],['myAccount','My Account'],['profile','Profile'],
   ['dealerFeatures','Dealer Features'],['resellerFeatures','Reseller Features'],['adminFeatures','Admin Features'],
   ['moreFeaturesTile','More Services'],['walletTransfer','Wallet Transfer'],['myDocuments','My Documents'],
-  ['salary','Salary & OT'],['kyc','Profile & KYC'],['businessProfile','My Business'],
+  ['salary','Salary & OT'],['reports','Reports'],['kyc','Profile & KYC'],['businessProfile','Company Details'],
   ['fomema','FOMEMA'],['visa','Visa Malaysia'],['mydigital','Malaysia Arrival Card'],['passport','Passport'],
   ['adminAnalytics','Analytics'],['inquiries','Inquiries'],['pending','Pending'],['topups','Top-Ups'],
   ['rates','Rates'],['pricing','Pricing'],['payments','Payments'],['transferPoints','Transfers'],['apiManagement','API Management'],
-  ['userManagement','Users'],['verificationManagement','KYC Verification'],['featureAccess','Feature Access'],['banners','Banners'],['announcements','Announcements']
+  ['trustedDevices','Trusted Devices'],['tierPromotions','Tier Promotions'],['superAdminTopup','Point Top-Up'],
+  ['adFeatureControls','Ad Controls'],['adAnalytics','Ad Analytics'],['advertiserManagement','Advertisers'],
+  ['adPackagesManagement','Ad Packages'],['adPaymentsManagement','Ad Payments'],['salarySettings','Salary Settings'],['salaryReports','Salary Reports'],
+  ['userManagement','Users'],['verificationManagement','KYC Verification'],['featureAccess','Feature Access'],['banners','Home Banners'],['bannerManagement','Ad Banners'],['announcements','Announcements']
 ].map(([key,name]) => ({ key, name }));
 
 export const DEFAULT_GRID_MANAGEMENT = Object.fromEntries(GRID_DEFS.map(({key}) => [key, key === 'rechargePin' ? false : true]));

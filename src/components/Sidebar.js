@@ -13,7 +13,7 @@ import ServiceIcon from './ServiceIcon';
 const APP_VERSION = (Constants.expoConfig?.version || '1.0.0').split('.').slice(0, 3).join('.');
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DRAWER_WIDTH = Math.min(360, SCREEN_WIDTH * 0.9);
-const ROLE_LABEL = { customer: 'Customer', dealer: 'Dealer', reseller: 'Reseller', admin: 'Admin', superadmin: 'Super Admin' };
+const ROLE_LABEL = { customer: 'Customer', dealer: 'Dealer', reseller: 'Reseller', support: 'Support Agent', finance: 'Finance', admin: 'Admin', superadmin: 'Super Admin' };
 
 const COMMON_GROUPS = [
   { title: 'Account', icon: 'profile', color: 'secondary', items: [
@@ -52,10 +52,8 @@ const ADMIN_GROUPS = [
     { key: 'verificationManagement', icon: 'kyc', label: 'KYC Verification' },
   ] },
   { title: 'Platform', icon: 'more', color: 'primary', items: [
-    { key: 'featureAccess', icon: 'kyc', label: 'Feature Access' },
     { key: 'banners', icon: 'more', label: 'Banners' },
     { key: 'announcements', icon: 'support', label: 'Announcements' },
-    { key: 'adFeatureControls', icon: 'more', label: 'Ad Controls' },
   ] },
 ];
 
@@ -72,6 +70,8 @@ const SUPERADMIN_GROUPS = [
     { key: 'verificationManagement', icon: 'kyc', label: 'Verification Queue' },
   ] },
   { title: 'Advertising', icon: 'more', color: 'secondary', items: [
+    { key: 'bannerManagement', icon: 'more', label: 'Ad Banners' },
+    { key: 'adFeatureControls', icon: 'more', label: 'Ad Controls' },
     { key: 'adAnalytics', icon: 'history', label: 'Ad Analytics' },
     { key: 'advertiserManagement', icon: 'profile', label: 'Advertisers' },
     { key: 'adPackagesManagement', icon: 'more', label: 'Ad Packages' },
@@ -83,23 +83,60 @@ const SUPERADMIN_GROUPS = [
   ] },
 ];
 
+const STAFF_GROUPS = [
+  { title: 'Work Queues', icon: 'support', color: 'primary', items: [
+    { key: 'adminSupport', icon: 'support', label: 'Support Inbox' },
+    { key: 'inquiries', icon: 'profile', label: 'Inquiries' },
+    { key: 'all', icon: 'history', label: 'Transactions' },
+    { key: 'topups', icon: 'topup', label: 'Top-Ups' },
+  ] },
+];
+
 function roleGroups(role) {
   if (role === 'superadmin') return [...ADMIN_GROUPS, ...SUPERADMIN_GROUPS];
   if (role === 'admin') return ADMIN_GROUPS;
+  if (role === 'support' || role === 'finance') return [...STAFF_GROUPS, ...COMMON_GROUPS];
   return COMMON_GROUPS;
 }
 
 export default function Sidebar() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { sidebarVisible, closeSidebar, setScreen, screen, profile, logout, gridManagement } = useApp();
+  const { sidebarVisible, closeSidebar, setScreen, screen, profile, logout, gridManagement, setAdminTab, setAdminViewingSection, can, openSalary, openMyDocuments } = useApp();
   const translateX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const [collapsed, setCollapsed] = useState({});
 
   const isSuperadmin = profile?.role === 'superadmin';
   const isAdmin = profile?.role === 'admin' || isSuperadmin;
-  const groups = roleGroups(profile?.role);
+  const groups = roleGroups(profile?.role)
+    .map((group) => ({ ...group, items: group.items.filter((item) => {
+      const gridKey = item.key === 'salaryDashboard' ? 'salary' : item.key === 'apiProviderManagement' ? 'apiManagement' : item.key === 'adminSupport' ? 'support' : item.key === 'all' ? 'history' : item.key;
+      if (!['adminHome', 'adminFeatures', 'gridManagement'].includes(item.key) && gridManagement?.[gridKey] === false) return false;
+      const required = item.key === 'reports' && !['admin', 'superadmin', 'support', 'finance'].includes(profile?.role)
+        ? null
+        : {
+          adminAnalytics: ['reports'],
+          reports: ['reports'],
+          adminSupport: ['support'],
+          all: ['orders', 'finance'],
+          pending: ['orders'],
+          inquiries: ['support'],
+          topups: ['finance'],
+          support: ['support'],
+          rates: ['settings'],
+          pricing: ['settings'],
+          payments: ['settings'],
+          transferPoints: ['finance'],
+          userManagement: ['users'],
+          verificationManagement: ['users'],
+          banners: ['settings'],
+          announcements: ['support'],
+        }[item.key];
+      if (required && !required.some((capability) => can(capability))) return false;
+      return true;
+    }) }))
+    .filter((group) => group.items.length > 0);
 
   useEffect(() => {
     if (!sidebarVisible) return;
@@ -116,10 +153,41 @@ export default function Sidebar() {
 
   if (!sidebarVisible) return null;
 
+  const requiredCapabilityFor = (key) => {
+    if (key === 'reports' && !['admin', 'superadmin', 'support', 'finance'].includes(profile?.role)) return null;
+    return ({
+      adminAnalytics: ['reports'], reports: ['reports'], adminSupport: ['support'], all: ['orders', 'finance'],
+      pending: ['orders'], inquiries: ['support'], topups: ['finance'], support: ['support'],
+      rates: ['settings'], pricing: ['settings'], payments: ['settings'],
+      transferPoints: ['finance'], userManagement: ['users'], verificationManagement: ['users'],
+      banners: ['settings'], announcements: ['support'],
+    })[key];
+  };
+
   const goTo = (key) => {
     const always = ['adminHome','adminFeatures','gridManagement'];
-    if (!always.includes(key) && gridManagement?.[key] === false) { showAlert('MySheba', 'This feature is currently unavailable.'); return; }
-    setScreen(key); closeSidebar();
+    const gridKey = key === 'salaryDashboard' ? 'salary' : key === 'apiProviderManagement' ? 'apiManagement' : key === 'adminSupport' ? 'support' : key === 'all' ? 'history' : key;
+    if (!always.includes(key) && gridManagement?.[gridKey] === false) { showAlert('MySheba', 'This feature is currently unavailable.'); return; }
+    const required = requiredCapabilityFor(key);
+    if (required && !required.some((capability) => can(capability))) { showAlert('MySheba', 'Your account does not have access to this feature.'); return; }
+
+    // These entries are tabs inside AdminHomeScreen, not standalone screens.
+    // Sending them to setScreen(key) rendered no screen for keys such as
+    // "pending", "all", "rates" and "announcements".
+    const adminTabs = ['all', 'pending', 'inquiries', 'topups', 'rates', 'pricing', 'support', 'payments', 'banners', 'announcements', 'homepage'];
+    const staffQueueTabs = ['all', 'inquiries', 'topups'];
+    if ((isAdmin && adminTabs.includes(key)) || (['support', 'finance'].includes(profile?.role) && staffQueueTabs.includes(key))) {
+      setAdminTab(key);
+      setAdminViewingSection(true);
+      setScreen('adminHome');
+    } else if (key === 'salaryDashboard') {
+      openSalary();
+    } else if (key === 'myDocuments') {
+      openMyDocuments();
+    } else {
+      setScreen(key);
+    }
+    closeSidebar();
   };
   const toggleGroup = (title) => setCollapsed((prev) => ({ ...prev, [title]: !prev[title] }));
   const onLogout = () => {

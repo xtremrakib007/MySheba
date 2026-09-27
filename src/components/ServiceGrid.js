@@ -113,14 +113,14 @@ export function useServiceAction() {
     if (s.kind === 'walletTransfer') return setScreen('transferPoints');
     if (s.kind === 'kyc') return setScreen('verifyIdentity');
     if (s.kind === 'support') return setScreen('support');
-    if (s.kind === 'businessProfile') return setScreen('businessProfile');
-    if (s.kind === 'billPayment') return setScreen('billPayment');
-    if (s.kind === 'billpayment') return setScreen('billPayment');
+    if (s.kind === 'businessProfile') return setScreen('profile');
+    if (s.kind === 'billPayment') return startService('billpayment');
+    if (s.kind === 'billpayment') return startService('billpayment');
     if (s.kind === 'history') return setScreen('history');
     if (s.kind === 'myaccount') return setScreen('myAccount');
     if (s.kind === 'profile') return setScreen('profile');
     if (s.kind === 'topup') return setScreen('topup');
-    if (s.kind === 'adminTopup') return setScreen('superAdminTopup');
+    if (s.kind === 'adminTopup') { setAdminTab('topups'); setAdminViewingSection(true); return setScreen('adminHome'); }
     if (s.kind === 'dealerFeatures') return setScreen('dealerFeatures');
     if (s.kind === 'resellerFeatures') return setScreen('resellerFeatures');
     if (s.kind === 'adminFeatures') return setScreen('adminFeatures');
@@ -164,7 +164,7 @@ export default function ServiceGrid({ homeOnly }) {
       : role === 'admin'
         ? STAFF_SERVICES.admin.filter((t) => !ADMIN_TILE_NEEDS[t.key] || ADMIN_TILE_NEEDS[t.key].some((cap) => can(cap)))
         : (STAFF_SERVICES[role] || STAFF_SERVICES.admin);
-  const gridKeyFor = (service) => ({ buspicker: 'bus', webview: service.key, adminFeatures: 'adminFeatures', dealerFeatures: 'dealerFeatures', resellerFeatures: 'resellerFeatures', adminTopup: 'topup' }[service.kind] || service.key);
+  const gridKeyFor = (service) => ({ buspicker: 'bus', webview: service.key, adminFeatures: 'adminFeatures', dealerFeatures: 'dealerFeatures', resellerFeatures: 'resellerFeatures', adminTopup: 'topups', staffSupport: 'support' }[service.kind] || service.key);
   const active = allServices.filter((service) => gridManagementService.isGridActive(gridManagement, gridKeyFor(service)));
   const moreTile = active.find((service) => service.kind === 'moreFeaturesLink');
   // homeOnly keeps the tiles flagged for the home screen, in declaration
