@@ -25,6 +25,7 @@
     "publish:ota": "node scripts/publish-ota.js",
     "test:otp": "node scripts/test-otp-challenge.js",
     "test:device": "node scripts/test-device-trust.js",
+    "test:deviceid": "node scripts/test-device-id.js",
     "test:dates": "node scripts/test-date-field.js",
     "audit:jsxdefs": "node scripts/audit-undefined-jsx.js",
     "audit:rawtext": "node scripts/audit-rawtext.js",
