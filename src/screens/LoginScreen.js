@@ -14,6 +14,8 @@ import * as supportContactService from '../firebase/supportContactService';
 import { signInErrorCopy } from '../utils/signInErrorCopy';
 import { getLastTokenProbe } from '../firebase/authService';
 import { isValidPhone } from '../firebase/authService';
+import { peekSignOutTrace } from '../utils/authTrace';
+import BuildStamp from '../components/BuildStamp';
 
 const SUPPORT_EMAIL = 'info.mysheba@gmail.com';
 const REMEMBER_KEY = 'mysheba_remembered_phone';
@@ -38,6 +40,8 @@ export default function LoginScreen() {
   const [phoneError, setPhoneError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [showErrorDetail, setShowErrorDetail] = useState(false);
+  const [signOutTrace, setSignOutTrace] = useState(null);
+  useEffect(() => { peekSignOutTrace().then(setSignOutTrace).catch(() => {}); }, []);
 
   // Restore the remembered number.
   //
@@ -247,6 +251,23 @@ export default function LoginScreen() {
               <Text style={styles.signupText}>{t('login.noAccount')}<Text style={styles.signupLink}>{t('login.signUp')}</Text></Text>
             </TouchableOpacity>
 
+            {/* Why the last session ended, and which bundle is running.
+                Three separate causes of "it logged me out on its own" have
+                been fixed now, and from the outside they are identical - the
+                app opens on this screen. Without the app saying which one it
+                was, the next report is another round of guessing. It only
+                shows when a sign-out was actually recorded, so a first
+                install and a deliberate log out show nothing. */}
+            {!!signOutTrace && (
+              <View style={styles.traceBox}>
+                <Text style={styles.traceText} selectable>
+                  {'Last sign-out: ' + signOutTrace.reason
+                    + (signOutTrace.detail ? ' - ' + signOutTrace.detail : '')}
+                </Text>
+                <Text style={styles.traceText} selectable>{signOutTrace.at}</Text>
+                <BuildStamp />
+              </View>
+            )}
             <TouchableOpacity style={styles.helpRow} onPress={onNeedHelp}>
               <Text style={styles.signupText}>{t('login.needHelp')}<Text style={styles.signupLink}>{t('login.contactUs')}</Text></Text>
             </TouchableOpacity>
@@ -312,6 +333,8 @@ function createStyles(colors) {
     arrowText: { color: 'white', fontSize: 14, fontWeight: '700' },
     signupRow: { marginTop: 18, alignItems: 'center' },
     helpRow: { marginTop: 10, alignItems: 'center' },
+    traceBox: { marginTop: 14, padding: 8, borderRadius: 8, backgroundColor: colors.inputBg, borderWidth: 1, borderColor: colors.border },
+    traceText: { fontSize: 10, color: colors.textSecondary, textAlign: 'center' },
     signupText: { fontSize: 13, color: '#6B7785' },
     signupLink: { color: colors.primary, fontWeight: '700' },
   });
