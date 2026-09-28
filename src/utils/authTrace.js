@@ -16,9 +16,46 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const KEY = 'authTrace:lastSignOut:v1';
 
-/** Leave a breadcrumb. Never throws - tracing must not break the auth path. */
-export async function noteSignOut(reason, detail) {
+// How long a specific reason outranks the generic one.
+//
+// 'firebase-no-user' is not a cause, it is the observation that Firebase Auth
+// has no user - which is true after EVERY sign-out, including the ones whose
+// cause is already known. A deliberate logout and a device takeover both call
+// signOut() themselves, so the auth listener fires moments later and wrote
+// 'firebase-no-user' over the reason that had just been recorded. Every
+// sign-out therefore looked identical on the login screen, which defeated the
+// entire point of recording one.
+//
+// Ten seconds is far longer than the gap between signOut() and the listener
+// firing (milliseconds), and far shorter than the gap between two unrelated
+// sign-outs, so it separates the two cases without a flag being threaded
+// through every call site.
+const SPECIFIC_WINS_MS = 10000;
+
+/**
+ * Leave a breadcrumb. Never throws - tracing must not break the auth path.
+ *
+ * Pass `generic: true` for a reason that merely observes the sign-out rather
+ * than explaining it. A generic reason will not overwrite a specific one
+ * recorded in the last few seconds.
+ */
+export async function noteSignOut(reason, detail, { generic = false } = {}) {
   try {
+    if (generic) {
+      // Its own try/catch: a corrupt stored value must read as "nothing
+      // recorded", not abort the write. Sharing the outer catch meant one bad
+      // entry silently stopped every future breadcrumb from being saved,
+      // which is worse than the problem this guard exists to solve.
+      let prevAt = NaN;
+      try {
+        const raw = await AsyncStorage.getItem(KEY);
+        const prev = raw ? JSON.parse(raw) : null;
+        if (prev && prev.at) prevAt = Date.parse(prev.at);
+      } catch (e) {
+        prevAt = NaN;
+      }
+      if (Number.isFinite(prevAt) && Date.now() - prevAt < SPECIFIC_WINS_MS) return;
+    }
     await AsyncStorage.setItem(KEY, JSON.stringify({
       reason: String(reason || 'unknown'),
       detail: String(detail == null ? '' : detail).slice(0, 300),

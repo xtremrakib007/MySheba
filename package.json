@@ -35,7 +35,8 @@
     "test:face": "node scripts/test-face-event.js",
     "postinstall": "patch-package",
     "lint": "eslint src App.js scripts functions",
-    "test:session": "node scripts/test-session-persistence.js"
+    "test:session": "node scripts/test-session-persistence.js",
+    "test:trace": "node scripts/test-auth-trace.js"
   },
   "dependencies": {
     "expo": "~53.0.0",

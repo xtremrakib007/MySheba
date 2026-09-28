@@ -1136,7 +1136,7 @@ export function AppProvider({ children }) {
         // Firebase itself says there is no session. This is the one
         // legitimate sign-out, but it is also what a persistence failure
         // looks like, so record which of the two it was.
-        noteSignOut("firebase-no-user", initialRouteDone ? "while running" : "at launch");
+        noteSignOut("firebase-no-user", initialRouteDone ? "while running" : "at launch", { generic: true });
         setProfile(null);
         setAppLocked(false);
         setPendingDeviceVerification(null);

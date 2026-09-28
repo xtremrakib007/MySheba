@@ -18,6 +18,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db, functions } from './config';
 import { logActivity } from './logService';
+import { noteSignOut } from '../utils/authTrace';
 import { getDeviceId, getDeviceLabel, setLocalSessionId, setDeviceCheckDeferred, clearDeviceCheckDeferred, isDeviceCheckUnreachable, clearLocalSessionId } from './deviceSessionService';
 import { toE164 as phoneToE164 } from '../data/phoneCountries';
 
@@ -291,6 +292,12 @@ export async function confirmDeviceLogin(uid, emailIdToken) {
 
 export async function logout() {
   logActivity('logout');
+  // Record that this sign-out was asked for, so the login screen can tell a
+  // deliberate logout apart from a session that died on its own. Written as
+  // generic so it yields to a more specific reason recorded moments earlier -
+  // the device-takeover path calls this function too, and its reason is the
+  // one worth keeping.
+  await noteSignOut('manual-logout', 'logout() was called', { generic: true });
   try {
     if (auth.currentUser) await refreshCallableAuthToken();
     const deviceId = await getDeviceId();
