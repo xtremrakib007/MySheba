@@ -41,9 +41,19 @@ export const colors = lightColors;
 // darker than their mockup swatch for that last reason - the lighter
 // greens left white header text at 3.4:1.
 export const roleThemes = {
+  // Teal, taken from the logo rather than picked by eye: the icon's dominant
+  // colour is #0DB4B2, hue 179.3. Each swatch keeps the saturation and
+  // lightness it had as green and moves to that hue, so the palette's internal
+  // relationships are unchanged and only the colour differs.
+  //
+  // light.secondary is the one exception, darkened from #0F8685 to #0F8483.
+  // Teal reads slightly lighter than green at identical lightness, and the
+  // straight hue shift left white header text at 4.40:1 on that gradient stop
+  // - under the 4.5 this file holds itself to, and the same trap the note
+  // above describes for the original greens.
   customer: { label: 'Customer',
-    light: { primary: '#0E7A43', primaryDark: '#0A5C33', secondary: '#0F864C', gold: '#2DBE6C' },
-    dark:  { primary: '#3FD98A', primaryDark: '#1E9A5C', secondary: '#57E09B', gold: '#7CEFB6' } },
+    light: { primary: '#0E7A79', primaryDark: '#0A5C5B', secondary: '#0F8483', gold: '#2DBEBC' },
+    dark:  { primary: '#3FD9D7', primaryDark: '#1E9A99', secondary: '#57E0DE', gold: '#7CEFEE' } },
   admin: { label: 'Admin',
     light: { primary: '#1257B0', primaryDark: '#0C3F84', secondary: '#1A73E8', gold: '#4A9DFF' },
     dark:  { primary: '#6BB0FF', primaryDark: '#2F7FD6', secondary: '#8CC4FF', gold: '#B6DCFF' } },
