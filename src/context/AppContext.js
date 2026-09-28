@@ -1264,6 +1264,15 @@ export function AppProvider({ children }) {
                   "local=" + String(localSessionId) + " active=" + String(p.activeSessionId));
                 await authService.logout();
                 setProfile(null);
+                // Clear the lock here rather than waiting for the signed-out
+                // branch above to do it. That branch runs when Firebase Auth
+                // emits null, which is a moment later, and until then
+                // appLocked is still true while the screen is already
+                // 'login' - so the PIN modal sits on top of the login form,
+                // asking someone who has just been signed out to unlock an
+                // app they are no longer signed in to. The only way out of
+                // that modal is its own 'Forgot PIN? Log out' link.
+                setAppLocked(false);
                 screenHistoryRef.current = [];
                 setScreen("login");
                 showAlert(
