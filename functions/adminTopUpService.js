@@ -78,7 +78,7 @@ exports.adminTopUpPoints = onCall({ enforceAppCheck: false }, async request => {
 
       const target = targetSnap.data();
       if (!['dealer', 'reseller'].includes(target.role)) {
-        throw new HttpsError('failed-precondition', 'Only dealer/reseller accounts can receive admin point top-ups.');
+        throw new HttpsError('failed-precondition', 'Only dealer/reseller accounts can receive admin top-ups.');
       }
       if (!activeAccount(target)) {
         throw new HttpsError('failed-precondition', 'The target account is not active.');
@@ -136,6 +136,6 @@ exports.adminTopUpPoints = onCall({ enforceAppCheck: false }, async request => {
   } catch (error) {
     if (error instanceof HttpsError) throw error;
     await logServerError('adminTopUpPoints', error, { userId: callerUid, targetUid, requestId });
-    throw new HttpsError('internal', 'Could not complete the point top-up.');
+    throw new HttpsError('internal', 'Could not complete the top-up.');
   }
 });

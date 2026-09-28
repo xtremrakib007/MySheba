@@ -331,7 +331,7 @@ export default function WebViewScreen() {
           actually confirmed. */}
       {!!(isSubmitFlow && alreadySubmitted) && (
         <View style={styles.submitBar}>
-          <Text style={styles.submitDoneText}>✓ Submitted - points deducted</Text>
+          <Text style={styles.submitDoneText}>✓ Submitted - balance charged</Text>
         </View>
       )}
 
@@ -343,7 +343,7 @@ export default function WebViewScreen() {
       {!!isAccessClickFlow && (
         <View style={styles.submitBar}>
           <Text style={styles.autoChargeHintText}>
-            {webViewBusy ? 'Confirming…' : 'Points deduct automatically when you tap Search/Carian on this page.'}
+            {webViewBusy ? 'Confirming…' : 'Your balance is charged automatically when you tap Search/Carian on this page.'}
           </Text>
         </View>
       )}

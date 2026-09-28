@@ -2346,7 +2346,7 @@ export function AppProvider({ children }) {
       }
 
       showAlert(
-        "Points will be deducted",
+        "Your balance will be charged",
         `Using this feature costs ${cost} pts. Your current balance is ${balance} pts.\n\nContinue?`,
         [
           { text: "Cancel", style: "cancel" },
@@ -2475,7 +2475,7 @@ export function AppProvider({ children }) {
         if (result.charged) {
           showAlert(
             "MySheba",
-            "Thanks - your submission is confirmed and points have been deducted.",
+            "Thanks - your submission is confirmed and your balance has been charged.",
           );
         } else {
           showAlert("MySheba", "This application was already confirmed.");

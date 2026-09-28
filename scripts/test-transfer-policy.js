@@ -1,0 +1,99 @@
+#!/usr/bin/env node
+/**
+ * The app's copy of the transfer rule must agree with the server's.
+ *
+ * src/utils/transferPolicy.js exists so the Send To list only offers
+ * transfers that will be accepted. That is only worth anything while it
+ * matches functions/secureTransfer.js, which is the authority - and the two
+ * are separate bundles, so nothing links them. If the client drifts wider,
+ * people are offered transfers that get refused after they enter a PIN. If
+ * it drifts narrower, legitimate recipients quietly vanish from the list.
+ *
+ * This loads BOTH implementations and compares them across every role pair.
+ */
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+
+const ROOT = path.resolve(__dirname, '..');
+
+function serverRule() {
+  const src = fs.readFileSync(path.join(ROOT, 'functions', 'secureTransfer.js'), 'utf8');
+  const start = src.indexOf('function canTransferTo(');
+  const end = src.indexOf('function validBalance(');
+  if (start < 0 || end < 0) throw new Error('could not find canTransferTo in functions/secureTransfer.js');
+  const box = { module: { exports: {} } };
+  vm.createContext(box);
+  vm.runInContext(`${src.slice(start, end)}\nmodule.exports = canTransferTo;`, box);
+  return box.module.exports;
+}
+
+function clientRule() {
+  const src = fs.readFileSync(path.join(ROOT, 'src', 'utils', 'transferPolicy.js'), 'utf8');
+  const start = src.indexOf('export function canTransferTo(');
+  const end = src.indexOf('/** Who a sender may actually be shown');
+  if (start < 0 || end < 0) throw new Error('could not find canTransferTo in src/utils/transferPolicy.js');
+  const box = { module: { exports: {} } };
+  vm.createContext(box);
+  vm.runInContext(`${src.slice(start, end).replace('export ', '')}\nmodule.exports = canTransferTo;`, box);
+  return box.module.exports;
+}
+
+const server = serverRule();
+const client = clientRule();
+
+const ROLES = ['customer', 'dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin', undefined];
+const ME = 'uid-me';
+const OTHER = 'uid-other';
+
+let failed = 0;
+let compared = 0;
+const disagreements = [];
+
+for (const senderRole of ROLES) {
+  for (const recipientRole of ROLES) {
+    for (const dealerId of [ME, OTHER, undefined]) {
+      const recipient = { role: recipientRole, dealerId };
+      // The server reads the sender's own uid off `caller.id`.
+      const s = server(senderRole, { id: ME }, recipient);
+      const c = client(senderRole, ME, recipient);
+      compared += 1;
+      if (Boolean(s) !== Boolean(c)) {
+        failed += 1;
+        disagreements.push(`${senderRole} -> ${recipientRole} (dealerId ${dealerId === ME ? 'mine' : dealerId === OTHER ? "someone else's" : 'unset'}): server ${Boolean(s)}, app ${Boolean(c)}`);
+      }
+    }
+  }
+}
+
+console.log(`Compared ${compared} sender/recipient combinations.`);
+if (disagreements.length) {
+  console.error(`\n${disagreements.length} disagreement(s) between the app and the server:\n`);
+  disagreements.forEach((d) => console.error(`  ${d}`));
+  process.exit(1);
+}
+console.log('  ok    the app and the server agree on every one');
+
+// The rule itself, stated once, so a change to BOTH copies still gets noticed.
+const expect = (label, got, want) => {
+  if (got === want) { console.log(`  ok    ${label}`); return; }
+  failed += 1;
+  console.error(`  FAIL  ${label}\n          got ${got}, want ${want}`);
+};
+console.log('\nThe rule as intended:');
+expect('superadmin -> admin', client('superadmin', ME, { role: 'admin' }), true);
+expect('superadmin -> dealer', client('superadmin', ME, { role: 'dealer' }), true);
+expect('superadmin -> customer is NOT allowed', client('superadmin', ME, { role: 'customer' }), false);
+expect('admin -> dealer', client('admin', ME, { role: 'dealer' }), true);
+expect('admin -> customer is NOT allowed', client('admin', ME, { role: 'customer' }), false);
+expect('admin -> admin is NOT allowed', client('admin', ME, { role: 'admin' }), false);
+expect('dealer -> their own customer', client('dealer', ME, { role: 'customer', dealerId: ME }), true);
+expect("dealer -> another dealer's customer is NOT allowed", client('dealer', ME, { role: 'customer', dealerId: OTHER }), false);
+expect('dealer -> dealer is NOT allowed', client('dealer', ME, { role: 'dealer' }), false);
+expect('reseller cannot send', client('reseller', ME, { role: 'customer', dealerId: ME }), false);
+expect('customer cannot send', client('customer', ME, { role: 'customer', dealerId: ME }), false);
+expect('support cannot send', client('support', ME, { role: 'dealer' }), false);
+expect('finance cannot send', client('finance', ME, { role: 'dealer' }), false);
+
+console.log(failed ? `\n${failed} failure(s).` : '\nTransfer policy: the app matches the server.');
+process.exit(failed ? 1 : 0);

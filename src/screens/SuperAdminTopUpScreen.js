@@ -130,7 +130,7 @@ const result = await ImagePicker.launchImageLibraryAsync({
           onChangeText={setAmount}
         />
         {amountNum > 0 && (
-          <Text style={styles.pointsPreview}>= {formatAmount(amountNum)} points, credited instantly</Text>
+          <Text style={styles.pointsPreview}>= {formatAmount(amountNum)}, credited instantly</Text>
         )}
 
         <FormLabel style={{ marginTop: 6 }}>Payment Method</FormLabel>

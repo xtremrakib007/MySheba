@@ -44,7 +44,7 @@ export default {
     googleLinked: 'Google Account Linked ✓',
     changeSecurityPin: 'Change Security PIN',
     setUpSecurityPin: 'Set Up Security PIN',
-    securityPinSub: 'Protects My Documents, Transfer Points, and Notepad',
+    securityPinSub: 'Protects My Documents, Wallet Transfer, and Notepad',
     appLock: 'App Lock',
     appLockSub: "Require your PIN or fingerprint/face to open MySheba",
     trustedDevices: 'Trusted Devices',

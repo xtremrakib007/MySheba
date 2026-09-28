@@ -88,7 +88,7 @@ function formatTopupCopy(tp) {
   ];
   if (tp.bankName) lines.push(`Bank: ${tp.bankName}${tp.refNo ? ` · Ref: ${tp.refNo}` : ''}`);
   lines.push(`Amount: ${txAmount(tp.amount, currency)}`);
-  lines.push(`Points: ${Number(tp.points || 0).toFixed(2)}`);
+  lines.push(`Credited: ${txAmount(tp.points, currency)}`);
   if (tp.rejectReason) lines.push(`Reject reason: ${tp.rejectReason}`);
   lines.push(`Status: ${(tp.status || 'pending').toUpperCase()}`);
   return lines.join('\n');

@@ -217,7 +217,7 @@ export default function AdminSupportScreen() {
       <PromptModal
         visible={!!resolveId}
         title="Reply to requester (optional):"
-        placeholder="e.g. Issue fixed, points credited"
+        placeholder="e.g. Issue fixed, balance credited"
         onSubmit={confirmResolve}
         onCancel={() => setResolveId(null)}
       />

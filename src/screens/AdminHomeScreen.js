@@ -816,7 +816,7 @@ export default function AdminHomeScreen() {
             </View>
 
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>🔒 Point Feature Costs</Text>
+              <Text style={styles.cardTitle}>🔒 Feature Costs</Text>
               {POINT_COST_FIELDS.map((r) => (
                 <View key={r.key} style={styles.rateRow}>
                   <Text style={{ flex: 1 }}>{r.label}</Text>
@@ -1333,7 +1333,7 @@ export default function AdminHomeScreen() {
         title={
           ACCESS_WINDOW_FIELDS.some((f) => f.key === editPointCostKey) ? 'New value (hours):'
           : MODULE_SUBSCRIPTION_DAYS_FIELDS.some((f) => f.key === editPointCostKey) ? 'New value (days):'
-          : 'New cost (points):'
+          : 'New cost:'
         }
         placeholder={
           ACCESS_WINDOW_FIELDS.some((f) => f.key === editPointCostKey) ? 'e.g. 1'

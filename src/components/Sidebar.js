@@ -55,7 +55,7 @@ const ADMIN_GROUPS = [
     { key: 'rates', icon: 'rates', label: 'Rates', tab: true },
     { key: 'pricing', icon: 'pricing', label: 'Pricing', tab: true },
     { key: 'payments', icon: 'payments', label: 'Payments', tab: true },
-    { key: 'transferPoints', icon: 'walletTransfer', label: 'Transfer Points' },
+    { key: 'transferPoints', icon: 'walletTransfer', label: 'Wallet Transfer' },
       ] },
   { title: 'Users & Verification', icon: 'profile', color: 'secondary', items: [
     { key: 'userManagement', icon: 'userManagement', label: 'User Management' },
@@ -76,7 +76,7 @@ const SUPERADMIN_GROUPS = [
     { key: 'featureAccess', icon: 'featureAccess', label: 'Tool Access' },
     { key: 'apiProviderManagement', icon: 'apiProviderManagement', label: 'API Providers' },
     { key: 'tierPromotions', icon: 'tierPromotions', label: 'Tier Promotions' },
-    { key: 'superAdminTopup', icon: 'superAdminTopup', label: 'Point Top-Up' },
+    { key: 'superAdminTopup', icon: 'superAdminTopup', label: 'Wallet Top-Up' },
   ] },
   { title: 'Risk & Moderation', icon: 'kyc', color: 'primary', items: [
     { key: 'verificationManagement', icon: 'verificationManagement', label: 'Verification Queue' },
