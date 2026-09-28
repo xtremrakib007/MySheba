@@ -1,10 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
-import { Appearance } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getPalette, brandGradientFor, roleThemes, roleList, DEFAULT_ROLE, gridStyles, gridStyleList, DEFAULT_GRID_STYLE } from './theme';
 import { useApp } from '../context/AppContext';
-
-const STORAGE_KEY = 'mysheba.themeMode';
 
 // Ten selectable icon presentations. They only change service iconography;
 // country flags, operator logos and mobile-banking/provider branding are never replaced.
@@ -23,23 +19,34 @@ export const iconStyles = {
 export const iconStyleList = Object.keys(iconStyles);
 export const DEFAULT_ICON_STYLE = 'classic';
 
-function currentSystemScheme() { return Appearance.getColorScheme() === 'dark' ? 'dark' : 'light'; }
-const initialSystemScheme = currentSystemScheme();
+// Light only.
+//
+// The app ships one appearance. app.base.json already pins the native side to
+// userInterfaceStyle "light", so the OS never hands us a dark surface; this is
+// the JS half, which was still resolving dark from the system scheme or a
+// stored preference and producing a half-dark app on a dark phone.
+//
+// It is enforced here rather than by deleting the dark palettes, because
+// roleThemes.*.dark is what getPalette expects to exist and forty components
+// read `isDark`. One resolved value keeps every one of those correct without
+// touching them, and turning dark mode back on later is this constant.
+//
+// setMode and toggleMode stay as no-ops for the same reason setGridStyle and
+// setIconStyle already are: the surface stays stable, the product decides.
+const FORCED_MODE = 'light';
 
 const ThemeContext = createContext({
-  mode: 'system', resolvedMode: initialSystemScheme,
+  mode: FORCED_MODE, resolvedMode: FORCED_MODE,
   role: DEFAULT_ROLE,
-  colors: getPalette(initialSystemScheme, DEFAULT_ROLE),
-  brandGradient: brandGradientFor(getPalette(initialSystemScheme, DEFAULT_ROLE)),
-  isDark: initialSystemScheme === 'dark', isSystemMode: true,
+  colors: getPalette(FORCED_MODE, DEFAULT_ROLE),
+  brandGradient: brandGradientFor(getPalette(FORCED_MODE, DEFAULT_ROLE)),
+  isDark: false, isSystemMode: false,
   setMode: () => {}, toggleMode: () => {}, roleThemes, roleList,
   gridStyle: DEFAULT_GRID_STYLE, setGridStyle: () => {}, gridStyles, gridStyleList,
   iconStyle: DEFAULT_ICON_STYLE, setIconStyle: () => {}, iconStyles, iconStyleList,
 });
 
 export function ThemeProvider({ children }) {
-  const [mode, setModeState] = useState('system');
-  const [systemScheme, setSystemScheme] = useState(initialSystemScheme);
   // Role, not a stored preference: the palette follows the account that is
   // signed in. ThemeProvider therefore sits inside AppProvider (see App.js)
   // so it can read the profile directly - a copy kept in sync by hand would
@@ -50,49 +57,29 @@ export function ThemeProvider({ children }) {
   const [iconStyle] = useState(DEFAULT_ICON_STYLE);
   const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([
-      AsyncStorage.getItem(STORAGE_KEY),
-    ]).then(([savedMode]) => {
-      if (cancelled) return;
-      if (savedMode === 'light' || savedMode === 'dark' || savedMode === 'system') setModeState(savedMode);
-      setLoaded(true);
-    }).catch(() => setLoaded(true));
-    return () => { cancelled = true; };
-  }, []);
+  // Nothing to load and nothing to listen to: no stored mode is read, and the
+  // OS appearance is deliberately ignored.
+  useEffect(() => { setLoaded(true); }, []);
 
-  useEffect(() => {
-    const subscription = Appearance.addChangeListener(({ colorScheme }) => setSystemScheme(colorScheme === 'dark' ? 'dark' : 'light'));
-    return () => subscription.remove();
-  }, []);
-
-  const setMode = useCallback((next) => { setModeState(next); AsyncStorage.setItem(STORAGE_KEY, next).catch(() => {}); }, []);
-  const toggleMode = useCallback(() => {
-    setModeState((prev) => {
-      const currentlyDark = prev === 'system' ? currentSystemScheme() === 'dark' : prev === 'dark';
-      const next = currentlyDark ? 'light' : 'dark';
-      AsyncStorage.setItem(STORAGE_KEY, next).catch(() => {});
-      return next;
-    });
-  }, []);
+  const setMode = useCallback(() => {}, []);
+  const toggleMode = useCallback(() => {}, []);
   // Product-controlled visual identity: theme color, grid, and icon style are not user-configurable.
   const setGridStyle = useCallback(() => {}, []);
   const setIconStyle = useCallback(() => {}, []);
 
   const value = useMemo(() => {
-    const resolvedMode = mode === 'system' ? systemScheme : mode;
+    const resolvedMode = FORCED_MODE;
     const palette = getPalette(resolvedMode, role);
     return {
-      mode, resolvedMode, role, colors: palette,
+      mode: FORCED_MODE, resolvedMode, role, colors: palette,
       brandGradient: brandGradientFor(palette),
-      isDark: resolvedMode === 'dark', isSystemMode: mode === 'system',
+      isDark: false, isSystemMode: false,
       setMode, toggleMode, roleThemes, roleList,
       gridStyle, setGridStyle, gridStyles, gridStyleList,
       iconStyle, setIconStyle, iconStyles, iconStyleList,
       loaded,
     };
-  }, [mode, systemScheme, role, gridStyle, iconStyle, loaded, setMode, toggleMode, setGridStyle, setIconStyle]);
+  }, [role, gridStyle, iconStyle, loaded, setMode, toggleMode, setGridStyle, setIconStyle]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

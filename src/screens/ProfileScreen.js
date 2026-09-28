@@ -47,12 +47,7 @@ function splitName(profile) {
 }
 
 export default function ProfileScreen() {
-  const {
-    colors,
-    brandGradient,
-    isDark,
-    toggleMode
-  } = useTheme();
+  const { colors, brandGradient } = useTheme();
 
   const styles = createStyles(colors);
   const { goBackOrHome, authUser, profile } = useApp();
@@ -237,9 +232,6 @@ const result = await ImagePicker.launchImageLibraryAsync({
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Profile</Text>
-        <TouchableOpacity style={styles.themeBtn} onPress={toggleMode}>
-          <Text style={styles.themeBtnText}>{isDark ? '☀️' : '🌙'}</Text>
-        </TouchableOpacity>
       </LinearGradient>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 30 }}>
@@ -387,8 +379,6 @@ function createStyles(colors) {
     backBtn: { padding: 4 },
     backText: { color: 'white', fontSize: 20 },
     headerTitle: { color: 'white', fontWeight: '600', fontSize: 16, marginLeft: 10, flex: 1 },
-    themeBtn: { padding: 4 },
-    themeBtnText: { fontSize: 18 },
     avatarSection: { alignItems: 'center', paddingVertical: 26 },
     avatarWrap: { width: 80, height: 80, marginBottom: 6 },
     avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },

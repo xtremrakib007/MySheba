@@ -11,16 +11,15 @@ import BuildStamp from '../components/BuildStamp';
 import { SectionCard, ListRow, ToggleRow } from '../components/uiRows';
 import ChangePasswordModal from '../components/ChangePasswordModal';
 import ResetSecurityPinModal from '../components/ResetSecurityPinModal';
-import DisplayModeModal from '../components/DisplayModeModal';
 import LanguageModal from '../components/LanguageModal';
 
 export default function SettingsScreen() {
-  const { colors, brandGradient, isDark, mode, isSystemMode, setMode } = useTheme();
+  const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors); const { language, t } = useLanguage();
   const { goBackOrHome, logout, profile, setNotifPref, changePassword, resetSecurityPin, setScreen, appLockEnabled, setAppLockEnabled } = useApp();
   const prefs = profile?.notifPrefs || {};
   const [pushEnabled, setPushEnabledState] = useState(prefs.pushEnabled !== false); const [emailEnabled, setEmailEnabledState] = useState(prefs.emailEnabled !== false); const [rateAlerts, setRateAlertsState] = useState(!!prefs.rateAlerts);
-  const [pwModalVisible, setPwModalVisible] = useState(false); const [pinModalVisible, setPinModalVisible] = useState(false); const [displayModalVisible, setDisplayModalVisible] = useState(false); const [languageModalVisible, setLanguageModalVisible] = useState(false);
+  const [pwModalVisible, setPwModalVisible] = useState(false); const [pinModalVisible, setPinModalVisible] = useState(false); const [languageModalVisible, setLanguageModalVisible] = useState(false);
   useEffect(() => { if (!profile?.notifPrefs) return; setPushEnabledState(profile.notifPrefs.pushEnabled !== false); setEmailEnabledState(profile.notifPrefs.emailEnabled !== false); setRateAlertsState(!!profile.notifPrefs.rateAlerts); }, [profile?.notifPrefs]);
   const onTogglePush = (value) => { setPushEnabledState(value); setNotifPref('pushEnabled', value); }; const onToggleEmail = (value) => { setEmailEnabledState(value); setNotifPref('emailEnabled', value); }; const onToggleRateAlerts = (value) => { setRateAlertsState(value); setNotifPref('rateAlerts', value); };
   const onToggleAppLock = (value) => { setAppLockEnabled(value).catch(() => {}); };
@@ -36,7 +35,6 @@ export default function SettingsScreen() {
       </SectionCard>
 
       <SectionCard title={t('settings.sectionGeneral')} style={styles.section}>
-        <ListRow icon="🌙" title={t('settings.displayMode')} subtitle={isSystemMode ? `System Default (${isDark ? 'Dark' : 'Light'})` : (isDark ? 'Dark' : 'Light')} onPress={() => setDisplayModalVisible(true)} />
         <ListRow icon="🌐" title={t('settings.language')} subtitle={LANGUAGES[language]?.label || 'English'} onPress={() => setLanguageModalVisible(true)} />
         <ListRow icon="🖨️" title="Printer" subtitle="Connect or select a supported printer" onPress={() => setScreen('printer')} />
         <ListRow icon="🔒" title={t('settings.changePassword')} onPress={() => setPwModalVisible(true)} />
@@ -53,7 +51,6 @@ export default function SettingsScreen() {
 
       <BuildStamp />
     </ScrollView>
-    <DisplayModeModal visible={displayModalVisible} selected={mode} onSelect={(key) => { setMode(key); setDisplayModalVisible(false); }} onClose={() => setDisplayModalVisible(false)} />
     <ChangePasswordModal visible={pwModalVisible} onSubmit={submitPasswordChange} onCancel={() => setPwModalVisible(false)} />
     <ResetSecurityPinModal visible={pinModalVisible} hasExistingPin={!!profile?.securityPinSet} onSubmit={submitPinReset} onCancel={() => setPinModalVisible(false)} />
     <LanguageModal visible={languageModalVisible} onClose={() => setLanguageModalVisible(false)} />

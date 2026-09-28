@@ -5,9 +5,9 @@ import { useTheme } from '../theme/ThemeContext';
 import { useLanguage, LANGUAGES, LANGUAGE_LIST } from '../i18n/LanguageContext';
 import AppModalHeader from './AppModalHeader';
 
-// Settings > "Language" row. Mirrors DisplayModeModal's layout/behaviour
-// exactly (same list-of-options-with-checkmark pattern) so the two pickers
-// feel consistent to the user.
+// Settings > "Language" row. A list of options with a checkmark against the
+// current one - the pattern the display-mode picker used before the app went
+// light-only, kept here so settings pickers stay consistent.
 export default function LanguageModal({ visible, onClose }) {
   const { colors } = useTheme();
   const { language, setLanguage, t } = useLanguage();
