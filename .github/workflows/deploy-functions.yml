@@ -17,15 +17,65 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Check required secrets
+      - name: Preflight - are the deploy secrets present?
         env:
-          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
         run: |
-          if [ -z "$SA" ]; then
-            echo "FIREBASE_SERVICE_ACCOUNT secret is required (the full service-account JSON)."
-            echo "Create one in Google Cloud console > IAM > Service Accounts, then add it as a repository secret."
+          # Never print a value, only whether one is set and how long it is.
+          # A length is enough to catch a secret pasted with a stray newline or
+          # truncated mid-paste, without putting the secret in the log.
+          missing=""
+          {
+            echo "## Deploy secrets"
+            echo ""
+            echo "| Secret | Status |"
+            echo "| --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          for k in FIREBASE_SERVICE_ACCOUNT SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM; do
+            v="$(printenv "$k" || true)"
+            if [ -z "$v" ]; then
+              missing="$missing $k"
+              echo "| \`$k\` | **NOT SET** |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "| \`$k\` | set (${#v} chars) |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          # The service account must be the whole JSON file. Pasting the client
+          # email, a bare key, or a path instead is a common mistake and fails
+          # much later, during the deploy, as an opaque auth error.
+          if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            if printf '%s' "$FIREBASE_SERVICE_ACCOUNT" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("type")=="service_account", "type is not service_account"; assert d.get("private_key"), "no private_key"; assert d.get("project_id"), "no project_id"' 2>/dev/null; then
+              echo "FIREBASE_SERVICE_ACCOUNT parses as service-account JSON." >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "**FIREBASE_SERVICE_ACCOUNT is set but is not valid service-account JSON.**" >> "$GITHUB_STEP_SUMMARY"
+              echo "Paste the entire downloaded key file, including the outer { and }." >> "$GITHUB_STEP_SUMMARY"
+              missing="$missing FIREBASE_SERVICE_ACCOUNT(malformed)"
+            fi
+          fi
+
+          if [ -n "$missing" ]; then
+            {
+              echo ""
+              echo "### Deploy did not run"
+              echo ""
+              echo "Missing or malformed:$missing"
+              echo ""
+              echo "Add each at **Settings > Secrets and variables > Actions > New repository secret**."
+              echo "\`FIREBASE_SERVICE_ACCOUNT\` is the full JSON from Google Cloud console > IAM > Service Accounts > Keys."
+              echo "The SMTP keys are the ones listed in \`functions/.env.example\`; deploying without them"
+              echo "would silently ship with no mail configuration and break password reset and device verification."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "Missing or malformed secret(s):$missing"
             exit 1
           fi
+          echo "All six deploy secrets are present."
 
       - name: Checkout exact commit
         uses: actions/checkout@v4
