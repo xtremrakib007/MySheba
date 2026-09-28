@@ -84,6 +84,37 @@ check('a transient profile error does NOT sign out',
   !/Transient[\s\S]{0,400}?authService\.logout\(\)/.test(ctx),
   'no network must never end a session');
 
+// --- signed in must never sit on the login form ----------------------------
+// The boundary only pushes people out when the session is gone. Nothing pulled
+// them back in when the session was fine but `screen` was "login" - which is
+// where it starts on every cold launch. Hardware back from that login form
+// revealed the home screen, which is what proved the session was valid.
+check('a signed-in session is routed off the login form',
+  /if \(screen !== "login"\) return;[\s\S]{0,300}?setScreen\(homeScreenForRole/.test(ctx),
+  'a valid session left on "login" has nothing to correct it');
+
+check('that correction does not fire during device verification',
+  /if \(pendingDeviceVerification \|\| pendingGooglePhone\) return;[\s\S]{0,200}?if \(screen !== "login"\)/.test(ctx),
+  'deviceVerify and googlePhone are deliberate destinations');
+
+// --- back must not walk into the app after a sign-out ----------------------
+// Every sign-out empties screenHistoryRef then calls setScreen("login"), but
+// the push effect runs AFTER that state change and pushed the screen being
+// left onto the array that had just been emptied. Clearing was a no-op.
+check('no history is pushed when navigating TO a pre-auth screen',
+  /!PRE_AUTH_SCREENS\.includes\(prev\)\s*&&\s*!PRE_AUTH_SCREENS\.includes\(screen\)/.test(ctx),
+  'otherwise hardware back from the login screen re-opens the app');
+
+// --- one source of truth for role homes ------------------------------------
+// Both AUTH routing paths - the cold-start router and the login-form
+// correction - go through one mapping. The six sign-in handlers still inline
+// theirs because each also picks a default tab; that duplication is real and
+// worth removing, but it is not what this bug was.
+check('both auth routing paths share one role-to-home mapping',
+  /const homeScreenForRole = \(role\) =>/.test(ctx)
+  && /const routeForRole = \(p\) => setScreen\(homeScreenForRole/.test(ctx)
+  && /if \(screen !== "login"\) return;[\s\S]{0,300}?setScreen\(homeScreenForRole/.test(ctx));
+
 // --- the watchdog that exposed all this ------------------------------------
 check('the first-route watchdog still exists',
   /FIRST_ROUTE_TIMEOUT_MS/.test(ctx),

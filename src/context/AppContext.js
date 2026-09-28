@@ -275,10 +275,30 @@ export function AppProvider({ children }) {
   // back-history stack below.
   const PRE_AUTH_SCREENS = ["login", "register", "deviceVerify", "googlePhone"];
 
+  // One place that answers "where does this role live". It was inlined in the
+  // auth effect and duplicated in DeviceVerifyScreen; both are now this.
+  const homeScreenForRole = (role) => {
+    if (role === "dealer") return "dealerHome";
+    if (role === "reseller") return "resellerHome";
+    if (role === "support" || role === "finance") return "staffHome";
+    if (role === "admin" || role === "superadmin") return "adminHome";
+    return "customerHome";
+  };
+
   useEffect(() => {
     const prev = prevScreenRef.current;
     if (prev !== screen) {
-      if (!isPoppingRef.current && !PRE_AUTH_SCREENS.includes(prev)) {
+      // Nothing is pushed when the DESTINATION is a pre-auth screen either.
+      //
+      // Every sign-out path empties screenHistoryRef and then calls
+      // setScreen("login") - but this effect runs after that state change, saw
+      // prev = "adminHome", and pushed it straight back onto the array that had
+      // just been emptied. Clearing before navigating was therefore a no-op,
+      // and hardware back from the login screen popped the home screen and
+      // showed it to somebody who had just been signed out.
+      if (!isPoppingRef.current
+          && !PRE_AUTH_SCREENS.includes(prev)
+          && !PRE_AUTH_SCREENS.includes(screen)) {
         // Leaving one feature for another drops the trail instead of adding
         // to it. Without this the stack accumulated across features and back
         // stepped sideways - out of Salary and into Documents, because
@@ -1107,15 +1127,7 @@ export function AppProvider({ children }) {
       }, FIRST_ROUTE_TIMEOUT_MS);
     };
 
-    const routeForRole = (p) => {
-      if (p && p.role === "dealer") setScreen("dealerHome");
-      else if (p && p.role === "reseller") setScreen("resellerHome");
-      else if (p && (p.role === "support" || p.role === "finance"))
-        setScreen("staffHome");
-      else if (p && (p.role === "admin" || p.role === "superadmin"))
-        setScreen("adminHome");
-      else setScreen("customerHome");
-    };
+    const routeForRole = (p) => setScreen(homeScreenForRole(p && p.role));
 
     // Ask Firebase why, before it stops telling us.
     //
@@ -1455,6 +1467,30 @@ export function AppProvider({ children }) {
       }
     }
   }, [authLoading, authUser, screen]);
+
+  // The other half of the boundary: signed in must never sit on the login form.
+  //
+  // The boundary above only pushes people OUT of the app when the session is
+  // gone. Nothing pulled them back IN when the session was fine but `screen`
+  // was "login" - and "login" is where `screen` starts on every cold launch,
+  // so anything that failed to route (a slow profile read, a route that ran
+  // and was then overwritten) left a signed-in person looking at the login
+  // form. Pressing hardware back from there revealed the home screen, which is
+  // what proved the session had been valid the whole time.
+  //
+  // Only "login" is corrected. register, deviceVerify and googlePhone are
+  // places the app puts people deliberately, and pendingDeviceVerification
+  // means a code is still outstanding.
+  useEffect(() => {
+    if (authLoading) return;
+    if (!authUser || !profile) return;
+    if (pendingDeviceVerification || pendingGooglePhone) return;
+    if (screen !== "login") return;
+    screenHistoryRef.current = [];
+    isPoppingRef.current = false;
+    prevScreenRef.current = "login";
+    setScreen(homeScreenForRole(profile.role));
+  }, [authLoading, authUser, profile, screen, pendingDeviceVerification, pendingGooglePhone]);
 
   // Signed in, but the profile has not arrived yet. The app must not show the
   // login form in this state - there is a valid session behind it.
