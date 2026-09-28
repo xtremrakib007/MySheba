@@ -25,13 +25,37 @@ function generateId() {
   return `${chars.slice(0, 8).join('')}-${chars.slice(8, 12).join('')}-${chars.slice(12, 16).join('')}-${chars.slice(16, 20).join('')}-${chars.slice(20).join('')}`;
 }
 
+// One in-flight read, shared by every caller.
+//
+// This used to be a bare read-then-write, and on a device with nothing
+// stored yet - a fresh install, a reinstall, cleared app data - two callers
+// arriving together both saw null, both generated an id, and both wrote.
+// Last write won, so one of them walked away with an id no one else agreed
+// with. Sign-in sent that id to the server, which recorded it as the active
+// device; the profile listener then read the stored one and saw a different
+// device, and the single-device rule signed the person out with "your
+// account was signed in on another device". One phone, nobody else involved.
+//
+// The device id is now what decides whether a session was taken over, so it
+// has to be the same value everywhere. A shared promise gives every caller
+// in this runtime one answer, and the re-read after writing settles on
+// whatever actually landed in storage.
+let deviceIdPromise = null;
+
 export async function getDeviceId() {
-  let id = await AsyncStorage.getItem(DEVICE_ID_KEY);
-  if (!id) {
-    id = generateId();
-    await AsyncStorage.setItem(DEVICE_ID_KEY, id);
+  if (!deviceIdPromise) {
+    deviceIdPromise = (async () => {
+      const existing = await AsyncStorage.getItem(DEVICE_ID_KEY);
+      if (existing) return existing;
+      const fresh = generateId();
+      await AsyncStorage.setItem(DEVICE_ID_KEY, fresh);
+      const stored = await AsyncStorage.getItem(DEVICE_ID_KEY);
+      return stored || fresh;
+    })();
+    // A failed read must not be cached as the answer for the whole session.
+    deviceIdPromise.catch(() => { deviceIdPromise = null; });
   }
-  return id;
+  return deviceIdPromise;
 }
 
 export async function getLocalSessionId() {

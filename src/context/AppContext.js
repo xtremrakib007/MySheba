@@ -1240,6 +1240,8 @@ export function AppProvider({ children }) {
                 shouldEndSessionForDevice({
                   localSessionId,
                   activeSessionId: p.activeSessionId,
+                  activeDeviceId: p.activeDeviceId,
+                  deviceId: await deviceSessionService.getDeviceId(),
                   initialRouteDone,
                   deviceCheckDeferred,
                 })
@@ -1947,6 +1949,7 @@ export function AppProvider({ children }) {
           phone: p.pendingDeviceApproval.phone,
           reason: p.pendingDeviceApproval.reason,
           availableMfaMethods: p.pendingDeviceApproval.availableMfaMethods,
+          emailChallengeSent: p.pendingDeviceApproval.emailChallengeSent,
         });
         setScreen("deviceVerify");
         return true;
@@ -1993,6 +1996,7 @@ export function AppProvider({ children }) {
           phone: p.pendingDeviceApproval.phone,
           reason: p.pendingDeviceApproval.reason,
           availableMfaMethods: p.pendingDeviceApproval.availableMfaMethods,
+          emailChallengeSent: p.pendingDeviceApproval.emailChallengeSent,
         });
         setScreen("deviceVerify");
         return true;
@@ -2049,7 +2053,9 @@ export function AppProvider({ children }) {
           uid: p.uid,
           email: p.pendingDeviceApproval.email,
           phone: p.pendingDeviceApproval.phone,
-          reason: p.pendingDeviceApproval.reason,          availableMfaMethods: p.pendingDeviceApproval.availableMfaMethods,
+          reason: p.pendingDeviceApproval.reason,
+          availableMfaMethods: p.pendingDeviceApproval.availableMfaMethods,
+          emailChallengeSent: p.pendingDeviceApproval.emailChallengeSent,
         });
         setScreen("deviceVerify");
         return true;

@@ -229,6 +229,10 @@ export async function login(phone, pin, dialCode = '+60') {
         phone: sessionResult.phone,
         reason: sessionResult.reason,
         availableMfaMethods: sessionResult.availableMfaMethods,
+        // Whether checkDeviceSession says it actually sent the email. An
+        // older deployed copy does not report this at all, which is what
+        // DeviceVerifyScreen uses to decide whether to ask for one.
+        emailChallengeSent: sessionResult.emailChallengeSent,
       },
     };
   }
@@ -259,6 +263,10 @@ export async function retryDeviceSession(uid, phoneIdToken, emailIdToken, emailO
         phone: sessionResult.phone,
         reason: sessionResult.reason,
         availableMfaMethods: sessionResult.availableMfaMethods,
+        // Whether checkDeviceSession says it actually sent the email. An
+        // older deployed copy does not report this at all, which is what
+        // DeviceVerifyScreen uses to decide whether to ask for one.
+        emailChallengeSent: sessionResult.emailChallengeSent,
       },
     };
   }

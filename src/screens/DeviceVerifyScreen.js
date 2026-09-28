@@ -70,6 +70,30 @@ export default function DeviceVerifyScreen() {
     finally { setBusy(false); }
   };
 
+  // Ask for the code ourselves when the server has not said it sent one.
+  //
+  // Signing in on a device that is not the account's active one raises a
+  // new-device challenge, and the deployed copy of checkDeviceSession only
+  // mails the code when resendEmailChallenge is set - which nothing does on
+  // a first sign-in. So this screen said "we emailed you a code", no email
+  // existed, and no code could work: logging out of one account and into
+  // another on the same phone had no path through at all. The fix for that
+  // is in functions/ and cannot ship over the air, so the client asks.
+  //
+  // emailChallengeSent is the server's own report. A copy new enough to
+  // send it on the first challenge sets it, and this does nothing; an older
+  // one leaves it undefined, and one resend request gets the mail sent.
+  // Once for the life of the screen, so it cannot loop.
+  const [autoAsked, setAutoAsked] = useState(false);
+  useEffect(() => {
+    if (autoAsked || sent || busy) return;
+    if (method !== 'email' || !email || !uid) return;
+    if (pendingDeviceVerification?.emailChallengeSent) return;
+    setAutoAsked(true);
+    sendEmail();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [method, email, uid, autoAsked, sent]);
+
   const sendSms = async () => {
     setLocalError(''); setBusy(true);
     try {
