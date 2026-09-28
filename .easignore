@@ -53,6 +53,10 @@ firebase-debug.log
 # bundler never opens.
 mysheba-web/
 
+# The admin console. Its own Vite/React app, deployed to Firebase Hosting
+# (firebase.json target "admin-web"), with no connection to the mobile bundle.
+admin-web/
+
 # Cloud Functions. Deployed by firebase-tools, never bundled into the app.
 functions/
 
