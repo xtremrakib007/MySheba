@@ -14,6 +14,7 @@ import AttachFileModal from '../components/AttachFileModal';
 import * as mediaUpload from '../firebase/mediaUpload';
 import HeaderDecor from '../components/HeaderDecor';
 import * as transactionService from '../firebase/transactionService';
+import { PIN_MAX, PIN_PROMPT_TITLE, PIN_PROMPT_PLACEHOLDER, PIN_INVALID_MESSAGE, isValidCollectionPin } from '../utils/collectionPin';
 
 const FEATURES = [
   { key: 'pending', icon: '⏳', bg: '#FFF8E1', name: 'Pending' },
@@ -115,8 +116,8 @@ export default function DealerHomeScreen() {
   };
 
   const confirmPin = async (pin) => {
-    if (!pin || pin.length !== 4) {
-      showAlert('MySheba', 'Enter a valid 4-digit code');
+    if (!isValidCollectionPin(pin)) {
+      showAlert('MySheba', PIN_INVALID_MESSAGE);
       return;
     }
     const tx = pinId;
@@ -288,10 +289,10 @@ export default function DealerHomeScreen() {
       />
       <PromptModal
         visible={!!pinId}
-        title="Enter 4-digit confirmation code:"
-        placeholder="4-digit code"
+        title={PIN_PROMPT_TITLE}
+        placeholder={PIN_PROMPT_PLACEHOLDER}
         secure
-        maxLength={4}
+        maxLength={PIN_MAX}
         onSubmit={confirmPin}
         onCancel={() => setPinId(null)}
       />

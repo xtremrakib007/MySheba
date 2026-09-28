@@ -33,6 +33,7 @@ import * as homepageConfigService from '../firebase/homepageConfigService';
 import { getHomepageModules } from '../firebase/homepageConfigService';
 import { getMergedPackages } from '../utils/internetPackages';
 import * as gridManagementService from '../firebase/gridManagementService';
+import { PIN_MAX, PIN_PROMPT_TITLE, PIN_PROMPT_PLACEHOLDER, PIN_INVALID_MESSAGE, isValidCollectionPin } from '../utils/collectionPin';
 
 const FEATURES = [
   { key: 'all', icon: '📋', bg: '#E3F2FD', name: 'All Tx' },
@@ -444,8 +445,8 @@ export default function AdminHomeScreen() {
   };
 
   const confirmTxPin = async (pin) => {
-    if (!pin || pin.length !== 4) {
-      showAlert('MySheba', 'Enter a valid 4-digit code');
+    if (!isValidCollectionPin(pin)) {
+      showAlert('MySheba', PIN_INVALID_MESSAGE);
       return;
     }
     const tx = pinTxId;
@@ -1432,10 +1433,10 @@ export default function AdminHomeScreen() {
       />
       <PromptModal
         visible={!!pinTxId}
-        title="Enter 4-digit confirmation code:"
-        placeholder="4-digit code"
+        title={PIN_PROMPT_TITLE}
+        placeholder={PIN_PROMPT_PLACEHOLDER}
         secure
-        maxLength={4}
+        maxLength={PIN_MAX}
         onSubmit={confirmTxPin}
         onCancel={() => setPinTxId(null)}
       />

@@ -15,6 +15,7 @@ import HeaderDecor from '../components/HeaderDecor';
 import * as transactionService from '../firebase/transactionService';
 import * as mediaUpload from '../firebase/mediaUpload';
 import * as inquiryService from '../firebase/inquiryService';
+import { PIN_MAX, PIN_PROMPT_TITLE, PIN_PROMPT_PLACEHOLDER, PIN_INVALID_MESSAGE, isValidCollectionPin } from '../utils/collectionPin';
 
 const FEATURES = [
   { key: 'pending', icon: '⏳', bg: '#FFF8E1', name: 'Pending' },
@@ -121,8 +122,8 @@ export default function ResellerHomeScreen() {
   };
 
   const confirmPin = async (pin) => {
-    if (!pin || pin.length !== 4) {
-      showAlert('MySheba', 'Enter a valid 4-digit code');
+    if (!isValidCollectionPin(pin)) {
+      showAlert('MySheba', PIN_INVALID_MESSAGE);
       return;
     }
     const tx = pinId;
@@ -371,7 +372,7 @@ export default function ResellerHomeScreen() {
         )}
       </ScrollView>
       <PromptModal visible={!!rejectId} title="Rejection reason:" placeholder="Enter reason" onSubmit={confirmReject} onCancel={() => setRejectId(null)} />
-      <PromptModal visible={!!pinId} title="Enter 4-digit confirmation code:" placeholder="4-digit code" secure maxLength={4} onSubmit={confirmPin} onCancel={() => setPinId(null)} />
+      <PromptModal visible={!!pinId} title={PIN_PROMPT_TITLE} placeholder={PIN_PROMPT_PLACEHOLDER} secure maxLength={PIN_MAX} onSubmit={confirmPin} onCancel={() => setPinId(null)} />
       <AttachFileModal
         visible={!!receiptTxId}
         title="Attach the transfer receipt"

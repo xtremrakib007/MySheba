@@ -13,6 +13,35 @@ const ASSIGNABLE_ROLES = ['dealer'];
 const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const DEVICE_ID_RE = /^[A-Za-z0-9-]{16,100}$/;
 
+// Collection PIN length.
+//
+// It was fixed at 4 everywhere - generated, validated and entered - which is
+// 10,000 possibilities standing between someone and a cash handover. For a
+// remittance that is not enough, so Remittance now mints 10 digits.
+//
+// Validation is a RANGE rather than a second fixed length, for two reasons.
+// Orders already in flight carry 4-digit PINs and must still complete, and a
+// range is what lets the length per service change again later without
+// another edit in five places.
+const PIN_MIN = 4;
+const PIN_MAX = 12;
+const PIN_RE = new RegExp(`^\\d{${PIN_MIN},${PIN_MAX}}$`);
+const PIN_LENGTH_BY_SERVICE = { Remittance: 10 };
+const DEFAULT_PIN_LENGTH = 4;
+
+function pinLengthFor(service) {
+  const n = PIN_LENGTH_BY_SERVICE[String(service || '')] || DEFAULT_PIN_LENGTH;
+  return Math.min(PIN_MAX, Math.max(PIN_MIN, n));
+}
+
+/** A zero-padded PIN of exactly `length` digits, from a CSPRNG. */
+function mintPin(length) {
+  // randomInt tops out at 2**48; 10**12 is well inside that, so every length
+  // up to PIN_MAX draws from the full range in one call rather than being
+  // stitched together from smaller draws (which is how modulo bias creeps in).
+  return String(crypto.randomInt(0, 10 ** length)).padStart(length, '0');
+}
+
 function requireAuth(request) { if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.'); }
 async function getActor(uid) {
   const snap = await admin.firestore().collection('users').doc(uid).get();
@@ -135,11 +164,11 @@ exports.generateCollectionPin = onCall({ enforceAppCheck: false }, async (reques
     // silently invalidated the PIN the customer had already been shown, and
     // any receipt printed with it, and the operator's entry of that PIN then
     // failed as "Incorrect collection PIN".
-    if (typeof order.pin === 'string' && /^\d{4}$/.test(order.pin)) {
+    if (typeof order.pin === 'string' && PIN_RE.test(order.pin)) {
       pin = order.pin;
       return;
     }
-    pin = String(crypto.randomInt(0, 10000)).padStart(4, '0');
+    pin = mintPin(pinLengthFor(order.service));
     tx.update(ref, { pin, pinGeneratedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
   });
   return { ok: true, transactionId: id, pin };
@@ -174,7 +203,7 @@ exports.completeTransaction = onCall({ enforceAppCheck: false }, async (request)
   if (!OPERATOR_ROLES.includes(actor.role)) throw new HttpsError('permission-denied', 'Only the dealer/reseller Operator can complete an order.');
   const id = String(request.data?.transactionId || ''), pin = String(request.data?.pin || ''), receiptUrl = String(request.data?.receiptUrl || '');
   if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
-  if (!/^\d{4}$/.test(pin)) throw new HttpsError('invalid-argument', 'A 4-digit collection PIN is required.');
+  if (!PIN_RE.test(pin)) throw new HttpsError('invalid-argument', `A collection PIN of ${PIN_MIN}-${PIN_MAX} digits is required.`);
   if (!receiptUrl) throw new HttpsError('invalid-argument', 'The transfer receipt is required before completion.');
   await checkVelocity(admin.firestore(), actor.uid, 'transactionComplete', { ip: getClientIp(request) });
   await assertReceiptObject(receiptUrl, id, actor.role);
@@ -186,7 +215,7 @@ exports.completeTransaction = onCall({ enforceAppCheck: false }, async (request)
     const order = snap.data();
     if (order.status !== 'processing' || order.claimedBy !== currentActor.uid) throw new HttpsError('failed-precondition', 'Only the operator who accepted this order can complete it.');
     if (order.approved !== true || !order.approvedBy) throw new HttpsError('failed-precondition', 'This order has no valid admin approval.');
-    if (typeof order.pin !== 'string' || !/^\d{4}$/.test(order.pin)) throw new HttpsError('failed-precondition', 'This order has no valid collection PIN. Please recreate the order.');
+    if (typeof order.pin !== 'string' || !PIN_RE.test(order.pin)) throw new HttpsError('failed-precondition', 'This order has no valid collection PIN. Please recreate the order.');
     if (pin !== order.pin) throw new HttpsError('permission-denied', 'Incorrect collection PIN.');
     // pin is deleted; collectionPin keeps the spent value as a record.
     //
