@@ -37,7 +37,8 @@
     "lint": "eslint src App.js scripts functions",
     "test:session": "node scripts/test-session-persistence.js",
     "test:trace": "node scripts/test-auth-trace.js",
-    "test:boundary": "node scripts/test-auth-boundary.js"
+    "test:boundary": "node scripts/test-auth-boundary.js",
+    "test:verify": "node scripts/test-device-verify.js"
   },
   "dependencies": {
     "expo": "~53.0.0",

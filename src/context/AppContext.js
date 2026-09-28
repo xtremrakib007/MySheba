@@ -1248,6 +1248,7 @@ export function AppProvider({ children }) {
               ) {
                 setPendingDeviceVerification({
                   uid: user.uid,
+                  role: p.role,
                   email: p.email || "",
                 });
                 setProfile(p);
@@ -2017,12 +2018,25 @@ export function AppProvider({ children }) {
         // yet either way.
         setPendingDeviceVerification({
           uid: p.uid,
+          // The role decides WHICH callable completes verification, and the
+          // wrong one cannot be recovered from - see src/utils/devicePolicy.js.
+          // It used to be read off `profile`, which every one of these
+          // branches returned without ever setting, so it was always
+          // undefined: staff accounts took the non-staff path,
+          // confirmDeviceSwitch found no pendingDeviceApproval to match, and
+          // verification could never complete. Carry it explicitly instead of
+          // depending on separate state having been populated first.
+          role: p.role,
           email: p.pendingDeviceApproval.email,
           phone: p.pendingDeviceApproval.phone,
           reason: p.pendingDeviceApproval.reason,
           availableMfaMethods: p.pendingDeviceApproval.availableMfaMethods,
           emailChallengeSent: p.pendingDeviceApproval.emailChallengeSent,
         });
+        // The sign-in succeeded and this is that account's profile. Withholding
+        // it left the verification screen, and everything else reading role,
+        // looking at null.
+        setProfile(p);
         setScreen("deviceVerify");
         return true;
       }
@@ -2064,12 +2078,25 @@ export function AppProvider({ children }) {
       if (p.pendingDeviceApproval) {
         setPendingDeviceVerification({
           uid: p.uid,
+          // The role decides WHICH callable completes verification, and the
+          // wrong one cannot be recovered from - see src/utils/devicePolicy.js.
+          // It used to be read off `profile`, which every one of these
+          // branches returned without ever setting, so it was always
+          // undefined: staff accounts took the non-staff path,
+          // confirmDeviceSwitch found no pendingDeviceApproval to match, and
+          // verification could never complete. Carry it explicitly instead of
+          // depending on separate state having been populated first.
+          role: p.role,
           email: p.pendingDeviceApproval.email,
           phone: p.pendingDeviceApproval.phone,
           reason: p.pendingDeviceApproval.reason,
           availableMfaMethods: p.pendingDeviceApproval.availableMfaMethods,
           emailChallengeSent: p.pendingDeviceApproval.emailChallengeSent,
         });
+        // The sign-in succeeded and this is that account's profile. Withholding
+        // it left the verification screen, and everything else reading role,
+        // looking at null.
+        setProfile(p);
         setScreen("deviceVerify");
         return true;
       }
@@ -2123,12 +2150,25 @@ export function AppProvider({ children }) {
         setPendingGooglePhone(false);
         setPendingDeviceVerification({
           uid: p.uid,
+          // The role decides WHICH callable completes verification, and the
+          // wrong one cannot be recovered from - see src/utils/devicePolicy.js.
+          // It used to be read off `profile`, which every one of these
+          // branches returned without ever setting, so it was always
+          // undefined: staff accounts took the non-staff path,
+          // confirmDeviceSwitch found no pendingDeviceApproval to match, and
+          // verification could never complete. Carry it explicitly instead of
+          // depending on separate state having been populated first.
+          role: p.role,
           email: p.pendingDeviceApproval.email,
           phone: p.pendingDeviceApproval.phone,
           reason: p.pendingDeviceApproval.reason,
           availableMfaMethods: p.pendingDeviceApproval.availableMfaMethods,
           emailChallengeSent: p.pendingDeviceApproval.emailChallengeSent,
         });
+        // The sign-in succeeded and this is that account's profile. Withholding
+        // it left the verification screen, and everything else reading role,
+        // looking at null.
+        setProfile(p);
         setScreen("deviceVerify");
         return true;
       }
@@ -2210,6 +2250,7 @@ export function AppProvider({ children }) {
         if (p.pendingDeviceApproval) {
           setPendingDeviceVerification({
             uid: p.uid,
+            role: p.role,
             email: p.pendingDeviceApproval.email,
             phone: p.pendingDeviceApproval.phone,
             reason: p.pendingDeviceApproval.reason,

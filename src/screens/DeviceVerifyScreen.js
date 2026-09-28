@@ -16,8 +16,11 @@ import * as authService from '../firebase/authService';
 import * as deviceSessionService from '../firebase/deviceSessionService';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../firebase/config';
+import { verifyCallableFor } from '../utils/devicePolicy';
 
-const STAFF_ROLES = ['admin', 'superadmin', 'dealer', 'reseller'];
+// The staff role list lives in src/utils/devicePolicy.js. A second copy here
+// is how this broke: the list itself was right, what it was tested against
+// was null.
 
 export default function DeviceVerifyScreen() {
   const { colors, brandGradient } = useTheme();
@@ -45,10 +48,19 @@ export default function DeviceVerifyScreen() {
     try {
       const deviceId = await deviceSessionService.getDeviceId();
       const deviceLabel = deviceSessionService.getDeviceLabel();
-      const role = profile?.role;
-      const staff = STAFF_ROLES.includes(role);
+      // Never guess this. The two callables are not interchangeable, and the
+      // wrong one cannot be recovered from - see src/utils/devicePolicy.js.
+      // pendingDeviceVerification carries the role now, profile is the
+      // fallback, and if neither has it, ask the server rather than assume.
+      let role = pendingDeviceVerification?.role || profile?.role;
+      if (!role && uid) {
+        try { role = (await authService.fetchProfile(uid))?.role || null; } catch (_) { role = null; }
+      }
+      const callable = verifyCallableFor(role);
+      if (!callable) throw new Error('Could not confirm your account type. Please sign in again.');
+      const staff = callable === 'checkDeviceSession';
       const payload = { uid, deviceId, deviceLabel, phoneIdToken: credential?.phoneIdToken || undefined, emailIdToken: credential?.emailIdToken || undefined, emailOtp: credential?.emailOtp || undefined };
-      const fn = httpsCallable(functions, staff ? 'checkDeviceSession' : 'confirmDeviceSwitch');
+      const fn = httpsCallable(functions, callable);
       const { data } = await fn(payload);
       if (data?.requiresOtp || (!staff && !data?.sessionId)) throw new Error('Verification is still pending. Please enter the latest code.');
       await deviceSessionService.setLocalSessionId(data.sessionId);
