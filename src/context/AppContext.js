@@ -216,6 +216,7 @@ export function AppProvider({ children }) {
   const can = useCallback((capability) => capabilities.includes(capability), [capabilities]);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
+  const [profileFatal, setProfileFatal] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
   // { uid, email } while a login is waiting on single-device-login
   // verification (functions/deviceSessionService.js) - see doLogin/
@@ -1164,6 +1165,7 @@ export function AppProvider({ children }) {
         // looks like, so record which of the two it was.
         noteSignOut("firebase-no-user", initialRouteDone ? "while running" : "at launch", { generic: true });
         setProfile(null);
+        setProfileFatal("");
         setAppLocked(false);
         setPendingDeviceVerification(null);
         setPendingGooglePhone(false);
@@ -1313,6 +1315,7 @@ export function AppProvider({ children }) {
 
             setProfile(p);
             setAuthError("");
+            setProfileFatal("");
             writeCachedProfile(user.uid, p);
             // Signed in with a profile, so there is a uid to attach last
             // time's breadcrumb to. Fire and forget.
@@ -1377,16 +1380,21 @@ export function AppProvider({ children }) {
             setAuthError(error || "Could not load your profile.");
             noteSignOut("profile-fatal", error || "profile listener gave up");
             setProfile(null);
-            // Actually end the session. 'fatal' means the server said this
-            // account may not use the app - permission-denied twice running,
-            // which firestore.rules only returns for a profile that is
-            // suspended, inactive, disabled or merged away. Clearing the
-            // profile without signing out used to be enough to reach the
-            // login screen, because the boundary below treated a missing
-            // profile as signed out. It no longer does, so this has to say
-            // so explicitly - otherwise a blocked account would sit on the
-            // restoring screen forever.
-            authService.logout().catch(() => {});
+            // Deliberately NOT a sign-out.
+            //
+            // 'fatal' is two permission-denied answers 1.5s apart, and while
+            // that usually means the account is blocked, it is also what a
+            // token still propagating looks like on a slow connection.
+            // Destroying a valid session over that is the same mistake this
+            // whole file keeps making, one layer down - and the cost is
+            // asymmetric: a blocked account stuck on a screen that explains
+            // itself is recoverable, a wrongly signed-out one is not.
+            //
+            // The session stands. The restoring screen shows this error and
+            // offers Log Out, so a genuinely blocked account is told why and
+            // can leave, and a race resolves itself when the listener's next
+            // attempt succeeds.
+            setProfileFatal(error || "Your profile could not be loaded.");
             if (!initialRouteDone) {
               initialRouteDone = true;
               setAuthLoading(false);
@@ -2794,6 +2802,7 @@ export function AppProvider({ children }) {
     resetSecurityPin,
     appLocked,
     sessionRestoring,
+    profileFatal,
     appLockEnabled,
     setAppLockEnabled,
     unlockApp,

@@ -167,7 +167,43 @@ export async function login(phone, pin, dialCode = '+60') {
     }
   }
 
-  const snap = await getDoc(doc(db, 'users', cred.user.uid));
+  // Firebase Auth has already accepted these credentials, so anything that
+  // fails from here is NOT a wrong password and must not be reported as one.
+  //
+  // This read used to be bare. A Firestore rejection threw straight out of
+  // sign-in as whatever Firestore said - "Missing or insufficient
+  // permissions" - which reads like the login failed, when in fact the
+  // account signed in perfectly and the profile is what could not be read.
+  // The two have completely different causes and completely different fixes.
+  let snap;
+  try {
+    snap = await getDoc(doc(db, 'users', cred.user.uid));
+  } catch (err) {
+    const code = String(err?.code || '');
+    if (code === 'permission-denied') {
+      // firestore.rules only denies someone their own users/{uid} document
+      // when activeProfile() is false - the profile is suspended, inactive,
+      // disabled, active:false, or merged into another account. That is a
+      // definite "this account may not use the app", so end the session.
+      await signOut(auth);
+      const e = inputError(
+        'This account is not active. Please contact support.',
+        'profile-denied',
+      );
+      e.detail = ['permission-denied', String(err?.message || '').slice(0, 70)].filter(Boolean).join(' | ');
+      throw e;
+    }
+    // Anything else - offline, a dropped connection, a Firestore hiccup - is
+    // not an answer about this account. Leave the session signed in: the
+    // profile listener retries on its own, and the app shows its restoring
+    // state rather than the login form while it does.
+    const e = inputError(
+      'Signed in, but your profile could not be loaded. Check your connection.',
+      'profile-unreachable',
+    );
+    e.detail = [code, String(err?.message || '').slice(0, 70)].filter(Boolean).join(' | ') || 'no code';
+    throw e;
+  }
   if (!snap.exists()) {
     await signOut(auth);
     throw inputError('No profile found for this account. Please register first.', 'no-profile');

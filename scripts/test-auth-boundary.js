@@ -66,9 +66,19 @@ check('the restoring state offers a way out',
 // With the boundary no longer keying on profile, clearing the profile is not
 // enough to end a session. The one case that MEANS "this account may not use
 // the app" has to say so.
-check('a fatal profile error signs the session out',
-  /action === "fatal"[\s\S]{0,900}?authService\.logout\(\)/.test(ctx),
-  'otherwise a suspended account sits on the restoring screen forever');
+// A fatal profile error must NOT sign out. Two permission-denied answers
+// 1.5s apart usually mean a blocked account, but they are also what a token
+// still propagating looks like on a slow link, and the costs are not
+// symmetric: a blocked account held on a screen that explains itself can
+// still log out, a wrongly signed-out one has lost its session.
+check('a fatal profile error does not sign the session out',
+  !/action === "fatal"[\s\S]{0,2000}?authService\.logout\(\)/.test(ctx),
+  'a rules race must not destroy a valid session');
+
+check('a fatal profile error is surfaced to the person',
+  /action === "fatal"[\s\S]{0,2000}?setProfileFatal\(/.test(ctx)
+  && /profileFatal/.test(app),
+  'otherwise a blocked account sits on a spinner with no explanation');
 
 check('a transient profile error does NOT sign out',
   !/Transient[\s\S]{0,400}?authService\.logout\(\)/.test(ctx),

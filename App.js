@@ -105,7 +105,7 @@ const NAV_SCREENS = [
 ];
 
 function Root() {
-  const { screen, authLoading, handleDeepLink, profile, adminViewingSection, sessionRestoring, logout } = useApp();
+  const { screen, authLoading, handleDeepLink, profile, adminViewingSection, sessionRestoring, profileFatal, logout } = useApp();
   const { colors, isDark } = useTheme();
   const styles = createStyles(colors);
   const [splashVisible, setSplashVisible] = useState(true);
@@ -122,8 +122,13 @@ function Root() {
     return <SafeAreaView style={styles.app} edges={['top', 'bottom']}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <View style={styles.restoring}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.restoringText}>Restoring your session...</Text>
+        {!profileFatal && <ActivityIndicator size="large" color={colors.primary} />}
+        <Text style={styles.restoringText}>
+          {profileFatal
+            ? 'Your profile could not be loaded. This account may not be active.'
+            : 'Restoring your session...'}
+        </Text>
+        {!!profileFatal && <Text style={styles.restoringDetail} selectable>{profileFatal}</Text>}
         <TouchableOpacity onPress={logout} accessibilityRole="button">
           <Text style={styles.restoringLink}>Log out instead</Text>
         </TouchableOpacity>
@@ -143,6 +148,7 @@ function createStyles(colors) {
     body: { flex: 1 },
     restoring: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
     restoringText: { marginTop: 18, fontSize: 15, color: colors.text, textAlign: 'center' },
+    restoringDetail: { marginTop: 10, fontSize: 12, color: '#888', textAlign: 'center' },
     restoringLink: { marginTop: 28, paddingVertical: 8, fontSize: 13, color: colors.primary, fontWeight: '600' },
   });
 }
