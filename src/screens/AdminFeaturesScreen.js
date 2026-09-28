@@ -7,7 +7,6 @@ import HeaderDecor from '../components/HeaderDecor';
 import AppHeader from '../components/AppHeader';
 import WalletCard from '../components/WalletCard';
 import FeatureGrid from '../components/FeatureGrid';
-import InfoBar from '../components/InfoBar';
 import { useServiceAction } from '../components/ServiceGrid';
 import PromptModal from '../components/PromptModal';
 import * as ratesService from '../firebase/ratesService';
@@ -225,7 +224,6 @@ export default function AdminFeaturesScreen() {
   return <View style={styles.screen}>
     <AppHeader onPressMenu={openSidebar} />
     <ScrollView contentContainerStyle={styles.homeContent}>
-      <InfoBar />
       <WalletCard balance={balance} variant="surface" onAddMoney={() => setScreen('superAdminTopup')} onTransfer={() => setScreen('transferPoints')} />
       <FeatureGrid
         title={isSuperadmin ? 'Superadmin Control Center' : 'Admin Control Center'}

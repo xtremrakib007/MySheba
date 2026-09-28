@@ -7,7 +7,6 @@ import BannerSlider from '../components/BannerSlider';
 import ServiceGrid from '../components/ServiceGrid';
 import AppHeader from '../components/AppHeader';
 import WalletCard from '../components/WalletCard';
-import InfoBar from '../components/InfoBar';
 import ServiceIcon from '../components/ServiceIcon';
 import { SectionCard, ListRow } from '../components/uiRows';
 
@@ -65,8 +64,6 @@ export default function CustomerHomeScreen() {
             </TouchableOpacity>
           )}
         </View>
-
-        <InfoBar />
         <BannerSlider />
         <ServiceGrid homeOnly />
 

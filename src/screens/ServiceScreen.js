@@ -19,6 +19,7 @@ import BusStep from '../steps/BusSteps';
 import TrainStep from '../steps/TrainSteps';
 import FlightStep from '../steps/FlightSteps';
 import { validateStep as validateTravelInquiry } from '../steps/TravelInquirySteps';
+import ServiceRateBar from '../components/ServiceRateBar';
 
 const SERVICE_TITLES = {
   recharge: 'Recharge',
@@ -124,6 +125,7 @@ export default function ServiceScreen() {
 
       <ScrollView style={styles.content} contentContainerStyle={{ padding: 16 }}>
         {!!adSlot && <SmartAd placement={adSlot.top} feature={adSlot.feature} height={100} style={{ marginBottom: 12 }} />}
+        <ServiceRateBar service={currentService} />
         {StepComponent ? <StepComponent step={currentStep} /> : <Text>Service content</Text>}
         {!!adSlot && <SmartAd placement={adSlot.bottom} feature={adSlot.feature} height={100} style={{ marginTop: 12 }} />}
       </ScrollView>
