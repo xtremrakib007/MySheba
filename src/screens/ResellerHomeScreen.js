@@ -13,7 +13,6 @@ import PromptModal from '../components/PromptModal';
 import AttachFileModal from '../components/AttachFileModal';
 import HeaderDecor from '../components/HeaderDecor';
 import * as transactionService from '../firebase/transactionService';
-import * as rechargePinService from '../firebase/rechargePinService';
 import * as mediaUpload from '../firebase/mediaUpload';
 import * as inquiryService from '../firebase/inquiryService';
 
@@ -132,32 +131,26 @@ export default function ResellerHomeScreen() {
     setReceiptTxId({ id: tx.id, pin });
   };
 
-  // A Recharge order can take its PIN straight from the uploaded e-PIN
-  // stock instead of the operator typing a collection code by hand.
-  const issuePinFromStock = async (tx) => {
-    setBusyId(tx.id);
-    try {
-      const issued = await rechargePinService.issueRechargePin(tx.id);
-      setReceiptTxId({ id: tx.id, pin: issued.pin });
-      showAlert('Recharge PIN issued', `PIN: ${issued.pin}${issued.serial ? `\nSerial: ${issued.serial}` : ''}\n\nAttach the receipt to finish the order.`);
-    } catch (e) {
-      showAlert('MySheba', e.message || 'Could not issue a recharge PIN.');
-    } finally {
-      setBusyId(null);
-    }
-  };
-
+  // "Use PIN from stock" is gone, along with issuePinFromStock.
+  //
+  // It called rechargePinService.issueRechargePin, which does not exist - the
+  // client service exports only purchaseRechargePin and getRechargePin - so
+  // tapping it threw "rechargePinService.issueRechargePin is not a function"
+  // straight into the alert, as the error text a reseller read.
+  //
+  // It was not a missing function so much as a button for a feature that was
+  // never built. There is no uploaded e-PIN stock anywhere in this codebase:
+  // no collection, no upload path, no allocation. Recharge PINs come from a
+  // configured API provider, one per customer purchase, through
+  // purchaseRechargePin - and getRechargePin, the only way to read one back,
+  // is customer-only and requires that customer's own completed transaction.
+  // Neither can serve a reseller filling someone else's order.
+  //
+  // So the choice collapses to the path that works: type the collection code
+  // and attach the receipt, which is what every other service already does.
   const onComplete = (tx) => {
     if (tx.claimedBy !== authUser?.uid) {
       showAlert('MySheba', 'This order was accepted by another staff member.');
-      return;
-    }
-    if (tx.service === 'Recharge') {
-      showAlert('Complete recharge', 'Use a PIN from your uploaded stock, or type a collection code yourself.', [
-        { text: 'Enter code', onPress: () => setPinId({ id: tx.id, service: tx.service }) },
-        { text: 'Use PIN from stock', onPress: () => issuePinFromStock(tx) },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
       return;
     }
     setPinId({ id: tx.id, service: tx.service });
