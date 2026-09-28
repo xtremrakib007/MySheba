@@ -14,7 +14,7 @@ import * as supportContactService from '../firebase/supportContactService';
 import { signInErrorCopy } from '../utils/signInErrorCopy';
 import { getLastTokenProbe } from '../firebase/authService';
 import { isValidPhone } from '../firebase/authService';
-import { peekSignOutTrace } from '../utils/authTrace';
+import { peekSignOutTrace, peekTokenProbe } from '../utils/authTrace';
 import BuildStamp from '../components/BuildStamp';
 
 const SUPPORT_EMAIL = 'info.mysheba@gmail.com';
@@ -41,7 +41,9 @@ export default function LoginScreen() {
   const [passwordError, setPasswordError] = useState('');
   const [showErrorDetail, setShowErrorDetail] = useState(false);
   const [signOutTrace, setSignOutTrace] = useState(null);
+  const [tokenProbe, setTokenProbe] = useState(null);
   useEffect(() => { peekSignOutTrace().then(setSignOutTrace).catch(() => {}); }, []);
+  useEffect(() => { peekTokenProbe().then(setTokenProbe).catch(() => {}); }, []);
 
   // Restore the remembered number.
   //
@@ -258,13 +260,23 @@ export default function LoginScreen() {
                 was, the next report is another round of guessing. It only
                 shows when a sign-out was actually recorded, so a first
                 install and a deliberate log out show nothing. */}
-            {!!signOutTrace && (
+            {(!!signOutTrace || !!tokenProbe) && (
               <View style={styles.traceBox}>
-                <Text style={styles.traceText} selectable>
-                  {'Last sign-out: ' + signOutTrace.reason
-                    + (signOutTrace.detail ? ' - ' + signOutTrace.detail : '')}
-                </Text>
-                <Text style={styles.traceText} selectable>{signOutTrace.at}</Text>
+                {!!signOutTrace && (
+                  <Text style={styles.traceText} selectable>
+                    {'Last sign-out: ' + signOutTrace.reason
+                      + (signOutTrace.detail ? ' - ' + signOutTrace.detail : '')}
+                  </Text>
+                )}
+                {!!signOutTrace && (
+                  <Text style={styles.traceText} selectable>{signOutTrace.at}</Text>
+                )}
+                {!!tokenProbe && (
+                  <Text style={styles.traceText} selectable>
+                    {'Token refresh: ' + tokenProbe.result
+                      + (tokenProbe.detail ? ' - ' + tokenProbe.detail : '')}
+                  </Text>
+                )}
                 <BuildStamp />
               </View>
             )}

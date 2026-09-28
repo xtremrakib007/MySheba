@@ -107,3 +107,50 @@ export async function flushSignOutTrace(report) {
   }
   return entry;
 }
+
+// ---------------------------------------------------------------------------
+// The refresh-token probe.
+//
+// 'firebase-no-user' says Firebase Auth dropped the user with nothing in the
+// app having asked for it. That is always a rejected refresh token, but the
+// SDK does not surface WHY: it fails the exchange, clears its persisted user
+// and reports null, and the error never reaches application code. From the
+// app's side a revoked token, a disabled account and a deleted user are
+// indistinguishable, and each has a completely different cause.
+//
+// So the app asks the question itself. Once per launch, with a restored user
+// in hand, it forces a token refresh and records the outcome. A failure here
+// returns the real Firebase error code - auth/user-token-expired for tokens
+// revoked server-side, auth/user-disabled for a suspended account,
+// auth/user-not-found for a deleted one, auth/network-request-failed for no
+// network, which is not a session problem at all.
+//
+// Its own key, never flushed: the sign-out breadcrumb is cleared as soon as a
+// profile loads, and this needs to survive a successful sign-in so it can be
+// read on the screen after the next drop.
+const PROBE_KEY = 'authTrace:lastTokenProbe:v1';
+
+/** Record how the launch token refresh went. Never throws. */
+export async function noteTokenProbe(result, detail) {
+  try {
+    await AsyncStorage.setItem(PROBE_KEY, JSON.stringify({
+      result: String(result || 'unknown'),
+      detail: String(detail == null ? '' : detail).slice(0, 200),
+      at: new Date().toISOString(),
+    }));
+  } catch (e) {
+    // A breadcrumb is not worth a crash.
+  }
+}
+
+/** The last probe result, left in place. */
+export async function peekTokenProbe() {
+  try {
+    const raw = await AsyncStorage.getItem(PROBE_KEY);
+    if (!raw) return null;
+    const entry = JSON.parse(raw);
+    return entry && entry.result ? entry : null;
+  } catch (e) {
+    return null;
+  }
+}

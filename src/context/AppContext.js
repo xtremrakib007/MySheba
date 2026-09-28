@@ -15,7 +15,7 @@ import {
   classifyProfileSnapshot,
   shouldEndSessionForDevice,
 } from "../utils/profileGate";
-import { noteSignOut, flushSignOutTrace } from "../utils/authTrace";
+import { noteSignOut, flushSignOutTrace, noteTokenProbe } from "../utils/authTrace";
 import { logError } from "../firebase/logService";
 
 import * as authService from "../firebase/authService";
@@ -1116,8 +1116,34 @@ export function AppProvider({ children }) {
       else setScreen("customerHome");
     };
 
+    // Ask Firebase why, before it stops telling us.
+    //
+    // A refresh token that the server has rejected fails silently: the SDK
+    // clears its persisted user and reports null, and the reason never
+    // reaches application code - so every such sign-out looks the same from
+    // in here. Forcing one refresh per launch, while a restored user is still
+    // in hand, produces the actual error code instead.
+    //
+    // Fire and forget, and deliberately not awaited: routing must not wait on
+    // a network call, and a failure here changes nothing about what the app
+    // does. The SDK is already refreshing this token on its own schedule, so
+    // this asks nothing of the server that was not going to be asked anyway.
+    let tokenProbed = false;
+    const probeToken = (user) => {
+      if (tokenProbed || !user) return;
+      tokenProbed = true;
+      user.getIdToken(true).then(
+        (token) => noteTokenProbe("ok", "token " + String(token || "").length),
+        (error) => noteTokenProbe(
+          "failed",
+          String(error?.code || error?.message || "unknown").slice(0, 120),
+        ),
+      ).catch(() => {});
+    };
+
     const unsub = authService.subscribeAuth((user) => {
       setAuthUser(user);
+      probeToken(user);
       if (retryTimer) {
         clearTimeout(retryTimer);
         retryTimer = null;
