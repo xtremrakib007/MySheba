@@ -35,7 +35,10 @@ function getReceiptData(tx = {}, profile = {}, operator = '') {
   const completedBy = tx.completedByName || operator || tx.operatorName || tx.operator || '';
   const approvedRole = tx.approvedByRole || '';
   const completedRole = tx.completedByRole || tx.claimedByRole || '';
-  const pin = tx.pin || tx.pinNo || raw.pin || '';
+  // collectionPin is the spent code, kept by completeTransaction after the
+  // live pin is deleted. Without it a completed order's receipt showed "-"
+  // for the one field that records how the handover was authorised.
+  const pin = tx.pin || tx.pinNo || tx.collectionPin || raw.pin || '';
   const rows = [
     ['Senders Name', sender], ['Cust ID', raw.customerId || profile.customerId || profile.custId || tx.customerId],
     ['PASSPORT', raw.senderPassportNo || tx.senderPassportNo], ['Place of Issue', raw.senderPassportIssuePlace || raw.passportPlaceOfIssue || raw.nationality],

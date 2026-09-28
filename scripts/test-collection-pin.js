@@ -109,9 +109,16 @@ check('an existing PIN is returned rather than replaced',
 check('the PIN is cryptographically random, not Math.random',
   /crypto\.randomInt\(0, 10000\)/.test(src) && !/Math\.random\(\)[\s\S]{0,60}?pin/.test(src));
 
-check('completion deletes the PIN',
+check('completion deletes the live PIN',
   /completeTransaction[\s\S]{0,3000}?pin: admin\.firestore\.FieldValue\.delete\(\)/.test(src),
   'a used collection PIN must not be replayable');
+
+// The receipt has to be able to show the code the order was collected with.
+// Deleting pin without recording it left the customer's own receipt printing
+// "-" for the one field that proves how the handover was authorised.
+check('completion records the spent PIN for the receipt',
+  /completeTransaction[\s\S]{0,3000}?collectionPin: pin/.test(src),
+  'the receipt cannot show a PIN that was deleted and never recorded');
 
 check('completion requires the PIN to match the stored one',
   /pin !== order\.pin[\s\S]{0,120}?Incorrect collection PIN/.test(src));

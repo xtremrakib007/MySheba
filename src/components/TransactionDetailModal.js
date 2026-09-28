@@ -338,7 +338,10 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
               <TouchableOpacity style={styles.printBtn} onPress={async () => {
                 try {
                   const safe = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-                  const pin = pinOverride || item.pin || 'Not generated';
+                  // collectionPin after completion, when the live pin is gone.
+                  // Without it a completed order printed "Not generated" for a
+                  // PIN that had very much been generated and used.
+                  const pin = pinOverride || item.pin || item.collectionPin || 'Not generated';
                   const currency = txCurrency(item);
                   let html;
                   if (item.service === 'Remittance') {

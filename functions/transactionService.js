@@ -188,7 +188,19 @@ exports.completeTransaction = onCall({ enforceAppCheck: false }, async (request)
     if (order.approved !== true || !order.approvedBy) throw new HttpsError('failed-precondition', 'This order has no valid admin approval.');
     if (typeof order.pin !== 'string' || !/^\d{4}$/.test(order.pin)) throw new HttpsError('failed-precondition', 'This order has no valid collection PIN. Please recreate the order.');
     if (pin !== order.pin) throw new HttpsError('permission-denied', 'Incorrect collection PIN.');
-    tx.update(ref, { status: 'completed', pin: admin.firestore.FieldValue.delete(), receiptUrl, completedBy: currentActor.uid, completedByName: currentActor.name, completedByRole: currentActor.role, completedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    // pin is deleted; collectionPin keeps the spent value as a record.
+    //
+    // The receipt is supposed to show the code the order was collected with,
+    // and it could not: deleting pin left the customer's own receipt printing
+    // "-" for the one field that proves how the handover was authorised.
+    //
+    // Keeping it does not weaken anything. pin is the LIVE secret and stays
+    // deleted, and completion already requires status === 'processing', so a
+    // completed order cannot be completed again whatever value is stored.
+    // firestore.rules:89 lets only the customer themselves and staff holding
+    // 'orders' or 'finance' read a transaction, which is the same audience
+    // that could read the PIN while the order was still open.
+    tx.update(ref, { status: 'completed', pin: admin.firestore.FieldValue.delete(), collectionPin: pin, receiptUrl, completedBy: currentActor.uid, completedByName: currentActor.name, completedByRole: currentActor.role, completedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
   });
   return { ok: true, transactionId: id };
 });
