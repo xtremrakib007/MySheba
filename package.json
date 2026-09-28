@@ -36,7 +36,8 @@
     "postinstall": "patch-package",
     "lint": "eslint src App.js scripts functions",
     "test:session": "node scripts/test-session-persistence.js",
-    "test:trace": "node scripts/test-auth-trace.js"
+    "test:trace": "node scripts/test-auth-trace.js",
+    "test:boundary": "node scripts/test-auth-boundary.js"
   },
   "dependencies": {
     "expo": "~53.0.0",

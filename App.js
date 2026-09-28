@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { StyleSheet, View, Platform, Linking } from 'react-native';
+import { StyleSheet, View, Text, ActivityIndicator, TouchableOpacity, Platform, Linking } from 'react-native';
 import { AppProvider, useApp } from './src/context/AppContext';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { LanguageProvider } from './src/i18n/LanguageContext';
@@ -105,7 +105,7 @@ const NAV_SCREENS = [
 ];
 
 function Root() {
-  const { screen, authLoading, handleDeepLink, profile, adminViewingSection } = useApp();
+  const { screen, authLoading, handleDeepLink, profile, adminViewingSection, sessionRestoring, logout } = useApp();
   const { colors, isDark } = useTheme();
   const styles = createStyles(colors);
   const [splashVisible, setSplashVisible] = useState(true);
@@ -113,6 +113,23 @@ function Root() {
   useEffect(() => { if (screen === renderedScreen) return undefined; const id = setTimeout(() => setRenderedScreen(screen), 0); return () => clearTimeout(id); }, [screen, renderedScreen]);
   const handleSplashFinished = () => setTimeout(() => setSplashVisible(false), 0);
   useEffect(() => { Linking.getInitialURL().then((url) => { if (url) handleDeepLink(url); }).catch(() => {}); const sub = Linking.addEventListener('url', ({ url }) => handleDeepLink(url)); return () => sub.remove(); }, [handleDeepLink]);
+  // Signed in, profile not here yet. Showing LoginScreen in this window is
+  // what "it logs me out when I close the app" actually was: the session is
+  // valid, `screen` simply never moved off its initial "login" before the
+  // first-route watchdog cleared authLoading. Say what is happening instead,
+  // and offer a way out so a profile that never arrives cannot trap anyone.
+  if (!splashVisible && sessionRestoring && renderedScreen === 'login') {
+    return <SafeAreaView style={styles.app} edges={['top', 'bottom']}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <View style={styles.restoring}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.restoringText}>Restoring your session...</Text>
+        <TouchableOpacity onPress={logout} accessibilityRole="button">
+          <Text style={styles.restoringLink}>Log out instead</Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>;
+  }
   if (splashVisible) return <SafeAreaView style={styles.app} edges={['top', 'bottom']}><StatusBar style={isDark ? 'light' : 'dark'} /><AnimatedSplash ready={!authLoading} onFinished={handleSplashFinished} /></SafeAreaView>;
   return <SafeAreaView style={styles.app} edges={['top', 'bottom']}><StatusBar style={isDark ? 'light' : 'dark'} /><View style={styles.body}>
     {renderedScreen === 'login' && <LoginScreen />}{renderedScreen === 'register' && <RegisterScreen />}{renderedScreen === 'forgotPassword' && <ForgotPasswordScreen />}{renderedScreen === 'deviceVerify' && <DeviceVerifyScreen />}{renderedScreen === 'googlePhone' && <GooglePhoneScreen />}{renderedScreen === 'customerHome' && <CustomerHomeScreen />}{renderedScreen === 'service' && <ServiceScreen />}{renderedScreen === 'dealerHome' && <DealerHomeScreen />}{renderedScreen === 'resellerHome' && <ResellerHomeScreen />}{renderedScreen === 'adminHome' && ((profile?.role === 'admin' || profile?.role === 'superadmin') && !adminViewingSection ? <AdminFeaturesScreen /> : <AdminHomeScreen />)}{renderedScreen === 'staffHome' && <StaffHomeScreen />}{renderedScreen === 'webview' && <WebViewScreen />}{renderedScreen === 'buspicker' && <BusPickerScreen />}{renderedScreen === 'support' && <SupportScreen />}{renderedScreen === 'help' && <HelpScreen />}{renderedScreen === 'adminSupport' && <AdminSupportScreen />}{renderedScreen === 'history' && <HistoryScreen />}{renderedScreen === 'topup' && <TopUpScreen />}{renderedScreen === 'superAdminTopup' && <SuperAdminTopUpScreen />}{renderedScreen === 'settings' && <SettingsScreen />}{renderedScreen === 'printer' && <PrinterScreen />}
@@ -120,4 +137,12 @@ function Root() {
   </View>{NAV_SCREENS.includes(renderedScreen) && <BottomNav />}<RatePopup /><ResultModal /><Sidebar /><AppAlertHost /><UpdateGate /><SecurityPinGate /><AppLockScreen /><BiometricOptInPrompt /></SafeAreaView>;
 }
 export default function App() { return <SafeAreaProvider><LanguageProvider><AppProvider><ThemeProvider><ErrorBoundary><Root /></ErrorBoundary></ThemeProvider></AppProvider></LanguageProvider></SafeAreaProvider>; }
-function createStyles(colors) { return StyleSheet.create({ app: { flex: 1, backgroundColor: colors.bg }, body: { flex: 1 } }); }
+function createStyles(colors) {
+  return StyleSheet.create({
+    app: { flex: 1, backgroundColor: colors.bg },
+    body: { flex: 1 },
+    restoring: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
+    restoringText: { marginTop: 18, fontSize: 15, color: colors.text, textAlign: 'center' },
+    restoringLink: { marginTop: 28, paddingVertical: 8, fontSize: 13, color: colors.primary, fontWeight: '600' },
+  });
+}

@@ -1377,6 +1377,16 @@ export function AppProvider({ children }) {
             setAuthError(error || "Could not load your profile.");
             noteSignOut("profile-fatal", error || "profile listener gave up");
             setProfile(null);
+            // Actually end the session. 'fatal' means the server said this
+            // account may not use the app - permission-denied twice running,
+            // which firestore.rules only returns for a profile that is
+            // suspended, inactive, disabled or merged away. Clearing the
+            // profile without signing out used to be enough to reach the
+            // login screen, because the boundary below treated a missing
+            // profile as signed out. It no longer does, so this has to say
+            // so explicitly - otherwise a blocked account would sit on the
+            // restoring screen forever.
+            authService.logout().catch(() => {});
             if (!initialRouteDone) {
               initialRouteDone = true;
               setAuthLoading(false);
@@ -1410,9 +1420,24 @@ export function AppProvider({ children }) {
   // to any protected screen. This also closes the small render/navigation
   // race that can otherwise leave the previous Home screen visible for a
   // moment after Firebase sign-out. There is no guest/anonymous session.
+  //
+  // It keys on authUser ALONE. It used to read `!authUser || !profile`, and
+  // that second half was the "it logs me out when I close the app" report:
+  // a missing profile is not a missing session. On a cold start Firebase
+  // restores the user immediately and Firestore answers a moment later - or,
+  // on a slow or offline start, not for a while. In that window authUser is
+  // set, the token is valid, and profile is still null. The first-route
+  // watchdog clears authLoading after 8 seconds regardless, `screen` has
+  // never moved off its initial "login", and the app renders the login form
+  // to somebody who is signed in. Nothing recorded a sign-out because none
+  // happened, which is why every trace said the session was healthy.
+  //
+  // Now a null profile with a live authUser is a RESTORING state (see
+  // sessionRestoring below), not a signed-out one, and only Firebase Auth
+  // reporting no user sends anyone back to the login form.
   useEffect(() => {
     if (authLoading) return;
-    if (!authUser || !profile) {
+    if (!authUser) {
       if (!PRE_AUTH_SCREENS.includes(screen)) {
         screenHistoryRef.current = [];
         isPoppingRef.current = false;
@@ -1420,7 +1445,11 @@ export function AppProvider({ children }) {
         setScreen("login");
       }
     }
-  }, [authLoading, authUser, profile, screen]);
+  }, [authLoading, authUser, screen]);
+
+  // Signed in, but the profile has not arrived yet. The app must not show the
+  // login form in this state - there is a valid session behind it.
+  const sessionRestoring = !!authUser && !profile;
 
   // ---- push notifications: once signed in, ask for permission and save
   // this device's Expo push token onto the profile doc so Cloud Functions
@@ -2764,6 +2793,7 @@ export function AppProvider({ children }) {
     cancelPinGate,
     resetSecurityPin,
     appLocked,
+    sessionRestoring,
     appLockEnabled,
     setAppLockEnabled,
     unlockApp,
