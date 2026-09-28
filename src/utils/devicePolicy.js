@@ -36,7 +36,19 @@ export const STAFF_ROLES = ['admin', 'superadmin', 'dealer', 'reseller'];
  */
 export function verifyCallableFor(role) {
   if (!role || typeof role !== 'string') return null;
-  return STAFF_ROLES.includes(role) ? 'checkDeviceSession' : 'confirmDeviceSwitch';
+  // Every role now, not just staff.
+  //
+  // checkDeviceSession challenges every sign-in for every role, and records
+  // the code as pendingAdminEmailChallenge. confirmDeviceSwitch still opens by
+  // requiring pendingDeviceApproval, which nobody gets any more - so sending a
+  // customer there would throw "No pending verification for this device" and
+  // trap them in the same unbreakable loop staff were stuck in. The two must
+  // move together: whoever issues the challenge has to be the one that
+  // verifies it.
+  //
+  // The role is still required rather than assumed, so that a missing one
+  // stays a loud failure instead of a silent wrong answer.
+  return 'checkDeviceSession';
 }
 
 /** Whether this role's device trust is recorded by verification at all. */

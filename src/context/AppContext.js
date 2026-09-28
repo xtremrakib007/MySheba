@@ -33,6 +33,7 @@ import {
   clearBiometricEnabledPref,
 } from "../firebase/appLockPrefs";
 import { isBiometricAvailable } from "../firebase/biometricAuth";
+import * as pinVault from "../firebase/pinVault";
 import * as deviceSessionService from "../firebase/deviceSessionService";
 import * as inquiryService from "../firebase/inquiryService";
 import * as transactionService from "../firebase/transactionService";
@@ -666,6 +667,10 @@ export function AppProvider({ children }) {
       }
       setBiometricEnabledState(value);
       await setBiometricEnabledPref(value);
+      // Opting out drops the stored PIN with it. The PIN is only on this
+      // device so a fingerprint can stand in for it; saying "no fingerprint"
+      // and leaving the PIN behind would keep the risk and lose the benefit.
+      if (!value) await pinVault.forgetPin(authUserRef.current?.uid);
     },
     [profile, requireSecurityPin, setAppLockEnabled],
   );
@@ -2388,6 +2393,11 @@ export function AppProvider({ children }) {
       // different one on this device) shows BiometricOptInPrompt again
       // rather than silently staying enabled/disabled from before.
       await clearBiometricEnabledPref();
+      // And forget the stored PIN. It exists only so a fingerprint can stand
+      // in for the PIN while signed in; once the session is over it is a money
+      // credential sitting on a handset for no reason. Logging back in stores
+      // it again on the first PIN entry.
+      await pinVault.forgetPin(uid);
       setBiometricEnabledState(null);
       biometricPromptedRef.current = false;
       setShowBiometricPrompt(false);

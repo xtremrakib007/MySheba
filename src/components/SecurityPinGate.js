@@ -5,6 +5,8 @@ import { radius } from '../theme/theme';
 import { useTheme } from "../theme/ThemeContext";
 import AppModalHeader from './AppModalHeader';
 import * as securityPinService from '../firebase/securityPinService';
+import * as pinVault from '../firebase/pinVault';
+import { isBiometricAvailable, authenticateWithBiometric } from '../firebase/biometricAuth';
 
 // Rendered once at the App.js root. Reads pinGateRequest (set by
 // AppContext.requireSecurityPin) and also auto-starts setup for an existing
@@ -20,6 +22,7 @@ export default function SecurityPinGate() {
     requireSecurityPin,
     resolvePinGate,
     cancelPinGate,
+    biometricEnabled,
   } = useApp();
   const visible = !!pinGateRequest;
   const isSetup = !profile?.securityPinSet;
@@ -48,6 +51,8 @@ export default function SecurityPinGate() {
   const [confirmPin, setConfirmPin] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [bioReady, setBioReady] = useState(false);
+  const bioTriedRef = useRef(false);
 
   useEffect(() => {
     if (visible) {
@@ -56,8 +61,43 @@ export default function SecurityPinGate() {
       setConfirmPin('');
       setError('');
       setBusy(false);
+      bioTriedRef.current = false;
     }
   }, [visible, pinGateRequest]);
+
+  // Offer the fingerprint only when all three are true: the person opted in,
+  // the hardware has something enrolled, and this device is actually holding
+  // their PIN. Showing the button without a stored PIN would pass the
+  // fingerprint and then still have nothing to send to the server.
+  useEffect(() => {
+    let cancelled = false;
+    if (!visible || isSetup || biometricEnabled !== true || !authUser?.uid) {
+      setBioReady(false);
+      return () => { cancelled = true; };
+    }
+    (async () => {
+      const [available, stored] = await Promise.all([
+        isBiometricAvailable(),
+        pinVault.hasPin(authUser.uid),
+      ]);
+      if (!cancelled) setBioReady(available && stored);
+    })();
+    return () => { cancelled = true; };
+  }, [visible, isSetup, biometricEnabled, authUser]);
+
+  // Prompt once automatically, the same way App Lock does - having to tap a
+  // button before the fingerprint sensor wakes up is the slower path, and this
+  // gate can appear several times in one session.
+  // Called through a ref, not directly. `if (!visible) return null` sits
+  // between the hooks and the handlers, so unlockWithBiometric is only
+  // initialised on renders that get past it - referencing it from up here
+  // would be a temporal-dead-zone hazard the moment that stops holding.
+  const bioRunRef = useRef(null);
+  useEffect(() => {
+    if (!bioReady || bioTriedRef.current) return;
+    bioTriedRef.current = true;
+    if (bioRunRef.current) bioRunRef.current();
+  }, [bioReady]);
 
   if (!visible) return null;
 
@@ -98,6 +138,13 @@ export default function SecurityPinGate() {
     setBusy(true);
     try {
       await securityPinService.verifySecurityPin(pin);
+      // The server said yes, so this PIN is safe to remember. Doing it here
+      // rather than from the text field is the point: an unverified guess must
+      // never be cached, or the fingerprint would replay a wrong PIN and burn
+      // the account's attempt limit without anyone typing anything.
+      if (biometricEnabled === true && authUser?.uid) {
+        await pinVault.rememberPin(authUser.uid, pin.trim());
+      }
       resolvePinGate();
     } catch (err) {
       setError(err?.message || 'Incorrect PIN.');
@@ -106,6 +153,32 @@ export default function SecurityPinGate() {
       setBusy(false);
     }
   };
+
+  const unlockWithBiometric = async () => {
+    if (busy) return;
+    setError('');
+    setBusy(true);
+    try {
+      const ok = await authenticateWithBiometric('Confirm to continue');
+      if (!ok) return;
+      const stored = await pinVault.readPin(authUser?.uid);
+      if (!stored) { setBioReady(false); return; }
+      // Still verified server side. The fingerprint proves who is holding the
+      // phone; only the server can say the PIN is still correct, and it may
+      // not be - it can be changed from another device, which leaves this copy
+      // stale. A rejection means exactly that, so drop it and ask.
+      await securityPinService.verifySecurityPin(stored);
+      resolvePinGate();
+    } catch (err) {
+      await pinVault.forgetPin(authUser?.uid);
+      setBioReady(false);
+      setError('Your saved PIN is no longer valid. Please enter it again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  bioRunRef.current = unlockWithBiometric;
 
   const actionLabel = pinGateRequest?.actionLabel;
 
@@ -154,6 +227,12 @@ export default function SecurityPinGate() {
 
             {!!error && <Text style={styles.error}>{error}</Text>}
 
+            {!!bioReady && (
+              <TouchableOpacity style={styles.bioBtn} onPress={unlockWithBiometric} disabled={busy}>
+                <Text style={styles.bioText}>👆 Use Fingerprint / Face</Text>
+              </TouchableOpacity>
+            )}
+
             <View style={styles.row}>
               <TouchableOpacity style={[styles.cancelBtn, isMandatoryGoogleSetup && styles.hiddenCancel]} onPress={onCancel} disabled={busy || isMandatoryGoogleSetup}>
                 {!isMandatoryGoogleSetup && <Text style={styles.cancelText}>Cancel</Text>}
@@ -182,6 +261,8 @@ function createStyles(colors) {
     subtitle: { fontSize: 12, color: '#666', marginBottom: 14 },
     input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingVertical: 10, paddingHorizontal: 12, fontSize: 18, letterSpacing: 4, textAlign: 'center' },
     error: { color: colors.error, fontSize: 12, marginTop: 12 },
+    bioBtn: { marginTop: 14, paddingVertical: 8, alignItems: 'center' },
+    bioText: { color: colors.primary, fontWeight: '600', fontSize: 13 },
     row: { flexDirection: 'row', gap: 10, marginTop: 20 },
     cancelBtn: { flex: 1, paddingVertical: 10, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
     hiddenCancel: { borderWidth: 0 },

@@ -58,14 +58,10 @@ new Function('exports', policySrc.replace(/^export /gm, '')
   + '\nexports.verifyCallableFor = verifyCallableFor;'
   + '\nexports.isStaffRole = isStaffRole;')(policy);
 
-check('staff roles resolve to checkDeviceSession',
-  ['admin', 'superadmin', 'dealer', 'reseller']
+check('every known role resolves to checkDeviceSession',
+  ['admin', 'superadmin', 'dealer', 'reseller', 'customer', 'support', 'finance']
     .every(r => policy.verifyCallableFor(r) === 'checkDeviceSession'),
-  'only this callable verifies pendingAdminEmailChallenge and writes trustedDevices');
-
-check('non-staff roles resolve to confirmDeviceSwitch',
-  ['customer', 'support', 'finance']
-    .every(r => policy.verifyCallableFor(r) === 'confirmDeviceSwitch'));
+  'it issues the challenge for every role now, so it must be what verifies it');
 
 check('an unknown role resolves to nothing, not a guess',
   [undefined, null, '', 0, {}].every(r => policy.verifyCallableFor(r) === null),
@@ -101,11 +97,25 @@ check('the screen falls back to fetching the role',
 // --- the server-side facts these depend on --------------------------------
 check('confirmDeviceSwitch still requires pendingDeviceApproval',
   /const pending = profile\.pendingDeviceApproval;[\s\S]{0,200}?throw new HttpsError/.test(server),
-  'if this ever stops being true, the staff/non-staff split can be simplified');
+  'this is exactly why nobody may be routed there any more - the challenge is '
+  + 'recorded as pendingAdminEmailChallenge and this would throw');
 
-check('the staff branch still writes trustedDevices on verification',
+check('verification still records the device',
   /verifiedNewStaffDevice\)\s*\{[\s\S]{0,300}?trustedDevices/.test(server),
-  'this is what stops the NEXT sign-in asking for a code');
+  'trustedDevices feeds the Trusted Devices list and the eviction cap');
+
+// --- every sign-in is challenged ------------------------------------------
+check('the challenge is not limited to staff roles',
+  !/if \(isStaffRole\(profile\.role\)\) \{[\s\S]{0,400}?ensureEmailChallenge/.test(server),
+  'a code is required for every role now, not only staff');
+
+check('a trusted device does not skip the challenge',
+  !/const trusted = Boolean\(profile\.trustedDevices\?\.\[deviceId\]\);[\s\S]{0,200}?if \(!trusted\) \{/.test(server),
+  'signing back in after a logout takes a code wherever you are');
+
+check('the challenge still short-circuits when a credential IS supplied',
+  /data\.emailOtp\)\s*\{[\s\S]{0,200}?verifiedNewStaffDevice = true/.test(server),
+  'otherwise entering the code could never complete the sign-in');
 
 for (const c of checks) {
   console.log((c.ok ? 'ok   ' : 'FAIL ') + c.name + (c.detail && !c.ok ? '\n       ' + c.detail : ''));

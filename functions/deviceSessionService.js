@@ -263,15 +263,34 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: false }, async (request) 
     const profile = snap.data();
     if (!isActiveAccount(profile)) throw new HttpsError('permission-denied', 'This account is not active.');
 
+    // Every sign-in is verified with a one-time code. Every role, every
+    // device, trusted or not.
+    //
+    // This used to run only for staff, and only when trustedDevices had no
+    // entry for this device - so a returning phone signed in on the password
+    // alone. The rule asked for is the stronger one: once someone has logged
+    // out, getting back in takes the password AND a code, wherever they are.
+    // Staying signed in is what avoids the code, and that is now reliable
+    // enough to lean on - the session survives closing the app, so a code is
+    // only ever asked for at a real sign-in, not on every launch.
+    //
+    // A customer's profile.email is a real, verified inbox: registration
+    // requires and verifies one (functions/customerRegistration.js:134). The
+    // <digits>@mysheba.app address is only Firebase Auth's internal login
+    // handle and is never what is written to the profile, so a code sent here
+    // reaches a person for every role.
+    //
+    // trustedDevices is still maintained, for the Trusted Devices list and so
+    // the cap evicts genuinely stale entries - it just no longer decides
+    // whether a code is required.
     let verifiedNewStaffDevice = false;
     let verificationMethod = null;
-    if (isStaffRole(profile.role)) {
+    {
       const email = normalizeEmail(profile.email);
       const phone = normalizePhone(profile.phone);
-      if (!email && !phone) throw new HttpsError('failed-precondition', 'This staff account has no verification contact.');
-      const trusted = Boolean(profile.trustedDevices?.[deviceId]);
+      if (!email && !phone) throw new HttpsError('failed-precondition', 'This account has no email or phone for sign-in verification. Please contact support.');
 
-      if (!trusted) {
+      {
         if (data.phoneIdToken) {
           try { await assertPhoneVerified(data.phoneIdToken, phone); } catch (error) { throw new HttpsError('failed-precondition', error.message || 'Please verify your phone first.'); }
           verifiedNewStaffDevice = true; verificationMethod = 'sms';
@@ -303,17 +322,15 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: false }, async (request) 
             pending: profile.pendingAdminEmailChallenge,
             force: Boolean(data.resendEmailChallenge),
           });
-          await logAudit({ action: 'staff_mfa_challenge', targetUid: uid, performedBy: uid, performedByRole: profile.role, details: { deviceId, ip, emailChallengeSent } });
-          return { requiresOtp: true, reason: 'new_device', email, phone, availableMfaMethods: [phone && 'sms', email && 'email'].filter(Boolean), emailChallengeSent };
+          await logAudit({ action: 'login_mfa_challenge', targetUid: uid, performedBy: uid, performedByRole: profile.role, details: { deviceId, ip, emailChallengeSent } });
+          return { requiresOtp: true, reason: 'login_verification', email, phone, availableMfaMethods: [phone && 'sms', email && 'email'].filter(Boolean), emailChallengeSent };
         }
       }
 
       if (verifiedNewStaffDevice) {
         const trustedDevices = trustedMap(profile.trustedDevices, deviceId, ip, label);
         await ref.update({ trustedDevices, pendingAdminEmailChallenge: FieldValue.delete() });
-        await logAudit({ action: 'staff_device_trusted', targetUid: uid, performedBy: uid, performedByRole: profile.role, details: { deviceId, ip, verificationMethod } });
-      } else if (trusted) {
-        try { await ref.update({ trustedDevices: trustedMap(profile.trustedDevices, deviceId, ip, label) }); } catch (error) {}
+        await logAudit({ action: 'device_verified', targetUid: uid, performedBy: uid, performedByRole: profile.role, details: { deviceId, ip, verificationMethod } });
       }
     }
 

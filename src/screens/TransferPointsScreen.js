@@ -7,6 +7,8 @@ import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import HeaderDecor from '../components/HeaderDecor';
 import { findWalletRecipient, walletTransfer } from '../firebase/walletTransferService';
+import * as pinVault from '../firebase/pinVault';
+import { isBiometricAvailable, authenticateWithBiometric } from '../firebase/biometricAuth';
 import LegacyTransferPointsScreen from './LegacyTransferPointsScreen';
 
 const ZERO_DECIMAL_CURRENCIES = new Set(['IDR', 'KHR', 'MMK']);
@@ -24,7 +26,7 @@ function fmt(n, currency = 'MYR') {
 export default function TransferPointsScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { goBackOrHome, profile } = useApp();
+  const { goBackOrHome, profile, authUser, biometricEnabled } = useApp();
   const currency = walletCurrency(profile);
   const digits = currencyDigits(currency);
   const balance = Number(profile?.walletBalance || profile?.balance || 0);
@@ -39,6 +41,25 @@ export default function TransferPointsScreen() {
   const [reviewing, setReviewing] = useState(false);
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [securityPin, setSecurityPin] = useState('');
+  // Offered only when all three hold: opted in, hardware enrolled, and a PIN
+  // actually stored for this account on this device. Without the stored PIN
+  // the fingerprint would pass and there would still be nothing to send.
+  const [bioReady, setBioReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    if (!confirmVisible || biometricEnabled !== true || !authUser?.uid) {
+      setBioReady(false);
+      return () => { cancelled = true; };
+    }
+    (async () => {
+      const [available, stored] = await Promise.all([
+        isBiometricAvailable(),
+        pinVault.hasPin(authUser.uid),
+      ]);
+      if (!cancelled) setBioReady(available && stored);
+    })();
+    return () => { cancelled = true; };
+  }, [confirmVisible, biometricEnabled, authUser]);
 
   const review = async () => {
     const query = recipientQuery.trim();
@@ -60,9 +81,26 @@ export default function TransferPointsScreen() {
     }
   };
 
-  const confirmTransfer = async () => {
+  // The transfer itself is what verifies the PIN - walletTransfer sends the
+  // digits and the server scrypt-compares them. So a fingerprint here is not a
+  // substitute for the check, it is a way of producing the digits without
+  // typing them. The server still decides.
+  const confirmWithBiometric = async () => {
+    if (busy) return;
+    const ok = await authenticateWithBiometric('Confirm this transfer');
+    if (!ok) return;
+    const stored = await pinVault.readPin(authUser?.uid);
+    if (!stored) {
+      setBioReady(false);
+      return showAlert('Wallet Transfer', 'No saved PIN on this device. Please enter your PIN.');
+    }
+    return confirmTransfer(stored);
+  };
+
+  const confirmTransfer = async (pinOverride) => {
     if (!recipient || busy) return;
-    if (!/^\d{4,8}$/.test(securityPin)) return showAlert('Wallet Transfer', 'Enter your 4-8 digit security PIN.');
+    const pinToSend = pinOverride || securityPin;
+    if (!/^\d{4,8}$/.test(pinToSend)) return showAlert('Wallet Transfer', 'Enter your 4-8 digit security PIN.');
     const value = Number(amount);
     const minimum = digits === 0 ? 1 : 0.01;
     if (!Number.isFinite(value) || value < minimum || value > balance || (digits === 0 && !Number.isInteger(value))) {
@@ -71,7 +109,12 @@ export default function TransferPointsScreen() {
 
     setBusy(true);
     try {
-      const result = await walletTransfer({ recipient: recipient.uid, amount: value, note, securityPin });
+      const result = await walletTransfer({ recipient: recipient.uid, amount: value, note, securityPin: pinToSend });
+      // Accepted by the server, so it is safe to remember. A typed PIN that
+      // just moved money is exactly the one the fingerprint should replay.
+      if (biometricEnabled === true && authUser?.uid && !pinOverride) {
+        await pinVault.rememberPin(authUser.uid, pinToSend);
+      }
       setConfirmVisible(false);
       setRecipient(null);
       setRecipientQuery('');
@@ -80,6 +123,13 @@ export default function TransferPointsScreen() {
       setSecurityPin('');
       showAlert('Transfer Successful', `${fmt(result.amount, result.currency || currency)} sent to ${result.recipient?.name || 'the recipient'}.`);
     } catch (err) {
+      // A stored PIN the server rejects is a stale one - the PIN was changed
+      // on another device and this copy is wrong. Drop it rather than let the
+      // fingerprint keep replaying it into the account's attempt limit.
+      if (pinOverride) {
+        await pinVault.forgetPin(authUser?.uid);
+        setBioReady(false);
+      }
       showAlert('Wallet Transfer', err.message || 'Could not complete the transfer.');
     } finally {
       setBusy(false);
@@ -184,11 +234,19 @@ export default function TransferPointsScreen() {
               maxLength={8}
               editable={!busy}
             />
+            {!!bioReady && (
+              <TouchableOpacity style={styles.bioBtn} onPress={confirmWithBiometric} disabled={busy}>
+                <Text style={styles.bioText}>👆 Confirm with Fingerprint / Face</Text>
+              </TouchableOpacity>
+            )}
             <View style={styles.divider} />
             <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Balance after</Text><Text style={styles.summaryValue}>{fmt(balance - Number(amount || 0), currency)}</Text></View>
             <View style={styles.actions}>
               <TouchableOpacity style={styles.cancelButton} onPress={() => setConfirmVisible(false)} disabled={busy}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.confirmButton} onPress={confirmTransfer} disabled={busy}><Text style={styles.confirmText}>{busy ? 'Sending…' : 'Confirm & Send'}</Text></TouchableOpacity>
+              {/* Arrow-wrapped: confirmTransfer now takes an optional PIN, and
+                  passing it straight to onPress would hand it the press event
+                  as that argument. */}
+              <TouchableOpacity style={styles.confirmButton} onPress={() => confirmTransfer()} disabled={busy}><Text style={styles.confirmText}>{busy ? 'Sending…' : 'Confirm & Send'}</Text></TouchableOpacity>
             </View>
           </View>
         </View>
@@ -235,6 +293,8 @@ function createStyles(colors) {
     pinLabel: { color: colors.text, fontSize: 12, fontWeight: '700', marginTop: 12, marginBottom: 7 },
     pinInput: { height: 50, borderWidth: 1.5, borderColor: colors.primary, borderRadius: 13, paddingHorizontal: 14, color: colors.text, fontSize: 18, letterSpacing: 4, textAlign: 'center', backgroundColor: '#FFFFFF' },
     divider: { height: 1, backgroundColor: colors.border, marginVertical: 7 },
+    bioBtn: { marginTop: 12, paddingVertical: 8, alignItems: 'center' },
+    bioText: { color: colors.primary, fontWeight: '600', fontSize: 13 },
     actions: { flexDirection: 'row', gap: 10, marginTop: 16 },
     cancelButton: { flex: 1, height: 48, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 13 },
     cancelText: { color: colors.muted || '#6B7280', fontWeight: '700' },
