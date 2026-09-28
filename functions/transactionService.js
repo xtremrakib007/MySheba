@@ -125,7 +125,17 @@ exports.generateCollectionPin = onCall({ enforceAppCheck: false }, async (reques
     if (order.customerId !== uid) throw new HttpsError('permission-denied', 'You can only manage your own collection PIN.');
     if (order.status !== 'pending') throw new HttpsError('failed-precondition', 'The collection PIN can only be generated while the order is pending.');
     if (order.rejected === true) throw new HttpsError('failed-precondition', 'A rejected order cannot receive a collection PIN.');
-    if (typeof order.pin === 'string' && /^\\d{4}$/.test(order.pin)) {
+    // One backslash. This read /^\\d{4}$/, which in a regex literal is an
+    // escaped backslash followed by "dddd" - it matches the string \dddd and
+    // never a PIN. The same test is written correctly twice in
+    // completeTransaction below, so only this copy was wrong.
+    //
+    // It is the idempotency guard, so a dead one meant every call minted a new
+    // PIN and overwrote the stored one. Tapping Generate a second time
+    // silently invalidated the PIN the customer had already been shown, and
+    // any receipt printed with it, and the operator's entry of that PIN then
+    // failed as "Incorrect collection PIN".
+    if (typeof order.pin === 'string' && /^\d{4}$/.test(order.pin)) {
       pin = order.pin;
       return;
     }
