@@ -72,17 +72,17 @@ exports.transferPoints = onCall({ enforceAppCheck: false }, async (request) => {
   const cleanNote = typeof note === 'string' ? note.trim() : '';
 
   if (typeof toUid !== 'string' || !toUid.trim()) throw new HttpsError('invalid-argument', 'A recipient is required.');
-  if (toUid === callerUid) throw new HttpsError('invalid-argument', "You can't transfer points to yourself.");
-  if (amt === null) throw new HttpsError('invalid-argument', `Transfer amount must be greater than 0 and no more than ${MAX_TRANSFER.toLocaleString()} points, with at most 2 decimal places.`);
+  if (toUid === callerUid) throw new HttpsError('invalid-argument', "You can't transfer money to yourself.");
+  if (amt === null) throw new HttpsError('invalid-argument', `Transfer amount must be greater than 0 and no more than ${MAX_TRANSFER.toLocaleString()}, with at most 2 decimal places.`);
   if (cleanNote.length > MAX_NOTE_LENGTH) throw new HttpsError('invalid-argument', `Note must be ${MAX_NOTE_LENGTH} characters or fewer.`);
 
   const caller = await profile(db, callerUid);
-  if (!active(caller) || !['dealer', 'admin', 'superadmin'].includes(caller.role)) throw new HttpsError('permission-denied', 'Your account cannot transfer points.');
+  if (!active(caller) || !['dealer', 'admin', 'superadmin'].includes(caller.role)) throw new HttpsError('permission-denied', 'Your account cannot transfer money.');
   // Staff transfers are payment operations; dealers keep their own transfers.
   if (caller.role !== 'dealer' && !(await hasCapability(db, callerUid, caller, 'finance'))) throw new HttpsError('permission-denied', 'Your account does not handle payments.');
   const recipient = await profile(db, toUid);
   if (!active(recipient)) throw new HttpsError('failed-precondition', 'The recipient account is not active.');
-  if (!canTransferTo(caller.role, caller, recipient)) throw new HttpsError('permission-denied', 'You are not allowed to send points to that account.');
+  if (!canTransferTo(caller.role, caller, recipient)) throw new HttpsError('permission-denied', 'You are not allowed to send money to that account.');
 
   const ip = getClientIp(request);
   await checkVelocity(db, callerUid, 'transferPoints', { ip });
@@ -138,7 +138,7 @@ exports.transferPoints = onCall({ enforceAppCheck: false }, async (request) => {
     });
 
     if (!pinResult.valid) {
-      if (pinResult.code === 'missing') throw new HttpsError('failed-precondition', 'Set up your security PIN before transferring points.');
+      if (pinResult.code === 'missing') throw new HttpsError('failed-precondition', 'Set up your security PIN before transferring money.');
       if (pinResult.code === 'locked') throw new HttpsError('resource-exhausted', 'Too many security PIN attempts. Try again later.');
       if (pinResult.code === 'invalid') throw new HttpsError('failed-precondition', 'Your security PIN needs to be reset before use.');
       throw new HttpsError('permission-denied', 'Incorrect security PIN.');

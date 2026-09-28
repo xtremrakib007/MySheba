@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, Modal,
 import { showAlert } from '../utils/appAlert';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
+import { eligibleRecipients, recipientHint } from '../utils/transferPolicy';
 import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import HeaderDecor from '../components/HeaderDecor';
@@ -56,7 +57,15 @@ export default function LegacyTransferPointsScreen() {
     return unsub;
   }, [authUser?.uid, unlocked]);
 
-  const recipients = useMemo(() => users.filter((u) => u.id !== profile?.uid), [users, profile]);
+  // Only the accounts this sender is actually allowed to send to. The pool
+  // from subscribeManageableUsers is everyone they can MANAGE, which is a
+  // wider set than everyone they can FUND - a superadmin manages customers
+  // but may only fund admins and dealers. Listing the rest meant picking one,
+  // typing an amount, entering a security PIN, and only then being refused.
+  const recipients = useMemo(
+    () => eligibleRecipients(myRole, authUser?.uid, users),
+    [users, myRole, authUser?.uid],
+  );
   const earningPreview = isDealerTier && target?.role === 'customer'
     ? Math.round((Number(amount) || 0) * (dealerEarningPercent / 100) * 100) / 100
     : 0;
@@ -112,7 +121,7 @@ export default function LegacyTransferPointsScreen() {
                 <Text style={styles.sendChevron}>Send ›</Text>
               </TouchableOpacity>
             ))}
-            {recipients.length === 0 && <Text style={styles.emptyText}>No one in your management pool yet.</Text>}
+            {recipients.length === 0 && <Text style={styles.emptyText}>{'No one to send to yet. ' + recipientHint(myRole)}</Text>}
             {history.length > 0 && (
               <>
                 <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Recent Transfers</Text>

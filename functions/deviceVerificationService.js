@@ -223,7 +223,31 @@ exports.confirmDeviceEmailOtp = onCall({ enforceAppCheck: false }, async (reques
     });
   }
 
-  try { await admin.auth().revokeRefreshTokens(uid); } catch (err) { console.error('[deviceVerification] revoke tokens failed', err); }
+  // No revokeRefreshTokens here. It used to sit on this line, and it ended
+  // the session it had just approved.
+  //
+  // This is the same bug as the one in deviceSessionService.js, on the other
+  // half of the same flow: that one revoked when a known device logged in,
+  // this one revoked the moment a NEW device passed its verification code.
+  // revokeRefreshTokens(uid) sets tokensValidAfterTime to now and kills every
+  // refresh token issued BEFORE that instant, including the one this device
+  // received from signInWithPassword a moment ago. The API is all or nothing;
+  // there is no way to spare the caller.
+  //
+  // The ID token already in memory stays valid for up to an hour, so the app
+  // looked fine and the person reached their home screen. Then the first time
+  // the SDK had to exchange the refresh token - which is exactly what closing
+  // and reopening the app forces - the exchange was rejected, Firebase Auth
+  // reported no user, and the app opened on Login. Every role hit it, because
+  // every role goes through device verification on a device it has not used
+  // before, and no client-side change could have fixed it.
+  //
+  // The other devices are still displaced, by the activeSessionId and
+  // activeDeviceId written just above: shouldEndSessionForDevice
+  // (src/utils/profileGate.js) signs a displaced device out from its own
+  // profile listener, over Firestore, without touching anyone's tokens.
+  // Deliberate revocation still happens where it is the actual intent -
+  // revokeTrustedDevice, adminForceLogout, suspension, password reset.
   console.log(`[deviceVerification] device approved via ${verifiedVia}`, { uid, deviceId });
   return { requiresOtp: false, sessionId };
 });

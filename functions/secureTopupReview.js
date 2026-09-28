@@ -53,57 +53,162 @@ function validBalance(value) {
   return n;
 }
 
-exports.approveTopup = onCall({ enforceAppCheck: false }, async request => {
+// Who may release money. Verifying is the finance capability (finance role,
+// and superadmin, which no override can restrict); completing is admin or
+// superadmin. A superadmin may do both steps, so a top-up is never stuck
+// waiting for someone else to be online.
+const COMPLETER_ROLES = ['admin', 'superadmin'];
+
+/** Everything needed to credit a wallet, or an HttpsError saying why not. */
+async function creditPlan(tx, db, topup) {
+  const userId = String(topup.userId || '').trim();
+  if (!userId) throw new HttpsError('failed-precondition', 'Top-up has no valid user account.');
+  const userRef = db.collection('users').doc(userId);
+  const userSnap = await tx.get(userRef);
+  if (!userSnap.exists) throw new HttpsError('not-found', 'That user account no longer exists.');
+  const user = userSnap.data() || {};
+  if (!activeAccount(user)) throw new HttpsError('failed-precondition', 'The recipient account is not active.');
+  if (!ALLOWED_RECIPIENT_ROLES.includes(user.role)) throw new HttpsError('failed-precondition', 'That account cannot receive wallet top-ups.');
+  const currency = inferWalletCurrency(user);
+  const requestedCurrency = String(topup.currency || '').toUpperCase();
+  if (requestedCurrency && requestedCurrency !== currency) throw new HttpsError('failed-precondition', `Top-up currency ${requestedCurrency} does not match the user's wallet currency ${currency}.`);
+  const points = validMoney(topup.walletAmount ?? topup.points ?? topup.amount, currency);
+  const balance = validBalance(user.walletBalance);
+  if (points === null) throw new HttpsError('failed-precondition', 'Top-up amount is invalid.');
+  if (balance === null) throw new HttpsError('failed-precondition', 'User wallet balance is invalid.');
+  const scale = 10 ** (ZERO_DECIMAL_CURRENCIES.has(currency) ? 0 : 2);
+  const newBalanceCents = Math.round(balance * scale) + Math.round(points * scale);
+  if (!Number.isSafeInteger(newBalanceCents)) throw new HttpsError('failed-precondition', 'Wallet balance is too large.');
+  return { userId, userRef, currency, points, newBalance: newBalanceCents / scale };
+}
+
+/** Load the caller and re-check them inside the transaction. */
+async function callerInTx(tx, db, uid, request) {
+  const snap = await tx.get(db.collection('users').doc(uid));
+  if (!snap.exists || !activeAccount(snap.data())) throw new HttpsError('permission-denied', 'Your account is not active.');
+  const caller = snap.data() || {};
+  requireSessionMatch(request, caller);
+  return caller;
+}
+
+const actor = (uid, caller) => ({ uid, name: caller.name || caller.displayName || '', role: caller.role || '' });
+
+// ---- step 1: finance checks the payment is real. No money moves. ----
+exports.verifyTopup = onCall({ enforceAppCheck: false }, async request => {
   const uid = requireAdmin(request);
   const db = admin.firestore();
-  const callerSnap = await db.collection('users').doc(uid).get();
-  const caller = callerSnap.exists ? callerSnap.data() : null;
-  if (!caller || !activeAccount(caller) || !(await hasCapability(db, uid, caller, 'finance'))) throw new HttpsError('permission-denied', 'Your account cannot approve top-ups.');
-  requireSessionMatch(request, caller);
   const topupId = String(request.data?.topupId || request.data?.id || '').trim();
   if (!topupId) throw new HttpsError('invalid-argument', 'topupId is required.');
   const ref = db.collection('topups').doc(topupId);
   try {
     const out = await db.runTransaction(async tx => {
-      const [snap, callerTxSnap] = await Promise.all([tx.get(ref), tx.get(db.collection('users').doc(uid))]);
-      if (!callerTxSnap.exists || !activeAccount(callerTxSnap.data())) throw new HttpsError('permission-denied', 'Your account is not active.');
-      const callerTx = callerTxSnap.data() || {};
-      if (!(await hasCapability(db, uid, callerTx, 'finance'))) throw new HttpsError('permission-denied', 'Your account cannot approve top-ups.');
-      requireSessionMatch(request, callerTx);
+      const snap = await tx.get(ref);
+      const caller = await callerInTx(tx, db, uid, request);
+      if (!(await hasCapability(db, uid, caller, 'finance'))) throw new HttpsError('permission-denied', 'Your account cannot verify top-ups.');
       if (!snap.exists) throw new HttpsError('not-found', 'That top-up request does not exist.');
       const topup = snap.data() || {};
       if (topup.status !== 'pending') throw new HttpsError('failed-precondition', 'That request has already been reviewed.');
-      const userId = String(topup.userId || '').trim();
-      if (!userId) throw new HttpsError('failed-precondition', 'Top-up has no valid user account.');
-      const userRef = db.collection('users').doc(userId);
-      const userSnap = await tx.get(userRef);
-      if (!userSnap.exists) throw new HttpsError('not-found', 'That user account no longer exists.');
-      const user = userSnap.data() || {};
-      if (!activeAccount(user)) throw new HttpsError('failed-precondition', 'The recipient account is not active.');
-      if (!ALLOWED_RECIPIENT_ROLES.includes(user.role)) throw new HttpsError('failed-precondition', 'That account cannot receive wallet top-ups.');
-      const currency = inferWalletCurrency(user);
-      const requestedCurrency = String(topup.currency || '').toUpperCase();
-      if (requestedCurrency && requestedCurrency !== currency) throw new HttpsError('failed-precondition', `Top-up currency ${requestedCurrency} does not match the user's wallet currency ${currency}.`);
-      const points = validMoney(topup.walletAmount ?? topup.points ?? topup.amount, currency);
-      const balance = validBalance(user.walletBalance);
-      if (points === null) throw new HttpsError('failed-precondition', 'Top-up amount is invalid.');
-      if (balance === null) throw new HttpsError('failed-precondition', 'User wallet balance is invalid.');
-      const scale = 10 ** (ZERO_DECIMAL_CURRENCIES.has(currency) ? 0 : 2);
-      const balanceCents = Math.round(balance * scale);
-      const pointsCents = Math.round(points * scale);
-      const newBalanceCents = balanceCents + pointsCents;
-      if (!Number.isSafeInteger(newBalanceCents)) throw new HttpsError('failed-precondition', 'Wallet balance is too large.');
-      const newBalance = newBalanceCents / scale;
-      tx.update(userRef, { walletBalance: newBalance, walletCurrency: currency, walletBalanceCurrency: currency });
-      tx.update(ref, { status: 'approved', approvedBy: uid, approvedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp(), creditedAmount: points, creditedCurrency: currency, creditedPoints: points });
-      return { userId, points };
+      // Checked now so a request cannot be verified and then fail to complete.
+      await creditPlan(tx, db, topup);
+      const who = actor(uid, caller);
+      tx.update(ref, {
+        status: 'verified',
+        verifiedBy: who.uid, verifiedByName: who.name, verifiedByRole: who.role,
+        verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return { userId: topup.userId || '', role: who.role };
     });
-    await logAudit({ action: 'topup_approved', targetUid: out.userId, performedBy: uid, performedByRole: caller.role, details: { topupId, points: out.points } });
-    return { approved: true };
+    await logAudit({ action: 'topup_verified', targetUid: out.userId, performedBy: uid, performedByRole: out.role, details: { topupId } });
+    return { verified: true };
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    await logServerError('verifyTopup', error, { userId: uid, topupId });
+    throw new HttpsError('internal', 'Could not verify that top-up.');
+  }
+});
+
+// ---- step 2: admin releases the money. ----
+exports.completeTopup = onCall({ enforceAppCheck: false }, async request => {
+  const uid = requireAdmin(request);
+  const db = admin.firestore();
+  const topupId = String(request.data?.topupId || request.data?.id || '').trim();
+  if (!topupId) throw new HttpsError('invalid-argument', 'topupId is required.');
+  const ref = db.collection('topups').doc(topupId);
+  try {
+    const out = await db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      const caller = await callerInTx(tx, db, uid, request);
+      if (!COMPLETER_ROLES.includes(caller.role)) throw new HttpsError('permission-denied', 'Only an admin or superadmin can complete a top-up.');
+      if (!snap.exists) throw new HttpsError('not-found', 'That top-up request does not exist.');
+      const topup = snap.data() || {};
+      if (topup.status === 'approved') throw new HttpsError('failed-precondition', 'That top-up has already been completed.');
+      if (topup.status !== 'verified') throw new HttpsError('failed-precondition', 'That top-up has not been verified yet.');
+      const plan = await creditPlan(tx, db, topup);
+      const who = actor(uid, caller);
+      tx.update(plan.userRef, { walletBalance: plan.newBalance, walletCurrency: plan.currency, walletBalanceCurrency: plan.currency });
+      tx.update(ref, {
+        // 'approved' stays the terminal status: ReportsScreen totals filter
+        // on it, and renaming it would silently drop every past top-up from
+        // the reports.
+        status: 'approved',
+        completedBy: who.uid, completedByName: who.name, completedByRole: who.role,
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+        approvedBy: who.uid, approvedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        creditedAmount: plan.points, creditedCurrency: plan.currency, creditedPoints: plan.points,
+      });
+      return { userId: plan.userId, points: plan.points, role: who.role, verifiedBy: topup.verifiedBy || null };
+    });
+    await logAudit({ action: 'topup_completed', targetUid: out.userId, performedBy: uid, performedByRole: out.role, details: { topupId, points: out.points, verifiedBy: out.verifiedBy } });
+    return { completed: true };
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    await logServerError('completeTopup', error, { userId: uid, topupId });
+    throw new HttpsError('internal', 'Could not complete that top-up.');
+  }
+});
+
+// ---- both steps at once, superadmin only ----
+// Kept so a superadmin is never blocked, and so an app that has not picked
+// up the two-step flow yet still works. Records the same superadmin as both
+// the verifier and the completer rather than pretending two people looked.
+exports.approveTopup = onCall({ enforceAppCheck: false }, async request => {
+  const uid = requireAdmin(request);
+  const db = admin.firestore();
+  const topupId = String(request.data?.topupId || request.data?.id || '').trim();
+  if (!topupId) throw new HttpsError('invalid-argument', 'topupId is required.');
+  const ref = db.collection('topups').doc(topupId);
+  try {
+    const out = await db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      const caller = await callerInTx(tx, db, uid, request);
+      if (caller.role !== 'superadmin') throw new HttpsError('permission-denied', 'A top-up is verified by finance and completed by an admin.');
+      if (!snap.exists) throw new HttpsError('not-found', 'That top-up request does not exist.');
+      const topup = snap.data() || {};
+      if (topup.status !== 'pending' && topup.status !== 'verified') throw new HttpsError('failed-precondition', 'That request has already been reviewed.');
+      const plan = await creditPlan(tx, db, topup);
+      const who = actor(uid, caller);
+      const stamp = admin.firestore.FieldValue.serverTimestamp();
+      tx.update(plan.userRef, { walletBalance: plan.newBalance, walletCurrency: plan.currency, walletBalanceCurrency: plan.currency });
+      tx.update(ref, {
+        status: 'approved',
+        verifiedBy: topup.verifiedBy || who.uid,
+        verifiedByName: topup.verifiedByName || who.name,
+        verifiedByRole: topup.verifiedByRole || who.role,
+        verifiedAt: topup.verifiedAt || stamp,
+        completedBy: who.uid, completedByName: who.name, completedByRole: who.role, completedAt: stamp,
+        approvedBy: who.uid, approvedAt: stamp, updatedAt: stamp,
+        creditedAmount: plan.points, creditedCurrency: plan.currency, creditedPoints: plan.points,
+      });
+      return { userId: plan.userId, points: plan.points, role: who.role };
+    });
+    await logAudit({ action: 'topup_completed', targetUid: out.userId, performedBy: uid, performedByRole: out.role, details: { topupId, points: out.points, oneStep: true } });
+    return { approved: true, completed: true };
   } catch (error) {
     if (error instanceof HttpsError) throw error;
     await logServerError('approveTopup', error, { userId: uid, topupId });
-    throw new HttpsError('internal', 'Could not approve this top-up.');
+    throw new HttpsError('internal', 'Could not complete that top-up.');
   }
 });
 
@@ -128,7 +233,9 @@ exports.rejectTopup = onCall({ enforceAppCheck: false }, async request => {
       requireSessionMatch(request, callerTx);
       if (!snap.exists) throw new HttpsError('not-found', 'That top-up request does not exist.');
       const topup = snap.data() || {};
-      if (topup.status !== 'pending') throw new HttpsError('failed-precondition', 'That request has already been reviewed.');
+      // Rejectable at either stage: an admin completing a verified request can
+      // still be the one who spots that the payment is wrong.
+      if (topup.status !== 'pending' && topup.status !== 'verified') throw new HttpsError('failed-precondition', 'That request has already been reviewed.');
       targetUid = String(topup.userId || '').trim() || null;
       tx.update(ref, { status: 'rejected', rejectReason: reason || 'Rejected by admin.', rejectedBy: uid, rejectedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
     });

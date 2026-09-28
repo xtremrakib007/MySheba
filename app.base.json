@@ -15,6 +15,11 @@
     "scheme": "mysheba",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-blank.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F2FAF7"
+    },
     "icon": "./assets/icon.png",
     "android": {
       "package": "com.satulink.mysheba",

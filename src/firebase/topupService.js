@@ -39,6 +39,39 @@ export function subscribeMyTopups(uid, callback, onError) {
   const q = query(collection(db, 'topups'), where('userId', '==', uid), limit(100));
   return onSnapshot(q, snap => { const list = snap.docs.map(d => ({ id: d.id, ...d.data() })); list.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)); callback(list); }, onError);
 }
+// A top-up is now two steps: finance verifies the payment is real, then an
+// admin releases the money. A superadmin may do both.
+//
+// verifyTopup and completeTopup are new callables, so a phone that has the
+// new app before the functions deploy lands would call something that is not
+// there. Both fall back to approveTopup - the old one-step call - on
+// functions/not-found, so the flow keeps working across the gap rather than
+// breaking outright. Once the deploy lands the fallback stops being reached.
+const NOT_DEPLOYED = new Set(['functions/not-found', 'not-found', 'functions/unimplemented']);
+const isMissingCallable = (e) => NOT_DEPLOYED.has(String(e?.code || '').toLowerCase());
+
+export async function verifyTopup(topup) {
+  try {
+    await httpsCallable(functions, 'verifyTopup')({ topupId: topup.id });
+    logActivity('topup_verified', { topupId: topup.id });
+  } catch (e) {
+    if (isMissingCallable(e)) return approveTopup(topup);
+    logError('topupService.verifyTopup', e);
+    throw e;
+  }
+}
+
+export async function completeTopup(topup) {
+  try {
+    await httpsCallable(functions, 'completeTopup')({ topupId: topup.id });
+    logActivity('topup_completed', { topupId: topup.id });
+  } catch (e) {
+    if (isMissingCallable(e)) return approveTopup(topup);
+    logError('topupService.completeTopup', e);
+    throw e;
+  }
+}
+
 export async function approveTopup(topup) { try { await httpsCallable(functions, 'approveTopup')({ topupId: topup.id }); logActivity('topup_approved', { topupId: topup.id }); } catch (e) { logError('topupService.approveTopup', e); throw e; } }
 export async function rejectTopup(id, reason) { try { await httpsCallable(functions, 'rejectTopup')({ topupId: id, reason }); logActivity('topup_rejected', { topupId: id }); } catch (e) { logError('topupService.rejectTopup', e); throw e; } }
 export async function createSelfTopup(payload, requestId = createRequestId('selftopup')) { const session = await getSessionProof(); const { data } = await httpsCallable(functions, 'createSelfTopup')({ ...payload, requestId, ...session }); return data?.id; }

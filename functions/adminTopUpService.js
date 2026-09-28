@@ -5,7 +5,15 @@ const { logAudit, logServerError } = require('./logService');
 
 const MAX_AMOUNT = 100000;
 // Staff who may hold the 'finance' capability (functions/accessControl.js).
-const ADMIN_ROLES = ['admin', 'superadmin', 'support', 'finance'];
+// An instant top-up credits a wallet with money that came from nowhere -
+// no payment, no sender, no balance deducted anywhere. That is the one
+// operation in the app that creates value, so it belongs to one role.
+//
+// This was ['admin', 'superadmin', 'support', 'finance'], so four roles
+// could mint money into a dealer or reseller wallet. Everyone else moves
+// money they already hold: secureTransfer deducts the sender's balance and
+// refuses when it is short.
+const INSTANT_TOPUP_ROLES = ['superadmin'];
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const DEVICE_ID_RE = /^[A-Za-z0-9-]{16,100}$/;
@@ -26,8 +34,8 @@ exports.adminTopUpPoints = onCall({ enforceAppCheck: false }, async request => {
   const callerUid = request.auth.uid;
   const callerSnap = await db.collection('users').doc(callerUid).get();
   const caller = callerSnap.exists ? callerSnap.data() : null;
-  if (!caller || !ADMIN_ROLES.includes(caller.role) || !(await hasCapability(db, callerUid, caller, 'finance'))) {
-    throw new HttpsError('permission-denied', 'Your account does not handle payments.');
+  if (!caller || !INSTANT_TOPUP_ROLES.includes(caller.role) || !(await hasCapability(db, callerUid, caller, 'finance'))) {
+    throw new HttpsError('permission-denied', 'Only a superadmin can add money directly to a wallet.');
   }
   if (!activeAccount(caller)) {
     throw new HttpsError('permission-denied', 'This account is not active.');
@@ -60,7 +68,7 @@ exports.adminTopUpPoints = onCall({ enforceAppCheck: false }, async request => {
       }
       const callerTx = callerTxSnap.data() || {};
       requireSessionMatch(request, callerTx);
-      if (!activeAccount(callerTx) || !ADMIN_ROLES.includes(callerTx.role)) {
+      if (!activeAccount(callerTx) || !INSTANT_TOPUP_ROLES.includes(callerTx.role)) {
         throw new HttpsError('permission-denied', 'Your admin privileges are no longer active.');
       }
 
@@ -78,7 +86,7 @@ exports.adminTopUpPoints = onCall({ enforceAppCheck: false }, async request => {
 
       const target = targetSnap.data();
       if (!['dealer', 'reseller'].includes(target.role)) {
-        throw new HttpsError('failed-precondition', 'Only dealer/reseller accounts can receive admin point top-ups.');
+        throw new HttpsError('failed-precondition', 'Only dealer/reseller accounts can receive admin top-ups.');
       }
       if (!activeAccount(target)) {
         throw new HttpsError('failed-precondition', 'The target account is not active.');
@@ -136,6 +144,6 @@ exports.adminTopUpPoints = onCall({ enforceAppCheck: false }, async request => {
   } catch (error) {
     if (error instanceof HttpsError) throw error;
     await logServerError('adminTopUpPoints', error, { userId: callerUid, targetUid, requestId });
-    throw new HttpsError('internal', 'Could not complete the point top-up.');
+    throw new HttpsError('internal', 'Could not complete the top-up.');
   }
 });

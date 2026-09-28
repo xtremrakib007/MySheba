@@ -42,6 +42,13 @@ jobs:
       - name: Syntax-check functions
         run: npm run audit:functions
 
+      # A session-establishing callable must not revoke refresh tokens: it kills
+      # the session it just handed out, and the damage only surfaces on the
+      # user's next cold start, an hour later, as "the app logged me out".
+      # That shipped twice. Never deploy a third time.
+      - name: Check no login path revokes refresh tokens
+        run: npm run test:session
+
       - name: Install function dependencies
         working-directory: functions
         run: npm ci --no-audit --no-fund

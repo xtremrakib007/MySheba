@@ -29,6 +29,18 @@ export async function noteSignOut(reason, detail) {
   }
 }
 
+/** The last breadcrumb, left in place. For showing on the login screen. */
+export async function peekSignOutTrace() {
+  try {
+    const raw = await AsyncStorage.getItem(KEY);
+    if (!raw) return null;
+    const entry = JSON.parse(raw);
+    return entry && entry.reason ? entry : null;
+  } catch (e) {
+    return null;
+  }
+}
+
 /**
  * Hand the last breadcrumb to `report` and clear it. Called once a profile
  * has loaded, so the row has a uid to attach to. Returns what it reported,

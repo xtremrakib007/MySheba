@@ -26,13 +26,16 @@
     "test:otp": "node scripts/test-otp-challenge.js",
     "test:device": "node scripts/test-device-trust.js",
     "test:deviceid": "node scripts/test-device-id.js",
+    "test:transfer": "node scripts/test-transfer-policy.js",
+    "test:topup": "node scripts/test-topup-flow.js",
     "test:dates": "node scripts/test-date-field.js",
     "audit:jsxdefs": "node scripts/audit-undefined-jsx.js",
     "audit:rawtext": "node scripts/audit-rawtext.js",
     "deploy:functions": "node scripts/deploy-functions.js",
     "test:face": "node scripts/test-face-event.js",
     "postinstall": "patch-package",
-    "lint": "eslint src App.js scripts functions"
+    "lint": "eslint src App.js scripts functions",
+    "test:session": "node scripts/test-session-persistence.js"
   },
   "dependencies": {
     "expo": "~53.0.0",
