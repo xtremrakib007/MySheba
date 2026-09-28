@@ -51,6 +51,10 @@ const FEATURES = [
 
 const BADGE_COLORS = {
   pending: { bg: '#FFF8E1', text: '#F57F17' },
+  // Verified but not yet released - finance has checked the payment, an
+  // admin still has to complete it.
+  verified: { bg: '#EDE7F6', text: '#5E35B1' },
+  approved: { bg: '#E8F5E9', text: '#2E7D32' },
   processing: { bg: '#E3F2FD', text: '#1565C0' },
   completed: { bg: '#E8F5E9', text: '#2E7D32' },
   new: { bg: '#FFF8E1', text: '#F57F17' },
@@ -266,7 +270,13 @@ export default function AdminHomeScreen() {
     // superadmin dashboard down on render - the same regression as
     // viewingSection, from the same deleted line.
     gridManagement,
+    can,
   } = useApp();
+  // Verifying a top-up is finance's step; releasing the money is an admin's.
+  // A superadmin has both - can('finance') is true for them and no override
+  // can take it away, and superadmin is in the completer list.
+  const canVerifyTopups = typeof can === 'function' ? can('finance') : false;
+  const canCompleteTopups = profile?.role === 'admin' || profile?.role === 'superadmin';
   const [editRateKey, setEditRateKey] = useState(null);
   const [editPricingKey, setEditPricingKey] = useState(null);
   const [editPointCostKey, setEditPointCostKey] = useState(null);
@@ -383,16 +393,18 @@ export default function AdminHomeScreen() {
     }
   };
 
-  const approveTopupReq = async (topup) => {
+  const runTopupStep = async (topup, step, failure) => {
     setBusyTopupId(topup.id);
     try {
-      await topupService.approveTopup(topup);
+      await step(topup);
     } catch (e) {
-      showAlert('MySheba', e.message || 'Could not approve this top-up.');
+      showAlert('MySheba', e.message || failure);
     } finally {
       setBusyTopupId(null);
     }
   };
+  const verifyTopupReq = (topup) => runTopupStep(topup, topupService.verifyTopup, 'Could not verify this top-up.');
+  const completeTopupReq = (topup) => runTopupStep(topup, topupService.completeTopup, 'Could not complete this top-up.');
 
   const confirmRejectTopup = async (reason) => {
     const id = rejectTopupId;
@@ -1242,7 +1254,7 @@ export default function AdminHomeScreen() {
                   </View>
                   <Text style={styles.txDetail}>👤 {tp.userName || 'Unknown'} ({tp.userRole}) · 📞 {tp.userPhone}</Text>
                   {!!tp.bankName && <Text style={styles.txDetail}>🏦 {tp.bankName}{tp.refNo ? ` · Ref: ${tp.refNo}` : ''}</Text>}
-                  <Text style={styles.txAmount}>MYR {Number(tp.amount || 0).toFixed(2)} → {Number(tp.points || 0).toFixed(2)} pts</Text>
+                  <Text style={styles.txAmount}>MYR {Number(tp.amount || 0).toFixed(2)} → MYR {Number(tp.points || 0).toFixed(2)}</Text>
                   {!!tp.receiptUrl && (
                     <TouchableOpacity onPress={() => Linking.openURL(tp.receiptUrl).catch(() => {})}>
                       <Image source={{ uri: tp.receiptUrl }} style={styles.receiptThumb} resizeMode="cover" />
@@ -1251,15 +1263,36 @@ export default function AdminHomeScreen() {
                   {tp.status === 'rejected' && !!tp.rejectReason && (
                     <Text style={[styles.txDetail, { color: colors.error }]}>Reason: {tp.rejectReason}</Text>
                   )}
-                  {tp.status === 'pending' && (
+                  {/* Who did what, kept on the card so the trail is visible
+                      without opening the request. */}
+                  {!!tp.verifiedByName && (
+                    <Text style={styles.txDetail}>{'✓ Verified by ' + tp.verifiedByName + (tp.verifiedByRole ? ' (' + tp.verifiedByRole + ')' : '')}</Text>
+                  )}
+                  {!!tp.completedByName && (
+                    <Text style={styles.txDetail}>{'✓ Completed by ' + tp.completedByName + (tp.completedByRole ? ' (' + tp.completedByRole + ')' : '')}</Text>
+                  )}
+                  {(tp.status === 'pending' || tp.status === 'verified') && (
                     <View style={styles.actions}>
-                      <TouchableOpacity style={styles.successBtn} onPress={() => approveTopupReq(tp)} disabled={busyTopupId === tp.id}>
-                        <Text style={styles.actionBtnText}>✓ Approve</Text>
-                      </TouchableOpacity>
+                      {/* Verify is finance's step; complete releases the money
+                          and is an admin's. A superadmin sees whichever step
+                          the request is actually waiting on. */}
+                      {tp.status === 'pending' && !!canVerifyTopups && (
+                        <TouchableOpacity style={styles.primaryBtn} onPress={() => verifyTopupReq(tp)} disabled={busyTopupId === tp.id}>
+                          <Text style={styles.actionBtnText}>✓ Verify</Text>
+                        </TouchableOpacity>
+                      )}
+                      {tp.status === 'verified' && !!canCompleteTopups && (
+                        <TouchableOpacity style={styles.successBtn} onPress={() => completeTopupReq(tp)} disabled={busyTopupId === tp.id}>
+                          <Text style={styles.actionBtnText}>✓ Complete</Text>
+                        </TouchableOpacity>
+                      )}
                       <TouchableOpacity style={styles.errorBtn} onPress={() => setRejectTopupId(tp.id)} disabled={busyTopupId === tp.id}>
                         <Text style={styles.actionBtnText}>✕ Reject</Text>
                       </TouchableOpacity>
                     </View>
+                  )}
+                  {tp.status === 'verified' && !canCompleteTopups && (
+                    <Text style={styles.txDetail}>Waiting for an admin to complete it.</Text>
                   )}
                 </TouchableOpacity>
               );
