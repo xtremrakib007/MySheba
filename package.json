@@ -34,7 +34,8 @@
     "deploy:functions": "node scripts/deploy-functions.js",
     "test:face": "node scripts/test-face-event.js",
     "postinstall": "patch-package",
-    "lint": "eslint src App.js scripts functions"
+    "lint": "eslint src App.js scripts functions",
+    "test:session": "node scripts/test-session-persistence.js"
   },
   "dependencies": {
     "expo": "~53.0.0",
