@@ -19,26 +19,34 @@ const STATUS_STYLES: Record<string, string> = {
 function CompleteControl({ tx, busy, onComplete }: { tx: Transaction; busy: boolean; onComplete: (pin?: string, receiptUrl?: string) => void }) {
   const [pin, setPin] = useState('');
   const [receiptUrl, setReceiptUrl] = useState('');
+  const needsPin = tx.service === 'Mobile Banking' || tx.service === 'Remittance';
 
-  if (tx.service === 'Mobile Banking') {
-    return (
-      <div className="flex gap-2">
-        <input value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="4-digit PIN" className="w-28 rounded-lg border border-[var(--color-line)] px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]" />
-        <button disabled={busy || pin.length !== 4} onClick={() => onComplete(pin)} className="rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">✓ Complete</button>
-      </div>
-    );
-  }
-
-  if (tx.service === 'Remittance') {
-    return (
-      <div className="flex gap-2">
-        <input value={receiptUrl} onChange={(e) => setReceiptUrl(e.target.value)} placeholder="Receipt URL" className="flex-1 rounded-lg border border-[var(--color-line)] px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]" />
-        <button disabled={busy || !receiptUrl.trim()} onClick={() => onComplete(undefined, receiptUrl.trim())} className="rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">✓ Complete</button>
-      </div>
-    );
-  }
-
-  return <button disabled={busy} onClick={() => onComplete()} className="rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">✓ Complete</button>;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {needsPin && (
+        <input
+          value={pin}
+          onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 12))}
+          placeholder="Collection PIN"
+          inputMode="numeric"
+          className="w-32 rounded-lg border border-[var(--color-line)] px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]"
+        />
+      )}
+      <input
+        value={receiptUrl}
+        onChange={(e) => setReceiptUrl(e.target.value)}
+        placeholder="Receipt URL"
+        className="min-w-48 flex-1 rounded-lg border border-[var(--color-line)] px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]"
+      />
+      <button
+        disabled={busy || !receiptUrl.trim() || (needsPin && !/^\d{4,12}$/.test(pin))}
+        onClick={() => onComplete(needsPin ? pin : undefined, receiptUrl.trim())}
+        className="rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+      >
+        ✓ Complete
+      </button>
+    </div>
+  );
 }
 
 export default function TransactionsPage() {
