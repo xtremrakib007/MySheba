@@ -122,58 +122,6 @@ exports.approveTransaction = onCall({ enforceAppCheck: false }, async (request) 
   return { ok: true, transactionId: id };
 });
 
-exports.generateCollectionPin = onCall({ enforceAppCheck: false }, async (request) => {
-  requireAuth(request);
-  const uid = request.auth.uid;
-  const db = admin.firestore();
-  const profileSnap = await db.collection('users').doc(uid).get();
-  if (!profileSnap.exists) throw new HttpsError('permission-denied', 'Your account was not found.');
-  const profile = profileSnap.data() || {};
-  if (profile.role !== 'customer' || profile.suspended === true || profile.inactive === true ||
-      profile.disabled === true || profile.active === false || profile.mergedInto) {
-    throw new HttpsError('permission-denied', 'Only an active customer can generate a collection PIN.');
-  }
-  const sessionId = request.data?.sessionId;
-  const deviceId = request.data?.deviceId;
-  if (typeof sessionId !== 'string' || !SESSION_ID_RE.test(sessionId) ||
-      typeof deviceId !== 'string' || !DEVICE_ID_RE.test(deviceId)) {
-    throw new HttpsError('failed-precondition', 'Your secure session is missing. Please sign in again.');
-  }
-  if (profile.activeSessionId !== sessionId || profile.activeDeviceId !== deviceId) {
-    throw new HttpsError('permission-denied', 'This device session is no longer active. Please sign in again.');
-  }
-  const id = String(request.data?.transactionId || '').trim();
-  if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
-  const ref = db.collection('transactions').doc(id);
-  await checkVelocity(db, uid, 'generateCollectionPin', { ip: getClientIp(request) });
-  let pin = '';
-  await db.runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
-    if (!snap.exists) throw new HttpsError('not-found', 'That order no longer exists.');
-    const order = snap.data() || {};
-    if (order.customerId !== uid) throw new HttpsError('permission-denied', 'You can only manage your own collection PIN.');
-    if (order.status !== 'pending') throw new HttpsError('failed-precondition', 'The collection PIN can only be generated while the order is pending.');
-    if (order.rejected === true) throw new HttpsError('failed-precondition', 'A rejected order cannot receive a collection PIN.');
-    // One backslash. This read /^\\d{4}$/, which in a regex literal is an
-    // escaped backslash followed by "dddd" - it matches the string \dddd and
-    // never a PIN. The same test is written correctly twice in
-    // completeTransaction below, so only this copy was wrong.
-    //
-    // It is the idempotency guard, so a dead one meant every call minted a new
-    // PIN and overwrote the stored one. Tapping Generate a second time
-    // silently invalidated the PIN the customer had already been shown, and
-    // any receipt printed with it, and the operator's entry of that PIN then
-    // failed as "Incorrect collection PIN".
-    if (typeof order.pin === 'string' && PIN_RE.test(order.pin)) {
-      pin = order.pin;
-      return;
-    }
-    pin = mintPin(pinLengthFor(order.service));
-    tx.update(ref, { pin, pinGeneratedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-  });
-  return { ok: true, transactionId: id, pin };
-});
-
 exports.acceptTransaction = onCall({ enforceAppCheck: false }, async (request) => {
   requireAuth(request); const actor = await getActor(request.auth.uid);
   const id = String(request.data?.transactionId || ''); if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
@@ -203,7 +151,6 @@ exports.completeTransaction = onCall({ enforceAppCheck: false }, async (request)
   if (!OPERATOR_ROLES.includes(actor.role)) throw new HttpsError('permission-denied', 'Only the dealer/reseller Operator can complete an order.');
   const id = String(request.data?.transactionId || ''), pin = String(request.data?.pin || ''), receiptUrl = String(request.data?.receiptUrl || '');
   if (!id) throw new HttpsError('invalid-argument', 'Transaction ID is required.');
-  if (!PIN_RE.test(pin)) throw new HttpsError('invalid-argument', `A collection PIN of ${PIN_MIN}-${PIN_MAX} digits is required.`);
   if (!receiptUrl) throw new HttpsError('invalid-argument', 'The transfer receipt is required before completion.');
   await checkVelocity(admin.firestore(), actor.uid, 'transactionComplete', { ip: getClientIp(request) });
   await assertReceiptObject(receiptUrl, id, actor.role);
@@ -215,8 +162,11 @@ exports.completeTransaction = onCall({ enforceAppCheck: false }, async (request)
     const order = snap.data();
     if (order.status !== 'processing' || order.claimedBy !== currentActor.uid) throw new HttpsError('failed-precondition', 'Only the operator who accepted this order can complete it.');
     if (order.approved !== true || !order.approvedBy) throw new HttpsError('failed-precondition', 'This order has no valid admin approval.');
-    if (typeof order.pin !== 'string' || !PIN_RE.test(order.pin)) throw new HttpsError('failed-precondition', 'This order has no valid collection PIN. Please recreate the order.');
-    if (pin !== order.pin) throw new HttpsError('permission-denied', 'Incorrect collection PIN.');
+    const service = String(order.service || '').trim();
+    const requiresCollectionPin = service === 'Mobile Banking' || service === 'Remittance';
+    if (requiresCollectionPin && !PIN_RE.test(pin)) {
+      throw new HttpsError('invalid-argument', `A collection PIN of ${PIN_MIN}-${PIN_MAX} digits is required for ${service}.`);
+    }
     // pin is deleted; collectionPin keeps the spent value as a record.
     //
     // The receipt is supposed to show the code the order was collected with,
@@ -229,7 +179,9 @@ exports.completeTransaction = onCall({ enforceAppCheck: false }, async (request)
     // firestore.rules:89 lets only the customer themselves and staff holding
     // 'orders' or 'finance' read a transaction, which is the same audience
     // that could read the PIN while the order was still open.
-    tx.update(ref, { status: 'completed', pin: admin.firestore.FieldValue.delete(), collectionPin: pin, receiptUrl, completedBy: currentActor.uid, completedByName: currentActor.name, completedByRole: currentActor.role, completedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    const completionUpdate = { status: 'completed', pin: admin.firestore.FieldValue.delete(), receiptUrl, completedBy: currentActor.uid, completedByName: currentActor.name, completedByRole: currentActor.role, completedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+    completionUpdate.collectionPin = requiresCollectionPin ? pin : admin.firestore.FieldValue.delete();
+    tx.update(ref, completionUpdate);
   });
   return { ok: true, transactionId: id };
 });
