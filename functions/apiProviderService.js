@@ -168,6 +168,7 @@ function validate(data) {
     responseProcessingValue = '';
     responseIdPath = '';
     responseMessagePath = 'message';
+    priority = 9999;
   }
 
   if (endpointPath.includes('?') || endpointPath.includes('#')) throw new HttpsError('invalid-argument', 'Endpoint path must not contain a query string or fragment; use Query Template instead.');
@@ -518,7 +519,7 @@ exports.saveApiProvider = onCall({ enforceAppCheck: false }, async (request) => 
         apiKey: data.apiKey,
         secretKey: data.secretKey,
         active: data.active !== false,
-        priority: Math.max(0, Math.min(9999, Number(data.priority) || 0)),
+        priority: 9999,
         timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)),
         notes: 'Fixed Success TopUp Bangladesh bill-payment integration.',
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
