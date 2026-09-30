@@ -229,7 +229,7 @@ const result=await db.runTransaction(async tx=>{const existingTx=await tx.get(tx
         let providerName = null;
         try {
           const executionKey = crypto.createHash('sha256')
-            .update(`${serviceLabel}|${result.customerUid}|${requestId}`)
+            .update(`${service}|${result.customerUid}|${requestId}`)
             .digest('hex');
           const executionSnap = await db.collection('apiExecutions').doc(executionKey).get();
           const execution = executionSnap.exists ? (executionSnap.data() || {}) : {};
