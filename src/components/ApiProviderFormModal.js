@@ -9,7 +9,7 @@ export default function ApiProviderFormModal({ visible, provider, onClose, onSav
   const [form, setForm] = useState({});
   useEffect(() => {
     if (special) {
-      setForm({ ...(provider || {}), name: 'Success TopUp', service: 'Recharge', apiKey: '', secretKey: '', active: true });
+      setForm({ ...(provider || {}), name: 'Success TopUp', service: 'Recharge', baseUrl: 'https://api.successtopup.com', endpointPath: '/api/recharge', method: 'POST', authType: 'none', headers: '{}', queryTemplate: '{}', requestTemplate: JSON.stringify({ number: '{{phone}}', type: 'prepaid', operator: '{{operator}}', amount: '{{amount}}', trxid: '{{requestId}}', successtopup_key: '{{apiKey}}', successtopup_secret: '{{secretKey}}' }), responseSuccessPath: 'result', responseSuccessValue: 'true', responseMessagePath: 'message', apiKey: '', secretKey: '', active: true });
     } else {
       setForm(provider || { service: API_SERVICES[0], authType: 'none', method: 'POST', active: true, priority: 0, timeoutMs: 15000, endpointPath: '/', headers: '{}', queryTemplate: '{}', requestTemplate: '{}', responseSuccessPath: '', responseSuccessValue: '', responseIdPath: '', responseMessagePath: '', responsePinPath: '' });
     }
