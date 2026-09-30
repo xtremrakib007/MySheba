@@ -393,15 +393,25 @@ exports.saveApiProvider = onCall({ enforceAppCheck: false }, async (request) => 
     }
 
     const data = validate(incoming);
+    let webhookRef = null;
+    let currentWebhook = {};
+    let settingsRef = null;
+    let currentSettings = {};
+    if (data.name === 'Success TopUp' && data.service === 'Recharge') {
+      webhookRef = db.collection('api_webhooks').doc(ref.id);
+      settingsRef = db.doc(SETTINGS);
+      const webhookSnap = await tx.get(webhookRef);
+      const settingsSnap = await tx.get(settingsRef);
+      currentWebhook = webhookSnap.exists ? (webhookSnap.data() || {}) : {};
+      currentSettings = settingsSnap.exists ? (settingsSnap.data() || {}) : {};
+    }
+
     tx.set(ref, { ...data, updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: request.auth.uid }, { merge: false });
 
     // Success TopUp is a fixed integration: saving it also enables Recharge API mode
     // and creates the webhook configuration automatically. The admin only supplies
     // the provider API key and API secret.
-    if (data.name === 'Success TopUp' && data.service === 'Recharge') {
-      const webhookRef = db.collection('api_webhooks').doc(ref.id);
-      const webhookSnap = await tx.get(webhookRef);
-      const currentWebhook = webhookSnap.exists ? (webhookSnap.data() || {}) : {};
+    if (webhookRef && settingsRef) {
       const webhookToken = currentWebhook.webhookToken || crypto.randomBytes(32).toString('hex');
       tx.set(webhookRef, {
         providerId: ref.id,
@@ -417,8 +427,8 @@ exports.saveApiProvider = onCall({ enforceAppCheck: false }, async (request) => 
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedBy: request.auth.uid
       }, { merge: false });
-      tx.set(db.doc(SETTINGS), {
-        modes: { ...DEFAULT_MODES, Recharge: 'api' },
+      tx.set(settingsRef, {
+        modes: { ...DEFAULT_MODES, ...(currentSettings.modes || {}), Recharge: 'api' },
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedBy: request.auth.uid
       }, { merge: true });
