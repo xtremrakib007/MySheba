@@ -163,6 +163,7 @@ function buildTransactionPayload(service, serviceData, pricing, rates) {
       details: `${serviceData.operator || ""} - ${serviceData.package || ""} (${serviceData.currency || "MYR"} ${rawAmount})`,
       amount,
       total: amount,
+      raw: { country: serviceData.country, operator: serviceData.operator, phone: serviceData.phone, amount: rawAmount, packageId: serviceData.packageId, package: serviceData.package },
     };
   }
   if (service === "billpayment") {
