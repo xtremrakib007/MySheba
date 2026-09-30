@@ -70,9 +70,10 @@ async function sanitizeRequest(request, requestId) {
   if (profile.suspended === true || profile.inactive === true || profile.disabled === true || profile.active === false || profile.mergedInto != null) {
     throw new HttpsError('permission-denied', 'Your account is not active.');
   }
-  if (profile.role !== 'customer') {
-    throw new HttpsError('permission-denied', 'Only customer accounts can submit service orders.');
-  }
+  // Customer-facing financial services are available to every active role.
+  // Role-specific management permissions remain enforced by their own callables;
+  // these service charges only require an active authenticated account.
+
   const balance = profile.walletBalance == null ? 0 : Number(profile.walletBalance);
   if (!Number.isFinite(balance) || balance < 0 || !Number.isSafeInteger(Math.round(balance * 100))) {
     throw new HttpsError('failed-precondition', 'Wallet balance is invalid.');
