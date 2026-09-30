@@ -59,7 +59,19 @@ exports.transferPoints=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>{c
 const CHARGEABLE={recharge:'rechargePointCostPerUnit',internet:'internetPointCostPerUnit',billpayment:'billPaymentPointCostPerUnit',mobilebanking:null,remittance:null};
 async function chargeProduct(request,service,payload,customer){const uid=requireAuth(request),db=admin.firestore(),rates=await getRates(db),calc=recompute(service,payload?.raw,rates),clientAmount=Number(payload?.amount),clientTotal=Number(payload?.total),charge=service==='mobilebanking'||service==='remittance'?calc.total:calc.amount;if(!Number.isFinite(calc.amount)||calc.amount<=0||!Number.isFinite(charge)||charge<=0)throw new HttpsError('invalid-argument','Amount must be greater than zero.');if(Number.isFinite(clientAmount)&&Math.abs(clientAmount-calc.amount)>.01)throw new HttpsError('failed-precondition','Rate changed - please review your order.');if(Number.isFinite(clientTotal)&&Math.abs(clientTotal-calc.total)>.01)throw new HttpsError('failed-precondition','Order total changed - please review your order.');const p=await getPricing(db),settings=await progressionService.getProgressionSettings(),uref=db.collection('users').doc(uid),requestId=payload?.requestId;if(typeof requestId!=='string'||!REQUEST_ID_RE.test(requestId))throw new HttpsError('invalid-argument','A valid requestId is required.');const txId=crypto.createHash('sha256').update(`${uid}|${service}|${requestId}`).digest('hex').slice(0,40);const txref=db.collection('transactions').doc(txId);const collectionPin=String(crypto.randomInt(0,10000)).padStart(4,'0');const serviceLabel = { recharge: 'Recharge', internet: 'Internet', billpayment: 'Bill Payment', mobilebanking: 'Mobile Banking', remittance: 'Remittance' }[service];
 const apiSettingsSnap = serviceLabel ? await db.collection('api_settings').doc('service_modes').get() : null;
-const apiMode = apiSettingsSnap?.exists ? apiSettingsSnap.data()?.modes?.[serviceLabel] || 'legacy' : 'legacy';
+const configuredMode = apiSettingsSnap?.exists ? apiSettingsSnap.data()?.modes?.[serviceLabel] || 'legacy' : 'legacy';
+// Success TopUp is a fixed direct-recharge integration. If its provider is
+// present and active, do not silently fall back to the legacy dealer/reseller
+// order queue because a stale/missing service_modes document exists.
+let apiMode = configuredMode;
+if (serviceLabel === 'Recharge' && configuredMode !== 'api') {
+  const providerSnap = await db.collection('api_providers')
+    .where('service', '==', 'Recharge')
+    .where('active', '==', true)
+    .get();
+  const hasSuccessTopUp = providerSnap.docs.some((doc) => String(doc.data()?.name || '').trim().toLowerCase() === 'success topup');
+  if (hasSuccessTopUp) apiMode = 'api';
+}
 const result=await db.runTransaction(async tx=>{const existingTx=await tx.get(txref);if(existingTx.exists){const existing=existingTx.data()||{};if(existing.customerId!==uid)throw new HttpsError('permission-denied','This request ID belongs to another account.');const existingStatus=String(existing.status||'pending');if(existingStatus==='failed')throw new HttpsError('failed-precondition',existing.apiError||'This order already failed.');if(existingStatus==='pending' && (existing.executionMode==='api' || apiMode==='api')){
   // A previously created API transaction must never be sent to the provider
   // again just because the original function instance disappeared mid-flight.
