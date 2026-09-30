@@ -123,14 +123,14 @@ export default function LiveFaceCapture({ onCaptured, onCancel }) {
     />
     <View style={styles.overlay} pointerEvents="box-none">
       <View style={styles.topBar}><Text style={styles.badge}>LIVE FACE VERIFICATION</Text><TouchableOpacity onPress={onCancel} style={styles.close}><Text style={styles.closeText}>✕</Text></TouchableOpacity></View>
-      <View style={styles.guideArea} pointerEvents="none"><View style={styles.faceGuide}><View style={styles.faceInner} /></View><Text style={styles.instruction}>{status}</Text><Text style={styles.subInstruction}>{modelStatus === 'FAILED' ? 'Face models could not load on this device' : 'Hold your face inside the oval in good light'}</Text></View>
+      <View style={styles.guideArea} pointerEvents="none"><View style={styles.faceGuide}><View style={styles.faceInner} /></View><Text style={styles.instruction}>{status}</Text><Text style={styles.subInstruction}>Hold your face inside the oval in good light</Text></View>
       <View style={styles.bottom} pointerEvents="none"><Text style={styles.security}>🔒 Live face recognition + duplicate check</Text>{error ? <Text style={styles.error}>{error}</Text> : null}{busy ? <ActivityIndicator color="#fff" size="large" /> : null}</View>
     </View>
   </View>;
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' }, camera: { flex: 1 }, overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.18)' },
+  container: { flex: 1, backgroundColor: '#000' }, camera: { flex: 1, width: '100%' }, overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.18)' },
   topBar: { minHeight: 60, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, badge: { color: '#fff', fontWeight: '900', fontSize: 12, letterSpacing: 0.5 }, close: { padding: 8 }, closeText: { color: '#fff', fontSize: 20, fontWeight: '900' },
   guideArea: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }, faceGuide: { width: 245, height: 310, borderRadius: 125, borderWidth: 3, borderColor: '#fff', alignItems: 'center', justifyContent: 'center' }, faceInner: { width: 220, height: 285, borderRadius: 112, borderWidth: 1, borderColor: 'rgba(255,255,255,0.55)' }, instruction: { color: '#fff', fontSize: 18, fontWeight: '800', textAlign: 'center', marginTop: 22, textShadowColor: '#000', textShadowRadius: 5 }, subInstruction: { color: '#fff', fontSize: 12, textAlign: 'center', marginTop: 7, textShadowColor: '#000', textShadowRadius: 4 },
   bottom: { alignItems: 'center', paddingHorizontal: 20, paddingBottom: 28 }, security: { color: '#fff', fontSize: 12, fontWeight: '700', marginTop: 12, textShadowColor: '#000', textShadowRadius: 4, textAlign: 'center' },
