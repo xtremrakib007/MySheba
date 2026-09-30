@@ -292,13 +292,14 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     if(success===false || (provider.responseSuccessValue && String(success)!==String(provider.responseSuccessValue))) throw new Error(provider.responseMessagePath?String(getPath(data,provider.responseMessagePath)||'Provider rejected the request.'):'Provider rejected the request.');
     const responseId = provider.responseIdPath ? getPath(data, provider.responseIdPath) : null;
     const responseMessage = provider.responseMessagePath ? getPath(data, provider.responseMessagePath) : null;
+    const isProcessing = Boolean(provider.responseProcessingPath && provider.responseProcessingValue && String(getPath(data, provider.responseProcessingPath)) === String(provider.responseProcessingValue));
     const safeResponseId = responseId == null ? null : (typeof responseId === 'string' || typeof responseId === 'number' || typeof responseId === 'boolean' ? String(responseId).slice(0, 200) : null);
     const safeResponseMessage = responseMessage == null ? null : (typeof responseMessage === 'string' || typeof responseMessage === 'number' || typeof responseMessage === 'boolean' ? String(responseMessage).slice(0, 500) : null);
     const result={providerId:provider.id,providerName:provider.name,responseId:safeResponseId,message:safeResponseMessage,status:isProcessing?'processing':'completed'};
     const secretPath = options.extractPath || (service === 'Recharge PIN' ? provider.responsePinPath : '');
     if (secretPath) { const secret = getPath(data, secretPath); if (typeof secret !== 'string' || !secret.trim() || secret.length > 500) throw new Error('Provider did not return a valid recharge PIN.'); result.secret = secret.trim(); }
     const { secret: _secret, ...safeResult } = result;
-    await executionRef.set({status:'completed',result:service === 'Recharge PIN' ? { ...safeResult, secret: result.secret } : safeResult,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
+    await executionRef.set({status:isProcessing ? 'processing' : 'completed',result:service === 'Recharge PIN' ? { ...safeResult, secret: result.secret } : safeResult,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
     return result;
   } catch(e) {
     const rawMessage = String(e?.message || 'Provider execution failed');
