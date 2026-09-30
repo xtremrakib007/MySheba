@@ -166,7 +166,7 @@ exports.pollSuccessTopUpStatus = onSchedule(
       if (!transactionProviderId && data.customerId) {
         try {
           const executionKey = crypto.createHash('sha256')
-            .update(`Recharge|${data.customerId}|${trxid}`)
+            .update(`recharge|${data.customerId}|${trxid}`)
             .digest('hex');
           const executionSnap = await db.collection('apiExecutions').doc(executionKey).get();
           transactionProviderId = executionSnap.exists ? executionSnap.data()?.providerId || null : null;
