@@ -1,6 +1,9 @@
 name: Publish MySheba OTA Update
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       message:
@@ -8,62 +11,52 @@ on:
         required: false
         default: "Publish production OTA update"
 
+permissions:
+  contents: read
+
 jobs:
   update:
-    name: Publish production OTA
+    name: Publish Android production OTA
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    timeout-minutes: 30
     steps:
       - name: Check EXPO_TOKEN
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           if [ -z "$EXPO_TOKEN" ]; then
-            echo "EXPO_TOKEN GitHub Actions secret is required."
+            echo "::error::EXPO_TOKEN GitHub Actions secret is required."
             exit 1
           fi
 
       - name: Checkout exact commit
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
 
       - name: Setup Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 20
           cache: npm
 
-      # Cheap, dependency-free guard: the script only reads source with
-      # node's own fs, so it runs before npm ci and fails in seconds rather
-      # than after a ten-minute build. Catches a tile or setScreen() that
-      # points at a screen, tab or service which no longer exists - the
-      # shape of bug the retired-module cleanup kept producing, and one that
-      # neither lint nor a syntax check sees.
       - name: Audit navigation targets
         run: npm run audit:nav
 
-      # Catches a screen that imports useApp but never calls it - the shape of
-      # bug that left AdminHomeScreen throwing "Property 'viewingSection'
-      # doesn't exist" for ten days. Dependency-free, so it runs before npm ci.
       - name: Audit context usage
         run: npm run audit:context
 
-      # A \u escape in a JSX attribute string is not decoded - the app
-      # renders the literal characters where an icon should be. Parses fine,
-      # so only this catches it.
       - name: Audit JSX attribute escapes
         run: npm run audit:jsx
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Publish production OTA
+      - name: Publish Android production OTA
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-          UPDATE_MESSAGE: ${{ inputs.message || github.event.head_commit.message }}
+          UPDATE_MESSAGE: ${{ inputs.message || github.event.head_commit.message || 'Publish production OTA update' }}
         run: |
           npx eas-cli@latest update \
             --channel production \
@@ -73,25 +66,34 @@ jobs:
             --json | tee eas-update-result.json
 
       - name: Verify published Android update
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           node <<'NODE'
           const fs = require('fs');
+
           const data = JSON.parse(fs.readFileSync('eas-update-result.json', 'utf8'));
           const expectedCommit = process.env.GITHUB_SHA;
           const updates = Array.isArray(data) ? data : (data.updates || []);
+
           if (!updates.length) {
             throw new Error('EAS CLI returned no published update records.');
           }
-          const android = updates.find((u) => u.platform === 'android') || updates[0];
+
+          const android = updates.find((u) => u.platform === 'android');
+          if (!android) {
+            throw new Error('EAS CLI response did not contain an Android update.');
+          }
+
           const updateId = android.id || android.updateId;
           if (!updateId) {
             throw new Error('EAS CLI response did not contain an Android update ID.');
           }
+
           if (android.gitCommitHash && android.gitCommitHash !== expectedCommit) {
-            throw new Error(`Published update commit ${android.gitCommitHash} does not match GitHub commit ${expectedCommit}.`);
+            throw new Error(
+              `Published update commit ${android.gitCommitHash} does not match GitHub commit ${expectedCommit}.`
+            );
           }
+
           console.log(`Published Android OTA update: ${updateId}`);
           console.log(`GitHub commit: ${expectedCommit}`);
           console.log(`Runtime: ${android.runtimeVersion || 'not reported'}`);
