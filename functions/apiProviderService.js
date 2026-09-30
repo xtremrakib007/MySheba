@@ -377,7 +377,7 @@ exports.listApiProviders = onCall({ enforceAppCheck: false }, async (request) =>
   // Return only non-secret configuration fields. Do not spread the provider
   // document here: custom headers/templates may contain credentials or other
   // sensitive values that should never be sent back to the mobile/admin client.
-  return snap.docs.map((d) => {
+  return snap.docs.filter((d) => !(String(d.data()?.name || '').trim().toLowerCase() === 'success topup' && d.data()?.service === 'Bill Payment')).map((d) => {
     const x = d.data() || {};
     return {
       id: d.id,
@@ -479,10 +479,51 @@ exports.saveApiProvider = onCall({ enforceAppCheck: false }, async (request) => 
         updatedBy: request.auth.uid
       }, { merge: false });
       tx.set(settingsRef, {
-        modes: { ...DEFAULT_MODES, ...(currentSettings.modes || {}), Recharge: 'api' },
+        modes: { ...DEFAULT_MODES, ...(currentSettings.modes || {}), Recharge: 'api', 'Bill Payment': 'api' },
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedBy: request.auth.uid
       }, { merge: true });
+    }
+
+    // Provision a companion Bill Payment provider from the same Success TopUp
+    // credentials. The provider is separate because execution selects by service.
+    if (data.name === 'Success TopUp' && data.service === 'Recharge') {
+      const billProviderRef = db.collection(COLLECTION).doc('success-topup-bill-payment');
+      tx.set(billProviderRef, {
+        service: 'Bill Payment',
+        name: 'Success TopUp',
+        baseUrl: 'https://api.successtopup.com',
+        endpointPath: '/api/bill-pay',
+        method: 'POST',
+        authType: 'none',
+        headers: {},
+        queryTemplate: {},
+        requestTemplate: {
+          billOperator: '{{billOperator}}',
+          billNumber: '{{billNumber}}',
+          billAmount: '{{amount}}',
+          mobileNumber: '{{mobileNumber}}',
+          monthName: '{{monthName}}',
+          note: '{{note}}',
+          trxid: '{{requestId}}',
+          successtopup_key: '{{apiKey}}',
+          successtopup_secret: '{{secretKey}}'
+        },
+        responseSuccessPath: 'result',
+        responseSuccessValue: 'true',
+        responseProcessingPath: '',
+        responseProcessingValue: '',
+        responseIdPath: '',
+        responseMessagePath: 'message',
+        apiKey: data.apiKey,
+        secretKey: data.secretKey,
+        active: data.active !== false,
+        priority: Math.max(0, Math.min(9999, Number(data.priority) || 0)),
+        timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)),
+        notes: 'Fixed Success TopUp Bangladesh bill-payment integration.',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedBy: request.auth.uid
+      }, { merge: false });
     }
   });
   const successTopUp = cleanString(request.data?.name, 100).toLowerCase() === 'success topup';
