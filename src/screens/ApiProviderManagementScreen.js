@@ -69,7 +69,7 @@ export default function ApiProviderManagementScreen() {
     </LinearGradient>
     <View style={styles.intro}>
       <Text style={styles.h}>Service APIs</Text>
-      <Text style={styles.p}>Configure providers and choose, per service, whether MySheba uses the API integration. API credentials and webhook credentials stay server-side.</Text>
+      <Text style={styles.p}>Configure country-specific providers. Each API key/secret is kept server-side and routed only to the selected country and service. API credentials and webhook credentials stay server-side.</Text>
       <View style={styles.modeCard}>
         <Text style={styles.modeTitle}>⚙️ Processing Mode</Text>
         {apiService.API_SERVICES.map((service)=><View key={service} style={styles.modeRow}>
@@ -93,7 +93,7 @@ export default function ApiProviderManagementScreen() {
         return <View style={styles.item}>
           <View style={{flex:1}}>
             <Text style={styles.name}>{item.name}</Text>
-            <Text>{item.service} • Priority {item.priority ?? 0}</Text>
+            <Text>{item.country === 'BD' ? '🇧🇩 Bangladesh' : item.country === 'MY' ? '🇲🇾 Malaysia' : item.country === 'SG' ? '🇸🇬 Singapore' : item.country === 'ID' ? '🇮🇩 Indonesia' : item.country === 'IN' ? '🇮🇳 India' : item.country === 'PH' ? '🇵🇭 Philippines' : '🌍 All countries'} • {item.service} • Priority {item.priority ?? 0}</Text>
             <Text numberOfLines={1} style={styles.url}>{item.baseUrl}</Text>
             <Text>{item.active?'Active':'Inactive'} • {item.authType || 'none'} • API Secret {item.hasSecretKey?'configured':'not set'}</Text>
             <Text style={styles.webhookState}>{hook?.enabled ? '🔔 Webhook active' : '🔕 Webhook not configured'}</Text>
