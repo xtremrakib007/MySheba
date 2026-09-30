@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Modal, View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { API_SERVICES } from '../firebase/apiProviderService';
 
+const COUNTRIES = [{code:'BD',label:'🇧🇩 Bangladesh'},{code:'MY',label:'🇲🇾 Malaysia'},{code:'SG',label:'🇸🇬 Singapore'},{code:'ID',label:'🇮🇩 Indonesia'},{code:'IN',label:'🇮🇳 India'},{code:'PH',label:'🇵🇭 Philippines'},{code:'ALL',label:'🌍 All countries'}];
+
 const HELP_TEXT = 'Success TopUp is preconfigured by MySheba. Enter only the API key and API secret. The same credentials configure mobile recharge plus Bangladesh bill payment server-side; secrets never go to the customer app.';
 
 export default function ApiProviderFormModal({ visible, provider, onClose, onSave, successTopUp = false }) {
@@ -9,9 +11,9 @@ export default function ApiProviderFormModal({ visible, provider, onClose, onSav
   const [form, setForm] = useState({});
   useEffect(() => {
     if (special) {
-      setForm({ ...(provider || {}), name: 'Success TopUp', service: 'Recharge', baseUrl: 'https://api.successtopup.com', endpointPath: '/api/recharge', method: 'POST', authType: 'none', headers: '{}', queryTemplate: '{}', requestTemplate: JSON.stringify({ number: '{{phone}}', type: 'prepaid', operator: '{{operator}}', amount: '{{amount}}', trxid: '{{requestId}}', successtopup_key: '{{apiKey}}', successtopup_secret: '{{secretKey}}' }), responseSuccessPath: 'result', responseSuccessValue: 'true', responseMessagePath: 'message', apiKey: '', secretKey: '', active: true });
+      setForm({ ...(provider || {}), name: 'Success TopUp', country: 'BD', service: 'Recharge', baseUrl: 'https://api.successtopup.com', endpointPath: '/api/recharge', method: 'POST', authType: 'none', headers: '{}', queryTemplate: '{}', requestTemplate: JSON.stringify({ number: '{{phone}}', type: 'prepaid', operator: '{{operator}}', amount: '{{amount}}', trxid: '{{requestId}}', successtopup_key: '{{apiKey}}', successtopup_secret: '{{secretKey}}' }), responseSuccessPath: 'result', responseSuccessValue: 'true', responseMessagePath: 'message', apiKey: '', secretKey: '', active: true });
     } else {
-      setForm(provider || { service: API_SERVICES[0], authType: 'none', method: 'POST', active: true, priority: 0, timeoutMs: 15000, endpointPath: '/', headers: '{}', queryTemplate: '{}', requestTemplate: '{}', responseSuccessPath: '', responseSuccessValue: '', responseIdPath: '', responseMessagePath: '', responsePinPath: '' });
+      setForm(provider || { country: 'ALL', service: API_SERVICES[0], authType: 'none', method: 'POST', active: true, priority: 0, timeoutMs: 15000, endpointPath: '/', headers: '{}', queryTemplate: '{}', requestTemplate: '{}', responseSuccessPath: '', responseSuccessValue: '', responseIdPath: '', responseMessagePath: '', responsePinPath: '' });
     }
   }, [provider, visible, special]);
   const set = (k, v) => setForm((x) => ({ ...x, [k]: v }));
@@ -36,6 +38,8 @@ export default function ApiProviderFormModal({ visible, provider, onClose, onSav
             <Text>• Webhook configuration</Text>
           </View>
         </> : <>
+          <Text style={styles.label}>Country</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>{COUNTRIES.map((x) => <TouchableOpacity key={x.code} onPress={() => set('country', x.code)} style={[styles.chip, form.country === x.code && styles.chipOn]}><Text>{x.label}</Text></TouchableOpacity>)}</ScrollView>
           <Text style={styles.label}>Service</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>{API_SERVICES.map((x) => <TouchableOpacity key={x} onPress={() => set('service', x)} style={[styles.chip, form.service === x && styles.chipOn]}><Text>{x}</Text></TouchableOpacity>)}</ScrollView>
           {['name','baseUrl','endpointPath','apiKey','secretKey','username','password','priority','timeoutMs','headers','queryTemplate','requestTemplate','responseSuccessPath','responseSuccessValue','responseIdPath','responseMessagePath','responsePinPath','notes'].map((k) => <TextInput key={k} style={styles.input} placeholder={k === 'baseUrl' ? 'https://api.example.com (https only, no raw IPs)' : k === 'endpointPath' ? '/v1/order' : k === 'headers' ? '{"Authorization":"Bearer {{requestId}}"}' : k === 'requestTemplate' ? '{"phone":"{{phone}}","amount":"{{amount}}","requestId":"{{requestId}}"}' : k} value={String(form[k] ?? '')} onChangeText={(v) => set(k, v)} secureTextEntry={k === 'apiKey' || k === 'secretKey' || k === 'password'} keyboardType={k === 'priority' || k === 'timeoutMs' ? 'numeric' : 'default'} />)}
