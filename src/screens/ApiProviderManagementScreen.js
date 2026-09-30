@@ -21,6 +21,7 @@ export default function ApiProviderManagementScreen() {
   const [loading,setLoading]=useState(true);
   const [modes,setModes]=useState(Object.fromEntries(apiService.API_SERVICES.map((x)=>[x,'legacy'])));
   const [savingModes,setSavingModes]=useState(false);
+  const [successTopUpSetup,setSuccessTopUpSetup]=useState(false);
 
   const load=async()=>{
     try{
@@ -42,7 +43,7 @@ export default function ApiProviderManagementScreen() {
   const save=async(v)=>{
     try{
       const result=await apiService.saveApiProvider(v);
-      setShow(false);setEditing(null);await load();
+      setShow(false);setEditing(null);setSuccessTopUpSetup(false);await load();
       if(result?.successTopUp){
         Alert.alert('Success TopUp configured',
           'API key and API secret saved. Recharge API mode and webhook were configured automatically.\\n\\nWebhook URL:\\n'+result.webhookUrl+'\\n\\nWebhook token:\\n'+result.webhookToken,
@@ -82,8 +83,8 @@ export default function ApiProviderManagementScreen() {
           finally{setSavingModes(false);}
         }}><Text style={styles.saveModesText}>{savingModes?'Saving…':'Save Processing Modes'}</Text></TouchableOpacity>
       </View>
-      <TouchableOpacity style={styles.add} onPress={()=>{setEditing(null);setShow(true);}}><Text style={styles.addText}>+ Configure Success TopUp</Text></TouchableOpacity>
-      <TouchableOpacity style={styles.addOther} onPress={()=>{setEditing({});setShow(true);}}><Text style={styles.addOtherText}>+ Add Other API Provider</Text></TouchableOpacity>
+      <TouchableOpacity style={styles.add} onPress={()=>{setEditing(null);setSuccessTopUpSetup(true);setShow(true);}}><Text style={styles.addText}>+ Configure Success TopUp</Text></TouchableOpacity>
+      <TouchableOpacity style={styles.addOther} onPress={()=>{setEditing(null);setSuccessTopUpSetup(false);setShow(true);}}><Text style={styles.addOtherText}>+ Add Other API Provider</Text></TouchableOpacity>
     </View>
     <FlatList data={items} keyExtractor={(x)=>x.id} refreshing={loading} onRefresh={load} contentContainerStyle={{padding:14,paddingBottom:40}}
       ListEmptyComponent={<Text style={styles.empty}>{loading?'Loading…':'No API providers configured.'}</Text>}
@@ -105,7 +106,7 @@ export default function ApiProviderManagementScreen() {
         </View>;
       }}
     />
-    <ApiProviderFormModal visible={show} provider={editing} successTopUp={!editing || editing?.name === 'Success TopUp'} onClose={()=>setShow(false)} onSave={save}/>
+    <ApiProviderFormModal visible={show} provider={editing} successTopUp={successTopUpSetup || editing?.name === 'Success TopUp'} onClose={()=>{setShow(false);setSuccessTopUpSetup(false);}} onSave={save}/>
     <ApiWebhookFormModal visible={showWebhook} provider={webhookProvider} config={webhookProvider?webhooks[webhookProvider.id]:null} onClose={()=>setShowWebhook(false)} onSave={saveWebhook}/>
   </View>;
 }
