@@ -61,6 +61,13 @@ export default function ApiProviderManagementScreen() {
     }catch(e){Alert.alert('Webhook save failed',e.message||'Unable to save webhook');}
   };
   const remove=(id)=>Alert.alert('Delete API','Remove this API provider?',[{text:'Cancel'},{text:'Delete',style:'destructive',onPress:async()=>{await apiService.deleteApiProvider(id);await webhookService.deleteApiWebhook(id).catch(()=>{});load();}}]);
+  const testApi=async(item)=>{
+    try{
+      Alert.alert('Testing API','Checking the saved credentials and provider connection. No recharge, bill payment, or wallet charge will be created.');
+      const result=await apiService.testApiProvider(item.id);
+      Alert.alert('API connection OK',result?.message||'API credentials are valid and the provider is reachable.');
+    }catch(e){Alert.alert('API test failed',e.message||'Unable to connect to the provider.');}
+  };
 
   return <View style={[styles.screen,{backgroundColor:colors.bg}]}>
     <LinearGradient colors={brandGradient} style={styles.header}>
@@ -99,7 +106,7 @@ export default function ApiProviderManagementScreen() {
             <Text style={styles.webhookState}>{hook?.enabled ? '🔔 Webhook active' : '🔕 Webhook not configured'}</Text>
           </View>
           <View>
-            <TouchableOpacity onPress={()=>{setEditing(item);setShow(true);}}><Text style={styles.action}>Edit API</Text></TouchableOpacity>
+            <TouchableOpacity onPress={()=>testApi(item)}><Text style={styles.action}>Test API</Text></TouchableOpacity><TouchableOpacity onPress={()=>{setEditing(item);setShow(true);}}><Text style={styles.action}>Edit API</Text></TouchableOpacity>
             <TouchableOpacity onPress={()=>{setWebhookProvider(item);setShowWebhook(true);}}><Text style={styles.webhookAction}>Webhook</Text></TouchableOpacity>
             <TouchableOpacity onPress={()=>remove(item.id)}><Text style={styles.delete}>Delete</Text></TouchableOpacity>
           </View>
