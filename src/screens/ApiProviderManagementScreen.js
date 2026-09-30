@@ -40,8 +40,15 @@ export default function ApiProviderManagementScreen() {
   useEffect(()=>{if(profile?.role==='superadmin')load();},[profile?.role]);
 
   const save=async(v)=>{
-    try{await apiService.saveApiProvider(v);setShow(false);setEditing(null);load();}
-    catch(e){Alert.alert('Save failed',e.message||'Unable to save API');}
+    try{
+      const result=await apiService.saveApiProvider(v);
+      setShow(false);setEditing(null);await load();
+      if(result?.successTopUp){
+        Alert.alert('Success TopUp configured',
+          'API key and API secret saved. Recharge API mode and webhook were configured automatically.\\n\\nWebhook URL:\\n'+result.webhookUrl+'\\n\\nWebhook token:\\n'+result.webhookToken,
+          [{text:'OK'}]);
+      }
+    }catch(e){Alert.alert('Save failed',e.message||'Unable to save API');}
   };
   const saveWebhook=async(v)=>{
     try{
@@ -75,7 +82,8 @@ export default function ApiProviderManagementScreen() {
           finally{setSavingModes(false);}
         }}><Text style={styles.saveModesText}>{savingModes?'Saving…':'Save Processing Modes'}</Text></TouchableOpacity>
       </View>
-      <TouchableOpacity style={styles.add} onPress={()=>{setEditing(null);setShow(true);}}><Text style={styles.addText}>+ Add API Provider</Text></TouchableOpacity>
+      <TouchableOpacity style={styles.add} onPress={()=>{setEditing(null);setShow(true);}}><Text style={styles.addText}>+ Configure Success TopUp</Text></TouchableOpacity>
+      <TouchableOpacity style={styles.addOther} onPress={()=>{setEditing({});setShow(true);}}><Text style={styles.addOtherText}>+ Add Other API Provider</Text></TouchableOpacity>
     </View>
     <FlatList data={items} keyExtractor={(x)=>x.id} refreshing={loading} onRefresh={load} contentContainerStyle={{padding:14,paddingBottom:40}}
       ListEmptyComponent={<Text style={styles.empty}>{loading?'Loading…':'No API providers configured.'}</Text>}
@@ -97,7 +105,7 @@ export default function ApiProviderManagementScreen() {
         </View>;
       }}
     />
-    <ApiProviderFormModal visible={show} provider={editing} onClose={()=>setShow(false)} onSave={save}/>
+    <ApiProviderFormModal visible={show} provider={editing} successTopUp={!editing || editing?.name === 'Success TopUp'} onClose={()=>setShow(false)} onSave={save}/>
     <ApiWebhookFormModal visible={showWebhook} provider={webhookProvider} config={webhookProvider?webhooks[webhookProvider.id]:null} onClose={()=>setShowWebhook(false)} onSave={saveWebhook}/>
   </View>;
 }
@@ -109,6 +117,7 @@ const styles=StyleSheet.create({
   modeBtn:{paddingVertical:7,paddingHorizontal:9,borderWidth:1,borderColor:'#ddd',borderRadius:8},modeOn:{backgroundColor:'#E3F2FD',borderColor:'#2196F3'},
   saveModes:{marginTop:8,backgroundColor:'#455A64',padding:11,borderRadius:9,alignItems:'center'},saveModesText:{color:'white',fontWeight:'800'},
   add:{marginTop:14,backgroundColor:'#1976D2',padding:12,borderRadius:9,alignItems:'center'},addText:{color:'white',fontWeight:'800'},
+  addOther:{marginTop:8,borderWidth:1,borderColor:'#1976D2',padding:12,borderRadius:9,alignItems:'center'},addOtherText:{color:'#1976D2',fontWeight:'800'},
   item:{backgroundColor:'white',borderRadius:12,padding:14,marginBottom:10,flexDirection:'row',gap:12},name:{fontSize:16,fontWeight:'800'},url:{marginTop:4,opacity:.7},
   action:{fontWeight:'800',padding:5},webhookAction:{fontWeight:'800',padding:5},delete:{color:'#C62828',fontWeight:'800',padding:5},
   webhookState:{marginTop:5,fontWeight:'700'},empty:{textAlign:'center',padding:30,opacity:.6}
