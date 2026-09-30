@@ -64,9 +64,9 @@ const configuredMode = apiSettingsSnap?.exists ? apiSettingsSnap.data()?.modes?.
 // present and active, do not silently fall back to the legacy dealer/reseller
 // order queue because a stale/missing service_modes document exists.
 let apiMode = configuredMode;
-if (serviceLabel === 'Recharge' && configuredMode !== 'api') {
+if (['Recharge', 'Bill Payment'].includes(serviceLabel) && configuredMode !== 'api') {
   const providerSnap = await db.collection('api_providers')
-    .where('service', '==', 'Recharge')
+    .where('service', '==', serviceLabel)
     .where('active', '==', true)
     .get();
   const hasSuccessTopUp = providerSnap.docs.some((doc) => String(doc.data()?.name || '').trim().toLowerCase() === 'success topup');
