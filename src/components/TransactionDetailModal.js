@@ -323,36 +323,76 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
                   const requiresCollectionPin = item.service === 'Mobile Banking' || item.service === 'Remittance';
                   const pin = requiresCollectionPin ? (pinOverride || item.pin || item.collectionPin || '') : '';
                   const currency = txCurrency(item);
-                  let html;
-                  if (item.service === 'Remittance') {
-                    // The real remittance receipt, not the generic slip.
-                    //
-                    // buildReceiptHtml was already exported as a standalone
-                    // function so it could be used away from the send screen -
-                    // it just never was, so the full receipt (sender, receiver,
-                    // payout method, rate, totals, company header) existed only
-                    // on the modal shown immediately after sending. Close that
-                    // and it was gone; from history you got Service/Order
-                    // ID/Amount/Status and nothing else.
-                    //
-                    // profile is only passed when the viewer IS the customer.
-                    // It supplies fallbacks for sender name, customer ID and
-                    // phone, and handing an admin's profile to someone else's
-                    // receipt would print the admin as the sender wherever the
-                    // transaction had not recorded one.
-                    const isOwner = !!authUser?.uid && item.customerId === authUser.uid;
-                    html = buildReceiptHtml(
-                      { ...item, pin: pinOverride || item.pin || '' },
-                      isOwner ? (profile || {}) : {},
-                      item.completedByName || item.operatorName || '',
-                    );
-                  } else {
-                    const pinBlock = requiresCollectionPin && pin
-                      ? `<div style="margin-top:18px;padding:14px;border:2px solid #0B8A94;text-align:center"><div style="font-size:11px">COLLECTION PIN</div><div style="font-size:28px;font-weight:bold;letter-spacing:6px">${safe(pin)}</div></div><p style="margin-top:20px;font-size:11px;text-align:center">Keep this collection PIN safe.</p>`
-                      : '';
-                    html = `<html><body style="font-family:Arial;padding:18px"><h2 style="text-align:center">MySheba</h2><p style="text-align:center">Transaction Receipt</p><hr/><p><b>Service:</b> ${safe(item.service)}</p><p><b>Order ID:</b> ${safe(item.id)}</p><p><b>Amount:</b> ${txAmount(item.total, currency)}</p><p><b>Status:</b> ${safe(item.status)}</p>${pinBlock}</body></html>`;
-                  }
-                  await Print.printAsync({ html });
+                  const raw = item.raw || {};
+                  const currency = txCurrency(item);
+                  const requiresCollectionPin = item.service === 'Mobile Banking' || item.service === 'Remittance';
+                  const pin = requiresCollectionPin ? (pinOverride || item.collectionPin || item.pin || '') : '';
+                  const esc = (v) => safe(v);
+                  const rows = [
+                    ['Service', item.service],
+                    ['Order ID', item.id],
+                    ['Customer', item.customerPhone || item.customerId || ''],
+                    ['Phone / Number', raw.phone || item.customerPhone || ''],
+                    ['Operator', raw.operator || item.operator || ''],
+                    ['Country', raw.country || item.country || ''],
+                    ['Package', raw.package || item.package || ''],
+                    ['Package ID', raw.packageId || item.packageId || ''],
+                    ['Amount', txAmount(item.total, currency)],
+                    ['Status', String(item.status || '').toUpperCase()],
+                    ['Transaction ID', raw.trxid || raw.transactionId || item.trxid || item.transactionId || ''],
+                    ['Provider', raw.provider || item.provider || ''],
+                    ['Details', item.details || ''],
+                    ['Sender', raw.senderName || ''],
+                    ['Sender Phone', raw.senderPhone || ''],
+                    ['Sender Company', raw.senderCompany || ''],
+                    ['Sender Passport No.', raw.senderPassportNo || ''],
+                    ['Passport Expiry', raw.senderPassportExpiry || ''],
+                    ['Sender Address', raw.senderAddress || ''],
+                    ['Receiver Name', [raw.receiverFirstName, raw.receiverLastName].filter(Boolean).join(' ')],
+                    ['Receiver Relationship', raw.receiverRelationship || ''],
+                    ['Receiver Mobile', raw.receiverPhone || ''],
+                    ['Receiver Bank', raw.receiverBankName || ''],
+                    ['Account No.', raw.receiverAccountNumber || ''],
+                    ['Branch', raw.receiverBranch || ''],
+                    ['Routing No.', raw.receiverRoutingNumber || ''],
+                    ['Pickup Network', raw.receiverPickupNetwork || ''],
+                    ['Receiver ID', [raw.receiverIdType, raw.receiverIdNumber].filter(Boolean).join(' - ')],
+                    ['Pickup City', raw.receiverPickupCity || ''],
+                    ['Wallet Provider', raw.receiverWalletProvider || ''],
+                    ['Wallet Number', raw.receiverWalletNumber || ''],
+                    ['Created', formatDate(item.createdAt)],
+                    ['Updated', formatDate(item.updatedAt)],
+                    ['Completed By', item.completedByName || item.operatorName || ''],
+                  ].filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== '');
+
+                  const rowsHtml = rows.map(([label, value]) =>
+                    `<tr><td style="padding:7px 6px;border-bottom:1px solid #e5e7eb;color:#555;font-weight:600;width:38%">${esc(label)}</td><td style="padding:7px 6px;border-bottom:1px solid #e5e7eb;word-break:break-word">${esc(value)}</td></tr>`
+                  ).join('');
+
+                  const pinBlock = requiresCollectionPin && pin
+                    ? `<div style="margin:16px 0;padding:14px;border:2px solid #0B8A94;text-align:center"><div style="font-size:11px;font-weight:700">COLLECTION PIN</div><div style="font-size:28px;font-weight:bold;letter-spacing:6px;margin-top:5px">${esc(pin)}</div></div>`
+                    : '';
+
+                  const receiptImage = item.receiptUrl
+                    ? `<div style="margin-top:18px"><b>TRANSFER RECEIPT</b><br><img src="${esc(item.receiptUrl)}" style="max-width:100%;max-height:420px;margin-top:8px;object-fit:contain"></div>`
+                    : '';
+
+                  const passportImage = raw.passportUrl
+                    ? `<div style="margin-top:18px"><b>PASSPORT PHOTO</b><br><img src="${esc(raw.passportUrl)}" style="max-width:100%;max-height:420px;margin-top:8px;object-fit:contain"></div>`
+                    : '';
+
+                  html = `<!doctype html>
+<html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+@page{margin:12mm}body{font-family:Arial,sans-serif;color:#111;font-size:12px;margin:0}
+h1{font-size:20px;text-align:center;margin:0 0 4px}.sub{text-align:center;color:#666;margin-bottom:14px}
+table{width:100%;border-collapse:collapse}.footer{margin-top:18px;padding-top:10px;border-top:1px solid #ddd;text-align:center;color:#666;font-size:10px}
+</style></head><body>
+<h1>MySheba</h1><div class="sub">Transaction Receipt</div>
+<table>${rowsHtml}</table>
+${pinBlock}${receiptImage}${passportImage}
+<div class="footer">Please keep this receipt for your records.</div>
+</body></html>`;                  await Print.printAsync({ html });
                 } catch (err) { showAlert('Printer', err?.message || 'Printing is not available on this device.'); }
               }}>
                 <Text style={styles.printText}>🖨 Print</Text>
