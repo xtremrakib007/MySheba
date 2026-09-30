@@ -9,6 +9,7 @@ const SETTINGS = 'api_settings/service_modes';
 const ALLOWED_SERVICES = ['Recharge', 'Internet', 'Bill Payment', 'Bus', 'Train', 'Flight', 'Mobile Banking', 'Remittance', 'Payment Gateway', 'Entertainment', 'Recharge PIN'];
 const ALLOWED_AUTH = ['none', 'apiKey', 'bearer', 'basic'];
 const ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH'];
+const ALLOWED_COUNTRIES = ['ALL', 'BD', 'MY', 'SG', 'ID', 'IN', 'PH'];
 const DEFAULT_MODES = Object.fromEntries(ALLOWED_SERVICES.map((service) => [service, 'legacy']));
 
 function assertSuperadmin(db, request) {
@@ -118,6 +119,7 @@ function validateHeaders(value) {
 }
 function validate(data) {
   let service = cleanString(data.service, 40), name = cleanString(data.name, 100), baseUrl = cleanString(data.baseUrl, 500);
+  let country = cleanString(data.country, 10).toUpperCase() || 'ALL';
   let endpointPath = cleanString(data.endpointPath, 500) || '/';
   let authType = cleanString(data.authType, 20) || 'none';
   let method = cleanString(data.method, 10).toUpperCase() || 'POST';
@@ -170,10 +172,12 @@ function validate(data) {
     responseIdPath = '';
     responseMessagePath = 'message';
     priority = 9999;
+    country = 'BD';
   }
 
   if (endpointPath.includes('?') || endpointPath.includes('#')) throw new HttpsError('invalid-argument', 'Endpoint path must not contain a query string or fragment; use Query Template instead.');
   if (!ALLOWED_SERVICES.includes(service)) throw new HttpsError('invalid-argument', 'Invalid service.');
+  if (!ALLOWED_COUNTRIES.includes(country)) throw new HttpsError('invalid-argument', 'Invalid provider country.');
   if (!name) throw new HttpsError('invalid-argument', 'API provider name is required.');
   if (service === 'Recharge PIN' && !cleanString(data.responsePinPath, 200)) throw new HttpsError('invalid-argument', 'Recharge PIN providers must define Response PIN Path.');
   validateBaseUrl(baseUrl);
@@ -183,7 +187,7 @@ function validate(data) {
   if (authType === 'basic' && (!cleanString(data.username, 200) || !cleanString(data.password, 1000))) throw new HttpsError('invalid-argument', 'Username and password are required for Basic authentication.');
   if (!ALLOWED_METHODS.includes(method)) throw new HttpsError('invalid-argument', 'Invalid HTTP method.');
   return {
-    service, name, baseUrl, endpointPath, method, authType, apiKey, secretKey,
+    service, name, country, baseUrl, endpointPath, method, authType, apiKey, secretKey,
     username: cleanString(data.username, 200), password: cleanString(data.password, 1000),
     active: data.active !== false, priority: Math.max(0, Math.min(9999, Number(data.priority) || 0)),
     timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)), notes: cleanString(data.notes, 1000),
@@ -231,7 +235,11 @@ const SUCCESS_TOPUP_INTERNET_OPERATORS = { Grameenphone: 'GP', Robi: 'RB', Bangl
 async function executeConfiguredApi(service, payload, customer, requestId, options = {}) {
   const db = admin.firestore();
   const snap = await db.collection(COLLECTION).where('service','==',service).where('active','==',true).get();
-  const providers = snap.docs.map(d => ({ id:d.id, ...d.data() })).sort((x,y)=>Number(y.priority||0)-Number(x.priority||0));
+  const requestedCountry = String(payload?.raw?.country || '').trim().toUpperCase() || 'ALL';
+  const allProviders = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+  const countryProviders = allProviders.filter((p) => String(p.country || 'ALL').toUpperCase() === requestedCountry);
+  const globalProviders = allProviders.filter((p) => String(p.country || 'ALL').toUpperCase() === 'ALL');
+  const providers = [...(countryProviders.length ? countryProviders : globalProviders)].sort((x,y)=>Number(y.priority||0)-Number(x.priority||0));
   if (!providers.length) throw new HttpsError('failed-precondition', `No active API provider is configured for ${service}.`);
   const provider = providers[0];
   const executionKey = crypto.createHash('sha256').update(`${service}|${customer?.uid || ''}|${requestId}`).digest('hex');
@@ -457,6 +465,7 @@ exports.listApiProviders = onCall({ enforceAppCheck: false }, async (request) =>
       id: d.id,
       service: x.service || '',
       name: x.name || '',
+      country: x.country || 'ALL',
       baseUrl: x.baseUrl || '',
       endpointPath: x.endpointPath || '/',
       method: x.method || 'POST',
@@ -565,6 +574,7 @@ exports.saveApiProvider = onCall({ enforceAppCheck: false }, async (request) => 
       tx.set(internetProviderRef, {
         service: 'Internet',
         name: 'Success TopUp',
+        country: 'BD',
         baseUrl: 'https://api.successtopup.com',
         endpointPath: '/api/recharge',
         method: 'POST',
@@ -596,6 +606,7 @@ exports.saveApiProvider = onCall({ enforceAppCheck: false }, async (request) => 
       tx.set(billProviderRef, {
         service: 'Bill Payment',
         name: 'Success TopUp',
+        country: 'BD',
         baseUrl: 'https://api.successtopup.com',
         endpointPath: '/api/bill-pay',
         method: 'POST',
