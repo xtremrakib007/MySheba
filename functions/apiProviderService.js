@@ -133,8 +133,10 @@ function validate(data) {
   let responseIdPath = cleanString(data.responseIdPath, 200);
   let responseMessagePath = cleanString(data.responseMessagePath, 200);
 
-  const successTopUp = ['Recharge', 'Bill Payment'].includes(service) && name.toLowerCase() === 'success topup';
+  const successTopUp = ['Recharge', 'Internet', 'Bill Payment'].includes(service) && name.toLowerCase() === 'success topup';
   const successTopUpBill = service === 'Bill Payment' && successTopUp;
+  const successTopUpInternet = service === 'Internet' && successTopUp;
+  const successTopUpInternet = service === 'Internet' && successTopUp;
   if (successTopUp) {
     name = 'Success TopUp';
     baseUrl = 'https://api.successtopup.com';
@@ -225,6 +227,7 @@ const SUCCESS_TOPUP_BILL_OPERATORS = {
   'Dhaka WASA': 'DAWA',
 };
 const SUCCESS_TOPUP_MOBILE_OPERATORS = { Grameenphone: 'GP', Robi: 'RB', Banglalink: 'BL' };
+const SUCCESS_TOPUP_INTERNET_OPERATORS = { Grameenphone: 'GP', Robi: 'RB', Banglalink: 'BL', Airtel: 'AT', Teletalk: 'TT', Skitto: 'SK', 'Brilliant Connect': 'BT', Ryze: 'RY' };
 
 async function executeConfiguredApi(service, payload, customer, requestId, options = {}) {
   const db = admin.firestore();
@@ -283,7 +286,10 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   if (service === 'Recharge PIN' && !provider.responsePinPath) throw new Error('Recharge PIN provider is missing responsePinPath configuration.');
   const raw = payload?.raw || {};
   const isSuccessTopUpBill = service === 'Bill Payment' && String(provider.name || '').trim().toLowerCase() === 'success topup';
+  const isSuccessTopUpInternet = service === 'Internet' && String(provider.name || '').trim().toLowerCase() === 'success topup' && String(raw.country || '').toUpperCase() === 'BD';
   const billOperator = raw.billOperator || SUCCESS_TOPUP_BILL_OPERATORS[String(raw.provider || '').trim()] || '';
+  const internetOperator = raw.operatorCode || SUCCESS_TOPUP_INTERNET_OPERATORS[String(raw.operator || '').trim()] || '';
+  const packageId = raw.packageId || raw.package_id || '';
   const mobileBillOperator = SUCCESS_TOPUP_MOBILE_OPERATORS[String(raw.provider || '').trim()] || '';
   const monthName = raw.monthName || new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
   if (isSuccessTopUpBill && String(raw.country || '').toUpperCase() === 'BD') {
@@ -295,7 +301,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     if (category === 'mobile' && !/^01\d{9}$/.test(billNumber)) throw new Error('A valid Bangladesh postpaid mobile bill number is required.');
   }
   const providerAmount = (String(provider.name || '').trim().toLowerCase() === 'success topup' && String(raw.country || '').toUpperCase() === 'BD') ? (raw.amount ?? payload?.amount ?? '') : (payload?.amount ?? raw.amount ?? '');
-  const vars = { requestId, uid:customer?.uid||'', phone:customer?.phone||'', amount:providerAmount, total:payload?.total??raw.total??'', service, country:raw.country||'', operator:raw.operator||'', billOperator, billNumber:raw.billNumber||raw.accountNumber||'', mobileNumber:raw.mobileNumber||'', monthName, note:raw.note||'', packageCode:raw.packageCode||'', details:payload?.details||'', apiKey:provider.apiKey||'', secretKey:provider.secretKey||'', ...Object.fromEntries(Object.entries(raw).filter(([k,v]) => !['requestId'].includes(k) && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')).slice(0,100)) };
+  const vars = { requestId, uid:customer?.uid||'', phone:customer?.phone||'', amount:providerAmount, total:payload?.total??raw.total??'', service, country:raw.country||'', operator:raw.operator||'', internetOperator, packageId, billOperator, billNumber:raw.billNumber||raw.accountNumber||'', mobileNumber:raw.mobileNumber||'', monthName, note:raw.note||'', packageCode:raw.packageCode||'', details:payload?.details||'', apiKey:provider.apiKey||'', secretKey:provider.secretKey||'', ...Object.fromEntries(Object.entries(raw).filter(([k,v]) => !['requestId'].includes(k) && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')).slice(0,100)) };
   try {
     let base; try { base = new URL(provider.baseUrl); } catch { throw new Error('Provider URL is invalid.'); }
     if (base.protocol !== 'https:') throw new Error('Provider URL is not allowed.');
@@ -336,8 +342,19 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
         trxid: vars.requestId,
         successtopup_key: vars.apiKey,
         successtopup_secret: vars.secretKey,
+      } : isSuccessTopUpInternet ? {
+        number: vars.phone,
+        type: 'prepaid',
+        operator: vars.internetOperator,
+        amount: vars.amount,
+        package_id: vars.packageId,
+        trxid: vars.requestId,
+        successtopup_key: vars.apiKey,
+        successtopup_secret: vars.secretKey,
       } : render(asObject(provider.requestTemplate),vars);
       if (isBangladeshMobileBill && !mobileBillOperator) throw new Error('Success TopUp does not have a supported postpaid mobile operator mapping for this biller.');
+      if (isSuccessTopUpInternet && !vars.internetOperator) throw new Error('Success TopUp does not have a supported Bangladesh internet operator mapping.');
+      if (isSuccessTopUpInternet && !vars.packageId) throw new Error('Success TopUp package ID is required for an internet/data-pack purchase.');
       if (service === 'Bill Payment' && String(provider.name || '').trim().toLowerCase() === 'success topup' && !billOperator && !isBangladeshMobileBill) throw new Error('Success TopUp does not have a supported bill operator mapping for this biller.');
       body=JSON.stringify(requestBody);
       if(Buffer.byteLength(body,'utf8')>100000) throw new Error('Rendered API request body is too large.');
