@@ -320,7 +320,8 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
                   // collectionPin after completion, when the live pin is gone.
                   // Without it a completed order printed "Not generated" for a
                   // PIN that had very much been generated and used.
-                  const pin = pinOverride || item.pin || item.collectionPin || 'Not generated';
+                  const requiresCollectionPin = item.service === 'Mobile Banking' || item.service === 'Remittance';
+                  const pin = requiresCollectionPin ? (pinOverride || item.pin || item.collectionPin || '') : '';
                   const currency = txCurrency(item);
                   let html;
                   if (item.service === 'Remittance') {
@@ -346,7 +347,10 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
                       item.completedByName || item.operatorName || '',
                     );
                   } else {
-                    html = `<html><body style="font-family:Arial;padding:18px"><h2 style="text-align:center">MySheba</h2><p style="text-align:center">Transaction Receipt</p><hr/><p><b>Service:</b> ${safe(item.service)}</p><p><b>Order ID:</b> ${safe(item.id)}</p><p><b>Amount:</b> ${txAmount(item.total, currency)}</p><p><b>Status:</b> ${safe(item.status)}</p><div style="margin-top:18px;padding:14px;border:2px solid #0B8A94;text-align:center"><div style="font-size:11px">COLLECTION PIN</div><div style="font-size:28px;font-weight:bold;letter-spacing:6px">${safe(pin)}</div></div><p style="margin-top:20px;font-size:11px;text-align:center">Keep this receipt and collection PIN safe.</p></body></html>`;
+                    const pinBlock = requiresCollectionPin && pin
+                      ? `<div style="margin-top:18px;padding:14px;border:2px solid #0B8A94;text-align:center"><div style="font-size:11px">COLLECTION PIN</div><div style="font-size:28px;font-weight:bold;letter-spacing:6px">${safe(pin)}</div></div><p style="margin-top:20px;font-size:11px;text-align:center">Keep this collection PIN safe.</p>`
+                      : '';
+                    html = `<html><body style="font-family:Arial;padding:18px"><h2 style="text-align:center">MySheba</h2><p style="text-align:center">Transaction Receipt</p><hr/><p><b>Service:</b> ${safe(item.service)}</p><p><b>Order ID:</b> ${safe(item.id)}</p><p><b>Amount:</b> ${txAmount(item.total, currency)}</p><p><b>Status:</b> ${safe(item.status)}</p>${pinBlock}</body></html>`;
                   }
                   await Print.printAsync({ html });
                 } catch (err) { showAlert('Printer', err?.message || 'Printing is not available on this device.'); }
