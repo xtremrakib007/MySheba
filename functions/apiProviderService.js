@@ -117,24 +117,69 @@ function validateHeaders(value) {
   return headers;
 }
 function validate(data) {
-  const service = cleanString(data.service, 40), name = cleanString(data.name, 100), baseUrl = cleanString(data.baseUrl, 500);
-  const endpointPath = cleanString(data.endpointPath, 500) || '/';
+  let service = cleanString(data.service, 40), name = cleanString(data.name, 100), baseUrl = cleanString(data.baseUrl, 500);
+  let endpointPath = cleanString(data.endpointPath, 500) || '/';
+  let authType = cleanString(data.authType, 20) || 'none';
+  let method = cleanString(data.method, 10).toUpperCase() || 'POST';
+  let apiKey = cleanString(data.apiKey, 1000);
+  let secretKey = cleanString(data.secretKey, 1000);
+  let headers = data.headers || {};
+  let queryTemplate = data.queryTemplate || {};
+  let requestTemplate = data.requestTemplate || {};
+  let responseSuccessPath = cleanString(data.responseSuccessPath, 200);
+  let responseSuccessValue = cleanString(data.responseSuccessValue, 200);
+  let responseProcessingPath = cleanString(data.responseProcessingPath, 200);
+  let responseProcessingValue = cleanString(data.responseProcessingValue, 200);
+  let responseIdPath = cleanString(data.responseIdPath, 200);
+  let responseMessagePath = cleanString(data.responseMessagePath, 200);
+
+  const successTopUp = service === 'Recharge' && name.toLowerCase() === 'success topup';
+  if (successTopUp) {
+    service = 'Recharge';
+    name = 'Success TopUp';
+    baseUrl = 'https://api.successtopup.com';
+    endpointPath = '/api/recharge';
+    method = 'POST';
+    authType = 'none';
+    headers = {};
+    queryTemplate = {};
+    requestTemplate = {
+      number: '{{phone}}',
+      type: 'prepaid',
+      operator: '{{operator}}',
+      amount: '{{amount}}',
+      trxid: '{{requestId}}',
+      successtopup_key: '{{apiKey}}',
+      successtopup_secret: '{{secretKey}}'
+    };
+    responseSuccessPath = 'result';
+    responseSuccessValue = 'true';
+    responseProcessingPath = '';
+    responseProcessingValue = '';
+    responseIdPath = '';
+    responseMessagePath = 'message';
+  }
+
   if (endpointPath.includes('?') || endpointPath.includes('#')) throw new HttpsError('invalid-argument', 'Endpoint path must not contain a query string or fragment; use Query Template instead.');
-  const authType = cleanString(data.authType, 20) || 'none';
-  const method = cleanString(data.method, 10).toUpperCase() || 'POST';
   if (!ALLOWED_SERVICES.includes(service)) throw new HttpsError('invalid-argument', 'Invalid service.');
   if (!name) throw new HttpsError('invalid-argument', 'API provider name is required.');
   if (service === 'Recharge PIN' && !cleanString(data.responsePinPath, 200)) throw new HttpsError('invalid-argument', 'Recharge PIN providers must define Response PIN Path.');
   validateBaseUrl(baseUrl);
   if (!ALLOWED_AUTH.includes(authType)) throw new HttpsError('invalid-argument', 'Invalid authentication type.');
-  if (authType === 'apiKey' || authType === 'bearer') {
-    if (!cleanString(data.apiKey, 1000)) throw new HttpsError('invalid-argument', 'API key is required for this authentication type.');
-  }
-  if (authType === 'basic') {
-    if (!cleanString(data.username, 200) || !cleanString(data.password, 1000)) throw new HttpsError('invalid-argument', 'Username and password are required for Basic authentication.');
-  }
+  if (successTopUp && (!apiKey || !secretKey)) throw new HttpsError('invalid-argument', 'Success TopUp API key and API secret are required.');
+  if ((authType === 'apiKey' || authType === 'bearer') && !apiKey) throw new HttpsError('invalid-argument', 'API key is required for this authentication type.');
+  if (authType === 'basic' && (!cleanString(data.username, 200) || !cleanString(data.password, 1000))) throw new HttpsError('invalid-argument', 'Username and password are required for Basic authentication.');
   if (!ALLOWED_METHODS.includes(method)) throw new HttpsError('invalid-argument', 'Invalid HTTP method.');
-  return { service, name, baseUrl, endpointPath, method, authType, apiKey: cleanString(data.apiKey, 1000), secretKey: cleanString(data.secretKey, 1000), username: cleanString(data.username, 200), password: cleanString(data.password, 1000), active: data.active !== false, priority: Math.max(0, Math.min(9999, Number(data.priority) || 0)), timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)), notes: cleanString(data.notes, 1000), headers: validateHeaders(data.headers || {}), queryTemplate: validateTemplate(data.queryTemplate || {}, 'Query template'), requestTemplate: validateTemplate(data.requestTemplate || {}, 'Request template'), responseSuccessPath: cleanString(data.responseSuccessPath, 200), responseSuccessValue: cleanString(data.responseSuccessValue, 200), responseProcessingPath: cleanString(data.responseProcessingPath, 200), responseProcessingValue: cleanString(data.responseProcessingValue, 200), responseIdPath: cleanString(data.responseIdPath, 200), responseMessagePath: cleanString(data.responseMessagePath, 200), responsePinPath: service === 'Recharge PIN' ? cleanString(data.responsePinPath, 200) : '' };
+  return {
+    service, name, baseUrl, endpointPath, method, authType, apiKey, secretKey,
+    username: cleanString(data.username, 200), password: cleanString(data.password, 1000),
+    active: data.active !== false, priority: Math.max(0, Math.min(9999, Number(data.priority) || 0)),
+    timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)), notes: cleanString(data.notes, 1000),
+    headers: validateHeaders(headers), queryTemplate: validateTemplate(queryTemplate, 'Query template'),
+    requestTemplate: validateTemplate(requestTemplate, 'Request template'),
+    responseSuccessPath, responseSuccessValue, responseProcessingPath, responseProcessingValue,
+    responseIdPath, responseMessagePath, responsePinPath: service === 'Recharge PIN' ? cleanString(data.responsePinPath, 200) : ''
+  };
 }
 
 function asObject(value) { if (value && typeof value === 'object' && !Array.isArray(value)) return value; if (typeof value !== 'string') return {}; try { const x = JSON.parse(value); return x && typeof x === 'object' && !Array.isArray(x) ? x : {}; } catch { return {}; } }
@@ -349,8 +394,37 @@ exports.saveApiProvider = onCall({ enforceAppCheck: false }, async (request) => 
 
     const data = validate(incoming);
     tx.set(ref, { ...data, updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: request.auth.uid }, { merge: false });
+
+    // Success TopUp is a fixed integration: saving it also enables Recharge API mode
+    // and creates the webhook configuration automatically. The admin only supplies
+    // the provider API key and API secret.
+    if (data.name === 'Success TopUp' && data.service === 'Recharge') {
+      const webhookRef = db.collection('api_webhooks').doc(ref.id);
+      const webhookSnap = await tx.get(webhookRef);
+      const currentWebhook = webhookSnap.exists ? (webhookSnap.data() || {}) : {};
+      const webhookToken = currentWebhook.webhookToken || crypto.randomBytes(32).toString('hex');
+      tx.set(webhookRef, {
+        providerId: ref.id,
+        enabled: true,
+        authHeader: 'x-webhook-token',
+        webhookToken,
+        transactionIdPath: 'transactionId',
+        statusPath: 'status',
+        messagePath: 'comment',
+        successStatus: 'Success',
+        processingStatus: 'Processing',
+        cancelStatus: 'Cancel',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedBy: request.auth.uid
+      }, { merge: false });
+      tx.set(db.doc(SETTINGS), {
+        modes: { ...DEFAULT_MODES, Recharge: 'api' },
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedBy: request.auth.uid
+      }, { merge: true });
+    }
   });
-  return { id: ref.id };
+  return { id: ref.id, successTopUp: cleanString(request.data?.name, 100).toLowerCase() === 'success topup' };
 });
 exports.deleteApiProvider = onCall({ enforceAppCheck: false }, async (request) => {
   const db = admin.firestore();
