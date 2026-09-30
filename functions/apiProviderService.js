@@ -134,6 +134,7 @@ function validate(data) {
   let responseProcessingValue = cleanString(data.responseProcessingValue, 200);
   let responseIdPath = cleanString(data.responseIdPath, 200);
   let responseMessagePath = cleanString(data.responseMessagePath, 200);
+  let priority = Number.isFinite(Number(data.priority)) ? Number(data.priority) : 0;
 
   const successTopUp = ['Recharge', 'Internet', 'Bill Payment'].includes(service) && name.toLowerCase() === 'success topup';
   const successTopUpBill = service === 'Bill Payment' && successTopUp;
