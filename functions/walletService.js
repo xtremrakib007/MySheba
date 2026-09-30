@@ -80,6 +80,14 @@ if (serviceLabel === 'Internet' && configuredMode !== 'api') {
   const hasSuccessTopUp = providerSnap.docs.some((doc) => String(doc.data()?.name || '').trim().toLowerCase() === 'success topup');
   if (hasSuccessTopUp && String(payload?.raw?.country || '').toUpperCase() === 'BD') apiMode = 'api';
 }
+if (serviceLabel === 'Internet' && configuredMode === 'api' && String(payload?.raw?.country || '').toUpperCase() !== 'BD') {
+  const providerSnap = await db.collection('api_providers')
+    .where('service', '==', 'Internet')
+    .where('active', '==', true)
+    .get();
+  const topUpOnly = providerSnap.docs.length > 0 && providerSnap.docs.every((doc) => String(doc.data()?.name || '').trim().toLowerCase() === 'success topup');
+  if (topUpOnly) apiMode = 'legacy';
+}
 if (serviceLabel === 'Bill Payment' && configuredMode !== 'api') {
   const providerSnap = await db.collection('api_providers')
     .where('service', '==', 'Bill Payment')
