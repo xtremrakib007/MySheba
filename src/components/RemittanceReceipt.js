@@ -50,21 +50,21 @@ function getReceiptData(tx = {}, profile = {}, operator = '') {
   const senderIsSelf = raw.senderIsSelf === true || raw.isSenderSelf === true
     || String(raw.senderType || raw.senderRelation || '').toLowerCase() === 'self'
     || (!enteredSenderName && !enteredSenderPhone)
-    || (!!profileName && enteredSenderName.trim().toLowerCase() === String(profileName).trim().toLowerCase())
-    || (!!profilePhone && enteredSenderPhone.replace(/\\D/g, '') === String(profilePhone).replace(/\\D/g, ''));
+    || (!!profilePhone && !!enteredSenderPhone && enteredSenderPhone.replace(/\\D/g, '') === String(profilePhone).replace(/\\D/g, ''))
+    || (!enteredSenderPhone && !!profileName && enteredSenderName.trim().toLowerCase() === String(profileName).trim().toLowerCase());
   const sender = enteredSenderName || (senderIsSelf ? profileName : '');
   const senderPhone = enteredSenderPhone || (senderIsSelf ? profilePhone : '');
   const senderFields = [
     ['Sender Type', senderIsSelf ? 'Account Holder' : 'Someone Else'],
-    ['Sender Name', sender || profileName],
+    ['Sender Name', sender || (senderIsSelf ? profileName : '')],
     ['Customer / Account ID', raw.customerId || tx.customerId || profile.customerId || profile.custId],
     ['Sender Phone', senderPhone],
     ['Sender Email', raw.senderEmail || tx.senderEmail || (senderIsSelf ? profile.email : '')],
     ['Sender Company', raw.senderCompany || tx.senderCompany],
-    ['Passport / ID Type', raw.senderIdType || raw.senderDocumentType || raw.passportType || profile.passportType],
+    ['Passport / ID Type', raw.senderIdType || raw.senderDocumentType || raw.passportType || (senderIsSelf ? profile.passportType : '')],
     ['Passport / ID Number', raw.senderPassportNo || raw.senderPassportNumber || raw.senderIdNumber || tx.senderPassportNo || (senderIsSelf ? (profile.passportNo || profile.passportNumber || profile.idNumber) : '')],
-    ['Passport Issue Place', raw.senderPassportIssuePlace || raw.passportPlaceOfIssue || raw.passportIssuePlace || profile.passportIssuePlace],
-    ['Passport Issue Date', raw.senderPassportIssueDate || raw.passportIssueDate || profile.passportIssueDate],
+    ['Passport Issue Place', raw.senderPassportIssuePlace || raw.passportPlaceOfIssue || raw.passportIssuePlace || (senderIsSelf ? profile.passportIssuePlace : '')],
+    ['Passport Issue Date', raw.senderPassportIssueDate || raw.passportIssueDate || (senderIsSelf ? profile.passportIssueDate : '')],
     ['Passport Expiry Date', raw.senderPassportExpiry || raw.passportExpiry || raw.passportExpiryDate || tx.senderPassportExpiry || (senderIsSelf ? (profile.passportExpiry || profile.passportExpiryDate) : '')],
     ['Date of Birth', raw.senderDob || raw.senderDateOfBirth || raw.dateOfBirth || raw.dob || (senderIsSelf ? (profile.dateOfBirth || profile.dob || profile.birthDate) : '')],
     ['Gender', raw.senderGender || raw.gender || (senderIsSelf ? profile.gender : '')],
