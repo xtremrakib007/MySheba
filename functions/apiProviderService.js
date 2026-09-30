@@ -434,7 +434,18 @@ exports.saveApiProvider = onCall({ enforceAppCheck: false }, async (request) => 
       }, { merge: true });
     }
   });
-  return { id: ref.id, successTopUp: cleanString(request.data?.name, 100).toLowerCase() === 'success topup' };
+  const successTopUp = cleanString(request.data?.name, 100).toLowerCase() === 'success topup';
+  if (successTopUp) {
+    const hookSnap = await db.collection('api_webhooks').doc(ref.id).get();
+    const webhookToken = hookSnap.exists ? String(hookSnap.data()?.webhookToken || '') : '';
+    return {
+      id: ref.id,
+      successTopUp: true,
+      webhookToken,
+      webhookUrl: 'https://us-central1-satulink-solutions.cloudfunctions.net/apiWebhook?providerId=' + encodeURIComponent(ref.id)
+    };
+  }
+  return { id: ref.id, successTopUp: false };
 });
 exports.deleteApiProvider = onCall({ enforceAppCheck: false }, async (request) => {
   const db = admin.firestore();
