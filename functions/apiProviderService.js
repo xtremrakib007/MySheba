@@ -405,6 +405,47 @@ exports.executeConfiguredApi = executeConfiguredApi;
 // provider credentials and do not perform network or Firestore operations.
 exports._test = { isPrivateIp, validateBaseUrl, validateHeaders, validateTemplate, getPath, render, providerAuth, validate };
 
+exports.testApiProvider = onCall({ enforceAppCheck: false }, async (request) => {
+  const db = admin.firestore();
+  await assertSuperadmin(db, request);
+  const id = cleanString(request.data?.id, 100);
+  if (!id) throw new HttpsError('invalid-argument', 'Provider id is required.');
+  const snap = await db.collection(COLLECTION).doc(id).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'API provider not found.');
+  const provider = { id, ...(snap.data() || {}) };
+  if (String(provider.name || '').trim().toLowerCase() !== 'success topup') {
+    throw new HttpsError('failed-precondition', 'Safe connection testing is currently available for Success TopUp only.');
+  }
+  if (!provider.apiKey || !provider.secretKey) throw new HttpsError('failed-precondition', 'API key and API secret are not configured.');
+  const url = new URL('https://api.successtopup.com/api/drives');
+  const body = JSON.stringify({
+    operator: 'ALL',
+    type: 'regular',
+    successtopup_key: provider.apiKey,
+    successtopup_secret: provider.secretKey
+  });
+  try {
+    await assertPublicHostname(url.hostname);
+    const addresses = await dns.lookup(url.hostname, { all: true, verbatim: true });
+    const pinned = addresses.find(a => !isPrivateIp(a.address));
+    if (!pinned) throw new Error('Provider hostname resolved to an invalid address.');
+    const response = await requestHttpsPinned(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body
+    }, pinned);
+    const responseText = await response.text();
+    let data = {};
+    try { data = JSON.parse(responseText || '{}'); } catch {}
+    if (!response.ok || data.result !== true) {
+      throw new Error(String(data.message || 'Success TopUp rejected the credentials.'));
+    }
+    return { ok: true, message: 'Success TopUp API credentials are valid and the API is reachable.' };
+  } catch (e) {
+    throw new HttpsError('unavailable', String(e?.message || 'Unable to connect to Success TopUp.').slice(0, 500));
+  }
+});
+
 exports.listSuccessTopUpDrives = onCall({ enforceAppCheck: false }, async (request) => {
   const db = admin.firestore();
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
