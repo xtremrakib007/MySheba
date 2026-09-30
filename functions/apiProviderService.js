@@ -136,7 +136,6 @@ function validate(data) {
   const successTopUp = ['Recharge', 'Internet', 'Bill Payment'].includes(service) && name.toLowerCase() === 'success topup';
   const successTopUpBill = service === 'Bill Payment' && successTopUp;
   const successTopUpInternet = service === 'Internet' && successTopUp;
-  const successTopUpInternet = service === 'Internet' && successTopUp;
   if (successTopUp) {
     name = 'Success TopUp';
     baseUrl = 'https://api.successtopup.com';
