@@ -162,7 +162,7 @@ export function validateStep(step, serviceData) {
   if (step === 1 && !serviceData.category) return 'Please select a bill category.';
   if (step === 2 && !serviceData.provider) return 'Please select a bill provider.';
   if (step === 3 && !(serviceData.accountNumber || '').trim()) return 'Please enter the bill or account number.';
-  if (step === 3 && serviceData.country === 'BD' && !/^01\\d{9}$/.test(String(serviceData.mobileNumber || '').trim())) return 'Please enter a valid Bangladesh mobile number.';
+  if (step === 3 && serviceData.country === 'BD' && !/^01\d{9}$/.test(String(serviceData.mobileNumber || '').trim())) return 'Please enter a valid Bangladesh mobile number.';
   if (step === 4 && !(Number(serviceData.amount) > 0)) return 'Please enter a valid amount.';
   return null;
 }
