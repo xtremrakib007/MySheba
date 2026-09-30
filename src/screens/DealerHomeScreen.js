@@ -131,7 +131,11 @@ export default function DealerHomeScreen() {
       showAlert('MySheba', 'This order was accepted by another staff member.');
       return;
     }
-    setPinId({ id: tx.id, service: tx.service });
+    if (tx.service === 'Mobile Banking' || tx.service === 'Remittance') {
+      setPinId({ id: tx.id, service: tx.service });
+      return;
+    }
+    setReceiptTxId({ id: tx.id, pin: '' });
   };
 
   const confirmReceiptComplete = async (url) => {
