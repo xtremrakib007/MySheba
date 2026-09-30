@@ -33,30 +33,61 @@ function getReceiptData(tx = {}, profile = {}, operator = '') {
   const receive = raw.receiveAmount ?? tx.receiveAmount ?? (num(rate) ? send * num(rate) : 0);
   const status = String(tx.status || 'pending').toUpperCase();
   const method = raw.method === 'deposit' ? 'BANK DEPOSIT' : raw.method === 'cash' ? 'CASH PICKUP' : raw.method === 'ewallet' ? 'EWALLET' : val(raw.method || tx.method);
-  const receiver = `${raw.receiverFirstName || ''} ${raw.receiverLastName || ''}`.trim() || tx.receiverName || '';
-  const sender = raw.senderName || tx.senderName || profile.name || profile.fullName || '';
+  const receiver = `${raw.receiverFirstName || raw.receiverFirst || ''} ${raw.receiverLastName || raw.receiverLast || ''}`.trim()
+    || raw.receiverName || tx.receiverName || '';
   const txId = tx.txId || tx.id || tx.reference || raw.reference || '';
   const created = formatDate(tx.completedAt || tx.createdAt || tx.updatedAt || raw.createdAt);
   const approvedBy = tx.approvedByName || tx.approvedBy || '';
   const completedBy = tx.completedByName || operator || tx.operatorName || tx.operator || '';
   const approvedRole = tx.approvedByRole || '';
   const completedRole = tx.completedByRole || tx.claimedByRole || '';
-  // collectionPin is the spent code, kept by completeTransaction after the
-  // live pin is deleted. Without it a completed order's receipt showed "-"
-  // for the one field that records how the handover was authorised.
   const pin = tx.pin || tx.pinNo || tx.collectionPin || raw.pin || '';
-  const rows = [
-    ['Senders Name', sender], ['Cust ID', raw.customerId || profile.customerId || profile.custId || tx.customerId],
-    ['PASSPORT', raw.senderPassportNo || tx.senderPassportNo], ['Place of Issue', raw.senderPassportIssuePlace || raw.passportPlaceOfIssue || raw.nationality],
-    ['Expire Date', raw.senderPassportExpiry], ['Issue Date', raw.senderPassportIssueDate], ['Skilled labor', raw.skill || raw.skilledLabor],
-    ['Address', raw.senderAddress], ['Mobile No.', raw.senderPhone || tx.senderPhone || profile.phone], ['Date of Birth', raw.senderDob || raw.dateOfBirth],
-    ['Name of Employer', raw.employerName || raw.employer], ['Gender', raw.gender], ['Occupation', raw.occupation],
-    ['Source of funds', raw.sourceOfFunds || raw.sourceFunds], ['Nationality', raw.nationality], ['Purpose', raw.purpose], ['Relation', raw.receiverRelationship],
-  ].filter(([, v]) => v !== undefined && v !== null && v !== '');
+
+  const profileName = profile.name || profile.fullName || profile.displayName || '';
+  const profilePhone = profile.phone || profile.phoneNumber || profile.mobile || '';
+  const enteredSenderName = raw.senderName || tx.senderName || '';
+  const enteredSenderPhone = raw.senderPhone || tx.senderPhone || '';
+  const senderIsSelf = raw.senderIsSelf === true || raw.isSenderSelf === true
+    || String(raw.senderType || raw.senderRelation || '').toLowerCase() === 'self'
+    || (!enteredSenderName && !enteredSenderPhone)
+    || (!!profileName && enteredSenderName.trim().toLowerCase() === String(profileName).trim().toLowerCase())
+    || (!!profilePhone && enteredSenderPhone.replace(/\\D/g, '') === String(profilePhone).replace(/\\D/g, ''));
+  const sender = enteredSenderName || (senderIsSelf ? profileName : '');
+  const senderPhone = enteredSenderPhone || (senderIsSelf ? profilePhone : '');
+  const senderFields = [
+    ['Sender Type', senderIsSelf ? 'Account Holder' : 'Someone Else'],
+    ['Sender Name', sender || profileName],
+    ['Customer / Account ID', raw.customerId || tx.customerId || profile.customerId || profile.custId],
+    ['Sender Phone', senderPhone],
+    ['Sender Email', raw.senderEmail || tx.senderEmail || (senderIsSelf ? profile.email : '')],
+    ['Sender Company', raw.senderCompany || tx.senderCompany],
+    ['Passport / ID Type', raw.senderIdType || raw.senderDocumentType || raw.passportType || profile.passportType],
+    ['Passport / ID Number', raw.senderPassportNo || raw.senderPassportNumber || raw.senderIdNumber || tx.senderPassportNo || (senderIsSelf ? (profile.passportNo || profile.passportNumber || profile.idNumber) : '')],
+    ['Passport Issue Place', raw.senderPassportIssuePlace || raw.passportPlaceOfIssue || raw.passportIssuePlace || profile.passportIssuePlace],
+    ['Passport Issue Date', raw.senderPassportIssueDate || raw.passportIssueDate || profile.passportIssueDate],
+    ['Passport Expiry Date', raw.senderPassportExpiry || raw.passportExpiry || raw.passportExpiryDate || tx.senderPassportExpiry || (senderIsSelf ? (profile.passportExpiry || profile.passportExpiryDate) : '')],
+    ['Date of Birth', raw.senderDob || raw.senderDateOfBirth || raw.dateOfBirth || raw.dob || (senderIsSelf ? (profile.dateOfBirth || profile.dob || profile.birthDate) : '')],
+    ['Gender', raw.senderGender || raw.gender || (senderIsSelf ? profile.gender : '')],
+    ['Nationality', raw.senderNationality || raw.nationality || (senderIsSelf ? profile.nationality : '')],
+    ['Address', raw.senderAddress || tx.senderAddress || (senderIsSelf ? (profile.address || profile.fullAddress) : '')],
+    ['City', raw.senderCity || raw.city || (senderIsSelf ? profile.city : '')],
+    ['State / Province', raw.senderState || raw.state || (senderIsSelf ? profile.state : '')],
+    ['Postcode', raw.senderPostcode || raw.postcode || raw.postalCode || (senderIsSelf ? (profile.postcode || profile.postalCode) : '')],
+    ['Country of Residence', raw.senderCountry || raw.residenceCountry || (senderIsSelf ? (profile.country || profile.residenceCountry) : '')],
+    ['Occupation', raw.senderOccupation || raw.occupation || (senderIsSelf ? profile.occupation : '')],
+    ['Employer', raw.employerName || raw.employer || raw.senderEmployer || (senderIsSelf ? profile.employerName : '')],
+    ['Skilled Labor / Profession', raw.skill || raw.skilledLabor || raw.profession || (senderIsSelf ? profile.profession : '')],
+    ['Source of Funds', raw.sourceOfFunds || raw.sourceFunds || (senderIsSelf ? profile.sourceOfFunds : '')],
+    ['Transfer Purpose', raw.purpose || raw.transferPurpose],
+    ['Relationship to Receiver', raw.receiverRelationship || raw.relationship],
+  ].filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== '');
+  const rows = senderFields;
   const receiverRows = [
     ['Payout Country', countryName(raw.country || tx.country)], ['Mobile No', raw.receiverPhone || tx.receiverPhone], ["Receiver's Name", receiver],
-    ['Address', raw.receiverAddress || raw.receiverCountry || countryName(raw.country || tx.country)], ['Bank Name', raw.receiverBankName], ['Branch', raw.receiverBranch],
-    ['Bank Account No', raw.receiverAccountNumber], ['Place of Issue', raw.receiverPlaceOfIssue], ['Routing Number', raw.receiverRoutingNumber],
+    ['Address', raw.receiverAddress || raw.receiverFullAddress || raw.receiverCountry || countryName(raw.country || tx.country)],
+    ['Receiver ID Type', raw.receiverIdType], ['Receiver ID Number', raw.receiverIdNumber],
+    ['Place of Issue', raw.receiverPlaceOfIssue], ['Bank Name', raw.receiverBankName], ['Branch', raw.receiverBranch],
+    ['Bank Account No', raw.receiverAccountNumber], ['Routing Number', raw.receiverRoutingNumber],
     ['Pickup Network', raw.receiverPickupNetwork], ['Pickup City', raw.receiverPickupCity], ['Wallet Provider', raw.receiverWalletProvider], ['Wallet Number', raw.receiverWalletNumber],
     ['Payout Method', method],
   ].filter(([, v]) => v !== undefined && v !== null && v !== '');
