@@ -62,13 +62,20 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: false }, async (request)
 
   const pricingSnap = await db.collection('settings').doc('pricing').get();
   const pricing = pricingSnap.exists ? pricingSnap.data() || {} : {};
-  const priceMultiplier = Number(pricing.rolePricing?.customer?.rechargePointCostPerUnit ?? pricing.rechargePointCostPerUnit ?? 1);
-  if (!Number.isFinite(priceMultiplier) || priceMultiplier <= 0) throw new HttpsError('failed-precondition', 'Recharge PIN pricing is not configured correctly.');
 
   const tierSettings = await progressionService.getProgressionSettings();
   const userSnap = await profileRef.get();
-  if (!userSnap.exists || !active(userSnap.data()) || userSnap.data().role !== 'customer') {
-    throw new HttpsError('permission-denied', 'Only active customer accounts can purchase Recharge PINs.');
+  if (!userSnap.exists || !active(userSnap.data())) {
+    throw new HttpsError('permission-denied', 'Only active accounts can purchase Recharge PINs.');
+  }
+  const callerRole = String(userSnap.data()?.role || 'customer');
+  const priceMultiplier = Number(
+    pricing.rolePricing?.[callerRole]?.rechargePointCostPerUnit ??
+    pricing.rechargePointCostPerUnit ??
+    1
+  );
+  if (!Number.isFinite(priceMultiplier) || priceMultiplier <= 0) {
+    throw new HttpsError('failed-precondition', 'Recharge PIN pricing is not configured correctly.');
   }
   requireSessionMatch(request, userSnap.data());
   await checkVelocity(db, uid, 'rechargePin', { ip: getClientIp(request) });
@@ -107,13 +114,13 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: false }, async (request)
       }
       throw new HttpsError('failed-precondition', 'This Recharge PIN request has already failed.');
     }
-    if (!user.exists || !active(user.data()) || user.data().role !== 'customer') throw new HttpsError('permission-denied', 'Your customer account is not active.');
+    if (!user.exists || !active(user.data())) throw new HttpsError('permission-denied', 'Your account is not active.');
     const balance = Number(user.data().walletBalance || 0);
     if (!Number.isFinite(balance) || balance < 0 || !Number.isSafeInteger(Math.round(balance * 100))) throw new HttpsError('failed-precondition', 'Wallet balance is invalid.');
     if (balance < walletCost) throw new HttpsError('failed-precondition', `You need ${walletCost.toFixed(2)} ${walletFx.currency} in your wallet to buy this PIN.`);
     tx.update(profileRef, { walletBalance: balance - walletCost, walletCurrency: walletFx.currency });
     tx.create(txRef, {
-      service: PIN_SERVICE, customerId: uid, customerRole: 'customer', customerPhone: user.data().phone || '',
+      service: PIN_SERVICE, customerId: uid, customerRole: callerRole, customerPhone: user.data().phone || '',
       operator, amount: denomination, total: denomination, denominationCurrency: 'MYR', currency: walletFx.currency, walletCurrency: walletFx.currency, cost: walletCost, walletCost, baseCostMyr: cost, fxRate: walletFx.sellRate, fxRateType: 'sell', fxRateSource: walletFx.rateSource,
       tierDiscountPercent: discount, executionMode: 'api', status: 'processing', rechargePinAvailable: false,
       apiRefunded: false, raw: { requestId, country: 'MY', operator, amount: denomination },
@@ -174,7 +181,7 @@ exports.getRechargePin = onCall({ enforceAppCheck: false }, async (request) => {
   if (!/^[A-Za-z0-9_-]{1,100}$/.test(transactionId)) throw new HttpsError('invalid-argument', 'Invalid transaction ID.');
   const db = admin.firestore();
   const profileSnap = await db.collection('users').doc(uid).get();
-  if (!profileSnap.exists || !active(profileSnap.data()) || profileSnap.data().role !== 'customer') throw new HttpsError('permission-denied', 'Your customer account is not active.');
+  if (!profileSnap.exists || !active(profileSnap.data())) throw new HttpsError('permission-denied', 'Your account is not active.');
   requireSessionMatch(request, profileSnap.data());
   await checkVelocity(db, uid, 'rechargePin', { ip: getClientIp(request) });
   const txSnap = await db.collection('transactions').doc(transactionId).get();
