@@ -143,7 +143,7 @@ export default function BillPaymentStep({ step }) {
       ? <Grid3>{providers.map((b) => { const brand = getBillerBrand(b.name); return <OperatorCard key={b.name} name={b.name} logo={brand.logo} color={brand.color} initials={brand.initials} selected={serviceData.provider === b.name} onPress={() => { updateServiceData({ provider: b.name, amount: b.amount != null ? b.amount : null }); nextStep(); }} />; })}</Grid3>
       : <Text style={noneStyles.none}>No biller is configured for this country and category yet.</Text>}</View>;
   }
-  if (step === 3) return <View><FormLabel>Enter Bill / Account Number</FormLabel><FormInput placeholder='Bill / account number' autoCapitalize='characters' value={serviceData.accountNumber || ''} onChangeText={(v) => updateServiceData({ accountNumber: v })} />{serviceData.country === 'BD' && <><FormLabel>Bangladesh Mobile Number</FormLabel><FormInput placeholder='01XXXXXXXXX' keyboardType='phone-pad' value={serviceData.mobileNumber || ''} onChangeText={(v) => updateServiceData({ mobileNumber: v.replace(/\\D/g, '').slice(0, 11) })} /></>}</View>;
+  if (step === 3) return <View><FormLabel>Enter Bill / Account Number</FormLabel><FormInput placeholder='Bill / account number' autoCapitalize='characters' value={serviceData.accountNumber || ''} onChangeText={(v) => updateServiceData({ accountNumber: v })} />{serviceData.country === 'BD' && <><FormLabel>Bangladesh Mobile Number</FormLabel><FormInput placeholder='01XXXXXXXXX' keyboardType='phone-pad' value={serviceData.mobileNumber || ''} onChangeText={(v) => updateServiceData({ mobileNumber: v.replace(/\D/g, '').slice(0, 11) })} /></>}</View>;
   if (step === 4) {
     const fixed = fixedAmountFor(serviceData);
     const cur = serviceData.currency || 'MYR';
