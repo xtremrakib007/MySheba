@@ -17,7 +17,7 @@ const DEVICE_ID_RE=/^[A-Za-z0-9-]{16,100}$/;
 const REQUEST_ID_RE=/^[A-Za-z0-9_-]{16,128}$/;
 const TRANSACTION_RAW_FIELDS = {
   recharge: new Set(['phone', 'country', 'amount']),
-  internet: new Set(['phone', 'country', 'amount', 'provider']),
+  internet: new Set(['phone', 'country', 'amount', 'provider', 'operator', 'packageId', 'package']),
   billpayment: new Set(['phone', 'country', 'amount', 'provider', 'category', 'accountNumber']),
   mobilebanking: new Set(['phone', 'country', 'amount', 'provider', 'category', 'accountNumber']),
   remittance: new Set([
