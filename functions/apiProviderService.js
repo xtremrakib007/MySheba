@@ -133,17 +133,27 @@ function validate(data) {
   let responseIdPath = cleanString(data.responseIdPath, 200);
   let responseMessagePath = cleanString(data.responseMessagePath, 200);
 
-  const successTopUp = service === 'Recharge' && name.toLowerCase() === 'success topup';
+  const successTopUp = ['Recharge', 'Bill Payment'].includes(service) && name.toLowerCase() === 'success topup';
+  const successTopUpBill = service === 'Bill Payment' && successTopUp;
   if (successTopUp) {
-    service = 'Recharge';
     name = 'Success TopUp';
     baseUrl = 'https://api.successtopup.com';
-    endpointPath = '/api/recharge';
+    endpointPath = successTopUpBill ? '/api/bill-pay' : '/api/recharge';
     method = 'POST';
     authType = 'none';
     headers = {};
     queryTemplate = {};
-    requestTemplate = {
+    requestTemplate = successTopUpBill ? {
+      billOperator: '{{billOperator}}',
+      billNumber: '{{billNumber}}',
+      billAmount: '{{amount}}',
+      mobileNumber: '{{mobileNumber}}',
+      monthName: '{{monthName}}',
+      note: '{{note}}',
+      trxid: '{{requestId}}',
+      successtopup_key: '{{apiKey}}',
+      successtopup_secret: '{{secretKey}}'
+    } : {
       number: '{{phone}}',
       type: 'prepaid',
       operator: '{{operator}}',
@@ -196,6 +206,25 @@ function providerAuth(p) {
   if (p.authType === 'basic' && p.username) return { authorization: `Basic ${Buffer.from(`${p.username}:${p.password || ''}`).toString('base64')}` };
   return {};
 }
+const SUCCESS_TOPUP_BILL_OPERATORS = {
+  'Palli Bidyut (Prepaid)': 'pbp',
+  'Palli Bidyut (Postpaid)': 'pbd',
+  'DESCO (Prepaid)': 'dsp',
+  'DESCO (Postpaid)': 'dsd',
+  'NESCO (Prepaid)': 'nsp',
+  'NESCO (Postpaid)': 'nsd',
+  'DPDC (Prepaid)': 'dpp',
+  'DPDC (Postpaid)': 'dpd',
+  'Titas Gas': 'ttg',
+  'Karnaphuli Gas': 'krp',
+  'Jalalabad Gas': 'jlb',
+  'Sundarban Gas': 'sbg',
+  'Bakhrabad Gas': 'brd',
+  'Amber IT': 'art',
+  'Dhaka WASA': 'DAWA',
+};
+const SUCCESS_TOPUP_MOBILE_OPERATORS = { Grameenphone: 'GP', Robi: 'RB', Banglalink: 'BL' };
+
 async function executeConfiguredApi(service, payload, customer, requestId, options = {}) {
   const db = admin.firestore();
   const snap = await db.collection(COLLECTION).where('service','==',service).where('active','==',true).get();
@@ -252,12 +281,18 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   }
   if (service === 'Recharge PIN' && !provider.responsePinPath) throw new Error('Recharge PIN provider is missing responsePinPath configuration.');
   const raw = payload?.raw || {};
-  const vars = { requestId, uid:customer?.uid||'', phone:customer?.phone||'', amount:payload?.amount??raw.amount??'', total:payload?.total??raw.total??'', service, country:raw.country||'', operator:raw.operator||'', packageCode:raw.packageCode||'', details:payload?.details||'', apiKey:provider.apiKey||'', secretKey:provider.secretKey||'', ...Object.fromEntries(Object.entries(raw).filter(([k,v]) => !['requestId'].includes(k) && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')).slice(0,100)) };
+  const isSuccessTopUpBill = service === 'Bill Payment' && String(provider.name || '').trim().toLowerCase() === 'success topup';
+  const billOperator = raw.billOperator || SUCCESS_TOPUP_BILL_OPERATORS[String(raw.provider || '').trim()] || '';
+  const mobileBillOperator = SUCCESS_TOPUP_MOBILE_OPERATORS[String(raw.provider || '').trim()] || '';
+  const monthName = raw.monthName || new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  const vars = { requestId, uid:customer?.uid||'', phone:customer?.phone||'', amount:payload?.amount??raw.amount??'', total:payload?.total??raw.total??'', service, country:raw.country||'', operator:raw.operator||'', billOperator, billNumber:raw.billNumber||raw.accountNumber||'', mobileNumber:raw.mobileNumber||customer?.phone||'', monthName, note:raw.note||'', packageCode:raw.packageCode||'', details:payload?.details||'', apiKey:provider.apiKey||'', secretKey:provider.secretKey||'', ...Object.fromEntries(Object.entries(raw).filter(([k,v]) => !['requestId'].includes(k) && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')).slice(0,100)) };
   try {
     let base; try { base = new URL(provider.baseUrl); } catch { throw new Error('Provider URL is invalid.'); }
     if (base.protocol !== 'https:') throw new Error('Provider URL is not allowed.');
     const pinnedAddress = await resolvePublicAddress(base.hostname);
-    const endpointPath = String(provider.endpointPath || '/');
+    let endpointPath = String(provider.endpointPath || '/');
+    const isBangladeshMobileBill = isSuccessTopUpBill && String(raw.country || '').toUpperCase() === 'BD' && String(raw.category || '').toLowerCase() === 'mobile';
+    if (isBangladeshMobileBill) endpointPath = '/api/recharge';
     if (/^https?:\/\//i.test(endpointPath) || endpointPath.startsWith('//')) throw new Error('Endpoint path must be relative to the provider base URL.');
     const url = new URL(endpointPath,base);
     for (const [k,v] of Object.entries(render(asObject(provider.queryTemplate),vars))) {
@@ -281,7 +316,22 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     }
     if (Object.keys(headers).length > 50) throw new Error('Too many rendered API headers.');
     let body;
-    if(method!=='GET'){ headers['content-type']=headers['content-type']||'application/json'; body=JSON.stringify(render(asObject(provider.requestTemplate),vars)); if(Buffer.byteLength(body,'utf8')>100000) throw new Error('Rendered API request body is too large.'); }
+    if(method!=='GET'){
+      headers['content-type']=headers['content-type']||'application/json';
+      const requestBody = isBangladeshMobileBill ? {
+        number: vars.mobileNumber,
+        type: 'postpaid',
+        operator: mobileBillOperator,
+        amount: vars.amount,
+        trxid: vars.requestId,
+        successtopup_key: vars.apiKey,
+        successtopup_secret: vars.secretKey,
+      } : render(asObject(provider.requestTemplate),vars);
+      if (isBangladeshMobileBill && !mobileBillOperator) throw new Error('Success TopUp does not have a supported postpaid mobile operator mapping for this biller.');
+      if (service === 'Bill Payment' && String(provider.name || '').trim().toLowerCase() === 'success topup' && !billOperator && !isBangladeshMobileBill) throw new Error('Success TopUp does not have a supported bill operator mapping for this biller.');
+      body=JSON.stringify(requestBody);
+      if(Buffer.byteLength(body,'utf8')>100000) throw new Error('Rendered API request body is too large.');
+    }
     const ctl=new AbortController(), timer=setTimeout(()=>ctl.abort(),Math.max(3000,Math.min(60000,Number(provider.timeoutMs)||15000)));
     let response; try { response=await requestHttpsPinned(url,{method,headers,body,signal:ctl.signal},pinnedAddress); } finally { clearTimeout(timer); }
     const responseText=await response.text();
