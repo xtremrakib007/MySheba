@@ -268,7 +268,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
       if (service === 'Recharge PIN') throw new HttpsError('unavailable','The provider request completed, but the voucher PIN is not recoverable from the cached execution. Reconciliation is required.');
       return state.result || {};
     }
-    if (state.status === 'unknown') throw new HttpsError('unavailable','The API request outcome is uncertain. Check the provider before retrying.');
+    if (state.status === 'unknown') throw new HttpsError('unavailable','Your request is being checked. Do not submit it again. Check Transaction History for the final status.');
     if (state.status === 'processing') {
       // A crashed invocation can leave the execution claim in processing.
       // Never retry a possibly side-effecting provider request automatically.

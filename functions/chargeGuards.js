@@ -38,7 +38,7 @@ async function recoverChargedRequest(db, uid, requestId, guardRef, expectedServi
   if (!txDoc.exists) return null;
   const txData = txDoc.data() || {};
   if (txData.status === 'unknown') {
-    throw new HttpsError('unavailable', 'The API request outcome is uncertain. Check the provider before retrying.');
+    throw new HttpsError('unavailable', 'Your request is being checked. Do not submit it again. Check Transaction History for the final status.');
   }
   // Only a completed transaction proves that the downstream service
   // completed. Pending/processing means the wallet charge exists but the

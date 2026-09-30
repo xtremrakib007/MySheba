@@ -5,7 +5,7 @@ import { countries } from '../data/countries';
 import { useTheme } from '../theme/ThemeContext';
 
 const COMPANY_NAME = 'SatuLink Solutions Sdn Bhd (1641555-U)';
-const COMPANY_ADDRESS = 'Address: To be set';
+const COMPANY_ADDRESS = '';
 const POWERED_BY = 'Powered by OTR';
 const WEBSITE = 'www.mysheba.top';
 const EMAIL = 'info@mysheba.top';
@@ -19,42 +19,79 @@ const formatDate = (v) => { if (!v) return '-'; try { const d = v?.toDate ? v.to
 
 function getReceiptData(tx = {}, profile = {}, operator = '') {
   const raw = tx.raw || tx.serviceData || {};
-  const curr = raw.currency || raw.receiveCurrency || raw.curr || tx.receiveCurrency || '';
+  const country = String(raw.country || tx.country || '').toUpperCase();
+  const curr = raw.currency || raw.receiveCurrency || raw.curr || tx.receiveCurrency
+    || countries.find((x) => x.code === country)?.curr || '';
   const send = num(raw.sendAmt ?? tx.amount);
-  const fee = num(raw.transferFee ?? raw.serviceCharge ?? tx.transferFee ?? tx.fee);
   const gst = num(raw.gst ?? tx.gst);
-  const total = send + fee + gst;
+  const explicitFee = raw.transferFee ?? raw.serviceCharge ?? tx.transferFee ?? tx.fee;
+  const fee = explicitFee != null && explicitFee !== ''
+    ? num(explicitFee)
+    : Math.max(0, num(tx.total) - send - gst);
+  const total = num(tx.total) > 0 ? num(tx.total) : send + fee + gst;
   const rate = raw.receivingRate ?? tx.receivingRate ?? tx.exchangeRate ?? '';
   const receive = raw.receiveAmount ?? tx.receiveAmount ?? (num(rate) ? send * num(rate) : 0);
+  const status = String(tx.status || 'pending').toUpperCase();
   const method = raw.method === 'deposit' ? 'BANK DEPOSIT' : raw.method === 'cash' ? 'CASH PICKUP' : raw.method === 'ewallet' ? 'EWALLET' : val(raw.method || tx.method);
-  const receiver = `${raw.receiverFirstName || ''} ${raw.receiverLastName || ''}`.trim() || tx.receiverName || '';
-  const sender = raw.senderName || tx.senderName || profile.name || profile.fullName || '';
+  const receiver = `${raw.receiverFirstName || raw.receiverFirst || ''} ${raw.receiverLastName || raw.receiverLast || ''}`.trim()
+    || raw.receiverName || tx.receiverName || '';
   const txId = tx.txId || tx.id || tx.reference || raw.reference || '';
   const created = formatDate(tx.completedAt || tx.createdAt || tx.updatedAt || raw.createdAt);
   const approvedBy = tx.approvedByName || tx.approvedBy || '';
   const completedBy = tx.completedByName || operator || tx.operatorName || tx.operator || '';
   const approvedRole = tx.approvedByRole || '';
   const completedRole = tx.completedByRole || tx.claimedByRole || '';
-  // collectionPin is the spent code, kept by completeTransaction after the
-  // live pin is deleted. Without it a completed order's receipt showed "-"
-  // for the one field that records how the handover was authorised.
   const pin = tx.pin || tx.pinNo || tx.collectionPin || raw.pin || '';
-  const rows = [
-    ['Senders Name', sender], ['Cust ID', raw.customerId || profile.customerId || profile.custId || tx.customerId],
-    ['PASSPORT', raw.senderPassportNo || tx.senderPassportNo], ['Place of Issue', raw.senderPassportIssuePlace || raw.passportPlaceOfIssue || raw.nationality],
-    ['Expire Date', raw.senderPassportExpiry], ['Issue Date', raw.senderPassportIssueDate], ['Skilled labor', raw.skill || raw.skilledLabor],
-    ['Address', raw.senderAddress], ['Mobile No.', raw.senderPhone || tx.senderPhone || profile.phone], ['Date of Birth', raw.senderDob || raw.dateOfBirth],
-    ['Name of Employer', raw.employerName || raw.employer], ['Gender', raw.gender], ['Occupation', raw.occupation],
-    ['Source of funds', raw.sourceOfFunds || raw.sourceFunds], ['Nationality', raw.nationality], ['Purpose', raw.purpose], ['Relation', raw.receiverRelationship],
-  ].filter(([, v]) => v !== undefined && v !== null && v !== '');
+
+  const profileName = profile.name || profile.fullName || profile.displayName || '';
+  const profilePhone = profile.phone || profile.phoneNumber || profile.mobile || '';
+  const enteredSenderName = raw.senderName || tx.senderName || '';
+  const enteredSenderPhone = raw.senderPhone || tx.senderPhone || '';
+  const senderIsSelf = raw.senderIsSelf === true || raw.isSenderSelf === true
+    || String(raw.senderType || raw.senderRelation || '').toLowerCase() === 'self'
+    || (!enteredSenderName && !enteredSenderPhone)
+    || (!!profilePhone && !!enteredSenderPhone && enteredSenderPhone.replace(/\\D/g, '') === String(profilePhone).replace(/\\D/g, ''))
+    || (!enteredSenderPhone && !!profileName && enteredSenderName.trim().toLowerCase() === String(profileName).trim().toLowerCase());
+  const sender = enteredSenderName || (senderIsSelf ? profileName : '');
+  const senderPhone = enteredSenderPhone || (senderIsSelf ? profilePhone : '');
+  const senderFields = [
+    ['Sender Type', senderIsSelf ? 'Account Holder' : 'Someone Else'],
+    ['Sender Name', sender || (senderIsSelf ? profileName : '')],
+    ['Customer / Account ID', raw.customerId || tx.customerId || profile.customerId || profile.custId],
+    ['Sender Phone', senderPhone],
+    ['Sender Email', raw.senderEmail || tx.senderEmail || (senderIsSelf ? profile.email : '')],
+    ['Sender Company', raw.senderCompany || tx.senderCompany],
+    ['Passport / ID Type', raw.senderIdType || raw.senderDocumentType || raw.passportType || (senderIsSelf ? profile.passportType : '')],
+    ['Passport / ID Number', raw.senderPassportNo || raw.senderPassportNumber || raw.senderIdNumber || tx.senderPassportNo || (senderIsSelf ? (profile.passportNo || profile.passportNumber || profile.idNumber) : '')],
+    ['Passport Issue Place', raw.senderPassportIssuePlace || raw.passportPlaceOfIssue || raw.passportIssuePlace || (senderIsSelf ? profile.passportIssuePlace : '')],
+    ['Passport Issue Date', raw.senderPassportIssueDate || raw.passportIssueDate || (senderIsSelf ? profile.passportIssueDate : '')],
+    ['Passport Expiry Date', raw.senderPassportExpiry || raw.passportExpiry || raw.passportExpiryDate || tx.senderPassportExpiry || (senderIsSelf ? (profile.passportExpiry || profile.passportExpiryDate) : '')],
+    ['Date of Birth', raw.senderDob || raw.senderDateOfBirth || raw.dateOfBirth || raw.dob || (senderIsSelf ? (profile.dateOfBirth || profile.dob || profile.birthDate) : '')],
+    ['Gender', raw.senderGender || raw.gender || (senderIsSelf ? profile.gender : '')],
+    ['Nationality', raw.senderNationality || raw.nationality || (senderIsSelf ? profile.nationality : '')],
+    ['Address', raw.senderAddress || tx.senderAddress || (senderIsSelf ? (profile.address || profile.fullAddress) : '')],
+    ['City', raw.senderCity || raw.city || (senderIsSelf ? profile.city : '')],
+    ['State / Province', raw.senderState || raw.state || (senderIsSelf ? profile.state : '')],
+    ['Postcode', raw.senderPostcode || raw.postcode || raw.postalCode || (senderIsSelf ? (profile.postcode || profile.postalCode) : '')],
+    ['Country of Residence', raw.senderCountry || raw.residenceCountry || (senderIsSelf ? (profile.country || profile.residenceCountry) : '')],
+    ['Occupation', raw.senderOccupation || raw.occupation || (senderIsSelf ? profile.occupation : '')],
+    ['Employer', raw.employerName || raw.employer || raw.senderEmployer || (senderIsSelf ? profile.employerName : '')],
+    ['Skilled Labor / Profession', raw.skill || raw.skilledLabor || raw.profession || (senderIsSelf ? profile.profession : '')],
+    ['Source of Funds', raw.sourceOfFunds || raw.sourceFunds || (senderIsSelf ? profile.sourceOfFunds : '')],
+    ['Transfer Purpose', raw.purpose || raw.transferPurpose],
+    ['Relationship to Receiver', raw.receiverRelationship || raw.relationship],
+  ].filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== '');
+  const rows = senderFields;
   const receiverRows = [
     ['Payout Country', countryName(raw.country || tx.country)], ['Mobile No', raw.receiverPhone || tx.receiverPhone], ["Receiver's Name", receiver],
-    ['Address', raw.receiverAddress || raw.receiverCountry || countryName(raw.country || tx.country)], ['Bank Name', raw.receiverBankName], ['Branch', raw.receiverBranch],
-    ['Bank Account No', raw.receiverAccountNumber], ['Place of Issue', raw.receiverPlaceOfIssue], ['Routing Number', raw.receiverRoutingNumber],
+    ['Address', raw.receiverAddress || raw.receiverFullAddress || raw.receiverCountry || countryName(raw.country || tx.country)],
+    ['Receiver ID Type', raw.receiverIdType], ['Receiver ID Number', raw.receiverIdNumber],
+    ['Place of Issue', raw.receiverPlaceOfIssue], ['Bank Name', raw.receiverBankName], ['Branch', raw.receiverBranch],
+    ['Bank Account No', raw.receiverAccountNumber], ['Routing Number', raw.receiverRoutingNumber],
     ['Pickup Network', raw.receiverPickupNetwork], ['Pickup City', raw.receiverPickupCity], ['Wallet Provider', raw.receiverWalletProvider], ['Wallet Number', raw.receiverWalletNumber],
     ['Payout Method', method],
   ].filter(([, v]) => v !== undefined && v !== null && v !== '');
-  return { curr, send, fee, gst, total, rate, receive, method, sender, receiver, txId, created, pin, approvedBy, approvedRole, completedBy, completedRole, rows, receiverRows };
+  return { curr, send, fee, gst, total, rate, receive, method, sender, receiver, txId, created, pin, status, approvedBy, approvedRole, completedBy, completedRole, rows, receiverRows };
 }
 
 export function buildReceiptHtml(tx = {}, profile = {}, operator = '') {
@@ -62,7 +99,7 @@ export function buildReceiptHtml(tx = {}, profile = {}, operator = '') {
   const rows = (items) => items.map(([label, value]) => `<div class="row"><span>${esc(label)}</span><b>${esc(val(value))}</b></div>`).join('');
   return `<!doctype html><html><head><meta charset="utf-8"><style>
 @page{size:A5 landscape;margin:5mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;color:#123b72;font-size:7.5px}.receipt{border:1px solid #b7d8f5;border-radius:5px;overflow:hidden}.header{background:#0757b9;color:#fff;padding:6mm 7mm;display:flex;justify-content:space-between;align-items:center}.brand{font-size:18px;font-weight:800}.company{font-size:7px;margin-top:1mm}.title{text-align:right;font-size:13px;font-weight:800}.subtitle{font-size:7px;font-weight:400;margin-top:1.5mm}.body{padding:4mm 5mm}.meta{display:grid;grid-template-columns:1fr 1.2fr 1fr;border:1px solid #b7d8f5;border-radius:4px;margin-bottom:3mm}.meta div{padding:2.5mm 3mm;border-right:1px solid #b7d8f5}.meta div:last-child{border:0}.meta span,.summary span,.staff span{display:block;color:#6683a6;font-size:6.5px;margin-bottom:1mm}.meta b{font-size:8px}.meta .pin{font-size:10px;color:#0764c8}.columns{display:grid;grid-template-columns:1.05fr 1.05fr 1fr;gap:3mm}.card,.summary{border:1px solid #a9d3f4;border-radius:4px;overflow:hidden}.card h2,.summary h2{margin:0;padding:2.5mm 3mm;background:#eef7ff;color:#0764c8;font-size:9px}.cardbody{padding:2mm 3mm}.row{display:flex;padding:1.1mm 0;line-height:1.15}.row span{width:40%;color:#5c7ba1}.row b{width:60%;color:#123f78}.amount{padding:2mm 3mm}.amount>div{display:flex;justify-content:space-between;border-bottom:1px solid #d7e9f8;padding:1.2mm 0}.amount b{color:#064d9f}.total{background:#0873d5;color:#fff;border-radius:3px;padding:2mm 3mm!important;border:0!important;margin-top:1mm}.total span,.total b{color:#fff!important;font-size:8.5px!important}.staff{display:grid;grid-template-columns:1fr 1fr;margin:0 3mm 3mm;background:#f0f8ff;border-radius:3px}.staff>div{padding:2mm 3mm;border-right:1px solid #c7e1f5}.staff>div:last-child{border:0}.staff b{font-size:7.5px}.footer{display:flex;justify-content:space-between;align-items:center;background:#eef8ff;padding:2.5mm 5mm;border-top:1px solid #c9e2f5}.footer b{font-size:8px;color:#0764c8}.footer span{display:block;margin-top:1mm;font-size:6.5px}.powered{font-size:5.5px;margin-top:1mm}.bottom{background:#0757b9;color:#fff;text-align:center;padding:2mm;font-size:7px;font-weight:700}
-</style></head><body><div class="receipt"><div class="header"><div><div class="brand">MySheba</div><div class="company">${esc(COMPANY_NAME)}<br>${esc(COMPANY_ADDRESS)}</div></div><div class="title">Remittance Transaction Receipt<div class="subtitle">Send Money • Connect People • Build a Better Tomorrow</div></div></div><div class="body"><div class="meta"><div><span>Date &amp; Time</span><b>${esc(d.created)}</b></div><div><span>Transaction ID</span><b>${esc(val(d.txId))}</b></div><div><span>PIN</span><b class="pin">${esc(val(d.pin))}</b></div></div><div class="columns"><div class="card"><h2>SENDER DETAILS</h2><div class="cardbody">${rows(d.rows)}</div></div><div class="card"><h2>RECEIVER DETAILS</h2><div class="cardbody">${rows(d.receiverRows)}</div></div><div class="summary"><h2>TRANSACTION SUMMARY</h2><div class="amount"><div><span>Transfer Amount</span><b>${esc(money(d.send,'MYR'))}</b></div><div><span>Service Charge</span><b>${esc(money(d.fee,'MYR'))}</b></div><div><span>GST</span><b>${esc(money(d.gst,'MYR'))}</b></div><div><span>Exchange Rate</span><b>1 MYR = ${esc(val(d.rate))} ${esc(d.curr)}</b></div><div><span>Receive Amount</span><b>${esc(money(d.receive,d.curr))}</b></div><div class="total"><span>Total Collected</span><b>${esc(money(d.total,'MYR'))}</b></div></div><div class="staff"><div><span>Operator</span><b>${esc(d.completedBy ? `${d.completedBy}${d.completedRole ? ` (${d.completedRole})` : ''}` : '-')}</b></div><div><span>Approved By</span><b>${esc(d.approvedBy ? `${d.approvedBy}${d.approvedRole ? ` (${d.approvedRole})` : ''}` : '-')}</b></div></div></div></div></div><div class="footer"><div><b>Thank you for choosing MySheba!</b><span>${esc(EMAIL)}</span><div class="powered">${esc(POWERED_BY)}</div></div><div style="text-align:right"><b>MySheba</b><span>${esc(WEBSITE)}</span></div></div><div class="bottom">${esc(WEBSITE)}</div></div></body></html>`;
+</style></head><body><div class="receipt"><div class="header"><div><div class="brand">MySheba</div><div class="company">${esc(COMPANY_NAME)}<br>${esc(COMPANY_ADDRESS)}</div></div><div class="title">Remittance Transaction Receipt<div class="subtitle">Send Money • Connect People • Build a Better Tomorrow</div></div></div><div class="body"><div class="meta"><div><span>Date &amp; Time</span><b>${esc(d.created)}</b></div><div><span>Transaction ID</span><b>${esc(val(d.txId))}</b></div><div><span>PIN</span><b class="pin">${esc(val(d.pin))}</b></div><div><span>Status</span><b>${esc(d.status)}</b></div></div><div class="columns"><div class="card"><h2>SENDER DETAILS</h2><div class="cardbody">${rows(d.rows)}</div></div><div class="card"><h2>RECEIVER DETAILS</h2><div class="cardbody">${rows(d.receiverRows)}</div></div><div class="summary"><h2>TRANSACTION SUMMARY</h2><div class="amount"><div><span>Transfer Amount</span><b>${esc(money(d.send,'MYR'))}</b></div><div><span>Service Charge</span><b>${esc(money(d.fee,'MYR'))}</b></div><div><span>GST</span><b>${esc(money(d.gst,'MYR'))}</b></div><div><span>Exchange Rate</span><b>1 MYR = ${esc(val(d.rate))} ${esc(d.curr)}</b></div><div><span>Receive Amount</span><b>${esc(money(d.receive,d.curr))}</b></div><div class="total"><span>Total Collected</span><b>${esc(money(d.total,'MYR'))}</b></div></div><div class="staff"><div><span>Operator</span><b>${esc(d.completedBy ? `${d.completedBy}${d.completedRole ? ` (${d.completedRole})` : ''}` : '-')}</b></div><div><span>Approved By</span><b>${esc(d.approvedBy ? `${d.approvedBy}${d.approvedRole ? ` (${d.approvedRole})` : ''}` : '-')}</b></div></div></div></div></div><div class="footer"><div><b>Thank you for choosing MySheba!</b><span>${esc(EMAIL)}</span><div class="powered">${esc(POWERED_BY)}</div></div><div style="text-align:right"><b>MySheba</b><span>${esc(WEBSITE)}</span></div></div><div class="bottom">${esc(WEBSITE)}</div></div></body></html>`;
 }
 
 function Section({ title, rows }) { return <View style={styles.section}><Text style={styles.sectionTitle}>{title}</Text>{rows.map(([label,value], i) => <View key={`${label}-${i}`} style={styles.row}><Text style={styles.label}>{label}</Text><Text style={styles.value}>{val(value)}</Text></View>)}</View>; }
@@ -75,7 +112,7 @@ export default function RemittanceReceipt({ transaction = {}, profile = {}, oper
   const d = useMemo(() => getReceiptData(transaction, profile, operator), [transaction, profile, operator]);
   const html = useMemo(() => buildReceiptHtml(transaction, profile, operator), [transaction, profile, operator]);
   const printReceipt = async () => { try { setPrinting(true); await printHtml(html); } catch (e) { console.warn('Receipt print failed', e); } finally { setPrinting(false); } };
-  return <View style={[styles.container,{backgroundColor:colors.background}]}><ScrollView contentContainerStyle={styles.content}><View style={styles.preview}><View style={styles.previewHeader}><Text style={styles.brand}>MySheba</Text><View><Text style={styles.company}>{COMPANY_NAME}</Text><Text style={styles.company}>{COMPANY_ADDRESS}</Text></View><Text style={styles.title}>Remittance Transaction Receipt</Text></View><View style={styles.meta}><Row label="Date & Time" value={d.created}/><Row label="Transaction ID" value={val(d.txId)}/><Row label="PIN" value={val(d.pin)}/></View><View style={styles.columns}><Section title="SENDER DETAILS" rows={d.rows}/><Section title="RECEIVER DETAILS" rows={d.receiverRows}/><Summary d={d}/></View><View style={styles.footer}><Text>{EMAIL}  •  {WEBSITE}</Text><Text>{POWERED_BY}</Text></View></View><TouchableOpacity style={styles.printButton} onPress={printReceipt} disabled={printing}>{printing ? <ActivityIndicator color="#fff"/> : <Text style={styles.printText}>Print / Save Receipt PDF</Text>}</TouchableOpacity></ScrollView></View>;
+  return <View style={[styles.container,{backgroundColor:colors.background}]}><ScrollView contentContainerStyle={styles.content}><View style={styles.preview}><View style={styles.previewHeader}><Text style={styles.brand}>MySheba</Text><View><Text style={styles.company}>{COMPANY_NAME}</Text><Text style={styles.company}>{COMPANY_ADDRESS}</Text></View><Text style={styles.title}>Remittance Transaction Receipt</Text></View><View style={styles.meta}><Row label="Date & Time" value={d.created}/><Row label="Transaction ID" value={val(d.txId)}/><Row label="PIN" value={val(d.pin)}/><Row label="Status" value={d.status}/></View><View style={styles.columns}><Section title="SENDER DETAILS" rows={d.rows}/><Section title="RECEIVER DETAILS" rows={d.receiverRows}/><Summary d={d}/></View><View style={styles.footer}><Text>{EMAIL}  •  {WEBSITE}</Text><Text>{POWERED_BY}</Text></View></View><TouchableOpacity style={styles.printButton} onPress={printReceipt} disabled={printing}>{printing ? <ActivityIndicator color="#fff"/> : <Text style={styles.printText}>Print / Save Receipt PDF</Text>}</TouchableOpacity></ScrollView></View>;
 }
 
 const styles = StyleSheet.create({

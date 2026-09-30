@@ -222,10 +222,33 @@ const result=await db.runTransaction(async tx=>{const existingTx=await tx.get(tx
       // transaction. Unknown transactions are also removed from the dealer/
       // reseller queue by transactionQueueService.
       if (ambiguousProviderOutcome) {
+        // Preserve the provider identity on the transaction so the scheduled
+        // status poller can reconcile it. Older unknown transactions can recover
+        // this identity from the apiExecutions claim using the same request ID.
+        let providerId = null;
+        let providerName = null;
+        try {
+          const executionKey = crypto.createHash('sha256')
+            .update(`${service}|${result.customerUid}|${requestId}`)
+            .digest('hex');
+          const executionSnap = await db.collection('apiExecutions').doc(executionKey).get();
+          const execution = executionSnap.exists ? (executionSnap.data() || {}) : {};
+          providerId = execution.providerId || null;
+          if (providerId) {
+            const providerSnap = await db.collection('api_providers').doc(providerId).get();
+            if (providerSnap.exists) providerName = providerSnap.data()?.name || null;
+          }
+        } catch (reconciliationLookupError) {
+          // Keep the original provider error; the poller can still attempt a
+          // lookup from apiExecutions if this metadata read temporarily fails.
+        }
         await txref.update({
           status: 'unknown',
           apiExecution: {
             status: 'unknown',
+            providerId,
+            providerName,
+            requestId,
             providerSucceeded,
             error: String(e?.message || 'Provider outcome is uncertain').slice(0, 500),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),

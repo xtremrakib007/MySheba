@@ -12,9 +12,11 @@ import HeaderDecor from '../components/HeaderDecor';
 
 function getTxStatusStyle(colors) {
   return {
-    pending: { label: 'Pending', color: colors.warning, bg: '#FFF8E1' },
+    pending: { label: 'Checking', color: colors.warning, bg: '#FFF8E1' },
     processing: { label: 'Processing', color: colors.primary, bg: '#E8F0FE' },
-    completed: { label: 'Completed', color: colors.success, bg: '#E8F5E9' },
+    unknown: { label: 'Checking with provider', color: colors.warning, bg: '#FFF8E1' },
+    completed: { label: 'Success', color: colors.success, bg: '#E8F5E9' },
+    failed: { label: 'Cancelled / Refunded', color: colors.error, bg: '#FDECEA' },
   };
 }
 
@@ -51,7 +53,15 @@ function TxRow({ item, onPress }) {
 
   const TX_STATUS_STYLE = getTxStatusStyle(colors);
   const styles = createStyles(colors);
-  const style = TX_STATUS_STYLE[item.status] || TX_STATUS_STYLE.pending;
+  const createdAtMs = item.createdAt?.toMillis
+    ? item.createdAt.toMillis()
+    : (item.createdAt?.seconds ? item.createdAt.seconds * 1000 : 0);
+  const needsReview = ['pending', 'processing', 'unknown'].includes(item.status)
+    && createdAtMs > 0
+    && Date.now() - createdAtMs >= 5 * 60 * 1000;
+  const style = needsReview
+    ? { label: 'Delayed — contact support', color: colors.error, bg: '#FDECEA' }
+    : (TX_STATUS_STYLE[item.status] || TX_STATUS_STYLE.pending);
   const showRejected = item.status === 'completed' && item.rejected;
   const badge = showRejected ? { label: 'Rejected', color: colors.error, bg: '#FDECEA' } : style;
 

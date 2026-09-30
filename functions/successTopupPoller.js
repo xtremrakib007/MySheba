@@ -1,5 +1,6 @@
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const admin = require('firebase-admin');
+const crypto = require('crypto');
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -68,6 +69,7 @@ async function settle(txRef, provider, providerStatus, message) {
 
     const apiExecution = {
       ...(order.apiExecution || {}),
+      status: normalized === 'success' ? 'accepted' : normalized,
       providerId: provider.id,
       providerName: provider.name || 'Success TopUp',
       providerStatus,
@@ -76,7 +78,7 @@ async function settle(txRef, provider, providerStatus, message) {
     };
 
     if (normalized === 'processing') {
-      if (order.status === 'pending') {
+      if (order.status === 'pending' || order.status === 'unknown') {
         tx.update(txRef, { status: 'processing', apiExecution, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
       } else {
         tx.update(txRef, { apiExecution, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
@@ -131,22 +133,64 @@ async function settle(txRef, provider, providerStatus, message) {
 }
 
 exports.pollSuccessTopUpStatus = onSchedule(
-  { schedule: 'every 5 minutes', timeoutSeconds: 120, memory: '256MiB' },
+  { schedule: 'every 1 minutes', timeoutSeconds: 120, memory: '256MiB' },
   async () => {
     const provider = await getProvider();
     if (!provider) return;
 
-    const snap = await db.collection(TRANSACTIONS)
-      .where('status', '==', 'processing')
-      .limit(50)
-      .get();
+    // Unknown transactions are included: a provider timeout/HTTP 503 can
+    // happen after the provider accepted the request but before MySheba received
+    // a usable response. Polling the original transaction ID is safe; resending
+    // the recharge is not.
+    const [pendingSnap, processingSnap, unknownSnap] = await Promise.all([
+      db.collection(TRANSACTIONS).where('status', '==', 'pending').limit(200).get(),
+      db.collection(TRANSACTIONS).where('status', '==', 'processing').limit(200).get(),
+      db.collection(TRANSACTIONS).where('status', '==', 'unknown').limit(200).get(),
+    ]);
+    // Include pending: a request can remain in this state when the initial
+    // provider call times out before the transaction receives provider metadata.
+    // We query status only and filter API transactions below to avoid requiring
+    // a new composite Firestore index for this recovery path.
+    const now = Date.now();
+    const candidates = [...pendingSnap.docs, ...processingSnap.docs, ...unknownSnap.docs]
+      .filter(doc => {
+        const data = doc.data() || {};
+        const createdAt = data.createdAt?.toMillis ? data.createdAt.toMillis() : 0;
+        // Give the original provider request time to finish before checking it.
+        return data.service === 'Recharge'
+          && data.executionMode === 'api'
+          && createdAt > 0
+          && now - createdAt >= 60 * 1000;
+      })
+      .sort((a, b) => {
+        const aTime = a.data().createdAt?.toMillis?.() || 0;
+        const bTime = b.data().createdAt?.toMillis?.() || 0;
+        return aTime - bTime;
+      })
+      .slice(0, 100); // Bound provider API traffic while prioritizing oldest orders.
 
-    for (const doc of snap.docs) {
+    for (const doc of candidates) {
       const data = doc.data() || {};
-      if (data.apiExecution?.providerId !== provider.id || data.executionMode !== 'api') continue;
 
-      const trxid = String(data.raw?.requestId || data.apiExecution?.providerTransactionId || '');
+      const trxid = String(data.raw?.requestId || data.apiExecution?.requestId || data.apiExecution?.providerTransactionId || '');
       if (!trxid) continue;
+
+      let transactionProviderId = data.apiExecution?.providerId || null;
+      // Backfill older unknown transactions, which predate provider metadata on
+      // the transaction document, from the atomic execution claim.
+      if (!transactionProviderId && data.customerId) {
+        try {
+          const executionKey = crypto.createHash('sha256')
+            .update(`recharge|${data.customerId}|${trxid}`)
+            .digest('hex');
+          const executionSnap = await db.collection('apiExecutions').doc(executionKey).get();
+          transactionProviderId = executionSnap.exists ? executionSnap.data()?.providerId || null : null;
+        } catch (lookupError) {
+          console.error('Could not recover provider for uncertain recharge', doc.id);
+          continue;
+        }
+      }
+      if (transactionProviderId !== provider.id) continue;
 
       try {
         const result = await checkStatus(trxid, provider);
