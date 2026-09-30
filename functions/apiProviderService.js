@@ -291,8 +291,8 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     const billNumber = String(raw.billNumber || raw.accountNumber || '').trim();
     const contactNumber = String(raw.mobileNumber || '').trim();
     if (!billNumber) throw new Error('Bangladesh bill account number is required.');
-    if (!/^01\\d{9}$/.test(contactNumber)) throw new Error('A valid Bangladesh mobile number is required for bill payment.');
-    if (category === 'mobile' && !/^01\\d{9}$/.test(billNumber)) throw new Error('A valid Bangladesh postpaid mobile bill number is required.');
+    if (!/^01\d{9}$/.test(contactNumber)) throw new Error('A valid Bangladesh mobile number is required for bill payment.');
+    if (category === 'mobile' && !/^01\d{9}$/.test(billNumber)) throw new Error('A valid Bangladesh postpaid mobile bill number is required.');
   }
   const providerAmount = (String(provider.name || '').trim().toLowerCase() === 'success topup' && String(raw.country || '').toUpperCase() === 'BD') ? (raw.amount ?? payload?.amount ?? '') : (payload?.amount ?? raw.amount ?? '');
   const vars = { requestId, uid:customer?.uid||'', phone:customer?.phone||'', amount:providerAmount, total:payload?.total??raw.total??'', service, country:raw.country||'', operator:raw.operator||'', billOperator, billNumber:raw.billNumber||raw.accountNumber||'', mobileNumber:raw.mobileNumber||'', monthName, note:raw.note||'', packageCode:raw.packageCode||'', details:payload?.details||'', apiKey:provider.apiKey||'', secretKey:provider.secretKey||'', ...Object.fromEntries(Object.entries(raw).filter(([k,v]) => !['requestId'].includes(k) && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')).slice(0,100)) };
