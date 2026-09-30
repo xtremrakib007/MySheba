@@ -90,6 +90,16 @@ export default function ServiceScreen() {
   const isEntertainment = currentService === 'entertainment';
   const isLast = currentStep === totalSteps - 1;
   const adSlot = AD_SLOTS[currentService];
+  const isBangladeshApiService =
+    ['recharge', 'internet', 'billpayment'].includes(currentService) &&
+    String(serviceData?.country || '').trim().toUpperCase() === 'BD';
+  const finalButtonLabel = isBangladeshApiService
+    ? (currentService === 'recharge'
+      ? 'Recharge Now'
+      : currentService === 'internet'
+        ? 'Buy Package'
+        : 'Pay Bill')
+    : 'Submit';
 
   // Same step-at-a-time behaviour as the "← Back" button in the nav bar
   // below - only leaves the wizard entirely once we're already on step 1.
@@ -134,7 +144,7 @@ export default function ServiceScreen() {
         <View style={styles.btnGroup}>
           {currentStep > 0 && <OutlineButton label="← Back" onPress={prevStep} />}
           <PrimaryButton
-            label={isLast ? (submitting ? 'Submitting...' : 'Submit') : 'Next →'}
+            label={isLast ? (submitting ? 'Processing...' : finalButtonLabel) : 'Next →'}
             onPress={onNext}
             disabled={isLast && submitting}
           />
