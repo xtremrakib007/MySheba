@@ -103,6 +103,7 @@ exports.listApiWebhooks = require('./apiWebhookService').listApiWebhooks;
 exports.saveApiWebhook = require('./apiWebhookService').saveApiWebhook;
 exports.deleteApiWebhook = require('./apiWebhookService').deleteApiWebhook;
 exports.apiWebhook = require('./apiWebhookService').apiWebhook;
+exports.pollSuccessTopUpStatus = require('./successTopupPoller').pollSuccessTopUpStatus;
 exports.purchaseRechargePin = require('./rechargePinService').purchaseRechargePin;
 exports.getRechargePin = require('./rechargePinService').getRechargePin;
 exports.createSupportTicket = supportTicketService.createSupportTicket;
