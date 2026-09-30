@@ -151,11 +151,26 @@ exports.pollSuccessTopUpStatus = onSchedule(
     // provider call times out before the transaction receives provider metadata.
     // We query status only and filter API transactions below to avoid requiring
     // a new composite Firestore index for this recovery path.
-    const docs = [...pendingSnap.docs, ...processingSnap.docs, ...unknownSnap.docs];
+    const now = Date.now();
+    const candidates = [...pendingSnap.docs, ...processingSnap.docs, ...unknownSnap.docs]
+      .filter(doc => {
+        const data = doc.data() || {};
+        const createdAt = data.createdAt?.toMillis ? data.createdAt.toMillis() : 0;
+        // Give the original provider request time to finish before checking it.
+        return data.service === 'Recharge'
+          && data.executionMode === 'api'
+          && createdAt > 0
+          && now - createdAt >= 60 * 1000;
+      })
+      .sort((a, b) => {
+        const aTime = a.data().createdAt?.toMillis?.() || 0;
+        const bTime = b.data().createdAt?.toMillis?.() || 0;
+        return aTime - bTime;
+      })
+      .slice(0, 100); // Bound provider API traffic while prioritizing oldest orders.
 
-    for (const doc of docs) {
+    for (const doc of candidates) {
       const data = doc.data() || {};
-      if (data.service !== 'Recharge' || data.executionMode !== 'api') continue;
 
       const trxid = String(data.raw?.requestId || data.apiExecution?.requestId || data.apiExecution?.providerTransactionId || '');
       if (!trxid) continue;
