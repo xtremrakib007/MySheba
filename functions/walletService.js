@@ -150,10 +150,10 @@ const result=await db.runTransaction(async tx=>{const existingTx=await tx.get(tx
       // Firestore write fails.
       providerSucceeded = true;
       await txref.update({
-        status: 'completed',
-        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+        status: api?.status === 'processing' ? 'processing' : 'completed',
+        completedAt: api?.status === 'processing' ? null : admin.firestore.FieldValue.serverTimestamp(),
         apiExecution: {
-          status: 'accepted',
+          status: api?.status === 'processing' ? 'processing' : 'accepted',
           providerId: api.providerId,
           providerName: api.providerName,
           responseId: api.responseId || null,
