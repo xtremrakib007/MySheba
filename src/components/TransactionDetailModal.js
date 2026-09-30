@@ -9,7 +9,7 @@ import DownloadButton from './DownloadButton';
 import * as topupService from '../firebase/topupService';
 import * as supportTicketService from '../firebase/supportTicketService';
 import { useApp } from '../context/AppContext';
-import { buildReceiptHtml } from './RemittanceReceipt';
+import RemittanceReceipt from './RemittanceReceipt';
 
 const BADGE_COLORS = {
   pending: { bg: '#FFF8E1', text: '#F57F17' },
@@ -274,7 +274,11 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
   const { colors } = useTheme();
   const { profile, authUser } = useApp();
   const [pinOverride, setPinOverride] = React.useState('');
-  React.useEffect(() => { setPinOverride(''); }, [item?.id, item?.pin]);
+  const [showRemittanceReceipt, setShowRemittanceReceipt] = React.useState(false);
+  React.useEffect(() => {
+    setPinOverride('');
+    setShowRemittanceReceipt(false);
+  }, [item?.id, item?.pin]);
 
   const styles = createStyles(colors);
   if (!item) return null;
@@ -313,6 +317,14 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
           </ScrollView>
 
           <View style={styles.footer}>
+            {type === 'tx' && item.service === 'Remittance' && item.status === 'completed' && (
+              <TouchableOpacity
+                style={styles.printBtn}
+                onPress={() => setShowRemittanceReceipt(true)}
+              >
+                <Text style={styles.printText}>View Remittance Receipt</Text>
+              </TouchableOpacity>
+            )}
             {type === 'tx' && (
               <TouchableOpacity style={styles.printBtn} onPress={async () => {
                 try {
@@ -321,12 +333,9 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
                   // Without it a completed order printed "Not generated" for a
                   // PIN that had very much been generated and used.
                   const requiresCollectionPin = item.service === 'Mobile Banking' || item.service === 'Remittance';
-                  const pin = requiresCollectionPin ? (pinOverride || item.pin || item.collectionPin || '') : '';
+                  const pin = requiresCollectionPin ? (pinOverride || item.collectionPin || item.pin || '') : '';
                   const currency = txCurrency(item);
                   const raw = item.raw || {};
-                  const currency = txCurrency(item);
-                  const requiresCollectionPin = item.service === 'Mobile Banking' || item.service === 'Remittance';
-                  const pin = requiresCollectionPin ? (pinOverride || item.collectionPin || item.pin || '') : '';
                   const esc = (v) => safe(v);
                   const rows = [
                     ['Service', item.service],
@@ -404,6 +413,26 @@ ${pinBlock}${receiptImage}${passportImage}
             </TouchableOpacity>
           </View>
         </View>
+      </View>
+    </Modal>
+    <Modal
+      visible={showRemittanceReceipt}
+      animationType="slide"
+      onRequestClose={() => setShowRemittanceReceipt(false)}
+    >
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <View style={{ minHeight: 54, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+          <Text style={{ fontSize: 17, fontWeight: '800', color: colors.text }}>MySheba Remittance Receipt</Text>
+          <TouchableOpacity onPress={() => setShowRemittanceReceipt(false)} accessibilityRole="button" accessibilityLabel="Close remittance receipt">
+            <Text style={{ color: colors.primary, fontWeight: '700', padding: 8 }}>Close</Text>
+          </TouchableOpacity>
+        </View>
+        <RemittanceReceipt
+          transaction={item}
+          profile={profile || {}}
+          operator={item.completedByName || item.operatorName || ''}
+          onClose={() => setShowRemittanceReceipt(false)}
+        />
       </View>
     </Modal>
   );
