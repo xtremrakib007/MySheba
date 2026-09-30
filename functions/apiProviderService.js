@@ -506,10 +506,40 @@ exports.saveApiProvider = onCall({ enforceAppCheck: false }, async (request) => 
         updatedBy: request.auth.uid
       }, { merge: false });
       tx.set(settingsRef, {
-        modes: { ...DEFAULT_MODES, ...(currentSettings.modes || {}), Recharge: 'api', 'Bill Payment': 'api' },
+        modes: { ...DEFAULT_MODES, ...(currentSettings.modes || {}), Recharge: 'api', Internet: 'api', 'Bill Payment': 'api' },
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedBy: request.auth.uid
       }, { merge: true });
+    }
+
+    // Provision a companion Internet provider from the same Success TopUp credentials.
+    if (data.name === 'Success TopUp' && data.service === 'Recharge') {
+      const internetProviderRef = db.collection(COLLECTION).doc('success-topup-internet');
+      tx.set(internetProviderRef, {
+        service: 'Internet',
+        name: 'Success TopUp',
+        baseUrl: 'https://api.successtopup.com',
+        endpointPath: '/api/recharge',
+        method: 'POST',
+        authType: 'none',
+        headers: {},
+        queryTemplate: {},
+        requestTemplate: {},
+        responseSuccessPath: 'result',
+        responseSuccessValue: 'true',
+        responseProcessingPath: '',
+        responseProcessingValue: '',
+        responseIdPath: '',
+        responseMessagePath: 'message',
+        apiKey: data.apiKey,
+        secretKey: data.secretKey,
+        active: data.active !== false,
+        priority: 9999,
+        timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)),
+        notes: 'Fixed Success TopUp Bangladesh internet/data-pack integration.',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedBy: request.auth.uid
+      }, { merge: false });
     }
 
     // Provision a companion Bill Payment provider from the same Success TopUp
