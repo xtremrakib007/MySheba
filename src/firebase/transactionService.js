@@ -65,11 +65,3 @@ export async function rejectTransaction(id, reason, service) { if (!['Recharge',
 export async function completeTransaction(id, pin, receiptUrl) { try { await httpsCallable(functions, 'completeTransaction')({ transactionId: id, pin: pin || '', receiptUrl: receiptUrl || '' }); } catch (err) { throw new Error(err.message || 'Could not complete this order.'); } }
 export async function assignDealer(id, dealerId) { try { await httpsCallable(functions, 'assignDealer')({ transactionId: id, dealerId }); } catch (err) { throw new Error(err.message || 'Could not assign this dealer.'); } }
 
-export async function generateCollectionPin(id) {
-  try {
-    const { data } = await httpsCallable(functions, 'generateCollectionPin')({ transactionId: id });
-    return data;
-  } catch (err) {
-    throw new Error(err.message || 'Could not generate the collection PIN.');
-  }
-}
