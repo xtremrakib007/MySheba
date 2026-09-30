@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Modal, View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { API_SERVICES } from '../firebase/apiProviderService';
 
-const HELP_TEXT = 'Success TopUp is preconfigured by MySheba. Only the API key and API secret are entered here; endpoint, request format, status handling and webhook settings are fixed server-side.';
+const HELP_TEXT = 'Success TopUp is preconfigured by MySheba. Enter only the API key and API secret. The same credentials configure mobile recharge plus Bangladesh bill payment server-side; secrets never go to the customer app.';
 
 export default function ApiProviderFormModal({ visible, provider, onClose, onSave, successTopUp = false }) {
   const special = successTopUp || provider?.name === 'Success TopUp';
@@ -20,7 +20,7 @@ export default function ApiProviderFormModal({ visible, provider, onClose, onSav
       <Text style={styles.title}>{special ? 'Success TopUp Setup' : (provider ? 'Edit API Provider' : 'Add API Provider')}</Text>
       <ScrollView>
         {special ? <>
-          <Text style={styles.provider}>Recharge API: Success TopUp</Text>
+          <Text style={styles.provider}>Success TopUp: Recharge + Bangladesh Bills</Text>
           <Text style={styles.help}>{HELP_TEXT}</Text>
           <Text style={styles.label}>API Key</Text>
           <TextInput style={styles.input} placeholder={provider?.hasApiKey ? 'Leave blank to keep current API key' : 'Success TopUp API key'} value={String(form.apiKey || '')} onChangeText={(v) => set('apiKey', v)} secureTextEntry autoCapitalize="none" />
@@ -28,9 +28,10 @@ export default function ApiProviderFormModal({ visible, provider, onClose, onSav
           <TextInput style={styles.input} placeholder={provider?.hasSecretKey ? 'Leave blank to keep current API secret' : 'Success TopUp API secret'} value={String(form.secretKey || '')} onChangeText={(v) => set('secretKey', v)} secureTextEntry autoCapitalize="none" />
           <View style={styles.fixedBox}>
             <Text style={styles.fixedTitle}>Automatic configuration</Text>
-            <Text>• HTTPS Success TopUp recharge endpoint</Text>
-            <Text>• Prepaid recharge request format</Text>
-            <Text>• Success / Processing / Cancel handling</Text>
+            <Text>• HTTPS Success TopUp recharge + bill endpoints</Text>
+            <Text>• Bangladesh electricity, gas, water and internet bills</Text>
+            <Text>• Bangladesh postpaid mobile bills (GP, Robi, Banglalink)</Text>
+            <Text>• Success / Processing / Cancel handling for recharge</Text>
             <Text>• Status polling and wallet refund protection</Text>
             <Text>• Webhook configuration</Text>
           </View>
