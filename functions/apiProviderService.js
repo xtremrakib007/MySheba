@@ -134,7 +134,7 @@ function validate(data) {
     if (!cleanString(data.username, 200) || !cleanString(data.password, 1000)) throw new HttpsError('invalid-argument', 'Username and password are required for Basic authentication.');
   }
   if (!ALLOWED_METHODS.includes(method)) throw new HttpsError('invalid-argument', 'Invalid HTTP method.');
-  return { service, name, baseUrl, endpointPath, method, authType, apiKey: cleanString(data.apiKey, 1000), secretKey: cleanString(data.secretKey, 1000), username: cleanString(data.username, 200), password: cleanString(data.password, 1000), active: data.active !== false, priority: Math.max(0, Math.min(9999, Number(data.priority) || 0)), timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)), notes: cleanString(data.notes, 1000), headers: validateHeaders(data.headers || {}), queryTemplate: validateTemplate(data.queryTemplate || {}, 'Query template'), requestTemplate: validateTemplate(data.requestTemplate || {}, 'Request template'), responseSuccessPath: cleanString(data.responseSuccessPath, 200), responseSuccessValue: cleanString(data.responseSuccessValue, 200), responseIdPath: cleanString(data.responseIdPath, 200), responseMessagePath: cleanString(data.responseMessagePath, 200), responsePinPath: service === 'Recharge PIN' ? cleanString(data.responsePinPath, 200) : '' };
+  return { service, name, baseUrl, endpointPath, method, authType, apiKey: cleanString(data.apiKey, 1000), secretKey: cleanString(data.secretKey, 1000), username: cleanString(data.username, 200), password: cleanString(data.password, 1000), active: data.active !== false, priority: Math.max(0, Math.min(9999, Number(data.priority) || 0)), timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)), notes: cleanString(data.notes, 1000), headers: validateHeaders(data.headers || {}), queryTemplate: validateTemplate(data.queryTemplate || {}, 'Query template'), requestTemplate: validateTemplate(data.requestTemplate || {}, 'Request template'), responseSuccessPath: cleanString(data.responseSuccessPath, 200), responseSuccessValue: cleanString(data.responseSuccessValue, 200), responseProcessingPath: cleanString(data.responseProcessingPath, 200), responseProcessingValue: cleanString(data.responseProcessingValue, 200), responseIdPath: cleanString(data.responseIdPath, 200), responseMessagePath: cleanString(data.responseMessagePath, 200), responsePinPath: service === 'Recharge PIN' ? cleanString(data.responsePinPath, 200) : '' };
 }
 
 function asObject(value) { if (value && typeof value === 'object' && !Array.isArray(value)) return value; if (typeof value !== 'string') return {}; try { const x = JSON.parse(value); return x && typeof x === 'object' && !Array.isArray(x) ? x : {}; } catch { return {}; } }
@@ -249,7 +249,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     const responseMessage = provider.responseMessagePath ? getPath(data, provider.responseMessagePath) : null;
     const safeResponseId = responseId == null ? null : (typeof responseId === 'string' || typeof responseId === 'number' || typeof responseId === 'boolean' ? String(responseId).slice(0, 200) : null);
     const safeResponseMessage = responseMessage == null ? null : (typeof responseMessage === 'string' || typeof responseMessage === 'number' || typeof responseMessage === 'boolean' ? String(responseMessage).slice(0, 500) : null);
-    const result={providerId:provider.id,providerName:provider.name,responseId:safeResponseId,message:safeResponseMessage};
+    const result={providerId:provider.id,providerName:provider.name,responseId:safeResponseId,message:safeResponseMessage,status:isProcessing?'processing':'completed'};
     const secretPath = options.extractPath || (service === 'Recharge PIN' ? provider.responsePinPath : '');
     if (secretPath) { const secret = getPath(data, secretPath); if (typeof secret !== 'string' || !secret.trim() || secret.length > 500) throw new Error('Provider did not return a valid recharge PIN.'); result.secret = secret.trim(); }
     const { secret: _secret, ...safeResult } = result;
@@ -297,6 +297,8 @@ exports.listApiProviders = onCall({ enforceAppCheck: false }, async (request) =>
       notes: x.notes || '',
       responseSuccessPath: x.responseSuccessPath || '',
       responseSuccessValue: x.responseSuccessValue || '',
+      responseProcessingPath: x.responseProcessingPath || '',
+      responseProcessingValue: x.responseProcessingValue || '',
       responseIdPath: x.responseIdPath || '',
       responseMessagePath: x.responseMessagePath || '',
       responsePinPath: x.responsePinPath || '',
