@@ -1,7 +1,6 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { hasCapability } = require('./accessControl');
-const crypto = require('crypto');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 
 const DEALER_SERVICES = ['Mobile Banking'];
@@ -26,22 +25,6 @@ const DEVICE_ID_RE = /^[A-Za-z0-9-]{16,100}$/;
 const PIN_MIN = 4;
 const PIN_MAX = 12;
 const PIN_RE = new RegExp(`^\\d{${PIN_MIN},${PIN_MAX}}$`);
-const PIN_LENGTH_BY_SERVICE = { Remittance: 10 };
-const DEFAULT_PIN_LENGTH = 4;
-
-function pinLengthFor(service) {
-  const n = PIN_LENGTH_BY_SERVICE[String(service || '')] || DEFAULT_PIN_LENGTH;
-  return Math.min(PIN_MAX, Math.max(PIN_MIN, n));
-}
-
-/** A zero-padded PIN of exactly `length` digits, from a CSPRNG. */
-function mintPin(length) {
-  // randomInt tops out at 2**48; 10**12 is well inside that, so every length
-  // up to PIN_MAX draws from the full range in one call rather than being
-  // stitched together from smaller draws (which is how modulo bias creeps in).
-  return String(crypto.randomInt(0, 10 ** length)).padStart(length, '0');
-}
-
 function requireAuth(request) { if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.'); }
 async function getActor(uid) {
   const snap = await admin.firestore().collection('users').doc(uid).get();
