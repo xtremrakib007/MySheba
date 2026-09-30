@@ -397,6 +397,54 @@ exports.executeConfiguredApi = executeConfiguredApi;
 // provider credentials and do not perform network or Firestore operations.
 exports._test = { isPrivateIp, validateBaseUrl, validateHeaders, validateTemplate, getPath, render, providerAuth, validate };
 
+exports.listSuccessTopUpDrives = onCall({ enforceAppCheck: false }, async (request) => {
+  const db = admin.firestore();
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
+  const snap = await db.collection(COLLECTION)
+    .where('service', '==', 'Internet')
+    .where('name', '==', 'Success TopUp')
+    .where('active', '==', true)
+    .limit(1)
+    .get();
+  if (snap.empty) throw new HttpsError('failed-precondition', 'Success TopUp Internet API is not configured.');
+  const provider = { id: snap.docs[0].id, ...(snap.docs[0].data() || {}) };
+  if (!provider.apiKey || !provider.secretKey) throw new HttpsError('failed-precondition', 'Success TopUp credentials are not configured.');
+  const url = new URL('https://api.successtopup.com/api/drives');
+  const operator = String(request.data?.operator || 'ALL').trim().toUpperCase();
+  const type = String(request.data?.type || 'regular').trim().toLowerCase();
+  const body = JSON.stringify({
+    operator: ['GP','RB','AT','TT','BL','SK','BT','RY','ALL'].includes(operator) ? operator : 'ALL',
+    type: ['regular','drive'].includes(type) ? type : 'regular',
+    successtopup_key: provider.apiKey,
+    successtopup_secret: provider.secretKey
+  });
+  try {
+    await assertPublicHostname(url.hostname);
+    const addresses = await dns.lookup(url.hostname, { all: true, verbatim: true });
+    const pinned = addresses.find(a => !isPrivateIp(a.address));
+    if (!pinned) throw new Error('Provider hostname resolved to an invalid address.');
+    const response = await requestHttpsPinned(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body
+    }, pinned);
+    const text = await response.text();
+    if (!response.ok) throw new Error('Success TopUp drives request failed.');
+    let data; try { data = JSON.parse(text || '{}'); } catch { throw new Error('Success TopUp returned invalid drive data.'); }
+    if (data.result !== true) throw new Error(String(data.message || 'Success TopUp rejected the drive-list request.'));
+    const drives = Array.isArray(data.drives) ? data.drives : [];
+    return { drives: drives.slice(0, 500).map((d) => ({
+      id: String(d.id ?? d.package_id ?? d.packageId ?? '').slice(0, 200),
+      name: String(d.name ?? d.title ?? d.package_name ?? '').slice(0, 200),
+      data: String(d.data ?? d.data_amount ?? d.volume ?? '').slice(0, 100),
+      valid: String(d.valid ?? d.validity ?? d.duration ?? '').slice(0, 100),
+      price: Number(d.price ?? d.amount ?? 0)
+    })).filter(d => d.id && d.price > 0) };
+  } catch (e) {
+    throw new HttpsError('unavailable', String(e?.message || 'Unable to load Success TopUp packages.').slice(0, 500));
+  }
+});
+
 exports.listApiProviders = onCall({ enforceAppCheck: false }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
