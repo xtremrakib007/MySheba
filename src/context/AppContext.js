@@ -175,6 +175,7 @@ function buildTransactionPayload(service, serviceData, pricing, rates) {
       details: `${serviceData.provider || ""} - ${serviceData.category || ""} (${serviceData.accountNumber || ""})`,
       amount,
       total: amount,
+      raw: { country: serviceData.country, provider: serviceData.provider, category: serviceData.category, accountNumber: serviceData.accountNumber, mobileNumber: serviceData.mobileNumber },
     };
   }
   if (service === "remittance") {
