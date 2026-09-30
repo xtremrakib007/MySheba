@@ -46,19 +46,10 @@ const CUSTOMER_SERVICES = [
 // and books a bus; the staff grids used to stop at six management tiles and
 // offered none of this, so the one grid the app has looked like two
 // different apps depending on who signed in.
-const SHARED_SERVICES = [
-  { key: 'recharge', icon: 'recharge', name: 'Recharge', kind: 'service' },
-  { key: 'remittance', icon: 'remittance', name: 'Remittance', kind: 'service' },
-  { key: 'mobilebanking', icon: 'mobilebanking', name: 'Mobile Banking', kind: 'service' },
-  { key: 'internet', icon: 'internet', name: 'Internet', kind: 'service' },
-  { key: 'flight', icon: 'flight', name: 'Flight', kind: 'service' },
-  { key: 'bus', icon: 'bus', name: 'Bus', kind: 'buspicker' },
-  { key: 'train', icon: 'train', name: 'Train', kind: 'webview' },
-  { key: 'visa', icon: 'visa', name: 'Visa', kind: 'webview' },
-  { key: 'mydigital', icon: 'mydigital', name: 'Malaysia Arrival Card', kind: 'webview' },
-  { key: 'passport', icon: 'passport', name: 'Passport', kind: 'webview' },
-  { key: 'moreFeaturesTile', icon: 'more', name: 'More Services', kind: 'moreFeaturesLink' },
-];
+// Customer-facing services are available to every authenticated role.
+// Management/operations tiles remain role-specific below, but a staff role
+// must never lose the same service catalogue a customer can use.
+const SHARED_SERVICES = CUSTOMER_SERVICES.map(({ home, ...service }) => ({ ...service }));
 
 const STAFF_SERVICES = {
   dealer: [
@@ -189,12 +180,12 @@ export default function ServiceGrid({ homeOnly }) {
   const { colors } = useTheme(); const { webViewBusy, profile, gridManagement, can } = useApp();
   const handlePress = useServiceAction(); const role = profile?.role || 'customer';
   const isStaff = ['dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin'].includes(role);
-  const allServices = !isStaff ? CUSTOMER_SERVICES
-    : role === 'support' || role === 'finance'
-      ? STAFF_CAPABILITY_TILES.filter((t) => !t.needs || t.needs.some((cap) => can(cap)))
-      : role === 'admin'
-        ? STAFF_SERVICES.admin.filter((t) => !ADMIN_TILE_NEEDS[t.key] || ADMIN_TILE_NEEDS[t.key].some((cap) => can(cap)))
-        : (STAFF_SERVICES[role] || STAFF_SERVICES.admin);
+  const roleSpecificServices = role === 'support' || role === 'finance'
+    ? STAFF_CAPABILITY_TILES.filter((t) => !t.needs || t.needs.some((cap) => can(cap)))
+    : role === 'admin'
+      ? STAFF_SERVICES.admin.filter((t) => !ADMIN_TILE_NEEDS[t.key] || ADMIN_TILE_NEEDS[t.key].some((cap) => can(cap)))
+      : (STAFF_SERVICES[role] || STAFF_SERVICES.admin);
+  const allServices = !isStaff ? CUSTOMER_SERVICES : [...roleSpecificServices, ...SHARED_SERVICES];
   const gridKeyFor = (service) => ({ buspicker: 'bus', webview: service.key, adminFeatures: 'adminFeatures', dealerFeatures: 'dealerFeatures', resellerFeatures: 'resellerFeatures', adminTopup: 'topup' }[service.kind] || service.key);
   const active = allServices.filter((service) => gridManagementService.isGridActive(gridManagement, gridKeyFor(service)));
   const moreTile = active.find((service) => service.kind === 'moreFeaturesLink');
