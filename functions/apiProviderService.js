@@ -451,7 +451,7 @@ exports.listApiProviders = onCall({ enforceAppCheck: false }, async (request) =>
   // Return only non-secret configuration fields. Do not spread the provider
   // document here: custom headers/templates may contain credentials or other
   // sensitive values that should never be sent back to the mobile/admin client.
-  return snap.docs.filter((d) => !(String(d.data()?.name || '').trim().toLowerCase() === 'success topup' && d.data()?.service === 'Bill Payment')).map((d) => {
+  return snap.docs.filter((d) => !(String(d.data()?.name || '').trim().toLowerCase() === 'success topup' && ['Bill Payment', 'Internet'].includes(d.data()?.service))).map((d) => {
     const x = d.data() || {};
     return {
       id: d.id,
