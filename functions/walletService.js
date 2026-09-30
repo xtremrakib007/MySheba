@@ -72,6 +72,14 @@ if (serviceLabel === 'Recharge' && configuredMode !== 'api') {
   const hasSuccessTopUp = providerSnap.docs.some((doc) => String(doc.data()?.name || '').trim().toLowerCase() === 'success topup');
   if (hasSuccessTopUp) apiMode = 'api';
 }
+if (serviceLabel === 'Internet' && configuredMode !== 'api') {
+  const providerSnap = await db.collection('api_providers')
+    .where('service', '==', 'Internet')
+    .where('active', '==', true)
+    .get();
+  const hasSuccessTopUp = providerSnap.docs.some((doc) => String(doc.data()?.name || '').trim().toLowerCase() === 'success topup');
+  if (hasSuccessTopUp && String(payload?.raw?.country || '').toUpperCase() === 'BD') apiMode = 'api';
+}
 if (serviceLabel === 'Bill Payment' && configuredMode !== 'api') {
   const providerSnap = await db.collection('api_providers')
     .where('service', '==', 'Bill Payment')
