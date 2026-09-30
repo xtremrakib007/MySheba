@@ -28,6 +28,10 @@ const BADGE_COLORS = {
 const TYPE_ICON = { flight: '✈️', bus: '🚌', train: '🚂' };
 const ZERO_DECIMAL_CURRENCIES = new Set(['IDR', 'KHR', 'MMK']);
 function txCurrency(item) { return String(item?.currency || item?.walletCurrency || 'MYR').toUpperCase(); }
+function isRemittanceTransaction(item) {
+  const service = String(item?.service || item?.chargedServiceKind || item?.serviceType || '').trim().toLowerCase().replace(/[ _-]+/g, '');
+  return service === 'remittance' || service === 'moneytransfer' || service === 'internationaltransfer';
+}
 function txAmount(value, currency) { const digits = ZERO_DECIMAL_CURRENCIES.has(currency) ? 0 : 2; return `${currency} ${Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })}`; }
 
 function formatDate(ts) {
@@ -313,16 +317,18 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
             {type === 'inquiry' ? <InquiryBody item={item} />
               : type === 'topup' ? <TopupBody item={item} />
               : type === 'supportTicket' ? <TicketBody item={item} />
-              : <TxBody item={item} showCost={showCost} pinOverride={pinOverride} />
+              : <TxBody item={item} showCost={showCost} pinOverride={pinOverride} />}
           </ScrollView>
 
           <View style={styles.footer}>
-            {type === 'tx' && item.service === 'Remittance' && item.status === 'completed' && (
+            {type === 'tx' && isRemittanceTransaction(item) && (
               <TouchableOpacity
                 style={styles.printBtn}
                 onPress={() => setShowRemittanceReceipt(true)}
+                accessibilityRole="button"
+                accessibilityLabel="View and print remittance receipt"
               >
-                <Text style={styles.printText}>View Remittance Receipt</Text>
+                <Text style={styles.printText}>View / Print Remittance Receipt</Text>
               </TouchableOpacity>
             )}
             {type === 'tx' && (
