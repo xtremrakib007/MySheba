@@ -8,7 +8,6 @@ import CopyButton from './CopyButton';
 import DownloadButton from './DownloadButton';
 import * as topupService from '../firebase/topupService';
 import * as supportTicketService from '../firebase/supportTicketService';
-import * as transactionService from '../firebase/transactionService';
 import { useApp } from '../context/AppContext';
 import { buildReceiptHtml } from './RemittanceReceipt';
 
@@ -108,7 +107,7 @@ function formatTicketCopy(t) {
   return lines.join('\n');
 }
 
-function TxBody({ item, showCost, pinOverride, onGeneratePin, generatingPin }) {
+function TxBody({ item, showCost, pinOverride }) {
   const currency = txCurrency(item);
   const {
     colors
@@ -151,24 +150,14 @@ function TxBody({ item, showCost, pinOverride, onGeneratePin, generatingPin }) {
           <Row label="Profit" value={txAmount(item.profit, currency)} />
         </>
       )}
-      {!!(pinOverride || item.pin) && (
+      {!!(item.collectionPin || pinOverride || item.pin) && (item.service === 'Mobile Banking' || item.service === 'Remittance') && (
         <View style={styles.pinBlock}>
           <Text style={styles.pinLabel}>COLLECTION PIN</Text>
           <View style={styles.pinRow}>
-            <Text style={styles.pinValue}>{pinOverride || item.pin}</Text>
-            <CopyButton value={pinOverride || item.pin} label="Copy PIN" />
+            <Text style={styles.pinValue}>{item.collectionPin || pinOverride || item.pin}</Text>
+            <CopyButton value={item.collectionPin || pinOverride || item.pin} label="Copy PIN" />
           </View>
-          {item.status === 'pending' && (
-            <TouchableOpacity style={styles.generatePinBtn} onPress={onGeneratePin} disabled={generatingPin}>
-              <Text style={styles.generatePinText}>{generatingPin ? 'Generating…' : (pinOverride || item.pin ? 'Generate New PIN' : 'Generate PIN')}</Text>
-            </TouchableOpacity>
-          )}
         </View>
-      )}
-      {item.status === 'pending' && !(pinOverride || item.pin) && (
-        <TouchableOpacity style={styles.generatePinStandalone} onPress={onGeneratePin} disabled={generatingPin}>
-          <Text style={styles.generatePinStandaloneText}>{generatingPin ? 'Generating collection PIN…' : 'Generate Collection PIN'}</Text>
-        </TouchableOpacity>
       )}
       <Row label="Order ID" value={item.id} />
       <Row label="Created" value={formatDate(item.createdAt)} />
@@ -285,7 +274,6 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
   const { colors } = useTheme();
   const { profile, authUser } = useApp();
   const [pinOverride, setPinOverride] = React.useState('');
-  const [generatingPin, setGeneratingPin] = React.useState(false);
   React.useEffect(() => { setPinOverride(''); }, [item?.id, item?.pin]);
 
   const styles = createStyles(colors);
@@ -321,16 +309,7 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
             {type === 'inquiry' ? <InquiryBody item={item} />
               : type === 'topup' ? <TopupBody item={item} />
               : type === 'supportTicket' ? <TicketBody item={item} />
-              : <TxBody item={item} showCost={showCost} pinOverride={pinOverride} generatingPin={generatingPin} onGeneratePin={async () => {
-                if (generatingPin || !item?.id) return;
-                setGeneratingPin(true);
-                try {
-                  const result = await transactionService.generateCollectionPin(item.id);
-                  setPinOverride(String(result?.pin || ''));
-                  showAlert('Collection PIN', `Your new collection PIN is ${result?.pin || ''}. Give this PIN to the MySheba operator when the order is collected.`);
-                } catch (err) { showAlert('MySheba', err?.message || 'Could not generate the collection PIN.'); }
-                finally { setGeneratingPin(false); }
-              }} />}
+              : <TxBody item={item} showCost={showCost} pinOverride={pinOverride} />
           </ScrollView>
 
           <View style={styles.footer}>
@@ -404,10 +383,6 @@ function createStyles(colors) {
     pinLabel: { fontSize: 10, fontWeight: '700', color: '#B8860B', letterSpacing: 0.5, marginBottom: 6 },
     pinRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     pinValue: { fontSize: 22, fontWeight: '700', color: colors.text, letterSpacing: 4 },
-    generatePinBtn: { marginTop: 9, borderRadius: radius.md, paddingVertical: 9, backgroundColor: colors.primary, alignItems: 'center' },
-    generatePinText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
-    generatePinStandalone: { marginVertical: 8, borderRadius: radius.md, paddingVertical: 11, borderWidth: 1, borderColor: colors.primary, alignItems: 'center' },
-    generatePinStandaloneText: { color: colors.primary, fontSize: 12, fontWeight: '700' },
     footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
     printBtn: { paddingVertical: 10, paddingHorizontal: 10, borderRadius: radius.md, backgroundColor: '#EAF7F2' },
     printText: { color: colors.primaryDark, fontWeight: '700', fontSize: 12 },
