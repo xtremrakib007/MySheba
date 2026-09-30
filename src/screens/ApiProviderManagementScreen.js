@@ -46,7 +46,7 @@ export default function ApiProviderManagementScreen() {
       setShow(false);setEditing(null);setSuccessTopUpSetup(false);await load();
       if(result?.successTopUp){
         Alert.alert('Success TopUp configured',
-          'API key and API secret saved. Recharge API mode and webhook were configured automatically.\\n\\nWebhook URL:\\n'+result.webhookUrl+'\\n\\nWebhook token:\\n'+result.webhookToken,
+          'API key and API secret saved. Bangladesh Recharge, Internet and Bill Payment API modes were configured automatically.\\n\\nWebhook URL:\\n'+result.webhookUrl+'\\n\\nWebhook token:\\n'+result.webhookToken,
           [{text:'OK'}]);
       }
     }catch(e){Alert.alert('Save failed',e.message||'Unable to save API');}
@@ -83,7 +83,7 @@ export default function ApiProviderManagementScreen() {
           finally{setSavingModes(false);}
         }}><Text style={styles.saveModesText}>{savingModes?'Saving…':'Save Processing Modes'}</Text></TouchableOpacity>
       </View>
-      <TouchableOpacity style={styles.add} onPress={()=>{setEditing(null);setSuccessTopUpSetup(true);setShow(true);}}><Text style={styles.addText}>+ Configure Success TopUp (Recharge + BD Bills)</Text></TouchableOpacity>
+      <TouchableOpacity style={styles.add} onPress={()=>{setEditing(null);setSuccessTopUpSetup(true);setShow(true);}}><Text style={styles.addText}>+ Configure Success TopUp (Recharge + BD Internet + BD Bills)</Text></TouchableOpacity>
       <TouchableOpacity style={styles.addOther} onPress={()=>{setEditing(null);setSuccessTopUpSetup(false);setShow(true);}}><Text style={styles.addOtherText}>+ Add Other API Provider</Text></TouchableOpacity>
     </View>
     <FlatList data={items} keyExtractor={(x)=>x.id} refreshing={loading} onRefresh={load} contentContainerStyle={{padding:14,paddingBottom:40}}
