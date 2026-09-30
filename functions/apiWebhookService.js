@@ -46,12 +46,17 @@ exports.listApiWebhooks = onCall({ enforceAppCheck: false }, async (request) => 
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const snap = await db.collection(COLLECTION).get();
+  const providerIds = snap.docs.map((d) => d.data()?.providerId || d.id).filter(Boolean);
+  const providerSnaps = await Promise.all(providerIds.map((id) => db.collection(PROVIDERS).doc(id).get()));
+  const providerNames = Object.fromEntries(providerSnaps.map((p) => [p.id, p.exists ? String(p.data()?.name || '') : '']));
   return {
     webhooks: snap.docs.map((d) => {
       const x = d.data() || {};
+      const providerId = x.providerId || d.id;
+      const successTopUp = providerNames[providerId] === 'Success TopUp';
       return {
         id: d.id,
-        providerId: x.providerId || d.id,
+        providerId,
         enabled: x.enabled !== false,
         authHeader: x.authHeader || 'x-webhook-token',
         transactionIdPath: x.transactionIdPath || 'transactionId',
@@ -61,7 +66,8 @@ exports.listApiWebhooks = onCall({ enforceAppCheck: false }, async (request) => 
         processingStatus: x.processingStatus || 'Processing',
         cancelStatus: x.cancelStatus || 'Cancel',
         hasWebhookToken: Boolean(x.webhookToken),
-        webhookUrl: endpointUrl(x.providerId || d.id),
+        webhookToken: successTopUp ? String(x.webhookToken || '') : '',
+        webhookUrl: endpointUrl(providerId),
       };
     }),
   };
