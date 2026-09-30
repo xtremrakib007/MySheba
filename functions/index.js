@@ -118,7 +118,7 @@ exports.generateCollectionPin = require('./transactionService').generateCollecti
 exports.reconcileUnknownTransaction = require('./transactionService').reconcileUnknownTransaction;
 exports.rejectTransaction = require('./rejectionService').rejectTransaction;
 exports.assignDealer = require('./transactionService').assignDealer;
-admin.initializeApp();
+if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const ADMIN_ROLES = ['admin', 'superadmin'];
