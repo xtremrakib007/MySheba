@@ -83,7 +83,7 @@ export default function ApiProviderManagementScreen() {
           finally{setSavingModes(false);}
         }}><Text style={styles.saveModesText}>{savingModes?'Saving…':'Save Processing Modes'}</Text></TouchableOpacity>
       </View>
-      <TouchableOpacity style={styles.add} onPress={()=>{setEditing(null);setSuccessTopUpSetup(true);setShow(true);}}><Text style={styles.addText}>+ Configure Success TopUp</Text></TouchableOpacity>
+      <TouchableOpacity style={styles.add} onPress={()=>{setEditing(null);setSuccessTopUpSetup(true);setShow(true);}}><Text style={styles.addText}>+ Configure Success TopUp (Recharge + BD Bills)</Text></TouchableOpacity>
       <TouchableOpacity style={styles.addOther} onPress={()=>{setEditing(null);setSuccessTopUpSetup(false);setShow(true);}}><Text style={styles.addOtherText}>+ Add Other API Provider</Text></TouchableOpacity>
     </View>
     <FlatList data={items} keyExtractor={(x)=>x.id} refreshing={loading} onRefresh={load} contentContainerStyle={{padding:14,paddingBottom:40}}
