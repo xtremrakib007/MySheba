@@ -104,6 +104,12 @@ if (serviceLabel === 'Bill Payment' && configuredMode === 'api' && String(payloa
   const topUpOnly = providerSnap.docs.length > 0 && providerSnap.docs.every((doc) => String(doc.data()?.name || '').trim().toLowerCase() === 'success topup');
   if (topUpOnly) apiMode = 'legacy';
 }
+
+// Bangladesh recharge, internet/data and bill payment are API-only. Fail closed rather than creating a manual order.
+const transactionCountry = String(payload?.raw?.country || '').trim().toUpperCase();
+if (transactionCountry === 'BD' && ['Recharge', 'Internet', 'Bill Payment'].includes(serviceLabel) && apiMode !== 'api') {
+  throw new HttpsError('failed-precondition', 'Bangladesh ' + serviceLabel + ' is API-only. Please configure an active Bangladesh API provider.');
+}
 const result=await db.runTransaction(async tx=>{const existingTx=await tx.get(txref);if(existingTx.exists){const existing=existingTx.data()||{};if(existing.customerId!==uid)throw new HttpsError('permission-denied','This request ID belongs to another account.');const existingStatus=String(existing.status||'pending');if(existingStatus==='failed')throw new HttpsError('failed-precondition',existing.apiError||'This order already failed.');if(existingStatus==='pending' && (existing.executionMode==='api' || apiMode==='api')){
   // A previously created API transaction must never be sent to the provider
   // again just because the original function instance disappeared mid-flight.
