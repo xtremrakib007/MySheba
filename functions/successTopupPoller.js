@@ -133,7 +133,7 @@ async function settle(txRef, provider, providerStatus, message) {
 }
 
 exports.pollSuccessTopUpStatus = onSchedule(
-  { schedule: 'every 5 minutes', timeoutSeconds: 120, memory: '256MiB' },
+  { schedule: 'every 1 minutes', timeoutSeconds: 120, memory: '256MiB' },
   async () => {
     const provider = await getProvider();
     if (!provider) return;
@@ -142,11 +142,16 @@ exports.pollSuccessTopUpStatus = onSchedule(
     // happen after the provider accepted the request but before MySheba received
     // a usable response. Polling the original transaction ID is safe; resending
     // the recharge is not.
-    const [processingSnap, unknownSnap] = await Promise.all([
-      db.collection(TRANSACTIONS).where('status', '==', 'processing').limit(100).get(),
-      db.collection(TRANSACTIONS).where('status', '==', 'unknown').limit(100).get(),
+    const [pendingSnap, processingSnap, unknownSnap] = await Promise.all([
+      db.collection(TRANSACTIONS).where('status', '==', 'pending').limit(200).get(),
+      db.collection(TRANSACTIONS).where('status', '==', 'processing').limit(200).get(),
+      db.collection(TRANSACTIONS).where('status', '==', 'unknown').limit(200).get(),
     ]);
-    const docs = [...processingSnap.docs, ...unknownSnap.docs];
+    // Include pending: a request can remain in this state when the initial
+    // provider call times out before the transaction receives provider metadata.
+    // We query status only and filter API transactions below to avoid requiring
+    // a new composite Firestore index for this recovery path.
+    const docs = [...pendingSnap.docs, ...processingSnap.docs, ...unknownSnap.docs];
 
     for (const doc of docs) {
       const data = doc.data() || {};
