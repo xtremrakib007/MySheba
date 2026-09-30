@@ -64,13 +64,29 @@ const configuredMode = apiSettingsSnap?.exists ? apiSettingsSnap.data()?.modes?.
 // present and active, do not silently fall back to the legacy dealer/reseller
 // order queue because a stale/missing service_modes document exists.
 let apiMode = configuredMode;
-if (['Recharge', 'Bill Payment'].includes(serviceLabel) && configuredMode !== 'api') {
+if (serviceLabel === 'Recharge' && configuredMode !== 'api') {
   const providerSnap = await db.collection('api_providers')
-    .where('service', '==', serviceLabel)
+    .where('service', '==', 'Recharge')
     .where('active', '==', true)
     .get();
   const hasSuccessTopUp = providerSnap.docs.some((doc) => String(doc.data()?.name || '').trim().toLowerCase() === 'success topup');
   if (hasSuccessTopUp) apiMode = 'api';
+}
+if (serviceLabel === 'Bill Payment' && configuredMode !== 'api') {
+  const providerSnap = await db.collection('api_providers')
+    .where('service', '==', 'Bill Payment')
+    .where('active', '==', true)
+    .get();
+  const hasSuccessTopUp = providerSnap.docs.some((doc) => String(doc.data()?.name || '').trim().toLowerCase() === 'success topup');
+  if (hasSuccessTopUp && String(payload?.raw?.country || '').toUpperCase() === 'BD') apiMode = 'api';
+}
+if (serviceLabel === 'Bill Payment' && configuredMode === 'api' && String(payload?.raw?.country || '').toUpperCase() !== 'BD') {
+  const providerSnap = await db.collection('api_providers')
+    .where('service', '==', 'Bill Payment')
+    .where('active', '==', true)
+    .get();
+  const topUpOnly = providerSnap.docs.length > 0 && providerSnap.docs.every((doc) => String(doc.data()?.name || '').trim().toLowerCase() === 'success topup');
+  if (topUpOnly) apiMode = 'legacy';
 }
 const result=await db.runTransaction(async tx=>{const existingTx=await tx.get(txref);if(existingTx.exists){const existing=existingTx.data()||{};if(existing.customerId!==uid)throw new HttpsError('permission-denied','This request ID belongs to another account.');const existingStatus=String(existing.status||'pending');if(existingStatus==='failed')throw new HttpsError('failed-precondition',existing.apiError||'This order already failed.');if(existingStatus==='pending' && (existing.executionMode==='api' || apiMode==='api')){
   // A previously created API transaction must never be sent to the provider
