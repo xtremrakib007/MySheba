@@ -21,6 +21,10 @@ export const PIN_MAX = 12;
 export const PIN_PROMPT_TITLE = 'Enter the collection code:';
 export const PIN_PROMPT_PLACEHOLDER = `${PIN_MIN}-${PIN_MAX} digit code`;
 export const PIN_INVALID_MESSAGE = `Enter the collection code (${PIN_MIN}-${PIN_MAX} digits).`;
+export const COLLECTION_PIN_SERVICES = new Set(['Mobile Banking', 'Remittance']);
+export function requiresCollectionPin(service) {
+  return COLLECTION_PIN_SERVICES.has(String(service || '').trim());
+}
 
 /** Whether this is a syntactically valid collection PIN. The server decides
  *  whether it is the RIGHT one. */
