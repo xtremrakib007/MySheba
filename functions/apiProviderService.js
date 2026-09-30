@@ -321,7 +321,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     if(method!=='GET'){
       headers['content-type']=headers['content-type']||'application/json';
       const requestBody = isBangladeshMobileBill ? {
-        number: vars.mobileNumber,
+        number: vars.billNumber,
         type: 'postpaid',
         operator: mobileBillOperator,
         amount: vars.amount,
