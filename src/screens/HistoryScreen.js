@@ -12,9 +12,11 @@ import HeaderDecor from '../components/HeaderDecor';
 
 function getTxStatusStyle(colors) {
   return {
-    pending: { label: 'Pending', color: colors.warning, bg: '#FFF8E1' },
+    pending: { label: 'Checking', color: colors.warning, bg: '#FFF8E1' },
     processing: { label: 'Processing', color: colors.primary, bg: '#E8F0FE' },
-    completed: { label: 'Completed', color: colors.success, bg: '#E8F5E9' },
+    unknown: { label: 'Checking with provider', color: colors.warning, bg: '#FFF8E1' },
+    completed: { label: 'Success', color: colors.success, bg: '#E8F5E9' },
+    failed: { label: 'Cancelled / Refunded', color: colors.error, bg: '#FDECEA' },
   };
 }
 
