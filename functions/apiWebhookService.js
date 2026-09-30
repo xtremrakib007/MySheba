@@ -206,6 +206,9 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
       } else {
         tx.update(txRef, { status: 'completed', apiExecution, completedAt: order.completedAt || admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
       }
+    } else if (status === config.processingStatus) {
+      if (order.apiRefunded !== true && order.status !== 'failed' && order.status !== 'completed') tx.update(txRef, { status: 'processing', apiExecution, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      else tx.update(txRef, { apiExecution, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
     } else {
       tx.update(txRef, { apiExecution, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
     }
