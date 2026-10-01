@@ -100,12 +100,21 @@ async function migrateDocument(doc) {
 async function cleanupUnreferenced(db, names) {
   const values = Object.values(names).filter(Boolean);
   if (!values.length) return;
-  const snap = await db.collection('api_providers').get();
   const used = new Set();
-  snap.forEach(d => {
-    const x = d.data() || {};
-    for (const key of ['apiKeySecretName','secretKeySecretName','passwordSecretName']) if (x[key]) used.add(x[key]);
-  });
+  let lastDoc = null;
+  do {
+    let query = db.collection('api_providers').orderBy(admin.firestore.FieldPath.documentId()).limit(200);
+    if (lastDoc) query = query.startAfter(lastDoc);
+    const snap = await query.get();
+    snap.forEach((d) => {
+      const x = d.data() || {};
+      for (const key of ['apiKeySecretName', 'secretKeySecretName', 'passwordSecretName']) {
+        if (x[key]) used.add(x[key]);
+      }
+    });
+    lastDoc = snap.docs[snap.docs.length - 1] || null;
+    if (snap.size < 200) break;
+  } while (lastDoc);
   for (const name of values) if (!used.has(name)) await remove(name);
 }
 module.exports = {
