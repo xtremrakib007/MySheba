@@ -103,9 +103,7 @@ function getClientIp(request) {
   try {
     const raw = request.rawRequest;
     if (!raw) return null;
-    const forwarded = raw.headers && raw.headers['x-forwarded-for'];
-    if (typeof forwarded === 'string' && forwarded.trim()) return forwarded.split(',')[0].trim();
-    return raw.ip || null;
+    return typeof raw.ip === 'string' && raw.ip.trim() ? raw.ip.trim() : null;
   } catch (e) {
     return null;
   }
