@@ -1,7 +1,7 @@
 /**
  * Single switch for App Check enforcement across every callable.
  *
- * Currently OFF, deliberately. App Check enforcement was added to all 74
+ * Client App Check is now initialized for Android/iOS. Production uses Play Integrity/App Attest and development/preview builds can use a registered debug token. App Check enforcement was added to all 74
  * callables on 17-18 Sep, but the functions deploy had already been broken
  * by a syntax error in topupSubmissionService.js, so none of it ever
  * reached the project - the callables running in production predate App
@@ -20,6 +20,6 @@
  * client-side App Check (a native package, Play Integrity enabled in the
  * Firebase console, and the app's SHA-256 registered), not before.
  */
-const ENFORCE_APP_CHECK = false;
+const ENFORCE_APP_CHECK = true;
 
 module.exports = { ENFORCE_APP_CHECK };
