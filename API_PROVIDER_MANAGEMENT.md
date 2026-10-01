@@ -31,6 +31,6 @@ After deploying the Functions changes, a superadmin can run the one-time `migrat
 
 ### IAM requirement
 
-The Firebase Functions runtime service account must have permission to create/read/delete these secrets. Grant the minimum required Secret Manager permissions to the Functions runtime service account before running the migration.
+The Firebase Functions runtime service account must have Secret Manager access before running the migration. Because MySheba creates and rotates provider-specific secrets dynamically, the runtime needs permission to create secrets, add versions, read versions, and delete unused secrets. Prefer granting the narrowest Secret Manager scope available for your deployment. At minimum, secret payload reads use `roles/secretmanager.secretAccessor`; secret version creation uses `roles/secretmanager.secretVersionAdder`; creating/deleting secret resources requires Secret Manager administration permissions. See Google Cloud's current Secret Manager IAM documentation before granting project-level roles.
 
-App Check remains intentionally disabled on these provider-management callables until the native MySheba App Check/Play Integrity client integration is enabled and verified.
+Provider-management callables now require Firebase App Check in addition to Superadmin authorization. The native client must therefore have App Check/Play Integrity configured before these actions are used in production.
