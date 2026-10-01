@@ -4,7 +4,7 @@ import {
   AlertTriangle, BarChart3, BadgeCheck, Banknote, BellRing, Building2, CheckCircle2,
   CreditCard, FileText, Globe2, Headphones, LayoutGrid, Plane, Search, Settings2,
   ShieldCheck, Smartphone, Ticket, TrainFront, UserRoundCog, Users, XCircle,
-  Activity, ClipboardSearch, Megaphone, WalletCards, RefreshCw,
+  Activity, FileSearch, Megaphone, WalletCards, RefreshCw,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchOpsOverview, type OpsOverview } from '../services/reportsService';
@@ -34,7 +34,7 @@ const FEATURES: Feature[] = [
 const SHORTCUTS: Shortcut[] = [
   { label: 'Executive Overview', description: 'Platform-wide KPIs and priorities', path: '/executive', icon: Activity },
   { label: 'Alert Center', description: 'Review active operational alerts', path: '/alerts', icon: AlertTriangle },
-  { label: 'Investigation Center', description: 'Trace a user across platform records', path: '/investigation', icon: ClipboardSearch },
+  { label: 'Investigation Center', description: 'Trace a user across platform records', path: '/investigation', icon: FileSearch },
   { label: 'Communications', description: 'Broadcast and monitor notifications', path: '/communications', icon: Megaphone },
   { label: 'Wallet Settlement', description: 'Review point-transfer operations', path: '/wallet-settlement', icon: WalletCards },
   { label: 'System Governance', description: 'Superadmin controls and oversight', path: '/governance', icon: ShieldCheck, superadminOnly: true },
@@ -134,7 +134,7 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 xl:gap-4">{filteredFeatures.map(({ key, label, path, icon: Icon, tone }) => <button key={key} onClick={() => navigate(path)} className="group flex min-h-[132px] flex-col items-center justify-center rounded-[20px] border-2 border-blue-500/90 bg-white px-1.5 py-3.5 text-center shadow-sm transition duration-200 hover:-translate-y-1 hover:border-blue-600 hover:shadow-lg active:scale-[0.98] sm:min-h-[145px] sm:px-2 sm:py-4 md:min-h-[174px] md:rounded-[24px]"><div className={`mb-2.5 rounded-2xl bg-gradient-to-br p-3 shadow-sm transition group-hover:scale-105 sm:mb-3 sm:p-3.5 md:p-4 ${toneClasses[tone]}`}><Icon size={33} strokeWidth={1.8} className="sm:h-[37px] sm:w-[37px] md:h-11 md:w-11" /></div><span className="whitespace-pre-line text-[13px] font-bold leading-5 text-slate-900 sm:text-[15px] md:text-[17px] md:leading-6">{label}</span></button>)}</div>
       {filteredFeatures.length === 0 && <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">No matching features found.</div>}
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400"><div className="flex items-center gap-1.5">{lastUpdated ? <><span className="flex items-center gap-1.5"><span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" /></span><CheckCircle2 size={14} className="text-emerald-500" /> Live overview updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span> : 'Loading platform overview...'}</div><button disabled={refreshing} onClick={() => void refreshOverview()} className="flex min-h-[36px] items-center gap-1.5 font-semibold text-blue-600 hover:text-blue-700 disabled:cursor-wait disabled:opacity-50"><RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />{refreshing ? 'Refreshing...' : 'Refresh data'}</button></div>
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400"><div className="flex items-center gap-1.5">{lastUpdated ? <span className="flex items-center gap-1.5"><span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" /></span><CheckCircle2 size={14} className="text-emerald-500" /> Live overview updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span> : 'Loading platform overview...'}</div><button disabled={refreshing} onClick={() => void refreshOverview()} className="flex min-h-[36px] items-center gap-1.5 font-semibold text-blue-600 hover:text-blue-700 disabled:cursor-wait disabled:opacity-50"><RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />{refreshing ? 'Refreshing...' : 'Refresh data'}</button></div>
     </div>
   );
 }

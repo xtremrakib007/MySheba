@@ -1,6 +1,7 @@
 // Client side of user management. Permission checks remain server-side.
 import { httpsCallable } from 'firebase/functions';
-import { functions } from './config';
+import { collection, query, where, getCountFromServer } from 'firebase/firestore';
+import { functions, db } from './config';
 
 export const ROLE_PERMISSIONS = {
   dealer: { canCreate: ['customer'], canUpgradeTo: [] },
@@ -208,4 +209,24 @@ export async function assignReseller({ targetUid, resellerId }) {
   const fn = httpsCallable(functions, 'manageUser');
   const { data } = await fn({ action: 'setReseller', targetUid, resellerId });
   return data;
+}
+
+/**
+ * Dashboard totals, counted on the server.
+ *
+ * getCountFromServer returns a single number per query rather than the
+ * documents, so this stays compatible with the directory pagination above: no
+ * unbounded client read, and the whole users collection is never shipped to a
+ * device to be counted with .length.
+ */
+export async function fetchUserStats({ since = {} } = {}) {
+  const users = collection(db, 'users');
+  const countOf = async (...constraints) =>
+    (await getCountFromServer(constraints.length ? query(users, ...constraints) : users)).data().count;
+  const [total, newToday, newThisWeek] = await Promise.all([
+    countOf(),
+    since.today ? countOf(where('createdAt', '>=', since.today)) : Promise.resolve(0),
+    since.weekAgo ? countOf(where('createdAt', '>=', since.weekAgo)) : Promise.resolve(0),
+  ]);
+  return { total, newToday, newThisWeek };
 }

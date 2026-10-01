@@ -99,6 +99,11 @@ jobs:
       - name: Check no login path revokes refresh tokens
         run: npm run test:session
 
+      # `npm ci` refuses to install when functions/package.json and its lockfile
+      # disagree. This says so up front, using nothing but Node builtins.
+      - name: Check lockfiles are in sync
+        run: node scripts/audit-lockfiles.js
+
       - name: Install function dependencies
         working-directory: functions
         run: npm ci --no-audit --no-fund

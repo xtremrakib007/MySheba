@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bell, CheckCircle2, RefreshCw, Send, Users, XCircle } from 'lucide-react';
+import { Bell, CheckCircle2, RefreshCw, Send, Users, XCircle, type LucideIcon } from 'lucide-react';
 import { subscribeAnnouncements, type AnnouncementLogEntry } from '../services/announcementService';
 
 const audienceLabel: Record<string, string> = {
@@ -24,6 +24,13 @@ export default function NotificationDeliveryPage() {
     return { matched, sent, failed, rate };
   }, [items]);
 
+  const tiles: [label: string, value: number, icon: LucideIcon][] = [
+    ['Broadcasts', items.length, Bell],
+    ['Recipients Matched', stats.matched, Users],
+    ['Notifications Sent', stats.sent, CheckCircle2],
+    ['Unsent / Failed', stats.failed, XCircle],
+  ];
+
   return (
     <div className="space-y-6 p-4 sm:p-6">
       <div className="rounded-3xl bg-gradient-to-r from-[#00a99d] to-[#1a73e8] p-6 text-white shadow-sm">
@@ -38,9 +45,7 @@ export default function NotificationDeliveryPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          ['Broadcasts', items.length, Bell], ['Recipients Matched', stats.matched, Users], ['Notifications Sent', stats.sent, CheckCircle2], ['Unsent / Failed', stats.failed, XCircle],
-        ].map(([label, value, Icon]) => (
+        {tiles.map(([label, value, Icon]) => (
           <div key={String(label)} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><span className="text-sm text-slate-500">{label}</span><Icon size={20} /></div><div className="mt-2 text-2xl font-bold text-[#0b2447]">{Number(value).toLocaleString()}</div></div>
         ))}
       </div>
