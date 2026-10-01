@@ -49,6 +49,12 @@ jobs:
       - name: Validate Cloud Functions syntax
         run: npm run audit:functions
 
+      # Doubled escapes have shipped four times: a PIN regex that validated
+      # nothing, a search sentinel that excluded most names, a recovery hash
+      # that never matched, and secret redaction that never fired.
+      - name: Doubled-escape audit
+        run: npm run audit:escapes
+
       # scripts/test-api-provider-service.js requires functions/apiProviderService.js,
       # which requires firebase-functions/v2/https - a dependency of functions/,
       # not of the root package. The root `npm ci` above does not install it, so

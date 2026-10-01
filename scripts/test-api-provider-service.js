@@ -28,7 +28,12 @@ assert.throws(() => api.validateBaseUrl('https://api.example.com?apiKey=secret')
 // Header hardening.
 api.validateHeaders({ accept: 'application/json', 'x-test': true });
 assert.throws(() => api.validateHeaders({ Host: 'evil.example' }));
-assert.throws(() => api.validateHeaders({ 'x-test': 'bad\\nvalue' }));
+assert.throws(() => api.validateHeaders({ 'x-test': 'bad\nvalue' }), 'LF in a header value must be rejected');
+assert.throws(() => api.validateHeaders({ 'x-test': 'bad\r\nX-Injected: evil' }), 'CRLF header injection must be rejected');
+assert.throws(() => api.validateHeaders({ 'x-test': 'bad\u0000value' }), 'NUL in a header value must be rejected');
+// And the guard must not over-reject: it is control characters only, not
+// digits, capitals or ':' - which is what the mangled class actually matched.
+api.validateHeaders({ 'content-type': 'application/json', 'x-api-version': '2', authorization: 'Bearer abc123' });
 
 // Template bounds and object-only parsing.
 assert.deepStrictEqual(api.validateTemplate('{"amount":"{{amount}}"}', 'Request'), { amount: '{{amount}}' });

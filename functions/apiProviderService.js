@@ -116,7 +116,7 @@ function validateHeaders(value) {
     if (/^(host|content-length|connection|transfer-encoding|proxy-)/i.test(key)) throw new HttpsError('invalid-argument', 'This API header is not allowed.');
     const v = headers[key];
     if (!(typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')) throw new HttpsError('invalid-argument', 'API header values must be scalar.');
-    if (typeof v === 'string' && /[\\u0000-\\u001F\\u007F]/.test(v)) throw new HttpsError('invalid-argument', 'API header values contain invalid control characters.');
+    if (typeof v === 'string' && /[\x00-\x1F\x7F]/.test(v)) throw new HttpsError('invalid-argument', 'API header values contain invalid control characters.');
   }
   return headers;
 }
@@ -417,7 +417,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     if (url.search.length > 8000) throw new Error('Provider query string is too large.');
     const headers = { accept:'application/json', ...render(asObject(provider.headers),vars), ...providerAuth(provider) };
     for (const [key, value] of Object.entries(headers)) {
-      if (typeof value === 'string' && /[\\u0000-\\u001F\\u007F]/.test(value)) throw new Error('Rendered API header contains invalid control characters.');
+      if (typeof value === 'string' && /[\x00-\x1F\x7F]/.test(value)) throw new Error('Rendered API header contains invalid control characters.');
       if (String(value).length > 4000) throw new Error('Rendered API header value is too large.');
     }
     if (Object.keys(headers).length > 50) throw new Error('Too many rendered API headers.');
@@ -475,12 +475,12 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   } catch(e) {
     const rawMessage = String(e?.message || 'Provider execution failed');
     const sanitizedMessage = rawMessage
-      .replace(/Bearer\\s+[A-Za-z0-9._~+\\/-]+/gi, 'Bearer [REDACTED]')
-      .replace(/Basic\\s+[A-Za-z0-9+/=]+/gi, 'Basic [REDACTED]')
-      .replace(/((?:api[-_]?key|access[-_]?token|auth[-_]?token|token|password|passwd|secret|credential|private[-_]?key)\\s*[:=]\\s*)[^,;\\s]+/gi, '$1[REDACTED]')
+      .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [REDACTED]')
+      .replace(/Basic\s+[A-Za-z0-9+/=]+/gi, 'Basic [REDACTED]')
+      .replace(/((?:api[-_]?key|access[-_]?token|auth[-_]?token|token|password|passwd|secret|credential|private[-_]?key)\s*[:=]\s*)[^,;\s]+/gi, '$1[REDACTED]')
       .slice(0,500);
     const message = sanitizedMessage || 'Provider execution failed.';
-    const definitive=/^Provider HTTP 4\\d{2}$/.test(message)||message.includes('Provider rejected the request')||message.includes('missing responsePinPath configuration')||message.includes('Provider did not return a valid recharge PIN.');
+    const definitive=/^Provider HTTP 4\d{2}$/.test(message)||message.includes('Provider rejected the request')||message.includes('missing responsePinPath configuration')||message.includes('Provider did not return a valid recharge PIN.');
     await executionRef.set({status:definitive?'failed':'unknown',message,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
     throw definitive?new HttpsError('failed-precondition',message):new HttpsError('unavailable',message);
   }
