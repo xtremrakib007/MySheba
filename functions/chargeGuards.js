@@ -3,11 +3,14 @@ const admin = require('firebase-admin');
 const crypto = require('crypto');
 const walletService = require('./walletService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const SERVICE_BY_CALLABLE = {
   chargeRecharge: 'Recharge',
   chargeInternetPackage: 'Internet',
+  chargeOfferPacks: 'Offer Packs',
+  chargeEntertainment: 'Entertainment',
   chargeBillPayment: 'Bill Payment',
   chargeMobileBanking: 'Mobile Banking',
   chargeRemittance: 'Remittance',
@@ -98,7 +101,7 @@ async function sanitizeRequest(request, requestId) {
 }
 
 function wrap(name) {
-  return onCall({ enforceAppCheck: true }, async (request) => {
+  return onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
     const uid = requireAuth(request);
     const requestId = getRequestId(request);
     const db = admin.firestore();
@@ -189,6 +192,8 @@ function wrap(name) {
 
 exports.chargeRecharge = wrap('chargeRecharge');
 exports.chargeInternetPackage = wrap('chargeInternetPackage');
+exports.chargeOfferPacks = wrap('chargeOfferPacks');
+exports.chargeEntertainment = wrap('chargeEntertainment');
 exports.chargeBillPayment = wrap('chargeBillPayment');
 exports.chargeMobileBanking = wrap('chargeMobileBanking');
 exports.chargeRemittance = wrap('chargeRemittance');

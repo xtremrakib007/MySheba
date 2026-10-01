@@ -22,7 +22,7 @@ const DEFAULT_LIMITS = {
   testApiProvider: { max: 5, windowMinutes: 15 },
   migrateApiProviderSecrets: { max: 2, windowMinutes: 60 },
   saveApiProvider: { max: 20, windowMinutes: 60 },
-  deleteApiProvider: { max: 10, windowMinutes: 60 }
+  deleteApiProvider: { max: 10, windowMinutes: 60 },
 };
 
 const DEFAULT_OTP_LIMITS = {

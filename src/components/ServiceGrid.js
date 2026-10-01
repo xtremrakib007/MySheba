@@ -36,6 +36,7 @@ const CUSTOMER_SERVICES = [
   { key: 'passport', icon: 'passport', name: 'Passport', kind: 'webview' , home: true },
 
   // Other services
+  { key: 'offerpacks', icon: 'internet', name: 'Offer Packs', kind: 'service' , home: true },
   { key: 'entertainment', icon: 'entertainment', name: 'Entertainment', kind: 'service' , home: true },
   { key: 'salary', icon: 'salary', name: 'Salary & Payslip', kind: 'salary' },
   { key: 'documents', icon: 'passport', name: 'Documents', kind: 'documents' },

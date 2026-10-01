@@ -2,10 +2,11 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logServerError } = require('./logService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 function requireAuth(request) { if (!request.auth) throw new HttpsError('unauthenticated','Sign in required.'); return request.auth.uid; }
 async function requireSuperadmin(db, uid) { const snap=await db.collection('users').doc(uid).get(); const caller=snap.exists?snap.data():null; if(!caller||caller.role!=='superadmin') throw new HttpsError('permission-denied','Only a Super Admin can manage advertisement creatives.'); if(caller.suspended===true||caller.inactive===true||caller.disabled===true||caller.active===false||caller.mergedInto) throw new HttpsError('permission-denied','Your account is not active.'); return caller; }
 function validStoragePath(p) { return typeof p==='string' && p.length<=512 && /^ads\/(banners|native|interstitial|advertisers)\/[A-Za-z0-9._-]+$/.test(p); }
-exports.deleteAdCreative = onCall({ enforceAppCheck: true }, async (request) => {
+exports.deleteAdCreative = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const callerUid=requireAuth(request); const db=admin.firestore(); await requireSuperadmin(db,callerUid);
   const {storagePaths}=request.data||{};
   if(!Array.isArray(storagePaths)||storagePaths.length===0||storagePaths.length>50) throw new HttpsError('invalid-argument','storagePaths must contain 1 to 50 paths.');

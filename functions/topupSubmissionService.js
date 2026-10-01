@@ -2,6 +2,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { inferWalletCurrency } = require('./walletCurrencyService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const MAX_AMOUNT = 100000;
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
@@ -53,7 +54,7 @@ function validMoney(value) {
   return Number.isFinite(n) && n > 0 && n <= MAX_AMOUNT ? n : null;
 }
 
-exports.submitTopupRequest = onCall({ enforceAppCheck: true }, async request => {
+exports.submitTopupRequest = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
   const { uid, requestId } = requireAuth(request);
   const db = admin.firestore();
   const data = request.data || {};

@@ -3,13 +3,11 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function LoginPage() {
-  const { profile, loading, accessDenied, deviceVerificationRequired, signIn, signInWithGoogle } =
-    useAuth();
+  const { profile, loading, accessDenied, deviceVerificationRequired, signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [googleSubmitting, setGoogleSubmitting] = useState(false);
 
   if (!loading && profile) {
     return <Navigate to="/" replace />;
@@ -36,22 +34,6 @@ export default function LoginPage() {
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    setError(null);
-    setGoogleSubmitting(true);
-    try {
-      await signInWithGoogle();
-    } catch (err) {
-      setError(
-        err instanceof Error && 'code' in err
-          ? readableAuthError((err as { code: string }).code)
-          : 'Google sign in failed. Try again.'
-      );
-    } finally {
-      setGoogleSubmitting(false);
-    }
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg)] px-4">
       <div className="w-full max-w-sm">
@@ -65,7 +47,7 @@ export default function LoginPage() {
           <h1 className="font-[var(--font-display)] text-xl font-bold text-white">
             MySheba Admin
           </h1>
-          <p className="mt-1 text-sm text-white/60">Sign in with your admin account</p>
+          <p className="mt-1 text-sm text-white/60">Sign in with your admin email and password</p>
         </div>
 
         <form
@@ -109,32 +91,12 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            disabled={submitting || googleSubmitting}
+            disabled={submitting}
             className="w-full rounded-lg bg-[var(--color-primary)] py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--color-primary-dark)] disabled:opacity-60"
           >
             {submitting ? 'Signing in…' : 'Sign in'}
           </button>
 
-          <div className="my-4 flex items-center gap-3">
-            <div className="h-px flex-1 bg-[var(--color-line)]" />
-            <span className="text-xs text-[var(--color-ink-soft)]">or</span>
-            <div className="h-px flex-1 bg-[var(--color-line)]" />
-          </div>
-
-          <button
-            type="button"
-            onClick={handleGoogleSignIn}
-            disabled={submitting || googleSubmitting}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-line)] bg-white py-2.5 text-sm font-semibold text-[var(--color-ink)] transition hover:bg-[var(--color-bg)] disabled:opacity-60"
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-              <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.9c1.7-1.56 2.7-3.86 2.7-6.62z" />
-              <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.8.54-1.84.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.9v2.33A9 9 0 0 0 9 18z" />
-              <path fill="#FBBC05" d="M3.95 10.7A5.4 5.4 0 0 1 3.67 9c0-.59.1-1.17.28-1.7V4.97H.9A9 9 0 0 0 0 9c0 1.45.35 2.83.9 4.03l3.05-2.33z" />
-              <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .9 4.97l3.05 2.33C4.66 5.17 6.65 3.58 9 3.58z" />
-            </svg>
-            {googleSubmitting ? 'Signing in…' : 'Sign in with Google'}
-          </button>
         </form>
       </div>
     </div>
@@ -146,7 +108,7 @@ export default function LoginPage() {
 // time this renders, so this just collects the code and offers
 // resend / switch-channel / cancel.
 function OtpStep() {
-  const { otpMethod, otpDestination, otpError, otpSubmitting, requestOtp, verifyOtp, cancelDeviceVerification } =
+  const { otpDestination, otpSent, otpError, otpSubmitting, resendOtp, verifyOtp, cancelDeviceVerification } =
     useAuth();
   const [code, setCode] = useState('');
 
@@ -155,8 +117,6 @@ function OtpStep() {
     if (code.trim().length < 4) return;
     await verifyOtp(code);
   };
-
-  const otherMethod = otpMethod === 'sms' ? 'email' : 'sms';
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg)] px-4">
@@ -169,9 +129,11 @@ function OtpStep() {
             Verify this device
           </h1>
           <p className="mt-1 text-sm text-white/60">
-            {otpDestination
-              ? `We sent a code to ${otpDestination}`
-              : 'We\u2019re sending a verification code…'}
+            {!otpSent
+              ? 'Request a verification code to continue'
+              : otpDestination
+                ? `We sent a code to ${otpDestination}`
+                : 'We sent a verification code to your admin email'}
           </p>
         </div>
 
@@ -208,24 +170,14 @@ function OtpStep() {
             {otpSubmitting ? 'Verifying…' : 'Verify and continue'}
           </button>
 
-          <div className="mt-4 flex items-center justify-between text-xs">
-            <button
-              type="button"
-              disabled={otpSubmitting}
-              onClick={() => requestOtp(otpMethod ?? 'email')}
-              className="font-semibold text-[var(--color-primary)] hover:underline disabled:opacity-40"
-            >
-              Resend code
-            </button>
-            <button
-              type="button"
-              disabled={otpSubmitting}
-              onClick={() => requestOtp(otherMethod)}
-              className="font-semibold text-[var(--color-primary)] hover:underline disabled:opacity-40"
-            >
-              {otherMethod === 'sms' ? 'Use SMS instead' : 'Use email instead'}
-            </button>
-          </div>
+          <button
+            type="button"
+            disabled={otpSubmitting}
+            onClick={() => resendOtp()}
+            className="mt-4 w-full text-center text-xs font-semibold text-[var(--color-primary)] hover:underline disabled:opacity-40"
+          >
+            {otpSent ? 'Send a new code' : 'Send a verification code'}
+          </button>
 
           <button
             type="button"
@@ -248,12 +200,10 @@ function readableAuthError(code: string): string {
       return 'Incorrect email or password.';
     case 'auth/too-many-requests':
       return 'Too many attempts. Try again shortly.';
-    case 'auth/popup-closed-by-user':
-      return 'Sign-in window closed before completing.';
-    case 'auth/popup-blocked':
-      return 'Your browser blocked the sign-in popup. Allow popups and try again.';
-    case 'auth/unauthorized-domain':
-      return 'This domain isn\u2019t authorized for Google sign-in yet.';
+    case 'auth/user-disabled':
+      return 'This account has been disabled.';
+    case 'auth/network-request-failed':
+      return 'Could not reach the server. Check your connection and try again.';
     default:
       return 'Sign in failed. Try again.';
   }

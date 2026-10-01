@@ -1,6 +1,6 @@
 // Client side of user management. Permission checks remain server-side.
 import { httpsCallable } from 'firebase/functions';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, getCountFromServer } from 'firebase/firestore';
 import { functions, db } from './config';
 
 export const ROLE_PERMISSIONS = {
@@ -17,62 +17,152 @@ export const DOWNGRADE_PERMISSIONS = {
 
 export function canManageUsers(role) { return !!ROLE_PERMISSIONS[role]; }
 
+const DIRECTORY_PAGE_SIZE = 500;
+const DIRECTORY_REFRESH_MS = 30000;
+const LOG_DIRECTORY_REFRESH_MS = 60000;
+
+async function loadAllDirectoryPages(type, stoppedRef) {
+  const fn = httpsCallable(functions, 'listUserDirectory');
+  const results = [];
+  let cursor = null;
+
+  do {
+    if (stoppedRef()) return null;
+
+    const { data } = await fn({
+      type,
+      pageSize: DIRECTORY_PAGE_SIZE,
+      ...(cursor ? { cursor } : {}),
+    });
+
+    const page = Array.isArray(data?.results) ? data.results : [];
+    results.push(...page);
+
+    cursor = data?.hasMore && data?.nextPageCursor
+      ? data.nextPageCursor
+      : null;
+  } while (cursor);
+
+  return results;
+}
+
+function subscribeDirectory(type, onUpdate, onError, refreshMs = DIRECTORY_REFRESH_MS, transform = (list) => list) {
+  let stopped = false;
+  let loading = false;
+
+  const load = async () => {
+    if (stopped || loading) return;
+    loading = true;
+    try {
+      const list = await loadAllDirectoryPages(type, () => stopped);
+      if (!stopped && list) onUpdate(transform(list));
+    } catch (err) {
+      if (!stopped) onError?.(err);
+    } finally {
+      loading = false;
+    }
+  };
+
+  load();
+  const timer = setInterval(load, refreshMs);
+
+  return () => {
+    stopped = true;
+    clearInterval(timer);
+  };
+}
+
 export function subscribeAllUsers(onUpdate, onError) {
-  const q = collection(db, 'users');
-  return onSnapshot(q, (snap) => onUpdate(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), onError);
+  return subscribeDirectory('all', onUpdate, onError, LOG_DIRECTORY_REFRESH_MS);
 }
 
 export function subscribeDealers(callback, onError) {
-  const q = query(collection(db, 'users'), where('role', '==', 'dealer'));
-  return onSnapshot(q, (snap) => {
-    const list = snap.docs.map((d) => ({ id: d.id, name: d.data().name || '', phone: d.data().phone || '', role: 'dealer', userId: d.data().userId || '' }));
-    list.sort((a, b) => a.name.localeCompare(b.name));
-    callback(list);
-  }, onError);
+  return subscribeDirectory(
+    'dealers',
+    callback,
+    onError,
+    DIRECTORY_REFRESH_MS,
+    (list) => list.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+  );
 }
 
 export function subscribeResellers(callback, onError) {
-  const q = query(collection(db, 'users'), where('role', '==', 'reseller'));
-  return onSnapshot(q, (snap) => {
-    const list = snap.docs.map((d) => ({ id: d.id, name: d.data().name || '', phone: d.data().phone || '', role: 'reseller', userId: d.data().userId || '' }));
-    list.sort((a, b) => a.name.localeCompare(b.name));
-    callback(list);
-  }, onError);
+  return subscribeDirectory(
+    'resellers',
+    callback,
+    onError,
+    DIRECTORY_REFRESH_MS,
+    (list) => list.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+  );
 }
 
 export function subscribeManageableUsers(role, dealerScope, onUpdate, onError) {
   if (role === 'dealer') {
-    if (!dealerScope) { onUpdate([]); return () => {}; }
-    const fn = httpsCallable(functions, 'listManagedUsers');
-    let stopped = false;
-    const load = async () => {
-      try {
-        const { data } = await fn({});
-        if (!stopped) onUpdate(Array.isArray(data?.results) ? data.results : []);
-      } catch (err) {
-        if (!stopped) onError?.(err);
-      }
-    };
-    load();
-    const timer = setInterval(load, 30000);
-    return () => { stopped = true; clearInterval(timer); };
+    if (!dealerScope) {
+      onUpdate([]);
+      return () => {};
+    }
+
+    return subscribeManagedUsers(
+      'dealer',
+      onUpdate,
+      onError,
+    );
   }
 
-  let q;
-  if (role === 'superadmin') {
-    q = query(collection(db, 'users'), where('role', 'in', ['admin', 'dealer', 'reseller', 'customer']));
-  } else if (role === 'admin') {
-    q = query(collection(db, 'users'), where('role', 'in', ['dealer', 'reseller', 'customer']));
-  } else {
-    onUpdate([]);
-    return () => {};
+  if (role === 'superadmin' || role === 'admin') {
+    return subscribeDirectory('managed', onUpdate, onError);
   }
 
-  return onSnapshot(q, (snap) => {
-    const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-    onUpdate(list);
-  }, onError);
+  onUpdate([]);
+  return () => {};
+}
+
+function subscribeManagedUsers(role, onUpdate, onError) {
+  let stopped = false;
+  let loading = false;
+
+  const fn = httpsCallable(functions, 'listManagedUsers');
+
+  const load = async () => {
+    if (stopped || loading) return;
+    loading = true;
+
+    try {
+      const results = [];
+      let cursor = null;
+
+      do {
+        if (stopped) return;
+
+        const { data } = await fn({
+          pageSize: DIRECTORY_PAGE_SIZE,
+          ...(cursor ? { cursor } : {}),
+        });
+
+        const page = Array.isArray(data?.results) ? data.results : [];
+        results.push(...page);
+
+        cursor = data?.hasMore && data?.nextPageCursor
+          ? data.nextPageCursor
+          : null;
+      } while (cursor);
+
+      if (!stopped) onUpdate(results);
+    } catch (err) {
+      if (!stopped) onError?.(err);
+    } finally {
+      loading = false;
+    }
+  };
+
+  load();
+  const timer = setInterval(load, DIRECTORY_REFRESH_MS);
+
+  return () => {
+    stopped = true;
+    clearInterval(timer);
+  };
 }
 
 export async function createManagedUser({ name, phone, pin, role, dealerId, resellerId }) {
@@ -106,12 +196,7 @@ export async function deleteManagedUser({ targetUid }) {
 }
 
 export function subscribeUnassignedCustomers(onUpdate, onError) {
-  const q = query(collection(db, 'users'), where('role', '==', 'customer'));
-  return onSnapshot(q, (snap) => {
-    const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((u) => !u.dealerId);
-    list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-    onUpdate(list);
-  }, onError);
+  return subscribeDirectory('unassigned', onUpdate, onError);
 }
 
 export async function assignDealer({ targetUid, dealerId }) {
@@ -124,4 +209,24 @@ export async function assignReseller({ targetUid, resellerId }) {
   const fn = httpsCallable(functions, 'manageUser');
   const { data } = await fn({ action: 'setReseller', targetUid, resellerId });
   return data;
+}
+
+/**
+ * Dashboard totals, counted on the server.
+ *
+ * getCountFromServer returns a single number per query rather than the
+ * documents, so this stays compatible with the directory pagination above: no
+ * unbounded client read, and the whole users collection is never shipped to a
+ * device to be counted with .length.
+ */
+export async function fetchUserStats({ since = {} } = {}) {
+  const users = collection(db, 'users');
+  const countOf = async (...constraints) =>
+    (await getCountFromServer(constraints.length ? query(users, ...constraints) : users)).data().count;
+  const [total, newToday, newThisWeek] = await Promise.all([
+    countOf(),
+    since.today ? countOf(where('createdAt', '>=', since.today)) : Promise.resolve(0),
+    since.weekAgo ? countOf(where('createdAt', '>=', since.weekAgo)) : Promise.resolve(0),
+  ]);
+  return { total, newToday, newThisWeek };
 }

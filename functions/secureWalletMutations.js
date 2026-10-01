@@ -3,6 +3,7 @@ const admin = require('firebase-admin');
 const { hasCapability } = require('./accessControl');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { logAudit, logServerError } = require('./logService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 // Staff who may hold the 'finance' capability (functions/accessControl.js).
@@ -27,7 +28,7 @@ function validMoney(value) { const n = Number(value); return Number.isFinite(n) 
 function validBalance(value) { const n = Number(value ?? 0); return Number.isFinite(n) && n >= 0 && Number.isSafeInteger(Math.round(n * 100)) ? n : null; }
 function active(account) { return !!account && account.suspended !== true && account.inactive !== true && account.disabled !== true && account.active !== false && account.mergedInto == null; }
 
-exports.createSelfTopup = onCall({ enforceAppCheck: true }, async (request) => {
+exports.createSelfTopup = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const { uid, requestId } = requireRequest(request);
   const db = admin.firestore();
   const data = request.data || {};

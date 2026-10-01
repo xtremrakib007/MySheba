@@ -17,6 +17,13 @@ jobs:
           node-version: 20
           cache: npm
 
+      # package.json and package-lock.json drifting apart is what `npm ci` below
+      # refuses on, and it refuses only after the runner has finished setting
+      # itself up. This script uses nothing but Node builtins, so it can say so
+      # in the first few seconds instead.
+      - name: Check lockfiles are in sync
+        run: node scripts/audit-lockfiles.js
+
       - name: Setup Expo and EAS
         uses: expo/expo-github-action@v8
         with:
@@ -54,6 +61,19 @@ jobs:
 
       - name: Run API provider regression tests
         run: npm run test:api-provider
+
+      # The Success TopUp operator map silently covered three of eight codes,
+      # so half the Bangladesh operator picker charged the wallet and was then
+      # rejected by the provider. Nothing else catches that.
+      - name: Success TopUp contract
+        run: npm run test:successtopup
+
+      - name: App Check posture
+        run: npm run test:appcheck
+
+      # Both trees are installed by this point, so the gate can audit each one.
+      - name: Audit production dependencies
+        run: npm run audit:deps
 
       - name: Build production AAB
         run: eas build --platform android --profile production --non-interactive --wait --message "MySheba production AAB"

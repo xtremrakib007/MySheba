@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Activity, AlertTriangle, BarChart3, BadgeCheck, Headphones, RefreshCw, ShieldAlert, Users, WalletCards } from 'lucide-react';
+import { Activity, AlertTriangle, BarChart3, BadgeCheck, Headphones, RefreshCw, Users, WalletCards, type LucideIcon } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchOpsOverview, type OpsOverview } from '../services/reportsService';
 import { subscribeTransactions, type Transaction } from '../services/transactionService';
@@ -39,7 +39,7 @@ export default function ExecutiveDashboardPage() {
     ['Open support', overview?.openTickets ?? null, '/support', Headphones],
   ].filter((x) => x[1] !== null && Number(x[1]) > 0) as [string, number, string, typeof AlertTriangle][];
 
-  const cards = [
+  const cards: [label: string, value: string | number | null | undefined, note: string, icon: LucideIcon, path: string][] = [
     ['Users', overview?.totalUsers, 'Registered accounts', Users, '/users'],
     ['Verified', overview?.verifiedUsers, 'Identity verified', BadgeCheck, '/users'],
     ['KYC Queue', overview?.pendingVerifications, 'Awaiting review', BadgeCheck, '/kyc-operations'],

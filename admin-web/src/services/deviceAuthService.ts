@@ -1,46 +1,92 @@
-// Admin-web device verification uses the same server-enforced device-session
-// service as the mobile app. The client never writes trusted-device state.
+// Admin-web device verification, matching the mobile app's contract exactly.
+// Both call the same `checkDeviceSession` callable, and the client never writes
+// trusted-device state - the server decides.
+//
+// Two rules are copied from src/firebase/authService.js deliberately, because
+// getting either wrong is what broke sign-in on the app:
+//
+//  1. ONE call per step. checkDeviceSession SENDS the email challenge as part
+//     of answering "is this device trusted?". Asking that question and then
+//     calling it again to request a code sends two codes, and only the last one
+//     verifies - which reads to the person as "the code doesn't work".
+//
+//  2. An answer of "no" blocks. No answer at all does not. A cold start, a
+//     misconfigured deploy or Cloud Functions having a bad afternoon must not
+//     lock an admin out of the console; that exact failure locked every user
+//     out of the app for ten days.
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../firebase/config';
 import { getOrCreateDeviceId, getDeviceLabel } from '../utils/deviceId';
 
-export type OtpMethod = 'email' | 'sms';
-
-interface DeviceSessionResult {
+export interface DeviceSessionResult {
   requiresOtp?: boolean;
   reason?: string;
   email?: string;
+  phone?: string;
   availableMfaMethods?: string[];
+  /**
+   * Whether the server says it actually sent the email challenge. An older
+   * deployed copy of checkDeviceSession does not report this at all, which is
+   * why an absent value must not be read as "no code was sent".
+   */
+  emailChallengeSent?: boolean;
   sessionId?: string;
 }
 
-async function checkDeviceSession(data: Record<string, unknown> = {}): Promise<DeviceSessionResult> {
+// Mirrors UNREACHABLE_CODES in src/firebase/deviceSessionService.js.
+// functions/unauthenticated belongs here because the callable framework returns
+// it when the callable itself is misconfigured - App Check enforced against a
+// client that sends no token, say. Firebase Auth accepted these credentials
+// moments earlier, so it cannot mean the sign-in was invalid.
+const UNREACHABLE_CODES = [
+  'functions/unavailable',
+  'functions/deadline-exceeded',
+  'functions/internal',
+  'functions/cancelled',
+  'functions/unauthenticated',
+  'functions/aborted',
+];
+
+export function isDeviceCheckUnreachable(error: unknown): boolean {
+  const err = error as { code?: unknown; message?: unknown } | null;
+  const code = String(err?.code || '').toLowerCase();
+  if (UNREACHABLE_CODES.includes(code)) return true;
+  const raw = `${code} ${String(err?.message || '')}`.toLowerCase();
+  return ['network', 'failed to fetch', 'timeout', 'timed out'].some((hint) => raw.includes(hint));
+}
+
+async function callCheckDeviceSession(data: Record<string, unknown> = {}): Promise<DeviceSessionResult> {
   const fn = httpsCallable<Record<string, unknown>, DeviceSessionResult>(functions, 'checkDeviceSession');
-  const deviceId = getOrCreateDeviceId();
-  const result = await fn({ deviceId, deviceLabel: getDeviceLabel(), ...data });
+  const result = await fn({ deviceId: getOrCreateDeviceId(), deviceLabel: getDeviceLabel(), ...data });
   return result.data;
 }
 
-export async function isDeviceTrusted(_uid: string, _deviceId: string): Promise<boolean> {
-  const result = await checkDeviceSession();
-  return result.requiresOtp !== true;
+/**
+ * The single call made right after a successful password sign-in. Its result
+ * says whether this browser is trusted and, when it is not, carries the
+ * destination of the challenge it just sent.
+ */
+export function startDeviceSession(): Promise<DeviceSessionResult> {
+  return callCheckDeviceSession();
 }
 
-export interface RequestOtpResult {
-  maskedDestination: string;
-  method: OtpMethod;
+/** Send another email challenge for a browser already awaiting one. */
+export function resendEmailChallenge(): Promise<DeviceSessionResult> {
+  return callCheckDeviceSession({ resendEmailChallenge: true });
 }
 
-export async function requestLoginOtp(method: OtpMethod = 'email'): Promise<RequestOtpResult> {
-  if (method !== 'email') throw new Error('SMS verification is not available for the admin web console.');
-  const result = await checkDeviceSession({ resendEmailChallenge: true });
-  if (result.requiresOtp !== true || !result.email) throw new Error('This browser is already verified.');
-  const email = result.email.trim().toLowerCase();
-  const maskedDestination = email.replace(/^(.).+(@.+)$/, '$1***$2');
-  return { maskedDestination, method: 'email' };
+/** Submit the emailed code. Resolves only once the browser is trusted. */
+export async function verifyEmailChallenge(code: string): Promise<DeviceSessionResult> {
+  const result = await callCheckDeviceSession({ emailOtp: code.trim() });
+  if (result.requiresOtp === true || !result.sessionId) {
+    throw new Error('That code did not work. Request a new one and try again.');
+  }
+  return result;
 }
 
-export async function verifyLoginOtp(code: string, _deviceId: string, _deviceLabel: string): Promise<void> {
-  const result = await checkDeviceSession({ emailOtp: code.trim() });
-  if (result.requiresOtp === true || !result.sessionId) throw new Error('Device verification was not completed.');
+/** `a***@example.com` - enough to recognise the inbox, not to read it off a screen. */
+export function maskEmail(email: string | undefined | null): string | null {
+  const value = String(email || '').trim().toLowerCase();
+  if (!value) return null;
+  return value.replace(/^(.).+(@.+)$/, '$1***$2');
 }

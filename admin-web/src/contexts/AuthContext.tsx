@@ -2,20 +2,18 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
-  signInWithPopup,
-  GoogleAuthProvider,
   signOut as firebaseSignOut,
   type User,
 } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
-import { getOrCreateDeviceId, getDeviceLabel } from '../utils/deviceId';
 import { subscribeMyCapabilities, type Capability } from '../services/accessControlService';
 import {
-  isDeviceTrusted,
-  requestLoginOtp,
-  verifyLoginOtp,
-  type OtpMethod,
+  isDeviceCheckUnreachable,
+  maskEmail,
+  resendEmailChallenge,
+  startDeviceSession,
+  verifyEmailChallenge,
 } from '../services/deviceAuthService';
 
 export type AdminRole = 'admin' | 'superadmin' | 'support' | 'finance';
@@ -40,16 +38,23 @@ interface AuthContextValue {
   access: { role: AdminRole | undefined; capabilities: Capability[] };
   accessDenied: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   deviceVerificationRequired: boolean;
-  otpMethod: OtpMethod | null;
+  /** Masked inbox the challenge went to, or null while it is being sent. */
   otpDestination: string | null;
+  /** False when the server did not confirm it sent a code, so the UI offers one. */
+  otpSent: boolean;
   otpError: string | null;
   otpSubmitting: boolean;
-  requestOtp: (method: OtpMethod) => Promise<void>;
+  resendOtp: () => Promise<void>;
   verifyOtp: (code: string) => Promise<void>;
   cancelDeviceVerification: () => Promise<void>;
+  /**
+   * True when checkDeviceSession could not be reached at sign-in. Access is
+   * allowed - an outage must not lock admins out - but the console says so,
+   * because single-device enforcement did not run for this session.
+   */
+  deviceCheckDeferred: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -67,8 +72,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
   const [deviceVerificationRequired, setDeviceVerificationRequired] = useState(false);
-  const [otpMethod, setOtpMethod] = useState<OtpMethod | null>(null);
   const [otpDestination, setOtpDestination] = useState<string | null>(null);
+  const [otpSent, setOtpSent] = useState(false);
+  const [deviceCheckDeferred, setDeviceCheckDeferred] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
   const [otpSubmitting, setOtpSubmitting] = useState(false);
   const pendingProfileRef = useRef<AdminProfile | null>(null);
@@ -100,9 +106,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setFirebaseUser(user);
       setAccessDenied(false);
       setDeviceVerificationRequired(false);
-      setOtpMethod(null);
       setOtpDestination(null);
+      setOtpSent(false);
       setOtpError(null);
+      setDeviceCheckDeferred(false);
       pendingProfileRef.current = null;
 
       if (!user) {
@@ -152,35 +159,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           role,
         };
 
-        // Device verification is mandatory for the admin web console. Do not
-        // fall back to password-only access if the verification service fails.
+        // One call, and it both answers "is this browser trusted?" and sends
+        // the email challenge when it is not. Asking the question and then
+        // requesting a code separately sent two codes and invalidated the
+        // first, which is what "the code doesn't work" was.
+        let session;
         try {
-          const deviceId = getOrCreateDeviceId();
-          const trusted = await isDeviceTrusted(user.uid, deviceId);
-          if (trusted) {
-            setProfile(adminProfile);
-            return;
-          }
-
-          pendingProfileRef.current = adminProfile;
-          setDeviceVerificationRequired(true);
-
-          try {
-            const { maskedDestination, method } = await requestLoginOtp('email');
-            setOtpMethod(method);
-            setOtpDestination(maskedDestination);
-          } catch (err) {
-            console.error('Device verification OTP unavailable:', err);
+          session = await startDeviceSession();
+        } catch (err) {
+          // An answer of "no" blocks. No answer at all does not - same rule as
+          // the app. Signing the admin out here turned any Cloud Functions
+          // hiccup into "that account doesn't have admin access", which is both
+          // untrue and unrecoverable from the login screen.
+          if (!isDeviceCheckUnreachable(err)) {
+            console.error('Device verification rejected this sign-in:', err);
             setProfile(null);
             setAccessDenied(true);
             await firebaseSignOut(auth).catch(() => undefined);
+            return;
           }
-        } catch (err) {
-          console.error('Device trust check unavailable:', err);
-          setProfile(null);
-          setAccessDenied(true);
-          await firebaseSignOut(auth).catch(() => undefined);
+          console.warn('Device verification unreachable; allowing access for this session', err);
+          setDeviceCheckDeferred(true);
+          setProfile(adminProfile);
+          return;
         }
+
+        if (session.requiresOtp !== true) {
+          setProfile(adminProfile);
+          return;
+        }
+
+        pendingProfileRef.current = adminProfile;
+        setOtpDestination(maskEmail(session.email));
+        // An older deployed copy of checkDeviceSession does not report this, so
+        // only an explicit false means "ask the person to request one".
+        setOtpSent(session.emailChallengeSent !== false);
+        setDeviceVerificationRequired(true);
       } catch (err) {
         console.error('Failed to load admin profile:', err);
         setProfile(null);
@@ -200,25 +214,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signInWithEmailAndPassword(auth, email.trim(), password);
   };
 
-  const signInWithGoogle = async () => {
-    setAccessDenied(false);
-    setProfile(null);
-    const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
-  };
-
   const signOut = async () => {
     pendingProfileRef.current = null;
     await firebaseSignOut(auth);
   };
 
-  const requestOtp = async (method: OtpMethod) => {
+  // Email only. Staff challenges are recorded as pendingAdminEmailChallenge and
+  // the server has no SMS path for them, so offering one was a button that
+  // always threw.
+  const resendOtp = async () => {
     setOtpError(null);
     setOtpSubmitting(true);
     try {
-      const { maskedDestination, method: confirmedMethod } = await requestLoginOtp(method);
-      setOtpMethod(confirmedMethod);
-      setOtpDestination(maskedDestination);
+      const result = await resendEmailChallenge();
+      setOtpDestination(maskEmail(result.email) ?? otpDestination);
+      setOtpSent(result.emailChallengeSent !== false);
     } catch (err) {
       setOtpError(err instanceof Error ? err.message : 'Could not send a verification code.');
     } finally {
@@ -231,10 +241,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setOtpError(null);
     setOtpSubmitting(true);
     try {
-      const deviceId = getOrCreateDeviceId();
-      await verifyLoginOtp(code.trim(), deviceId, getDeviceLabel());
+      await verifyEmailChallenge(code);
       setProfile(pendingProfileRef.current);
       setDeviceVerificationRequired(false);
+      setOtpDestination(null);
       pendingProfileRef.current = null;
     } catch (err) {
       setOtpError(err instanceof Error ? err.message : 'That code did not work. Try again.');
@@ -246,8 +256,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const cancelDeviceVerification = async () => {
     pendingProfileRef.current = null;
     setDeviceVerificationRequired(false);
-    setOtpMethod(null);
     setOtpDestination(null);
+    setOtpSent(false);
     setOtpError(null);
     await firebaseSignOut(auth);
   };
@@ -264,16 +274,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         access,
         accessDenied,
         signIn,
-        signInWithGoogle,
         signOut,
         deviceVerificationRequired,
-        otpMethod,
         otpDestination,
+        otpSent,
         otpError,
         otpSubmitting,
-        requestOtp,
+        resendOtp,
         verifyOtp,
         cancelDeviceVerification,
+        deviceCheckDeferred,
       }}
     >
       {children}

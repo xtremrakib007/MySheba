@@ -20,7 +20,7 @@ const COLLAPSE_KEY = 'mysheba-admin-sidebar-collapsed';
 const GROUPS_KEY = 'mysheba-admin-sidebar-groups';
 
 export default function AppShell() {
-  const { profile, signOut, access } = useAuth();
+  const { profile, signOut, access, deviceCheckDeferred } = useAuth();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_KEY) === '1');
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -98,6 +98,13 @@ export default function AppShell() {
           <div className="min-w-0 flex-1"><UniversalSearch /></div>
           <NotificationCenter />
         </div>
+        {deviceCheckDeferred && (
+          <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+            <span className="font-semibold">Device verification was unavailable at sign-in.</span>{' '}
+            You have access, but this browser was not verified for this session. Sign out and back in
+            once the connection is stable.
+          </div>
+        )}
         <Outlet />
       </main>
     </div>

@@ -11,6 +11,8 @@
     "build:apk": "node scripts/build-android.js production-apk",
     "build:aab": "node scripts/build-android.js production",
     "audit:functions": "find functions -maxdepth 1 -name '*.js' -print0 | xargs -0 -n1 node --check",
+    "audit:lockfiles": "node scripts/audit-lockfiles.js",
+    "audit:deps": "node scripts/audit-deps.js",
     "audit:nav": "node scripts/audit-navigation.js",
     "test:api-provider": "node scripts/test-api-provider-service.js",
     "production:check": "node scripts/production-readiness-check.js",
@@ -40,7 +42,10 @@
     "test:boundary": "node scripts/test-auth-boundary.js",
     "test:verify": "node scripts/test-device-verify.js",
     "test:vault": "node scripts/test-pin-vault.js",
-    "test:pin": "node scripts/test-collection-pin.js"
+    "test:pin": "node scripts/test-collection-pin.js",
+    "test:adminlogin": "node scripts/test-admin-login.js",
+    "test:successtopup": "node scripts/test-success-topup.js",
+    "test:appcheck": "node scripts/test-app-check.js"
   },
   "dependencies": {
     "expo": "~53.0.0",

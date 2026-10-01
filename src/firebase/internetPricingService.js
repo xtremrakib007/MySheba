@@ -56,6 +56,52 @@ export function subscribeInternetPricing(callback, onError) {
   );
 }
 
+// ---- Success TopUp API packages ----
+//
+// Bangladesh packages come live from /api/drives, so there is no base list to
+// override by index. They are keyed by the provider's own package id under
+// `apiPackages`, in the same per-operator doc:
+//
+//   apiPackages: { [packageId]: { price?: number, hidden?: true } }
+//
+// `price` is the SELL price in BDT - what the customer pays. The catalogue
+// price stays the cost and is what gets sent to Success TopUp, so a markup here
+// is margin, not a changed order. No entry means sell at cost, which is the
+// behaviour before this existed. The server resolves all of this
+// (functions/successTopUpCatalog.js); these writes only record the intent.
+
+/** Sets the customer-facing BDT price for one API package. */
+export async function setApiPackagePrice(operator, packageId, price) {
+  if (!operator || !packageId) throw new Error('Missing operator or package.');
+  const num = Number(price);
+  if (!Number.isFinite(num) || num <= 0) throw new Error('Enter a valid price.');
+  await setDoc(
+    doc(db, COLLECTION, operator),
+    { [`apiPackages.${packageId}.price`]: Math.round(num * 100) / 100, updatedAt: serverTimestamp() },
+    { merge: true }
+  );
+}
+
+/** Clears the override so the package sells at the provider's catalogue price. */
+export async function clearApiPackagePrice(operator, packageId) {
+  if (!operator || !packageId) throw new Error('Missing operator or package.');
+  await setDoc(
+    doc(db, COLLECTION, operator),
+    { apiPackages: { [packageId]: { price: deleteField() } }, updatedAt: serverTimestamp() },
+    { merge: true }
+  );
+}
+
+/** Hides or un-hides an API package from customers. */
+export async function setApiPackageHidden(operator, packageId, hidden) {
+  if (!operator || !packageId) throw new Error('Missing operator or package.');
+  await setDoc(
+    doc(db, COLLECTION, operator),
+    { apiPackages: { [packageId]: { hidden: hidden ? true : deleteField() } }, updatedAt: serverTimestamp() },
+    { merge: true }
+  );
+}
+
 /** Overrides a single package's price for one operator (creates the doc if needed). Kept for backward compatibility. */
 export async function setPackagePrice(operator, packageName, price) {
   if (!operator || !packageName) throw new Error('Missing operator or package.');

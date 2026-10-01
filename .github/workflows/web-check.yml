@@ -1,0 +1,109 @@
+name: Check web consoles
+
+# The admin console stopped compiling on 15 Sep 2026 (3f395e8 dropped a closing
+# JSX fragment) and nobody found out for two weeks, because nothing in CI ever
+# built it - the EAS workflows build the app, and hosting is deployed by hand.
+# By the time it surfaced there were 20 type errors across 9 files on top of the
+# original one. This runs on every push and pull request so the next one is a
+# failed check instead of a fortnight of rot.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  admin-web:
+    name: admin-web typecheck, lint and build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: admin-web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: admin-web
+        run: npm ci --no-audit --no-fund
+
+      # `npm run build` is `tsc -b && vite build`, so this covers the typecheck
+      # and the bundle in one step. Lint runs separately because oxlint exits
+      # non-zero on warnings too and those are tracked, not blocking.
+      - name: Build
+        working-directory: admin-web
+        run: npm run build
+
+      # Scans both surfaces' sources, so it needs no install of its own.
+      - name: Admin login parity with the app
+        run: node scripts/test-admin-login.js
+
+      - name: Lint (errors only)
+        working-directory: admin-web
+        shell: bash
+        run: |
+          set -o pipefail
+          # oxlint exits 1 on warnings as well, and admin-web carries a backlog
+          # of react-hooks warnings. Only a real error should fail the build.
+          out="$(npm run --silent lint 2>&1 || true)"
+          echo "$out"
+          errors="$(printf '%s\n' "$out" | grep -cE ': error ' || true)"
+          warnings="$(printf '%s\n' "$out" | grep -cE ': warning ' || true)"
+          {
+            echo "## admin-web lint"
+            echo ""
+            echo "- errors: $errors"
+            echo "- warnings: $warnings (not blocking)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$errors" -gt 0 ]; then
+            echo "admin-web lint reported $errors error(s)."
+            exit 1
+          fi
+
+  hosting-config:
+    name: Hosting targets point at real directories
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # firebase.json pointed the customer site at mysheba-web/dist, a
+      # directory that has never existed in this repo, so that hosting deploy
+      # could not publish anything. A built target is allowed to be missing
+      # here (CI has not run its build); a static one must be present.
+      - name: Check firebase.json hosting targets
+        shell: bash
+        run: |
+          node -e '
+            const fs = require("fs");
+            const cfg = JSON.parse(fs.readFileSync("firebase.json", "utf8"));
+            const targets = [].concat(cfg.hosting || []);
+            let bad = 0;
+            for (const h of targets) {
+              const dir = h.public;
+              const built = /(^|\/)dist$/.test(dir);
+              const exists = fs.existsSync(dir) && fs.statSync(dir).isDirectory();
+              if (built) {
+                const src = dir.replace(/(^|\/)dist$/, "");
+                const ok = fs.existsSync(`${src}/package.json`);
+                console.log(`${h.target}: ${dir} (built) source=${src} ${ok ? "OK" : "NO package.json"}`);
+                if (!ok) bad++;
+              } else {
+                console.log(`${h.target}: ${dir} (static) ${exists ? "OK" : "MISSING"}`);
+                if (!exists) bad++;
+              }
+            }
+            if (bad) {
+              console.error(`${bad} hosting target(s) point at a directory that cannot be produced.`);
+              process.exit(1);
+            }
+            console.log(`All ${targets.length} hosting target(s) resolve.`);
+          '

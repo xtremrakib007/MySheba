@@ -2,6 +2,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { logAudit, logServerError } = require('./logService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const MAX_SUBJECT = 200;
 const MAX_MESSAGE = 5000;
@@ -19,7 +20,7 @@ async function getActiveActor(db, uid) {
   return profile;
 }
 
-exports.createSupportTicket = onCall({ enforceAppCheck: true }, async (request) => {
+exports.createSupportTicket = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const db = admin.firestore();
@@ -76,5 +77,5 @@ async function setAssignment(request, clear) {
   return { ok: true, ticketId, assignedToUid: staffUid };
 }
 
-exports.assignSupportTicket = onCall({ enforceAppCheck: true }, async (request) => setAssignment(request, false));
-exports.unassignSupportTicket = onCall({ enforceAppCheck: true }, async (request) => setAssignment(request, true));
+exports.assignSupportTicket = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => setAssignment(request, false));
+exports.unassignSupportTicket = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => setAssignment(request, true));

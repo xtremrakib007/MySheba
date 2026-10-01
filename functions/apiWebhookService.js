@@ -1,6 +1,7 @@
 const { onCall, HttpsError, onRequest } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const crypto = require('crypto');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const COLLECTION = 'api_webhooks';
 const PROVIDERS = 'api_providers';
@@ -42,7 +43,7 @@ function validateConfig(data) {
   return { providerId, enabled, authHeader, webhookToken, transactionIdPath, statusPath, messagePath, successStatus, processingStatus, cancelStatus };
 }
 
-exports.listApiWebhooks = onCall({ enforceAppCheck: true }, async (request) => {
+exports.listApiWebhooks = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const snap = await db.collection(COLLECTION).limit(100).get();
@@ -73,7 +74,7 @@ exports.listApiWebhooks = onCall({ enforceAppCheck: true }, async (request) => {
   };
 });
 
-exports.saveApiWebhook = onCall({ enforceAppCheck: true }, async (request) => {
+exports.saveApiWebhook = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const id = clean(request.data?.providerId, 100);
@@ -98,7 +99,7 @@ exports.saveApiWebhook = onCall({ enforceAppCheck: true }, async (request) => {
   return { ok: true, providerId: id, webhookUrl: endpointUrl(id) };
 });
 
-exports.deleteApiWebhook = onCall({ enforceAppCheck: true }, async (request) => {
+exports.deleteApiWebhook = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const id = clean(request.data?.providerId, 100);
@@ -144,6 +145,7 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
     return res.status(401).send('Invalid webhook token');
   }
 
+  if (req.rawBody && req.rawBody.length > 1024 * 1024) return res.status(413).send('Webhook payload too large');
   const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
   const transactionId = safeText(pathGet(body, config.transactionIdPath || 'transactionId'), 200);
   const status = safeText(pathGet(body, config.statusPath || 'status'), 100);

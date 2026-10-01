@@ -19,7 +19,7 @@ import { useTheme } from "../theme/ThemeContext";
 import HeaderDecor from '../components/HeaderDecor';
 import * as analyticsService from '../firebase/analyticsService';
 import * as logService from '../firebase/logService';
-import { subscribeAllUsers } from '../firebase/userManagementService';
+import { fetchUserStats } from '../firebase/userManagementService';
 
 const ROLE_LABELS = { customer: 'Customers', dealer: 'Dealers', dealer: 'Dealers', reseller: 'Resellers', admin: 'Admins', superadmin: 'Super Admins' };
 
@@ -239,13 +239,21 @@ export default function AdminAnalyticsScreen() {
   const [audit, setAudit] = useState([]);
   const [auditLoading, setAuditLoading] = useState(true);
 
-  const [allUsers, setAllUsers] = useState([]);
+  const [userStats, setUserStats] = useState({ total: 0, newToday: 0, newThisWeek: 0 });
   const [loginEvents, setLoginEvents] = useState([]);
 
+  // Counted on the server, not streamed. This used to open a live listener
+  // over every user profile just to call .length on it.
   useEffect(() => {
     if (mainTab !== 'logs' || !isSuperAdmin) return undefined;
-    const unsub = subscribeAllUsers(setAllUsers, () => {});
-    return unsub;
+    let cancelled = false;
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekAgoStart = new Date(todayStart.getTime() - 6 * 24 * 60 * 60 * 1000);
+    fetchUserStats({ since: { today: todayStart, weekAgo: weekAgoStart } })
+      .then((stats) => { if (!cancelled) setUserStats(stats); })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, [mainTab, isSuperAdmin]);
 
   useEffect(() => {
@@ -301,9 +309,9 @@ export default function AdminAnalyticsScreen() {
 
   const today = startOfToday();
   const weekAgo = daysAgo(7);
-  const totalUsers = allUsers.length;
-  const newToday = allUsers.filter((u) => isAfter(u.createdAt, today)).length;
-  const newThisWeek = allUsers.filter((u) => isAfter(u.createdAt, weekAgo)).length;
+  const totalUsers = userStats.total;
+  const newToday = userStats.newToday;
+  const newThisWeek = userStats.newThisWeek;
   const uniqueLoginsToday = new Set(
     loginEvents.filter((e) => isAfter(e.createdAt, today)).map((e) => e.userId)
   ).size;

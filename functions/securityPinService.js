@@ -3,6 +3,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const crypto = require('crypto');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 const { logAudit, logServerError } = require('./logService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
@@ -37,7 +38,7 @@ function hashPin(pin, salt) {
   return crypto.scryptSync(pin, salt, 64).toString('hex');
 }
 
-exports.setupSecurityPin = onCall({ enforceAppCheck: true }, async (request) => {
+exports.setupSecurityPin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const uid = requireAuth(request);
   const { pin } = request.data || {};
   if (!isValidPin(pin)) throw new HttpsError('invalid-argument', 'PIN must be 4-8 digits.');
@@ -66,7 +67,7 @@ exports.setupSecurityPin = onCall({ enforceAppCheck: true }, async (request) => 
   }
 });
 
-exports.verifySecurityPin = onCall({ enforceAppCheck: true }, async (request) => {
+exports.verifySecurityPin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const uid = requireAuth(request);
   const { pin } = request.data || {};
   if (!isValidPin(pin)) throw new HttpsError('invalid-argument', 'Enter your PIN.');
@@ -120,7 +121,7 @@ exports.verifySecurityPin = onCall({ enforceAppCheck: true }, async (request) =>
   }
 });
 
-exports.resetSecurityPin = onCall({ enforceAppCheck: true }, async (request) => {
+exports.resetSecurityPin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const uid = requireAuth(request);
   requireRecentReauthentication(request);
   const { pin } = request.data || {};

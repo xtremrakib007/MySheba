@@ -34,6 +34,7 @@ exports.sendPasswordResetEmailVerification = require('./passwordResetEmail').sen
 exports.verifyPasswordResetEmailOtp = require('./passwordResetEmail').verifyPasswordResetEmailOtp;
 exports.recordAdEvent = require('./adTrackingCallable').recordAdEvent;
 exports.listManagedUsers = require('./managedUserListService').listManagedUsers;
+exports.listUserDirectory = require('./userDirectoryService').listUserDirectory;
 exports.searchUsers = require('./userSearch').searchUsers;
 exports.getUserByUid = require('./userSearch').getUserByUid;
 exports.matchContactsByPhone = require('./matchContactsByPhone').matchContactsByPhone;
@@ -78,6 +79,8 @@ exports.createDiditKycSession = require('./diditKycService').createDiditKycSessi
 exports.chargeWallet = secureWalletCharge.chargeWallet;
 exports.chargeRecharge = chargeGuards.chargeRecharge;
 exports.chargeInternetPackage = chargeGuards.chargeInternetPackage;
+exports.chargeOfferPacks = chargeGuards.chargeOfferPacks;
+exports.chargeEntertainment = chargeGuards.chargeEntertainment;
 exports.chargeBillPayment = chargeGuards.chargeBillPayment;
 exports.chargeMobileBanking = chargeGuards.chargeMobileBanking;
 exports.chargeRemittance = chargeGuards.chargeRemittance;
@@ -98,10 +101,14 @@ exports.listApiProviders = require('./apiProviderService').listApiProviders;
 exports.migrateApiProviderSecrets = require('./apiProviderService').migrateApiProviderSecrets;
 exports.saveApiProvider = require('./apiProviderService').saveApiProvider;
 exports.deleteApiProvider = require('./apiProviderService').deleteApiProvider;
-exports.testApiProvider = require('./apiProviderService').testApiProvider;
-exports.listSuccessTopUpDrives = require('./apiProviderService').listSuccessTopUpDrives;
 exports.getServiceApiSettings = require('./apiProviderService').getServiceApiSettings;
 exports.saveServiceApiSettings = require('./apiProviderService').saveServiceApiSettings;
+// Both of these are defined in apiProviderService.js but were never exported
+// here, so every call reached the client as functions/not-found: the Test API
+// button and the Bangladesh internet package list.
+exports.testApiProvider = require('./apiProviderService').testApiProvider;
+exports.listSuccessTopUpDrives = require('./apiProviderService').listSuccessTopUpDrives;
+exports.listSuccessTopUpCatalogForAdmin = require('./apiProviderService').listSuccessTopUpCatalogForAdmin;
 exports.listApiWebhooks = require('./apiWebhookService').listApiWebhooks;
 exports.saveApiWebhook = require('./apiWebhookService').saveApiWebhook;
 exports.deleteApiWebhook = require('./apiWebhookService').deleteApiWebhook;

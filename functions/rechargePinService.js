@@ -5,6 +5,7 @@ const progressionService = require('./progressionService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { executeConfiguredApi } = require('./apiProviderService');
 const { getWalletCurrencyAndFx, baseToWallet } = require('./walletCurrencyService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
@@ -43,7 +44,7 @@ function requestIdOf(request) {
   return id;
 }
 
-exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) => {
+exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const uid = requireAuth(request);
   const requestId = requestIdOf(request);
   const db = admin.firestore();
@@ -175,7 +176,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: true }, async (request) 
   }
 });
 
-exports.getRechargePin = onCall({ enforceAppCheck: true }, async (request) => {
+exports.getRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const uid = requireAuth(request);
   const transactionId = typeof request.data?.transactionId === 'string' ? request.data.transactionId.trim() : '';
   if (!/^[A-Za-z0-9_-]{1,100}$/.test(transactionId)) throw new HttpsError('invalid-argument', 'Invalid transaction ID.');

@@ -1,11 +1,12 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 const TYPES = ['flight', 'bus', 'train'];
 const MAX = { from: 160, to: 160, date: 40, time: 40, name: 160, phone: 40, email: 254, notes: 3000 };
 function text(value, max) { return typeof value === 'string' ? value.trim().slice(0, max) : ''; }
 function activeProfile(p) { return !!p && p.suspended !== true && p.inactive !== true && p.disabled !== true && !p.mergedInto; }
-exports.createInquiry = onCall({ enforceAppCheck: true }, async (request) => {
+exports.createInquiry = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const db = admin.firestore();

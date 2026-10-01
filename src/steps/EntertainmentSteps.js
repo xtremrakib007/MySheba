@@ -1,26 +1,113 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View } from 'react-native';
+import { useApp } from '../context/AppContext';
+import { countries, rechargeOperators, amountToPoints } from '../data/countries';
+import { getOperatorBrand } from '../data/operatorBrand';
+import { FormLabel, Grid3, OperatorCard, FormInput, PackageCard, SummaryCard } from '../components/ui';
+import CountrySelectCard from '../components/CountrySelectCard';
+import * as apiProviderService from '../firebase/apiProviderService';
+import { isEntertainmentPackage } from '../utils/packageCategory';
+import { isDriveWindowOpen, driveWindowClosedMessage } from '../utils/driveWindow';
 
-export const validateStep = () => null;
+// Entertainment flow: country -> operator -> phone -> package.
+//
+// Success TopUp has no entertainment product today, and this screen is honest
+// about that rather than filling itself with something else. The supplied
+// catalogue (BD_Mobile_Operator_Packages.xlsx) is 239 regular + 211 drive
+// packages across four categories - Data, Bundle, Voice, Call Rate - and a
+// keyword sweep for Toffee, Bioscope, Hoichoi, Chorki, YouTube and the rest
+// matched zero of those 450 rows.
+//
+// An earlier version of this screen read the `drive` catalogue and called it
+// entertainment. That was wrong: "Drive Recharge" is a parallel,
+// commission-bearing catalogue of the SAME minutes-and-data packs (0-12% of
+// price, averaging 4.9%), not content.
+//
+// So it reads both catalogues and keeps only entries the provider itself
+// categorises as entertainment. That is nothing right now, which is the
+// truthful answer - and the screen starts working on its own the day Success
+// TopUp adds such SKUs, with no code change.
+//
+// Buying is unchanged and documented: POST /api/recharge with the chosen
+// package_id, which is why the server treats this and Internet as one path
+// (SUCCESS_TOPUP_PACKAGE_SERVICES).
+const DRIVE_OPERATOR_CODES = {
+  Grameenphone: 'GP', Robi: 'RB', Banglalink: 'BL', Airtel: 'AT',
+  Teletalk: 'TT', Skitto: 'SK', 'Brilliant Connect': 'BT', Ryze: 'RY',
+};
 
-export default function EntertainmentStep() {
-  return (
-    <View style={styles.card}>
-      <Text style={styles.icon}>🎮</Text>
-      <Text style={styles.title}>Entertainment</Text>
-      <Text style={styles.status}>Coming Soon</Text>
-      <Text style={styles.body}>
-        Game recharge, digital/game vouchers, music and entertainment, and streaming/TV services will be available here.
-      </Text>
-      <Text style={styles.note}>
-        A live provider must be configured by Superadmin before purchases can be processed. No manual or simulated purchase is available.
-      </Text>
-    </View>
-  );
+export default function EntertainmentStep({ step }) {
+  const { serviceData, updateServiceData, nextStep, rates } = useApp();
+  const [packages, setPackages] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [driveClosed, setDriveClosed] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    if (serviceData.country !== 'BD' || step !== 3) return () => { alive = false; };
+    setLoading(true); setError('');
+    const operator = DRIVE_OPERATOR_CODES[serviceData.operator] || 'ALL';
+    const driveOpen = isDriveWindowOpen();
+    setDriveClosed(!driveOpen);
+    Promise.all([
+      apiProviderService.listSuccessTopUpDrives(operator, 'regular', 'Entertainment', serviceData.operator || ''),
+      driveOpen
+        ? apiProviderService.listSuccessTopUpDrives(operator, 'drive', 'Entertainment', serviceData.operator || '')
+        : Promise.resolve([]),
+    ])
+      .then(([regular, drive]) => {
+        if (!alive) return;
+        const byId = new Map();
+        for (const pkg of [...regular, ...drive]) if (isEntertainmentPackage(pkg)) byId.set(pkg.id, pkg);
+        setPackages([...byId.values()]);
+      })
+      .catch((e) => { if (alive) { setPackages([]); setError(e?.message || 'Unable to load entertainment packages.'); } })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [serviceData.country, serviceData.operator, step]);
+
+  if (step === 0) {
+    return <View><FormLabel>Select Country</FormLabel><Grid3>{countries.map((c) => <CountrySelectCard key={c.code} code={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr, operator: null, package: null, packageId: null, amount: null }); nextStep(); }} />)}</Grid3></View>;
+  }
+
+  if (step === 1) {
+    const list = rechargeOperators[serviceData.country] || [];
+    return <View><FormLabel>Select Operator</FormLabel><Grid3>{list.map((o) => { const brand = getOperatorBrand(o); return <OperatorCard key={o} name={o} logo={brand.logo} color={brand.color} initials={brand.initials} selected={serviceData.operator === o} onPress={() => { updateServiceData({ operator: o, package: null, packageId: null, amount: null }); nextStep(); }} />; })}</Grid3></View>;
+  }
+
+  if (step === 2) {
+    return <View><FormLabel>Enter Mobile Number</FormLabel><FormInput placeholder="Mobile number" keyboardType="phone-pad" value={serviceData.phone || ''} onChangeText={(v) => updateServiceData({ phone: v })} /></View>;
+  }
+
+  if (step === 3) {
+    const cur = serviceData.currency || 'MYR';
+    const isForeign = serviceData.country && serviceData.country !== 'MY';
+    const selected = packages.find((p) => p.name === serviceData.package);
+    const walletDeductionMyr = isForeign && selected ? amountToPoints(selected.price, serviceData.country, rates) : null;
+    return (
+      <View>
+        <FormLabel>Select Entertainment Package</FormLabel>
+        {serviceData.country !== 'BD' && <FormLabel>Entertainment packages are available for Bangladesh only right now.</FormLabel>}
+        {!!loading && <FormLabel>Loading entertainment packages…</FormLabel>}
+        {!!error && <FormLabel>{error}</FormLabel>}
+        {!!driveClosed && <FormLabel>{driveWindowClosedMessage()} Packages outside those hours are not shown.</FormLabel>}
+        {!loading && !error && serviceData.country === 'BD' && packages.length === 0 && <FormLabel>Success TopUp has no entertainment packages for this operator yet. Data and minutes packs are under Internet and Recharge.</FormLabel>}
+        {!loading && !error && packages.map((p) => <PackageCard key={p.id} name={p.name} detail={`${p.data} • ${p.valid}`} price={p.price} currency={cur} selected={serviceData.package === p.name} onPress={() => updateServiceData({ package: p.name, packageId: p.id, amount: p.price })} />)}
+        {!!(isForeign && selected) && <SummaryCard rows={[{ label: 'Package Price', value: `${cur} ${Number(selected.price).toFixed(2)}` }]} totalLabel="Wallet deduction" totalValue={`${walletDeductionMyr.toFixed(2)} MYR`} />}
+      </View>
+    );
+  }
+
+  return null;
 }
-const styles = StyleSheet.create({
-  card:{padding:20,borderRadius:14,backgroundColor:'#fff',alignItems:'center',marginTop:8},
-  icon:{fontSize:44},title:{fontSize:22,fontWeight:'800',marginTop:8},
-  status:{marginTop:10,fontSize:16,fontWeight:'800'},body:{textAlign:'center',marginTop:10,lineHeight:21},
-  note:{textAlign:'center',marginTop:14,fontSize:12,opacity:.65,lineHeight:18}
-});
+
+export function validateStep(step, serviceData) {
+  if (step === 0 && !serviceData.country) return 'Please select a country.';
+  if (step === 1 && !serviceData.operator) return 'Please select an operator.';
+  if (step === 2 && !(serviceData.phone || '').trim()) return 'Please enter a mobile number.';
+  // packageId is what the provider actually buys - a name with no id cannot be
+  // dispatched, so never let the order through on the label alone.
+  if (step === 3 && !serviceData.packageId) return 'Please select an entertainment package.';
+  return null;
+}

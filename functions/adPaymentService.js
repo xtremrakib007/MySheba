@@ -2,6 +2,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logAdAudit, logServerError } = require('./logService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const PAYMENT_STATUS_TRANSITIONS = { pending:['paid','failed'], paid:['refunded','failed'], failed:['pending','paid'], refunded:[] };
 const VALID_PAYMENT_STATUSES = Object.keys(PAYMENT_STATUS_TRANSITIONS);
@@ -18,7 +19,7 @@ function validMoney(v) {
   const n = Number(v); if (!Number.isFinite(n) || n <= 0 || n > MAX_AMOUNT) throw new HttpsError('invalid-argument','amount is outside the allowed range.'); return n;
 }
 
-exports.createAdPayment = onCall({ enforceAppCheck: true }, async (request) => {
+exports.createAdPayment = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const callerUid=requireAuth(request); const db=admin.firestore(); const caller=await requireSuperadmin(db,callerUid);
   const {advertiserId,campaignId,packageId,amount,currency,paymentMethod,transactionReference,paymentStatus}=request.data||{};
   const advId=validId(advertiserId,'advertiserId'); const numericAmount=validMoney(amount);
@@ -85,7 +86,7 @@ exports.createAdPayment = onCall({ enforceAppCheck: true }, async (request) => {
   return {ok:true,paymentId:paymentRef.id};
 });
 
-exports.updateAdPaymentStatus = onCall({ enforceAppCheck: true }, async (request) => {
+exports.updateAdPaymentStatus = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const callerUid=requireAuth(request); const db=admin.firestore(); const caller=await requireSuperadmin(db,callerUid);
   const {paymentId,paymentStatus,note}=request.data||{}; const id=validId(paymentId,'paymentId');
   if(!VALID_PAYMENT_STATUSES.includes(paymentStatus)) throw new HttpsError('invalid-argument','Invalid payment status.');

@@ -5,6 +5,7 @@ const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestor
 const { assertEmailVerified } = require('./emailVerification');
 const { assertPhoneVerified } = require('./phoneVerification');
 const mailerService = require('./mailerService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const TTL_MS = 10 * 60 * 1000;
 const RESEND_MS = 60 * 1000;
@@ -26,7 +27,7 @@ function hash(code) { return crypto.createHash('sha256').update(String(code).tri
 function code() { return String(crypto.randomInt(100000, 1000000)); }
 function ref(db, uid) { return db.collection('users').doc(uid); }
 
-exports.sendDeviceVerification = onCall({ enforceAppCheck: true }, async (request) => {
+exports.sendDeviceVerification = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const uid = requireAuth(request);
   const deviceId = String(request.data?.deviceId || '').trim();
   if (!deviceId || deviceId.length > 100) throw new HttpsError('invalid-argument', 'Missing or invalid device id.');
@@ -105,7 +106,7 @@ exports.sendDeviceVerification = onCall({ enforceAppCheck: true }, async (reques
   return { sent: true, email };
 });
 
-exports.confirmDeviceEmailOtp = onCall({ enforceAppCheck: true }, async (request) => {
+exports.confirmDeviceEmailOtp = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const uid = requireAuth(request);
   const deviceId = String(request.data?.deviceId || '').trim();
   const otp = String(request.data?.code || '').trim();

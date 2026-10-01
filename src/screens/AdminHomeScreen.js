@@ -23,6 +23,7 @@ import * as settingsService from '../firebase/settingsService';
 import * as supportContactService from '../firebase/supportContactService';
 import * as paymentSettingsService from '../firebase/paymentSettingsService';
 import * as internetPricingService from '../firebase/internetPricingService';
+import ApiPackagePricingCard from '../components/ApiPackagePricingCard';
 import * as bannerService from '../firebase/bannerService';
 import * as announcementService from '../firebase/announcementService';
 import * as topupService from '../firebase/topupService';
@@ -953,6 +954,10 @@ export default function AdminHomeScreen() {
                 <Text style={styles.addPackageBtnText}>+ Add Package for {pricingOperator}</Text>
               </TouchableOpacity>
             </View>
+
+            <ApiPackagePricingCard service="Internet" title="📦 Success TopUp Internet Prices (BD)" />
+            <ApiPackagePricingCard service="Offer Packs" title="🎁 Success TopUp Offer Pack Prices (BD)" />
+            <ApiPackagePricingCard service="Entertainment" title="🎬 Success TopUp Entertainment Prices (BD)" />
           </View>
         )}
 
