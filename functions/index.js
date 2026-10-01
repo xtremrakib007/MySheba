@@ -99,6 +99,11 @@ exports.saveApiProvider = require('./apiProviderService').saveApiProvider;
 exports.deleteApiProvider = require('./apiProviderService').deleteApiProvider;
 exports.getServiceApiSettings = require('./apiProviderService').getServiceApiSettings;
 exports.saveServiceApiSettings = require('./apiProviderService').saveServiceApiSettings;
+// Both of these are defined in apiProviderService.js but were never exported
+// here, so every call reached the client as functions/not-found: the Test API
+// button and the Bangladesh internet package list.
+exports.testApiProvider = require('./apiProviderService').testApiProvider;
+exports.listSuccessTopUpDrives = require('./apiProviderService').listSuccessTopUpDrives;
 exports.listApiWebhooks = require('./apiWebhookService').listApiWebhooks;
 exports.saveApiWebhook = require('./apiWebhookService').saveApiWebhook;
 exports.deleteApiWebhook = require('./apiWebhookService').deleteApiWebhook;
@@ -114,7 +119,6 @@ exports.onTransactionQueueUpdated = transactionQueue.onTransactionQueueUpdated;
 exports.approveTransaction = require('./transactionService').approveTransaction;
 exports.acceptTransaction = require('./transactionService').acceptTransaction;
 exports.completeTransaction = require('./transactionService').completeTransaction;
-exports.generateCollectionPin = require('./transactionService').generateCollectionPin;
 exports.reconcileUnknownTransaction = require('./transactionService').reconcileUnknownTransaction;
 exports.rejectTransaction = require('./rejectionService').rejectTransaction;
 exports.assignDealer = require('./transactionService').assignDealer;

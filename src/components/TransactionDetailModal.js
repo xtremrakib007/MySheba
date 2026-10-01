@@ -309,7 +309,7 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
             {type === 'inquiry' ? <InquiryBody item={item} />
               : type === 'topup' ? <TopupBody item={item} />
               : type === 'supportTicket' ? <TicketBody item={item} />
-              : <TxBody item={item} showCost={showCost} pinOverride={pinOverride} />
+              : <TxBody item={item} showCost={showCost} pinOverride={pinOverride} />}
           </ScrollView>
 
           <View style={styles.footer}>
@@ -317,15 +317,12 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
               <TouchableOpacity style={styles.printBtn} onPress={async () => {
                 try {
                   const safe = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-                  // collectionPin after completion, when the live pin is gone.
-                  // Without it a completed order printed "Not generated" for a
-                  // PIN that had very much been generated and used.
-                  const requiresCollectionPin = item.service === 'Mobile Banking' || item.service === 'Remittance';
-                  const pin = requiresCollectionPin ? (pinOverride || item.pin || item.collectionPin || '') : '';
-                  const currency = txCurrency(item);
                   const raw = item.raw || {};
                   const currency = txCurrency(item);
+                  // Only these two services carry a collection PIN at all.
                   const requiresCollectionPin = item.service === 'Mobile Banking' || item.service === 'Remittance';
+                  // collectionPin first: completeTransaction deletes the live
+                  // pin, so on a completed order it is the only copy left.
                   const pin = requiresCollectionPin ? (pinOverride || item.collectionPin || item.pin || '') : '';
                   const esc = (v) => safe(v);
                   const rows = [
@@ -381,7 +378,7 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
                     ? `<div style="margin-top:18px"><b>PASSPORT PHOTO</b><br><img src="${esc(raw.passportUrl)}" style="max-width:100%;max-height:420px;margin-top:8px;object-fit:contain"></div>`
                     : '';
 
-                  html = `<!doctype html>
+                  const html = `<!doctype html>
 <html><head><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
 @page{margin:12mm}body{font-family:Arial,sans-serif;color:#111;font-size:12px;margin:0}
@@ -392,7 +389,8 @@ table{width:100%;border-collapse:collapse}.footer{margin-top:18px;padding-top:10
 <table>${rowsHtml}</table>
 ${pinBlock}${receiptImage}${passportImage}
 <div class="footer">Please keep this receipt for your records.</div>
-</body></html>`;                  await Print.printAsync({ html });
+</body></html>`;
+                  await Print.printAsync({ html });
                 } catch (err) { showAlert('Printer', err?.message || 'Printing is not available on this device.'); }
               }}>
                 <Text style={styles.printText}>🖨 Print</Text>
