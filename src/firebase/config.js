@@ -12,9 +12,9 @@ import { getStorage } from 'firebase/storage';
 import { getFunctions } from 'firebase/functions';
 import { initializeAppCheck as initializeWebAppCheck, CustomProvider } from 'firebase/app-check';
 import nativeAppCheck, { ReactNativeFirebaseAppCheckProvider } from '@react-native-firebase/app-check';
-import nativeFirebaseApp from '@react-native-firebase/app';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 import { secureAsyncStorage } from './secureLocalStorage';
 
 const firebaseConfig = {
@@ -39,8 +39,8 @@ if (Platform.OS !== 'web') {
   try {
     const provider = new ReactNativeFirebaseAppCheckProvider();
     provider.configure({
-      android: { provider: __DEV__ ? 'debug' : 'playIntegrity' },
-      apple: { provider: __DEV__ ? 'debug' : 'appAttestWithDeviceCheckFallback' },
+      android: { provider: (__DEV__ || Constants.expoConfig?.extra?.firebaseAppCheckDebugToken) ? 'debug' : 'playIntegrity', debugToken: Constants.expoConfig?.extra?.firebaseAppCheckDebugToken },
+      apple: { provider: (__DEV__ || Constants.expoConfig?.extra?.firebaseAppCheckDebugToken) ? 'debug' : 'appAttestWithDeviceCheckFallback', debugToken: Constants.expoConfig?.extra?.firebaseAppCheckDebugToken },
     });
     nativeAppCheckInstance = nativeAppCheck();
     nativeAppCheckInstance.initializeAppCheck({ provider, isTokenAutoRefreshEnabled: true });
