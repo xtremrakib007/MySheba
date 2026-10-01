@@ -107,6 +107,39 @@ reads both catalogues and keeps only what the provider itself categorises as
 entertainment, which is nothing today; the picker says so and points at Internet
 and Recharge instead.
 
+## Drive packages are sold 10am-10pm Bangladesh time
+
+Drive packages are only on sale **10:00-22:00 Asia/Dhaka**, which is
+**12:00-00:00 Asia/Kuala_Lumpur** and **04:00-16:00 UTC**. Regular packages are
+unaffected and sell around the clock.
+
+The window lives in UTC on purpose. Asia/Dhaka is a fixed +06:00 and
+Asia/Kuala_Lumpur a fixed +08:00 - neither has observed DST since 2009 - so a UTC
+comparison needs no timezone database, which matters because a React Native build
+may not ship full ICU and a Cloud Functions locale is not something to depend on.
+
+Enforced on the server, twice:
+
+| Where | Outside the window |
+| --- | --- |
+| `listSuccessTopUpDrives` with `type: 'drive'` | returns no packages, plus `driveWindowOpen: false` and a message |
+| `resolveOrderPackage`, at charge time | skips the drive catalogue, so a drive id cannot be bought |
+
+The order-time check is the one that counts: a customer can hold a package on
+screen past 22:00 Dhaka, or skip the listing altogether. When a drive id is
+submitted while the window is shut, the order is refused with the hours rather
+than a generic "no longer available", so the customer knows to come back.
+
+`src/utils/driveWindow.js` mirrors the constants for the app, which uses them
+only to skip the drive request and say when it reopens. It decides nothing.
+`npm run test:successtopup` fails if the two copies drift, and checks both
+against the IANA timezone database for all 24 hours rather than against the
+offsets the modules assume.
+
+**Superadmin prices around the clock.** Only selling is time-boxed, so
+`listSuccessTopUpCatalogForAdmin` is not gated - it reports the window state and
+the pricing screen says prices will apply when it reopens.
+
 ## Setting prices (Superadmin)
 
 Bangladesh packages arrive live from `/api/drives`, so there is no hardcoded list

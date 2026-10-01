@@ -352,6 +352,63 @@ check('the customer listing never exposes the cost price', () => {
   return null;
 });
 
+check('the drive window is 10:00-22:00 Bangladesh time, enforced on the server', () => {
+  const server = require(path.join(ROOT, 'functions', 'successTopUpWindow.js'));
+  const clientSrc = read('src/utils/driveWindow.js');
+  if (!clientSrc) return 'src/utils/driveWindow.js is missing.';
+
+  // Load the app's copy for real rather than pattern-matching it: a drifted
+  // constant is the failure, and only running both can show it.
+  const mod = {};
+  new Function('module', `${clientSrc.replace(/^export /gm, '')}\nmodule.exports={isDriveWindowOpen,DRIVE_WINDOW_OPEN_UTC_HOUR,DRIVE_WINDOW_CLOSE_UTC_HOUR,DRIVE_WINDOW_LABEL};`)(mod);
+  const client = mod.exports;
+
+  for (const key of ['DRIVE_WINDOW_OPEN_UTC_HOUR', 'DRIVE_WINDOW_CLOSE_UTC_HOUR', 'DRIVE_WINDOW_LABEL']) {
+    if (client[key] !== server[key]) {
+      return `${key} differs: app has ${JSON.stringify(client[key])}, server has ${JSON.stringify(server[key])}. `
+        + 'The screen would then promise hours the server refuses, or hide packages it would sell.';
+    }
+  }
+
+  // The stated window, checked against the real timezone database rather than
+  // against the offsets the modules assume. Asia/Dhaka 10:00-22:00 is
+  // Asia/Kuala_Lumpur 12:00-00:00 and UTC 04:00-16:00.
+  const hourIn = (tz, d) => Number(new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', hour12: false }).format(d));
+  for (let utcHour = 0; utcHour < 24; utcHour += 1) {
+    const at = new Date(Date.UTC(2026, 9, 1, utcHour, 30, 0));
+    const dhaka = hourIn('Asia/Dhaka', at);
+    const expected = dhaka >= 10 && dhaka < 22;
+    if (server.isDriveWindowOpen(at) !== expected) {
+      return `at ${utcHour}:30 UTC it is ${dhaka}:30 in Dhaka, so the window should be ${expected ? 'open' : 'closed'}, but the server says otherwise.`;
+    }
+    if (client.isDriveWindowOpen(at) !== expected) return `the app disagrees with Dhaka time at ${utcHour}:30 UTC.`;
+  }
+
+  // Server enforcement, at both the listing and the order. The app's copy is
+  // cosmetic, so neither of these may be missing.
+  const api = code(read('functions/apiProviderService.js') || '');
+  if (!/type === 'drive'\s*&&\s*!driveWindow\.isDriveWindowOpen\(\)/.test(api)) {
+    return 'listSuccessTopUpDrives no longer refuses a drive listing outside the window.';
+  }
+  const cat = code(read('functions/successTopUpCatalog.js') || '');
+  if (!/type === 'drive'\s*&&\s*!driveOpen/.test(cat)) {
+    return 'resolveOrderPackage no longer skips the drive catalogue outside the window, so a stale screen could still buy one.';
+  }
+  if (!/drive-window-closed/.test(cat)) return 'a closed window is not distinguished from a missing package.';
+  const wallet = code(read('functions/walletService.js') || '');
+  if (!/drive-window-closed/.test(wallet)) return 'chargeProduct does not surface the closed-window reason to the customer.';
+
+  // Superadmin prices around the clock; only selling is time-boxed.
+  const adminStart = api.indexOf('exports.listSuccessTopUpCatalogForAdmin');
+  if (adminStart < 0) return 'the admin catalogue callable is gone.';
+  const adminBody = api.slice(adminStart);
+  if (/if \(type === 'drive' && !driveWindow\.isDriveWindowOpen\(\)\) \{\s*return \{ packages: \[\]/.test(adminBody)) {
+    return 'the admin catalogue is gated by the window, so prices could not be set outside selling hours.';
+  }
+  if (!/driveWindowOpen/.test(adminBody)) return 'the admin catalogue does not report the drive-window state.';
+  return null;
+});
+
 if (failures.length) {
   console.error('Success TopUp contract FAILED:\n');
   for (const f of failures) console.error(`  - ${f}`);

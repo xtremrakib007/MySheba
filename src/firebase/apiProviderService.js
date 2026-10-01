@@ -27,5 +27,10 @@ export async function listSuccessTopUpDrives(operator, type, service = 'Internet
 
 /** Superadmin only: the catalogue with cost, sell and hidden state per package. */
 export async function listSuccessTopUpCatalogForAdmin({ operator, operatorName, type, service }) {
-  return (await adminCatalogFn({ operator, operatorName, type, service })).data?.packages || [];
+  const { data } = await adminCatalogFn({ operator, operatorName, type, service });
+  return {
+    packages: data?.packages || [],
+    driveWindowOpen: data?.driveWindowOpen !== false,
+    driveWindowLabel: data?.driveWindowLabel || '',
+  };
 }

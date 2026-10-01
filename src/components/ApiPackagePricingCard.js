@@ -38,14 +38,16 @@ export default function ApiPackagePricingCard({ service = 'Internet', title = 'ð
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
+  const [driveState, setDriveState] = useState({ open: true, label: '' });
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const items = await apiProviderService.listSuccessTopUpCatalogForAdmin({
+      const result = await apiProviderService.listSuccessTopUpCatalogForAdmin({
         operator: operator.code, operatorName: operator.name, type, service,
       });
-      setPackages(items);
+      setPackages(result.packages);
+      setDriveState({ open: result.driveWindowOpen, label: result.driveWindowLabel });
     } catch (e) {
       setPackages([]);
       setError(e?.message || 'Could not load the Success TopUp catalogue.');
@@ -100,6 +102,13 @@ export default function ApiPackagePricingCard({ service = 'Internet', title = 'ð
           </TouchableOpacity>
         ))}
       </View>
+
+      {type === 'drive' && !driveState.open && (
+        <Text style={styles.notice}>
+          Drive packages are closed to customers right now{driveState.label ? ` - they sell ${driveState.label}` : ''}.
+          You can still set prices here; they apply when the window reopens.
+        </Text>
+      )}
 
       {!!loading && <ActivityIndicator style={{ marginVertical: 12 }} />}
       {!!error && <Text style={styles.error}>{error}</Text>}
@@ -198,5 +207,6 @@ const styles = StyleSheet.create({
   btnPrimary: { backgroundColor: '#0E7A79', borderColor: '#0E7A79' },
   btnPrimaryText: { fontSize: 11, fontWeight: '800', color: '#fff' },
   error: { fontSize: 12, color: '#c0392b', marginBottom: 8 },
+  notice: { fontSize: 11, lineHeight: 17, color: '#8a6d00', backgroundColor: '#fff8e1', borderRadius: 8, padding: 8, marginBottom: 10 },
   dim: { opacity: 0.45 },
 });

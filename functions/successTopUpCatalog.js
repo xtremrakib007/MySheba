@@ -17,8 +17,7 @@
 // never taken from the client: chargeProduct used to convert whatever `amount`
 // the app submitted, so a tampered client could have named an expensive
 // package_id with a one-taka amount.
-const admin = require('firebase-admin');
-const dns = require('dns').promises;
+const driveWindow = require('./successTopUpWindow');
 
 const BASE_URL = 'https://api.successtopup.com';
 const PRICING_COLLECTION = 'internetPricing';
@@ -75,7 +74,9 @@ async function resolveOrderPackage({ db, service, operatorName, operatorCode, pa
   if (!provider || !provider.apiKey || !provider.secretKey) return { error: 'provider-unconfigured' };
 
   const pricingDoc = await readPricingDoc(db, operatorName);
+  const driveOpen = driveWindow.isDriveWindowOpen();
   for (const type of CATALOG_TYPES) {
+    if (type === 'drive' && !driveOpen) continue;
     let packages;
     try {
       packages = await fetchCatalog(provider, operatorCode || 'ALL', type);
@@ -91,11 +92,23 @@ async function resolveOrderPackage({ db, service, operatorName, operatorCode, pa
       sellAmount: sellPriceFor(match, pricingDoc),
     };
   }
+  if (!driveOpen) {
+    const provider2 = await readProvider(db, service);
+    if (provider2) {
+      try {
+        const driveOnly = await fetchCatalog(provider2, operatorCode || 'ALL', 'drive');
+        if (driveOnly.some((p) => String(p.id) === String(packageId))) {
+          return { error: 'drive-window-closed', message: driveWindow.driveWindowMessage() };
+        }
+      } catch (err) { /* fall through to not-found */ }
+    }
+  }
   return { error: 'package-not-found' };
 }
 
 module.exports = {
   BASE_URL,
+  isDriveWindowOpen: driveWindow.isDriveWindowOpen,
   CATALOG_TYPES,
   PRICING_COLLECTION,
   sellPriceFor,

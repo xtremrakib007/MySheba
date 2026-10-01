@@ -80,6 +80,7 @@ async function resolvePackagePricing(db, service, payload) {
   if (resolved.error === 'provider-unconfigured') throw new HttpsError('failed-precondition', `The ${label} provider is not configured.`);
   if (resolved.error === 'catalog-unreachable') throw new HttpsError('unavailable', 'Package prices could not be confirmed just now. Please try again.');
   if (resolved.error === 'package-hidden') throw new HttpsError('failed-precondition', 'That package is no longer offered. Please choose another.');
+  if (resolved.error === 'drive-window-closed') throw new HttpsError('failed-precondition', resolved.message || 'Drive packages are closed right now.');
   if (resolved.error) throw new HttpsError('failed-precondition', 'That package is no longer available. Please choose another.');
 
   // The client's amount is only used to tell the customer the price moved. The

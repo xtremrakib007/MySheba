@@ -4,6 +4,7 @@ const dns = require('dns').promises;
 const https = require('https');
 const crypto = require('crypto');
 const catalog = require('./successTopUpCatalog');
+const driveWindow = require('./successTopUpWindow');
 
 const COLLECTION = 'api_providers';
 const SETTINGS = 'api_settings/service_modes';
@@ -548,6 +549,9 @@ exports.listSuccessTopUpDrives = onCall({ enforceAppCheck: false }, async (reque
   const operator = String(request.data?.operator || 'ALL').trim().toUpperCase();
   const type = String(request.data?.type || 'regular').trim().toLowerCase();
   const operatorName = cleanString(request.data?.operatorName, 100);
+  if (type === 'drive' && !driveWindow.isDriveWindowOpen()) {
+    return { drives: [], driveWindowOpen: false, driveWindowMessage: driveWindow.driveWindowMessage() };
+  }
   try {
     const packages = await fetchSuccessTopUpCatalog(provider, operator, type);
     // Superadmin's price is what the customer sees and is charged. The
@@ -557,7 +561,7 @@ exports.listSuccessTopUpDrives = onCall({ enforceAppCheck: false }, async (reque
     const drives = packages
       .filter((pkg) => !catalog.isHidden(pkg, pricingDoc))
       .map((pkg) => ({ ...pkg, price: catalog.sellPriceFor(pkg, pricingDoc) }));
-    return { drives };
+    return { drives, driveWindowOpen: true, driveWindowMessage: '' };
   } catch (e) {
     throw new HttpsError('unavailable', String(e?.message || 'Unable to load Success TopUp packages.').slice(0, 500));
   }
@@ -585,6 +589,8 @@ exports.listSuccessTopUpCatalogForAdmin = onCall({ enforceAppCheck: false }, asy
     const packages = await fetchSuccessTopUpCatalog(provider, operator, type);
     const pricingDoc = await catalog.readPricingDoc(db, operatorName);
     return {
+      driveWindowOpen: driveWindow.isDriveWindowOpen(),
+      driveWindowLabel: driveWindow.DRIVE_WINDOW_LABEL,
       packages: packages.map((pkg) => ({
         ...pkg,
         costPrice: pkg.price,
