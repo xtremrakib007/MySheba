@@ -62,7 +62,7 @@ function parseMoney(value) {
   return Number.isFinite(n) && n > 0 && n <= MAX_TRANSFER ? n : null;
 }
 
-exports.transferPoints = onCall({ enforceAppCheck: false }, async (request) => {
+exports.transferPoints = onCall({ enforceAppCheck: true }, async (request) => {
   const callerUid = requireAuth(request);
   const requestId = requireRequestId(request);
   const db = admin.firestore();
