@@ -42,7 +42,8 @@
     "test:boundary": "node scripts/test-auth-boundary.js",
     "test:verify": "node scripts/test-device-verify.js",
     "test:vault": "node scripts/test-pin-vault.js",
-    "test:pin": "node scripts/test-collection-pin.js"
+    "test:pin": "node scripts/test-collection-pin.js",
+    "test:adminlogin": "node scripts/test-admin-login.js"
   },
   "dependencies": {
     "expo": "~53.0.0",

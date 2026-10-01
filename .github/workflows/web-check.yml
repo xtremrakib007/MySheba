@@ -40,6 +40,10 @@ jobs:
         working-directory: admin-web
         run: npm run build
 
+      # Scans both surfaces' sources, so it needs no install of its own.
+      - name: Admin login parity with the app
+        run: node scripts/test-admin-login.js
+
       - name: Lint (errors only)
         working-directory: admin-web
         shell: bash
