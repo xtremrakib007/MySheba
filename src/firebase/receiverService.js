@@ -1,7 +1,7 @@
 // Backs the Remittance wizard's "Select or Add Receiver" step. Saved
 // receivers live under the signed-in customer's own doc so each user only
 // ever sees their own list.
-import { collection, addDoc, getDocs, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from './config';
 
@@ -9,7 +9,7 @@ function receiversRef(uid) { return collection(db, 'users', uid, 'receivers'); }
 
 export async function getSavedReceivers(uid) {
   if (!uid) return [];
-  const q = query(receiversRef(uid), orderBy('createdAt', 'desc'));
+  const q = query(receiversRef(uid), orderBy('createdAt', 'desc'), limit(100));
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
