@@ -50,6 +50,9 @@ jobs:
       - name: Audit JSX attribute escapes
         run: npm run audit:jsx
 
+      - name: Check lockfiles are in sync
+        run: node scripts/audit-lockfiles.js
+
       - name: Install dependencies
         run: npm ci
 
