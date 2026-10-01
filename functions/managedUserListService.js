@@ -2,7 +2,24 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 
 const ALLOWED_ROLES = new Set(['dealer', 'reseller']);
-const MAX_RESULTS = 500;
+const DEFAULT_PAGE_SIZE = 100;
+const MAX_PAGE_SIZE = 500;
+
+function decodeCursor(value) {
+  if (!value) return null;
+  try {
+    const decoded = Buffer.from(String(value), 'base64url').toString('utf8');
+    const parsed = JSON.parse(decoded);
+    if (!parsed || typeof parsed.id !== 'string' || parsed.id.length > 128) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function encodeCursor(doc) {
+  return Buffer.from(JSON.stringify({ id: doc.id }), 'utf8').toString('base64url');
+}
 
 function isActive(data) {
   return data && data.mergedInto == null && data.suspended !== true && data.inactive !== true && data.disabled !== true && data.active !== false;
@@ -38,10 +55,34 @@ exports.listManagedUsers = onCall({ enforceAppCheck: false }, async (request) =>
   if (!ALLOWED_ROLES.has(caller.role)) throw new HttpsError('permission-denied', 'This account cannot access a managed user list.');
 
   const field = caller.role === 'dealer' ? 'dealerId' : 'resellerId';
-  const snap = await db.collection('users').where(field, '==', request.auth.uid).limit(MAX_RESULTS).get();
-  const results = snap.docs
+  const requestedSize = Number(request.data?.pageSize);
+  const pageSize = Number.isInteger(requestedSize)
+    ? Math.max(1, Math.min(MAX_PAGE_SIZE, requestedSize))
+    : DEFAULT_PAGE_SIZE;
+  const cursor = decodeCursor(request.data?.cursor);
+  let query = db.collection('users')
+    .where(field, '==', request.auth.uid)
+    .orderBy('createdAt', 'desc')
+    .limit(pageSize + 1);
+
+  if (cursor) {
+    const cursorSnap = await db.collection('users').doc(cursor.id).get();
+    if (!cursorSnap.exists || cursorSnap.data()?.[field] !== request.auth.uid) {
+      throw new HttpsError('invalid-argument', 'The requested page is no longer available. Please refresh the list.');
+    }
+    query = query.startAfter(cursorSnap);
+  }
+
+  const snap = await query.get();
+  const hasMore = snap.docs.length > pageSize;
+  const pageDocs = hasMore ? snap.docs.slice(0, pageSize) : snap.docs;
+  const results = pageDocs
     .filter((doc) => isActive(doc.data()))
-    .map(sanitizeUser)
-    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-  return { results, truncated: snap.size >= MAX_RESULTS };
+    .map(sanitizeUser);
+
+  return {
+    results,
+    nextPageCursor: hasMore ? encodeCursor(pageDocs[pageDocs.length - 1]) : null,
+    hasMore,
+  };
 });
