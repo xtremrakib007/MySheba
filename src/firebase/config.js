@@ -10,6 +10,9 @@ import { initializeAuth, getAuth, getReactNativePersistence } from 'firebase/aut
 import { initializeFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getFunctions } from 'firebase/functions';
+import { initializeAppCheck as initializeWebAppCheck, CustomProvider } from 'firebase/app-check';
+import nativeAppCheck, { ReactNativeFirebaseAppCheckProvider } from '@react-native-firebase/app-check';
+import nativeFirebaseApp from '@react-native-firebase/app';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { secureAsyncStorage } from './secureLocalStorage';
@@ -25,6 +28,39 @@ const firebaseConfig = {
 };
 
 export const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+
+// App Check: the app uses the Firebase JS SDK for Auth/Firestore/Functions,
+// while Android/iOS use the native Play Integrity/App Attest providers. The
+// native token is bridged into the JS SDK through Firebase's CustomProvider so
+// callable functions receive the App Check token without changing every call site.
+let nativeAppCheckInstance = null;
+let webAppCheck = null;
+if (Platform.OS !== 'web') {
+  try {
+    const provider = new ReactNativeFirebaseAppCheckProvider();
+    provider.configure({
+      android: { provider: __DEV__ ? 'debug' : 'playIntegrity' },
+      apple: { provider: __DEV__ ? 'debug' : 'appAttestWithDeviceCheckFallback' },
+    });
+    nativeAppCheckInstance = nativeAppCheck();
+    nativeAppCheckInstance.initializeAppCheck({ provider, isTokenAutoRefreshEnabled: true });
+    webAppCheck = initializeWebAppCheck(app, {
+      provider: new CustomProvider({
+        getToken: async () => {
+          const result = await nativeAppCheckInstance.getToken();
+          return { token: result.token, expireTimeMillis: result.expireTimeMillis };
+        },
+      }),
+      isTokenAutoRefreshEnabled: true,
+    });
+  } catch (error) {
+    // Do not crash the application during development before native App Check
+    // is registered. Production enforcement should be enabled only after the
+    // production app has been registered and verified in Firebase Console.
+    if (__DEV__) console.warn('Firebase App Check initialization failed', error);
+  }
+}
+export { webAppCheck as appCheck };
 
 // Firebase's official React Native persistence implementation is backed by
 // @react-native-async-storage/async-storage. New Auth state is therefore
