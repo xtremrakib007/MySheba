@@ -61,7 +61,7 @@ exports.searchUsers = onCall({ enforceAppCheck: false }, async (request) => {
     for (const prefix of namePrefixes) {
       queries.push(db.collection('users')
         .where('name', '>=', prefix)
-        .where('name', '<', prefix + '\\uf8ff')
+        .where('name', '<', prefix + '\uf8ff')
         .limit(25)
         .get());
     }
