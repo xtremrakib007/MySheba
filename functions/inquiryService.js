@@ -5,7 +5,7 @@ const TYPES = ['flight', 'bus', 'train'];
 const MAX = { from: 160, to: 160, date: 40, time: 40, name: 160, phone: 40, email: 254, notes: 3000 };
 function text(value, max) { return typeof value === 'string' ? value.trim().slice(0, max) : ''; }
 function activeProfile(p) { return !!p && p.suspended !== true && p.inactive !== true && p.disabled !== true && !p.mergedInto; }
-exports.createInquiry = onCall({ enforceAppCheck: false }, async (request) => {
+exports.createInquiry = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const db = admin.firestore();
