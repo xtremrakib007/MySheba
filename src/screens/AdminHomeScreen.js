@@ -956,6 +956,7 @@ export default function AdminHomeScreen() {
             </View>
 
             <ApiPackagePricingCard service="Internet" title="📦 Success TopUp Internet Prices (BD)" />
+            <ApiPackagePricingCard service="Offer Packs" title="🎁 Success TopUp Offer Pack Prices (BD)" />
             <ApiPackagePricingCard service="Entertainment" title="🎬 Success TopUp Entertainment Prices (BD)" />
           </View>
         )}

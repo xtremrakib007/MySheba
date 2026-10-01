@@ -185,6 +185,64 @@ check('every service the provider dispatches can be charged', () => {
   return null;
 });
 
+check('Offer Packs is wired end to end', () => {
+  // Added as its own service rather than mixed into Internet: these are voice,
+  // call-rate and bundle packs as well as data, and a minutes pack under an
+  // "Internet" heading is the mislabelling this app already shipped once.
+  const files = {
+    'functions/apiProviderService.js': [/'Offer Packs'/, /success-topup-offer-packs/],
+    'functions/chargeGuards.js': [/chargeOfferPacks:\s*'Offer Packs'/, /exports\.chargeOfferPacks\s*=/],
+    'functions/walletService.js': [/offerpacks:\s*'Offer Packs'/, /offerpacks:\s*new Set\(/, /service==='offerpacks'/],
+    'functions/index.js': [/exports\.chargeOfferPacks\s*=/],
+    'src/firebase/transactionService.js': [/'Offer Packs':\s*'chargeOfferPacks'/],
+    'src/context/AppContext.js': [/offerpacks:\s*"Offer Packs"/, /offerpacks:\s*4/, /service === "offerpacks"/],
+    'src/screens/ServiceScreen.js': [/offerpacks:\s*OfferPacksStep/, /offerpacks:\s*validateOfferPacks/],
+    'src/components/ServiceGrid.js': [/key:\s*'offerpacks'/],
+    'src/components/serviceEmoji.js': [/offerpacks:/],
+    'src/firebase/gridManagementService.js': [/'offerpacks'/],
+    'src/steps/OfferPacksSteps.js': [/'drive'/, /isDriveWindowOpen/, /packageId/],
+  };
+  for (const [rel, patterns] of Object.entries(files)) {
+    const src = read(rel);
+    if (!src) return `${rel} unreadable`;
+    for (const re of patterns) if (!re.test(code(src))) return `${rel} is missing ${re}`;
+  }
+  // A grid key the rule does not whitelist is a silent permission-denied on the
+  // Superadmin toggle; audit:rules covers it, so just assert it is there.
+  const rules = read('firestore.rules');
+  if (!/'offerpacks'/.test(rules || '')) return "firestore.rules does not whitelist the offerpacks grid key.";
+
+  // It must read the drive catalogue, and must NOT category-filter: all four
+  // categories are legitimately on offer there.
+  const steps = code(read('src/steps/OfferPacksSteps.js') || '');
+  if (/isInternetPackage|isEntertainmentPackage/.test(steps)) {
+    return 'OfferPacksSteps filters by category. The drive catalogue is sold whole - Bundle, Voice, Data and Call Rate alike.';
+  }
+  if (!/'drive'/.test(steps)) return 'OfferPacksSteps does not request the drive catalogue.';
+  return null;
+});
+
+check('the Success TopUp service lists are derived, not repeated', () => {
+  const src = read('functions/apiProviderService.js');
+  if (!src) return 'unreadable';
+  const body = code(src);
+  // validate() kept its own hand-written list of Success TopUp services, and it
+  // went stale the moment Offer Packs was added: the service fell out of the
+  // branch and was stored with no base URL at all.
+  const m = /const successTopUp = \[([^\]]*)\]/.exec(body);
+  if (!m) return 'could not find the successTopUp service check in validate().';
+  if (!/SUCCESS_TOPUP_PACKAGE_SERVICES/.test(m[1])) {
+    return 'validate() repeats the package services by hand instead of spreading SUCCESS_TOPUP_PACKAGE_SERVICES. '
+      + 'That copy is what silently dropped Offer Packs out of the Success TopUp branch.';
+  }
+  for (const list of ['SUCCESS_TOPUP_PACKAGE_SERVICES', 'SUCCESS_TOPUP_COMPANION_SERVICES']) {
+    const decl = new RegExp(`${list}\\s*=\\s*\\[([^\\]]*)\\]`).exec(body);
+    if (!decl) return `${list} is missing.`;
+    if (!decl[1].includes("'Offer Packs'")) return `${list} does not include Offer Packs.`;
+  }
+  return null;
+});
+
 check('Entertainment is wired end to end', () => {
   const files = {
     'functions/chargeGuards.js': [/chargeEntertainment:\s*'Entertainment'/, /exports\.chargeEntertainment\s*=/],

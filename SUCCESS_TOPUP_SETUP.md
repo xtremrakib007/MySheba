@@ -86,6 +86,25 @@ empty today and will populate itself if Success TopUp ever adds such SKUs. An
 unknown or missing category is kept rather than hidden, so a renamed category
 cannot silently empty the picker.
 
+## The three package services
+
+All three buy the same way - POST `/api/recharge` with a `package_id` from
+`/api/drives` - and differ only in which catalogue they read and what they keep:
+
+| Service | Catalogue | Kept | On sale |
+| --- | --- | --- | --- |
+| Internet | `regular` | Data + Bundle | always |
+| **Offer Packs** | `drive` | everything | **10:00-22:00 Dhaka** |
+| Entertainment | `regular` + `drive` | entertainment categories only | always (empty today) |
+
+**Offer Packs** is its own service, not a mode of Internet, because the drive
+catalogue is 103 Bundle / 52 Voice / 52 Data / 4 Call Rate - and a voice-minutes
+pack under an "Internet" heading is the mislabelling this app already shipped
+once. It is also the only catalogue that pays a commission (0-12% of price,
+averaging 4.9%), so it is where the margin is.
+
+It takes no category filter: all four categories are legitimately on offer there.
+
 ## Internet and Entertainment packages
 
 Both are the same transaction to Success TopUp. There is no separate package or

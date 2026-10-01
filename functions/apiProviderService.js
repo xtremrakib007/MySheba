@@ -8,7 +8,7 @@ const driveWindow = require('./successTopUpWindow');
 
 const COLLECTION = 'api_providers';
 const SETTINGS = 'api_settings/service_modes';
-const ALLOWED_SERVICES = ['Recharge', 'Internet', 'Bill Payment', 'Bus', 'Train', 'Flight', 'Mobile Banking', 'Remittance', 'Payment Gateway', 'Entertainment', 'Recharge PIN'];
+const ALLOWED_SERVICES = ['Recharge', 'Internet', 'Offer Packs', 'Bill Payment', 'Bus', 'Train', 'Flight', 'Mobile Banking', 'Remittance', 'Payment Gateway', 'Entertainment', 'Recharge PIN'];
 const ALLOWED_AUTH = ['none', 'apiKey', 'bearer', 'basic'];
 const ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH'];
 const ALLOWED_COUNTRIES = ['ALL', 'BD', 'MY', 'SG', 'ID', 'IN', 'PH'];
@@ -138,7 +138,7 @@ function validate(data) {
   let responseMessagePath = cleanString(data.responseMessagePath, 200);
   let priority = Number.isFinite(Number(data.priority)) ? Number(data.priority) : 0;
 
-  const successTopUp = ['Recharge', 'Internet', 'Bill Payment', 'Entertainment'].includes(service) && name.toLowerCase() === 'success topup';
+  const successTopUp = ['Recharge', 'Bill Payment', ...SUCCESS_TOPUP_PACKAGE_SERVICES].includes(service) && name.toLowerCase() === 'success topup';
   const successTopUpBill = service === 'Bill Payment' && successTopUp;
   const successTopUpPackage = successTopUp && SUCCESS_TOPUP_PACKAGE_SERVICES.includes(service);
   if (successTopUp) {
@@ -247,10 +247,10 @@ const SUCCESS_TOPUP_OPERATORS = {
 };
 const SUCCESS_TOPUP_OPERATOR_CODES = Object.values(SUCCESS_TOPUP_OPERATORS);
 const SUCCESS_TOPUP_POSTPAID_BILL_OPERATORS = { Grameenphone: 'GP', Robi: 'RB', Banglalink: 'BL' };
-const SUCCESS_TOPUP_PACKAGE_SERVICES = ['Internet', 'Entertainment'];
+const SUCCESS_TOPUP_PACKAGE_SERVICES = ['Internet', 'Offer Packs', 'Entertainment'];
 // Provisioned automatically from the Recharge provider, so they are not shown
 // as separately editable rows in Superadmin.
-const SUCCESS_TOPUP_COMPANION_SERVICES = ['Internet', 'Entertainment', 'Bill Payment'];
+const SUCCESS_TOPUP_COMPANION_SERVICES = ['Internet', 'Offer Packs', 'Entertainment', 'Bill Payment'];
 
 function resolveSuccessTopUpOperator(value) {
   const raw = String(value || '').trim();
@@ -714,7 +714,7 @@ exports.saveApiProvider = onCall({ enforceAppCheck: false }, async (request) => 
         updatedBy: request.auth.uid
       }, { merge: false });
       tx.set(settingsRef, {
-        modes: { ...DEFAULT_MODES, ...(currentSettings.modes || {}), Recharge: 'api', Internet: 'api', Entertainment: 'api', 'Bill Payment': 'api' },
+        modes: { ...DEFAULT_MODES, ...(currentSettings.modes || {}), Recharge: 'api', Internet: 'api', 'Offer Packs': 'api', Entertainment: 'api', 'Bill Payment': 'api' },
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedBy: request.auth.uid
       }, { merge: true });
@@ -743,6 +743,7 @@ exports.saveApiProvider = onCall({ enforceAppCheck: false }, async (request) => 
       };
       const companions = [
         { id: 'success-topup-internet', service: 'Internet', endpointPath: '/api/recharge', requestTemplate: packageTemplate, notes: 'Fixed Success TopUp Bangladesh internet/data-pack integration.' },
+        { id: 'success-topup-offer-packs', service: 'Offer Packs', endpointPath: '/api/recharge', requestTemplate: packageTemplate, notes: 'Fixed Success TopUp Bangladesh drive/offer-pack integration.' },
         { id: 'success-topup-entertainment', service: 'Entertainment', endpointPath: '/api/recharge', requestTemplate: packageTemplate, notes: 'Fixed Success TopUp Bangladesh entertainment-package integration.' },
         { id: 'success-topup-bill-payment', service: 'Bill Payment', endpointPath: '/api/bill-pay', notes: 'Fixed Success TopUp Bangladesh bill-payment integration.', requestTemplate: {
           billOperator: '{{billOperator}}',

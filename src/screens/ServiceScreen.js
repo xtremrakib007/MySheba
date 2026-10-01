@@ -14,6 +14,7 @@ import MobileBankingStep, { validateStep as validateMobileBanking } from '../ste
 import InternetStep, { validateStep as validateInternet } from '../steps/InternetSteps';
 import RemittanceStep, { validateStep as validateRemittance } from '../steps/RemittanceSteps';
 import BillPaymentStep, { validateStep as validateBillPayment } from '../steps/BillPaymentSteps';
+import OfferPacksStep, { validateStep as validateOfferPacks } from '../steps/OfferPacksSteps';
 import EntertainmentStep, { validateStep as validateEntertainment } from '../steps/EntertainmentSteps';
 import BusStep from '../steps/BusSteps';
 import TrainStep from '../steps/TrainSteps';
@@ -27,6 +28,7 @@ const SERVICE_TITLES = {
   internet: 'Internet',
   remittance: 'Remittance',
   billpayment: 'Bill Payment',
+  offerpacks: 'Offer Packs',
   entertainment: 'Entertainment',
   bus: 'Bus',
   train: 'Train',
@@ -39,6 +41,7 @@ const STEP_COMPONENTS = {
   internet: InternetStep,
   remittance: RemittanceStep,
   billpayment: BillPaymentStep,
+  offerpacks: OfferPacksStep,
   entertainment: EntertainmentStep,
   bus: BusStep,
   train: TrainStep,
@@ -53,6 +56,7 @@ const VALIDATORS = {
   internet: validateInternet,
   remittance: validateRemittance,
   billpayment: validateBillPayment,
+  offerpacks: validateOfferPacks,
   entertainment: validateEntertainment,
   bus: validateTravelInquiry,
   train: validateTravelInquiry,
@@ -73,6 +77,7 @@ const AD_SLOTS = {
   internet: { feature: 'internet_package', top: 'INTERNET_TOP', bottom: 'INTERNET_BOTTOM' },
   remittance: { feature: 'remittance', top: 'REMITTANCE_TOP', bottom: 'REMITTANCE_BOTTOM' },
   flight: { feature: 'air_ticket', top: 'FLIGHT_TOP', bottom: 'FLIGHT_BOTTOM' },
+  offerpacks: { feature: 'internet', top: 'INTERNET_TOP', bottom: 'INTERNET_BOTTOM' },
   entertainment: { feature: 'entertainment', top: 'ENTERTAINMENT_TOP', bottom: 'ENTERTAINMENT_BOTTOM' },
 };
 
@@ -90,7 +95,7 @@ export default function ServiceScreen() {
   const isLast = currentStep === totalSteps - 1;
   const adSlot = AD_SLOTS[currentService];
   const isBangladeshApiService =
-    ['recharge', 'internet', 'entertainment', 'billpayment'].includes(currentService) &&
+    ['recharge', 'internet', 'offerpacks', 'entertainment', 'billpayment'].includes(currentService) &&
     String(serviceData?.country || '').trim().toUpperCase() === 'BD';
   const finalButtonLabel = isBangladeshApiService
     ? (currentService === 'recharge'

@@ -78,6 +78,7 @@ exports.createDiditKycSession = require('./diditKycService').createDiditKycSessi
 exports.chargeWallet = secureWalletCharge.chargeWallet;
 exports.chargeRecharge = chargeGuards.chargeRecharge;
 exports.chargeInternetPackage = chargeGuards.chargeInternetPackage;
+exports.chargeOfferPacks = chargeGuards.chargeOfferPacks;
 exports.chargeEntertainment = chargeGuards.chargeEntertainment;
 exports.chargeBillPayment = chargeGuards.chargeBillPayment;
 exports.chargeMobileBanking = chargeGuards.chargeMobileBanking;
