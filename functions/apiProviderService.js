@@ -408,7 +408,7 @@ exports.executeConfiguredApi = executeConfiguredApi;
 // provider credentials and do not perform network or Firestore operations.
 exports._test = { isPrivateIp, validateBaseUrl, validateHeaders, validateTemplate, getPath, render, providerAuth, validate };
 
-exports.testApiProvider = onCall({ enforceAppCheck: false }, async (request) => {
+exports.testApiProvider = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const id = cleanString(request.data?.id, 100);
@@ -450,7 +450,7 @@ exports.testApiProvider = onCall({ enforceAppCheck: false }, async (request) => 
   }
 });
 
-exports.listSuccessTopUpDrives = onCall({ enforceAppCheck: false }, async (request) => {
+exports.listSuccessTopUpDrives = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const snap = await db.collection(COLLECTION)
@@ -499,7 +499,7 @@ exports.listSuccessTopUpDrives = onCall({ enforceAppCheck: false }, async (reque
   }
 });
 
-exports.listApiProviders = onCall({ enforceAppCheck: false }, async (request) => {
+exports.listApiProviders = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const snap = await db.collection(COLLECTION).orderBy('priority', 'desc').get();
@@ -538,7 +538,7 @@ exports.listApiProviders = onCall({ enforceAppCheck: false }, async (request) =>
     };
   });
 });
-exports.saveApiProvider = onCall({ enforceAppCheck: false }, async (request) => {
+exports.saveApiProvider = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const id = cleanString(request.data?.id, 100);
@@ -647,7 +647,7 @@ exports.saveApiProvider = onCall({ enforceAppCheck: false }, async (request) => 
   }
   return { id: ref.id, successTopUp: false };
 });
-exports.deleteApiProvider = onCall({ enforceAppCheck: false }, async (request) => {
+exports.deleteApiProvider = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const id = cleanString(request.data?.id, 100);
@@ -672,7 +672,7 @@ exports.deleteApiProvider = onCall({ enforceAppCheck: false }, async (request) =
   return { ok: true };
 });
 
-exports.migrateApiProviderSecrets = onCall({ enforceAppCheck: false }, async (request) => {
+exports.migrateApiProviderSecrets = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const snap = await db.collection(COLLECTION).get();
@@ -683,13 +683,13 @@ exports.migrateApiProviderSecrets = onCall({ enforceAppCheck: false }, async (re
   return { migrated };
 });
 
-exports.getServiceApiSettings = onCall({ enforceAppCheck: false }, async (request) => {
+exports.getServiceApiSettings = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const snap = await db.doc(SETTINGS).get();
   return { modes: { ...DEFAULT_MODES, ...(snap.exists ? (snap.data().modes || {}) : {}) } };
 });
-exports.saveServiceApiSettings = onCall({ enforceAppCheck: false }, async (request) => {
+exports.saveServiceApiSettings = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const incoming = request.data?.modes || {};
