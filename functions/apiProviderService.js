@@ -3,6 +3,7 @@ const admin = require('firebase-admin');
 const dns = require('dns').promises;
 const https = require('https');
 const crypto = require('crypto');
+const catalog = require('./successTopUpCatalog');
 
 const COLLECTION = 'api_providers';
 const SETTINGS = 'api_settings/service_modes';
@@ -258,6 +259,44 @@ function resolveSuccessTopUpOperator(value) {
   return SUCCESS_TOPUP_OPERATOR_CODES.includes(upper) ? upper : '';
 }
 
+// One place that talks to /api/drives. The listing callable, the credential
+// test and the order-time price check all go through it, so the response
+// mapping cannot differ between what a customer is shown and what they are
+// charged.
+async function fetchSuccessTopUpCatalog(provider, operator, type) {
+  const url = new URL('https://api.successtopup.com/api/drives');
+  const body = JSON.stringify({
+    operator: SUCCESS_TOPUP_OPERATOR_CODES.includes(operator) || operator === 'ALL' ? operator : 'ALL',
+    type: ['regular', 'drive'].includes(type) ? type : 'regular',
+    successtopup_key: provider.apiKey,
+    successtopup_secret: provider.secretKey,
+  });
+  await assertPublicHostname(url.hostname);
+  const addresses = await dns.lookup(url.hostname, { all: true, verbatim: true });
+  const pinned = addresses.find((a) => !isPrivateIp(a.address));
+  if (!pinned) throw new Error('Provider hostname resolved to an invalid address.');
+  const response = await requestHttpsPinned(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    body,
+  }, pinned);
+  const text = await response.text();
+  if (!response.ok) throw new Error('Success TopUp drives request failed.');
+  let data;
+  try { data = JSON.parse(text || '{}'); } catch { throw new Error('Success TopUp returned invalid drive data.'); }
+  if (data.result !== true) throw new Error(String(data.message || 'Success TopUp rejected the drive-list request.'));
+  const drives = Array.isArray(data.drives) ? data.drives : [];
+  return drives.slice(0, 500).map((d) => ({
+    id: String(d.id ?? d.package_id ?? d.packageId ?? '').slice(0, 200),
+    name: String(d.name ?? d.title ?? d.package_name ?? '').slice(0, 200),
+    data: String(d.data ?? d.data_amount ?? d.volume ?? '').slice(0, 100),
+    valid: String(d.valid ?? d.validity ?? d.duration ?? '').slice(0, 100),
+    category: String(d.category ?? d.pack_type ?? d.packType ?? d.type ?? '').slice(0, 60),
+    price: Number(d.price ?? d.amount ?? 0),
+  })).filter((d) => d.id && d.price > 0);
+}
+exports.fetchSuccessTopUpCatalog = fetchSuccessTopUpCatalog;
+
 async function executeConfiguredApi(service, payload, customer, requestId, options = {}) {
   const db = admin.firestore();
   const snap = await db.collection(COLLECTION).where('service','==',service).where('active','==',true).get();
@@ -341,7 +380,14 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     if (!/^01\d{9}$/.test(contactNumber)) throw new Error('A valid Bangladesh mobile number is required for bill payment.');
     if (category === 'mobile' && !/^01\d{9}$/.test(billNumber)) throw new Error('A valid Bangladesh postpaid mobile bill number is required.');
   }
-  const providerAmount = (String(provider.name || '').trim().toLowerCase() === 'success topup' && String(raw.country || '').toUpperCase() === 'BD') ? (raw.amount ?? payload?.amount ?? '') : (payload?.amount ?? raw.amount ?? '');
+  const isSuccessTopUpBd = String(provider.name || '').trim().toLowerCase() === 'success topup' && String(raw.country || '').toUpperCase() === 'BD';
+  // packageCostAmount is set by walletService's resolvePackagePricing from the
+  // live catalogue. raw.amount is the SELL price and must never reach the
+  // provider: /api/recharge checks amount against package_id.
+  const packageCost = Number(raw.packageCostAmount);
+  const providerAmount = isSuccessTopUpBd
+    ? (Number.isFinite(packageCost) && packageCost > 0 ? packageCost : (raw.amount ?? payload?.amount ?? ''))
+    : (payload?.amount ?? raw.amount ?? '');
   const vars = { requestId, uid:customer?.uid||'', phone:customer?.phone||'', amount:providerAmount, total:payload?.total??raw.total??'', service, country:raw.country||'', operator:(String(provider.name || '').trim().toLowerCase() === 'success topup' && String(raw.country || '').toUpperCase() === 'BD' ? rechargeOperator : (raw.operator || '')), internetOperator, packageId, billOperator, billNumber:raw.billNumber||raw.accountNumber||'', mobileNumber:raw.mobileNumber||'', monthName, note:raw.note||'', packageCode:raw.packageCode||'', details:payload?.details||'', apiKey:provider.apiKey||'', secretKey:provider.secretKey||'', ...Object.fromEntries(Object.entries(raw).filter(([k,v]) => !['requestId'].includes(k) && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')).slice(0,100)) };
   try {
     let base; try { base = new URL(provider.baseUrl); } catch { throw new Error('Provider URL is invalid.'); }
@@ -399,6 +445,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
       // know reached the provider as a display name and was rejected there.
       if (isSuccessTopUpRecharge && !rechargeOperator) throw new Error(`Success TopUp does not support the Bangladesh operator "${String(raw.operator || '').slice(0, 40)}".`);
       if (isSuccessTopUpInternet && !vars.packageId) throw new Error('Success TopUp package ID is required for an internet/data-pack purchase.');
+      if (isSuccessTopUpPackage && !(Number.isFinite(packageCost) && packageCost > 0)) throw new Error('The package cost price was not resolved on the server; refusing to send a customer-facing price to Success TopUp.');
       if (service === 'Bill Payment' && String(provider.name || '').trim().toLowerCase() === 'success topup' && !billOperator && !isBangladeshMobileBill) throw new Error('Success TopUp does not have a supported bill operator mapping for this biller.');
       body=JSON.stringify(requestBody);
       if(Buffer.byteLength(body,'utf8')>100000) throw new Error('Rendered API request body is too large.');
@@ -498,40 +545,56 @@ exports.listSuccessTopUpDrives = onCall({ enforceAppCheck: false }, async (reque
   if (snap.empty) throw new HttpsError('failed-precondition', `Success TopUp ${service} API is not configured.`);
   const provider = { id: snap.docs[0].id, ...(snap.docs[0].data() || {}) };
   if (!provider.apiKey || !provider.secretKey) throw new HttpsError('failed-precondition', 'Success TopUp credentials are not configured.');
-  const url = new URL('https://api.successtopup.com/api/drives');
   const operator = String(request.data?.operator || 'ALL').trim().toUpperCase();
   const type = String(request.data?.type || 'regular').trim().toLowerCase();
-  const body = JSON.stringify({
-    operator: SUCCESS_TOPUP_OPERATOR_CODES.includes(operator) || operator === 'ALL' ? operator : 'ALL',
-    type: ['regular','drive'].includes(type) ? type : 'regular',
-    successtopup_key: provider.apiKey,
-    successtopup_secret: provider.secretKey
-  });
+  const operatorName = cleanString(request.data?.operatorName, 100);
   try {
-    await assertPublicHostname(url.hostname);
-    const addresses = await dns.lookup(url.hostname, { all: true, verbatim: true });
-    const pinned = addresses.find(a => !isPrivateIp(a.address));
-    if (!pinned) throw new Error('Provider hostname resolved to an invalid address.');
-    const response = await requestHttpsPinned(url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body
-    }, pinned);
-    const text = await response.text();
-    if (!response.ok) throw new Error('Success TopUp drives request failed.');
-    let data; try { data = JSON.parse(text || '{}'); } catch { throw new Error('Success TopUp returned invalid drive data.'); }
-    if (data.result !== true) throw new Error(String(data.message || 'Success TopUp rejected the drive-list request.'));
-    const drives = Array.isArray(data.drives) ? data.drives : [];
-    return { drives: drives.slice(0, 500).map((d) => ({
-      id: String(d.id ?? d.package_id ?? d.packageId ?? '').slice(0, 200),
-      name: String(d.name ?? d.title ?? d.package_name ?? '').slice(0, 200),
-      data: String(d.data ?? d.data_amount ?? d.volume ?? '').slice(0, 100),
-      valid: String(d.valid ?? d.validity ?? d.duration ?? '').slice(0, 100),
-      category: String(d.category ?? d.pack_type ?? d.packType ?? d.type ?? '').slice(0, 60),
-      price: Number(d.price ?? d.amount ?? 0)
-    })).filter(d => d.id && d.price > 0) };
+    const packages = await fetchSuccessTopUpCatalog(provider, operator, type);
+    // Superadmin's price is what the customer sees and is charged. The
+    // catalogue cost is deliberately NOT returned - the client has no use for
+    // it and it is our margin.
+    const pricingDoc = await catalog.readPricingDoc(db, operatorName);
+    const drives = packages
+      .filter((pkg) => !catalog.isHidden(pkg, pricingDoc))
+      .map((pkg) => ({ ...pkg, price: catalog.sellPriceFor(pkg, pricingDoc) }));
+    return { drives };
   } catch (e) {
     throw new HttpsError('unavailable', String(e?.message || 'Unable to load Success TopUp packages.').slice(0, 500));
+  }
+});
+
+/**
+ * Superadmin-only: the catalogue WITH its cost price, so a price can be set
+ * against something. Customers get listSuccessTopUpDrives, which never
+ * exposes cost.
+ */
+exports.listSuccessTopUpCatalogForAdmin = onCall({ enforceAppCheck: false }, async (request) => {
+  const db = admin.firestore();
+  await assertSuperadmin(db, request);
+  const service = String(request.data?.service || 'Internet').trim();
+  if (!SUCCESS_TOPUP_PACKAGE_SERVICES.includes(service)) {
+    throw new HttpsError('invalid-argument', 'Package pricing is available for Internet and Entertainment only.');
+  }
+  const provider = await catalog.readProvider(db, service);
+  if (!provider) throw new HttpsError('failed-precondition', `Success TopUp ${service} API is not configured.`);
+  if (!provider.apiKey || !provider.secretKey) throw new HttpsError('failed-precondition', 'Success TopUp credentials are not configured.');
+  const operator = String(request.data?.operator || 'ALL').trim().toUpperCase();
+  const operatorName = cleanString(request.data?.operatorName, 100);
+  const type = String(request.data?.type || 'regular').trim().toLowerCase();
+  try {
+    const packages = await fetchSuccessTopUpCatalog(provider, operator, type);
+    const pricingDoc = await catalog.readPricingDoc(db, operatorName);
+    return {
+      packages: packages.map((pkg) => ({
+        ...pkg,
+        costPrice: pkg.price,
+        sellPrice: catalog.sellPriceFor(pkg, pricingDoc),
+        hidden: catalog.isHidden(pkg, pricingDoc),
+        overridden: catalog.sellPriceFor(pkg, pricingDoc) !== pkg.price,
+      })),
+    };
+  } catch (e) {
+    throw new HttpsError('unavailable', String(e?.message || 'Unable to load the Success TopUp catalogue.').slice(0, 500));
   }
 });
 

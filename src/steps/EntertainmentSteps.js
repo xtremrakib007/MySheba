@@ -47,8 +47,8 @@ export default function EntertainmentStep({ step }) {
     setLoading(true); setError('');
     const operator = DRIVE_OPERATOR_CODES[serviceData.operator] || 'ALL';
     Promise.all([
-      apiProviderService.listSuccessTopUpDrives(operator, 'regular', 'Entertainment'),
-      apiProviderService.listSuccessTopUpDrives(operator, 'drive', 'Entertainment'),
+      apiProviderService.listSuccessTopUpDrives(operator, 'regular', 'Entertainment', serviceData.operator || ''),
+      apiProviderService.listSuccessTopUpDrives(operator, 'drive', 'Entertainment', serviceData.operator || ''),
     ])
       .then(([regular, drive]) => {
         if (!alive) return;

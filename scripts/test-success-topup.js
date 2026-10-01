@@ -287,6 +287,71 @@ check('both package screens explain an empty catalogue', () => {
   return null;
 });
 
+check('the provider is paid cost, the customer is charged sell', () => {
+  const server = read('functions/apiProviderService.js');
+  const wallet = read('functions/walletService.js');
+  if (!server || !wallet) return 'unreadable';
+  const srv = code(server);
+  const wal = code(wallet);
+
+  // /api/recharge validates `amount` against package_id. Sending the
+  // Superadmin markup there either fails the order or buys the wrong package,
+  // and sending cost to the wallet gives the margin away.
+  if (!/packageCostAmount/.test(srv)) return 'the dispatch path no longer reads packageCostAmount, so the sell price would reach the provider.';
+  if (!/isSuccessTopUpPackage\s*&&\s*!\(Number\.isFinite\(packageCost\)/.test(srv)) {
+    return 'a package order with no resolved cost is no longer refused; it would send the customer-facing price to Success TopUp.';
+  }
+  if (!/packageCostAmount/.test(wal)) return 'walletService no longer records the resolved cost.';
+  return null;
+});
+
+check('a package order is priced by the server, not the client', () => {
+  const wallet = read('functions/walletService.js');
+  const cat = read('functions/successTopUpCatalog.js');
+  if (!wallet || !cat) return 'unreadable';
+  const wal = code(wallet);
+
+  // chargeProduct used to convert whatever `amount` the app submitted, so a
+  // tampered client could name an expensive package_id with a one-taka amount.
+  if (!/resolvePackagePricing\s*\(/.test(wal)) return 'resolvePackagePricing is gone.';
+  if (!/payload\s*=\s*await resolvePackagePricing\(db,\s*service,\s*payload\)/.test(wal)) {
+    return 'chargeProduct no longer resolves the package price before computing the charge.';
+  }
+  const fn = wal.slice(wal.indexOf('async function resolvePackagePricing'));
+  const body = fn.slice(0, fn.indexOf('\nfunction active'));
+  if (!/amount:\s*resolved\.sellAmount/.test(body)) return 'the resolver does not overwrite the submitted amount with the server price.';
+  if (!/packageCostAmount:\s*resolved\.costAmount/.test(body)) return 'the resolver does not record the catalogue cost.';
+  if (!/package-not-found|resolved\.error/.test(body)) return 'the resolver does not refuse a package it cannot find.';
+  if (!/!packageId/.test(body)) return 'an order with no packageId is not rejected.';
+
+  // The override must be read server-side; a client-only markup is cosmetic.
+  const resolver = code(cat);
+  if (!/apiPackages/.test(resolver)) return 'successTopUpCatalog does not read the apiPackages overrides.';
+  if (!/function sellPriceFor/.test(resolver)) return 'sellPriceFor is gone.';
+  return null;
+});
+
+check('the customer listing never exposes the cost price', () => {
+  const server = read('functions/apiProviderService.js');
+  if (!server) return 'unreadable';
+  const srv = code(server);
+  const start = srv.indexOf('exports.listSuccessTopUpDrives');
+  const end = srv.indexOf('exports.listSuccessTopUpCatalogForAdmin');
+  if (start < 0 || end < 0 || end < start) return 'could not isolate the two listing callables.';
+  const customerListing = srv.slice(start, end);
+  if (/costPrice/.test(customerListing)) {
+    return 'listSuccessTopUpDrives returns costPrice. That is our margin and the app has no use for it.';
+  }
+  if (!/sellPriceFor/.test(customerListing)) return 'the customer listing does not apply the Superadmin sell price.';
+  if (!/isHidden/.test(customerListing)) return 'the customer listing does not honour hidden packages.';
+  // And the admin one must be superadmin-gated, since it does expose cost.
+  const adminListing = srv.slice(end);
+  if (!/assertSuperadmin/.test(adminListing.slice(0, 600))) {
+    return 'listSuccessTopUpCatalogForAdmin exposes cost prices without a superadmin check.';
+  }
+  return null;
+});
+
 if (failures.length) {
   console.error('Success TopUp contract FAILED:\n');
   for (const f of failures) console.error(`  - ${f}`);

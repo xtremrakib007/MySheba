@@ -107,6 +107,50 @@ reads both catalogues and keeps only what the provider itself categorises as
 entertainment, which is nothing today; the picker says so and points at Internet
 and Recharge instead.
 
+## Setting prices (Superadmin)
+
+Bangladesh packages arrive live from `/api/drives`, so there is no hardcoded list
+to edit by index the way **Admin > Internet Package Prices** edits the other
+countries. They get their own surface - **Success TopUp Internet Prices (BD)**
+and **Success TopUp Entertainment Prices (BD)** in the same Pricing tab - keyed
+by the provider's own package id.
+
+Two prices, and they must not be confused:
+
+| | What it is | Where it goes |
+| --- | --- | --- |
+| **Cost** | the package's catalogue price | `/api/recharge`'s `amount`, beside `package_id` |
+| **Sell** | what the customer pays | the wallet charge |
+
+`/api/recharge` validates `amount` against `package_id`, so the catalogue price
+is what the provider must receive. A price set in Superadmin raises only the sell
+side, and the difference is margin. A package with no override sells at cost,
+which is how it behaved before this existed.
+
+Stored as `internetPricing/{operator}.apiPackages[packageId] = { price?, hidden? }`
+- the same per-operator doc the built-in list already uses, gated by
+`can('settings')` in `firestore.rules`. `hidden: true` removes a package from
+the customer's picker without touching the provider.
+
+Both prices are resolved server-side in `functions/successTopUpCatalog.js`:
+
+- `listSuccessTopUpDrives` (any signed-in user) returns the **sell** price as
+  `price` and never returns cost.
+- `listSuccessTopUpCatalogForAdmin` (superadmin only) returns cost, sell, and
+  whether each package is overridden or hidden - that is what the pricing screen
+  reads.
+- `chargeProduct` calls `resolvePackagePricing` before computing anything, which
+  re-reads the live catalogue and the override and **replaces** the amount the
+  app submitted. Previously the charge was converted straight from the client's
+  `amount`, so a tampered client could have named an expensive `package_id` with
+  a one-taka amount. If the price has moved since the customer saw it, the order
+  is refused with "This package price has changed - please review your order"
+  rather than silently charging the new figure.
+
+The per-order resolution costs one extra `/api/drives` call. That is deliberate:
+listings are frequent and orders are not, and a package order must never be
+priced from a stale number.
+
 ## Companion providers
 
 Superadmin configures ONE provider: `Success TopUp` / `Recharge`. Saving it

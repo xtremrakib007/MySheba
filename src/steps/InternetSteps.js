@@ -22,7 +22,7 @@ export default function InternetStep({ step }) {
     if (serviceData.country !== 'BD' || step !== 3) return () => { alive = false; };
     setPackageLoading(true); setPackageError('');
     const operatorMap = { Grameenphone: 'GP', Robi: 'RB', Banglalink: 'BL', Airtel: 'AT', Teletalk: 'TT', Skitto: 'SK', 'Brilliant Connect': 'BT', Ryze: 'RY' };
-    apiProviderService.listSuccessTopUpDrives(operatorMap[serviceData.operator] || 'ALL', 'regular', 'Internet')
+    apiProviderService.listSuccessTopUpDrives(operatorMap[serviceData.operator] || 'ALL', 'regular', 'Internet', serviceData.operator || '')
       .then((items) => { if (alive) setSuccessTopUpPackages(items.filter(isInternetPackage)); })
       .catch((e) => { if (alive) { setSuccessTopUpPackages([]); setPackageError(e?.message || 'Unable to load Success TopUp packages.'); } })
       .finally(() => { if (alive) setPackageLoading(false); });
