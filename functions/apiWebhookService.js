@@ -45,7 +45,7 @@ function validateConfig(data) {
 exports.listApiWebhooks = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
-  const snap = await db.collection(COLLECTION).get();
+  const snap = await db.collection(COLLECTION).limit(100).get();
   const providerIds = snap.docs.map((d) => d.data()?.providerId || d.id).filter(Boolean);
   const providerSnaps = await Promise.all(providerIds.map((id) => db.collection(PROVIDERS).doc(id).get()));
   const providerNames = Object.fromEntries(providerSnaps.map((p) => [p.id, p.exists ? String(p.data()?.name || '') : '']));
@@ -66,7 +66,7 @@ exports.listApiWebhooks = onCall({ enforceAppCheck: true }, async (request) => {
         processingStatus: x.processingStatus || 'Processing',
         cancelStatus: x.cancelStatus || 'Cancel',
         hasWebhookToken: Boolean(x.webhookToken),
-        webhookToken: successTopUp ? String(x.webhookToken || '') : '',
+        webhookToken: '',
         webhookUrl: endpointUrl(providerId),
       };
     }),
