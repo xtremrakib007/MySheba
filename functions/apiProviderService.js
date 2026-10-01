@@ -557,9 +557,9 @@ exports.saveApiProvider = onCall({ enforceAppCheck: true }, async (request) => {
   const incoming = { ...(request.data || {}) };
 
   if (existingSnap.exists) {
-    if (!incoming.apiKey || incoming.apiKey === providerSecretService.MASK) incoming.apiKey = existingCredentials.apiKey || current.apiKey || '';
-    if (!incoming.secretKey || incoming.secretKey === providerSecretService.MASK) incoming.secretKey = existingCredentials.secretKey || current.secretKey || '';
-    if (!incoming.password || incoming.password === providerSecretService.MASK) incoming.password = existingCredentials.password || current.password || '';
+    if (!incoming.apiKey || incoming.apiKey === providerSecretService.MASK) incoming.apiKey = existingCredentials.apiKey || '';
+    if (!incoming.secretKey || incoming.secretKey === providerSecretService.MASK) incoming.secretKey = existingCredentials.secretKey || '';
+    if (!incoming.password || incoming.password === providerSecretService.MASK) incoming.password = existingCredentials.password || '';
     if (!incoming.username) incoming.username = current.username || '';
     if (!Object.keys(incoming.headers || {}).length && current.headers) incoming.headers = current.headers;
     if (!Object.keys(incoming.queryTemplate || {}).length && current.queryTemplate) incoming.queryTemplate = current.queryTemplate;
