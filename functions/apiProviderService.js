@@ -127,6 +127,9 @@ function validate(data) {
   let method = cleanString(data.method, 10).toUpperCase() || 'POST';
   let apiKey = cleanString(data.apiKey, 1000);
   let secretKey = cleanString(data.secretKey, 1000);
+  const apiKeySecret = cleanString(data.apiKeySecret, 500);
+  const secretKeySecret = cleanString(data.secretKeySecret, 500);
+  const passwordSecret = cleanString(data.passwordSecret, 500);
   let headers = data.headers || {};
   let queryTemplate = data.queryTemplate || {};
   let requestTemplate = data.requestTemplate || {};
@@ -185,12 +188,13 @@ function validate(data) {
   if (service === 'Recharge PIN' && !cleanString(data.responsePinPath, 200)) throw new HttpsError('invalid-argument', 'Recharge PIN providers must define Response PIN Path.');
   validateBaseUrl(baseUrl);
   if (!ALLOWED_AUTH.includes(authType)) throw new HttpsError('invalid-argument', 'Invalid authentication type.');
-  if (successTopUp && (!apiKey || !secretKey)) throw new HttpsError('invalid-argument', 'Success TopUp API key and API secret are required.');
+  if (successTopUp && ((!apiKey && !apiKeySecret) || (!secretKey && !secretKeySecret))) throw new HttpsError('invalid-argument', 'Success TopUp API key and API secret are required.');
   if ((authType === 'apiKey' || authType === 'bearer') && !apiKey) throw new HttpsError('invalid-argument', 'API key is required for this authentication type.');
   if (authType === 'basic' && (!cleanString(data.username, 200) || !cleanString(data.password, 1000))) throw new HttpsError('invalid-argument', 'Username and password are required for Basic authentication.');
   if (!ALLOWED_METHODS.includes(method)) throw new HttpsError('invalid-argument', 'Invalid HTTP method.');
   return {
     service, name, country, baseUrl, endpointPath, method, authType, apiKey, secretKey,
+    apiKeySecret, secretKeySecret, passwordSecret,
     username: cleanString(data.username, 200), password: cleanString(data.password, 1000),
     active: data.active !== false, priority: Math.max(0, Math.min(9999, Number(data.priority) || 0)),
     timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)), notes: cleanString(data.notes, 1000),
@@ -656,14 +660,18 @@ exports.saveApiProvider = onCall({ enforceAppCheck: true }, async (request) => {
   }
   // Store provider credentials in Google Secret Manager rather than Firestore.
   // Existing legacy credentials are migrated on the next save/edit and then removed.
-  const currentDoc = await db.collection(COLLECTION).doc(ref.id).get();
-  const currentData = currentDoc.exists ? (currentDoc.data() || {}) : {};
   const secretUpdates = {};
   if (data.apiKey) secretUpdates.apiKeySecret = await setSecret(`mysheba-provider-${ref.id}-api-key`, data.apiKey);
   if (data.secretKey) secretUpdates.secretKeySecret = await setSecret(`mysheba-provider-${ref.id}-secret-key`, data.secretKey);
   if (data.password) secretUpdates.passwordSecret = await setSecret(`mysheba-provider-${ref.id}-password`, data.password);
   if (Object.keys(secretUpdates).length) {
     await db.collection(COLLECTION).doc(ref.id).set({ ...secretUpdates, apiKey: admin.firestore.FieldValue.delete(), secretKey: admin.firestore.FieldValue.delete(), password: admin.firestore.FieldValue.delete(), updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    if (successTopUp) {
+      for (const companionId of ['success-topup-internet', 'success-topup-bill-payment']) {
+        const companion = await db.collection(COLLECTION).doc(companionId).get();
+        if (companion.exists) await db.collection(COLLECTION).doc(companionId).set({ apiKey: admin.firestore.FieldValue.delete(), secretKey: admin.firestore.FieldValue.delete(), apiKeySecret: secretUpdates.apiKeySecret || null, secretKeySecret: secretUpdates.secretKeySecret || null, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      }
+    }
   }
   return { id: ref.id, successTopUp: false };
 });
