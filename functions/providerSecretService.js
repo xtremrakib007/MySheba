@@ -64,9 +64,9 @@ async function remove(name) {
 }
 async function getCredentials(provider) {
   return {
-    apiKey: provider.apiKeySecretName ? await read(provider.apiKeySecretName) : String(provider.apiKey || ''),
-    secretKey: provider.secretKeySecretName ? await read(provider.secretKeySecretName) : String(provider.secretKey || ''),
-    password: provider.passwordSecretName ? await read(provider.passwordSecretName) : String(provider.password || ''),
+    apiKey: provider.apiKeySecretName ? await read(provider.apiKeySecretName) : '',
+    secretKey: provider.secretKeySecretName ? await read(provider.secretKeySecretName) : '',
+    password: provider.passwordSecretName ? await read(provider.passwordSecretName) : '',
     username: String(provider.username || ''),
   };
 }
