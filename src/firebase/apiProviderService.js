@@ -17,3 +17,6 @@ export async function getServiceApiSettings() { return (await getModesFn({})).da
 export async function saveServiceApiSettings(modes) { return (await saveModesFn({ modes })).data; }
 
 export async function testApiProvider(id) { return (await testFn({ id })).data; }
+export async function listSuccessTopUpDrives(operator = 'ALL', type = 'regular') {
+  return (await drivesFn({ operator, type })).data;
+}
