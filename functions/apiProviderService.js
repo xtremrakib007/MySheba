@@ -508,7 +508,7 @@ exports.listSuccessTopUpDrives = onCall({ enforceAppCheck: true }, async (reques
 exports.listApiProviders = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
-  const snap = await db.collection(COLLECTION).orderBy('priority', 'desc').get();
+  const snap = await db.collection(COLLECTION).orderBy('priority', 'desc').limit(100).get();
   // Return only non-secret configuration fields. Do not spread the provider
   // document here: custom headers/templates may contain credentials or other
   // sensitive values that should never be sent back to the mobile/admin client.
@@ -534,10 +534,10 @@ exports.listApiProviders = onCall({ enforceAppCheck: true }, async (request) => 
       responseIdPath: x.responseIdPath || '',
       responseMessagePath: x.responseMessagePath || '',
       responsePinPath: x.responsePinPath || '',
-      hasApiKey: Boolean(x.apiKeySecretName || x.apiKey),
-      hasSecretKey: Boolean(x.secretKeySecretName || x.secretKey),
+      hasApiKey: Boolean(x.apiKeySecretName),
+      hasSecretKey: Boolean(x.secretKeySecretName),
       hasUsername: Boolean(x.username),
-      hasPassword: Boolean(x.passwordSecretName || x.password),
+      hasPassword: Boolean(x.passwordSecretName),
       hasCustomHeaders: Boolean(x.headers && Object.keys(x.headers).length),
       hasQueryTemplate: Boolean(x.queryTemplate && Object.keys(x.queryTemplate).length),
       hasRequestTemplate: Boolean(x.requestTemplate && Object.keys(x.requestTemplate).length),
