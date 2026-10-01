@@ -46,6 +46,7 @@ module.exports = () => {
       admobAndroidBannerId: ADMOB_ANDROID_BANNER_ID,
       admobIosBannerId: ADMOB_IOS_BANNER_ID,
       admobAndroidInterstitialId: ADMOB_ANDROID_INTERSTITIAL_ID,
+      ...(process.env.FIREBASE_APP_CHECK_DEBUG_TOKEN ? { firebaseAppCheckDebugToken: process.env.FIREBASE_APP_CHECK_DEBUG_TOKEN } : {}),
     },
   };
 };
