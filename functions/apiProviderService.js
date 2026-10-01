@@ -4,6 +4,7 @@ const dns = require('dns').promises;
 const https = require('https');
 const crypto = require('crypto');
 const providerSecretService = require('./providerSecretService');
+const { checkVelocity, getClientIp } = require('./rateLimitService');
 
 const COLLECTION = 'api_providers';
 const SETTINGS = 'api_settings/service_modes';
@@ -411,6 +412,7 @@ exports._test = { isPrivateIp, validateBaseUrl, validateHeaders, validateTemplat
 exports.testApiProvider = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
+  await checkVelocity(db, request.auth.uid, 'testApiProvider', { ip: getClientIp(request) });
   const id = cleanString(request.data?.id, 100);
   if (!id) throw new HttpsError('invalid-argument', 'Provider id is required.');
   const snap = await db.collection(COLLECTION).doc(id).get();
@@ -541,6 +543,7 @@ exports.listApiProviders = onCall({ enforceAppCheck: true }, async (request) => 
 exports.saveApiProvider = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
+  await checkVelocity(db, request.auth.uid, 'saveApiProvider', { ip: getClientIp(request) });
   const id = cleanString(request.data?.id, 100);
   if (id && !/^[A-Za-z0-9_-]{1,100}$/.test(id)) throw new HttpsError('invalid-argument', 'Provider id is invalid.');
   const ref = id ? db.collection(COLLECTION).doc(id) : db.collection(COLLECTION).doc();
@@ -649,6 +652,7 @@ exports.saveApiProvider = onCall({ enforceAppCheck: true }, async (request) => {
 exports.deleteApiProvider = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
+  await checkVelocity(db, request.auth.uid, 'deleteApiProvider', { ip: getClientIp(request) });
   const id = cleanString(request.data?.id, 100);
   if (!id || !/^[A-Za-z0-9_-]{1,100}$/.test(id)) throw new HttpsError('invalid-argument', 'Provider id is invalid.');
   const ref = db.collection(COLLECTION).doc(id);
@@ -674,6 +678,7 @@ exports.deleteApiProvider = onCall({ enforceAppCheck: true }, async (request) =>
 exports.migrateApiProviderSecrets = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
+  await checkVelocity(db, request.auth.uid, 'migrateApiProviderSecrets', { ip: getClientIp(request) });
   const snap = await db.collection(COLLECTION).get();
   let migrated = 0;
   for (const doc of snap.docs) {
