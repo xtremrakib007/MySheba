@@ -1,0 +1,45 @@
+name: Security audit
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install root dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Function syntax audit
+        run: npm run audit:functions
+
+      - name: API provider tests
+        run: npm run test:api-provider
+
+      - name: Rules audit
+        run: npm run audit:rules
+
+      - name: Repository security audit
+        run: npm run audit:repo
+
+      - name: Dependency audit
+        run: npm audit --audit-level=high
+        continue-on-error: true
+        # Existing third-party advisories are reported in the workflow rather
+        # than silently ignored. The application security checks above remain
+        # blocking; dependency upgrades should be reviewed separately.
