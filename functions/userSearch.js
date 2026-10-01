@@ -96,6 +96,7 @@ exports.searchUsers = onCall({ enforceAppCheck: false }, async (request) => {
   results.sort((a, b) => String(a.name).localeCompare(String(b.name)));
   return { results: results.slice(0, 25) };
 
+  });
 // QR lookup returns the same public-safe fields as searchUsers and never trusts
 // the name/phone/userId embedded in a QR payload.
 exports.getUserByUid = onCall({ enforceAppCheck: false }, async (request) => {
