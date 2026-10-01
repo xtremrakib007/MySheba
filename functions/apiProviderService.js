@@ -190,7 +190,7 @@ function validate(data) {
   if (!ALLOWED_AUTH.includes(authType)) throw new HttpsError('invalid-argument', 'Invalid authentication type.');
   if (successTopUp && ((!apiKey && !apiKeySecret) || (!secretKey && !secretKeySecret))) throw new HttpsError('invalid-argument', 'Success TopUp API key and API secret are required.');
   if ((authType === 'apiKey' || authType === 'bearer') && !apiKey) throw new HttpsError('invalid-argument', 'API key is required for this authentication type.');
-  if (authType === 'basic' && (!cleanString(data.username, 200) || !cleanString(data.password, 1000))) throw new HttpsError('invalid-argument', 'Username and password are required for Basic authentication.');
+  if (authType === 'basic' && (!cleanString(data.username, 200) || (!cleanString(data.password, 1000) && !passwordSecret))) throw new HttpsError('invalid-argument', 'Username and password are required for Basic authentication.');
   if (!ALLOWED_METHODS.includes(method)) throw new HttpsError('invalid-argument', 'Invalid HTTP method.');
   return {
     service, name, country, baseUrl, endpointPath, method, authType, apiKey, secretKey,
