@@ -101,7 +101,7 @@ jobs:
 
       - name: Install function dependencies
         working-directory: functions
-        run: npm ci --no-audit --no-fund
+        run: npm install --no-audit --no-fund
 
       # Firebase reads functions/.env at deploy time and bakes the values into
       # the deployed environment. The file is gitignored, so without this step
