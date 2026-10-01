@@ -95,6 +95,7 @@ exports.onAdClickCreated = require('./adTrackingService').onAdClickCreated;
 exports.createAdPayment = require('./adPaymentService').createAdPayment;
 exports.updateAdPaymentStatus = require('./adPaymentService').updateAdPaymentStatus;
 exports.listApiProviders = require('./apiProviderService').listApiProviders;
+exports.migrateApiProviderSecrets = require('./apiProviderService').migrateApiProviderSecrets;
 exports.saveApiProvider = require('./apiProviderService').saveApiProvider;
 exports.deleteApiProvider = require('./apiProviderService').deleteApiProvider;
 exports.getServiceApiSettings = require('./apiProviderService').getServiceApiSettings;
