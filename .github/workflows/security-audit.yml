@@ -23,13 +23,16 @@ jobs:
           node-version: '22'
 
       - name: Install root dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Install function dependencies
-        run: npm install --prefix functions --no-audit --no-fund
+        run: npm ci --prefix functions --no-audit --no-fund
 
       - name: Function syntax audit
         run: npm run audit:functions
+
+      - name: Lint
+        run: npm run lint
 
       - name: API provider tests
         run: npm run test:api-provider
