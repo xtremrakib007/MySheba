@@ -71,7 +71,7 @@ async function checkVelocity(db, uid, action, context = {}) {
   if (!limit || !limit.max) return;
   const tripped = await slidingWindowTripped(db, 'walletVelocity', `${uid}_${action}`, limit);
   if (tripped) {
-    await logAudit({ action: 'wallet_velocity_blocked', targetUid: uid, performedBy: uid, performedByRole: null, details: { blockedAction: action, limit, ip: context.ip || null } });
+    await logAudit({ action: 'wallet_velocity_blocked', targetUid: uid, performedBy: uid, performedByRole: null, details: { blockedAction: action, limit } });
     throw new HttpsError('resource-exhausted', "You're doing that too quickly. Please wait a bit and try again.");
   }
   // Also rate-limit expensive authenticated actions per source IP. The IP is
