@@ -8,6 +8,7 @@ const SEARCH_MAX = 30;
 const SEARCH_WINDOW_MS = 10 * 60 * 1000;
 const QR_MAX = 60;
 const QR_WINDOW_MS = 60 * 60 * 1000;
+const SEARCH_SCAN_MAX = 1000;
 
 function normalizeDigits(value) {
   return String(value || '').replace(/[^0-9]/g, '');
@@ -48,7 +49,7 @@ exports.searchUsers = onCall({ enforceAppCheck: false }, async (request) => {
 
   let snap;
   try {
-    snap = await db.collection('users').get();
+    snap = await db.collection('users').limit(SEARCH_SCAN_MAX).get();
   } catch (err) {
     await logServerError('searchUsers', err, { userId: callerUid });
     throw new HttpsError('internal', 'Could not search users right now.');
