@@ -72,7 +72,7 @@ export default function WalletExchangeRatesPage() {
     }
   }
 
-  function useLive(currency: string) {
+  function applyLiveRate(currency: string) {
     const live = Number(data.liveRates?.[currency]);
     if (!Number.isFinite(live) || live <= 0) return;
     setDrafts((prev) => ({
@@ -141,7 +141,7 @@ export default function WalletExchangeRatesPage() {
                     </select>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button onClick={() => useLive(currency)} className="mr-3 text-xs font-semibold text-[var(--color-primary-dark)] hover:underline">Use live</button>
+                    <button onClick={() => applyLiveRate(currency)} className="mr-3 text-xs font-semibold text-[var(--color-primary-dark)] hover:underline">Use live</button>
                     <button disabled={busy} onClick={() => handleSave(currency)} className="text-xs font-semibold text-[var(--color-primary-dark)] hover:underline disabled:opacity-50">Save</button>
                   </td>
                 </tr>

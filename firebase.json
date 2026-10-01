@@ -21,11 +21,12 @@
   "hosting": [
     {
       "target": "myshebas",
-      "public": "mysheba-web/dist",
+      "public": "mysheba-web",
       "ignore": [
         "firebase.json",
         "**/.*",
-        "!.well-known/**"
+        "!.well-known/**",
+        "**/*.md"
       ],
       "headers": [
         {

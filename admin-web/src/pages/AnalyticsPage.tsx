@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, AlertTriangle, BarChart3, CheckCircle2, RefreshCw, TrendingUp, Users } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Users } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getDashboard, setErrorResolved, subscribeActivityLog, subscribeAuditLog, subscribeErrorLog, type AnalyticsDashboard, type LogEntry } from '../services/analyticsService';
 

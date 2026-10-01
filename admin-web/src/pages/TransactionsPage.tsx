@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   approveTransaction,
   assignDealer,
-  completeTransaction,
   rejectTransaction,
   subscribeDealerOptions,
   subscribeTransactions,
@@ -16,35 +15,31 @@ const STATUS_STYLES: Record<string, string> = {
   completed: 'bg-[var(--color-success)]/10 text-[var(--color-success)]',
 };
 
-function CompleteControl({ tx, busy, onComplete }: { tx: Transaction; busy: boolean; onComplete: (pin?: string, receiptUrl?: string) => void }) {
-  const [pin, setPin] = useState('');
-  const [receiptUrl, setReceiptUrl] = useState('');
+// An order in `processing` is with its Operator, and only that Operator can
+// finish it. This panel used to be a PIN box, a "Receipt URL" box and a
+// Complete button, none of which could ever work from here:
+// completeTransaction is gated on OPERATOR_ROLES (dealer/reseller) and on
+// claimedBy === the caller, so every admin press returned permission-denied
+// "Only the dealer/reseller Operator can complete an order." The receipt box
+// was unusable for a second reason - the server only accepts a Firebase
+// Storage URL under order-receipts/<txId>/ or remittance-receipts/<txId>/ in
+// our own bucket, which the Operator's app produces by uploading the receipt.
+// An admin has nothing to type there.
+//
+// So this says what is actually waiting to happen, rather than offering a
+// button that fails.
+function OperatorPendingNote({ tx }: { tx: Transaction }) {
   const needsPin = tx.service === 'Mobile Banking' || tx.service === 'Remittance';
+  const operator = tx.claimedByName || 'the assigned Operator';
 
   return (
-    <div className="flex flex-wrap gap-2">
-      {needsPin && (
-        <input
-          value={pin}
-          onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 12))}
-          placeholder="Collection PIN"
-          inputMode="numeric"
-          className="w-32 rounded-lg border border-[var(--color-line)] px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]"
-        />
-      )}
-      <input
-        value={receiptUrl}
-        onChange={(e) => setReceiptUrl(e.target.value)}
-        placeholder="Receipt URL"
-        className="min-w-48 flex-1 rounded-lg border border-[var(--color-line)] px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]"
-      />
-      <button
-        disabled={busy || !receiptUrl.trim() || (needsPin && !/^\d{4,12}$/.test(pin))}
-        onClick={() => onComplete(needsPin ? pin : undefined, receiptUrl.trim())}
-        className="rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
-      >
-        ✓ Complete
-      </button>
+    <div className="rounded-lg bg-[var(--color-primary)]/5 px-3 py-2">
+      <p className="text-xs font-semibold text-[var(--color-primary)]">Waiting on {operator} to complete this order</p>
+      <p className="mt-1 text-xs text-[var(--color-ink-soft)]">
+        {operator} completes it in the MySheba app after uploading the transfer receipt
+        {needsPin ? ` and entering the ${tx.service} collection PIN the customer gives them` : ''}. Admins approve,
+        appoint and reject orders; only the Operator who accepted an order can close it.
+      </p>
     </div>
   );
 }
@@ -133,7 +128,8 @@ export default function TransactionsPage() {
                   </div>
                 )}
 
-                {tx.status === 'processing' && tx.approved && <div className="mt-4"><CompleteControl tx={tx} busy={busy} onComplete={(pin, receiptUrl) => run(tx.id, () => completeTransaction(tx.id, pin, receiptUrl))} /></div>}
+                {tx.status === 'processing' && tx.approved && <div className="mt-4"><OperatorPendingNote tx={tx} /></div>}
+                {!!tx.receiptUrl && <p className="mt-2 text-xs"><a href={tx.receiptUrl} target="_blank" rel="noreferrer" className="font-semibold text-[var(--color-primary)] underline">View transfer receipt</a></p>}
                 {tx.status === 'completed' && tx.rejected && <p className="mt-2 text-xs text-[var(--color-danger)]">Rejected: {tx.rejectReason}</p>}
               </div>
             );

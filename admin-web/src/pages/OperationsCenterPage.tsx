@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, ArrowRight, CheckCircle2, Clock3, Headphones, RefreshCw, ShieldCheck } from 'lucide-react';
+import { AlertCircle, ArrowRight, CheckCircle2, Clock3, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchTickets, type SupportTicket } from '../services/supportService';

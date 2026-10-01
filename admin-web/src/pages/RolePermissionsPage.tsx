@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { ShieldCheck, Lock, Users, SlidersHorizontal, ExternalLink } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { FEATURE_DEFS, TOGGLEABLE_ROLES, ROLE_LABEL, subscribeFeatureAccess, type FeatureAccessMap } from '../services/toolAccessService';
+import { FEATURE_DEFS, ROLE_LABEL, subscribeFeatureAccess, type FeatureAccessMap } from '../services/toolAccessService';
 import { useEffect, useState } from 'react';
 
 const ROLE_ORDER = ['customer', 'dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin'] as const;
