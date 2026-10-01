@@ -37,7 +37,7 @@ function hashPin(pin, salt) {
   return crypto.scryptSync(pin, salt, 64).toString('hex');
 }
 
-exports.setupSecurityPin = onCall({ enforceAppCheck: false }, async (request) => {
+exports.setupSecurityPin = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireAuth(request);
   const { pin } = request.data || {};
   if (!isValidPin(pin)) throw new HttpsError('invalid-argument', 'PIN must be 4-8 digits.');
@@ -66,7 +66,7 @@ exports.setupSecurityPin = onCall({ enforceAppCheck: false }, async (request) =>
   }
 });
 
-exports.verifySecurityPin = onCall({ enforceAppCheck: false }, async (request) => {
+exports.verifySecurityPin = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireAuth(request);
   const { pin } = request.data || {};
   if (!isValidPin(pin)) throw new HttpsError('invalid-argument', 'Enter your PIN.');
@@ -120,7 +120,7 @@ exports.verifySecurityPin = onCall({ enforceAppCheck: false }, async (request) =
   }
 });
 
-exports.resetSecurityPin = onCall({ enforceAppCheck: false }, async (request) => {
+exports.resetSecurityPin = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireAuth(request);
   requireRecentReauthentication(request);
   const { pin } = request.data || {};
