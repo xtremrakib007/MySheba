@@ -15,7 +15,7 @@
 // PAYSLIP, per "Do NOT create a second document storage system." This
 // service only persists the payslip's structured data, plus a pointer
 // (fileReference) to that My Documents record once saved.
-import { collection, doc, addDoc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, doc, addDoc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, Timestamp, limit, query } from 'firebase/firestore';
 import { db } from './config';
 import { calculatePayslipTotals } from '../utils/payslipCalculationService';
 import { PAYSLIP_TEMPLATES, CURRENCY } from '../data/payslipConstants';
@@ -36,7 +36,7 @@ function settingsRef(userId) {
 
 export async function listPayslips(userId) {
   if (!userId) throw new Error('Not authenticated');
-  const snap = await getDocs(payslipsCollection(userId));
+  const snap = await getDocs(query(payslipsCollection(userId), limit(100)));
   return sortByPeriodDesc(snap.docs.map((d) => hydrate(d.id, d.data())));
 }
 
@@ -52,7 +52,7 @@ export function subscribePayslips(userId, onChange, onError) {
     return () => {};
   }
   return onSnapshot(
-    payslipsCollection(userId),
+    query(payslipsCollection(userId), limit(100)),
     (snap) => onChange(sortByPeriodDesc(snap.docs.map((d) => hydrate(d.id, d.data())))),
     (err) => onError?.(err)
   );
