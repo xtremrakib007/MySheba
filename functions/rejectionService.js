@@ -70,7 +70,7 @@ function canReject(actor, tx) {
   return false;
 }
 
-exports.rejectTransaction = onCall({ enforceAppCheck: false }, async request => {
+exports.rejectTransaction = onCall({ enforceAppCheck: true }, async request => {
   const uid = requireAuth(request);
   const actor = await getActor(uid);
   requireSessionMatch(request, actor);
