@@ -3,6 +3,7 @@
 const { HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logAudit } = require('./logService');
+const crypto = require('crypto');
 
 const DEFAULT_LIMITS = {
   createSelfTopup: { max: 5, windowMinutes: 60 },
@@ -68,6 +69,17 @@ async function checkVelocity(db, uid, action, context = {}) {
   if (tripped) {
     await logAudit({ action: 'wallet_velocity_blocked', targetUid: uid, performedBy: uid, performedByRole: null, details: { blockedAction: action, limit, ip: context.ip || null } });
     throw new HttpsError('resource-exhausted', "You're doing that too quickly. Please wait a bit and try again.");
+  }
+  // Also rate-limit expensive authenticated actions per source IP. The IP is
+  // hashed before storage so the velocity collection does not retain raw IPs.
+  if (context.ip) {
+    const ipHash = crypto.createHash('sha256').update(String(context.ip)).digest('hex').slice(0, 32);
+    const ipLimit = { max: Math.max(1, Math.ceil(Number(limit.max) * 3)), windowMinutes: Number(limit.windowMinutes) || 60 };
+    const ipTripped = await slidingWindowTripped(db, 'walletVelocityIp', `${ipHash}_${action}`, ipLimit);
+    if (ipTripped) {
+      await logAudit({ action: 'wallet_ip_velocity_blocked', targetUid: uid, performedBy: uid, performedByRole: null, details: { blockedAction: action, limit: ipLimit } });
+      throw new HttpsError('resource-exhausted', "Too many requests from this network. Please wait and try again.");
+    }
   }
 }
 
