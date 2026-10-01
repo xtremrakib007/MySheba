@@ -546,12 +546,13 @@ exports.saveApiProvider = onCall({ enforceAppCheck: false }, async (request) => 
   const ref = id ? db.collection(COLLECTION).doc(id) : db.collection(COLLECTION).doc();
   const existingSnap = await ref.get();
   const current = existingSnap.exists ? (existingSnap.data() || {}) : {};
+  const existingCredentials = existingSnap.exists ? await providerSecretService.getCredentials(current) : {};
   const incoming = { ...(request.data || {}) };
 
   if (existingSnap.exists) {
-    if (!incoming.apiKey || incoming.apiKey === providerSecretService.MASK) incoming.apiKey = current.apiKey || '';
-    if (!incoming.secretKey || incoming.secretKey === providerSecretService.MASK) incoming.secretKey = current.secretKey || '';
-    if (!incoming.password || incoming.password === providerSecretService.MASK) incoming.password = current.password || '';
+    if (!incoming.apiKey || incoming.apiKey === providerSecretService.MASK) incoming.apiKey = existingCredentials.apiKey || current.apiKey || '';
+    if (!incoming.secretKey || incoming.secretKey === providerSecretService.MASK) incoming.secretKey = existingCredentials.secretKey || current.secretKey || '';
+    if (!incoming.password || incoming.password === providerSecretService.MASK) incoming.password = existingCredentials.password || current.password || '';
     if (!incoming.username) incoming.username = current.username || '';
     if (!Object.keys(incoming.headers || {}).length && current.headers) incoming.headers = current.headers;
     if (!Object.keys(incoming.queryTemplate || {}).length && current.queryTemplate) incoming.queryTemplate = current.queryTemplate;
