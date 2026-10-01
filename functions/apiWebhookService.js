@@ -42,7 +42,7 @@ function validateConfig(data) {
   return { providerId, enabled, authHeader, webhookToken, transactionIdPath, statusPath, messagePath, successStatus, processingStatus, cancelStatus };
 }
 
-exports.listApiWebhooks = onCall({ enforceAppCheck: false }, async (request) => {
+exports.listApiWebhooks = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const snap = await db.collection(COLLECTION).get();
@@ -73,7 +73,7 @@ exports.listApiWebhooks = onCall({ enforceAppCheck: false }, async (request) => 
   };
 });
 
-exports.saveApiWebhook = onCall({ enforceAppCheck: false }, async (request) => {
+exports.saveApiWebhook = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const id = clean(request.data?.providerId, 100);
@@ -98,7 +98,7 @@ exports.saveApiWebhook = onCall({ enforceAppCheck: false }, async (request) => {
   return { ok: true, providerId: id, webhookUrl: endpointUrl(id) };
 });
 
-exports.deleteApiWebhook = onCall({ enforceAppCheck: false }, async (request) => {
+exports.deleteApiWebhook = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const id = clean(request.data?.providerId, 100);
