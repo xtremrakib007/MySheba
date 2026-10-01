@@ -648,7 +648,8 @@ exports.saveApiProvider = onCall({ enforceAppCheck: true }, async (request) => {
       webhookUrl: 'https://us-central1-satulink-solutions.cloudfunctions.net/apiWebhook?providerId=' + encodeURIComponent(ref.id)
     };
   }
-  return { id: ref.id, successTopUp: false };\n});
+  return { id: ref.id, successTopUp: false };
+});
 exports.deleteApiProvider = onCall({ enforceAppCheck: true }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
