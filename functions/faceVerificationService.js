@@ -53,7 +53,7 @@ function cosine(a, b) {
   return dot;
 }
 
-exports.verifyKycFace = onCall({ enforceAppCheck: false }, async (request) => {
+exports.verifyKycFace = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireAuth(request);
   const db = admin.firestore();
   await requireActiveAccount(db, uid);
