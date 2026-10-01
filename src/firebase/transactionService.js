@@ -8,7 +8,7 @@ import { getSessionProof } from './deviceSessionService';
 
 const COLLECTION = 'transactions';
 const QUEUE_COLLECTION = 'transactionQueue';
-const CHARGEABLE_SERVICE_FNS = { Recharge: 'chargeRecharge', Internet: 'chargeInternetPackage', 'Bill Payment': 'chargeBillPayment', 'Mobile Banking': 'chargeMobileBanking', Remittance: 'chargeRemittance' };
+const CHARGEABLE_SERVICE_FNS = { Recharge: 'chargeRecharge', Internet: 'chargeInternetPackage', Entertainment: 'chargeEntertainment', 'Bill Payment': 'chargeBillPayment', 'Mobile Banking': 'chargeMobileBanking', Remittance: 'chargeRemittance' };
 
 function createRequestId() {
   if (typeof Crypto.randomUUID !== 'function') throw new Error('Secure request identifier generation is unavailable. Please update the app.');

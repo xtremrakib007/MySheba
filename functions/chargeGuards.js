@@ -8,6 +8,7 @@ const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const SERVICE_BY_CALLABLE = {
   chargeRecharge: 'Recharge',
   chargeInternetPackage: 'Internet',
+  chargeEntertainment: 'Entertainment',
   chargeBillPayment: 'Bill Payment',
   chargeMobileBanking: 'Mobile Banking',
   chargeRemittance: 'Remittance',
@@ -189,6 +190,7 @@ function wrap(name) {
 
 exports.chargeRecharge = wrap('chargeRecharge');
 exports.chargeInternetPackage = wrap('chargeInternetPackage');
+exports.chargeEntertainment = wrap('chargeEntertainment');
 exports.chargeBillPayment = wrap('chargeBillPayment');
 exports.chargeMobileBanking = wrap('chargeMobileBanking');
 exports.chargeRemittance = wrap('chargeRemittance');

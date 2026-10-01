@@ -20,6 +20,6 @@ export async function testApiProvider(id) { return (await testFn({ id })).data; 
 
 // drivesFn was built above but never exported, so InternetSteps' call to
 // apiProviderService.listSuccessTopUpDrives resolved to undefined.
-export async function listSuccessTopUpDrives(operator, type) {
-  return (await drivesFn({ operator, type })).data?.drives || [];
+export async function listSuccessTopUpDrives(operator, type, service = 'Internet') {
+  return (await drivesFn({ operator, type, service })).data?.drives || [];
 }

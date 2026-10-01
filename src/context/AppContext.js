@@ -95,6 +95,7 @@ const SERVICE_STEPS = {
   recharge: 4,
   mobilebanking: 3,
   internet: 4,
+  entertainment: 4,
   billpayment: 5,
   remittance: 7,
   bus: 3,
@@ -110,6 +111,7 @@ const DEALER_LABELS = {
   recharge: "Recharge",
   mobilebanking: "Mobile Banking",
   internet: "Internet",
+  entertainment: "Entertainment",
   billpayment: "Bill Payment",
   remittance: "Remittance",
 };
@@ -164,6 +166,16 @@ function buildTransactionPayload(service, serviceData, pricing, rates) {
       amount,
       total: amount,
       raw: { country: serviceData.country, operator: serviceData.operator, phone: serviceData.phone, amount: rawAmount, packageId: serviceData.packageId, package: serviceData.package },
+    };
+  }
+  if (service === "entertainment") {
+    const rawAmount = serviceData.amount || 0;
+    const amount = amountToPoints(rawAmount, serviceData.country, rates);
+    return {
+      service: DEALER_LABELS.entertainment,
+      details: `${serviceData.operator || ""} - ${serviceData.package || ""} (${serviceData.currency || "MYR"} ${rawAmount})`,
+      amount,
+      total: amount,
     };
   }
   if (service === "billpayment") {

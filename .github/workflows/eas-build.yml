@@ -62,6 +62,12 @@ jobs:
       - name: Run API provider regression tests
         run: npm run test:api-provider
 
+      # The Success TopUp operator map silently covered three of eight codes,
+      # so half the Bangladesh operator picker charged the wallet and was then
+      # rejected by the provider. Nothing else catches that.
+      - name: Success TopUp contract
+        run: npm run test:successtopup
+
       # Both trees are installed by this point, so the gate can audit each one.
       - name: Audit production dependencies
         run: npm run audit:deps

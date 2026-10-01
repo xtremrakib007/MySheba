@@ -87,11 +87,10 @@ export default function ServiceScreen() {
 
   const StepComponent = STEP_COMPONENTS[currentService];
   const title = SERVICE_TITLES[currentService] || 'Service';
-  const isEntertainment = currentService === 'entertainment';
   const isLast = currentStep === totalSteps - 1;
   const adSlot = AD_SLOTS[currentService];
   const isBangladeshApiService =
-    ['recharge', 'internet', 'billpayment'].includes(currentService) &&
+    ['recharge', 'internet', 'entertainment', 'billpayment'].includes(currentService) &&
     String(serviceData?.country || '').trim().toUpperCase() === 'BD';
   const finalButtonLabel = isBangladeshApiService
     ? (currentService === 'recharge'
@@ -131,7 +130,7 @@ export default function ServiceScreen() {
         <Text style={styles.headerTitle}>{title}</Text>
       </LinearGradient>
 
-      {!isEntertainment && <StepBar totalSteps={totalSteps} currentStep={currentStep} />}
+      <StepBar totalSteps={totalSteps} currentStep={currentStep} />
 
       <ScrollView style={styles.content} contentContainerStyle={{ padding: 16 }}>
         {!!adSlot && <SmartAd placement={adSlot.top} feature={adSlot.feature} height={100} style={{ marginBottom: 12 }} />}
@@ -140,7 +139,7 @@ export default function ServiceScreen() {
         {!!adSlot && <SmartAd placement={adSlot.bottom} feature={adSlot.feature} height={100} style={{ marginTop: 12 }} />}
       </ScrollView>
 
-      {!isEntertainment && <View style={styles.navBar}>
+      <View style={styles.navBar}>
         <View style={styles.btnGroup}>
           {currentStep > 0 && <OutlineButton label="← Back" onPress={prevStep} />}
           <PrimaryButton
@@ -149,7 +148,7 @@ export default function ServiceScreen() {
             disabled={isLast && submitting}
           />
         </View>
-      </View>}
+      </View>
     </View>
   );
 }

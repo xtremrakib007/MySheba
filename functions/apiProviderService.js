@@ -136,9 +136,9 @@ function validate(data) {
   let responseMessagePath = cleanString(data.responseMessagePath, 200);
   let priority = Number.isFinite(Number(data.priority)) ? Number(data.priority) : 0;
 
-  const successTopUp = ['Recharge', 'Internet', 'Bill Payment'].includes(service) && name.toLowerCase() === 'success topup';
+  const successTopUp = ['Recharge', 'Internet', 'Bill Payment', 'Entertainment'].includes(service) && name.toLowerCase() === 'success topup';
   const successTopUpBill = service === 'Bill Payment' && successTopUp;
-  const successTopUpInternet = service === 'Internet' && successTopUp;
+  const successTopUpPackage = successTopUp && SUCCESS_TOPUP_PACKAGE_SERVICES.includes(service);
   if (successTopUp) {
     name = 'Success TopUp';
     baseUrl = 'https://api.successtopup.com';
@@ -154,6 +154,15 @@ function validate(data) {
       mobileNumber: '{{mobileNumber}}',
       monthName: '{{monthName}}',
       note: '{{note}}',
+      trxid: '{{requestId}}',
+      successtopup_key: '{{apiKey}}',
+      successtopup_secret: '{{secretKey}}'
+    } : successTopUpPackage ? {
+      number: '{{phone}}',
+      type: 'prepaid',
+      operator: '{{internetOperator}}',
+      amount: '{{amount}}',
+      package_id: '{{packageId}}',
       trxid: '{{requestId}}',
       successtopup_key: '{{apiKey}}',
       successtopup_secret: '{{secretKey}}'
@@ -190,7 +199,7 @@ function validate(data) {
   return {
     service, name, country, baseUrl, endpointPath, method, authType, apiKey, secretKey,
     username: cleanString(data.username, 200), password: cleanString(data.password, 1000),
-    active: data.active !== false, priority: Math.max(0, Math.min(9999, Number(data.priority) || 0)),
+    active: data.active !== false, priority: Math.max(0, Math.min(9999, Number(priority) || 0)),
     timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)), notes: cleanString(data.notes, 1000),
     headers: validateHeaders(headers), queryTemplate: validateTemplate(queryTemplate, 'Query template'),
     requestTemplate: validateTemplate(requestTemplate, 'Request template'),
@@ -230,8 +239,24 @@ const SUCCESS_TOPUP_BILL_OPERATORS = {
   'Amber IT': 'art',
   'Dhaka WASA': 'DAWA',
 };
-const SUCCESS_TOPUP_MOBILE_OPERATORS = { Grameenphone: 'GP', Robi: 'RB', Banglalink: 'BL' };
-const SUCCESS_TOPUP_INTERNET_OPERATORS = { Grameenphone: 'GP', Robi: 'RB', Banglalink: 'BL', Airtel: 'AT', Teletalk: 'TT', Skitto: 'SK', 'Brilliant Connect': 'BT', Ryze: 'RY' };
+const SUCCESS_TOPUP_OPERATORS = {
+  Grameenphone: 'GP', Robi: 'RB', Banglalink: 'BL', Airtel: 'AT',
+  Teletalk: 'TT', Skitto: 'SK', 'Brilliant Connect': 'BT', Ryze: 'RY',
+};
+const SUCCESS_TOPUP_OPERATOR_CODES = Object.values(SUCCESS_TOPUP_OPERATORS);
+const SUCCESS_TOPUP_POSTPAID_BILL_OPERATORS = { Grameenphone: 'GP', Robi: 'RB', Banglalink: 'BL' };
+const SUCCESS_TOPUP_PACKAGE_SERVICES = ['Internet', 'Entertainment'];
+// Provisioned automatically from the Recharge provider, so they are not shown
+// as separately editable rows in Superadmin.
+const SUCCESS_TOPUP_COMPANION_SERVICES = ['Internet', 'Entertainment', 'Bill Payment'];
+
+function resolveSuccessTopUpOperator(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (SUCCESS_TOPUP_OPERATORS[raw]) return SUCCESS_TOPUP_OPERATORS[raw];
+  const upper = raw.toUpperCase();
+  return SUCCESS_TOPUP_OPERATOR_CODES.includes(upper) ? upper : '';
+}
 
 async function executeConfiguredApi(service, payload, customer, requestId, options = {}) {
   const db = admin.firestore();
@@ -294,12 +319,19 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   if (service === 'Recharge PIN' && !provider.responsePinPath) throw new Error('Recharge PIN provider is missing responsePinPath configuration.');
   const raw = payload?.raw || {};
   const isSuccessTopUpBill = service === 'Bill Payment' && String(provider.name || '').trim().toLowerCase() === 'success topup';
-  const isSuccessTopUpInternet = service === 'Internet' && String(provider.name || '').trim().toLowerCase() === 'success topup' && String(raw.country || '').toUpperCase() === 'BD';
+  const isSuccessTopUp = String(provider.name || '').trim().toLowerCase() === 'success topup' && String(raw.country || '').toUpperCase() === 'BD';
+  // Internet and Entertainment are the same transaction to Success TopUp: a
+  // /api/recharge call carrying package_id. Their documented API has no
+  // separate package or entertainment endpoint - a bundle is bought by naming
+  // its id from /api/drives - so both services share one code path.
+  const isSuccessTopUpPackage = isSuccessTopUp && SUCCESS_TOPUP_PACKAGE_SERVICES.includes(service);
+  const isSuccessTopUpInternet = isSuccessTopUpPackage;
+  const isSuccessTopUpRecharge = isSuccessTopUp && service === 'Recharge';
   const billOperator = raw.billOperator || SUCCESS_TOPUP_BILL_OPERATORS[String(raw.provider || '').trim()] || '';
-  const internetOperator = raw.operatorCode || SUCCESS_TOPUP_INTERNET_OPERATORS[String(raw.operator || '').trim()] || '';
+  const internetOperator = resolveSuccessTopUpOperator(raw.operatorCode || raw.operator);
   const packageId = raw.packageId || raw.package_id || '';
-  const mobileBillOperator = SUCCESS_TOPUP_MOBILE_OPERATORS[String(raw.provider || '').trim()] || '';
-  const rechargeOperator = SUCCESS_TOPUP_MOBILE_OPERATORS[String(raw.operator || '').trim()] || String(raw.operator || '').trim();
+  const mobileBillOperator = SUCCESS_TOPUP_POSTPAID_BILL_OPERATORS[String(raw.provider || '').trim()] || '';
+  const rechargeOperator = resolveSuccessTopUpOperator(raw.operator);
   const monthName = raw.monthName || new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
   if (isSuccessTopUpBill && String(raw.country || '').toUpperCase() === 'BD') {
     const category = String(raw.category || '').toLowerCase();
@@ -363,6 +395,9 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
       } : render(asObject(provider.requestTemplate),vars);
       if (isBangladeshMobileBill && !mobileBillOperator) throw new Error('Success TopUp does not have a supported postpaid mobile operator mapping for this biller.');
       if (isSuccessTopUpInternet && !vars.internetOperator) throw new Error('Success TopUp does not have a supported Bangladesh internet operator mapping.');
+      // Plain recharge had no equivalent guard, so an operator the map does not
+      // know reached the provider as a display name and was rejected there.
+      if (isSuccessTopUpRecharge && !rechargeOperator) throw new Error(`Success TopUp does not support the Bangladesh operator "${String(raw.operator || '').slice(0, 40)}".`);
       if (isSuccessTopUpInternet && !vars.packageId) throw new Error('Success TopUp package ID is required for an internet/data-pack purchase.');
       if (service === 'Bill Payment' && String(provider.name || '').trim().toLowerCase() === 'success topup' && !billOperator && !isBangladeshMobileBill) throw new Error('Success TopUp does not have a supported bill operator mapping for this biller.');
       body=JSON.stringify(requestBody);
@@ -450,20 +485,24 @@ exports.testApiProvider = onCall({ enforceAppCheck: false }, async (request) => 
 exports.listSuccessTopUpDrives = onCall({ enforceAppCheck: false }, async (request) => {
   const db = admin.firestore();
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
+  const service = String(request.data?.service || 'Internet').trim();
+  if (!SUCCESS_TOPUP_PACKAGE_SERVICES.includes(service)) {
+    throw new HttpsError('invalid-argument', 'Package listings are available for Internet and Entertainment only.');
+  }
   const snap = await db.collection(COLLECTION)
-    .where('service', '==', 'Internet')
+    .where('service', '==', service)
     .where('name', '==', 'Success TopUp')
     .where('active', '==', true)
     .limit(1)
     .get();
-  if (snap.empty) throw new HttpsError('failed-precondition', 'Success TopUp Internet API is not configured.');
+  if (snap.empty) throw new HttpsError('failed-precondition', `Success TopUp ${service} API is not configured.`);
   const provider = { id: snap.docs[0].id, ...(snap.docs[0].data() || {}) };
   if (!provider.apiKey || !provider.secretKey) throw new HttpsError('failed-precondition', 'Success TopUp credentials are not configured.');
   const url = new URL('https://api.successtopup.com/api/drives');
   const operator = String(request.data?.operator || 'ALL').trim().toUpperCase();
   const type = String(request.data?.type || 'regular').trim().toLowerCase();
   const body = JSON.stringify({
-    operator: ['GP','RB','AT','TT','BL','SK','BT','RY','ALL'].includes(operator) ? operator : 'ALL',
+    operator: SUCCESS_TOPUP_OPERATOR_CODES.includes(operator) || operator === 'ALL' ? operator : 'ALL',
     type: ['regular','drive'].includes(type) ? type : 'regular',
     successtopup_key: provider.apiKey,
     successtopup_secret: provider.secretKey
@@ -502,7 +541,7 @@ exports.listApiProviders = onCall({ enforceAppCheck: false }, async (request) =>
   // Return only non-secret configuration fields. Do not spread the provider
   // document here: custom headers/templates may contain credentials or other
   // sensitive values that should never be sent back to the mobile/admin client.
-  return snap.docs.filter((d) => !(String(d.data()?.name || '').trim().toLowerCase() === 'success topup' && ['Bill Payment', 'Internet'].includes(d.data()?.service))).map((d) => {
+  return snap.docs.filter((d) => !(String(d.data()?.name || '').trim().toLowerCase() === 'success topup' && SUCCESS_TOPUP_COMPANION_SERVICES.includes(d.data()?.service))).map((d) => {
     const x = d.data() || {};
     return {
       id: d.id,
@@ -605,58 +644,37 @@ exports.saveApiProvider = onCall({ enforceAppCheck: false }, async (request) => 
         updatedBy: request.auth.uid
       }, { merge: false });
       tx.set(settingsRef, {
-        modes: { ...DEFAULT_MODES, ...(currentSettings.modes || {}), Recharge: 'api', Internet: 'api', 'Bill Payment': 'api' },
+        modes: { ...DEFAULT_MODES, ...(currentSettings.modes || {}), Recharge: 'api', Internet: 'api', Entertainment: 'api', 'Bill Payment': 'api' },
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedBy: request.auth.uid
       }, { merge: true });
     }
 
-    // Provision a companion Internet provider from the same Success TopUp credentials.
+    // Companions. Superadmin configures ONE Success TopUp provider (Recharge);
+    // these carry the same credentials for the other services, because
+    // executeConfiguredApi selects a provider by service. They are hidden from
+    // listApiProviders and must never be edited by hand - re-saving the
+    // Recharge provider rewrites them.
+    //
+    // Internet and Entertainment are identical to Success TopUp: both POST
+    // /api/recharge with the chosen package_id. Entertainment reads the `drive`
+    // catalogue, Internet the `regular` one, but that is a listing argument,
+    // not a different endpoint.
     if (data.name === 'Success TopUp' && data.service === 'Recharge') {
-      const internetProviderRef = db.collection(COLLECTION).doc('success-topup-internet');
-      tx.set(internetProviderRef, {
-        service: 'Internet',
-        name: 'Success TopUp',
-        country: 'BD',
-        baseUrl: 'https://api.successtopup.com',
-        endpointPath: '/api/recharge',
-        method: 'POST',
-        authType: 'none',
-        headers: {},
-        queryTemplate: {},
-        requestTemplate: {},
-        responseSuccessPath: 'result',
-        responseSuccessValue: 'true',
-        responseProcessingPath: '',
-        responseProcessingValue: '',
-        responseIdPath: '',
-        responseMessagePath: 'message',
-        apiKey: data.apiKey,
-        secretKey: data.secretKey,
-        active: data.active !== false,
-        priority: 9999,
-        timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)),
-        notes: 'Fixed Success TopUp Bangladesh internet/data-pack integration.',
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedBy: request.auth.uid
-      }, { merge: false });
-    }
-
-    // Provision a companion Bill Payment provider from the same Success TopUp
-    // credentials. The provider is separate because execution selects by service.
-    if (data.name === 'Success TopUp' && data.service === 'Recharge') {
-      const billProviderRef = db.collection(COLLECTION).doc('success-topup-bill-payment');
-      tx.set(billProviderRef, {
-        service: 'Bill Payment',
-        name: 'Success TopUp',
-        country: 'BD',
-        baseUrl: 'https://api.successtopup.com',
-        endpointPath: '/api/bill-pay',
-        method: 'POST',
-        authType: 'none',
-        headers: {},
-        queryTemplate: {},
-        requestTemplate: {
+      const packageTemplate = {
+        number: '{{phone}}',
+        type: 'prepaid',
+        operator: '{{internetOperator}}',
+        amount: '{{amount}}',
+        package_id: '{{packageId}}',
+        trxid: '{{requestId}}',
+        successtopup_key: '{{apiKey}}',
+        successtopup_secret: '{{secretKey}}'
+      };
+      const companions = [
+        { id: 'success-topup-internet', service: 'Internet', endpointPath: '/api/recharge', requestTemplate: packageTemplate, notes: 'Fixed Success TopUp Bangladesh internet/data-pack integration.' },
+        { id: 'success-topup-entertainment', service: 'Entertainment', endpointPath: '/api/recharge', requestTemplate: packageTemplate, notes: 'Fixed Success TopUp Bangladesh entertainment-package integration.' },
+        { id: 'success-topup-bill-payment', service: 'Bill Payment', endpointPath: '/api/bill-pay', notes: 'Fixed Success TopUp Bangladesh bill-payment integration.', requestTemplate: {
           billOperator: '{{billOperator}}',
           billNumber: '{{billNumber}}',
           billAmount: '{{amount}}',
@@ -666,22 +684,36 @@ exports.saveApiProvider = onCall({ enforceAppCheck: false }, async (request) => 
           trxid: '{{requestId}}',
           successtopup_key: '{{apiKey}}',
           successtopup_secret: '{{secretKey}}'
-        },
-        responseSuccessPath: 'result',
-        responseSuccessValue: 'true',
-        responseProcessingPath: '',
-        responseProcessingValue: '',
-        responseIdPath: '',
-        responseMessagePath: 'message',
-        apiKey: data.apiKey,
-        secretKey: data.secretKey,
-        active: data.active !== false,
-        priority: 9999,
-        timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)),
-        notes: 'Fixed Success TopUp Bangladesh bill-payment integration.',
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedBy: request.auth.uid
-      }, { merge: false });
+        } },
+      ];
+      for (const companion of companions) {
+        tx.set(db.collection(COLLECTION).doc(companion.id), {
+          service: companion.service,
+          name: 'Success TopUp',
+          country: 'BD',
+          baseUrl: 'https://api.successtopup.com',
+          endpointPath: companion.endpointPath,
+          method: 'POST',
+          authType: 'none',
+          headers: {},
+          queryTemplate: {},
+          requestTemplate: companion.requestTemplate,
+          responseSuccessPath: 'result',
+          responseSuccessValue: 'true',
+          responseProcessingPath: '',
+          responseProcessingValue: '',
+          responseIdPath: '',
+          responseMessagePath: 'message',
+          apiKey: data.apiKey,
+          secretKey: data.secretKey,
+          active: data.active !== false,
+          priority: 9999,
+          timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)),
+          notes: companion.notes,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedBy: request.auth.uid
+        }, { merge: false });
+      }
     }
   });
   const successTopUp = cleanString(request.data?.name, 100).toLowerCase() === 'success topup';

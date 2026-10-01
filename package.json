@@ -43,7 +43,8 @@
     "test:verify": "node scripts/test-device-verify.js",
     "test:vault": "node scripts/test-pin-vault.js",
     "test:pin": "node scripts/test-collection-pin.js",
-    "test:adminlogin": "node scripts/test-admin-login.js"
+    "test:adminlogin": "node scripts/test-admin-login.js",
+    "test:successtopup": "node scripts/test-success-topup.js"
   },
   "dependencies": {
     "expo": "~53.0.0",

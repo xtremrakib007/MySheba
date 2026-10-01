@@ -27,6 +27,12 @@ In Superadmin -> API Management -> Recharge, create/enable:
 }
 ```
 
+All eight codes below are mapped server-side in `SUCCESS_TOPUP_OPERATORS`
+(`functions/apiProviderService.js`). An operator the map cannot resolve now
+fails before the provider is called: it used to be forwarded as its display
+name, so an Airtel, Teletalk or Skitto recharge was charged to the wallet and
+then rejected by Success TopUp.
+
 Success TopUp documents these Bangladesh operator codes:
 
 - GP = Grameenphone
@@ -39,6 +45,43 @@ Success TopUp documents these Bangladesh operator codes:
 - RY = Ryze
 
 Minimum recharge amount documented by Success TopUp is BDT 9.
+
+## Internet and Entertainment packages
+
+Both are the same transaction to Success TopUp. There is no separate package or
+entertainment endpoint: a bundle is listed with `/api/drives` and bought by
+POSTing `/api/recharge` with that package's `package_id` at its exact catalogue
+price. The two services differ only in which catalogue they read:
+
+| Service | `/api/drives` `type` |
+| --- | --- |
+| Internet | `regular` |
+| Entertainment | `drive` |
+
+Server-side they share one code path (`SUCCESS_TOPUP_PACKAGE_SERVICES` in
+`functions/apiProviderService.js`), and a package order with no `packageId` is
+rejected rather than silently sent as a plain top-up of the package price.
+
+If Success TopUp's `drive` catalogue has no entries for an operator, the
+Entertainment picker shows "No entertainment packages are available" rather than
+an empty screen. Nothing needs changing here if they later add entertainment
+SKUs to that catalogue - they appear automatically.
+
+## Companion providers
+
+Superadmin configures ONE provider: `Success TopUp` / `Recharge`. Saving it
+provisions three companions from the same credentials, because
+`executeConfiguredApi` selects a provider by service:
+
+| Document ID | Service | Endpoint |
+| --- | --- | --- |
+| `success-topup-internet` | Internet | `/api/recharge` + `package_id` |
+| `success-topup-entertainment` | Entertainment | `/api/recharge` + `package_id` |
+| `success-topup-bill-payment` | Bill Payment | `/api/bill-pay` |
+
+They are hidden from `listApiProviders` and must not be edited by hand -
+re-saving the Recharge provider overwrites them. Saving it also switches
+Recharge, Internet, Entertainment and Bill Payment to `api` mode.
 
 ## Webhook
 
