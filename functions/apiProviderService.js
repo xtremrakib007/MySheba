@@ -527,6 +527,7 @@ exports.listSuccessTopUpDrives = onCall({ enforceAppCheck: false }, async (reque
       name: String(d.name ?? d.title ?? d.package_name ?? '').slice(0, 200),
       data: String(d.data ?? d.data_amount ?? d.volume ?? '').slice(0, 100),
       valid: String(d.valid ?? d.validity ?? d.duration ?? '').slice(0, 100),
+      category: String(d.category ?? d.pack_type ?? d.packType ?? d.type ?? '').slice(0, 60),
       price: Number(d.price ?? d.amount ?? 0)
     })).filter(d => d.id && d.price > 0) };
   } catch (e) {

@@ -6,17 +6,30 @@ import { getOperatorBrand } from '../data/operatorBrand';
 import { FormLabel, Grid3, OperatorCard, FormInput, PackageCard, SummaryCard } from '../components/ui';
 import CountrySelectCard from '../components/CountrySelectCard';
 import * as apiProviderService from '../firebase/apiProviderService';
+import { isEntertainmentPackage } from '../utils/packageCategory';
 
 // Entertainment flow: country -> operator -> phone -> package.
 //
-// Success TopUp has no separate entertainment endpoint. Its documented API buys
-// any bundle the same way: list the catalogue with /api/drives, then POST
-// /api/recharge with that package's `package_id`. So this is the Internet flow
-// over the `drive` catalogue rather than the `regular` one, and the server
-// treats both services through one code path (SUCCESS_TOPUP_PACKAGE_SERVICES).
+// Success TopUp has no entertainment product today, and this screen is honest
+// about that rather than filling itself with something else. The supplied
+// catalogue (BD_Mobile_Operator_Packages.xlsx) is 239 regular + 211 drive
+// packages across four categories - Data, Bundle, Voice, Call Rate - and a
+// keyword sweep for Toffee, Bioscope, Hoichoi, Chorki, YouTube and the rest
+// matched zero of those 450 rows.
 //
-// Only Bangladesh has a configured provider. Other countries show nothing
-// rather than a list that cannot be bought.
+// An earlier version of this screen read the `drive` catalogue and called it
+// entertainment. That was wrong: "Drive Recharge" is a parallel,
+// commission-bearing catalogue of the SAME minutes-and-data packs (0-12% of
+// price, averaging 4.9%), not content.
+//
+// So it reads both catalogues and keeps only entries the provider itself
+// categorises as entertainment. That is nothing right now, which is the
+// truthful answer - and the screen starts working on its own the day Success
+// TopUp adds such SKUs, with no code change.
+//
+// Buying is unchanged and documented: POST /api/recharge with the chosen
+// package_id, which is why the server treats this and Internet as one path
+// (SUCCESS_TOPUP_PACKAGE_SERVICES).
 const DRIVE_OPERATOR_CODES = {
   Grameenphone: 'GP', Robi: 'RB', Banglalink: 'BL', Airtel: 'AT',
   Teletalk: 'TT', Skitto: 'SK', 'Brilliant Connect': 'BT', Ryze: 'RY',
@@ -32,9 +45,17 @@ export default function EntertainmentStep({ step }) {
     let alive = true;
     if (serviceData.country !== 'BD' || step !== 3) return () => { alive = false; };
     setLoading(true); setError('');
-    apiProviderService
-      .listSuccessTopUpDrives(DRIVE_OPERATOR_CODES[serviceData.operator] || 'ALL', 'drive', 'Entertainment')
-      .then((items) => { if (alive) setPackages(items); })
+    const operator = DRIVE_OPERATOR_CODES[serviceData.operator] || 'ALL';
+    Promise.all([
+      apiProviderService.listSuccessTopUpDrives(operator, 'regular', 'Entertainment'),
+      apiProviderService.listSuccessTopUpDrives(operator, 'drive', 'Entertainment'),
+    ])
+      .then(([regular, drive]) => {
+        if (!alive) return;
+        const byId = new Map();
+        for (const pkg of [...regular, ...drive]) if (isEntertainmentPackage(pkg)) byId.set(pkg.id, pkg);
+        setPackages([...byId.values()]);
+      })
       .catch((e) => { if (alive) { setPackages([]); setError(e?.message || 'Unable to load entertainment packages.'); } })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
@@ -64,7 +85,7 @@ export default function EntertainmentStep({ step }) {
         {serviceData.country !== 'BD' && <FormLabel>Entertainment packages are available for Bangladesh only right now.</FormLabel>}
         {!!loading && <FormLabel>Loading entertainment packages…</FormLabel>}
         {!!error && <FormLabel>{error}</FormLabel>}
-        {!loading && !error && serviceData.country === 'BD' && packages.length === 0 && <FormLabel>No entertainment packages are available for this operator right now.</FormLabel>}
+        {!loading && !error && serviceData.country === 'BD' && packages.length === 0 && <FormLabel>Success TopUp has no entertainment packages for this operator yet. Data and minutes packs are under Internet and Recharge.</FormLabel>}
         {!loading && !error && packages.map((p) => <PackageCard key={p.id} name={p.name} detail={`${p.data} • ${p.valid}`} price={p.price} currency={cur} selected={serviceData.package === p.name} onPress={() => updateServiceData({ package: p.name, packageId: p.id, amount: p.price })} />)}
         {!!(isForeign && selected) && <SummaryCard rows={[{ label: 'Package Price', value: `${cur} ${Number(selected.price).toFixed(2)}` }]} totalLabel="Wallet deduction" totalValue={`${walletDeductionMyr.toFixed(2)} MYR`} />}
       </View>

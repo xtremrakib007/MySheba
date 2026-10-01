@@ -237,6 +237,56 @@ check('the app never holds a literal Success TopUp credential', () => {
     : null;
 });
 
+check('packages are classified, not dumped into one list', () => {
+  const server = read('functions/apiProviderService.js');
+  const util = read('src/utils/packageCategory.js');
+  const internet = read('src/steps/InternetSteps.js');
+  const ent = read('src/steps/EntertainmentSteps.js');
+  if (!server || !util || !internet || !ent) return 'unreadable';
+
+  // Without category the app cannot tell a data pack from a voice or call-rate
+  // pack, and listed all of them under "Internet".
+  if (!/category:\s*String\(d\.category/.test(code(server))) {
+    return 'listSuccessTopUpDrives no longer passes category through, so neither screen can filter.';
+  }
+  if (!/isInternetPackage/.test(code(internet))) return 'the Internet step no longer filters to data packages.';
+  if (!/isEntertainmentPackage/.test(code(ent))) return 'the Entertainment step no longer filters by category.';
+
+  // Loading the classifier for real beats pattern-matching its source.
+  const src = util.replace(/^export (const|function) /gm, '$1 ').replace(/^export \{[^}]*\};?$/gm, '');
+  const mod = {};
+  new Function('module', 'exports', `${src}\nmodule.exports={isInternetPackage,isEntertainmentPackage};`)(mod, {});
+  const { isInternetPackage, isEntertainmentPackage } = mod.exports;
+
+  // The four categories the Bangladesh catalogue actually uses.
+  for (const [category, internetExpected] of [['Data', true], ['Bundle', true], ['Voice', false], ['Call Rate', false]]) {
+    if (isInternetPackage({ category }) !== internetExpected) {
+      return `"${category}" is ${internetExpected ? 'not treated as' : 'treated as'} an internet package.`;
+    }
+    if (isEntertainmentPackage({ category })) return `"${category}" is treated as entertainment; it is a mobile pack.`;
+  }
+  // A renamed or absent category must not empty the picker.
+  if (!isInternetPackage({ category: '' }) || !isInternetPackage({ category: 'something-new' })) {
+    return 'an unknown or missing category is hidden from the Internet picker instead of kept.';
+  }
+  if (isEntertainmentPackage({ category: '' })) return 'a package with no category counts as entertainment.';
+  if (!isEntertainmentPackage({ category: 'Streaming' })) return 'a genuine entertainment category is not recognised.';
+  return null;
+});
+
+check('both package screens explain an empty catalogue', () => {
+  for (const rel of ['src/steps/InternetSteps.js', 'src/steps/EntertainmentSteps.js']) {
+    const src = read(rel);
+    if (!src) return `${rel} unreadable`;
+    // Skitto is in the operator picker with no packages in either catalogue,
+    // and Teletalk has no drive packs, so a blank step is reachable.
+    if (!/packages\.length === 0/.test(code(src))) {
+      return `${rel} renders nothing when the catalogue is empty, so those operators show a blank step.`;
+    }
+  }
+  return null;
+});
+
 if (failures.length) {
   console.error('Success TopUp contract FAILED:\n');
   for (const f of failures) console.error(`  - ${f}`);

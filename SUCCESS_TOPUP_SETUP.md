@@ -46,6 +46,46 @@ Success TopUp documents these Bangladesh operator codes:
 
 Minimum recharge amount documented by Success TopUp is BDT 9.
 
+## What is actually in the catalogue
+
+From the supplied `BD_Mobile_Operator_Packages.xlsx` (239 regular packs + 211
+drive packs, captured from the Success TopUp app):
+
+| Category | Regular | Drive |
+| --- | --- | --- |
+| Bundle (data + minutes) | 56 | 103 |
+| Data | 83 | 52 |
+| Voice | 76 | 52 |
+| Call Rate | 24 | 4 |
+
+Operator coverage, against the six the app offers in `src/data/countries.js`:
+
+| Operator | Regular | Drive |
+| --- | --- | --- |
+| Grameenphone | 63 | 55 |
+| Robi | 58 | 77 |
+| Airtel | 60 | 58 |
+| Banglalink | 38 | 21 |
+| Teletalk | 20 | **none** |
+| Skitto | **none** | **none** |
+
+Two consequences the app now handles rather than showing a blank step: Skitto
+has no packages in either catalogue, and Teletalk has no drive packs.
+
+**There is no entertainment product.** A keyword sweep of all 450 package
+descriptions for Toffee, Bioscope, Hoichoi, Chorki, YouTube, TV, streaming,
+music and game matched nothing. Every drive pack carries a commission, 0-12% of
+price and averaging 4.9% - so "Drive Recharge" is a parallel, higher-margin
+catalogue of the SAME minutes-and-data packs, not content. Anything that offers
+drive packs as "Entertainment" is mislabelling them.
+
+`src/utils/packageCategory.js` routes packages by the category the provider
+returns: Data and Bundle to Internet, Voice and Call Rate to neither screen
+(use Recharge), and streaming/TV/game categories to Entertainment - which is
+empty today and will populate itself if Success TopUp ever adds such SKUs. An
+unknown or missing category is kept rather than hidden, so a renamed category
+cannot silently empty the picker.
+
 ## Internet and Entertainment packages
 
 Both are the same transaction to Success TopUp. There is no separate package or
@@ -53,19 +93,19 @@ entertainment endpoint: a bundle is listed with `/api/drives` and bought by
 POSTing `/api/recharge` with that package's `package_id` at its exact catalogue
 price. The two services differ only in which catalogue they read:
 
-| Service | `/api/drives` `type` |
-| --- | --- |
-| Internet | `regular` |
-| Entertainment | `drive` |
+| Service | `/api/drives` `type` | Kept from the result |
+| --- | --- | --- |
+| Internet | `regular` | Data and Bundle categories |
+| Entertainment | `regular` + `drive` | entertainment categories only |
 
 Server-side they share one code path (`SUCCESS_TOPUP_PACKAGE_SERVICES` in
 `functions/apiProviderService.js`), and a package order with no `packageId` is
 rejected rather than silently sent as a plain top-up of the package price.
 
-If Success TopUp's `drive` catalogue has no entries for an operator, the
-Entertainment picker shows "No entertainment packages are available" rather than
-an empty screen. Nothing needs changing here if they later add entertainment
-SKUs to that catalogue - they appear automatically.
+The drive catalogue is NOT entertainment - see the section above. Entertainment
+reads both catalogues and keeps only what the provider itself categorises as
+entertainment, which is nothing today; the picker says so and points at Internet
+and Recharge instead.
 
 ## Companion providers
 

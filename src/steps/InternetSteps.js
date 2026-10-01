@@ -7,6 +7,7 @@ import { getOperatorBrand } from '../data/operatorBrand';
 import { FormLabel, Grid3, OperatorCard, FormInput, PackageCard, SummaryCard } from '../components/ui';
 import CountrySelectCard from '../components/CountrySelectCard';
 import * as apiProviderService from '../firebase/apiProviderService';
+import { isInternetPackage } from '../utils/packageCategory';
 
 // Internet flow: country -> operator -> phone -> package.
 // Customer-facing wallet values are always displayed as MYR. The legacy
@@ -22,7 +23,7 @@ export default function InternetStep({ step }) {
     setPackageLoading(true); setPackageError('');
     const operatorMap = { Grameenphone: 'GP', Robi: 'RB', Banglalink: 'BL', Airtel: 'AT', Teletalk: 'TT', Skitto: 'SK', 'Brilliant Connect': 'BT', Ryze: 'RY' };
     apiProviderService.listSuccessTopUpDrives(operatorMap[serviceData.operator] || 'ALL', 'regular', 'Internet')
-      .then((items) => { if (alive) setSuccessTopUpPackages(items); })
+      .then((items) => { if (alive) setSuccessTopUpPackages(items.filter(isInternetPackage)); })
       .catch((e) => { if (alive) { setSuccessTopUpPackages([]); setPackageError(e?.message || 'Unable to load Success TopUp packages.'); } })
       .finally(() => { if (alive) setPackageLoading(false); });
     return () => { alive = false; };
@@ -52,6 +53,7 @@ export default function InternetStep({ step }) {
         <FormLabel>Select Package</FormLabel>
         {!!packageLoading && <FormLabel>Loading Success TopUp packages…</FormLabel>}
         {!!packageError && <FormLabel>{packageError}</FormLabel>}
+        {!packageLoading && !packageError && serviceData.country === 'BD' && packages.length === 0 && <FormLabel>No internet packages are available for this operator right now. Try another operator, or use Recharge for a plain top-up.</FormLabel>}
         {!packageLoading && !packageError && packages.map((p) => <PackageCard key={p.id || p.name} name={p.name} detail={`${p.data} • ${p.valid}`} price={p.price} currency={cur} selected={serviceData.package === p.name} onPress={() => updateServiceData({ package: p.name, packageId: p.id, amount: p.price })} />)}
         {!!(isForeign && selectedPackage) && <SummaryCard rows={[{ label: 'Package Price', value: `${cur} ${Number(selectedPackage.price).toFixed(2)}` }]} totalLabel="Wallet deduction" totalValue={`${walletDeductionMyr.toFixed(2)} MYR`} />}
       </View>
