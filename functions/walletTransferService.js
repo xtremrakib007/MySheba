@@ -34,10 +34,10 @@ function parseMoneyCents(value, currency = 'MYR') {
     const digits = ZERO_DECIMAL_CURRENCIES.has(currency) ? 0 : 2;
     if (!Number.isFinite(value) || !Number.isSafeInteger(Math.round(value * (10 ** digits)))) throw new HttpsError('invalid-argument', 'Enter a valid wallet transfer amount.');
     const text = String(value);
-    if ((digits === 0 && !/^\\d+$/.test(text)) || (digits === 2 && !MONEY_RE.test(text))) throw new HttpsError('invalid-argument', digits === 0 ? 'Transfer amount must be a whole number for this currency.' : 'Transfer amount must use no more than 2 decimal places.');
+    if ((digits === 0 && !/^\d+$/.test(text)) || (digits === 2 && !MONEY_RE.test(text))) throw new HttpsError('invalid-argument', digits === 0 ? 'Transfer amount must be a whole number for this currency.' : 'Transfer amount must use no more than 2 decimal places.');
   } else if (typeof value === 'string') {
     const text = value.trim();
-    if ((ZERO_DECIMAL_CURRENCIES.has(currency) && !/^\\d+$/.test(text)) || (!ZERO_DECIMAL_CURRENCIES.has(currency) && !MONEY_RE.test(text))) throw new HttpsError('invalid-argument', ZERO_DECIMAL_CURRENCIES.has(currency) ? 'Transfer amount must be a whole number for this currency.' : 'Transfer amount must be a valid wallet amount with no more than 2 decimal places.');
+    if ((ZERO_DECIMAL_CURRENCIES.has(currency) && !/^\d+$/.test(text)) || (!ZERO_DECIMAL_CURRENCIES.has(currency) && !MONEY_RE.test(text))) throw new HttpsError('invalid-argument', ZERO_DECIMAL_CURRENCIES.has(currency) ? 'Transfer amount must be a whole number for this currency.' : 'Transfer amount must be a valid wallet amount with no more than 2 decimal places.');
     value = Number(text);
   } else throw new HttpsError('invalid-argument', 'Enter a valid wallet transfer amount.');
   const amountCents = Math.round(Number(value) * (10 ** (ZERO_DECIMAL_CURRENCIES.has(currency) ? 0 : 2)));

@@ -29,12 +29,31 @@ function getRequestId(request) {
   return requestId;
 }
 
+/**
+ * The service key walletService uses in its transaction-ID hash.
+ *
+ * walletService is called with the key ('billpayment'), while this module holds
+ * the label ('Bill Payment'), so the two must derive the same string or the
+ * recovery lookup reads a document ID that was never written.
+ *
+ * It was derived three times here, two ways. recoverChargedRequest used
+ * `.replace(/\\s+/g, '')` - a doubled escape, so it matched a literal
+ * backslash followed by "s" and stripped NOTHING: 'Bill Payment' stayed
+ * 'bill payment' and hashed to a different ID than walletService wrote. An
+ * interrupted charge on any multi-word service (Bill Payment, Mobile Banking,
+ * Offer Packs, Recharge PIN) could therefore never be recovered. The other two
+ * used `.replace(' ', '')`, which strips only the first space.
+ */
+function serviceKey(label) {
+  return String(label || '').trim().toLowerCase().replace(/\s+/g, '');
+}
+
 async function recoverChargedRequest(db, uid, requestId, guardRef, expectedService) {
   // walletService uses this same deterministic transaction ID. Recovering by
   // document ID avoids a composite/nested-field query and guarantees that a
   // request ID cannot accidentally recover another transaction.
   const transactionId = crypto.createHash('sha256')
-    .update(`${uid}|${String(expectedService || '').trim().toLowerCase().replace(/\\s+/g, '')}|${requestId}`)
+    .update(`${uid}|${serviceKey(expectedService)}|${requestId}`)
     .digest('hex')
     .slice(0, 40);
   const txDoc = await db.collection('transactions').doc(transactionId).get();
@@ -155,7 +174,7 @@ function wrap(name) {
       const fn = walletService.runChargeProduct;
       if (typeof fn !== 'function') throw new HttpsError('internal', 'Charge service is unavailable.');
       const safeRequest = await sanitizeRequest(request, requestId);
-      const result = await fn(safeRequest, SERVICE_BY_CALLABLE[name].toLowerCase().replace(' ', ''));
+      const result = await fn(safeRequest, serviceKey(SERVICE_BY_CALLABLE[name]));
       await guardRef.set({
         status: 'completed',
         transactionId: result?.id || null,
@@ -173,8 +192,7 @@ function wrap(name) {
         throw new HttpsError('internal', 'Charge service is unavailable.');
       }
       const safeRequest = await sanitizeRequest(request, requestId);
-      const serviceKey = SERVICE_BY_CALLABLE[name].toLowerCase().replace(' ', '');
-      const result = await fn(safeRequest, serviceKey);
+      const result = await fn(safeRequest, serviceKey(SERVICE_BY_CALLABLE[name]));
       await guardRef.update({
         status: 'completed', transactionId: result?.id || null,
         cost: result?.cost == null ? 0 : Number(result.cost),

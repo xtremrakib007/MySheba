@@ -33,6 +33,7 @@
     "test:dates": "node scripts/test-date-field.js",
     "audit:jsxdefs": "node scripts/audit-undefined-jsx.js",
     "audit:rawtext": "node scripts/audit-rawtext.js",
+    "audit:escapes": "node scripts/audit-escapes.js",
     "deploy:functions": "node scripts/deploy-functions.js",
     "test:face": "node scripts/test-face-event.js",
     "postinstall": "patch-package",
