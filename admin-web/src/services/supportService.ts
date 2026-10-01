@@ -10,6 +10,7 @@ import {
   where,
   type DocumentData,
   type QueryDocumentSnapshot,
+  limit,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../firebase/config';
@@ -26,8 +27,8 @@ function mapTicket(d: QueryDocumentSnapshot<DocumentData>): SupportTicket { cons
 
 export async function fetchTickets(mode: 'queue' | 'assigned', opts: { status?: TicketStatus | 'all'; myUid?: string }): Promise<SupportTicket[]> {
   const ref = collection(db, COLLECTION);
-  if (mode === 'assigned') { if (!opts.myUid) return []; const snap = await getDocs(query(ref, where('assignedToUid', '==', opts.myUid))); const rows = snap.docs.map(mapTicket); rows.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? '')); return rows; }
-  const q = opts.status && opts.status !== 'all' ? query(ref, where('status', '==', opts.status), orderBy('createdAt', 'desc')) : query(ref, orderBy('createdAt', 'desc'));
+  if (mode === 'assigned') { if (!opts.myUid) return []; const snap = await getDocs(query(ref, where('assignedToUid', '==', opts.myUid), limit(100))); const rows = snap.docs.map(mapTicket); rows.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? '')); return rows; }
+  const q = opts.status && opts.status !== 'all' ? query(ref, where('status', '==', opts.status), orderBy('createdAt', 'desc'), limit(100)) : query(ref, orderBy('createdAt', 'desc'), limit(100));
   const snap = await getDocs(q); return snap.docs.map(mapTicket);
 }
 
