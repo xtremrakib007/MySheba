@@ -78,7 +78,7 @@ async function resolveRecipient(db, query, senderUid) {
   return recipient;
 }
 
-exports.findWalletRecipient = onCall({ enforceAppCheck: false }, async (request) => {
+exports.findWalletRecipient = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireAuth(request), db = admin.firestore(), sender = await getProfile(db, uid);
   if (!sender) throw new HttpsError('not-found', 'Your account was not found.');
   if (!active(sender)) throw new HttpsError('permission-denied', 'Your account is not active.');
@@ -89,7 +89,7 @@ exports.findWalletRecipient = onCall({ enforceAppCheck: false }, async (request)
   return { uid: recipient.id, name: recipient.displayName || recipient.name || 'MySheba Customer', customerId: recipient.customerId || recipient.userId || '', phoneMasked: String(recipient.phone || '').replace(/(\d{3})\d+(\d{2})$/, '$1••••$2'), walletCurrency: inferWalletCurrency(recipient) };
 });
 
-exports.listWalletTransfers = onCall({ enforceAppCheck: false }, async (request) => {
+exports.listWalletTransfers = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireAuth(request), db = admin.firestore();
   const sender = await getProfile(db, uid);
   if (!active(sender) || sender.role !== 'customer') throw new HttpsError('permission-denied', 'Wallet transfer history is only available to active customer accounts.');
@@ -97,7 +97,7 @@ exports.listWalletTransfers = onCall({ enforceAppCheck: false }, async (request)
   return snap.docs.map(doc => { const d = doc.data() || {}; return { id: doc.id, type: d.type || 'wallet_transfer', currency: d.currency || 'MYR', fromUid: d.fromUid || '', fromName: d.fromName || '', toUid: d.toUid || '', toName: d.toName || '', amount: Number(d.amount || 0), note: d.note || '', status: d.status || 'completed', createdAt: d.createdAt?.toMillis ? d.createdAt.toMillis() : null }; });
 });
 
-exports.walletTransfer = onCall({ enforceAppCheck: false }, async (request) => {
+exports.walletTransfer = onCall({ enforceAppCheck: true }, async (request) => {
   const senderUid = requireAuth(request), requestId = requireRequestId(request), db = admin.firestore(), sender = await getProfile(db, senderUid);
   if (!sender) throw new HttpsError('not-found', 'Your account was not found.');
   if (!active(sender)) throw new HttpsError('permission-denied', 'Your account is not active.');
