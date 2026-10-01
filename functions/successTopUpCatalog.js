@@ -18,6 +18,7 @@
 // the app submitted, so a tampered client could have named an expensive
 // package_id with a one-taka amount.
 const driveWindow = require('./successTopUpWindow');
+const providerSecretService = require('./providerSecretService');
 
 const BASE_URL = 'https://api.successtopup.com';
 const PRICING_COLLECTION = 'internetPricing';
@@ -61,7 +62,9 @@ async function readProvider(db, service) {
     .limit(1)
     .get();
   if (snap.empty) return null;
-  return { id: snap.docs[0].id, ...(snap.docs[0].data() || {}) };
+  const provider = { id: snap.docs[0].id, ...(snap.docs[0].data() || {}) };
+  Object.assign(provider, await providerSecretService.getCredentials(provider));
+  return provider;
 }
 
 /**

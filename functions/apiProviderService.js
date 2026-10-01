@@ -3,6 +3,7 @@ const admin = require('firebase-admin');
 const dns = require('dns').promises;
 const https = require('https');
 const crypto = require('crypto');
+const providerSecretService = require('./providerSecretService');
 const catalog = require('./successTopUpCatalog');
 const driveWindow = require('./successTopUpWindow');
 
@@ -307,7 +308,8 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   const globalProviders = allProviders.filter((p) => String(p.country || 'ALL').toUpperCase() === 'ALL');
   const providers = [...(countryProviders.length ? countryProviders : globalProviders)].sort((x,y)=>Number(y.priority||0)-Number(x.priority||0));
   if (!providers.length) throw new HttpsError('failed-precondition', `No active API provider is configured for ${service}.`);
-  const provider = providers[0];
+  const provider = { ...providers[0] };
+  Object.assign(provider, await providerSecretService.getCredentials(provider));
   const executionKey = crypto.createHash('sha256').update(`${service}|${customer?.uid || ''}|${requestId}`).digest('hex');
   const executionRef = db.collection('apiExecutions').doc(executionKey);
   // Atomically claim this request before making any external side effect.
@@ -497,6 +499,7 @@ exports.testApiProvider = onCall({ enforceAppCheck: false }, async (request) => 
   const snap = await db.collection(COLLECTION).doc(id).get();
   if (!snap.exists) throw new HttpsError('not-found', 'API provider not found.');
   const provider = { id, ...(snap.data() || {}) };
+  Object.assign(provider, await providerSecretService.getCredentials(provider));
   if (String(provider.name || '').trim().toLowerCase() !== 'success topup') {
     throw new HttpsError('failed-precondition', 'Safe connection testing is currently available for Success TopUp only.');
   }
@@ -535,7 +538,7 @@ exports.listSuccessTopUpDrives = onCall({ enforceAppCheck: false }, async (reque
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const service = String(request.data?.service || 'Internet').trim();
   if (!SUCCESS_TOPUP_PACKAGE_SERVICES.includes(service)) {
-    throw new HttpsError('invalid-argument', 'Package listings are available for Internet and Entertainment only.');
+    throw new HttpsError('invalid-argument', `Package listings are available for ${SUCCESS_TOPUP_PACKAGE_SERVICES.join(', ')} only.`);
   }
   const snap = await db.collection(COLLECTION)
     .where('service', '==', service)
@@ -545,6 +548,7 @@ exports.listSuccessTopUpDrives = onCall({ enforceAppCheck: false }, async (reque
     .get();
   if (snap.empty) throw new HttpsError('failed-precondition', `Success TopUp ${service} API is not configured.`);
   const provider = { id: snap.docs[0].id, ...(snap.docs[0].data() || {}) };
+  Object.assign(provider, await providerSecretService.getCredentials(provider));
   if (!provider.apiKey || !provider.secretKey) throw new HttpsError('failed-precondition', 'Success TopUp credentials are not configured.');
   const operator = String(request.data?.operator || 'ALL').trim().toUpperCase();
   const type = String(request.data?.type || 'regular').trim().toLowerCase();
@@ -577,7 +581,7 @@ exports.listSuccessTopUpCatalogForAdmin = onCall({ enforceAppCheck: false }, asy
   await assertSuperadmin(db, request);
   const service = String(request.data?.service || 'Internet').trim();
   if (!SUCCESS_TOPUP_PACKAGE_SERVICES.includes(service)) {
-    throw new HttpsError('invalid-argument', 'Package pricing is available for Internet and Entertainment only.');
+    throw new HttpsError('invalid-argument', `Package pricing is available for ${SUCCESS_TOPUP_PACKAGE_SERVICES.join(', ')} only.`);
   }
   const provider = await catalog.readProvider(db, service);
   if (!provider) throw new HttpsError('failed-precondition', `Success TopUp ${service} API is not configured.`);
@@ -633,10 +637,10 @@ exports.listApiProviders = onCall({ enforceAppCheck: false }, async (request) =>
       responseIdPath: x.responseIdPath || '',
       responseMessagePath: x.responseMessagePath || '',
       responsePinPath: x.responsePinPath || '',
-      hasApiKey: Boolean(x.apiKey),
-      hasSecretKey: Boolean(x.secretKey),
+      hasApiKey: Boolean(x.apiKeySecretName || x.apiKey),
+      hasSecretKey: Boolean(x.secretKeySecretName || x.secretKey),
       hasUsername: Boolean(x.username),
-      hasPassword: Boolean(x.password),
+      hasPassword: Boolean(x.passwordSecretName || x.password),
       hasCustomHeaders: Boolean(x.headers && Object.keys(x.headers).length),
       hasQueryTemplate: Boolean(x.queryTemplate && Object.keys(x.queryTemplate).length),
       hasRequestTemplate: Boolean(x.requestTemplate && Object.keys(x.requestTemplate).length),
@@ -649,152 +653,129 @@ exports.saveApiProvider = onCall({ enforceAppCheck: false }, async (request) => 
   const id = cleanString(request.data?.id, 100);
   if (id && !/^[A-Za-z0-9_-]{1,100}$/.test(id)) throw new HttpsError('invalid-argument', 'Provider id is invalid.');
   const ref = id ? db.collection(COLLECTION).doc(id) : db.collection(COLLECTION).doc();
+  const existingSnap = await ref.get();
+  const current = existingSnap.exists ? (existingSnap.data() || {}) : {};
+  const existingCredentials = existingSnap.exists ? await providerSecretService.getCredentials(current) : {};
+  const incoming = { ...(request.data || {}) };
 
+  if (existingSnap.exists) {
+    if (!incoming.apiKey || incoming.apiKey === providerSecretService.MASK) incoming.apiKey = existingCredentials.apiKey || current.apiKey || '';
+    if (!incoming.secretKey || incoming.secretKey === providerSecretService.MASK) incoming.secretKey = existingCredentials.secretKey || current.secretKey || '';
+    if (!incoming.password || incoming.password === providerSecretService.MASK) incoming.password = existingCredentials.password || current.password || '';
+    if (!incoming.username) incoming.username = current.username || '';
+    if (!Object.keys(incoming.headers || {}).length && current.headers) incoming.headers = current.headers;
+    if (!Object.keys(incoming.queryTemplate || {}).length && current.queryTemplate) incoming.queryTemplate = current.queryTemplate;
+    if (!Object.keys(incoming.requestTemplate || {}).length && current.requestTemplate) incoming.requestTemplate = current.requestTemplate;
+  }
+
+  const data = validate(incoming);
+  const secretNames = {
+    apiKeySecretName: current.apiKeySecretName || providerSecretService.secretName(ref.id, 'api-key'),
+    secretKeySecretName: current.secretKeySecretName || providerSecretService.secretName(ref.id, 'secret-key'),
+    passwordSecretName: current.passwordSecretName || providerSecretService.secretName(ref.id, 'password'),
+  };
+
+  await providerSecretService.put(secretNames.apiKeySecretName, data.apiKey);
+  await providerSecretService.put(secretNames.secretKeySecretName, data.secretKey);
+  await providerSecretService.put(secretNames.passwordSecretName, data.password);
+
+  const stored = { ...data };
+  delete stored.apiKey;
+  delete stored.secretKey;
+  delete stored.password;
+  stored.apiKeySecretName = data.apiKey || current.apiKeySecretName ? secretNames.apiKeySecretName : '';
+  stored.secretKeySecretName = data.secretKey || current.secretKeySecretName ? secretNames.secretKeySecretName : '';
+  stored.passwordSecretName = data.password || current.passwordSecretName ? secretNames.passwordSecretName : '';
+  stored.updatedAt = admin.firestore.FieldValue.serverTimestamp();
+  stored.updatedBy = request.auth.uid;
+
+  let webhookToken = '';
   await db.runTransaction(async (tx) => {
-    // Read the current provider inside the same transaction as the write. This
-    // lets masked/omitted secrets and templates be preserved without a stale
-    // pre-read race if another superadmin edits the provider concurrently.
     const callerSnap = await tx.get(db.collection('users').doc(request.auth.uid));
     const caller = callerSnap.exists ? callerSnap.data() : null;
     if (!caller || caller.role !== 'superadmin' || caller.suspended === true || caller.inactive === true || caller.disabled === true || caller.active === false || caller.mergedInto) {
       throw new HttpsError('permission-denied', 'Your account is no longer active.');
     }
-
     const existing = await tx.get(ref);
-    const current = existing.exists ? (existing.data() || {}) : {};
-    const incoming = { ...(request.data || {}) };
-
-    // The admin UI only receives masked credentials and safe metadata. For an
-    // existing provider, an omitted/empty credential means "keep current",
-    // while the mask also means "keep current". Validate only after this merge
-    // so an edit cannot accidentally fail just because the secret is hidden.
+    const currentDb = existing.exists ? (existing.data() || {}) : {};
     if (existing.exists) {
-      if (!incoming.apiKey || incoming.apiKey === '••••••••') incoming.apiKey = current.apiKey || '';
-      if (!incoming.secretKey || incoming.secretKey === '••••••••') incoming.secretKey = current.secretKey || '';
-      if (!incoming.password || incoming.password === '••••••••') incoming.password = current.password || '';
-      if (!incoming.username) incoming.username = current.username || '';
-      if (!Object.keys(incoming.headers || {}).length && current.headers) incoming.headers = current.headers;
-      if (!Object.keys(incoming.queryTemplate || {}).length && current.queryTemplate) incoming.queryTemplate = current.queryTemplate;
-      if (!Object.keys(incoming.requestTemplate || {}).length && current.requestTemplate) incoming.requestTemplate = current.requestTemplate;
+      if (!stored.apiKeySecretName && currentDb.apiKeySecretName) stored.apiKeySecretName = currentDb.apiKeySecretName;
+      if (!stored.secretKeySecretName && currentDb.secretKeySecretName) stored.secretKeySecretName = currentDb.secretKeySecretName;
+      if (!stored.passwordSecretName && currentDb.passwordSecretName) stored.passwordSecretName = currentDb.passwordSecretName;
     }
+    tx.set(ref, stored, { merge: false });
 
-    const data = validate(incoming);
-    let webhookRef = null;
-    let currentWebhook = {};
-    let settingsRef = null;
-    let currentSettings = {};
     if (data.name === 'Success TopUp' && data.service === 'Recharge') {
-      webhookRef = db.collection('api_webhooks').doc(ref.id);
-      settingsRef = db.doc(SETTINGS);
-      const webhookSnap = await tx.get(webhookRef);
-      const settingsSnap = await tx.get(settingsRef);
-      currentWebhook = webhookSnap.exists ? (webhookSnap.data() || {}) : {};
-      currentSettings = settingsSnap.exists ? (settingsSnap.data() || {}) : {};
-    }
-
-    tx.set(ref, { ...data, updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: request.auth.uid }, { merge: false });
-
-    // Success TopUp is a fixed integration: saving it also enables Recharge API mode
-    // and creates the webhook configuration automatically. The admin only supplies
-    // the provider API key and API secret.
-    if (webhookRef && settingsRef) {
-      const webhookToken = currentWebhook.webhookToken || crypto.randomBytes(32).toString('hex');
+      const webhookRef = db.collection('api_webhooks').doc(ref.id);
+      const settingsRef = db.doc(SETTINGS);
+      const [webhookSnap, settingsSnap] = await Promise.all([tx.get(webhookRef), tx.get(settingsRef)]);
+      const oldHook = webhookSnap.exists ? (webhookSnap.data() || {}) : {};
+      const oldSettings = settingsSnap.exists ? (settingsSnap.data() || {}) : {};
+      webhookToken = oldHook.webhookToken || crypto.randomBytes(32).toString('hex');
       tx.set(webhookRef, {
-        providerId: ref.id,
-        enabled: true,
-        authHeader: 'x-webhook-token',
-        webhookToken,
-        transactionIdPath: 'transactionId',
-        statusPath: 'status',
-        messagePath: 'comment',
-        successStatus: 'Success',
-        processingStatus: 'Processing',
-        cancelStatus: 'Cancel',
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedBy: request.auth.uid
+        providerId: ref.id, enabled: true, authHeader: 'x-webhook-token', webhookToken,
+        transactionIdPath: 'transactionId', statusPath: 'status', messagePath: 'comment',
+        successStatus: 'Success', processingStatus: 'Processing', cancelStatus: 'Cancel',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: request.auth.uid
       }, { merge: false });
       tx.set(settingsRef, {
-        modes: { ...DEFAULT_MODES, ...(currentSettings.modes || {}), Recharge: 'api', Internet: 'api', 'Offer Packs': 'api', Entertainment: 'api', 'Bill Payment': 'api' },
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedBy: request.auth.uid
+        modes: { ...DEFAULT_MODES, ...(oldSettings.modes || {}), Recharge: 'api', Internet: 'api', 'Offer Packs': 'api', Entertainment: 'api', 'Bill Payment': 'api' },
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: request.auth.uid
       }, { merge: true });
-    }
 
-    // Companions. Superadmin configures ONE Success TopUp provider (Recharge);
-    // these carry the same credentials for the other services, because
-    // executeConfiguredApi selects a provider by service. They are hidden from
-    // listApiProviders and must never be edited by hand - re-saving the
-    // Recharge provider rewrites them.
-    //
-    // Internet and Entertainment are identical to Success TopUp: both POST
-    // /api/recharge with the chosen package_id. Entertainment reads the `drive`
-    // catalogue, Internet the `regular` one, but that is a listing argument,
-    // not a different endpoint.
-    if (data.name === 'Success TopUp' && data.service === 'Recharge') {
+      // Companions. Superadmin configures ONE Success TopUp provider (Recharge);
+      // these carry the same credentials for the other services, because
+      // executeConfiguredApi selects a provider by service. They are hidden
+      // from listApiProviders and must never be edited by hand - re-saving the
+      // Recharge provider rewrites them.
+      //
+      // Internet, Offer Packs and Entertainment are one transaction to Success
+      // TopUp: POST /api/recharge with the chosen package_id. They differ only
+      // in which /api/drives catalogue they read, which is a listing argument,
+      // not a different endpoint - so they share one request template.
+      //
+      // Credentials are referenced by Secret Manager name, never written into
+      // the provider document. That is the whole point of this branch, and it
+      // applies to the companions as much as the provider the superadmin edits.
       const packageTemplate = {
-        number: '{{phone}}',
-        type: 'prepaid',
-        operator: '{{internetOperator}}',
-        amount: '{{amount}}',
-        package_id: '{{packageId}}',
-        trxid: '{{requestId}}',
-        successtopup_key: '{{apiKey}}',
-        successtopup_secret: '{{secretKey}}'
+        number: '{{phone}}', type: 'prepaid', operator: '{{internetOperator}}',
+        amount: '{{amount}}', package_id: '{{packageId}}', trxid: '{{requestId}}',
+        successtopup_key: '{{apiKey}}', successtopup_secret: '{{secretKey}}'
+      };
+      const companionBase = {
+        name: 'Success TopUp', country: 'BD', baseUrl: 'https://api.successtopup.com',
+        method: 'POST', authType: 'none', headers: {}, queryTemplate: {},
+        responseSuccessPath: 'result', responseSuccessValue: 'true',
+        responseProcessingPath: '', responseProcessingValue: '', responseIdPath: '', responseMessagePath: 'message',
+        apiKeySecretName: secretNames.apiKeySecretName, secretKeySecretName: secretNames.secretKeySecretName,
+        active: data.active !== false, priority: 9999, timeoutMs: data.timeoutMs,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: request.auth.uid
       };
       const companions = [
         { id: 'success-topup-internet', service: 'Internet', endpointPath: '/api/recharge', requestTemplate: packageTemplate, notes: 'Fixed Success TopUp Bangladesh internet/data-pack integration.' },
         { id: 'success-topup-offer-packs', service: 'Offer Packs', endpointPath: '/api/recharge', requestTemplate: packageTemplate, notes: 'Fixed Success TopUp Bangladesh drive/offer-pack integration.' },
         { id: 'success-topup-entertainment', service: 'Entertainment', endpointPath: '/api/recharge', requestTemplate: packageTemplate, notes: 'Fixed Success TopUp Bangladesh entertainment-package integration.' },
         { id: 'success-topup-bill-payment', service: 'Bill Payment', endpointPath: '/api/bill-pay', notes: 'Fixed Success TopUp Bangladesh bill-payment integration.', requestTemplate: {
-          billOperator: '{{billOperator}}',
-          billNumber: '{{billNumber}}',
-          billAmount: '{{amount}}',
-          mobileNumber: '{{mobileNumber}}',
-          monthName: '{{monthName}}',
-          note: '{{note}}',
-          trxid: '{{requestId}}',
-          successtopup_key: '{{apiKey}}',
-          successtopup_secret: '{{secretKey}}'
+          billOperator: '{{billOperator}}', billNumber: '{{billNumber}}', billAmount: '{{amount}}',
+          mobileNumber: '{{mobileNumber}}', monthName: '{{monthName}}', note: '{{note}}', trxid: '{{requestId}}',
+          successtopup_key: '{{apiKey}}', successtopup_secret: '{{secretKey}}'
         } },
       ];
       for (const companion of companions) {
         tx.set(db.collection(COLLECTION).doc(companion.id), {
+          ...companionBase,
           service: companion.service,
-          name: 'Success TopUp',
-          country: 'BD',
-          baseUrl: 'https://api.successtopup.com',
           endpointPath: companion.endpointPath,
-          method: 'POST',
-          authType: 'none',
-          headers: {},
-          queryTemplate: {},
           requestTemplate: companion.requestTemplate,
-          responseSuccessPath: 'result',
-          responseSuccessValue: 'true',
-          responseProcessingPath: '',
-          responseProcessingValue: '',
-          responseIdPath: '',
-          responseMessagePath: 'message',
-          apiKey: data.apiKey,
-          secretKey: data.secretKey,
-          active: data.active !== false,
-          priority: 9999,
-          timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)),
-          notes: companion.notes,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedBy: request.auth.uid
+          notes: companion.notes
         }, { merge: false });
       }
     }
   });
-  const successTopUp = cleanString(request.data?.name, 100).toLowerCase() === 'success topup';
-  if (successTopUp) {
-    const hookSnap = await db.collection('api_webhooks').doc(ref.id).get();
-    const webhookToken = hookSnap.exists ? String(hookSnap.data()?.webhookToken || '') : '';
+
+  if (data.name === 'Success TopUp' && data.service === 'Recharge') {
     return {
-      id: ref.id,
-      successTopUp: true,
-      webhookToken,
+      id: ref.id, successTopUp: true, webhookToken,
       webhookUrl: 'https://us-central1-satulink-solutions.cloudfunctions.net/apiWebhook?providerId=' + encodeURIComponent(ref.id)
     };
   }
@@ -806,18 +787,36 @@ exports.deleteApiProvider = onCall({ enforceAppCheck: false }, async (request) =
   const id = cleanString(request.data?.id, 100);
   if (!id || !/^[A-Za-z0-9_-]{1,100}$/.test(id)) throw new HttpsError('invalid-argument', 'Provider id is invalid.');
   const ref = db.collection(COLLECTION).doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Provider not found.');
+  const data = snap.data() || {};
   await db.runTransaction(async (tx) => {
     const callerSnap = await tx.get(db.collection('users').doc(request.auth.uid));
     const caller = callerSnap.exists ? callerSnap.data() : null;
     if (!caller || caller.role !== 'superadmin' || caller.suspended === true || caller.inactive === true || caller.disabled === true || caller.active === false || caller.mergedInto) {
       throw new HttpsError('permission-denied', 'Your account is no longer active.');
     }
-    const existing = await tx.get(ref);
-    if (!existing.exists) throw new HttpsError('not-found', 'Provider not found.');
     tx.delete(ref);
+  });
+  await providerSecretService.cleanupUnreferenced(db, {
+    apiKeySecretName: data.apiKeySecretName,
+    secretKeySecretName: data.secretKeySecretName,
+    passwordSecretName: data.passwordSecretName,
   });
   return { ok: true };
 });
+
+exports.migrateApiProviderSecrets = onCall({ enforceAppCheck: false }, async (request) => {
+  const db = admin.firestore();
+  await assertSuperadmin(db, request);
+  const snap = await db.collection(COLLECTION).get();
+  let migrated = 0;
+  for (const doc of snap.docs) {
+    if (await providerSecretService.migrateDocument(doc)) migrated += 1;
+  }
+  return { migrated };
+});
+
 exports.getServiceApiSettings = onCall({ enforceAppCheck: false }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);

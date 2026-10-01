@@ -1,5 +1,6 @@
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const admin = require('firebase-admin');
+const providerSecretService = require('./providerSecretService');
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -30,11 +31,17 @@ async function getProvider() {
     return null;
   }
 
-  if (!match.apiKey || !match.secretKey) {
-    console.error('Success TopUp provider is missing server-side credentials.');
+  try {
+    const credentials = await providerSecretService.getCredentials(match);
+    if (!credentials.apiKey || !credentials.secretKey) {
+      console.error('Success TopUp provider is missing server-side credentials.');
+      return null;
+    }
+    return { ...match, apiKey: credentials.apiKey, secretKey: credentials.secretKey };
+  } catch (error) {
+    console.error('Success TopUp provider credentials could not be loaded.', String(error?.message || error));
     return null;
   }
-  return match;
 }
 
 async function checkStatus(trxid, provider) {
@@ -55,7 +62,9 @@ async function checkStatus(trxid, provider) {
   return data;
 }
 
-async function settle(txRef, provider, providerStatus, message) {
+const MAX_PROVIDER_PROCESSING_MS = 5 * 60 * 1000;
+
+async function settle(txRef, provider, providerStatus, message, timedOut = false) {
   const normalized = String(providerStatus || '').toLowerCase();
   if (!['success', 'cancel', 'processing'].includes(normalized)) return 'unknown-status';
 
@@ -76,11 +85,29 @@ async function settle(txRef, provider, providerStatus, message) {
     };
 
     if (normalized === 'processing') {
-      if (order.status === 'pending') {
-        tx.update(txRef, { status: 'processing', apiExecution, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-      } else {
-        tx.update(txRef, { apiExecution, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      // Do not leave an API order in pending/processing indefinitely. Five
+      // minutes is the maximum customer-visible provider wait. If the
+      // provider still says Processing after that point, move to UNKNOWN
+      // rather than guessing success or issuing an unsafe refund. An admin
+      // can then reconcile it against the provider reference.
+      if (timedOut) {
+        tx.update(txRef, {
+          status: 'unknown',
+          apiExecution: {
+            ...apiExecution,
+            status: 'unknown',
+            timedOut: true,
+            error: 'Provider remained in Processing for more than 5 minutes. Reconciliation is required.',
+          },
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return 'unknown-timeout';
       }
+      tx.update(txRef, {
+        status: 'processing',
+        apiExecution,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
       return 'processing';
     }
 
@@ -136,24 +163,45 @@ exports.pollSuccessTopUpStatus = onSchedule(
     const provider = await getProvider();
     if (!provider) return;
 
-    const snap = await db.collection(TRANSACTIONS)
-      .where('status', '==', 'processing')
-      .limit(50)
-      .get();
+    // Process both pending and processing API orders. A crash can leave the
+    // transaction document in pending after the wallet charge was committed;
+    // those orders must still be reconciled instead of waiting forever.
+    const [pendingSnap, processingSnap] = await Promise.all([
+      db.collection(TRANSACTIONS).where('status', '==', 'pending').limit(50).get(),
+      db.collection(TRANSACTIONS).where('status', '==', 'processing').limit(50).get(),
+    ]);
 
-    for (const doc of snap.docs) {
+    const docs = [...pendingSnap.docs, ...processingSnap.docs];
+    for (const doc of docs) {
       const data = doc.data() || {};
       if (data.apiExecution?.providerId !== provider.id || data.executionMode !== 'api') continue;
 
       const trxid = String(data.raw?.requestId || data.apiExecution?.providerTransactionId || '');
       if (!trxid) continue;
 
+      const updatedAtMs = data.updatedAt?.toMillis ? data.updatedAt.toMillis() : 0;
+      const timedOut = updatedAtMs > 0 && Date.now() - updatedAtMs >= MAX_PROVIDER_PROCESSING_MS;
+
       try {
         const result = await checkStatus(trxid, provider);
-        if (!result?.result || !result?.status) continue;
-        await settle(doc.ref, provider, result.status, result.message || null);
+        if (!result?.result || !result?.status) {
+          // No usable provider status after the five-minute deadline is still
+          // an uncertain outcome. Never auto-refund an external side effect.
+          if (timedOut) {
+            await settle(doc.ref, provider, 'processing', 'Provider did not return a final status within 5 minutes.', true);
+          }
+          continue;
+        }
+        await settle(doc.ref, provider, result.status, result.message || null, timedOut);
       } catch (error) {
         console.error('Success TopUp status poll failed', doc.id, String(error?.message || error));
+        if (timedOut) {
+          try {
+            await settle(doc.ref, provider, 'processing', 'Provider status could not be confirmed within 5 minutes.', true);
+          } catch (timeoutError) {
+            console.error('Success TopUp timeout settlement failed', doc.id, String(timeoutError?.message || timeoutError));
+          }
+        }
       }
     }
   }

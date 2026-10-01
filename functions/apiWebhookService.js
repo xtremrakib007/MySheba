@@ -144,6 +144,7 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
     return res.status(401).send('Invalid webhook token');
   }
 
+  if (req.rawBody && req.rawBody.length > 1024 * 1024) return res.status(413).send('Webhook payload too large');
   const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
   const transactionId = safeText(pathGet(body, config.transactionIdPath || 'transactionId'), 200);
   const status = safeText(pathGet(body, config.statusPath || 'status'), 100);

@@ -46,28 +46,44 @@ exports.searchUsers = onCall({ enforceAppCheck: false }, async (request) => {
   const db = admin.firestore();
   await rateLimit(db, callerUid, 'search', SEARCH_MAX, SEARCH_WINDOW_MS);
 
-  let snap;
+  const termLower = term.toLowerCase();
+  const termDigits = normalizeDigits(term);
+  const namePrefixes = [...new Set([
+    term,
+    termLower,
+    term.charAt(0).toUpperCase() + term.slice(1).toLowerCase(),
+    term.toUpperCase(),
+  ].filter(Boolean))].slice(0, 4);
+  const resultDocs = new Map();
+
   try {
-    snap = await db.collection('users').get();
+    const queries = [];
+    for (const prefix of namePrefixes) {
+      queries.push(db.collection('users')
+        .where('name', '>=', prefix)
+        .where('name', '<', prefix + '\\uf8ff')
+        .limit(25)
+        .get());
+    }
+    if (termDigits.length >= 2) {
+      queries.push(db.collection('users').where('phone', '==', term).limit(25).get());
+      queries.push(db.collection('users').where('phone', '==', '+' + termDigits).limit(25).get());
+      queries.push(db.collection('users').where('userId', '==', termDigits).limit(25).get());
+    }
+    const snapshots = await Promise.all(queries);
+    for (const snap of snapshots) {
+      for (const doc of snap.docs) resultDocs.set(doc.id, doc);
+    }
   } catch (err) {
     await logServerError('searchUsers', err, { userId: callerUid });
     throw new HttpsError('internal', 'Could not search users right now.');
   }
 
-  const termLower = term.toLowerCase();
-  const termDigits = normalizeDigits(term);
   const results = [];
-
-  snap.forEach((doc) => {
-    if (doc.id === callerUid) return;
+  for (const doc of resultDocs.values()) {
+    if (doc.id === callerUid) continue;
     const u = doc.data() || {};
-    if (!isPublicActiveAccount(u)) return;
-    const nameLower = String(u.name || '').toLowerCase();
-    const phoneDigits = normalizeDigits(u.phone);
-    const userIdStr = String(u.userId || '');
-    if (!nameLower.includes(termLower)
-      && !(termDigits.length > 0 && phoneDigits.includes(termDigits))
-      && !(termDigits.length > 0 && userIdStr.includes(termDigits))) return;
+    if (!isPublicActiveAccount(u)) continue;
     results.push({
       uid: doc.id,
       name: u.name || '',
@@ -75,12 +91,12 @@ exports.searchUsers = onCall({ enforceAppCheck: false }, async (request) => {
       role: u.role || 'customer',
       userId: u.userId || '',
     });
-  });
+  }
 
-  results.sort((a, b) => a.name.localeCompare(b.name));
+  results.sort((a, b) => String(a.name).localeCompare(String(b.name)));
   return { results: results.slice(0, 25) };
-});
 
+  });
 // QR lookup returns the same public-safe fields as searchUsers and never trusts
 // the name/phone/userId embedded in a QR payload.
 exports.getUserByUid = onCall({ enforceAppCheck: false }, async (request) => {
