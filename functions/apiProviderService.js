@@ -237,7 +237,11 @@ const SUCCESS_TOPUP_INTERNET_OPERATORS = { Grameenphone: 'GP', Robi: 'RB', Bangl
 
 async function executeConfiguredApi(service, payload, customer, requestId, options = {}) {
   const db = admin.firestore();
-  const snap = await db.collection(COLLECTION).where('service','==',service).where('active','==',true).get();
+  const snap = await db.collection(COLLECTION)
+    .where('service', '==', service)
+    .where('active', '==', true)
+    .limit(100)
+    .get();
   const requestedCountry = String(payload?.raw?.country || '').trim().toUpperCase() || 'ALL';
   const allProviders = snap.docs.map(d => ({ id:d.id, ...d.data() }));
   const countryProviders = allProviders.filter((p) => String(p.country || 'ALL').toUpperCase() === requestedCountry);
@@ -680,11 +684,18 @@ exports.migrateApiProviderSecrets = onCall({ enforceAppCheck: true }, async (req
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   await checkVelocity(db, request.auth.uid, 'migrateApiProviderSecrets', { ip: getClientIp(request) });
-  const snap = await db.collection(COLLECTION).get();
   let migrated = 0;
-  for (const doc of snap.docs) {
-    if (await providerSecretService.migrateDocument(doc)) migrated += 1;
-  }
+  let lastDoc = null;
+  do {
+    let query = db.collection(COLLECTION).orderBy(admin.firestore.FieldPath.documentId()).limit(100);
+    if (lastDoc) query = query.startAfter(lastDoc);
+    const snap = await query.get();
+    for (const doc of snap.docs) {
+      if (await providerSecretService.migrateDocument(doc)) migrated += 1;
+    }
+    lastDoc = snap.docs[snap.docs.length - 1] || null;
+    if (snap.size < 100) break;
+  } while (lastDoc);
   return { migrated };
 });
 
