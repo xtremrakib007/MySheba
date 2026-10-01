@@ -3,6 +3,7 @@ const admin = require('firebase-admin');
 const dns = require('dns').promises;
 const https = require('https');
 const crypto = require('crypto');
+const { setSecret, getSecret, deleteSecret } = require('./secretManagerService');
 const providerSecretService = require('./providerSecretService');
 
 const COLLECTION = 'api_providers';
@@ -233,6 +234,14 @@ const SUCCESS_TOPUP_BILL_OPERATORS = {
 };
 const SUCCESS_TOPUP_MOBILE_OPERATORS = { Grameenphone: 'GP', Robi: 'RB', Banglalink: 'BL' };
 const SUCCESS_TOPUP_INTERNET_OPERATORS = { Grameenphone: 'GP', Robi: 'RB', Banglalink: 'BL', Airtel: 'AT', Teletalk: 'TT', Skitto: 'SK', 'Brilliant Connect': 'BT', Ryze: 'RY' };
+
+async function hydrateProviderSecrets(provider) {
+  const runtime = { ...provider };
+  if (provider.apiKeySecret) runtime.apiKey = await getSecret(provider.apiKeySecret);
+  if (provider.secretKeySecret) runtime.secretKey = await getSecret(provider.secretKeySecret);
+  if (provider.passwordSecret) runtime.password = await getSecret(provider.passwordSecret);
+  return runtime;
+}
 
 async function executeConfiguredApi(service, payload, customer, requestId, options = {}) {
   const db = admin.firestore();
@@ -644,6 +653,17 @@ exports.saveApiProvider = onCall({ enforceAppCheck: true }, async (request) => {
       id: ref.id, successTopUp: true, webhookToken,
       webhookUrl: 'https://us-central1-satulink-solutions.cloudfunctions.net/apiWebhook?providerId=' + encodeURIComponent(ref.id)
     };
+  }
+  // Store provider credentials in Google Secret Manager rather than Firestore.
+  // Existing legacy credentials are migrated on the next save/edit and then removed.
+  const currentDoc = await db.collection(COLLECTION).doc(ref.id).get();
+  const currentData = currentDoc.exists ? (currentDoc.data() || {}) : {};
+  const secretUpdates = {};
+  if (data.apiKey) secretUpdates.apiKeySecret = await setSecret(`mysheba-provider-${ref.id}-api-key`, data.apiKey);
+  if (data.secretKey) secretUpdates.secretKeySecret = await setSecret(`mysheba-provider-${ref.id}-secret-key`, data.secretKey);
+  if (data.password) secretUpdates.passwordSecret = await setSecret(`mysheba-provider-${ref.id}-password`, data.password);
+  if (Object.keys(secretUpdates).length) {
+    await db.collection(COLLECTION).doc(ref.id).set({ ...secretUpdates, apiKey: admin.firestore.FieldValue.delete(), secretKey: admin.firestore.FieldValue.delete(), password: admin.firestore.FieldValue.delete(), updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
   }
   return { id: ref.id, successTopUp: false };
 });
