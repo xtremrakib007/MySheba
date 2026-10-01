@@ -1,4 +1,4 @@
-import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, orderBy, query, where, limit } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../firebase/config';
 
@@ -38,7 +38,7 @@ export function subscribeTransferRecipients(
   onError: (err: Error) => void
 ) {
   const roles = role === 'superadmin' ? ['admin', 'dealer', 'reseller', 'customer'] : ['dealer', 'reseller', 'customer'];
-  const q = query(collection(db, 'users'), where('role', 'in', roles));
+  const q = query(collection(db, 'users'), where('role', 'in', roles), limit(500));
   return onSnapshot(q, (snap) => {
     const list = snap.docs.map((d) => ({ id: d.id, name: (d.data().name as string) ?? '', phone: (d.data().phone as string) ?? '', role: (d.data().role as string) ?? '' }));
     list.sort((a, b) => a.name.localeCompare(b.name));
@@ -58,7 +58,7 @@ export interface PointTransfer {
 }
 
 export function subscribeAllTransfers(onUpdate: (list: PointTransfer[]) => void, onError: (err: Error) => void) {
-  const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'));
+  const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'), limit(100));
   return onSnapshot(q, (snap) => onUpdate(snap.docs.map((d) => {
     const data = d.data();
     return { id: d.id, fromUid: data.fromUid ?? '', fromName: data.fromName ?? '', toUid: data.toUid ?? '', toName: data.toName ?? '', amount: data.amount ?? 0, note: data.note ?? '', createdAt: data.createdAt?.toDate?.().toLocaleString() ?? null };
