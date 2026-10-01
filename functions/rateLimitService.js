@@ -18,7 +18,6 @@ const DEFAULT_LIMITS = {
   rechargePin: { max: 10, windowMinutes: 10 },
   reconcileTransaction: { max: 20, windowMinutes: 10 },
   transactionComplete: { max: 5, windowMinutes: 10 },
-  reconcileTransaction: { max: 20, windowMinutes: 60 }
 };
 
 const DEFAULT_OTP_LIMITS = {
