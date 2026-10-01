@@ -3,11 +3,13 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logServerError } = require('./logService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const SEARCH_MAX = 30;
 const SEARCH_WINDOW_MS = 10 * 60 * 1000;
 const QR_MAX = 60;
 const QR_WINDOW_MS = 60 * 60 * 1000;
+const SEARCH_SCAN_MAX = 1000;
 
 function normalizeDigits(value) {
   return String(value || '').replace(/[^0-9]/g, '');
@@ -37,7 +39,7 @@ async function rateLimit(db, uid, action, max, windowMs) {
   }
 }
 
-exports.searchUsers = onCall({ enforceAppCheck: false }, async (request) => {
+exports.searchUsers = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const callerUid = request.auth.uid;
   const term = String((request.data && request.data.query) || '').trim().slice(0, 100);
@@ -99,7 +101,7 @@ exports.searchUsers = onCall({ enforceAppCheck: false }, async (request) => {
   });
 // QR lookup returns the same public-safe fields as searchUsers and never trusts
 // the name/phone/userId embedded in a QR payload.
-exports.getUserByUid = onCall({ enforceAppCheck: false }, async (request) => {
+exports.getUserByUid = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const callerUid = request.auth.uid;
   const targetUid = String((request.data && request.data.uid) || '').trim();

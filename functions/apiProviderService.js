@@ -4,8 +4,10 @@ const dns = require('dns').promises;
 const https = require('https');
 const crypto = require('crypto');
 const providerSecretService = require('./providerSecretService');
+const { checkVelocity, getClientIp } = require('./rateLimitService');
 const catalog = require('./successTopUpCatalog');
 const driveWindow = require('./successTopUpWindow');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const COLLECTION = 'api_providers';
 const SETTINGS = 'api_settings/service_modes';
@@ -301,7 +303,11 @@ exports.fetchSuccessTopUpCatalog = fetchSuccessTopUpCatalog;
 
 async function executeConfiguredApi(service, payload, customer, requestId, options = {}) {
   const db = admin.firestore();
-  const snap = await db.collection(COLLECTION).where('service','==',service).where('active','==',true).get();
+  const snap = await db.collection(COLLECTION)
+    .where('service', '==', service)
+    .where('active', '==', true)
+    .limit(100)
+    .get();
   const requestedCountry = String(payload?.raw?.country || '').trim().toUpperCase() || 'ALL';
   const allProviders = snap.docs.map(d => ({ id:d.id, ...d.data() }));
   const countryProviders = allProviders.filter((p) => String(p.country || 'ALL').toUpperCase() === requestedCountry);
@@ -491,9 +497,10 @@ exports.executeConfiguredApi = executeConfiguredApi;
 // provider credentials and do not perform network or Firestore operations.
 exports._test = { isPrivateIp, validateBaseUrl, validateHeaders, validateTemplate, getPath, render, providerAuth, validate };
 
-exports.testApiProvider = onCall({ enforceAppCheck: false }, async (request) => {
+exports.testApiProvider = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
+  await checkVelocity(db, request.auth.uid, 'testApiProvider', { ip: getClientIp(request) });
   const id = cleanString(request.data?.id, 100);
   if (!id) throw new HttpsError('invalid-argument', 'Provider id is required.');
   const snap = await db.collection(COLLECTION).doc(id).get();
@@ -533,7 +540,7 @@ exports.testApiProvider = onCall({ enforceAppCheck: false }, async (request) => 
   }
 });
 
-exports.listSuccessTopUpDrives = onCall({ enforceAppCheck: false }, async (request) => {
+exports.listSuccessTopUpDrives = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const service = String(request.data?.service || 'Internet').trim();
@@ -608,10 +615,10 @@ exports.listSuccessTopUpCatalogForAdmin = onCall({ enforceAppCheck: false }, asy
   }
 });
 
-exports.listApiProviders = onCall({ enforceAppCheck: false }, async (request) => {
+exports.listApiProviders = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
-  const snap = await db.collection(COLLECTION).orderBy('priority', 'desc').get();
+  const snap = await db.collection(COLLECTION).orderBy('priority', 'desc').limit(100).get();
   // Return only non-secret configuration fields. Do not spread the provider
   // document here: custom headers/templates may contain credentials or other
   // sensitive values that should never be sent back to the mobile/admin client.
@@ -637,19 +644,20 @@ exports.listApiProviders = onCall({ enforceAppCheck: false }, async (request) =>
       responseIdPath: x.responseIdPath || '',
       responseMessagePath: x.responseMessagePath || '',
       responsePinPath: x.responsePinPath || '',
-      hasApiKey: Boolean(x.apiKeySecretName || x.apiKey),
-      hasSecretKey: Boolean(x.secretKeySecretName || x.secretKey),
+      hasApiKey: Boolean(x.apiKeySecretName),
+      hasSecretKey: Boolean(x.secretKeySecretName),
       hasUsername: Boolean(x.username),
-      hasPassword: Boolean(x.passwordSecretName || x.password),
+      hasPassword: Boolean(x.passwordSecretName),
       hasCustomHeaders: Boolean(x.headers && Object.keys(x.headers).length),
       hasQueryTemplate: Boolean(x.queryTemplate && Object.keys(x.queryTemplate).length),
       hasRequestTemplate: Boolean(x.requestTemplate && Object.keys(x.requestTemplate).length),
     };
   });
 });
-exports.saveApiProvider = onCall({ enforceAppCheck: false }, async (request) => {
+exports.saveApiProvider = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
+  await checkVelocity(db, request.auth.uid, 'saveApiProvider', { ip: getClientIp(request) });
   const id = cleanString(request.data?.id, 100);
   if (id && !/^[A-Za-z0-9_-]{1,100}$/.test(id)) throw new HttpsError('invalid-argument', 'Provider id is invalid.');
   const ref = id ? db.collection(COLLECTION).doc(id) : db.collection(COLLECTION).doc();
@@ -659,9 +667,9 @@ exports.saveApiProvider = onCall({ enforceAppCheck: false }, async (request) => 
   const incoming = { ...(request.data || {}) };
 
   if (existingSnap.exists) {
-    if (!incoming.apiKey || incoming.apiKey === providerSecretService.MASK) incoming.apiKey = existingCredentials.apiKey || current.apiKey || '';
-    if (!incoming.secretKey || incoming.secretKey === providerSecretService.MASK) incoming.secretKey = existingCredentials.secretKey || current.secretKey || '';
-    if (!incoming.password || incoming.password === providerSecretService.MASK) incoming.password = existingCredentials.password || current.password || '';
+    if (!incoming.apiKey || incoming.apiKey === providerSecretService.MASK) incoming.apiKey = existingCredentials.apiKey || '';
+    if (!incoming.secretKey || incoming.secretKey === providerSecretService.MASK) incoming.secretKey = existingCredentials.secretKey || '';
+    if (!incoming.password || incoming.password === providerSecretService.MASK) incoming.password = existingCredentials.password || '';
     if (!incoming.username) incoming.username = current.username || '';
     if (!Object.keys(incoming.headers || {}).length && current.headers) incoming.headers = current.headers;
     if (!Object.keys(incoming.queryTemplate || {}).length && current.queryTemplate) incoming.queryTemplate = current.queryTemplate;
@@ -775,15 +783,17 @@ exports.saveApiProvider = onCall({ enforceAppCheck: false }, async (request) => 
 
   if (data.name === 'Success TopUp' && data.service === 'Recharge') {
     return {
-      id: ref.id, successTopUp: true, webhookToken,
+      id: ref.id, successTopUp: true,
+      webhookToken,
       webhookUrl: 'https://us-central1-satulink-solutions.cloudfunctions.net/apiWebhook?providerId=' + encodeURIComponent(ref.id)
     };
   }
   return { id: ref.id, successTopUp: false };
 });
-exports.deleteApiProvider = onCall({ enforceAppCheck: false }, async (request) => {
+exports.deleteApiProvider = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
+  await checkVelocity(db, request.auth.uid, 'deleteApiProvider', { ip: getClientIp(request) });
   const id = cleanString(request.data?.id, 100);
   if (!id || !/^[A-Za-z0-9_-]{1,100}$/.test(id)) throw new HttpsError('invalid-argument', 'Provider id is invalid.');
   const ref = db.collection(COLLECTION).doc(id);
@@ -806,24 +816,32 @@ exports.deleteApiProvider = onCall({ enforceAppCheck: false }, async (request) =
   return { ok: true };
 });
 
-exports.migrateApiProviderSecrets = onCall({ enforceAppCheck: false }, async (request) => {
+exports.migrateApiProviderSecrets = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
-  const snap = await db.collection(COLLECTION).get();
+  await checkVelocity(db, request.auth.uid, 'migrateApiProviderSecrets', { ip: getClientIp(request) });
   let migrated = 0;
-  for (const doc of snap.docs) {
-    if (await providerSecretService.migrateDocument(doc)) migrated += 1;
-  }
+  let lastDoc = null;
+  do {
+    let query = db.collection(COLLECTION).orderBy(admin.firestore.FieldPath.documentId()).limit(100);
+    if (lastDoc) query = query.startAfter(lastDoc);
+    const snap = await query.get();
+    for (const doc of snap.docs) {
+      if (await providerSecretService.migrateDocument(doc)) migrated += 1;
+    }
+    lastDoc = snap.docs[snap.docs.length - 1] || null;
+    if (snap.size < 100) break;
+  } while (lastDoc);
   return { migrated };
 });
 
-exports.getServiceApiSettings = onCall({ enforceAppCheck: false }, async (request) => {
+exports.getServiceApiSettings = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const snap = await db.doc(SETTINGS).get();
   return { modes: { ...DEFAULT_MODES, ...(snap.exists ? (snap.data().modes || {}) : {}) } };
 });
-exports.saveServiceApiSettings = onCall({ enforceAppCheck: false }, async (request) => {
+exports.saveServiceApiSettings = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const incoming = request.data?.modes || {};

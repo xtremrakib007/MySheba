@@ -4,6 +4,7 @@ const { hasCapability } = require('./accessControl');
 const { inferWalletCurrency } = require('./walletCurrencyService');
 const ZERO_DECIMAL_CURRENCIES = new Set(['IDR', 'KHR', 'MMK']);
 const { logAudit, logServerError } = require('./logService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'support', 'finance'];
 const ALLOWED_RECIPIENT_ROLES = ['customer', 'dealer', 'reseller'];
@@ -94,7 +95,7 @@ async function callerInTx(tx, db, uid, request) {
 const actor = (uid, caller) => ({ uid, name: caller.name || caller.displayName || '', role: caller.role || '' });
 
 // ---- step 1: finance checks the payment is real. No money moves. ----
-exports.verifyTopup = onCall({ enforceAppCheck: false }, async request => {
+exports.verifyTopup = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
   const uid = requireAdmin(request);
   const db = admin.firestore();
   const topupId = String(request.data?.topupId || request.data?.id || '').trim();
@@ -129,7 +130,7 @@ exports.verifyTopup = onCall({ enforceAppCheck: false }, async request => {
 });
 
 // ---- step 2: admin releases the money. ----
-exports.completeTopup = onCall({ enforceAppCheck: false }, async request => {
+exports.completeTopup = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
   const uid = requireAdmin(request);
   const db = admin.firestore();
   const topupId = String(request.data?.topupId || request.data?.id || '').trim();
@@ -173,7 +174,7 @@ exports.completeTopup = onCall({ enforceAppCheck: false }, async request => {
 // Kept so a superadmin is never blocked, and so an app that has not picked
 // up the two-step flow yet still works. Records the same superadmin as both
 // the verifier and the completer rather than pretending two people looked.
-exports.approveTopup = onCall({ enforceAppCheck: false }, async request => {
+exports.approveTopup = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
   const uid = requireAdmin(request);
   const db = admin.firestore();
   const topupId = String(request.data?.topupId || request.data?.id || '').trim();
@@ -212,7 +213,7 @@ exports.approveTopup = onCall({ enforceAppCheck: false }, async request => {
   }
 });
 
-exports.rejectTopup = onCall({ enforceAppCheck: false }, async request => {
+exports.rejectTopup = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
   const uid = requireAdmin(request);
   const db = admin.firestore();
   const callerSnap = await db.collection('users').doc(uid).get();

@@ -10,8 +10,12 @@ import { initializeAuth, getAuth, getReactNativePersistence } from 'firebase/aut
 import { initializeFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getFunctions } from 'firebase/functions';
+import { initializeAppCheck as initializeWebAppCheck, CustomProvider } from 'firebase/app-check';
+import nativeAppCheck, { ReactNativeFirebaseAppCheckProvider } from '@react-native-firebase/app-check';
+import { toAppCheckToken, shouldUseDebugProvider, appCheckBuildProfile } from './appCheckBridge';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 import { secureAsyncStorage } from './secureLocalStorage';
 
 const firebaseConfig = {
@@ -25,6 +29,62 @@ const firebaseConfig = {
 };
 
 export const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+
+// App Check: the app uses the Firebase JS SDK for Auth/Firestore/Functions,
+// while Android/iOS use the native Play Integrity/App Attest providers. The
+// native token is bridged into the JS SDK through Firebase's CustomProvider so
+// callable functions receive the App Check token without changing every call
+// site.
+//
+// Three things here are load-bearing; see appCheckBridge.js for the reasoning.
+let nativeAppCheckInstance = null;
+let webAppCheck = null;
+let appCheckStatus = { ready: false, reason: 'not attempted' };
+
+if (Platform.OS !== 'web') {
+  const debugToken = Constants.expoConfig?.extra?.firebaseAppCheckDebugToken;
+  const useDebugProvider = shouldUseDebugProvider({ isDev: __DEV__, debugToken, profile: appCheckBuildProfile() });
+  try {
+    const provider = new ReactNativeFirebaseAppCheckProvider();
+    provider.configure({
+      android: { provider: useDebugProvider ? 'debug' : 'playIntegrity', debugToken },
+      apple: { provider: useDebugProvider ? 'debug' : 'appAttestWithDeviceCheckFallback', debugToken },
+    });
+    nativeAppCheckInstance = nativeAppCheck();
+    nativeAppCheckInstance.initializeAppCheck({ provider, isTokenAutoRefreshEnabled: true });
+    webAppCheck = initializeWebAppCheck(app, {
+      provider: new CustomProvider({
+        getToken: async () => {
+          const result = await nativeAppCheckInstance.getToken();
+          return toAppCheckToken(result);
+        },
+      }),
+      isTokenAutoRefreshEnabled: true,
+    });
+    appCheckStatus = { ready: true, reason: useDebugProvider ? 'debug provider' : 'attestation provider' };
+  } catch (error) {
+    // Never crash: a device that cannot attest must still be able to use the
+    // app while ENFORCE_APP_CHECK is off. But this must not be invisible -
+    // once enforcement is on, a silent failure here means every callable
+    // returns `unauthenticated` with nothing in the client to say why. So the
+    // reason is recorded for isAppCheckReady() and logged in every build, not
+    // only in __DEV__.
+    appCheckStatus = { ready: false, reason: String(error?.message || error).slice(0, 200) };
+    console.warn('[appCheck] initialization failed; callables will send no App Check token:', appCheckStatus.reason);
+  }
+}
+
+/** Whether a token can actually be minted. False means enforcement would lock this device out. */
+export function isAppCheckReady() {
+  return appCheckStatus.ready;
+}
+
+/** Why App Check is not ready, for the login screen's diagnostic. */
+export function appCheckFailureReason() {
+  return appCheckStatus.ready ? '' : appCheckStatus.reason;
+}
+
+export { webAppCheck as appCheck };
 
 // Firebase's official React Native persistence implementation is backed by
 // @react-native-async-storage/async-storage. New Auth state is therefore

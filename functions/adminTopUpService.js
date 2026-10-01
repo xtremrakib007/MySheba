@@ -2,6 +2,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { hasCapability } = require('./accessControl');
 const { logAudit, logServerError } = require('./logService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const MAX_AMOUNT = 100000;
 // Staff who may hold the 'finance' capability (functions/accessControl.js).
@@ -27,7 +28,7 @@ function activeAccount(profile) {
   return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && profile.active !== false && profile.mergedInto == null;
 }
 
-exports.adminTopUpPoints = onCall({ enforceAppCheck: false }, async request => {
+exports.adminTopUpPoints = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
 
   const db = admin.firestore();

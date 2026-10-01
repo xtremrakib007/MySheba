@@ -4,6 +4,7 @@ const { hasCapability } = require('./accessControl');
 const { logAudit, logServerError } = require('./logService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { checkIpAnomaly } = require('./anomalyService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const KEY_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const MAX_TRANSFER = 100000;
@@ -62,7 +63,7 @@ function parseMoney(value) {
   return Number.isFinite(n) && n > 0 && n <= MAX_TRANSFER ? n : null;
 }
 
-exports.transferPoints = onCall({ enforceAppCheck: false }, async (request) => {
+exports.transferPoints = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const callerUid = requireAuth(request);
   const requestId = requireRequestId(request);
   const db = admin.firestore();

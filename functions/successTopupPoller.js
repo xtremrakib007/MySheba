@@ -14,6 +14,7 @@ async function getProvider() {
   const snap = await db.collection(PROVIDERS)
     .where('service', '==', 'Recharge')
     .where('active', '==', true)
+    .limit(20)
     .get();
 
   const match = snap.docs

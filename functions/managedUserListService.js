@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const ALLOWED_ROLES = new Set(['dealer', 'reseller']);
 const DEFAULT_PAGE_SIZE = 100;
@@ -42,7 +43,7 @@ function sanitizeUser(doc) {
   };
 }
 
-exports.listManagedUsers = onCall({ enforceAppCheck: false }, async (request) => {
+exports.listManagedUsers = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const db = admin.firestore();
   const callerRef = db.collection('users').doc(request.auth.uid);

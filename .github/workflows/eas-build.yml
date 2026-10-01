@@ -74,6 +74,9 @@ jobs:
       - name: Success TopUp contract
         run: npm run test:successtopup
 
+      - name: App Check posture
+        run: npm run test:appcheck
+
       # Both trees are installed by this point, so the gate can audit each one.
       - name: Audit production dependencies
         run: npm run audit:deps

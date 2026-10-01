@@ -5,6 +5,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const PENDING = 'pendingBiometricTemplates';
 const VERIFIED = 'biometricTemplates';
@@ -53,7 +54,7 @@ function cosine(a, b) {
   return dot;
 }
 
-exports.verifyKycFace = onCall({ enforceAppCheck: false }, async (request) => {
+exports.verifyKycFace = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const uid = requireAuth(request);
   const db = admin.firestore();
   await requireActiveAccount(db, uid);

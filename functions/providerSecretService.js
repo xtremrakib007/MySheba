@@ -64,9 +64,9 @@ async function remove(name) {
 }
 async function getCredentials(provider) {
   return {
-    apiKey: provider.apiKeySecretName ? await read(provider.apiKeySecretName) : String(provider.apiKey || ''),
-    secretKey: provider.secretKeySecretName ? await read(provider.secretKeySecretName) : String(provider.secretKey || ''),
-    password: provider.passwordSecretName ? await read(provider.passwordSecretName) : String(provider.password || ''),
+    apiKey: provider.apiKeySecretName ? await read(provider.apiKeySecretName) : '',
+    secretKey: provider.secretKeySecretName ? await read(provider.secretKeySecretName) : '',
+    password: provider.passwordSecretName ? await read(provider.passwordSecretName) : '',
     username: String(provider.username || ''),
   };
 }
@@ -100,12 +100,21 @@ async function migrateDocument(doc) {
 async function cleanupUnreferenced(db, names) {
   const values = Object.values(names).filter(Boolean);
   if (!values.length) return;
-  const snap = await db.collection('api_providers').get();
   const used = new Set();
-  snap.forEach(d => {
-    const x = d.data() || {};
-    for (const key of ['apiKeySecretName','secretKeySecretName','passwordSecretName']) if (x[key]) used.add(x[key]);
-  });
+  let lastDoc = null;
+  do {
+    let query = db.collection('api_providers').orderBy(admin.firestore.FieldPath.documentId()).limit(200);
+    if (lastDoc) query = query.startAfter(lastDoc);
+    const snap = await query.get();
+    snap.forEach((d) => {
+      const x = d.data() || {};
+      for (const key of ['apiKeySecretName', 'secretKeySecretName', 'passwordSecretName']) {
+        if (x[key]) used.add(x[key]);
+      }
+    });
+    lastDoc = snap.docs[snap.docs.length - 1] || null;
+    if (snap.size < 200) break;
+  } while (lastDoc);
   for (const name of values) if (!used.has(name)) await remove(name);
 }
 module.exports = {

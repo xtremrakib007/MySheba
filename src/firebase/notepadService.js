@@ -19,6 +19,7 @@ import {
   where,
   serverTimestamp,
   Timestamp,
+  limit,
 } from 'firebase/firestore';
 import { db } from './config';
 import { NOTE_TYPES, MONEY_NOTE_TYPES, NOTE_STATUS } from '../data/notepadConstants';
@@ -33,7 +34,7 @@ function sortByUpdatedDesc(notes) {
 
 export async function listNotes(userId) {
   if (!userId) throw new Error('Not authenticated');
-  const q = query(notesCollection(), where('userId', '==', userId));
+  const q = query(notesCollection(), where('userId', '==', userId), limit(100));
   const snap = await getDocs(q);
   return sortByUpdatedDesc(snap.docs.map((d) => hydrate(d.id, d.data())));
 }

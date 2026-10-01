@@ -1,6 +1,7 @@
 const { onCall, HttpsError, onRequest } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const crypto = require('crypto');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const COLLECTION = 'api_webhooks';
 const PROVIDERS = 'api_providers';
@@ -42,10 +43,10 @@ function validateConfig(data) {
   return { providerId, enabled, authHeader, webhookToken, transactionIdPath, statusPath, messagePath, successStatus, processingStatus, cancelStatus };
 }
 
-exports.listApiWebhooks = onCall({ enforceAppCheck: false }, async (request) => {
+exports.listApiWebhooks = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
-  const snap = await db.collection(COLLECTION).get();
+  const snap = await db.collection(COLLECTION).limit(100).get();
   const providerIds = snap.docs.map((d) => d.data()?.providerId || d.id).filter(Boolean);
   const providerSnaps = await Promise.all(providerIds.map((id) => db.collection(PROVIDERS).doc(id).get()));
   const providerNames = Object.fromEntries(providerSnaps.map((p) => [p.id, p.exists ? String(p.data()?.name || '') : '']));
@@ -66,14 +67,14 @@ exports.listApiWebhooks = onCall({ enforceAppCheck: false }, async (request) => 
         processingStatus: x.processingStatus || 'Processing',
         cancelStatus: x.cancelStatus || 'Cancel',
         hasWebhookToken: Boolean(x.webhookToken),
-        webhookToken: successTopUp ? String(x.webhookToken || '') : '',
+        webhookToken: '',
         webhookUrl: endpointUrl(providerId),
       };
     }),
   };
 });
 
-exports.saveApiWebhook = onCall({ enforceAppCheck: false }, async (request) => {
+exports.saveApiWebhook = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const id = clean(request.data?.providerId, 100);
@@ -98,7 +99,7 @@ exports.saveApiWebhook = onCall({ enforceAppCheck: false }, async (request) => {
   return { ok: true, providerId: id, webhookUrl: endpointUrl(id) };
 });
 
-exports.deleteApiWebhook = onCall({ enforceAppCheck: false }, async (request) => {
+exports.deleteApiWebhook = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const id = clean(request.data?.providerId, 100);

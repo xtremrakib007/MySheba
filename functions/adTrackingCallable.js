@@ -2,6 +2,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const crypto = require('crypto');
 const { checkVelocity, checkAnonymousAdVelocity, getClientIp } = require('./rateLimitService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const PLACEMENTS = new Set([
   'HOME_TOP','HOME_MIDDLE','HOME_BOTTOM','RECHARGE_TOP','RECHARGE_BOTTOM','INTERNET_TOP','INTERNET_BOTTOM',
@@ -17,7 +18,7 @@ const MAX = { adId:128, campaignId:128, placementId:64, feature:64, sessionId:12
 function text(value, max) { return typeof value === 'string' ? value.trim().slice(0, max) : ''; }
 function activeProfile(profile) { return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && profile.active !== false && !profile.mergedInto; }
 
-exports.recordAdEvent = onCall({ enforceAppCheck: false }, async (request) => {
+exports.recordAdEvent = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const data = request.data || {};
   const kind = data.kind === 'click' ? 'click' : data.kind === 'impression' ? 'impression' : null;
   if (!kind) throw new HttpsError('invalid-argument', 'Invalid ad event type.');

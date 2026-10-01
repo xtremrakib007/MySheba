@@ -45,7 +45,8 @@
     "test:vault": "node scripts/test-pin-vault.js",
     "test:pin": "node scripts/test-collection-pin.js",
     "test:adminlogin": "node scripts/test-admin-login.js",
-    "test:successtopup": "node scripts/test-success-topup.js"
+    "test:successtopup": "node scripts/test-success-topup.js",
+    "test:appcheck": "node scripts/test-app-check.js"
   },
   "dependencies": {
     "expo": "~53.0.0",
@@ -87,7 +88,8 @@
     "react-native-google-mobile-ads": "14.7.0",
     "@react-native-async-storage/async-storage": "2.1.2",
     "react-native-share": "~12.0.9",
-    "buffer": "^6.0.3"
+    "buffer": "^6.0.3",
+    "@react-native-firebase/app-check": "^21.13.0"
   },
   "devDependencies": {
     "@babel/core": "^7.24.0",

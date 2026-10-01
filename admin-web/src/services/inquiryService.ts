@@ -3,7 +3,7 @@
 // customer leaves route/date/contact details, staff calls back to
 // arrange the ticket. firestore.rules grants active staff (dealer/reseller/admin/superadmin) read+update - not admin-only.
 
-import { collection, doc, onSnapshot, orderBy, query, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, onSnapshot, orderBy, query, updateDoc, serverTimestamp, limit } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
 const COLLECTION = 'inquiries';
@@ -33,7 +33,7 @@ export function subscribeInquiries(
   onUpdate: (list: Inquiry[]) => void,
   onError: (err: Error) => void
 ) {
-  const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'));
+  const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'), limit(100));
   return onSnapshot(
     q,
     (snap) =>

@@ -19,6 +19,7 @@ import {
   where,
   serverTimestamp,
   Timestamp,
+  limit,
 } from 'firebase/firestore';
 import { db } from './config';
 import { DEFAULT_REMINDER_OFFSETS, DOCUMENT_STATUS } from '../data/documentConstants';
@@ -68,7 +69,7 @@ function sortByUpdatedDesc(docs) {
 
 export async function listDocuments(userId) {
   if (!userId) throw new Error('Not authenticated');
-  const q = query(documentsCollection(), where('userId', '==', userId));
+  const q = query(documentsCollection(), where('userId', '==', userId), limit(100));
   const snap = await getDocs(q);
   return sortByUpdatedDesc(snap.docs.map((d) => hydrate(d.id, d.data())));
 }

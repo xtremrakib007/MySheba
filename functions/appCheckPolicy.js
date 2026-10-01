@@ -1,24 +1,29 @@
 /**
- * Single switch for App Check enforcement across every callable.
+ * The single switch for App Check enforcement across every callable.
  *
- * Currently OFF, deliberately. App Check enforcement was added to all 74
- * callables on 17-18 Sep, but the functions deploy had already been broken
- * by a syntax error in topupSubmissionService.js, so none of it ever
- * reached the project - the callables running in production predate App
- * Check entirely. Meanwhile the app has no way to mint a token: there is
- * no @react-native-firebase/app-check, no firebase/app-check, and no
- * initializeAppCheck call anywhere in the client.
+ * OFF, deliberately, and it must stay off until a build carrying the native
+ * App Check module is widely installed. Flipping it on is a one-line change
+ * here and nowhere else - but turning it on early returns `unauthenticated`
+ * from every callable for every user, which is what happened between
+ * 2026-09-16 and 2026-09-26.
  *
- * Deploying with enforcement on would therefore switch it on for all 74 at
- * once against a client that cannot satisfy it, and every callable would
- * start failing 'unauthenticated' - registration, top-ups, wallet
- * transfers, charges, security PIN, device sessions, account merge and the
- * rest. Turning it off here is not a downgrade: it matches the posture
- * already live in the project, and lets the accumulated fixes deploy.
+ * Until this branch, "the single switch" was not true: 57 of the 95 enforcing
+ * callables hardcoded `enforceAppCheck: true` instead of reading this
+ * constant, so setting it to false would have left enforcement hard-on for
+ * chargeGuards (every purchase), deviceVerificationService (sign-in),
+ * secureTransfer, secureWalletCharge, rechargePinService, adminTopUpService
+ * and 51 others. All 95 now read this value, and
+ * scripts/test-app-check.js fails the build if any callable goes back to a
+ * literal.
  *
- * To re-enable, flip this one constant - in the same release that ships
- * client-side App Check (a native package, Play Integrity enabled in the
- * Firebase console, and the app's SHA-256 registered), not before.
+ * Before flipping it to true, all of the following must hold:
+ *   - a release containing @react-native-firebase/app-check is live and
+ *     adopted (check Play's version adoption, not just the rollout);
+ *   - Play Integrity is enabled and the app's SHA-256 registered in the
+ *     Firebase console, iOS App Attest configured;
+ *   - Firebase console > App Check shows verified requests arriving from real
+ *     installs, not just debug tokens;
+ *   - FIREBASE_APP_CHECK_DEBUG_TOKEN is NOT set on the production EAS profile.
  */
 const ENFORCE_APP_CHECK = false;
 

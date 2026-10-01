@@ -4,6 +4,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logServerError } = require('./logService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const MAX_NUMBERS = 500;
 const MATCH_MAX = 5;
@@ -37,7 +38,7 @@ async function rateLimit(db, uid) {
   }
 }
 
-exports.matchContactsByPhone = onCall({ enforceAppCheck: false }, async (request) => {
+exports.matchContactsByPhone = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const callerUid = request.auth.uid;
   const rawNumbers = Array.isArray(request.data && request.data.phoneNumbers)
@@ -53,7 +54,7 @@ exports.matchContactsByPhone = onCall({ enforceAppCheck: false }, async (request
 
   let snap;
   try {
-    snap = await db.collection('users').get();
+    snap = await db.collection('users').orderBy(admin.firestore.FieldPath.documentId()).limit(1000).get();
   } catch (err) {
     await logServerError('matchContactsByPhone', err, { userId: callerUid });
     throw new HttpsError('internal', 'Could not match contacts right now.');

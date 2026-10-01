@@ -3,6 +3,7 @@ const admin = require('firebase-admin');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { logAudit, logServerError } = require('./logService');
 const { getWalletCurrencyAndFx, baseToWallet } = require('./walletCurrencyService');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
@@ -58,7 +59,7 @@ function priceForRole(pricing, key, role) {
   return roleValue != null ? roleValue : pricing[key];
 }
 
-exports.chargeWallet = onCall({ enforceAppCheck: false }, async (request) => {
+exports.chargeWallet = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const uid = auth(request);
   const rid = requestId(request);
   const { kind, key } = request.data || {};

@@ -1,5 +1,6 @@
 const admin = require('firebase-admin');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const ALLOWED_SERVICES = ['Recharge', 'Internet', 'Bill Payment', 'Mobile Banking', 'Remittance'];
 const SERVICE_ALIASES = {
@@ -70,7 +71,7 @@ function canReject(actor, tx) {
   return false;
 }
 
-exports.rejectTransaction = onCall({ enforceAppCheck: false }, async request => {
+exports.rejectTransaction = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
   const uid = requireAuth(request);
   const actor = await getActor(uid);
   requireSessionMatch(request, actor);
