@@ -1,5 +1,6 @@
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const admin = require('firebase-admin');
+const { getCredentials } = require('./providerSecretService');
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -13,6 +14,7 @@ async function getProvider() {
   const snap = await db.collection(PROVIDERS)
     .where('service', '==', 'Recharge')
     .where('active', '==', true)
+    .limit(20)
     .get();
 
   const match = snap.docs
@@ -30,11 +32,12 @@ async function getProvider() {
     return null;
   }
 
-  if (!match.apiKey || !match.secretKey) {
+  const credentials = await getCredentials(match);
+  if (!credentials.apiKey || !credentials.secretKey) {
     console.error('Success TopUp provider is missing server-side credentials.');
     return null;
   }
-  return match;
+  return { ...match, apiKey: credentials.apiKey, secretKey: credentials.secretKey };
 }
 
 async function checkStatus(trxid, provider) {
