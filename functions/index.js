@@ -34,6 +34,7 @@ exports.sendPasswordResetEmailVerification = require('./passwordResetEmail').sen
 exports.verifyPasswordResetEmailOtp = require('./passwordResetEmail').verifyPasswordResetEmailOtp;
 exports.recordAdEvent = require('./adTrackingCallable').recordAdEvent;
 exports.listManagedUsers = require('./managedUserListService').listManagedUsers;
+exports.listUserDirectory = require('./userDirectoryService').listUserDirectory;
 exports.searchUsers = require('./userSearch').searchUsers;
 exports.getUserByUid = require('./userSearch').getUserByUid;
 exports.matchContactsByPhone = require('./matchContactsByPhone').matchContactsByPhone;
