@@ -648,7 +648,8 @@ exports.saveApiProvider = onCall({ enforceAppCheck: true }, async (request) => {
 
   if (data.name === 'Success TopUp' && data.service === 'Recharge') {
     return {
-      id: ref.id, successTopUp: true, webhookToken,
+      id: ref.id, successTopUp: true,
+      webhookToken,
       webhookUrl: 'https://us-central1-satulink-solutions.cloudfunctions.net/apiWebhook?providerId=' + encodeURIComponent(ref.id)
     };
   }
