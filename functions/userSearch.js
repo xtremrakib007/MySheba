@@ -38,7 +38,7 @@ async function rateLimit(db, uid, action, max, windowMs) {
   }
 }
 
-exports.searchUsers = onCall({ enforceAppCheck: false }, async (request) => {
+exports.searchUsers = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const callerUid = request.auth.uid;
   const term = String((request.data && request.data.query) || '').trim().slice(0, 100);
@@ -49,7 +49,7 @@ exports.searchUsers = onCall({ enforceAppCheck: false }, async (request) => {
 
   let snap;
   try {
-    snap = await db.collection('users').limit(SEARCH_SCAN_MAX).get();
+    snap = await db.collection('users').orderBy(admin.firestore.FieldPath.documentId()).limit(SEARCH_SCAN_MAX).get();
   } catch (err) {
     await logServerError('searchUsers', err, { userId: callerUid });
     throw new HttpsError('internal', 'Could not search users right now.');
@@ -84,7 +84,7 @@ exports.searchUsers = onCall({ enforceAppCheck: false }, async (request) => {
 
 // QR lookup returns the same public-safe fields as searchUsers and never trusts
 // the name/phone/userId embedded in a QR payload.
-exports.getUserByUid = onCall({ enforceAppCheck: false }, async (request) => {
+exports.getUserByUid = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const callerUid = request.auth.uid;
   const targetUid = String((request.data && request.data.uid) || '').trim();
