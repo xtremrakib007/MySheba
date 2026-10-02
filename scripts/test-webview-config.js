@@ -94,6 +94,35 @@ check('a page that no longer validates is dropped',
   svc._test.sanitizePages({ wv_abcd1234: { name: 'x', url: 'http://nope' } }), {});
 check('and a non-object is harmless', svc._test.sanitizePages('nonsense'), {});
 
+console.log('\nEvery role actually gets the WebViews - computed, not read');
+// serviceTiles.js is plain data and a filter, so this runs the real selection
+// rather than grepping the render. Twice now a role has been reported as
+// covered on the strength of reading one line; this computes the answer.
+const tiles = run('src/components/serviceTiles.js', (id) => { throw new Error(id); });
+const CUSTOM = { wv_abcd1234: { key: 'wv_abcd1234', name: 'EPF', url: 'https://epf.gov.my/x', icon: '🏦', active: true, home: true, custom: true } };
+const allCaps = () => true;
+
+for (const role of ['customer', 'dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin']) {
+  const list = tiles.withWebviewConfig(tiles.servicesForRole(role, allCaps), CUSTOM);
+  const webviews = list.filter((t) => t.kind === 'webview').map((t) => t.key);
+  yes(`${role} gets the built-in WebViews`, svc.BUILT_IN_KEYS.filter((k) => webviews.includes(k)).length >= 4);
+  yes(`${role} gets an added one`, webviews.includes('wv_abcd1234'));
+}
+
+// A capability-gated role must not lose them: support and finance see only the
+// management tiles their capabilities own, and the shared services regardless.
+const noCaps = () => false;
+yes('support keeps them with no capabilities at all',
+  tiles.withWebviewConfig(tiles.servicesForRole('support', noCaps), CUSTOM)
+    .some((t) => t.key === 'wv_abcd1234'));
+
+// And switching one off has to reach every role, not just the customer grid.
+const OFF = { fomema: { key: 'fomema', name: 'FOMEMA', url: 'https://a.example.com/f', icon: '🏥', active: false, home: true, custom: false } };
+for (const role of ['customer', 'reseller', 'support', 'superadmin']) {
+  yes(`${role} loses a page that was switched off`,
+    !tiles.withWebviewConfig(tiles.servicesForRole(role, allCaps), OFF).some((t) => t.key === 'fomema'));
+}
+
 console.log('\nStaff see the same WebViews as customers');
 const admin = read('src/screens/AdminFeaturesScreen.js');
 const gridSrc = read('src/components/ServiceGrid.js');
@@ -109,8 +138,8 @@ yes('an added tile can still carry a drawing', /hasServiceArt\(it\.art \|\| it\.
 yes('and the admin tile passes one when it has it', /hasServiceArt\(page\.icon\) \? \{ art: page\.icon/.test(admin));
 // Dealers and resellers take SHARED_SERVICES through ServiceGrid, which
 // already runs the overlay - this is the line that keeps that true.
-yes('dealer and reseller grids share the customer list',
-  /withWebviewConfig\(!isStaff \? CUSTOMER_SERVICES : \[\.\.\.roleSpecificServices, \.\.\.SHARED_SERVICES\]\)/.test(gridSrc));
+yes('one line carries them to every staff role',
+  /return \[\.\.\.roleSpecific, \.\.\.SHARED_SERVICES\];/.test(read('src/components/serviceTiles.js')));
 
 async function rejects(name, promise) {
   try { await promise; check(name, 'resolved', 'rejected'); } catch (e) { check(name, true, true); }
@@ -134,10 +163,12 @@ const grid = read('src/components/ServiceGrid.js');
 const screen = read('src/screens/WebViewScreen.js');
 const ctx = read('src/context/AppContext.js');
 yes('the context subscribes once', /subscribeWebviewConfig\(/.test(ctx) && /^ {4}webviewPages,$/m.test(ctx));
-yes('the grid overlays name and icon', /withWebviewConfig/.test(grid));
-yes('and appends the added ones', /\.filter\(\(p\) => p\.custom && p\.active !== false\)/.test(grid));
-yes('a page switched off leaves the grid', /pages\[item\.key\]\.active !== false/.test(grid));
-yes('the home flag reaches the tile', /home: p\.home !== false/.test(grid));
+// The behaviour itself is computed above; this is the wiring, which a
+// computed test cannot see: the grid must use the shared helpers rather than
+// keep a second copy that drifts.
+yes('the grid builds its list from the shared helpers',
+  /withWebviewConfig\(servicesForRole\(role, can\), webviewPages\)/.test(grid));
+yes('and keeps no copy of its own', !/const withWebviewConfig = \(list\)/.test(grid));
 // MoreFeaturesScreen's own rule: on the home screen or here, never nowhere.
 const more = read('src/screens/MoreFeaturesScreen.js');
 yes('a page kept off home is still reachable',
