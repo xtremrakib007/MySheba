@@ -84,6 +84,24 @@ export default function ApiProviderManagementScreen() {
   // the primary already in it, and falls back to `service` for a document
   // written before multi-feature support.
   const servicesOf=(x)=>(Array.isArray(x.services)&&x.services.length?x.services:[x.service].filter(Boolean));
+  // Our float with the provider, not a customer's wallet - the callable is
+  // superadmin-gated, and this only ever renders inside a superadmin screen.
+  // Two numbers because drives are funded separately: drives can be empty
+  // while the account is healthy, and that is the case worth seeing.
+  const [balance,setBalance]=useState(null);
+  const [balanceBusy,setBalanceBusy]=useState(false);
+  const isSuccessTopUp=(x)=>String(x?.name||'').trim().toLowerCase()==='success topup';
+  // null is "not reported", which is not the same as the zero the provider
+  // documents as a real balance.
+  const fmtBalance=(v)=>v===null||v===undefined?'—':`BDT ${Number(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const checkBalance=async()=>{
+    if(balanceBusy)return;
+    setBalanceBusy(true);
+    try{const data=await apiService.getSuccessTopUpBalance();setBalance(data);}
+    catch(e){Alert.alert('Balance',e.message||'Could not read the Success TopUp balance.');}
+    finally{setBalanceBusy(false);}
+  };
+
   const providersFor=(service)=>items.filter((x)=>servicesOf(x).includes(service)).sort((a,b)=>Number(b.priority||0)-Number(a.priority||0));
 
   const renderFeature=({item:service})=>{
@@ -111,9 +129,15 @@ export default function ApiProviderManagementScreen() {
             <Text numberOfLines={1} style={styles.url}>{item.baseUrl}</Text>
             <Text style={styles.meta}>{item.authType||'none'} • API secret {item.hasSecretKey?'configured':'not set'}{item.catalogPath?' • catalogue':''}</Text>
             <Text style={styles.webhookState}>{hook?.enabled?'🔔 Webhook active':'🔕 Webhook not configured'}</Text>
+            {isSuccessTopUp(item)&&!!balance?<Text style={styles.balance}>
+              Account {fmtBalance(balance.balance)} • Drives {fmtBalance(balance.driveBalance)}
+            </Text>:null}
           </View>
           <View>
             <TouchableOpacity onPress={()=>testApi(item)}><Text style={styles.action}>Test</Text></TouchableOpacity>
+            {isSuccessTopUp(item)?<TouchableOpacity onPress={checkBalance} disabled={balanceBusy}>
+              <Text style={styles.action}>{balanceBusy?'…':'Balance'}</Text>
+            </TouchableOpacity>:null}
             <TouchableOpacity onPress={()=>{setEditing(item);setPresetService('');setShow(true);}}><Text style={styles.action}>Edit</Text></TouchableOpacity>
             <TouchableOpacity onPress={()=>{setWebhookProvider(item);setShowWebhook(true);}}><Text style={styles.webhookAction}>Webhook</Text></TouchableOpacity>
             <TouchableOpacity onPress={()=>remove(item.id)}><Text style={styles.delete}>Delete</Text></TouchableOpacity>
@@ -192,5 +216,6 @@ function createStyles(colors) {
     webhookAction: { fontWeight: '800', padding: 5, color: colors.primary },
     delete: { fontWeight: '800', padding: 5, color: colors.error },
     webhookState: { marginTop: 5, fontWeight: '700', color: colors.textSecondary },
+    balance: { marginTop: 5, fontWeight: '800', fontSize: 12, color: colors.primary },
   });
 }

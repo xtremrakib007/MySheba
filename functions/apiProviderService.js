@@ -863,6 +863,70 @@ exports.listApiProviders = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async 
     };
   });
 });
+/**
+ * The Success TopUp floats, for a superadmin only.
+ *
+ * This is OUR prepaid trading capacity with the provider, not any customer's
+ * money, so it is gated server side rather than merely hidden in the UI.
+ *
+ * Two numbers, not one. From the documentation:
+ *
+ *   POST /api/balance -> { "result": true, "balance": 0, "driveBalance": 0 }
+ *
+ * Drive packages are funded from their own float, so drives can fail while
+ * the account balance is healthy and the account can be empty while drives
+ * still work. Reporting one number would hide exactly the case worth seeing.
+ */
+exports.getSuccessTopUpBalance = onCall({ enforceAppCheck: false }, async (request) => {
+  const db = admin.firestore();
+  await assertSuperadmin(db, request);
+
+  const provider = await catalog.readProvider(db, 'Recharge');
+  if (!provider) throw unconfiguredError('Recharge');
+  Object.assign(provider, await providerSecretService.getCredentials(provider));
+  if (!provider.apiKey || !provider.secretKey) {
+    throw new HttpsError('failed-precondition', 'Success TopUp credentials are not configured.');
+  }
+
+  let body;
+  try {
+    body = await catalogHttpsRequest(
+      new URL('/api/balance', provider.baseUrl || 'https://api.successtopup.com'),
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({
+          successtopup_key: provider.apiKey,
+          successtopup_secret: provider.secretKey,
+        }),
+      },
+      { errorLabel: 'Success TopUp' },
+    );
+  } catch (e) {
+    throw new HttpsError('unavailable', String(e?.message || 'Could not reach Success TopUp.').slice(0, 300));
+  }
+
+  // `result` is a JSON boolean here as everywhere else; accept the string form
+  // too rather than call a working provider broken over a type.
+  if (body && body.result !== undefined && String(body.result) !== 'true') {
+    throw new HttpsError('failed-precondition', String(body.message || 'Success TopUp rejected the balance request.').slice(0, 300));
+  }
+
+  // Zero is a real balance and the documented example, so an absent number and
+  // a zero must not collapse into each other: null means "not reported".
+  const read = (value) => {
+    if (value === undefined || value === null || value === '') return null;
+    const numeric = typeof value === 'number' ? value : Number(String(value).replace(/[^0-9.-]/g, ''));
+    return Number.isFinite(numeric) ? numeric : null;
+  };
+
+  return {
+    balance: read(body?.balance),
+    driveBalance: read(body?.driveBalance),
+    checkedAt: Date.now(),
+  };
+});
+
 exports.saveApiProvider = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);

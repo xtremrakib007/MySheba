@@ -109,6 +109,7 @@ exports.saveServiceApiSettings = require('./apiProviderService').saveServiceApiS
 exports.testApiProvider = require('./apiProviderService').testApiProvider;
 exports.listSuccessTopUpDrives = require('./apiProviderService').listSuccessTopUpDrives;
 exports.listSuccessTopUpCatalogForAdmin = require('./apiProviderService').listSuccessTopUpCatalogForAdmin;
+exports.getSuccessTopUpBalance = require('./apiProviderService').getSuccessTopUpBalance;
 exports.listApiWebhooks = require('./apiWebhookService').listApiWebhooks;
 exports.saveApiWebhook = require('./apiWebhookService').saveApiWebhook;
 exports.deleteApiWebhook = require('./apiWebhookService').deleteApiWebhook;

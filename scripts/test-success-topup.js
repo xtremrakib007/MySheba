@@ -579,6 +579,35 @@ check('billAmount goes out as the documented number', () => {
   return null;
 });
 
+// POST /api/balance -> { "result": true, "balance": 0, "driveBalance": 0 }
+//
+// Two floats, not one: drives are funded separately, so drives can be empty
+// while the account is healthy. This is OUR trading capacity, so the callable
+// is superadmin-gated server side rather than merely hidden in a screen.
+check('the balance callable reads both documented floats', () => {
+  const src = read('functions/apiProviderService.js');
+  const fn = src.slice(src.indexOf('exports.getSuccessTopUpBalance'));
+  if (!fn) return 'getSuccessTopUpBalance not found';
+  if (!/assertSuperadmin\(db, request\)/.test(fn.slice(0, 600))) return 'not gated to superadmin';
+  if (!/\/api\/balance/.test(fn.slice(0, 2000))) return 'does not call /api/balance';
+  if (!/read\(body\?\.balance\)/.test(fn)) return 'does not read balance';
+  if (!/read\(body\?\.driveBalance\)/.test(fn)) return 'does not read driveBalance';
+  // The documented example is zero, so an absent number must not read as one.
+  if (!/Zero is a real balance/.test(fn)) return 'no longer distinguishes zero from not-reported';
+  if (!/exports\.getSuccessTopUpBalance/.test(read('functions/index.js'))) return 'not exported from index.js';
+  return null;
+});
+
+check('the balance is shown to a superadmin only, never a customer', () => {
+  const screen = read('src/screens/ApiProviderManagementScreen.js');
+  if (!/getSuccessTopUpBalance/.test(screen)) return 'the admin screen does not read it';
+  // Anything outside the superadmin API screen would be a leak of our float.
+  for (const f of ['src/components/ServiceGrid.js', 'src/screens/CustomerHomeScreen.js', 'src/screens/TopUpScreen.js']) {
+    if (/getSuccessTopUpBalance|driveBalance/.test(read(f))) return `${f} reads the provider float`;
+  }
+  return null;
+});
+
 check('amount goes out as the documented number', () => {
   const api = require('../functions/apiProviderService')._test;
   // The docs table types amount as `number` and the example sends 50.

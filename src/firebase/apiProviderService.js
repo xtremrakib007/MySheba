@@ -9,6 +9,7 @@ const saveModesFn = httpsCallable(functions, 'saveServiceApiSettings');
 const drivesFn = httpsCallable(functions, 'listSuccessTopUpDrives');
 const testFn = httpsCallable(functions, 'testApiProvider');
 const adminCatalogFn = httpsCallable(functions, 'listSuccessTopUpCatalogForAdmin');
+const balanceFn = httpsCallable(functions, 'getSuccessTopUpBalance');
 
 // Must match ALLOWED_SERVICES in functions/apiProviderService.js. A service
 // the backend routes but this list omits cannot be configured by a
@@ -18,6 +19,16 @@ const adminCatalogFn = httpsCallable(functions, 'listSuccessTopUpCatalogForAdmin
 export const API_SERVICES = ['Recharge', 'Internet', 'Offer Packs', 'Bill Payment', 'Bus', 'Train', 'Flight', 'Mobile Banking', 'Remittance', 'Payment Gateway', 'Entertainment', 'Recharge PIN'];
 export async function listApiProviders() { const res = await listFn({}); return res.data?.providers || res.data || []; }
 export async function saveApiProvider(provider) { return (await saveFn(provider)).data; }
+
+/**
+ * Our floats with Success TopUp. Superadmin only, enforced in the callable -
+ * this is trading capacity, not any customer's money.
+ *
+ * Returns { balance, driveBalance, checkedAt }. Drives are funded separately,
+ * so either can be empty while the other is fine. Null means the provider did
+ * not report that number; zero means it reported zero.
+ */
+export async function getSuccessTopUpBalance() { return (await balanceFn({})).data; }
 export async function deleteApiProvider(id) { return (await deleteFn({ id })).data; }
 export async function getServiceApiSettings() { return (await getModesFn({})).data; }
 export async function saveServiceApiSettings(modes) { return (await saveModesFn({ modes })).data; }
