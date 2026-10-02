@@ -1,7 +1,7 @@
 // PHASE 2 - MySheba Advertisement Feature Controls.
 //
 // This is the Super Admin advertisement CONTROL layer: the Global
-// Controls (Global Ads / Direct MySheba Ads / Google AdMob / Banner /
+// Controls (Global Ads / Direct MySheba Ads / Banner /
 // Native / Interstitial - AdSettings in src/types/ads.ts) and the
 // per-feature controls (Ads / Banner / Native / Interstitial for each of
 // the 12 FEATURE_IDS - AdFeatureControl in src/types/ads.ts), plus the
@@ -38,7 +38,6 @@ import { FEATURE_ID_LIST, FEATURE_LABELS } from '../constants/adFeatures';
 export const DEFAULT_AD_SETTINGS = {
   adsEnabled: true,
   directAdsEnabled: true,
-  admobEnabled: true,
   bannerAdsEnabled: true,
   nativeAdsEnabled: true,
   interstitialAdsEnabled: true,
@@ -173,15 +172,14 @@ export function isGlobalAdTypeEnabled(adSettings, adType) {
   }
 }
 
-/** Is `network` (direct/admob - AD_NETWORKS in adEnums.ts) enabled by the
- * Global Controls? Also false whenever Global Ads itself is off. Defaults
- * an unspecified/unknown network to the "direct" switch, since every
- * Advertisement created before a `network` field existed is a Direct
- * MySheba Ad. */
+/** Is `network` (AD_NETWORKS in adEnums.ts) enabled by the Global Controls?
+ * Also false whenever Global Ads itself is off. Direct is the only network
+ * now, and an unspecified or unknown one still answers to the "direct"
+ * switch, since every Advertisement created before a `network` field existed
+ * is a Direct MySheba Ad. */
 export function isAdNetworkEnabled(adSettings, network) {
   const settings = adSettings || DEFAULT_AD_SETTINGS;
   if (settings.adsEnabled === false) return false;
-  if (network === AD_NETWORKS.ADMOB) return settings.admobEnabled !== false;
   return settings.directAdsEnabled !== false;
 }
 

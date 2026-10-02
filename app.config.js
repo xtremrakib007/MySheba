@@ -1,15 +1,8 @@
-// Dynamic Expo config. Firebase and AdMob values can be injected by EAS
+// Dynamic Expo config. Firebase values can be injected by EAS
 // environment variables without committing secrets or provider settings.
 const fs = require('fs');
 const appJson = require('./app.base.json');
 
-const ADMOB_ANDROID_BANNER_ID =
-  process.env.ADMOB_ANDROID_BANNER_ID || appJson.expo.extra.admobAndroidBannerId;
-const ADMOB_IOS_BANNER_ID =
-  process.env.ADMOB_IOS_BANNER_ID || appJson.expo.extra.admobIosBannerId;
-const ADMOB_ANDROID_INTERSTITIAL_ID =
-  process.env.ADMOB_ANDROID_INTERSTITIAL_ID ||
-  appJson.expo.extra.admobAndroidInterstitialId;
 
 function resolveGoogleServicesFile() {
   const configured = process.env.GOOGLE_SERVICES_JSON || appJson.expo.android.googleServicesFile;
@@ -43,9 +36,6 @@ module.exports = () => {
     },
     extra: {
       ...expo.extra,
-      admobAndroidBannerId: ADMOB_ANDROID_BANNER_ID,
-      admobIosBannerId: ADMOB_IOS_BANNER_ID,
-      admobAndroidInterstitialId: ADMOB_ANDROID_INTERSTITIAL_ID,
       ...(process.env.FIREBASE_APP_CHECK_DEBUG_TOKEN ? { firebaseAppCheckDebugToken: process.env.FIREBASE_APP_CHECK_DEBUG_TOKEN } : {}),
     },
   };

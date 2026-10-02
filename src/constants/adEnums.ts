@@ -15,17 +15,17 @@ export const AD_TYPES = {
 export type AdType = (typeof AD_TYPES)[keyof typeof AD_TYPES];
 
 /**
- * PHASE 2 - which ad network an Advertisement was sourced from: sold and
- * managed directly through this app's own advertisements/ad_campaigns
+ * PHASE 2 - which ad network an Advertisement was sourced from. Every ad is
+ * sold and managed directly through this app's own advertisements/ad_campaigns
  * collections ("Direct MySheba Ads" in the Global Controls section of
- * AdFeatureControlsScreen), or served through Google AdMob. Independent
- * of AdType above (a banner can come from either network) - see
- * AdSettings.directAdsEnabled/admobEnabled in src/types/ads.ts and
+ * AdFeatureControlsScreen). Google AdMob was the other member of this enum;
+ * its SDK was shipped and configured but never rendered a single ad, so it was
+ * removed rather than left as a switch that did nothing. Independent of AdType
+ * above - see AdSettings.directAdsEnabled in src/types/ads.ts and
  * adControlsService.js's isAdNetworkEnabled.
  */
 export const AD_NETWORKS = {
   DIRECT: 'direct',
-  ADMOB: 'admob',
 } as const;
 export type AdNetwork = (typeof AD_NETWORKS)[keyof typeof AD_NETWORKS];
 

@@ -8,7 +8,7 @@ const AD_SETTINGS_COLLECTION = 'ad_settings';
 const AD_SETTINGS_DOC_ID = 'general';
 const AD_FEATURE_CONTROLS_COLLECTION = 'ad_feature_controls';
 const VALID_FEATURE_IDS = ['home','mobile_recharge','internet_package','mobile_banking','remittance','air_ticket','jobs','buy_sell','services','help_support'];
-const VALID_SETTINGS_FIELDS = ['adsEnabled','directAdsEnabled','admobEnabled','bannerAdsEnabled','nativeAdsEnabled','interstitialAdsEnabled'];
+const VALID_SETTINGS_FIELDS = ['adsEnabled','directAdsEnabled','bannerAdsEnabled','nativeAdsEnabled','interstitialAdsEnabled'];
 const VALID_FEATURE_CONTROL_FIELDS = ['adsEnabled','bannerEnabled','nativeEnabled','interstitialEnabled'];
 
 function requireAuth(request) { if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.'); return request.auth.uid; }

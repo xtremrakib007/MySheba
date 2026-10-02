@@ -40,8 +40,8 @@ export type AdCollectionName = (typeof AD_COLLECTIONS)[keyof typeof AD_COLLECTIO
 
 /**
  * PHASE 2 - doc id of the single ad_settings document (AD_COLLECTIONS.SETTINGS)
- * that holds the Global Controls (Global Ads / Direct MySheba Ads / Google
- * AdMob / Banner / Native / Interstitial) - see AdSettings in
+ * that holds the Global Controls (Global Ads / Direct MySheba Ads /
+ * Banner / Native / Interstitial) - see AdSettings in
  * src/types/ads.ts and adControlsService.js. One doc, same "single
  * settings/{id} doc per config group" shape this app already uses
  * elsewhere (e.g. settings/featureAccess - see featureAccessService.js).

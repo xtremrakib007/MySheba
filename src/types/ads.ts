@@ -398,8 +398,6 @@ export interface AdAuditLog {
  * regardless of which feature or placement it would otherwise show in:
  *   - directAdsEnabled: "Direct MySheba Ads" - ads sold/managed directly
  *     (the advertisements/ad_campaigns collections above), as opposed to
- *   - admobEnabled: "Google AdMob" - the other ad network this app can
- *     surface. See AD_NETWORKS in adEnums.ts.
  *   - bannerAdsEnabled / nativeAdsEnabled / interstitialAdsEnabled:
  *     "Banner Ads" / "Native Ads" / "Interstitial Ads" - global toggle
  *     per ad *format* (AdType in adEnums.ts), independent of network.
@@ -407,7 +405,6 @@ export interface AdAuditLog {
 export interface AdSettings {
   adsEnabled: boolean;
   directAdsEnabled: boolean;
-  admobEnabled: boolean;
   bannerAdsEnabled: boolean;
   nativeAdsEnabled: boolean;
   interstitialAdsEnabled: boolean;

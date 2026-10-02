@@ -92,7 +92,6 @@
     "@react-native-firebase/app": "^21.13.0",
     "@react-native-firebase/auth": "^21.13.0",
     "@react-native-firebase/messaging": "^21.13.0",
-    "react-native-google-mobile-ads": "14.7.0",
     "@react-native-async-storage/async-storage": "2.1.2",
     "react-native-share": "~12.0.9",
     "buffer": "^6.0.3",

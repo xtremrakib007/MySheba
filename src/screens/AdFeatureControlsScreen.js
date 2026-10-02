@@ -13,7 +13,7 @@ import * as adControlsService from '../firebase/adControlsService';
 // Controls"). Two independent control layers, both backed by
 // src/firebase/adControlsService.js / functions/adControlsService.js:
 //   1. Global Controls (ad_settings/general) - Global Ads / Direct
-//      MySheba Ads / Google AdMob / Banner / Native / Interstitial.
+//      MySheba Ads / Banner / Native / Interstitial.
 //   2. Feature Controls (ad_feature_controls/{featureId}) - per-feature
 //      Ads / Banner / Native / Interstitial, one row per FEATURE_ID_LIST
 //      entry (adFeatures.ts).
@@ -26,7 +26,6 @@ import * as adControlsService from '../firebase/adControlsService';
 const GLOBAL_TOGGLES = [
   { key: 'adsEnabled', label: 'Global Ads', sub: 'Master switch - off disables every ad, everywhere.' },
   { key: 'directAdsEnabled', label: 'Direct MySheba Ads', sub: 'Ads sold and managed directly through MySheba.' },
-  { key: 'admobEnabled', label: 'Google AdMob', sub: 'Ads served through the Google AdMob network.' },
   { key: 'bannerAdsEnabled', label: 'Banner Ads', sub: 'Banner-format ads, across every feature.' },
   { key: 'nativeAdsEnabled', label: 'Native Ads', sub: 'Native-format ads, across every feature.' },
   { key: 'interstitialAdsEnabled', label: 'Interstitial Ads', sub: 'Full-screen interstitial ads, across every feature.' },

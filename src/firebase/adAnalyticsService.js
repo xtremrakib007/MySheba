@@ -132,21 +132,6 @@ async function getDirectRevenue() {
   return paid.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 }
 
-/** DASHBOARD - "AdMob Revenue when available". No AdMob SDK/reporting
- * integration exists anywhere in this app yet (adSettings.admobEnabled is
- * only ever a global on/off switch for whether AdMob ads are ALLOWED to
- * show - src/types/ads.ts's AdSettings - never a revenue source), so
- * there is no collection this could honestly read from. Returns `null`
- * (not 0 - see this function's own distinction) so AdAnalyticsScreen can
- * render "Not available yet" rather than a misleading "MYR 0.00" that
- * would look like AdMob ran and earned nothing, per the brief's own
- * "when available" qualifier - this is the ONE dashboard number in this
- * file that isn't a real Firestore read, deliberately, because there is
- * nothing yet to read. */
-function getAdmobRevenue() {
-  return null;
-}
-
 /** DASHBOARD - everything AdAnalyticsScreen's top cards need, fetched in
  * parallel. Any one section failing (e.g. a stale composite index while
  * Firestore is still building one after this feature ships) won't block
@@ -173,7 +158,6 @@ export async function getAdDashboard(filterKey, customRange) {
     clicks,
     ctr,
     directRevenue,
-    admobRevenue: getAdmobRevenue(),
     dateRange: { startKey, endKey },
   };
 }

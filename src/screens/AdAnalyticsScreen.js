@@ -40,7 +40,7 @@ const REPORT_TABS = [
 
 const EMPTY_DASHBOARD = {
   activeCampaigns: 0, pendingAds: 0, activeAds: 0, advertisers: 0,
-  impressions: 0, clicks: 0, ctr: 0, directRevenue: 0, admobRevenue: null,
+  impressions: 0, clicks: 0, ctr: 0, directRevenue: 0,
 };
 
 function formatAmount(n) {
@@ -243,12 +243,6 @@ export default function AdAnalyticsScreen() {
                   <StatCard icon="👆" label="Clicks" value={formatCount(dashboard.clicks)} />
                   <StatCard icon="📈" label="CTR" value={formatCTR(dashboard.ctr)} />
                   <StatCard icon="💰" label="Direct Ad Revenue" value={`MYR ${formatAmount(dashboard.directRevenue)}`} />
-                  <StatCard
-                    icon="🅰️"
-                    label="AdMob Revenue"
-                    value={dashboard.admobRevenue === null || dashboard.admobRevenue === undefined ? '—' : `MYR ${formatAmount(dashboard.admobRevenue)}`}
-                    sub={dashboard.admobRevenue === null || dashboard.admobRevenue === undefined ? 'Not available yet' : undefined}
-                  />
                 </View>
               </Section>
 

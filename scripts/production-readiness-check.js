@@ -27,18 +27,6 @@ assert(eas?.build?.['production-apk']?.channel === 'production', 'EAS production
 assert(typeof app?.updates?.url === 'string' && app.updates.url.startsWith('https://u.expo.dev/'), 'Expo Updates URL must point to EAS');
 assert(app?.runtimeVersion?.policy === 'sdkVersion', 'Runtime version policy must be sdkVersion');
 
-const testAdMobIds = [
-  'ca-app-pub-3940256099942544/6300978111',
-  'ca-app-pub-3940256099942544/1033173712',
-  'ca-app-pub-3940256099942544/5224354917',
-];
-const configuredAdMob = [
-  app?.extra?.admobAndroidBannerId,
-  app?.extra?.admobAndroidInterstitialId,
-  app?.extra?.admobIosBannerId,
-].filter(Boolean);
-assert(!configuredAdMob.some((id) => testAdMobIds.includes(id)), 'Production app config must not contain Google test AdMob unit IDs');
-
 const configPath = path.join(root, 'app.config.js');
 assert(fs.existsSync(configPath), 'app.config.js is required');
 

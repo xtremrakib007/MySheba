@@ -134,7 +134,6 @@ const EXEMPT = {
       'that verifies an RSA PKCS#1 v1.5 signature.',
   },
   '@expo/code-signing-certificates': { tree: 'app', aliasOf: 'node-forge' },
-  'react-native-google-mobile-ads': { tree: 'app', aliasOf: 'postcss' },
   '@react-native-firebase/app-check': { tree: 'app', aliasOf: '@grpc/grpc-js' },
   'firebase-admin': { tree: 'functions', aliasOf: 'node-forge' },
   'firebase-functions': { tree: 'functions', aliasOf: 'node-forge' },

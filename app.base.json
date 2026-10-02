@@ -94,13 +94,6 @@
       "@react-native-firebase/app",
       "@react-native-firebase/app-check",
       [
-        "react-native-google-mobile-ads",
-        {
-          "androidAppId": "ca-app-pub-5028998697615030~7504898532",
-          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
-        }
-      ],
-      [
         "react-native-share",
         {
           "ios": [
@@ -144,10 +137,7 @@
     "extra": {
       "eas": {
         "projectId": "5f0bbeb3-e2d9-4a46-af9f-66379fada1c8"
-      },
-      "admobAndroidBannerId": "ca-app-pub-5028998697615030/9556346804",
-      "admobIosBannerId": "",
-      "admobAndroidInterstitialId": "ca-app-pub-5028998697615030/4687163508"
+      }
     },
     "owner": "xtremrakib5"
   }
