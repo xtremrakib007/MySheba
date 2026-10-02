@@ -52,6 +52,11 @@ export default function SecurityPinGate() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [bioReady, setBioReady] = useState(false);
+  // Enabled and supported, but this device is not holding the PIN yet - which
+  // is every first gate after a sign-in, because logging out clears the vault.
+  // Without a word here the fingerprint is simply absent and the only way to
+  // find out it comes back is to type the PIN and notice next time.
+  const [bioNeedsPin, setBioNeedsPin] = useState(false);
   const bioTriedRef = useRef(false);
 
   useEffect(() => {
@@ -73,6 +78,7 @@ export default function SecurityPinGate() {
     let cancelled = false;
     if (!visible || isSetup || biometricEnabled !== true || !authUser?.uid) {
       setBioReady(false);
+      setBioNeedsPin(false);
       return () => { cancelled = true; };
     }
     (async () => {
@@ -80,7 +86,9 @@ export default function SecurityPinGate() {
         isBiometricAvailable(),
         pinVault.hasPin(authUser.uid),
       ]);
-      if (!cancelled) setBioReady(available && stored);
+      if (cancelled) return;
+      setBioReady(available && stored);
+      setBioNeedsPin(available && !stored);
     })();
     return () => { cancelled = true; };
   }, [visible, isSetup, biometricEnabled, authUser]);
@@ -232,6 +240,9 @@ export default function SecurityPinGate() {
                 <Text style={styles.bioText}>👆 Use Fingerprint / Face</Text>
               </TouchableOpacity>
             )}
+            {!bioReady && !!bioNeedsPin && (
+              <Text style={styles.bioHint}>Enter your PIN once here and your fingerprint will work from next time.</Text>
+            )}
 
             <View style={styles.row}>
               <TouchableOpacity style={[styles.cancelBtn, isMandatoryGoogleSetup && styles.hiddenCancel]} onPress={onCancel} disabled={busy || isMandatoryGoogleSetup}>
@@ -263,6 +274,7 @@ function createStyles(colors) {
     error: { color: colors.error, fontSize: 12, marginTop: 12 },
     bioBtn: { marginTop: 14, paddingVertical: 8, alignItems: 'center' },
     bioText: { color: colors.primary, fontWeight: '600', fontSize: 13 },
+    bioHint: { color: colors.textSecondary, fontSize: 11.5, lineHeight: 16, marginTop: 10, textAlign: 'center' },
     row: { flexDirection: 'row', gap: 10, marginTop: 20 },
     cancelBtn: { flex: 1, paddingVertical: 10, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
     hiddenCancel: { borderWidth: 0 },

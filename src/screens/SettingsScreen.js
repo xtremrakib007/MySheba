@@ -12,17 +12,27 @@ import { SectionCard, ListRow, ToggleRow } from '../components/uiRows';
 import ChangePasswordModal from '../components/ChangePasswordModal';
 import ResetSecurityPinModal from '../components/ResetSecurityPinModal';
 import LanguageModal from '../components/LanguageModal';
+import { isBiometricAvailable } from '../firebase/biometricAuth';
 
 export default function SettingsScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors); const { language, t } = useLanguage();
-  const { goBackOrHome, logout, profile, setNotifPref, changePassword, resetSecurityPin, setScreen, appLockEnabled, setAppLockEnabled } = useApp();
+  const { goBackOrHome, logout, profile, setNotifPref, changePassword, resetSecurityPin, setScreen, appLockEnabled, setAppLockEnabled, biometricEnabled, setBiometricEnabled } = useApp();
   const prefs = profile?.notifPrefs || {};
   const [pushEnabled, setPushEnabledState] = useState(prefs.pushEnabled !== false); const [emailEnabled, setEmailEnabledState] = useState(prefs.emailEnabled !== false); const [rateAlerts, setRateAlertsState] = useState(!!prefs.rateAlerts);
   const [pwModalVisible, setPwModalVisible] = useState(false); const [pinModalVisible, setPinModalVisible] = useState(false); const [languageModalVisible, setLanguageModalVisible] = useState(false);
   useEffect(() => { if (!profile?.notifPrefs) return; setPushEnabledState(profile.notifPrefs.pushEnabled !== false); setEmailEnabledState(profile.notifPrefs.emailEnabled !== false); setRateAlertsState(!!profile.notifPrefs.rateAlerts); }, [profile?.notifPrefs]);
   const onTogglePush = (value) => { setPushEnabledState(value); setNotifPref('pushEnabled', value); }; const onToggleEmail = (value) => { setEmailEnabledState(value); setNotifPref('emailEnabled', value); }; const onToggleRateAlerts = (value) => { setRateAlertsState(value); setNotifPref('rateAlerts', value); };
   const onToggleAppLock = (value) => { setAppLockEnabled(value).catch(() => {}); };
+  // Biometric had no switch anywhere - it could only ever be turned on by the
+  // one-time prompt at sign-in, so anyone who tapped "Not Now", or never saw
+  // it, had no fingerprint on any PIN screen and nothing to change. App Lock
+  // got a row here; this never did.
+  const [bioAvailable, setBioAvailable] = useState(null);
+  useEffect(() => { let on = true; isBiometricAvailable().then((v) => { if (on) setBioAvailable(v); }); return () => { on = false; }; }, []);
+  // The switch reads context state, so a cancelled PIN gate leaves it off on
+  // its own - setBiometricEnabled throws before it writes anything.
+  const onToggleBiometric = (value) => { setBiometricEnabled(value).catch(() => {}); };
   const submitPasswordChange = async (currentPin, newPin) => { await changePassword(currentPin, newPin); setPwModalVisible(false); showAlert('MySheba', t('settings.passwordChanged')); };
   const submitPinReset = async (currentPassword, newPin) => { await resetSecurityPin(currentPassword, newPin); setPinModalVisible(false); showAlert('MySheba', t('settings.pinSaved')); };
   return <View style={styles.screen}>
@@ -39,7 +49,16 @@ export default function SettingsScreen() {
         <ListRow icon="🖨️" title="Printer" subtitle="Connect or select a supported printer" onPress={() => setScreen('printer')} />
         <ListRow icon="🔒" title={t('settings.changePassword')} onPress={() => setPwModalVisible(true)} />
         <ListRow icon="🔢" title={profile?.securityPinSet ? t('settings.changeSecurityPin') : t('settings.setUpSecurityPin')} subtitle={t('settings.securityPinSub')} onPress={() => setPinModalVisible(true)} />
-        <ToggleRow icon="🔐" title={t('settings.appLock')} subtitle={t('settings.appLockSub')} value={appLockEnabled} onValueChange={onToggleAppLock} last={!(profile?.role === 'admin' || profile?.role === 'superadmin')} />
+        <ToggleRow icon="🔐" title={t('settings.appLock')} subtitle={t('settings.appLockSub')} value={appLockEnabled} onValueChange={onToggleAppLock} />
+        <ToggleRow
+          icon="👆"
+          title="Fingerprint / Face Unlock"
+          subtitle={bioAvailable === false ? 'No fingerprint or face set up on this device' : 'Use it instead of your PIN'}
+          value={biometricEnabled === true}
+          onValueChange={onToggleBiometric}
+          disabled={bioAvailable === false}
+          last={!(profile?.role === 'admin' || profile?.role === 'superadmin')}
+        />
         {(profile?.role === 'admin' || profile?.role === 'superadmin') && (
           <ListRow icon="📱" title={t('settings.trustedDevices')} subtitle={t('settings.trustedDevicesSub')} onPress={() => setScreen('trustedDevices')} last />
         )}

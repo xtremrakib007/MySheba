@@ -94,6 +94,26 @@ for (const file of replays) {
   check(`${name} drops a stored PIN the server rejected`, /pinVault\.forgetPin\(/.test(text));
 }
 
+console.log('\nAnd it can actually be turned on');
+// The gap behind "no biometric" on a PIN screen: biometricEnabled could only
+// ever be set by the one-time prompt at sign-in. Decline it, or never see it,
+// and there was no fingerprint on any PIN surface and no switch anywhere to
+// change that. App Lock had a row in Settings the whole time; this did not.
+const settings = fs.readFileSync(path.join(ROOT, 'src/screens/SettingsScreen.js'), 'utf8');
+check('Settings has a biometric switch', /setBiometricEnabled/.test(settings));
+check('it reads the three-state pref as a boolean', /value=\{biometricEnabled === true\}/.test(settings));
+// A row that vanishes on a device without a sensor reads as a missing feature.
+check('and stays visible, dimmed, when the device has no sensor',
+  /disabled=\{bioAvailable === false\}/.test(settings) && /isBiometricAvailable/.test(settings));
+check('ToggleRow can be disabled at all', /disabled=\{!!disabled\}/.test(fs.readFileSync(path.join(ROOT, 'src/components/uiRows.js'), 'utf8')));
+
+// Logging out clears the vault, so the first gate after every sign-in has no
+// stored PIN and shows no fingerprint. Silence there looks like the feature is
+// broken; one line says it comes back.
+const gate = fs.readFileSync(path.join(ROOT, 'src/components/SecurityPinGate.js'), 'utf8');
+check('the gate says why the fingerprint is missing', /bioNeedsPin/.test(gate));
+check('only when it would otherwise work', /setBioNeedsPin\(available && !stored\)/.test(gate));
+
 console.log('');
 if (failed) {
   console.error(`${failed} check(s) failed.`);

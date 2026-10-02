@@ -59,7 +59,7 @@ export function ListRow({ icon, iconColor, title, subtitle, value, onPress, last
   );
 }
 
-export function ToggleRow({ icon, iconColor, title, subtitle, value, onValueChange, last }) {
+export function ToggleRow({ icon, iconColor, title, subtitle, value, onValueChange, last, disabled }) {
   const { colors } = useTheme();
   const s = createStyles(colors);
   const tint = iconColor || colors.primary;
@@ -70,13 +70,17 @@ export function ToggleRow({ icon, iconColor, title, subtitle, value, onValueChan
           <Text style={[s.iconGlyph, { color: tint }]}>{icon}</Text>
         </View>
       )}
-      <View style={s.rowText}>
+      <View style={[s.rowText, disabled && s.rowTextDisabled]}>
         <Text style={s.rowTitle} numberOfLines={1}>{title}</Text>
         {!!subtitle && <Text style={s.rowSubtitle} numberOfLines={1}>{subtitle}</Text>}
       </View>
       <Switch
         value={!!value}
         onValueChange={onValueChange}
+        // Shown rather than hidden when it cannot be used: a missing row reads
+        // as a missing feature, while a dimmed one with its reason underneath
+        // says the setting exists and what this device is short of.
+        disabled={!!disabled}
         trackColor={{ false: colors.border, true: colors.primary }}
         thumbColor={colors.onPrimary}
       />
@@ -184,6 +188,7 @@ function createStyles(colors) {
     rowDivider: { borderBottomWidth: 1, borderBottomColor: colors.divider },
     rowDisabled: { opacity: 0.5 },
     rowText: { flex: 1, minWidth: 0 },
+    rowTextDisabled: { opacity: 0.55 },
     rowTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
     rowSubtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
     rowValue: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, maxWidth: '40%' },
