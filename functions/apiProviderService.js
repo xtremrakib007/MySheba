@@ -150,9 +150,14 @@ function validateCatalog(data) {
     }
     out.catalogSuccessValue = typeof v === 'string' ? cleanString(v, 100) : v;
   }
-  if (data.catalogTypes !== undefined) {
-    if (!Array.isArray(data.catalogTypes)) throw new HttpsError('invalid-argument', 'Catalogue types must be a list.');
-    const types = data.catalogTypes.map((t) => cleanString(t, 40).toLowerCase()).filter(Boolean);
+  if (data.catalogTypes !== undefined && data.catalogTypes !== null && data.catalogTypes !== '') {
+    // The admin form edits this as "regular, drive", so a comma-separated
+    // string is as valid an input as an array.
+    const raw = Array.isArray(data.catalogTypes)
+      ? data.catalogTypes
+      : typeof data.catalogTypes === 'string' ? data.catalogTypes.split(',') : null;
+    if (!raw) throw new HttpsError('invalid-argument', 'Catalogue types must be a list or a comma-separated string.');
+    const types = raw.map((t) => cleanString(t, 40).toLowerCase()).filter(Boolean);
     if (types.length > 10) throw new HttpsError('invalid-argument', 'Too many catalogue types.');
     out.catalogTypes = [...new Set(types)];
   }
@@ -726,6 +731,22 @@ exports.listApiProviders = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async 
       hasCustomHeaders: Boolean(x.headers && Object.keys(x.headers).length),
       hasQueryTemplate: Boolean(x.queryTemplate && Object.keys(x.queryTemplate).length),
       hasRequestTemplate: Boolean(x.requestTemplate && Object.keys(x.requestTemplate).length),
+      // Catalogue configuration: where a provider's product list lives and how
+      // to read it. Paths, field mappings and selling hours are configuration,
+      // not credentials, so unlike the templates above they come back in full -
+      // Superadmin cannot correct a mapping it cannot see. The one exception is
+      // catalogRequestTemplate, which follows the same rule as requestTemplate
+      // because someone may paste a literal key into it.
+      catalogPreset: x.catalogPreset || '',
+      catalogPath: x.catalogPath || '',
+      catalogMethod: x.catalogMethod || '',
+      catalogListPath: x.catalogListPath || '',
+      catalogSuccessPath: x.catalogSuccessPath || '',
+      catalogSuccessValue: x.catalogSuccessValue === undefined ? '' : x.catalogSuccessValue,
+      catalogTypes: Array.isArray(x.catalogTypes) ? x.catalogTypes : [],
+      catalogItemMap: x.catalogItemMap || null,
+      catalogWindow: x.catalogWindow || null,
+      hasCatalogRequestTemplate: Boolean(x.catalogRequestTemplate && Object.keys(x.catalogRequestTemplate).length),
     };
   });
 });

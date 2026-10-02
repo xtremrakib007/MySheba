@@ -111,6 +111,9 @@ jobs:
       - name: Provider catalogue
         run: npm run test:catalog
 
+      - name: API management surface
+        run: npm run test:apimanagement
+
       - name: Uncertain-transaction reconciliation
         run: npm run test:reconcile
 
