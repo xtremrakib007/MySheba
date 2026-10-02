@@ -38,7 +38,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22   # eas-cli needs >=22: @oclif/plugin-autocomplete refuses to install on 20
           cache: npm
 
       - name: Audit navigation targets

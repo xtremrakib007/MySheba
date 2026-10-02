@@ -97,7 +97,7 @@ const EXEMPT = {
   'expo-dev-launcher': { tree: 'app', aliasOf: 'fast-uri' },
   'expo-manifests': { tree: 'app', aliasOf: 'fast-uri' },
   'expo-notifications': { tree: 'app', aliasOf: 'fast-uri' },
-  'expo-updates': { tree: 'app', aliasOf: 'fast-uri' },
+  'expo-updates': { tree: 'app', aliasOf: 'node-forge' },
   uuid: {
     tree: 'app',
     why:
@@ -105,6 +105,39 @@ const EXEMPT = {
       'Every consumer in this tree calls uuid.v4() with no buffer.',
     recheckIf: 'any code calls uuid.v3/v5/v6 with a buffer, especially one sized from input.',
   },
+  'node-forge': {
+    tree: ['app', 'functions'],
+    why:
+      'GHSA: RSA PKCS#1 v1.5 signature *verification* accepts extra nested DigestAlgorithm ' +
+      'elements, so a forged signature can be made to validate. It only bites code that ' +
+      'verifies a PKCS#1 v1.5 signature against a trusted key. Neither tree does that.\n' +
+      '  app: two paths, both build-time. expo-updates -> @expo/code-signing-certificates is ' +
+      'the one that would verify (it checks OTA manifest signatures), but expo-updates code ' +
+      'signing is not configured — there is no codeSigning/certificate key in app.base.json, ' +
+      'app.config.js or eas.json — so no verification ever runs. The other path is ' +
+      'expo -> @expo/cli, which is the dev/prebuild CLI. Confirmed by exporting the Android ' +
+      'bundle: "node-forge", "code-signing-certificates", "pki.privateKeyFromPem" and ' +
+      '"rsa.verify" each appear 0 times in the 6.9M Hermes bundle, so the library is not on a ' +
+      'device at all.\n' +
+      '  functions: firebase-admin requires node-forge in exactly one place, ' +
+      'lib/app/credential-internal.js, as forge.pki.privateKeyFromPem(this.privateKey) — ' +
+      'parsing our own service-account private key out of the runtime credentials. That is ' +
+      'key parsing, not signature verification, and the input is ours, not an attacker\'s.\n' +
+      '  Every fix npm offers is a major, and the app-tree ones are downgrades that predate ' +
+      'the vulnerable range (expo-updates@0.11.7 against our 0.28.18) and cannot run on ' +
+      'SDK 53. functions can move to firebase-admin@14 / firebase-functions@7 on purpose, as ' +
+      'a deliberate upgrade rather than an audit-driven one.',
+    recheckIf:
+      'expo-updates code signing is turned on (a codeSigning or certificate key appears in the ' +
+      'app config or eas.json), or node-forge starts showing up in an exported bundle, or ' +
+      'firebase-admin gains a node-forge call beyond privateKeyFromPem, or we write anything ' +
+      'that verifies an RSA PKCS#1 v1.5 signature.',
+  },
+  '@expo/code-signing-certificates': { tree: 'app', aliasOf: 'node-forge' },
+  'react-native-google-mobile-ads': { tree: 'app', aliasOf: 'postcss' },
+  '@react-native-firebase/app-check': { tree: 'app', aliasOf: '@grpc/grpc-js' },
+  'firebase-admin': { tree: 'functions', aliasOf: 'node-forge' },
+  'firebase-functions': { tree: 'functions', aliasOf: 'node-forge' },
 };
 
 const TREES = [
@@ -138,9 +171,22 @@ function titlesFor(vuln) {
   return out;
 }
 
+function treesOf(exempt) {
+  return Array.isArray(exempt.tree) ? exempt.tree : [exempt.tree];
+}
+
+function appliesTo(exempt, treeName) {
+  return Boolean(exempt) && treesOf(exempt).includes(treeName);
+}
+
 let blocking = 0;
 let accepted = 0;
-const unused = new Set(Object.keys(EXEMPT));
+// Keyed per (package, tree): an exemption scoped to both trees that is only
+// still reported in one of them has half rotted, and should say so.
+const unused = new Set();
+for (const [name, exempt] of Object.entries(EXEMPT)) {
+  for (const treeName of treesOf(exempt)) unused.add(`${name} (${treeName})`);
+}
 
 for (const tree of TREES) {
   let report;
@@ -159,11 +205,11 @@ for (const tree of TREES) {
     const exempt = EXEMPT[name];
     // An exemption is in use as long as npm still reports the package at any
     // severity; the moderate entries are documentation, not gate bypasses.
-    if (exempt && exempt.tree === tree.name) unused.delete(name);
+    if (appliesTo(exempt, tree.name)) unused.delete(`${name} (${tree.name})`);
 
     if (vuln.severity !== 'high' && vuln.severity !== 'critical') continue;
 
-    if (exempt && exempt.tree === tree.name) {
+    if (appliesTo(exempt, tree.name)) {
       accepted += 1;
       continue;
     }
@@ -183,7 +229,7 @@ for (const tree of TREES) {
       console.error('            Either upgrade, or add a triaged exemption in scripts/audit-deps.js');
       console.error('            saying why it is unreachable here.');
     } else {
-      console.error(`            An exemption exists but it is scoped to the "${exempt.tree}" tree, not "${tree.name}".`);
+      console.error(`            An exemption exists but it is scoped to the ${treesOf(exempt).map((t) => `"${t}"`).join(' and ')} tree, not "${tree.name}".`);
     }
   }
 }

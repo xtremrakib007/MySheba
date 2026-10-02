@@ -27,10 +27,14 @@ comparison in the first few seconds and names the package and both versions.
 It is wired in ahead of every `npm ci` in the repo: `eas-build.yml`,
 `eas-update-production.yml`, `deploy-functions.yml`.
 
-## `functions/` — fixed, now clean
+## `functions/` — fixed, then one new high
 
-Cloud Functions run on Node, where every advisory in the tree **is** reachable.
-This tree went from 14 advisories (2 high, 12 moderate) to **0**.
+Cloud Functions run on Node, where every advisory in the tree **is** reachable
+in principle, so this tree gets fixed rather than triaged wherever a fix exists.
+It went from 14 advisories (2 high, 12 moderate) to **0** — and then, in October
+2026, back to 3 highs when the node-forge advisory landed. Those 3 are one root
+cause with one call site, triaged below; everything in this section is still
+fixed, not exempted.
 
 **`@grpc/grpc-js` 1.14.4 → 1.14.5** (high). Picked up by `npm audit fix`, along
 with patch bumps to `express`, `body-parser` and `qs`. Reachable here: unlike
@@ -91,6 +95,44 @@ Each of these is an entry in `EXEMPT` in `scripts/audit-deps.js` carrying a
 gate also reports **stale** exemptions, so an entry that stops vouching for
 anything gets deleted rather than quietly outliving its advisory.
 
+## `node-forge` — the one high in both trees
+
+Added October 2026: GHSA *"RSA PKCS#1 v1.5 signature verification accepts extra
+nested DigestAlgorithm elements"*. It is a **verification bypass** — a forged
+signature can be made to validate. It only matters where node-forge verifies a
+PKCS#1 v1.5 signature against a trusted key. Seven packages across the two
+trees are flagged for it, and none of them do that:
+
+- **App tree, path 1** — `expo-updates` -> `@expo/code-signing-certificates`.
+  This is the one that *would* verify: it checks OTA manifest signatures. But
+  expo-updates code signing **is not configured** — there is no `codeSigning`
+  or `certificate` key in `app.base.json`, `app.config.js` or `eas.json` — so
+  the verification path never runs.
+- **App tree, path 2** — `expo` -> `@expo/cli`. The dev and prebuild CLI,
+  build-time only.
+- Confirmed rather than assumed: `npx expo export --platform android` and then
+  grepping the 6.9M Hermes bundle gives **0 occurrences** of `node-forge`,
+  `code-signing-certificates`, `pki.privateKeyFromPem` and `rsa.verify`. The
+  library is not on a device at all.
+- **functions** — `firebase-admin` requires it in exactly one place,
+  `lib/app/credential-internal.js`, as
+  `forge.pki.privateKeyFromPem(this.privateKey)`: parsing *our own*
+  service-account private key out of the runtime credentials. Key parsing, not
+  signature verification, on an input that is ours.
+
+`react-native-google-mobile-ads`, `@react-native-firebase/app-check`,
+`@firebase/*` and `firebase-functions` are flagged only for depending on
+node-forge or `@grpc/grpc-js` — none has a bug of its own.
+
+Every fix npm offers is a major, and the app-tree ones are **downgrades** that
+predate the vulnerable range (`expo-updates@0.11.7` against our `0.28.18`,
+`react-native-google-mobile-ads@13.6.1`, `@react-native-firebase/app-check@19.0.1`)
+and cannot run on SDK 53. Taking them would break the build, not secure it.
+
+`functions` is the exception: `firebase-admin@14` / `firebase-functions@7` are
+real forward versions. Worth doing as a deliberate, tested upgrade — not as an
+audit-driven scramble, since the advisory cannot reach us today.
+
 ## When this needs revisiting
 
 - Before an SDK bump, re-run `npm audit` in the app tree — an SDK 57 move
@@ -99,3 +141,9 @@ anything gets deleted rather than quietly outliving its advisory.
   harness), the `@grpc/grpc-js` exemption is void and the bump becomes urgent.
 - `firebase` and `@react-native-async-storage/async-storage` should be bumped
   together, on purpose, with a native rebuild — never by `npm audit fix`.
+- If expo-updates code signing is ever turned on, the `node-forge` exemption is
+  void: that switch is exactly what makes the advisory reachable. Same if
+  node-forge starts appearing in an exported bundle, or if `firebase-admin`
+  gains a node-forge call beyond `privateKeyFromPem`.
+- `firebase-admin@14` / `firebase-functions@7` in `functions/` is a worthwhile
+  planned upgrade that happens to clear three highs.
