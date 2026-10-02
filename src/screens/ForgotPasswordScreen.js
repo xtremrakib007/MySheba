@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Linking } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Linking, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { showAlert } from '../utils/appAlert';
@@ -32,6 +32,12 @@ export default function ForgotPasswordScreen() {
   const [phoneIdToken, setPhoneIdToken] = useState(null);
   const [emailIdToken, setEmailIdToken] = useState(null);
 
+  // resetPassword accepts exactly ONE proof: passwordReset.js:123 rejects the
+  // call when hasPhoneProof === hasEmailProof, so holding both is the same
+  // refusal as holding neither. Both are kept in state, so whichever path
+  // finishes clears the other - otherwise a stray email link arriving after an
+  // SMS code was verified turned a completed verification into "Please verify
+  // your phone or email first."
   const backToLogin = () => setScreen('login');
   const onContinueFromPhone = () => {
     setError('');
@@ -47,7 +53,7 @@ export default function ForgotPasswordScreen() {
   const completeEmailLink = async (url) => {
     if (!emailVerification.isEmailSignInLink(url)) return false;
     setBusy(true); setError('');
-    try { const result = await emailVerification.confirmEmailLink(url, email); setEmailIdToken(result.idToken); setStep('newPassword'); }
+    try { const result = await emailVerification.confirmEmailLink(url, emailRef.current); setEmailIdToken(result.idToken); setPhoneIdToken(null); setStep('newPassword'); }
     catch (e) { setError(friendlyMessage(e, 'Could not verify your email address. Please try again.')); }
     finally { setBusy(false); }
     return true;
@@ -60,17 +66,24 @@ export default function ForgotPasswordScreen() {
     catch (e) { setError(friendlyMessage(e, 'Could not send the verification email. Please try again.')); }
     finally { setBusy(false); }
   };
+  // The address is read through a ref so this registers once. Keyed on `email`
+  // it tore the listener down and re-ran getInitialURL() on every keystroke,
+  // and a link already waiting there was retried against a half-typed address -
+  // each attempt failing and writing its own error under the field.
+  const emailRef = useRef(email);
+  useEffect(() => { emailRef.current = email; }, [email]);
   useEffect(() => {
     let mounted = true;
     const sub = Linking.addEventListener('url', ({ url }) => { if (mounted) completeEmailLink(url); });
     Linking.getInitialURL().then(url => { if (mounted && url && emailVerification.isEmailSignInLink(url)) completeEmailLink(url); }).catch(() => {});
     return () => { mounted = false; sub.remove(); };
-  }, [email]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const onVerifySmsCode = async () => {
     setError('');
     if (!code.trim()) return setError('Please enter the code we sent you.');
     setBusy(true);
-    try { const result = await phoneVerification.confirmPhoneOtp(phoneConfirmation, code.trim()); setPhoneIdToken(result.idToken); setStep('newPassword'); }
+    try { const result = await phoneVerification.confirmPhoneOtp(phoneConfirmation, code.trim()); setPhoneIdToken(result.idToken); setEmailIdToken(null); setStep('newPassword'); }
     catch (e) { setError(friendlyMessage(e, 'Incorrect code. Please try again.')); }
     finally { setBusy(false); }
   };
@@ -78,6 +91,7 @@ export default function ForgotPasswordScreen() {
     setError('');
     if (newPassword.length < 6 || newPassword.length > 20) return setError('Password must be 6-20 characters.');
     if (newPassword !== confirmPassword) return setError('Passwords do not match.');
+    if (!phoneIdToken && !emailIdToken) return setError('Please verify your phone or email first.');
     setBusy(true);
     try {
       await authService.resetPassword({ phone, phoneE164: phoneVerification.phoneToE164(phone, phoneCountry.dial), dialCode: phoneCountry.dial, email, newPassword, phoneIdToken, emailIdToken });
@@ -87,19 +101,19 @@ export default function ForgotPasswordScreen() {
   };
 
   return (
-    <View style={styles.screen}>
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <LinearGradient colors={brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}><HeaderDecor /><Text style={styles.headerTitle}>Forgot Password</Text></LinearGradient>
-      <View style={styles.body}>
-        {step === 'phone' && <><Text style={styles.intro}>Enter the phone number on your account to reset your password.</Text><View style={styles.formGroup}><Text style={styles.label}>Phone Number</Text><View style={{flexDirection:'row',alignItems:'center'}}><TouchableOpacity onPress={()=>setCountryPicker(true)} style={{padding:12,borderWidth:1,borderColor:colors.border,borderRadius:8,marginRight:6,flexDirection:'row',alignItems:'center'}}><CountryFlag code={phoneCountry.code} emoji={phoneCountry.flag} size={24} /><Text style={{marginLeft:5,fontWeight:'600'}}>{phoneCountry.dial}</Text></TouchableOpacity><TextInput style={styles.input} placeholder="Phone number" keyboardType="phone-pad" value={phone} onChangeText={setPhone}/></View></View><TouchableOpacity style={[styles.btn,busy&&styles.btnDisabled]} onPress={onContinueFromPhone} disabled={busy}><Text style={styles.btnText}>Continue</Text></TouchableOpacity></>}
-        {step === 'choose' && <><Text style={styles.intro}>How would you like to verify it's you?</Text><TouchableOpacity style={[styles.btn,busy&&styles.btnDisabled]} onPress={onSendSms} disabled={busy}>{busy?<ActivityIndicator color="white"/>:<Text style={styles.btnText}>Send SMS Code</Text>}</TouchableOpacity><View style={styles.formGroup}><Text style={styles.label}>Or verify via the email on your account</Text><TextInput style={styles.input} placeholder="Email address" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail}/></View><TouchableOpacity style={[styles.btn,busy&&styles.btnDisabled]} onPress={onSendEmail} disabled={busy}>{busy?<ActivityIndicator color="white"/>:<Text style={styles.btnText}>Send Email Link</Text>}</TouchableOpacity></>}
-        {step === 'sms' && <><Text style={styles.intro}>Enter the code we texted to {phoneCountry.dial} {phone.replace(/[^0-9]/g, '').replace(/^0+/, '')}.</Text><View style={styles.formGroup}><Text style={styles.label}>Verification Code</Text><TextInput style={styles.input} placeholder="123456" keyboardType="number-pad" maxLength={6} value={code} onChangeText={setCode}/></View><TouchableOpacity style={[styles.btn,busy&&styles.btnDisabled]} onPress={onVerifySmsCode} disabled={busy}>{busy?<ActivityIndicator color="white"/>:<Text style={styles.btnText}>Verify Code</Text>}</TouchableOpacity><TouchableOpacity style={styles.resendBtn} onPress={onSendSms} disabled={busy}><Text style={styles.resendText}>Didn't get a code? Resend</Text></TouchableOpacity></>}
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+        {step === 'phone' && <><Text style={styles.intro}>Enter the phone number on your account to reset your password.</Text><View style={styles.formGroup}><Text style={styles.label}>Phone Number</Text><View style={{flexDirection:'row',alignItems:'center'}}><TouchableOpacity onPress={()=>setCountryPicker(true)} style={styles.dialBtn}><CountryFlag code={phoneCountry.code} emoji={phoneCountry.flag} size={24} /><Text style={styles.dialText}>{phoneCountry.dial}</Text></TouchableOpacity><TextInput style={[styles.input,styles.phoneInput]} placeholder="Phone number" placeholderTextColor={colors.placeholder} keyboardType="phone-pad" value={phone} onChangeText={setPhone}/></View></View><TouchableOpacity style={[styles.btn,busy&&styles.btnDisabled]} onPress={onContinueFromPhone} disabled={busy}><Text style={styles.btnText}>Continue</Text></TouchableOpacity></>}
+        {step === 'choose' && <><Text style={styles.intro}>How would you like to verify it's you?</Text><TouchableOpacity style={[styles.btn,busy&&styles.btnDisabled]} onPress={onSendSms} disabled={busy}>{busy?<ActivityIndicator color="white"/>:<Text style={styles.btnText}>Send SMS Code</Text>}</TouchableOpacity><View style={styles.formGroup}><Text style={styles.label}>Or verify via the email on your account</Text><TextInput style={styles.input} placeholder="Email address" placeholderTextColor={colors.placeholder} keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail}/></View><TouchableOpacity style={[styles.btn,busy&&styles.btnDisabled]} onPress={onSendEmail} disabled={busy}>{busy?<ActivityIndicator color="white"/>:<Text style={styles.btnText}>Send Email Link</Text>}</TouchableOpacity></>}
+        {step === 'sms' && <><Text style={styles.intro}>Enter the code we texted to {phoneCountry.dial} {phone.replace(/[^0-9]/g, '').replace(/^0+/, '')}.</Text><View style={styles.formGroup}><Text style={styles.label}>Verification Code</Text><TextInput style={styles.input} placeholder="123456" placeholderTextColor={colors.placeholder} keyboardType="number-pad" maxLength={6} value={code} onChangeText={setCode}/></View><TouchableOpacity style={[styles.btn,busy&&styles.btnDisabled]} onPress={onVerifySmsCode} disabled={busy}>{busy?<ActivityIndicator color="white"/>:<Text style={styles.btnText}>Verify Code</Text>}</TouchableOpacity><TouchableOpacity style={styles.resendBtn} onPress={onSendSms} disabled={busy}><Text style={styles.resendText}>Didn't get a code? Resend</Text></TouchableOpacity></>}
         {step === 'email' && <><Text style={styles.intro}>Tap the link we emailed to {email} to continue. This screen will move on automatically once you do.</Text>{!!busy&&<ActivityIndicator color={colors.primary} style={{marginBottom:14}}/>}<TouchableOpacity style={styles.resendBtn} onPress={onSendEmail} disabled={busy}><Text style={styles.resendText}>Didn't get a link? Resend</Text></TouchableOpacity></>}
-        {step === 'newPassword' && <><Text style={styles.intro}>Choose a new password for your account.</Text><View style={styles.formGroup}><Text style={styles.label}>New Password</Text><TextInput style={styles.input} placeholder="6-20 characters" secureTextEntry value={newPassword} onChangeText={setNewPassword}/></View><View style={styles.formGroup}><Text style={styles.label}>Confirm New Password</Text><TextInput style={styles.input} placeholder="Re-enter new password" secureTextEntry value={confirmPassword} onChangeText={setConfirmPassword}/></View><TouchableOpacity style={[styles.btn,busy&&styles.btnDisabled]} onPress={onSubmitNewPassword} disabled={busy}>{busy?<ActivityIndicator color="white"/>:<Text style={styles.btnText}>Reset Password</Text>}</TouchableOpacity></>}
+        {step === 'newPassword' && <><Text style={styles.intro}>Choose a new password for your account.</Text><View style={styles.formGroup}><Text style={styles.label}>New Password</Text><TextInput style={styles.input} placeholder="6-20 characters" placeholderTextColor={colors.placeholder} secureTextEntry value={newPassword} onChangeText={setNewPassword}/></View><View style={styles.formGroup}><Text style={styles.label}>Confirm New Password</Text><TextInput style={styles.input} placeholder="Re-enter new password" placeholderTextColor={colors.placeholder} secureTextEntry value={confirmPassword} onChangeText={setConfirmPassword}/></View><TouchableOpacity style={[styles.btn,busy&&styles.btnDisabled]} onPress={onSubmitNewPassword} disabled={busy}>{busy?<ActivityIndicator color="white"/>:<Text style={styles.btnText}>Reset Password</Text>}</TouchableOpacity></>}
         {!!error&&<Text style={styles.errorText}>{error}</Text>}
         <TouchableOpacity style={styles.cancelBtn} onPress={backToLogin} disabled={busy}><Text style={styles.cancelText}>Back to Login</Text></TouchableOpacity>
-      </View>
+      </ScrollView>
       <PhoneCountryPicker visible={countryPicker} value={phoneCountry} onSelect={c=>{setPhoneCountry(c);setCountryPicker(false);}} onClose={()=>setCountryPicker(false)}/>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
-function createStyles(colors){return StyleSheet.create({screen:{flex:1,backgroundColor:colors.bg},header:{flexDirection:'row',alignItems:'center',gap:10,padding:12,backgroundColor:colors.primary,overflow:'hidden'},headerTitle:{color:'white',fontWeight:'600',fontSize:16},body:{padding:20},intro:{fontSize:13,color:'#666',marginBottom:20,textAlign:'center',lineHeight:19},formGroup:{marginBottom:14},label:{fontWeight:'500',marginBottom:5,fontSize:13},input:{width:'100%',paddingVertical:12,paddingHorizontal:14,borderWidth:1,borderColor:colors.border,borderRadius:radius.md,fontSize:14,backgroundColor:'white'},btn:{backgroundColor:colors.primary,paddingVertical:12,borderRadius:radius.md,alignItems:'center',marginBottom:14},btnDisabled:{opacity:0.6},btnText:{color:'white',fontWeight:'600',fontSize:14},errorText:{color:colors.error,fontSize:12,marginTop:4,marginBottom:10,textAlign:'center'},resendBtn:{alignItems:'center',marginTop:4,marginBottom:14},resendText:{color:colors.primary,fontSize:12,fontWeight:'500'},cancelBtn:{alignItems:'center',marginTop:10},cancelText:{color:'#999',fontSize:12,fontWeight:'500'}});}
+function createStyles(colors){return StyleSheet.create({screen:{flex:1,backgroundColor:colors.bg},header:{flexDirection:'row',alignItems:'center',gap:10,padding:12,backgroundColor:colors.primary,overflow:'hidden'},headerTitle:{color:'white',fontWeight:'600',fontSize:16},scroll:{flex:1},body:{padding:20,paddingBottom:40},intro:{fontSize:13,color:colors.textSecondary,marginBottom:20,textAlign:'center',lineHeight:19},formGroup:{marginBottom:14},label:{fontWeight:'500',marginBottom:5,fontSize:13,color:colors.text},input:{width:'100%',paddingVertical:12,paddingHorizontal:14,borderWidth:1,borderColor:colors.border,borderRadius:radius.md,fontSize:14,backgroundColor:colors.inputBg,color:colors.text},phoneInput:{flex:1,width:'auto'},dialBtn:{padding:12,borderWidth:1,borderColor:colors.border,borderRadius:8,marginRight:6,flexDirection:'row',alignItems:'center',backgroundColor:colors.inputBg},dialText:{marginLeft:5,fontWeight:'600',color:colors.text},btn:{backgroundColor:colors.primary,paddingVertical:12,borderRadius:radius.md,alignItems:'center',marginBottom:14},btnDisabled:{opacity:0.6},btnText:{color:'white',fontWeight:'600',fontSize:14},errorText:{color:colors.error,fontSize:12,marginTop:4,marginBottom:10,textAlign:'center'},resendBtn:{alignItems:'center',marginTop:4,marginBottom:14},resendText:{color:colors.primary,fontSize:12,fontWeight:'500'},cancelBtn:{alignItems:'center',marginTop:10},cancelText:{color:colors.textSecondary,fontSize:12,fontWeight:'500'}});}

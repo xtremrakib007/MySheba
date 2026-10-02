@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, Dimensions, Easing, Image, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '../context/AppContext';
 import * as gridService from '../firebase/gridManagementService';
 import { radius } from '../theme/theme';
@@ -113,6 +114,15 @@ export default function Sidebar() {
   // every group title - the groups depend on the role, so there is no one
   // list to seed from. The reset on open below then starts each visit shut.
   const [expanded, setExpanded] = useState({});
+  // App.js wraps the whole app in <SafeAreaView edges={['top','bottom']}>, but a
+  // React Native Modal renders in its own native window OUTSIDE that hierarchy,
+  // so this drawer was the one piece of UI with no safe-area inset at all. At
+  // 100% height it ran under the status bar at the top - which the hardcoded
+  // paddingTop: 48 was compensating for by guesswork - and under the system
+  // navigation bar at the bottom, where the scroll list ends and Logout sits.
+  // That is the "scroll problem": the last rows and the logout button were
+  // behind the nav bar, so the list looked like it would not scroll far enough.
+  const insets = useSafeAreaInsets();
 
   const isSuperadmin = profile?.role === 'superadmin';
   const isAdmin = profile?.role === 'admin' || isSuperadmin;
@@ -164,7 +174,7 @@ export default function Sidebar() {
         </Animated.View>
 
         <Animated.View style={[styles.drawer, { width: DRAWER_WIDTH, transform: [{ translateX }] }]}>
-          <LinearGradient colors={brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
+          <LinearGradient colors={brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.header, { paddingTop: insets.top + 16 }]}>
             <HeaderDecor corner="left" />
             <TouchableOpacity style={styles.closeBtn} onPress={closeSidebar} accessibilityLabel="Close menu">
               <Text style={styles.closeText}>✕</Text>
@@ -230,7 +240,7 @@ export default function Sidebar() {
 
             {!!isAdmin && (
               <View style={styles.protectedCard}>
-                <View style={styles.protectedIcon}><Text>kyc</Text></View>
+                <View style={styles.protectedIcon}><ServiceIcon name="kyc" size={17} color={colors.primary} /></View>
                 <View style={styles.protectedCopy}><Text style={styles.protectedTitle}>Protected access</Text><Text style={styles.protectedText}>Role and feature permissions remain enforced by the destination screens and backend rules.</Text></View>
               </View>
             )}
@@ -243,7 +253,7 @@ export default function Sidebar() {
             </View>
             <Text style={styles.brandVersion}>v{APP_VERSION}</Text>
           </View>
-          <View style={styles.footer}><TouchableOpacity style={styles.logoutRow} onPress={onLogout} activeOpacity={0.8}><View style={styles.logoutIcon}><ServiceIcon name="profile" size={18} color={colors.danger || '#B00020'} /></View><Text style={styles.logoutLabel}>Logout</Text><Text style={styles.logoutArrow}>→</Text></TouchableOpacity></View>
+          <View style={[styles.footer, { paddingBottom: insets.bottom + 17 }]}><TouchableOpacity style={styles.logoutRow} onPress={onLogout} activeOpacity={0.8}><View style={styles.logoutIcon}><ServiceIcon name="profile" size={18} color={colors.danger || '#B00020'} /></View><Text style={styles.logoutLabel}>Logout</Text><Text style={styles.logoutArrow}>→</Text></TouchableOpacity></View>
         </Animated.View>
       </View>
     </Modal>
@@ -255,7 +265,8 @@ function createStyles(colors) {
     root: { flex: 1, flexDirection: 'row' },
     backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(7,15,30,0.62)' },
     drawer: { height: '100%', backgroundColor: colors.card, elevation: 14, shadowColor: '#000', shadowOpacity: 0.28, shadowRadius: 18, shadowOffset: { width: 6, height: 0 } },
-    header: { paddingTop: 48, paddingBottom: 16, paddingHorizontal: 16, overflow: 'hidden' },
+    // paddingTop comes from the safe-area inset at the call site.
+    header: { paddingBottom: 16, paddingHorizontal: 16, overflow: 'hidden' },
     closeBtn: { position: 'absolute', top: 42, right: 12, width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center', zIndex: 3 },
     closeText: { color: 'white', fontSize: 15, fontWeight: '700' },
     headerTopRow: { flexDirection: 'row', alignItems: 'center', paddingRight: 34 },
@@ -295,7 +306,8 @@ function createStyles(colors) {
     protectedCopy: { flex: 1 }, protectedTitle: { color: colors.text, fontSize: 10.5, fontWeight: '800' }, protectedText: { color: colors.textSecondary, fontSize: 9.5, lineHeight: 14, marginTop: 2 },
     brandFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: colors.border },
     brandIdentity: { flexDirection: 'row', alignItems: 'center' }, brandLogo: { width: 30, height: 30, marginRight: 8, opacity: 0.9 }, brandRow: { flexDirection: 'row' }, brandDark: { fontSize: 14, fontWeight: '900', color: colors.navy }, brandTeal: { fontSize: 14, fontWeight: '900', color: colors.primary }, brandCompany: { color: colors.textSecondary, fontSize: 8.5, marginTop: 1 }, brandVersion: { color: colors.textSecondary, fontSize: 9, fontWeight: '700' },
-    footer: { borderTopWidth: 1, borderTopColor: colors.border, paddingBottom: 17 },
+    // paddingBottom comes from the safe-area inset at the call site.
+    footer: { borderTopWidth: 1, borderTopColor: colors.border },
     logoutRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 11, paddingHorizontal: 16 }, logoutIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', marginRight: 9 }, logoutLabel: { flex: 1, color: colors.error, fontSize: 13, fontWeight: '800' }, logoutArrow: { color: colors.error, fontSize: 18, fontWeight: '700' },
   });
 }
