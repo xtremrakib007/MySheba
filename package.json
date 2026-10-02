@@ -11,6 +11,7 @@
     "build:apk": "node scripts/build-android.js production-apk",
     "build:aab": "node scripts/build-android.js production",
     "audit:functions": "find functions -maxdepth 1 -name '*.js' -print0 | xargs -0 -n1 node --check",
+    "audit:deployed": "node scripts/audit-deployed-functions.js",
     "audit:lockfiles": "node scripts/audit-lockfiles.js",
     "audit:deps": "node scripts/audit-deps.js",
     "audit:nav": "node scripts/audit-navigation.js",

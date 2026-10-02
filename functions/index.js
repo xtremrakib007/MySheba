@@ -114,6 +114,11 @@ exports.saveApiWebhook = require('./apiWebhookService').saveApiWebhook;
 exports.deleteApiWebhook = require('./apiWebhookService').deleteApiWebhook;
 exports.apiWebhook = require('./apiWebhookService').apiWebhook;
 exports.pollSuccessTopUpStatus = require('./successTopupPoller').pollSuccessTopUpStatus;
+// Added in d152997, then lost in the conflict resolution of 4eccc79 on
+// 23 Sep. The job stayed deployed and kept running, so nothing broke and
+// nobody noticed - but it could no longer be updated from this repo, and the
+// next deploy would have offered to delete it as a function with no source.
+exports.cleanupExpiredVerificationArtifacts = require('./verificationCleanup').cleanupExpiredVerificationArtifacts;
 exports.purchaseRechargePin = require('./rechargePinService').purchaseRechargePin;
 exports.getRechargePin = require('./rechargePinService').getRechargePin;
 exports.createSupportTicket = supportTicketService.createSupportTicket;
