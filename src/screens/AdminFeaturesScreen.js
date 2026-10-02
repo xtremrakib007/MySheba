@@ -11,6 +11,7 @@ import { useServiceAction } from '../components/ServiceGrid';
 import PromptModal from '../components/PromptModal';
 import * as ratesService from '../firebase/ratesService';
 import * as gridManagementService from '../firebase/gridManagementService';
+import { hasServiceArt } from '../components/ServiceArt';
 
 const CATEGORIES = [
   { key: 'operations', icon: '⚙️', bg: '#E3F2FD', name: 'Operations' },
@@ -126,7 +127,7 @@ const SCREEN_FOR = { apiManagement: 'apiProviderManagement' };
 export default function AdminFeaturesScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { profile, goBackOrHome, setScreen, openSidebar, dealerTxs, inquiries, topups, setAdminTab, setAdminViewingSection, setHomeBackInterceptor, rates, gridManagement, gridViewer, can } = useApp();
+  const { profile, goBackOrHome, setScreen, openSidebar, dealerTxs, inquiries, topups, setAdminTab, setAdminViewingSection, setHomeBackInterceptor, rates, gridManagement, gridViewer, webviewPages, can } = useApp();
   const [section, setSection] = useState(null);
   const [rateView, setRateView] = useState(false);
   const [editRateKey, setEditRateKey] = useState(null);
@@ -174,7 +175,11 @@ export default function AdminFeaturesScreen() {
   // different: a hub section, a screen, or a service the customer grid
   // already knows how to run.
   const openHomeItem = (key) => {
-    const item = ADMIN_HOME.find((x) => x.key === key);
+    // adminHomeList, not ADMIN_HOME: a WebView added in Superadmin is not in
+    // the static list, so looking there made its tile do nothing when tapped.
+    // Declared below this line, which is safe because nothing calls this until
+    // a press, long after the render that initialises it.
+    const item = adminHomeList.find((x) => x.key === key);
     if (!item) return;
     if (item.section) { setSection(item.section); return; }
     if (item.screen) { setScreen(item.screen); return; }
@@ -244,7 +249,28 @@ export default function AdminFeaturesScreen() {
   // and the two most-used destinations - users and KYC - were two levels
   // down. The category hubs still exist; More Features and the sidebar
   // reach them, and openHomeItem routes the tiles that live in one.
-  const homeItems = ADMIN_HOME.filter((item) => {
+  // Staff sell these services too, so the admin landing takes the same WebView
+  // configuration the customer grid does: a superadmin's rename, icon or new
+  // address shows here as well, and a page added in WebView Pages appears
+  // rather than existing only for customers.
+  const webviewTile = (page) => ({
+    key: page.key,
+    // FeatureGrid draws by key, and an added page's key names no drawing - so
+    // an art name is passed as `art` and anything else stays an emoji.
+    ...(hasServiceArt(page.icon) ? { art: page.icon, icon: '🌐' } : { icon: page.icon || '🌐' }),
+    name: page.name,
+    service: { key: page.key, kind: 'webview' },
+  });
+  const adminHomeList = (() => {
+    const pages = webviewPages || {};
+    const overlaid = ADMIN_HOME
+      .filter((item) => !(item.service?.kind === 'webview' && pages[item.key] && pages[item.key].active === false))
+      .map((item) => (item.service?.kind === 'webview' && pages[item.key] ? { ...item, ...webviewTile(pages[item.key]) } : item));
+    const extra = Object.values(pages).filter((p) => p.custom && p.active !== false).map(webviewTile);
+    return [...overlaid, ...extra];
+  })();
+
+  const homeItems = adminHomeList.filter((item) => {
     if (item.section === 'system' && !isSuperadmin) return false;
     if (!gridManagementService.isGridActive(gridManagement, item.key, gridViewer)) return false;
     const need = CAPABILITY_FOR[item.key];

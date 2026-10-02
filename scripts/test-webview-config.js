@@ -94,6 +94,24 @@ check('a page that no longer validates is dropped',
   svc._test.sanitizePages({ wv_abcd1234: { name: 'x', url: 'http://nope' } }), {});
 check('and a non-object is harmless', svc._test.sanitizePages('nonsense'), {});
 
+console.log('\nStaff see the same WebViews as customers');
+const admin = read('src/screens/AdminFeaturesScreen.js');
+const gridSrc = read('src/components/ServiceGrid.js');
+const featureGrid = read('src/components/FeatureGrid.js');
+yes('the admin landing reads the config', /webviewPages/.test(admin) && /adminHomeList/.test(admin));
+yes('it overlays the built-in admin tiles', /item\.service\?\.kind === 'webview' && pages\[item\.key\]/.test(admin));
+yes('and appends the added ones', /p\.custom && p\.active !== false\)\.map\(webviewTile\)/.test(admin));
+// Looking the tapped key up in the static list made an added tile inert.
+yes('a tapped tile is looked up in the live list', /adminHomeList\.find\(\(x\) => x\.key === key\)/.test(admin));
+yes('a page switched off leaves the admin grid too', /pages\[item\.key\]\.active === false/.test(admin));
+// FeatureGrid draws by key, and an added page's key names no drawing.
+yes('an added tile can still carry a drawing', /hasServiceArt\(it\.art \|\| it\.key\)/.test(featureGrid));
+yes('and the admin tile passes one when it has it', /hasServiceArt\(page\.icon\) \? \{ art: page\.icon/.test(admin));
+// Dealers and resellers take SHARED_SERVICES through ServiceGrid, which
+// already runs the overlay - this is the line that keeps that true.
+yes('dealer and reseller grids share the customer list',
+  /withWebviewConfig\(!isStaff \? CUSTOMER_SERVICES : \[\.\.\.roleSpecificServices, \.\.\.SHARED_SERVICES\]\)/.test(gridSrc));
+
 async function rejects(name, promise) {
   try { await promise; check(name, 'resolved', 'rejected'); } catch (e) { check(name, true, true); }
 }

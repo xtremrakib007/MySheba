@@ -98,8 +98,11 @@ export default function FeatureGrid({ title, items, activeKey, onPress, numColum
                   {/* A drawing when there is one - crisp at any size and the
                       same on every device - and the emoji only for keys that
                       have none yet. */}
-                  {hasServiceArt(it.key)
-                    ? <ServiceArt name={it.key} size={28 * iconRender.scale} color={tileTint || iconColor} />
+                  {/* `art` names a drawing for a tile whose key is not one -
+                      a WebView a superadmin added has a generated key, and
+                      without this its chosen icon would print as the word. */}
+                  {hasServiceArt(it.art || it.key)
+                    ? <ServiceArt name={it.art || it.key} size={28 * iconRender.scale} color={tileTint || iconColor} />
                     : <Text style={[styles.iconText, { color: tileTint || iconColor, fontSize: 27 * iconRender.scale, fontWeight: iconRender.weight }]}>{iconFor(it.key, iconStyle, it.icon)}</Text>}
                 </View>
                 <Text style={labelStyle} numberOfLines={2}>{String(it.name || '')}</Text>
