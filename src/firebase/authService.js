@@ -91,7 +91,17 @@ export async function registerCustomer({ name, phone, phoneE164, dialCode, email
     const sessionFn = httpsCallable(functions, 'checkDeviceSession');
     const { data: sessionResult } = await sessionFn({ deviceId, deviceLabel: getDeviceLabel() });
     if (sessionResult && sessionResult.sessionId) await setLocalSessionId(sessionResult.sessionId);
-  } catch (e) {}
+    else await setDeviceCheckDeferred();
+  } catch (err) {
+    // Registration has already succeeded, so this must not fail the sign-up.
+    // But a bare `catch (e) {}` left no session id and no record of why, and
+    // every later money action then failed with "Your secure session is
+    // missing" until the person signed out and in again - which they had no
+    // reason to do. Mark the device unchecked, exactly as sign-in does, so
+    // getSessionProof can repair it on first use.
+    await setDeviceCheckDeferred();
+    logActivity('registerDeviceCheckUnreachable', { code: String(err?.code || '') });
+  }
 
   return { uid: cred.user.uid, ...snap.data() };
 }

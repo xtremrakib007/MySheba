@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import * as Crypto from 'expo-crypto';
 import { httpsCallable } from 'firebase/functions';
-import { functions } from './config';
+import { auth, functions } from './config';
 
 const DEVICE_ID_KEY = 'mysheba_device_id';
 const LOCAL_SESSION_ID_KEY = 'mysheba_local_session_id';
@@ -62,10 +62,53 @@ export async function getLocalSessionId() {
   return AsyncStorage.getItem(LOCAL_SESSION_ID_KEY);
 }
 
+// Re-establishing a session for a device that is already signed in.
+//
+// Sign-in deliberately lets people through when checkDeviceSession cannot be
+// reached (see authService: App Check enforcement once locked out every user
+// for ten days, so availability wins). It sets the deferred flag and stores no
+// local session id.
+//
+// Nothing ever did the other half. Twenty call sites ask for session proof
+// before touching money, and with no local session id every one of them failed
+// with "Your secure session is missing. Please sign in again." - permanently,
+// because signing in again while the check is still unreachable lands in the
+// same state, and the person has no reason to try: they ARE signed in.
+//
+// So the proof is repaired on demand, through the same callable sign-in uses.
+// This grants nothing: the server still decides. If it wants the device
+// verified it says so and we stop, and whatever it returns is validated again
+// on every callable against the profile's activeSessionId and activeDeviceId.
+let repairPromise = null;
+
+export async function repairSessionProof() {
+  if (!repairPromise) {
+    repairPromise = (async () => {
+      if (!auth.currentUser) throw new Error('Your secure session is missing. Please sign in again.');
+      const deviceId = await getDeviceId();
+      const sessionFn = httpsCallable(functions, 'checkDeviceSession');
+      const { data } = await sessionFn({ deviceId, deviceLabel: getDeviceLabel() });
+      if (data?.requiresOtp) {
+        throw new Error('This device needs to be verified before you can continue. Please sign out and sign in again to verify it.');
+      }
+      if (!data?.sessionId) throw new Error('Your secure session is missing. Please sign in again.');
+      await setLocalSessionId(data.sessionId);
+      // A check that completed is exactly what clears the deferred flag.
+      await clearDeviceCheckDeferred();
+      return data.sessionId;
+    })();
+    // A failed repair must not be cached as the answer for the whole session;
+    // the next attempt should be able to try again.
+    repairPromise.catch(() => { repairPromise = null; });
+  }
+  return repairPromise;
+}
+
 export async function getSessionProof() {
   const [sessionId, deviceId] = await Promise.all([getLocalSessionId(), getDeviceId()]);
-  if (!sessionId || !deviceId) throw new Error('Your secure session is missing. Please sign in again.');
-  return { sessionId, deviceId };
+  if (sessionId && deviceId) return { sessionId, deviceId };
+  const repaired = await repairSessionProof();
+  return { sessionId: repaired, deviceId: deviceId || (await getDeviceId()) };
 }
 
 export async function setLocalSessionId(sessionId) {

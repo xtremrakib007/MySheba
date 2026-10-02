@@ -114,6 +114,9 @@ jobs:
       - name: Uncertain-transaction reconciliation
         run: npm run test:reconcile
 
+      - name: Session proof repair
+        run: npm run test:sessionproof
+
       - name: App Check posture
         run: npm run test:appcheck
 
