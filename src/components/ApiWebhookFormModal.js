@@ -2,11 +2,25 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 
-export default function ApiWebhookFormModal({ visible, provider, config, onClose, onSave }) {
+export default function ApiWebhookFormModal({ visible, provider, config, onClose, onSave, onReveal, onRotate, onUnmatched }) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const special = provider?.name === 'Success TopUp';
   const [form, setForm] = useState({});
+  const [token, setToken] = useState('');
+  const [unmatched, setUnmatched] = useState(null);
+  const [busy, setBusy] = useState('');
+  // The token is shown once and never re-sent by listApiWebhooks, so a stale
+  // one left on screen after switching providers would be the wrong secret
+  // against the right name.
+  useEffect(() => { setToken(''); setUnmatched(null); setBusy(''); }, [provider, visible]);
+  const run = async (what, fn) => {
+    if (busy) return;
+    setBusy(what);
+    try { await fn(); } finally { setBusy(''); }
+  };
+  const delivery = config?.delivery || {};
+  const received = Number(delivery.matchedCount || 0) + Number(delivery.unmatchedCount || 0) + Number(delivery.mismatchedCount || 0) + Number(delivery.duplicateCount || 0);
   useEffect(() => setForm({
     providerId: provider?.id || '',
     enabled: config?.enabled !== false,
@@ -29,15 +43,39 @@ export default function ApiWebhookFormModal({ visible, provider, config, onClose
         <Text selectable style={styles.value}>{config?.webhookUrl || 'Webhook URL will be generated automatically.'}</Text>
         {special ? <>
           <Text style={styles.label}>Webhook token</Text>
-          <Text selectable style={styles.token}>{config?.webhookToken || 'Token unavailable — save the Success TopUp provider again.'}</Text>
+          <Text selectable style={styles.token}>{token ? token : (config?.hasWebhookToken ? 'Stored and hidden. Tap Show token to copy it.' : 'Not generated yet. Tap Rotate token.')}</Text>
+          <View style={styles.actions}>
+            <TouchableOpacity style={styles.secondary} disabled={Boolean(busy)} onPress={() => run('reveal', async () => { const t = await onReveal(); setToken(t || ''); })}>
+              <Text style={styles.secondaryText}>{busy === 'reveal' ? 'Loading…' : 'Show token'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.secondary} disabled={Boolean(busy)} onPress={() => run('rotate', async () => { const t = await onRotate(); setToken(t || ''); })}>
+              <Text style={styles.secondaryText}>{busy === 'rotate' ? 'Working…' : 'Rotate token'}</Text>
+            </TouchableOpacity>
+          </View>
           <Text style={styles.help}>This is generated automatically by MySheba. Copy the URL and token into your Success TopUp API settings. Do not change the webhook fields.</Text>
+
+          <View style={styles.fixedBox}>
+            <Text style={styles.fixedTitle}>Deliveries</Text>
+            <Text style={styles.fixedLine}>{delivery.lastReceivedAt ? 'Last received: ' + new Date(delivery.lastReceivedAt).toLocaleString() : 'Nothing received yet. Until the URL and token are saved on the Success TopUp side, this stays empty.'}</Text>
+            <Text style={styles.fixedLine}>{'Matched ' + Number(delivery.matchedCount || 0) + ' · Unmatched ' + Number(delivery.unmatchedCount || 0) + ' · Repeat ' + Number(delivery.duplicateCount || 0)}</Text>
+            {received > 0 && Number(delivery.matchedCount || 0) === 0
+              ? <Text style={styles.warn}>Callbacks are arriving but none matched a transaction. Tap Unmatched below to see which reference Success TopUp is sending.</Text>
+              : null}
+            <TouchableOpacity style={styles.secondary} disabled={Boolean(busy)} onPress={() => run('unmatched', async () => { setUnmatched(await onUnmatched()); })}>
+              <Text style={styles.secondaryText}>{busy === 'unmatched' ? 'Loading…' : 'Unmatched callbacks'}</Text>
+            </TouchableOpacity>
+            {unmatched === null ? null : unmatched.length === 0
+              ? <Text style={styles.fixedLine}>No unmatched callbacks. Every webhook found its transaction.</Text>
+              : unmatched.map((u, i) => <Text key={String(i)} selectable style={styles.fixedLine}>{(u.receivedAt ? new Date(u.receivedAt).toLocaleString() : '—') + ' · ' + u.status + ' · ' + u.transactionId}</Text>)}
+          </View>
+
           <View style={styles.fixedBox}>
             <Text style={styles.fixedTitle}>Fixed webhook mapping</Text>
-            <Text>Header: x-webhook-token</Text>
-            <Text>Transaction ID: transactionId</Text>
-            <Text>Status: status</Text>
-            <Text>Message: comment</Text>
-            <Text>Statuses: Success / Processing / Cancel</Text>
+            <Text style={styles.fixedLine}>Header: x-webhook-token</Text>
+            <Text style={styles.fixedLine}>Transaction ID: transactionId</Text>
+            <Text style={styles.fixedLine}>Status: status</Text>
+            <Text style={styles.fixedLine}>Message: comment</Text>
+            <Text style={styles.fixedLine}>Statuses: Success / Processing / Cancel</Text>
           </View>
         </> : <>
           <Text style={styles.help}>Give this URL to the provider. Webhooks are received by MySheba server-side; the mobile app does not receive provider callbacks.</Text>
@@ -67,6 +105,13 @@ function createStyles(colors) {
     input: { borderWidth: 1, borderColor: colors.border, borderRadius: 9, padding: 11, marginBottom: 9, color: colors.text, backgroundColor: colors.inputBg },
     fixedBox: { marginTop: 8, marginBottom: 8, padding: 12, borderRadius: 10, backgroundColor: colors.surface, gap: 4 },
     fixedTitle: { fontWeight: '800', marginBottom: 4, color: colors.text },
+    // These lines carried no colour at all, so they rendered in the platform
+    // default against a themed sheet - black on near-black in dark mode.
+    fixedLine: { fontSize: 12, lineHeight: 18, color: colors.text },
+    warn: { fontSize: 12, lineHeight: 18, fontWeight: '700', color: colors.danger || colors.primary, marginTop: 4 },
+    actions: { flexDirection: 'row', gap: 10, marginBottom: 4 },
+    secondary: { paddingVertical: 9, paddingHorizontal: 12, borderRadius: 9, borderWidth: 1, borderColor: colors.border, marginTop: 6, alignSelf: 'flex-start' },
+    secondaryText: { color: colors.primary, fontWeight: '700', fontSize: 12 },
     toggle: { padding: 12, marginVertical: 10 },
     toggleText: { color: colors.primary, fontWeight: '700' },
     row: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },

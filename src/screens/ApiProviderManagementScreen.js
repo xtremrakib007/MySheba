@@ -62,6 +62,28 @@ export default function ApiProviderManagementScreen() {
       load();
     }catch(e){Alert.alert('Webhook save failed',e.message||'Unable to save webhook');}
   };
+  // The token is returned once, by these calls only. Re-reading the list never
+  // carries it, so it is handed straight to the modal rather than into state
+  // that a background refresh could overwrite with an empty string.
+  const revealToken=async()=>{
+    try{const r=await webhookService.revealApiWebhookToken(webhookProvider.id);return r?.webhookToken||'';}
+    catch(e){Alert.alert('Webhook token',e.message||'Could not read the webhook token.');return '';}
+  };
+  const rotateToken=async()=>{
+    return new Promise((resolve)=>{
+      Alert.alert('Rotate webhook token',
+        'A new token is generated now. Success TopUp callbacks signed with the old token are rejected until you paste the new one into their API settings page.',
+        [{text:'Cancel',style:'cancel',onPress:()=>resolve('')},
+         {text:'Rotate',style:'destructive',onPress:async()=>{
+           try{const r=await webhookService.rotateApiWebhookToken(webhookProvider.id);await load();resolve(r?.webhookToken||'');}
+           catch(e){Alert.alert('Rotate failed',e.message||'Could not rotate the webhook token.');resolve('');}
+         }}]);
+    });
+  };
+  const loadUnmatched=async()=>{
+    try{return await webhookService.listApiWebhookUnmatched(webhookProvider.id);}
+    catch(e){Alert.alert('Unmatched callbacks',e.message||'Could not read unmatched callbacks.');return [];}
+  };
   const remove=(id)=>Alert.alert('Delete API','Remove this API provider?',[{text:'Cancel'},{text:'Delete',style:'destructive',onPress:async()=>{await apiService.deleteApiProvider(id);await webhookService.deleteApiWebhook(id).catch(()=>{});load();}}]);
   const testApi=async(item)=>{
     try{
@@ -175,7 +197,7 @@ export default function ApiProviderManagementScreen() {
       }}><Text style={styles.saveModesText}>{savingModes?'Saving…':'Save Processing Modes'}</Text></TouchableOpacity>}
     />
     <ApiProviderFormModal visible={show} provider={editing} presetService={presetService} successTopUp={successTopUpSetup || editing?.name === 'Success TopUp'} onClose={()=>{setShow(false);setSuccessTopUpSetup(false);setPresetService('');}} onSave={save}/>
-    <ApiWebhookFormModal visible={showWebhook} provider={webhookProvider} config={webhookProvider?webhooks[webhookProvider.id]:null} onClose={()=>setShowWebhook(false)} onSave={saveWebhook}/>
+    <ApiWebhookFormModal visible={showWebhook} provider={webhookProvider} config={webhookProvider?webhooks[webhookProvider.id]:null} onClose={()=>setShowWebhook(false)} onSave={saveWebhook} onReveal={revealToken} onRotate={rotateToken} onUnmatched={loadUnmatched}/>
   </View>;
 }
 // Themed, like every other screen. This stylesheet was built at module level

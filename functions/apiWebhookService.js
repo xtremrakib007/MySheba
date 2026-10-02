@@ -6,6 +6,12 @@ const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 const COLLECTION = 'api_webhooks';
 const PROVIDERS = 'api_providers';
 const EVENTS = 'apiWebhookEvents';
+// Stats live in their own collection on purpose. Both saveApiWebhook and the
+// Success TopUp auto-provision write the config document with merge:false, so
+// anything kept beside the config would be erased every time the provider is
+// re-saved - and the delivery history is exactly what you need after a
+// re-save, to see whether the new token actually works.
+const STATS = 'apiWebhookStats';
 const PROJECT_ID = 'satulink-solutions';
 const REGION = 'us-central1';
 
@@ -19,6 +25,27 @@ function assertSuperadmin(db, request) {
     }
   });
 }
+/**
+ * What the screen needs to answer "is this webhook actually working?".
+ *
+ * Timestamps go out as epoch milliseconds: a Firestore Timestamp does not
+ * survive the callable's JSON encoding as anything the client can read.
+ */
+function deliverySummary(stat) {
+  const s = stat || {};
+  const at = s.lastReceivedAt;
+  return {
+    lastReceivedAt: at && typeof at.toMillis === 'function' ? at.toMillis() : null,
+    lastStatus: clean(s.lastStatus, 100),
+    lastTransactionId: clean(s.lastTransactionId, 200),
+    lastMatched: s.lastMatched === true,
+    matchedCount: Number(s.matchedCount || 0),
+    unmatchedCount: Number(s.unmatchedCount || 0),
+    mismatchedCount: Number(s.mismatchedCount || 0),
+    duplicateCount: Number(s.duplicateCount || 0),
+  };
+}
+
 function endpointUrl(providerId) {
   return 'https://' + REGION + '-' + PROJECT_ID + '.cloudfunctions.net/apiWebhook?providerId=' + encodeURIComponent(providerId);
 }
@@ -50,6 +77,8 @@ exports.listApiWebhooks = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (
   const providerIds = snap.docs.map((d) => d.data()?.providerId || d.id).filter(Boolean);
   const providerSnaps = await Promise.all(providerIds.map((id) => db.collection(PROVIDERS).doc(id).get()));
   const providerNames = Object.fromEntries(providerSnaps.map((p) => [p.id, p.exists ? String(p.data()?.name || '') : '']));
+  const statSnaps = await Promise.all(providerIds.map((id) => db.collection(STATS).doc(id).get()));
+  const stats = Object.fromEntries(statSnaps.map((p) => [p.id, p.exists ? (p.data() || {}) : {}]));
   return {
     webhooks: snap.docs.map((d) => {
       const x = d.data() || {};
@@ -69,6 +98,7 @@ exports.listApiWebhooks = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (
         hasWebhookToken: Boolean(x.webhookToken),
         webhookToken: '',
         webhookUrl: endpointUrl(providerId),
+        delivery: deliverySummary(stats[providerId]),
       };
     }),
   };
@@ -121,11 +151,47 @@ async function findTransaction(db, providerId, providerTransactionId) {
     return data.executionMode === 'api' && data.apiExecution?.providerId === providerId;
   });
   if (responseMatches.length === 1) return responseMatches[0];
+
+  // An id this provider sent us on an earlier callback. The first webhook for
+  // an order may arrive unmatched, but once any code path has recorded the
+  // provider's own reference, later callbacks for that order can be matched by
+  // it - so Processing-then-Success does not land half in the unmatched log.
+  const byProviderRef = await db.collection('transactions').where('apiExecution.providerTransactionId', '==', providerTransactionId).limit(2).get();
+  const providerRefMatches = byProviderRef.docs.filter((d) => {
+    const data = d.data() || {};
+    return data.executionMode === 'api' && data.apiExecution?.providerId === providerId;
+  });
+  if (providerRefMatches.length === 1) return providerRefMatches[0];
   return null;
 }
 
 function safeText(value, max = 500) {
   return (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') ? String(value).slice(0, max) : '';
+}
+
+/**
+ * Delivery history, so a webhook that is quietly matching nothing is visible.
+ *
+ * An unmatched callback answers 202 and files the payload - correct for the
+ * provider, who should not retry forever, but it means a webhook pointed at the
+ * wrong provider id, or sending an id we never stored, looks exactly like one
+ * that works. Counting both outcomes is what turns that into something a
+ * superadmin can read off the screen.
+ *
+ * Never allowed to fail the delivery: we have already committed the wallet and
+ * transaction writes by this point, and answering non-2xx would make the
+ * provider resend a callback we have fully applied.
+ */
+async function recordDelivery(db, providerId, fields) {
+  try {
+    await db.collection(STATS).doc(providerId).set({
+      ...fields,
+      providerId,
+      lastReceivedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  } catch (error) {
+    console.error('apiWebhook stats write failed', providerId, String(error?.message || error));
+  }
 }
 
 exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (req, res) => {
@@ -157,6 +223,10 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
     await db.collection('apiWebhookUnmatched').add({
       providerId, transactionId, status, message, body: JSON.stringify(body).slice(0, 10000),
       receivedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    await recordDelivery(db, providerId, {
+      unmatchedCount: admin.firestore.FieldValue.increment(1),
+      lastTransactionId: transactionId, lastStatus: status, lastMatched: false,
     });
     return res.status(202).json({ ok: true, matched: false });
   }
@@ -227,6 +297,103 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
     });
   });
 
-  if (providerMismatch) return res.status(202).json({ ok: true, matched: false });
+  if (providerMismatch) {
+    await recordDelivery(db, providerId, {
+      mismatchedCount: admin.firestore.FieldValue.increment(1),
+      lastTransactionId: transactionId, lastStatus: status, lastMatched: false,
+    });
+    return res.status(202).json({ ok: true, matched: false });
+  }
+  await recordDelivery(db, providerId, {
+    matchedCount: admin.firestore.FieldValue.increment(duplicate ? 0 : 1),
+    duplicateCount: admin.firestore.FieldValue.increment(duplicate ? 1 : 0),
+    lastTransactionId: transactionId, lastStatus: status, lastMatched: true,
+  });
   return res.status(200).json({ ok: true, duplicate });
+});
+
+
+/**
+ * Show the superadmin the webhook token again.
+ *
+ * It is generated for them, shown once in an alert when the Success TopUp
+ * provider is saved, and then never again - listApiWebhooks deliberately
+ * returns an empty string for it. Dismiss that alert and setup cannot be
+ * finished, because the token still has to be pasted into the provider's own
+ * API settings page. This is the superadmin's own credential and they can
+ * already rotate it; refusing to redisplay it protects nothing and strands the
+ * integration.
+ */
+exports.revealApiWebhookToken = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  const db = admin.firestore();
+  await assertSuperadmin(db, request);
+  const id = clean(request.data?.providerId, 100);
+  if (!/^[A-Za-z0-9_-]{1,100}$/.test(id)) throw new HttpsError('invalid-argument', 'Invalid provider id.');
+  const snap = await db.collection(COLLECTION).doc(id).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Webhook is not configured for this provider.');
+  const token = String(snap.data()?.webhookToken || '');
+  if (!token) throw new HttpsError('failed-precondition', 'No webhook token is stored. Rotate the token to generate one.');
+  console.log('apiWebhook token revealed', id, 'by', request.auth.uid);
+  return { providerId: id, webhookToken: token, webhookUrl: endpointUrl(id) };
+});
+
+/**
+ * Issue a new webhook token, returning it once.
+ *
+ * The provider documents rotation as something you do from their API settings
+ * page, so the two have to be changed together: callbacks signed with the old
+ * token are rejected from the moment this returns until the new one is pasted
+ * in on their side. The caller is told that plainly rather than discovering it
+ * as a run of 401s.
+ */
+exports.rotateApiWebhookToken = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  const db = admin.firestore();
+  await assertSuperadmin(db, request);
+  const id = clean(request.data?.providerId, 100);
+  if (!/^[A-Za-z0-9_-]{1,100}$/.test(id)) throw new HttpsError('invalid-argument', 'Invalid provider id.');
+  const ref = db.collection(COLLECTION).doc(id);
+  const token = crypto.randomBytes(32).toString('hex');
+  await db.runTransaction(async (tx) => {
+    const callerSnap = await tx.get(db.collection('users').doc(request.auth.uid));
+    const caller = callerSnap.exists ? callerSnap.data() : null;
+    if (!caller || caller.role !== 'superadmin' || caller.suspended === true || caller.inactive === true || caller.disabled === true || caller.active === false || caller.mergedInto) {
+      throw new HttpsError('permission-denied', 'Your account is no longer active.');
+    }
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'Webhook is not configured for this provider.');
+    tx.update(ref, { webhookToken: token, updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: request.auth.uid });
+  });
+  console.log('apiWebhook token rotated', id, 'by', request.auth.uid);
+  return { providerId: id, webhookToken: token, webhookUrl: endpointUrl(id) };
+});
+
+/**
+ * The callbacks that arrived but matched no transaction.
+ *
+ * This is the diagnostic for the one thing that can still be wrong after the
+ * URL and token are in place: the provider identifying the transaction by a
+ * reference we never stored. Seeing the actual ids they send is what tells you
+ * which field to map, instead of guessing at it.
+ *
+ * Ordered by receipt and filtered in memory so this needs no composite index -
+ * a diagnostic that first requires a deploy to read is no use when you are
+ * trying to find out why a deploy did not work.
+ */
+exports.listApiWebhookUnmatched = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  const db = admin.firestore();
+  await assertSuperadmin(db, request);
+  const id = clean(request.data?.providerId, 100);
+  const snap = await db.collection('apiWebhookUnmatched').orderBy('receivedAt', 'desc').limit(50).get();
+  const rows = snap.docs
+    .map((d) => d.data() || {})
+    .filter((x) => !id || x.providerId === id)
+    .slice(0, 10)
+    .map((x) => ({
+      providerId: clean(x.providerId, 100),
+      transactionId: clean(x.transactionId, 200),
+      status: clean(x.status, 100),
+      message: clean(x.message, 500),
+      receivedAt: x.receivedAt && typeof x.receivedAt.toMillis === 'function' ? x.receivedAt.toMillis() : null,
+    }));
+  return { unmatched: rows };
 });

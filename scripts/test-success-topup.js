@@ -616,6 +616,73 @@ check('amount goes out as the documented number', () => {
   return null;
 });
 
+check('the auto-provisioned webhook matches the documented payload', () => {
+  // From Success TopUp's own documentation. The payload carries `comment` and
+  // `note`; there is NO `message` field, so the service-wide default of
+  // 'message' would record every provider reason as blank - including the one
+  // written onto a transaction when a Cancel triggers a refund.
+  //
+  //   header   x-webhook-token: YOUR_WEBHOOK_TOKEN
+  //   body     { "status": "Success", "transactionId": "ST17138666251234",
+  //              "comment": "Recharge Success", "note": "Recharge Success",
+  //              "updatedAt": "2026-04-23T10:15:12.000Z" }
+  //   statuses Success, Cancel, Processing
+  const src = read('functions/apiProviderService.js');
+  if (!src) return 'apiProviderService.js is missing';
+  const block = src.slice(src.indexOf("const webhookRef = db.collection('api_webhooks')"));
+  if (!block) return 'the Success TopUp webhook is never provisioned';
+  const want = {
+    authHeader: "'x-webhook-token'",
+    transactionIdPath: "'transactionId'",
+    statusPath: "'status'",
+    messagePath: "'comment'",
+    successStatus: "'Success'",
+    processingStatus: "'Processing'",
+    cancelStatus: "'Cancel'",
+  };
+  for (const [field, value] of Object.entries(want)) {
+    const found = new RegExp(field + "\\s*:\\s*" + value).test(block.slice(0, 1200));
+    if (!found) return `${field} is not provisioned as ${value}, which the documentation specifies`;
+  }
+  return null;
+});
+
+check('a webhook that matches nothing is visible rather than silent', () => {
+  // An unmatched callback answers 202 and files the body, which is right for
+  // the provider but means a misconfigured webhook and a working one look
+  // identical from the admin screen. The counters are what separate them.
+  const src = read('functions/apiWebhookService.js');
+  if (!src) return 'apiWebhookService.js is missing';
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  for (const token of ['unmatchedCount', 'matchedCount', 'recordDelivery', 'deliverySummary']) {
+    if (!code.includes(token)) return `${token} is missing, so delivery health cannot be read`;
+  }
+  if (!/exports\.listApiWebhookUnmatched/.test(code)) return 'unmatched callbacks cannot be inspected';
+  const modal = read('src/components/ApiWebhookFormModal.js');
+  if (modal && !/delivery/.test(modal)) return 'the admin screen never shows delivery health';
+  return null;
+});
+
+check('the webhook token can be recovered after the one-time alert', () => {
+  // listApiWebhooks deliberately returns webhookToken: '' forever. Without a
+  // way back to it, dismissing the save-time alert strands the integration:
+  // the token still has to be pasted into Success TopUp's own settings page.
+  const src = read('functions/apiWebhookService.js');
+  const index = read('functions/index.js');
+  const client = read('src/firebase/apiWebhookService.js');
+  if (!src || !index || !client) return 'webhook sources are missing';
+  for (const name of ['revealApiWebhookToken', 'rotateApiWebhookToken']) {
+    // Anchored on the assignment: a bare name match also accepts a rename to
+    // anything that merely starts with it, which is the drift worth catching.
+    if (!new RegExp('exports\\.' + name + '\\s*=').test(src)) return `${name} is not implemented`;
+    if (!index.includes(name)) return `${name} is not exported from index.js`;
+    if (!client.includes(name)) return `${name} is not callable from the app`;
+  }
+  const reveal = src.slice(src.indexOf('exports.revealApiWebhookToken'));
+  if (!/assertSuperadmin\(db, request\)/.test(reveal.slice(0, 400))) return 'revealApiWebhookToken does not gate on superadmin';
+  return null;
+});
+
 if (failures.length) {
   console.error('Success TopUp contract FAILED:\n');
   for (const f of failures) console.error(`  - ${f}`);

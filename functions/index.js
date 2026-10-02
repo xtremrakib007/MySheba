@@ -114,6 +114,9 @@ exports.listApiWebhooks = require('./apiWebhookService').listApiWebhooks;
 exports.saveApiWebhook = require('./apiWebhookService').saveApiWebhook;
 exports.deleteApiWebhook = require('./apiWebhookService').deleteApiWebhook;
 exports.apiWebhook = require('./apiWebhookService').apiWebhook;
+exports.revealApiWebhookToken = require('./apiWebhookService').revealApiWebhookToken;
+exports.rotateApiWebhookToken = require('./apiWebhookService').rotateApiWebhookToken;
+exports.listApiWebhookUnmatched = require('./apiWebhookService').listApiWebhookUnmatched;
 exports.pollSuccessTopUpStatus = require('./successTopupPoller').pollSuccessTopUpStatus;
 // Added in d152997, then lost in the conflict resolution of 4eccc79 on
 // 23 Sep. The job stayed deployed and kept running, so nothing broke and
