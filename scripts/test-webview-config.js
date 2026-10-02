@@ -101,6 +101,16 @@ async function resolves(name, promise) {
   try { await promise; check(name, true, true); } catch (e) { check(name, String(e.message), 'no error'); }
 }
 
+console.log('\nAn added page lands on the home grid, not two taps away');
+// A tile nobody flagged for home only renders in the non-homeOnly grid, and
+// the customer home screen passes homeOnly - so defaulting this off would have
+// made every added WebView look like it had failed to appear.
+check('a new page is on the home screen by default',
+  svc.validatePage({ name: 'EPF', url: 'https://epf.gov.my/x' }).home, true);
+check('and can be moved off it deliberately',
+  svc.validatePage({ name: 'EPF', url: 'https://epf.gov.my/x', home: false }).home, false);
+check('built-ins are on the home screen as before', base.fomema.home, true);
+
 console.log('\nEverything that shows a WebView reads the same source');
 const grid = read('src/components/ServiceGrid.js');
 const screen = read('src/screens/WebViewScreen.js');
@@ -109,6 +119,11 @@ yes('the context subscribes once', /subscribeWebviewConfig\(/.test(ctx) && /^ {4
 yes('the grid overlays name and icon', /withWebviewConfig/.test(grid));
 yes('and appends the added ones', /\.filter\(\(p\) => p\.custom && p\.active !== false\)/.test(grid));
 yes('a page switched off leaves the grid', /pages\[item\.key\]\.active !== false/.test(grid));
+yes('the home flag reaches the tile', /home: p\.home !== false/.test(grid));
+// MoreFeaturesScreen's own rule: on the home screen or here, never nowhere.
+const more = read('src/screens/MoreFeaturesScreen.js');
+yes('a page kept off home is still reachable',
+  /p\.custom && p\.active !== false && p\.home === false/.test(more) && /items=\{visible\(overflow\)\}/.test(more));
 yes('the WebView screen prefers the live page', /webviewPages && webviewPages\[webViewKey\]/.test(screen));
 yes('but still falls back to the built-in', /webViewPages\[webViewKey\] \|\| webViewPages\.fomema/.test(screen));
 yes('and only a superadmin may write the document',

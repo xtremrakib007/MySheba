@@ -34,7 +34,7 @@ export default function WebviewManagementScreen() {
 
   const startNew = () => setEditing({
     key: webviewConfigService.newCustomKey(),
-    name: '', url: 'https://', title: '', icon: '🌐', active: true, custom: true, isNew: true,
+    name: '', url: 'https://', title: '', icon: '🌐', active: true, home: true, custom: true, isNew: true,
   });
 
   const save = async () => {
@@ -132,6 +132,12 @@ export default function WebviewManagementScreen() {
             <Switch value={editing.active !== false} onValueChange={(v) => setEditing({ ...editing, active: v })}
               trackColor={{ false: colors.border, true: colors.primary }} thumbColor={colors.onPrimary} />
           </View>
+          <View style={styles.switchRow}>
+            <Text style={styles.label}>On the home screen</Text>
+            <Switch value={editing.home !== false} onValueChange={(v) => setEditing({ ...editing, home: v })}
+              trackColor={{ false: colors.border, true: colors.primary }} thumbColor={colors.onPrimary} />
+          </View>
+          <Text style={styles.hintSmall}>Off puts it under More Services instead, where it is still reachable.</Text>
 
           <TouchableOpacity style={[styles.saveBtn, busy && styles.saveBtnBusy]} onPress={save} disabled={busy}>
             {busy ? <ActivityIndicator color={colors.onPrimary} /> : <Text style={styles.saveText}>Save</Text>}
@@ -163,7 +169,7 @@ export default function WebviewManagementScreen() {
               <TouchableOpacity style={styles.rowBody} onPress={() => setEditing({ ...page, isNew: false })}>
                 <Text style={styles.rowName} numberOfLines={1}>{page.name}</Text>
                 <Text style={styles.rowUrl} numberOfLines={1}>{page.url}</Text>
-                <Text style={styles.rowMeta}>{page.custom ? 'Added here' : 'Built in'}</Text>
+                <Text style={styles.rowMeta}>{page.custom ? 'Added here' : 'Built in'} · {page.home === false ? 'More Services' : 'Home screen'}</Text>
               </TouchableOpacity>
               <Switch value={page.active !== false} onValueChange={() => toggleActive(page)}
                 trackColor={{ false: colors.border, true: colors.primary }} thumbColor={colors.onPrimary} />

@@ -62,7 +62,17 @@ function Section({ title, subtitle, items, onPress }) {
 
 export default function MoreFeaturesScreen() {
   const { colors } = useTheme();
-  const { goBackOrHome, profile, gridManagement, gridViewer } = useApp();
+  const { goBackOrHome, profile, gridManagement, gridViewer, webviewPages } = useApp();
+  // This file's own rule is that a finished tile lands on the home screen or
+  // here, never nowhere. A WebView a superadmin added and kept off the home
+  // grid is exactly that case, so it joins the overflow list rather than
+  // existing only in the settings screen that created it.
+  const overflow = [
+    ...OVERFLOW_SERVICES,
+    ...Object.values(webviewPages || {})
+      .filter((p) => p.custom && p.active !== false && p.home === false)
+      .map((p) => ({ key: p.key, icon: p.icon || 'moreFeaturesTile', emoji: p.icon || '', name: p.name, kind: 'webview' })),
+  ];
   const handlePress = useServiceAction();
   const visible = (items) => items.filter((item) => gridManagementService.isGridActive(gridManagement, item.key, gridViewer));
   const isCustomer = !profile?.role || profile.role === 'customer';
@@ -81,7 +91,7 @@ export default function MoreFeaturesScreen() {
             {/* Hidden when empty - every service tile being on the home
                 screen is the good case, not a reason for a bare heading. */}
             {visible(OVERFLOW_SERVICES).length > 0 && (
-              <Section title="More Services" subtitle="Not shown on your home screen" items={visible(OVERFLOW_SERVICES)} onPress={handlePress} />
+              <Section title="More Services" subtitle="Not shown on your home screen" items={visible(overflow)} onPress={handlePress} />
             )}
             <Section title="Personal" subtitle="Your account, documents and activity" items={visible(PERSONAL_FEATURES)} onPress={handlePress} />
           </>

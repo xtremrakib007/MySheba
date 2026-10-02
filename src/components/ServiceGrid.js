@@ -194,11 +194,11 @@ export default function ServiceGrid({ homeOnly }) {
     const pages = webviewPages || {};
     const overlaid = list.map((item) => {
       const page = item.kind === 'webview' ? pages[item.key] : null;
-      return page ? { ...item, name: page.name || item.name, emoji: page.icon || '' } : item;
+      return page ? { ...item, name: page.name || item.name, emoji: page.icon || '', home: page.home !== false } : item;
     }).filter((item) => item.kind !== 'webview' || !pages[item.key] || pages[item.key].active !== false);
     const extra = Object.values(pages)
       .filter((p) => p.custom && p.active !== false)
-      .map((p) => ({ key: p.key, icon: p.icon || 'moreFeaturesTile', emoji: p.icon || '', name: p.name, kind: 'webview', home: false }));
+      .map((p) => ({ key: p.key, icon: p.icon || 'moreFeaturesTile', emoji: p.icon || '', name: p.name, kind: 'webview', home: p.home !== false }));
     return [...overlaid, ...extra];
   };
   const allServices = withWebviewConfig(!isStaff ? CUSTOMER_SERVICES : [...roleSpecificServices, ...SHARED_SERVICES]);

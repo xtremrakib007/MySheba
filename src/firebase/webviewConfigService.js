@@ -61,7 +61,10 @@ export function validatePage(page) {
     throw new Error('That does not look like a real website address.');
   }
 
-  return { name, url, title: title || name, icon, active: page?.active !== false };
+  // `home` is what puts the tile on the home grid rather than only under More
+  // Services. New pages default to on: someone adding a WebView is adding it
+  // to the grid, and a tile that lands two taps away looks like it failed.
+  return { name, url, title: title || name, icon, active: page?.active !== false, home: page?.home !== false };
 }
 
 function sanitizePages(raw) {
@@ -97,6 +100,7 @@ export function mergePages(data) {
       title: base.title || '',
       icon: base.icon || '',
       active: true,
+      home: true,
       custom: false,
       ...(overrides[key] || {}),
       key,
