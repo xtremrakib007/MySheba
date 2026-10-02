@@ -111,10 +111,52 @@ jobs:
         run: npm run audit:deps
 
       - name: Build production AAB
-        run: eas build --platform android --profile production --non-interactive --wait --message "MySheba production AAB"
+        id: build
+        run: |
+          set -euo pipefail
+          eas build --platform android --profile production --non-interactive --wait \
+            --message "MySheba production AAB" 2>&1 | tee build.log
+
+          # The normal output already carries both values the download step
+          # needs, so we scrape it rather than switching to --json: this step
+          # takes ~12 minutes and the readable progress is worth keeping.
+          #   See logs: https://expo.dev/accounts/<acct>/projects/<proj>/builds/<id>
+          #   https://expo.dev/artifacts/eas/<token>.aab
+          build_id="$(grep -oE 'builds/[0-9a-f-]{36}' build.log | head -1 | cut -d/ -f2 || true)"
+          artifact_url="$(grep -oE 'https://expo\.dev/artifacts/eas/[A-Za-z0-9._~+/=-]+\.aab' build.log | head -1 || true)"
+          echo "build-id=$build_id" >> "$GITHUB_OUTPUT"
+          echo "artifact-url=$artifact_url" >> "$GITHUB_OUTPUT"
+          echo "Resolved build id: ${build_id:-<none>}"
+          echo "Resolved artifact: ${artifact_url:-<none>}"
 
       - name: Download AAB
-        run: eas build:download --platform android --non-interactive
+        shell: bash
+        run: |
+          set +e -uo pipefail
+          build_id="${{ steps.build.outputs.build-id }}"
+          artifact_url="${{ steps.build.outputs.artifact-url }}"
+
+          # `eas build:download` with no build id exits with
+          # "Either --build-id or --fingerprint is required." eas-version is
+          # `latest`, so its flags move under us: try --output, then without it,
+          # then fall back to fetching the artifact URL the build already
+          # printed. The AAB exists on EAS either way at this point.
+          ok=0
+          if [ -n "$build_id" ]; then
+            eas build:download --build-id "$build_id" --output mysheba-production.aab && ok=1
+            if [ "$ok" -ne 1 ]; then
+              eas build:download --build-id "$build_id" && ok=1
+            fi
+          fi
+          if [ "$ok" -ne 1 ] && [ -n "$artifact_url" ]; then
+            echo "eas build:download did not work; fetching the artifact URL directly."
+            curl -fSL --retry 3 --retry-delay 2 -o mysheba-production.aab "$artifact_url" && ok=1
+          fi
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::Could not retrieve the AAB. The build itself succeeded, so download it from the EAS build page."
+            exit 1
+          fi
+          ls -lh ./*.aab
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
