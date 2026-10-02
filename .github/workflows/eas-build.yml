@@ -108,6 +108,9 @@ jobs:
       - name: Success TopUp contract
         run: npm run test:successtopup
 
+      - name: Provider catalogue
+        run: npm run test:catalog
+
       - name: App Check posture
         run: npm run test:appcheck
 

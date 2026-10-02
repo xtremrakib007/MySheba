@@ -303,9 +303,23 @@ check('packages are classified, not dumped into one list', () => {
   if (!server || !util || !internet || !ent) return 'unreadable';
 
   // Without category the app cannot tell a data pack from a voice or call-rate
-  // pack, and listed all of them under "Internet".
-  if (!/category:\s*String\(d\.category/.test(code(server))) {
-    return 'listSuccessTopUpDrives no longer passes category through, so neither screen can filter.';
+  // pack, and listed all of them under "Internet". Checked by running the
+  // normaliser rather than matching source, so moving it does not break this
+  // and quietly dropping the field still does.
+  const providerCatalog = require(path.join(ROOT, 'functions', 'providerCatalog.js'));
+  const preset = providerCatalog.PRESETS['success-topup'];
+  const sample = providerCatalog.normaliseItem(
+    { id: '7', name: '1GB 7 Days', data: '1GB', valid: '7 Days', category: 'Internet', price: 98 },
+    preset.itemMap
+  );
+  if (sample.category !== 'Internet') {
+    return 'the catalogue normaliser no longer passes category through, so neither screen can filter.';
+  }
+  if (sample.id !== '7' || sample.price !== 98) {
+    return 'the catalogue normaliser drops the id or price a package is bought and billed by.';
+  }
+  if (!/category/.test(JSON.stringify(preset.itemMap))) {
+    return 'the Success TopUp preset no longer maps a category key.';
   }
   if (!/isInternetPackage/.test(code(internet))) return 'the Internet step no longer filters to data packages.';
   if (!/isEntertainmentPackage/.test(code(ent))) return 'the Entertainment step no longer filters by category.';
@@ -383,9 +397,20 @@ check('a package order is priced by the server, not the client', () => {
   if (!/!packageId/.test(body)) return 'an order with no packageId is not rejected.';
 
   // The override must be read server-side; a client-only markup is cosmetic.
-  const resolver = code(cat);
-  if (!/apiPackages/.test(resolver)) return 'successTopUpCatalog does not read the apiPackages overrides.';
-  if (!/function sellPriceFor/.test(resolver)) return 'sellPriceFor is gone.';
+  // Run the resolver rather than grep it: this catches an override that is read
+  // but ignored, which source matching never would.
+  const catalogModule = require(path.join(ROOT, 'functions', 'successTopUpCatalog.js'));
+  const pkg = { id: 'pkg-1', price: 100 };
+  if (catalogModule.sellPriceFor(pkg, {}) !== 100) {
+    return 'with no override the sell price must equal the catalogue cost.';
+  }
+  if (catalogModule.sellPriceFor(pkg, { apiPackages: { 'pkg-1': { price: 150 } } }) !== 150) {
+    return 'the Superadmin apiPackages price override is not applied to the sell price.';
+  }
+  if (!catalogModule.isHidden(pkg, { apiPackages: { 'pkg-1': { hidden: true } } })) {
+    return 'a package Superadmin hid is still offered to customers.';
+  }
+  if (typeof catalogModule.sellPriceFor !== 'function') return 'sellPriceFor is gone.';
   return null;
 });
 
@@ -448,11 +473,29 @@ check('the drive window is 10:00-22:00 Bangladesh time, enforced on the server',
   if (!/type === 'drive'\s*&&\s*!driveWindow\.isDriveWindowOpen\(\)/.test(api)) {
     return 'listSuccessTopUpDrives no longer refuses a drive listing outside the window.';
   }
-  const cat = code(read('functions/successTopUpCatalog.js') || '');
-  if (!/type === 'drive'\s*&&\s*!driveOpen/.test(cat)) {
-    return 'resolveOrderPackage no longer skips the drive catalogue outside the window, so a stale screen could still buy one.';
+  // Order time. The window now comes from the provider's configuration, so
+  // check what it actually guards: drive restricted, regular always sellable.
+  const pc = require(path.join(ROOT, 'functions', 'providerCatalog.js'));
+  const stProvider = { name: 'Success TopUp', baseUrl: 'https://api.successtopup.com' };
+  const driveWindowFor = pc.windowFor(stProvider, 'drive');
+  const regularWindowFor = pc.windowFor(stProvider, 'regular');
+  if (driveWindowFor.alwaysOpen !== false) {
+    return 'drive packages are no longer behind a selling window, so a stale screen could buy one at any hour.';
   }
-  if (!/drive-window-closed/.test(cat)) return 'a closed window is not distinguished from a missing package.';
+  if (driveWindowFor.openUtcHour !== 4 || driveWindowFor.closeUtcHour !== 16) {
+    return `the drive window is ${driveWindowFor.openUtcHour}-${driveWindowFor.closeUtcHour} UTC, not 4-16.`;
+  }
+  if (regularWindowFor.alwaysOpen !== true) {
+    return 'regular packages are now behind a window; only drive packages are time-limited.';
+  }
+  const resolverSrc = code(read('functions/providerCatalog.js') || '');
+  if (!/windowFor\(provider, type\)/.test(resolverSrc) || !/window\.isOpen\(\)/.test(resolverSrc)) {
+    return 'resolveOrderPackage no longer consults the selling window, so a stale screen could still buy one.';
+  }
+  const shimSrc = code(read('functions/successTopUpCatalog.js') || '');
+  if (!/drive-window-closed/.test(shimSrc) || !/window-closed/.test(resolverSrc)) {
+    return 'a closed window is not distinguished from a missing package.';
+  }
   const wallet = code(read('functions/walletService.js') || '');
   if (!/drive-window-closed/.test(wallet)) return 'chargeProduct does not surface the closed-window reason to the customer.';
 

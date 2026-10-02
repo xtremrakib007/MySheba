@@ -1,6 +1,12 @@
 'use strict';
 
-// Success TopUp package catalogue, and the price Superadmin sells it at.
+// Success TopUp's view of the generic package catalogue.
+//
+// Everything here now lives in providerCatalog.js, which does the same job for
+// any provider that declares a catalogue. This module stays as the Success
+// TopUp entry point: it pins the provider name and keeps the export names that
+// walletService and apiProviderService already use, so the pricing path did not
+// have to be rewritten to gain the generality.
 //
 // Two prices, and conflating them loses money or breaks the order:
 //
@@ -13,111 +19,48 @@
 //         (internetPricing/{operator}.apiPackages[packageId].price). With no
 //         override it equals cost, so the default behaviour is unchanged.
 //
-// The sell price is resolved HERE, on the server, from the live catalogue. It is
-// never taken from the client: chargeProduct used to convert whatever `amount`
-// the app submitted, so a tampered client could have named an expensive
-// package_id with a one-taka amount.
+// The sell price is resolved on the SERVER from the live catalogue, never taken
+// from the client.
+const providerCatalog = require('./providerCatalog');
 const driveWindow = require('./successTopUpWindow');
-const providerSecretService = require('./providerSecretService');
 
-const BASE_URL = 'https://api.successtopup.com';
-const PRICING_COLLECTION = 'internetPricing';
-const PROVIDER_COLLECTION = 'api_providers';
+const PROVIDER_NAME = 'Success TopUp';
+const BASE_URL = providerCatalog.PRESETS['success-topup'].baseUrl;
 
 // Both catalogues, because a package id can live in either and an order only
 // carries the id. `regular` first so it wins a duplicate id.
-const CATALOG_TYPES = ['regular', 'drive'];
+const CATALOG_TYPES = providerCatalog.PRESETS['success-topup'].types;
 
-function pickOverride(pricingDoc, packageId) {
-  const apiPackages = (pricingDoc && pricingDoc.apiPackages) || {};
-  const entry = apiPackages[packageId];
-  return entry && typeof entry === 'object' ? entry : null;
-}
-
-/** The customer-facing price for one catalogue entry. */
-function sellPriceFor(pkg, pricingDoc) {
-  const override = pickOverride(pricingDoc, pkg.id);
-  const overridden = override ? Number(override.price) : NaN;
-  if (Number.isFinite(overridden) && overridden > 0) return Math.round(overridden * 100) / 100;
-  return pkg.price;
-}
-
-/** Whether Superadmin has hidden this package from customers. */
-function isHidden(pkg, pricingDoc) {
-  const override = pickOverride(pricingDoc, pkg.id);
-  return !!(override && override.hidden === true);
-}
-
-async function readPricingDoc(db, operatorName) {
-  if (!operatorName) return {};
-  const snap = await db.collection(PRICING_COLLECTION).doc(String(operatorName)).get();
-  return snap.exists ? (snap.data() || {}) : {};
-}
-
-async function readProvider(db, service) {
-  const snap = await db.collection(PROVIDER_COLLECTION)
-    .where('service', '==', service)
-    .where('name', '==', 'Success TopUp')
-    .where('active', '==', true)
-    .limit(1)
-    .get();
-  if (snap.empty) return null;
-  const provider = { id: snap.docs[0].id, ...(snap.docs[0].data() || {}) };
-  Object.assign(provider, await providerSecretService.getCredentials(provider));
-  return provider;
+/** The active Success TopUp provider for a service. */
+function readProvider(db, service) {
+  return providerCatalog.readProvider(db, service, { name: PROVIDER_NAME });
 }
 
 /**
  * Resolve one package by id, for an order that is about to be charged.
- * Returns null when the id is not in either catalogue any more - the caller
+ * Returns an `error` when the id is not in the catalogue any more - the caller
  * must refuse the order rather than guess a price.
  */
-async function resolveOrderPackage({ db, service, operatorName, operatorCode, packageId, fetchCatalog }) {
-  const provider = await readProvider(db, service);
-  if (!provider || !provider.apiKey || !provider.secretKey) return { error: 'provider-unconfigured' };
-
-  const pricingDoc = await readPricingDoc(db, operatorName);
-  const driveOpen = driveWindow.isDriveWindowOpen();
-  for (const type of CATALOG_TYPES) {
-    if (type === 'drive' && !driveOpen) continue;
-    let packages;
-    try {
-      packages = await fetchCatalog(provider, operatorCode || 'ALL', type);
-    } catch (err) {
-      return { error: 'catalog-unreachable', message: err && err.message };
-    }
-    const match = packages.find((p) => String(p.id) === String(packageId));
-    if (!match) continue;
-    if (isHidden(match, pricingDoc)) return { error: 'package-hidden' };
-    return {
-      package: match,
-      costAmount: match.price,
-      sellAmount: sellPriceFor(match, pricingDoc),
-    };
+async function resolveOrderPackage(args) {
+  const result = await providerCatalog.resolveOrderPackage({ ...args, providerName: PROVIDER_NAME });
+  // The generic engine names the error after the window; callers and tests
+  // written against the Success TopUp flow expect the drive wording.
+  if (result && result.error === 'window-closed') {
+    return { ...result, error: 'drive-window-closed' };
   }
-  if (!driveOpen) {
-    const provider2 = await readProvider(db, service);
-    if (provider2) {
-      try {
-        const driveOnly = await fetchCatalog(provider2, operatorCode || 'ALL', 'drive');
-        if (driveOnly.some((p) => String(p.id) === String(packageId))) {
-          return { error: 'drive-window-closed', message: driveWindow.driveWindowMessage() };
-        }
-      } catch (err) { /* fall through to not-found */ }
-    }
-  }
-  return { error: 'package-not-found' };
+  return result;
 }
 
 module.exports = {
   BASE_URL,
+  PROVIDER_NAME,
   isDriveWindowOpen: driveWindow.isDriveWindowOpen,
   CATALOG_TYPES,
-  PRICING_COLLECTION,
-  sellPriceFor,
-  isHidden,
-  readPricingDoc,
+  PRICING_COLLECTION: providerCatalog.PRICING_COLLECTION,
+  sellPriceFor: providerCatalog.sellPriceFor,
+  isHidden: providerCatalog.isHidden,
+  readPricingDoc: providerCatalog.readPricingDoc,
   readProvider,
   resolveOrderPackage,
-  _test: { pickOverride, sellPriceFor, isHidden },
+  _test: providerCatalog._test,
 };

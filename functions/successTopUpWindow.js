@@ -1,45 +1,45 @@
 'use strict';
 
-// Drive packages are only sold 10:00-22:00 Bangladesh time, which is
-// 12:00-00:00 Malaysia time and 04:00-16:00 UTC.
+// Success TopUp's drive-package hours, expressed through the generic selling
+// window.
 //
-// Held in UTC on purpose. Asia/Dhaka is a fixed +06:00 and Asia/Kuala_Lumpur a
-// fixed +08:00 - neither has observed DST since 2009 - so a UTC comparison needs
-// no timezone database and cannot be thrown off by the server's locale or by a
-// Node build without full ICU. Verified against the IANA data: 04:00 UTC is
-// 10:00 Dhaka / 12:00 KL and 16:00 UTC is 22:00 Dhaka / 00:00 KL.
+// The hours themselves are the ones in providerCatalog's `success-topup`
+// preset, so there is a single source for them: changing the preset changes
+// what is sold and what this module reports, and they cannot drift apart.
 //
-// The window is enforced on the SERVER, at listing and again at order time. The
-// app mirrors it in src/utils/driveWindow.js only to grey the packages out and
-// say when they reopen; a device clock decides nothing, and test:successtopup
-// fails if the two copies drift.
-const DRIVE_WINDOW_OPEN_UTC_HOUR = 4;   // 10:00 Asia/Dhaka
-const DRIVE_WINDOW_CLOSE_UTC_HOUR = 16; // 22:00 Asia/Dhaka
+// This file stays because the hours are mirrored in src/utils/driveWindow.js
+// for display, and test:successtopup fails if the two copies disagree. The app
+// mirror only greys packages out and says when they reopen; the server decides,
+// at listing and again at order time, and a device clock decides nothing.
+//
+// Drive packages sell 10:00-22:00 Bangladesh time, which is 12:00-00:00
+// Malaysia time and 04:00-16:00 UTC. Held in UTC because Asia/Dhaka is a fixed
+// +06:00 and Asia/Kuala_Lumpur a fixed +08:00 - neither has observed DST since
+// 2009 - so the comparison needs no timezone database.
+const sellingWindow = require('./sellingWindow');
+const { PRESETS } = require('./providerCatalog');
 
-const DRIVE_WINDOW_LABEL = '10:00 AM - 10:00 PM Bangladesh time (12:00 PM - 12:00 AM Malaysia time)';
+const SPEC = PRESETS['success-topup'].window;
+
+const DRIVE_WINDOW_OPEN_UTC_HOUR = SPEC.openUtcHour;   // 10:00 Asia/Dhaka
+const DRIVE_WINDOW_CLOSE_UTC_HOUR = SPEC.closeUtcHour; // 22:00 Asia/Dhaka
+const DRIVE_WINDOW_LABEL = SPEC.label;
+
+const window = sellingWindow.createWindow(SPEC);
 
 /** Whether drive packages may be listed or sold right now. */
 function isDriveWindowOpen(now = new Date()) {
-  const hour = now.getUTCHours();
-  return hour >= DRIVE_WINDOW_OPEN_UTC_HOUR && hour < DRIVE_WINDOW_CLOSE_UTC_HOUR;
+  return window.isOpen(now);
 }
 
 /** When the window next opens, as a Date. Returns null while it is open. */
 function nextDriveWindowOpening(now = new Date()) {
-  if (isDriveWindowOpen(now)) return null;
-  const next = new Date(Date.UTC(
-    now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
-    DRIVE_WINDOW_OPEN_UTC_HOUR, 0, 0, 0,
-  ));
-  // Past today's opening means the next one is tomorrow.
-  if (next.getTime() <= now.getTime()) next.setUTCDate(next.getUTCDate() + 1);
-  return next;
+  return window.nextOpening(now);
 }
 
 /** One sentence a customer can act on. */
 function driveWindowMessage(now = new Date()) {
-  if (isDriveWindowOpen(now)) return '';
-  return `Drive packages are available ${DRIVE_WINDOW_LABEL}. Please try again during those hours.`;
+  return window.message(now);
 }
 
 module.exports = {

@@ -48,6 +48,7 @@
     "test:pin": "node scripts/test-collection-pin.js",
     "test:adminlogin": "node scripts/test-admin-login.js",
     "test:successtopup": "node scripts/test-success-topup.js",
+    "test:catalog": "node scripts/test-provider-catalog.js",
     "test:appcheck": "node scripts/test-app-check.js"
   },
   "dependencies": {

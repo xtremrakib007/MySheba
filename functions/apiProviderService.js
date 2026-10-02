@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const providerSecretService = require('./providerSecretService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const catalog = require('./successTopUpCatalog');
+const providerCatalog = require('./providerCatalog');
 const driveWindow = require('./successTopUpWindow');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
@@ -122,6 +123,77 @@ function validateHeaders(value) {
   }
   return headers;
 }
+// Catalogue configuration. Only providers that sell a browsable product list
+// set these; a plain recharge or bill-pay API leaves them empty and behaves
+// exactly as before. A preset (see providerCatalog.PRESETS) supplies the
+// defaults for a known provider, and anything set here overrides it.
+function validateCatalog(data) {
+  const catalogPath = cleanString(data.catalogPath, 300);
+  const out = {
+    catalogPreset: cleanString(data.catalogPreset, 60),
+    catalogPath,
+    catalogMethod: (cleanString(data.catalogMethod, 10) || '').toUpperCase(),
+    catalogListPath: cleanString(data.catalogListPath, 200),
+    catalogSuccessPath: cleanString(data.catalogSuccessPath, 200),
+    catalogErrorLabel: cleanString(data.catalogErrorLabel, 100),
+  };
+  if (out.catalogPath && (out.catalogPath.includes('?') || out.catalogPath.includes('#'))) {
+    throw new HttpsError('invalid-argument', 'Catalogue path must not contain a query string or fragment.');
+  }
+  if (out.catalogMethod && !ALLOWED_METHODS.includes(out.catalogMethod)) {
+    throw new HttpsError('invalid-argument', 'Invalid catalogue HTTP method.');
+  }
+  if (data.catalogSuccessValue !== undefined && data.catalogSuccessValue !== null) {
+    const v = data.catalogSuccessValue;
+    if (!['string', 'number', 'boolean'].includes(typeof v)) {
+      throw new HttpsError('invalid-argument', 'Catalogue success value must be a scalar.');
+    }
+    out.catalogSuccessValue = typeof v === 'string' ? cleanString(v, 100) : v;
+  }
+  if (data.catalogTypes !== undefined) {
+    if (!Array.isArray(data.catalogTypes)) throw new HttpsError('invalid-argument', 'Catalogue types must be a list.');
+    const types = data.catalogTypes.map((t) => cleanString(t, 40).toLowerCase()).filter(Boolean);
+    if (types.length > 10) throw new HttpsError('invalid-argument', 'Too many catalogue types.');
+    out.catalogTypes = [...new Set(types)];
+  }
+  if (data.catalogRequestTemplate !== undefined) {
+    out.catalogRequestTemplate = validateTemplate(data.catalogRequestTemplate, 'Catalogue request template');
+  }
+  if (data.catalogItemMap !== undefined) {
+    const map = validateTemplate(data.catalogItemMap, 'Catalogue item map', 4000);
+    // Values are the provider's key names: one, or a list of fallbacks.
+    for (const [field, keys] of Object.entries(map)) {
+      const list = Array.isArray(keys) ? keys : [keys];
+      if (!list.length || list.some((k) => typeof k !== 'string' || !k.trim())) {
+        throw new HttpsError('invalid-argument', `Catalogue item map for "${field}" must name at least one response key.`);
+      }
+    }
+    // Without these two a package cannot be identified or billed.
+    for (const required of ['id', 'price']) {
+      if (map[required] === undefined) {
+        throw new HttpsError('invalid-argument', `Catalogue item map must map "${required}".`);
+      }
+    }
+    out.catalogItemMap = map;
+  }
+  if (data.catalogWindow !== undefined && data.catalogWindow !== null) {
+    const w = validateTemplate(data.catalogWindow, 'Catalogue selling window', 2000);
+    const open = Number(w.openUtcHour);
+    const close = Number(w.closeUtcHour);
+    if (!Number.isInteger(open) || open < 0 || open > 24 || !Number.isInteger(close) || close < 0 || close > 24) {
+      throw new HttpsError('invalid-argument', 'Catalogue selling window hours must be whole hours between 0 and 24 (UTC).');
+    }
+    out.catalogWindow = {
+      type: cleanString(w.type, 40).toLowerCase(),
+      openUtcHour: open,
+      closeUtcHour: close,
+      label: cleanString(w.label, 300),
+      noun: cleanString(w.noun, 60) || 'Packages',
+    };
+  }
+  return out;
+}
+
 function validate(data) {
   let service = cleanString(data.service, 40), name = cleanString(data.name, 100), baseUrl = cleanString(data.baseUrl, 500);
   let country = cleanString(data.country, 10).toUpperCase() || 'ALL';
@@ -209,7 +281,8 @@ function validate(data) {
     headers: validateHeaders(headers), queryTemplate: validateTemplate(queryTemplate, 'Query template'),
     requestTemplate: validateTemplate(requestTemplate, 'Request template'),
     responseSuccessPath, responseSuccessValue, responseProcessingPath, responseProcessingValue,
-    responseIdPath, responseMessagePath, responsePinPath: service === 'Recharge PIN' ? cleanString(data.responsePinPath, 200) : ''
+    responseIdPath, responseMessagePath, responsePinPath: service === 'Recharge PIN' ? cleanString(data.responsePinPath, 200) : '',
+    ...validateCatalog(data),
   };
 }
 
@@ -263,43 +336,45 @@ function resolveSuccessTopUpOperator(value) {
   return SUCCESS_TOPUP_OPERATOR_CODES.includes(upper) ? upper : '';
 }
 
-// One place that talks to /api/drives. The listing callable, the credential
-// test and the order-time price check all go through it, so the response
-// mapping cannot differ between what a customer is shown and what they are
-// charged.
-async function fetchSuccessTopUpCatalog(provider, operator, type) {
-  const url = new URL('https://api.successtopup.com/api/drives');
-  const body = JSON.stringify({
-    operator: SUCCESS_TOPUP_OPERATOR_CODES.includes(operator) || operator === 'ALL' ? operator : 'ALL',
-    type: ['regular', 'drive'].includes(type) ? type : 'regular',
-    successtopup_key: provider.apiKey,
-    successtopup_secret: provider.secretKey,
-  });
+// The one place a catalogue request leaves this server. The listing callables,
+// the credential test and the order-time price check all go through it, so the
+// response mapping cannot differ between what a customer is shown and what they
+// are charged.
+//
+// The shape of the request and response is no longer written here: that is
+// providerCatalog's configuration, so bus/train/flight providers get the same
+// treatment. What stays here is the part that must not be configurable - the
+// public-hostname assertion and the DNS pinning that stop a provider URL being
+// pointed at an internal address.
+async function catalogHttpsRequest(url, init, config) {
   await assertPublicHostname(url.hostname);
   const addresses = await dns.lookup(url.hostname, { all: true, verbatim: true });
   const pinned = addresses.find((a) => !isPrivateIp(a.address));
   if (!pinned) throw new Error('Provider hostname resolved to an invalid address.');
-  const response = await requestHttpsPinned(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', accept: 'application/json' },
-    body,
-  }, pinned);
+  const response = await requestHttpsPinned(url, init, pinned);
   const text = await response.text();
-  if (!response.ok) throw new Error('Success TopUp drives request failed.');
-  let data;
-  try { data = JSON.parse(text || '{}'); } catch { throw new Error('Success TopUp returned invalid drive data.'); }
-  if (data.result !== true) throw new Error(String(data.message || 'Success TopUp rejected the drive-list request.'));
-  const drives = Array.isArray(data.drives) ? data.drives : [];
-  return drives.slice(0, 500).map((d) => ({
-    id: String(d.id ?? d.package_id ?? d.packageId ?? '').slice(0, 200),
-    name: String(d.name ?? d.title ?? d.package_name ?? '').slice(0, 200),
-    data: String(d.data ?? d.data_amount ?? d.volume ?? '').slice(0, 100),
-    valid: String(d.valid ?? d.validity ?? d.duration ?? '').slice(0, 100),
-    category: String(d.category ?? d.pack_type ?? d.packType ?? d.type ?? '').slice(0, 60),
-    price: Number(d.price ?? d.amount ?? 0),
-  })).filter((d) => d.id && d.price > 0);
+  if (!response.ok) throw new Error(`${config.errorLabel} catalogue request failed.`);
+  try {
+    return JSON.parse(text || '{}');
+  } catch {
+    throw new Error(`${config.errorLabel} returned invalid catalogue data.`);
+  }
 }
+
+/** Fetch any provider's catalogue, normalised. */
+function fetchProviderCatalog(provider, operator, type) {
+  return providerCatalog.fetchCatalog(provider, { operator, type }, { request: catalogHttpsRequest });
+}
+
+// Success TopUp's operator codes are still validated here, because they are
+// specific to that provider's API rather than to catalogues in general.
+async function fetchSuccessTopUpCatalog(provider, operator, type) {
+  const safeOperator = SUCCESS_TOPUP_OPERATOR_CODES.includes(operator) || operator === 'ALL' ? operator : 'ALL';
+  return fetchProviderCatalog(provider, safeOperator, type);
+}
+
 exports.fetchSuccessTopUpCatalog = fetchSuccessTopUpCatalog;
+exports.fetchProviderCatalog = fetchProviderCatalog;
 
 async function executeConfiguredApi(service, payload, customer, requestId, options = {}) {
   const db = admin.firestore();
