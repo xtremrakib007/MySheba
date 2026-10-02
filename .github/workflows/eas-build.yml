@@ -94,6 +94,11 @@ jobs:
         working-directory: functions
         run: npm ci --no-audit --no-fund
 
+      # Needs functions/ deps installed, hence its position: it loads the
+      # functions entrypoint to read what the backend actually exports.
+      - name: Audit callable names
+        run: npm run audit:callables
+
       - name: Run API provider regression tests
         run: npm run test:api-provider
 
