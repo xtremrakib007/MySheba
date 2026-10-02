@@ -41,7 +41,9 @@ assert.deepStrictEqual(api.validateTemplate('not-json', 'Request'), {});
 
 // Rendering is deterministic and does not evaluate arbitrary expressions.
 assert.strictEqual(api.render('order-{{requestId}}-{{missing}}', { requestId: 'abc' }), 'order-abc-');
-assert.deepStrictEqual(api.render({ amount: '{{amount}}' }, { amount: 10 }), { amount: '10' });
+// A whole-placeholder keeps the value's type - see the typed-rendering block
+// at the end of this file for why. This used to assert the string '10'.
+assert.deepStrictEqual(api.render({ amount: '{{amount}}' }, { amount: 10 }), { amount: 10 });
 
 // Nested response extraction.
 assert.strictEqual(api.getPath({ data: { pin: '1234' } }, 'data.pin'), '1234');
@@ -189,6 +191,40 @@ assert.throws(() => api.validate({ service: 'Recharge', name: 'Test', baseUrl: '
   assert.deepStrictEqual(api.validate({ ...base, services: ['', null, 'Internet'] }).services, ['Recharge', 'Internet']);
 
   console.log('  one provider can serve several features, primary first');
+}
+
+// Request bodies have to match the documented types, not just the field names.
+//
+// Success TopUp documents amount as `number` and its own example sends
+// "amount": 50. Every rendered value was a string, because the replace that
+// substitutes placeholders stringifies - so a documented number went out
+// quoted on the charge path.
+{
+  const template = {
+    number: '{{phone}}', type: 'prepaid', operator: '{{operator}}',
+    amount: '{{amount}}', package_id: '{{packageId}}', trxid: '{{requestId}}',
+    note: 'ref {{requestId}}', flag: '{{enabled}}',
+  };
+  const out = api.render(template, {
+    phone: '01712345678', operator: 'GP', amount: 50,
+    packageId: '', requestId: 'trx-1', enabled: true,
+  });
+
+  assert.strictEqual(out.amount, 50, 'a whole-placeholder number keeps its type');
+  assert.strictEqual(typeof out.amount, 'number');
+  assert.strictEqual(out.flag, true, 'and so does a boolean');
+  // Anything with text around the placeholder is interpolation, not a value.
+  assert.strictEqual(out.note, 'ref trx-1');
+  assert.strictEqual(out.type, 'prepaid');
+  assert.strictEqual(out.trxid, 'trx-1');
+  // A missing value is still the empty string, not the word "undefined".
+  assert.strictEqual(out.package_id, '');
+
+  // A numeric-looking STRING was given as a string and stays one - inferring a
+  // type the caller did not use would be the same mistake in reverse.
+  assert.strictEqual(api.render({ a: '{{x}}' }, { x: '007' }).a, '007');
+
+  console.log('  a whole-placeholder keeps its value type, so amount sends as a number');
 }
 
 console.log('apiProviderService tests: PASS');

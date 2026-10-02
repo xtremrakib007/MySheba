@@ -350,8 +350,27 @@ function validate(data) {
 
 function asObject(value) { if (value && typeof value === 'object' && !Array.isArray(value)) return value; if (typeof value !== 'string') return {}; try { const x = JSON.parse(value); return x && typeof x === 'object' && !Array.isArray(x) ? x : {}; } catch { return {}; } }
 function getPath(obj, path) { return path ? path.split('.').reduce((v,k) => v == null ? undefined : v[k], obj) : undefined; }
+// A template value that is nothing but one placeholder takes that value's own
+// type; anything with text around it is interpolation and stays a string.
+//
+// Success TopUp documents amount as `number` and their own example sends
+// `"amount": 50`. Every value went out as a string because the replace()
+// stringifies, so we were sending "50" against a documented number. Providers
+// mostly coerce it, but sending a documented type wrongly on the charge path
+// is not something to leave to a parser's good nature.
+const WHOLE_PLACEHOLDER = /^\{\{\s*([A-Za-z0-9_]+)\s*\}\}$/;
 function render(v, vars) {
-  if (typeof v === 'string') return v.replace(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g, (_, k) => vars[k] == null ? '' : String(vars[k]));
+  if (typeof v === 'string') {
+    const whole = v.match(WHOLE_PLACEHOLDER);
+    if (whole) {
+      const value = vars[whole[1]];
+      if (value == null) return '';
+      // Only a value that is already a number or boolean keeps its type. A
+      // numeric-looking string stays a string: it was given as one.
+      return (typeof value === 'number' || typeof value === 'boolean') ? value : String(value);
+    }
+    return v.replace(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g, (_, k) => vars[k] == null ? '' : String(vars[k]));
+  }
   if (Array.isArray(v)) return v.map(x => render(x, vars));
   if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k,x]) => [k, render(x, vars)]));
   return v;

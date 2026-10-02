@@ -510,6 +510,47 @@ check('the drive window is 10:00-22:00 Bangladesh time, enforced on the server',
   return null;
 });
 
+// The documented responses, run through the code that reads them. Taken from
+// successtopup.com/recharge-api-documentation:
+//
+//   POST /api/recharge  -> { "result": true, "message": "Recharge successful" }
+//   POST /api/status    -> { "result": true, "status": "Success" }
+//
+// `result` is a JSON boolean, not the string the provider config compares
+// against - the comparison survives only because it String()s both sides, so
+// this pins that down rather than leaving it to luck.
+check('the documented recharge response is accepted', () => {
+  const api = require('../functions/apiProviderService')._test;
+  const body = { result: true, message: 'Recharge successful' };
+  const success = api.getPath(body, 'result');
+  if (success !== true) return 'result should be the boolean true';
+  if (String(success) !== String('true')) return 'the configured success value no longer matches a boolean result';
+  if (api.getPath(body, 'message') !== 'Recharge successful') return 'message is not read from "message"';
+  return null;
+});
+
+check('every documented status settles rather than parking', () => {
+  // successTopupPoller lowercases and accepts exactly these three. The
+  // documented example is capitalised ("Success"), so the lowercasing is
+  // load-bearing, and anything else is parked for manual reconcile on purpose.
+  const settled = ['success', 'cancel', 'processing'];
+  for (const documented of ['Success', 'Cancel', 'Processing']) {
+    if (!settled.includes(String(documented).toLowerCase())) return `${documented} would be parked as unknown`;
+  }
+  const poller = read('functions/successTopupPoller.js');
+  if (!/\.toLowerCase\(\)/.test(poller)) return 'the poller no longer lowercases the status';
+  if (!/result\?\.result/.test(poller) || !/result\?\.status/.test(poller)) return 'the poller no longer reads result and status';
+  return null;
+});
+
+check('amount goes out as the documented number', () => {
+  const api = require('../functions/apiProviderService')._test;
+  // The docs table types amount as `number` and the example sends 50.
+  const out = api.render({ amount: '{{amount}}' }, { amount: 50 });
+  if (typeof out.amount !== 'number') return `amount rendered as ${typeof out.amount}, documented as number`;
+  return null;
+});
+
 if (failures.length) {
   console.error('Success TopUp contract FAILED:\n');
   for (const f of failures) console.error(`  - ${f}`);
