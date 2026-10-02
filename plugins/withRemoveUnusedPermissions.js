@@ -4,10 +4,13 @@ const { withAndroidManifest } = require('@expo/config-plugins');
 // doesn't actually use, both pulled in automatically by dependencies rather
 // than requested on purpose:
 //
-// 1. FOREGROUND_SERVICE_MEDIA_PROJECTION - bundled by react-native-agora's
-//    Android SDK for its optional screen-share/streaming feature. MySheba
-//    only uses Agora for voice/video calling (see src/screens/CallScreen.js),
-//    never screen or media projection.
+// 1. FOREGROUND_SERVICE_MEDIA_PROJECTION - this arrived with
+//    react-native-agora, for its optional screen-share feature. The calling
+//    feature and that dependency are both long gone (842f47f removed the
+//    Agora token service; there is no CallScreen and no react-native-agora in
+//    package.json), so nothing requests it today. The removal entry stays as
+//    belt and braces: it costs nothing, and it keeps a future native
+//    dependency from quietly re-adding a screen-capture permission.
 //
 // 2. READ_MEDIA_IMAGES / READ_MEDIA_VIDEO - broad photo/video library
 //    permissions. MySheba uses the Android system Photo Picker through
