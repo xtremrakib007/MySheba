@@ -36,12 +36,41 @@ jobs:
       - name: Verify EAS production environment
         shell: bash
         run: |
-          set -euo pipefail
-          vars="$(eas env:list --environment production --non-interactive)"
-          echo "$vars" | grep -q "GOOGLE_SERVICES_JSON" || {
-            echo "Missing EAS production file variable: GOOGLE_SERVICES_JSON"
+          set +e -uo pipefail
+
+          # A bad or expired EXPO_TOKEN surfaces here. `eas env:list` only ever
+          # says "env:list command failed", which does not distinguish an auth
+          # problem from a missing variable.
+          echo "--- eas whoami ---"
+          eas whoami || echo "eas whoami failed: EXPO_TOKEN may be invalid, expired, or lack access to the project."
+          echo "--- eas-cli version ---"
+          eas --version || true
+
+          # This step is a pre-flight: it exists to save a ~30 minute build when
+          # GOOGLE_SERVICES_JSON is missing from the production environment.
+          # `--non-interactive` is not accepted by every eas-cli version and
+          # eas-version is `latest` here, so try it and fall back without it.
+          echo "--- eas env:list ---"
+          vars="$(EXPO_DEBUG=1 eas env:list --environment production --non-interactive 2>&1)"
+          status=$?
+          if [ $status -ne 0 ]; then
+            vars="$(EXPO_DEBUG=1 eas env:list --environment production 2>&1)"
+            status=$?
+          fi
+
+          if [ $status -ne 0 ]; then
+            # The probe could not run. Say so loudly, but do not block the build:
+            # `eas build` validates file-type environment variables itself, so a
+            # broken pre-flight must not be the thing that stops a release.
+            echo "$vars"
+            echo "::warning::Could not list the EAS production environment; skipping the GOOGLE_SERVICES_JSON pre-flight. The build itself still validates it."
+          elif grep -q GOOGLE_SERVICES_JSON <<<"$vars"; then
+            echo "GOOGLE_SERVICES_JSON is present in the production environment."
+          else
+            echo "$vars"
+            echo "::error::Missing EAS production file variable: GOOGLE_SERVICES_JSON"
             exit 1
-          }
+          fi
 
       - name: Validate production source
         run: npm run production:check
