@@ -163,4 +163,32 @@ assert.throws(() => api.validate({ service: 'Recharge', name: 'Test', baseUrl: '
   console.log('  optional catalogue fields accept null, empty and absent alike');
 }
 
+// One API, several features. Bangladesh recharge and Bangladesh internet are
+// the same Success TopUp account; before this each needed its own row with the
+// credentials typed again, and rotating a key meant finding every copy.
+{
+  const base = { service: 'Recharge', name: 'Test', baseUrl: 'https://api.example.com', authType: 'none' };
+
+  // The primary is always in the list, so a document written now reads back
+  // the same way whether or not extra features were picked.
+  assert.deepStrictEqual(api.validate(base).services, ['Recharge']);
+  assert.deepStrictEqual(
+    api.validate({ ...base, services: ['Internet', 'Offer Packs'] }).services,
+    ['Recharge', 'Internet', 'Offer Packs'],
+  );
+  // Listing the primary again must not duplicate it.
+  assert.deepStrictEqual(
+    api.validate({ ...base, services: ['Recharge', 'Internet'] }).services,
+    ['Recharge', 'Internet'],
+  );
+  // `service` is unchanged, which is what keeps the old queries working.
+  assert.strictEqual(api.validate({ ...base, services: ['Internet'] }).service, 'Recharge');
+
+  assert.throws(() => api.validate({ ...base, services: ['Nonsense'] }), /Invalid service: Nonsense/);
+  // Junk in the array must not slip through as an empty entry.
+  assert.deepStrictEqual(api.validate({ ...base, services: ['', null, 'Internet'] }).services, ['Recharge', 'Internet']);
+
+  console.log('  one provider can serve several features, primary first');
+}
+
 console.log('apiProviderService tests: PASS');

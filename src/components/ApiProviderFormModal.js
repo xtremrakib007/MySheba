@@ -133,6 +133,20 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
+  // `service` is the primary and is always in the list; the server keeps the
+  // same invariant, so a document written here reads back the same way.
+  const selectedServices = Array.isArray(form.services) && form.services.length
+    ? form.services
+    : [form.service].filter(Boolean);
+  const toggleService = (name) => setForm((f) => {
+    const current = Array.isArray(f.services) && f.services.length ? f.services : [f.service].filter(Boolean);
+    const next = current.includes(name) ? current.filter((x) => x !== name) : [...current, name];
+    // Never leave a provider serving nothing: the last feature cannot be
+    // unpicked, it has to be swapped by picking another first.
+    if (!next.length) return f;
+    return { ...f, services: next, service: next[0] };
+  });
+
   const renderField = (f) => (
     <View key={f.key} style={styles.field}>
       <Text style={styles.fieldLabel}>{f.label}</Text>
@@ -188,15 +202,27 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
               </>
             ) : (
               <>
-                <Text style={styles.sectionTitle}>Feature</Text>
-                <Text style={styles.fieldHint}>Which feature this API serves. Each one can have its own provider.</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  {API_SERVICES.map((x) => (
-                    <TouchableOpacity key={x} onPress={() => set('service', x)} style={[styles.chip, form.service === x && styles.chipOn]}>
-                      <Text style={form.service === x ? styles.chipOnText : null}>{x}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                <Text style={styles.sectionTitle}>Features</Text>
+                <Text style={styles.fieldHint}>
+                  Everything this one API serves. Bangladesh recharge and Bangladesh internet are usually the
+                  same account, so tap both rather than entering the credentials twice. The first one picked
+                  is the primary.
+                </Text>
+                <View style={styles.chipWrap}>
+                  {API_SERVICES.map((x) => {
+                    const on = selectedServices.includes(x);
+                    return (
+                      <TouchableOpacity key={x} onPress={() => toggleService(x)} style={[styles.chip, on && styles.chipOn]}>
+                        <Text style={on ? styles.chipOnText : styles.chipText}>{on ? `\u2713 ${x}` : x}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <Text style={styles.fieldHint}>
+                  {selectedServices.length > 1
+                    ? `One provider for ${selectedServices.length} features. Primary: ${form.service}.`
+                    : 'Tap another to have this provider serve it too.'}
+                </Text>
 
                 <Text style={styles.sectionTitle}>Country</Text>
                 <Text style={styles.fieldHint}>A country-specific provider is preferred over an &quot;All countries&quot; one.</Text>
@@ -292,6 +318,7 @@ function createStyles(colors) {
     input: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: colors.text, backgroundColor: colors.inputBg },
     chip: { paddingHorizontal: 13, paddingVertical: 8, borderRadius: 18, borderWidth: 1, borderColor: colors.border, marginRight: 7, marginTop: 4 },
     chipText: { color: colors.text, fontSize: 12 },
+    chipWrap: { flexDirection: 'row', flexWrap: 'wrap' },
     chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
     chipOnText: { color: colors.onPrimary, fontWeight: '700' },
     toggle: { marginTop: 16, paddingVertical: 10 },

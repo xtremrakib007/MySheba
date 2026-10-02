@@ -76,10 +76,19 @@ const SUPERADMIN_GROUPS = [
   { title: 'Superadmin Governance', icon: 'kyc', color: 'secondary', items: [
     { key: 'adminFeatures', icon: 'adminFeatures', label: 'System Control', featured: true },
     { key: 'trustedDevices', icon: 'trustedDevices', label: 'Trusted Devices' },
-    { key: 'featureAccess', icon: 'featureAccess', label: 'Tool Access' },
     { key: 'apiProviderManagement', icon: 'apiProviderManagement', label: 'API Providers' },
     { key: 'tierPromotions', icon: 'tierPromotions', label: 'Tier Promotions' },
     { key: 'superAdminTopup', icon: 'superAdminTopup', label: 'Wallet Top-Up' },
+  ] },
+  // Who sees what. These three were reachable only through System Control >
+  // System, two taps in, so the grid scoping and the WebView editor read as
+  // missing features. "Tool Access" is gone from the list above: it opened
+  // featureAccess, the same screen the Platform group already calls Feature
+  // Access, so the sidebar offered one screen twice under two names.
+  { title: 'Access Control', icon: 'featureAccess', color: 'secondary', items: [
+    { key: 'gridManagement', icon: 'gridManagement', label: 'Grid Access' },
+    { key: 'featureAccess', icon: 'featureAccess', label: 'Feature Access' },
+    { key: 'webviewManagement', icon: 'apiManagement', label: 'WebView Pages' },
   ] },
   { title: 'Risk & Moderation', icon: 'kyc', color: 'primary', items: [
     { key: 'verificationManagement', icon: 'verificationManagement', label: 'Verification Queue' },
@@ -144,7 +153,7 @@ export default function Sidebar() {
   if (!sidebarVisible) return null;
 
   const goTo = (key, asTab) => {
-    const always = ['adminHome','adminFeatures','gridManagement'];
+    const always = ['adminHome','adminFeatures','gridManagement','webviewManagement','featureAccess'];
     // Resolved for this person, not globally: a tile hidden from them in the
     // grid must not still be reachable from the sidebar.
     if (!always.includes(key) && !gridService.isGridActive(gridManagement, key, gridViewer)) { showAlert('MySheba', 'This feature is currently unavailable.'); return; }

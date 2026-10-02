@@ -307,6 +307,25 @@ function validate(data) {
 
   if (endpointPath.includes('?') || endpointPath.includes('#')) throw new HttpsError('invalid-argument', 'Endpoint path must not contain a query string or fragment; use Query Template instead.');
   if (!ALLOWED_SERVICES.includes(service)) throw new HttpsError('invalid-argument', 'Invalid service.');
+  // One provider, several features. Bangladesh recharge and Bangladesh
+  // internet are the same Success TopUp account; so are most bus, train and
+  // flight aggregators. Before this, each needed its own row with the same
+  // credentials typed again, and changing a key meant remembering every copy.
+  //
+  // `service` stays the primary and is always first in `services`, so the
+  // existing queries keep working against documents written before this and
+  // nothing has to be migrated before a deploy.
+  let services;
+  {
+    const extra = Array.isArray(data.services) ? data.services : [];
+    const list = [service, ...extra.map((x) => cleanString(x, 40))].filter(Boolean);
+    const unique = [...new Set(list)];
+    if (unique.length > ALLOWED_SERVICES.length) throw new HttpsError('invalid-argument', 'Too many features for one provider.');
+    for (const entry of unique) {
+      if (!ALLOWED_SERVICES.includes(entry)) throw new HttpsError('invalid-argument', `Invalid service: ${entry}.`);
+    }
+    services = unique;
+  }
   if (!ALLOWED_COUNTRIES.includes(country)) throw new HttpsError('invalid-argument', 'Invalid provider country.');
   if (!name) throw new HttpsError('invalid-argument', 'API provider name is required.');
   if (service === 'Recharge PIN' && !cleanString(data.responsePinPath, 200)) throw new HttpsError('invalid-argument', 'Recharge PIN providers must define Response PIN Path.');
@@ -317,7 +336,7 @@ function validate(data) {
   if (authType === 'basic' && (!cleanString(data.username, 200) || !cleanString(data.password, 1000))) throw new HttpsError('invalid-argument', 'Username and password are required for Basic authentication.');
   if (!ALLOWED_METHODS.includes(method)) throw new HttpsError('invalid-argument', 'Invalid HTTP method.');
   return {
-    service, name, country, baseUrl, endpointPath, method, authType, apiKey, secretKey,
+    service, services, name, country, baseUrl, endpointPath, method, authType, apiKey, secretKey,
     username: cleanString(data.username, 200), password: cleanString(data.password, 1000),
     active: data.active !== false, priority: Math.max(0, Math.min(9999, Number(priority) || 0)),
     timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)), notes: cleanString(data.notes, 1000),
@@ -438,15 +457,32 @@ async function fetchSuccessTopUpCatalog(provider, operator, type) {
 exports.fetchSuccessTopUpCatalog = fetchSuccessTopUpCatalog;
 exports.fetchProviderCatalog = fetchProviderCatalog;
 
+/**
+ * Every active provider that serves one feature.
+ *
+ * Two queries, merged. A provider written before multi-feature support has no
+ * `services` array, and one written since has `service` as well - so asking
+ * only one way would either miss the old documents or miss the extra features
+ * of the new ones. Deliberately not a migration: this is a money path, and a
+ * provider going quiet because a backfill had not run yet is not a failure
+ * mode worth accepting for one saved read.
+ */
+async function providersForService(db, service) {
+  const [legacy, multi] = await Promise.all([
+    db.collection(COLLECTION).where('service', '==', service).where('active', '==', true).limit(100).get(),
+    db.collection(COLLECTION).where('services', 'array-contains', service).where('active', '==', true).limit(100).get(),
+  ]);
+  const byId = new Map();
+  for (const d of [...legacy.docs, ...multi.docs]) byId.set(d.id, { id: d.id, ...d.data() });
+  return [...byId.values()];
+}
+exports._providersForService = providersForService;
+
 async function executeConfiguredApi(service, payload, customer, requestId, options = {}) {
   const db = admin.firestore();
-  const snap = await db.collection(COLLECTION)
-    .where('service', '==', service)
-    .where('active', '==', true)
-    .limit(100)
-    .get();
+  const allProvidersRaw = await providersForService(db, service);
   const requestedCountry = String(payload?.raw?.country || '').trim().toUpperCase() || 'ALL';
-  const allProviders = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+  const allProviders = allProvidersRaw;
   const countryProviders = allProviders.filter((p) => String(p.country || 'ALL').toUpperCase() === requestedCountry);
   const globalProviders = allProviders.filter((p) => String(p.country || 'ALL').toUpperCase() === 'ALL');
   const providers = [...(countryProviders.length ? countryProviders : globalProviders)].sort((x,y)=>Number(y.priority||0)-Number(x.priority||0));
@@ -801,6 +837,7 @@ exports.listApiProviders = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async 
       catalogSuccessPath: x.catalogSuccessPath || '',
       catalogSuccessValue: x.catalogSuccessValue === undefined ? '' : x.catalogSuccessValue,
       catalogTypes: Array.isArray(x.catalogTypes) ? x.catalogTypes : [],
+      services: Array.isArray(x.services) && x.services.length ? x.services : [x.service || ''].filter(Boolean),
       catalogItemMap: x.catalogItemMap || null,
       catalogWindow: x.catalogWindow || null,
       hasCatalogRequestTemplate: Boolean(x.catalogRequestTemplate && Object.keys(x.catalogRequestTemplate).length),

@@ -58,6 +58,23 @@ check('the logout row clears the navigation bar', /paddingBottom: insets\.bottom
 check('and the guessed padding is gone', !/paddingTop: 48/.test(sidebar));
 check('the menu list is still the flexible part', /menuScroll: \{ flex: 1 \}/.test(sidebar));
 
+console.log('\nThe access screens are findable, and listed once');
+// Grid Access and WebView Pages were reachable only through System Control >
+// System, two taps in, so the grid scoping and the WebView editor read as
+// features that did not exist. And featureAccess was in the sidebar twice -
+// "Feature Access" for admins and "Tool Access" for superadmins - one screen
+// under two names, which is the other half of the same report.
+for (const key of ['gridManagement', 'featureAccess', 'webviewManagement']) {
+  check(`${key} is in the sidebar`, new RegExp(`key: '${key}'`).test(sidebar));
+}
+check('and featureAccess is listed once per role',
+  (sidebar.match(/key: 'featureAccess'/g) || []).length === 2, 'admin group + superadmin group, no more');
+check('Tool Access is gone', !/Tool Access/.test(sidebar));
+// goTo refuses anything Grid Management switched off, and these are how a
+// superadmin switches things back on - locking yourself out of the unlock.
+check('the access screens cannot be gated by the grid they govern',
+  /'adminHome','adminFeatures','gridManagement','webviewManagement','featureAccess'/.test(sidebar));
+
 console.log('\nForgot password sends exactly one proof');
 
 check('verifying by SMS clears the email proof', /setPhoneIdToken\(result\.idToken\); setEmailIdToken\(null\)/.test(forgot));

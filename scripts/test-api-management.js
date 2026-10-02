@@ -34,8 +34,12 @@ console.log('\nThe screen is organised by feature');
 
 check('it lists every service, not every provider',
   /data=\{apiService\.API_SERVICES\}/.test(screen));
-check('and groups the providers under the feature they serve',
-  /providersFor\s*=\s*\(service\)\s*=>\s*items\.filter\(\(x\)\s*=>\s*x\.service\s*===\s*service\)/.test(screen));
+// One provider can now serve several features, so it has to appear under each
+// of them - matching on the primary alone would hide it everywhere else.
+check('and groups the providers under every feature they serve',
+  /providersFor=\(service\)=>items\.filter\(\(x\)=>servicesOf\(x\)\.includes\(service\)\)/.test(screen));
+check('falling back to the primary for a provider saved before that',
+  /Array\.isArray\(x\.services\)&&x\.services\.length\?x\.services:\[x\.service\]/.test(screen));
 check('ordering them the way the charge path picks one',
   /sort\(\(a,\s*b\)\s*=>\s*Number\(b\.priority\s*\|\|\s*0\)\s*-\s*Number\(a\.priority\s*\|\|\s*0\)\)/.test(screen));
 check('each feature can be given its own provider',
@@ -52,8 +56,12 @@ check('API mode with no provider is called out',
 console.log('\nThe form explains itself');
 
 check('fields carry labels, not just placeholders', /fieldLabel/.test(modal) && /SECTIONS/.test(modal));
-check('the feature chooser says what it is for',
-  /Each one can have its own provider/.test(modal));
+check('the feature chooser says it takes more than one',
+  /Everything this one API serves/.test(modal));
+check('and it is a multi-select, not a single choice',
+  /toggleService/.test(modal) && !/onPress=\{\(\) => set\('service', x\)\}/.test(modal));
+// A provider serving nothing would be unreachable and unfixable from the list.
+check('the last feature cannot be unpicked', /if \(!next\.length\) return f;/.test(modal));
 check('country precedence is stated',
   /country-specific provider is preferred/.test(modal));
 

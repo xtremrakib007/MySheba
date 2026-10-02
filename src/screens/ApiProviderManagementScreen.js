@@ -79,7 +79,12 @@ export default function ApiProviderManagementScreen() {
   // system looked like it could only do Success TopUp - when a separate
   // provider per feature per country is exactly what it has always supported.
   const countryLabel=(c)=>c==='BD'?'🇧🇩 Bangladesh':c==='MY'?'🇲🇾 Malaysia':c==='SG'?'🇸🇬 Singapore':c==='ID'?'🇮🇩 Indonesia':c==='IN'?'🇮🇳 India':c==='PH'?'🇵🇭 Philippines':'🌍 All countries';
-  const providersFor=(service)=>items.filter((x)=>x.service===service).sort((a,b)=>Number(b.priority||0)-Number(a.priority||0));
+  // A provider can serve several features now, so it appears under each one it
+  // was given rather than only under its primary. `services` is projected with
+  // the primary already in it, and falls back to `service` for a document
+  // written before multi-feature support.
+  const servicesOf=(x)=>(Array.isArray(x.services)&&x.services.length?x.services:[x.service].filter(Boolean));
+  const providersFor=(service)=>items.filter((x)=>servicesOf(x).includes(service)).sort((a,b)=>Number(b.priority||0)-Number(a.priority||0));
 
   const renderFeature=({item:service})=>{
     const mine=providersFor(service);
@@ -102,6 +107,7 @@ export default function ApiProviderManagementScreen() {
           <View style={{flex:1}}>
             <Text style={styles.name}>{item.name}</Text>
             <Text style={styles.meta}>{countryLabel(item.country)} • Priority {item.priority ?? 0} • {item.active?'Active':'Inactive'}</Text>
+            {servicesOf(item).length>1&&<Text style={styles.meta}>Also serves {servicesOf(item).filter((x)=>x!==service).join(', ')}</Text>}
             <Text numberOfLines={1} style={styles.url}>{item.baseUrl}</Text>
             <Text style={styles.meta}>{item.authType||'none'} • API secret {item.hasSecretKey?'configured':'not set'}{item.catalogPath?' • catalogue':''}</Text>
             <Text style={styles.webhookState}>{hook?.enabled?'🔔 Webhook active':'🔕 Webhook not configured'}</Text>
