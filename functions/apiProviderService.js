@@ -188,10 +188,21 @@ function validateCatalog(data) {
     if (types.length > 10) throw new HttpsError('invalid-argument', 'Too many catalogue types.');
     out.catalogTypes = [...new Set(types)];
   }
-  if (data.catalogRequestTemplate !== undefined) {
+  if (data.catalogRequestTemplate !== undefined && data.catalogRequestTemplate !== null && data.catalogRequestTemplate !== '') {
     out.catalogRequestTemplate = validateTemplate(data.catalogRequestTemplate, 'Catalogue request template');
   }
-  if (data.catalogItemMap !== undefined) {
+  // null and '' mean "not set", the same as they do for catalogTypes above and
+  // catalogWindow below. This one checked only for undefined, so the Success
+  // TopUp setup form - which spreads the provider straight from
+  // listApiProviders, where an unset map is projected as null - sent null back
+  // and was told its catalogue item map must map "id". A provider that takes
+  // its catalogue from a preset has no map of its own, so that was every save.
+  //
+  // An empty object is the same answer by another route: it is what clearing
+  // the field produces, and "{}" is not a map missing its required keys, it is
+  // no map at all.
+  if (data.catalogItemMap !== undefined && data.catalogItemMap !== null && data.catalogItemMap !== ''
+      && Object.keys(asObject(data.catalogItemMap)).length > 0) {
     const map = validateTemplate(data.catalogItemMap, 'Catalogue item map', 4000);
     // Values are the provider's key names: one, or a list of fallbacks.
     for (const [field, keys] of Object.entries(map)) {

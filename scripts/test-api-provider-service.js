@@ -129,4 +129,38 @@ assert.throws(() => api.validate({ service: 'Recharge', name: 'Test', baseUrl: '
   console.log('  pinned DNS lookup answers both callback shapes');
 }
 
+// The catalogue fields are optional, and "optional" has to include the shape
+// the client actually sends back.
+//
+// listApiProviders projects an unset catalogue item map as null, and the
+// Success TopUp setup form spreads the provider straight into its form state -
+// so every save of that provider sent catalogItemMap: null. The guard here
+// tested only for undefined, so null was taken as a real map and rejected with
+// "Catalogue item map must map \"id\"". A provider taking its catalogue from a
+// preset has no map of its own, which made it every save of that form.
+{
+  const base = { service: 'Recharge', name: 'Test', baseUrl: 'https://api.example.com', authType: 'none' };
+
+  for (const [label, value] of [['null', null], ['empty string', ''], ['empty object', {}]]) {
+    const out = api.validate({ ...base, catalogItemMap: value });
+    assert.strictEqual(out.catalogItemMap, undefined, `catalogItemMap ${label} must mean "not set"`);
+  }
+  // Absent entirely is the same answer.
+  assert.strictEqual(api.validate(base).catalogItemMap, undefined);
+
+  // A real map is still validated, and still has to carry the two fields a
+  // package cannot be identified or billed without.
+  const good = api.validate({ ...base, catalogItemMap: { id: 'id', price: ['price', 'amount'] } });
+  assert.deepStrictEqual(good.catalogItemMap, { id: 'id', price: ['price', 'amount'] });
+  assert.throws(() => api.validate({ ...base, catalogItemMap: { price: 'price' } }), /must map "id"/);
+  assert.throws(() => api.validate({ ...base, catalogItemMap: { id: 'id' } }), /must map "price"/);
+  assert.throws(() => api.validate({ ...base, catalogItemMap: { id: '', price: 'p' } }), /at least one response key/);
+
+  // Same for the request template, which the generic form can send as ''.
+  assert.strictEqual(api.validate({ ...base, catalogRequestTemplate: null }).catalogRequestTemplate, undefined);
+  assert.strictEqual(api.validate({ ...base, catalogRequestTemplate: '' }).catalogRequestTemplate, undefined);
+
+  console.log('  optional catalogue fields accept null, empty and absent alike');
+}
+
 console.log('apiProviderService tests: PASS');

@@ -197,7 +197,7 @@ check('Offer Packs is wired end to end', () => {
     'src/firebase/transactionService.js': [/'Offer Packs':\s*'chargeOfferPacks'/],
     'src/context/AppContext.js': [/offerpacks:\s*"Offer Packs"/, /offerpacks:\s*4/, /service === "offerpacks"/],
     'src/screens/ServiceScreen.js': [/offerpacks:\s*OfferPacksStep/, /offerpacks:\s*validateOfferPacks/],
-    'src/components/ServiceGrid.js': [/key:\s*'offerpacks'/],
+    'src/components/serviceTiles.js': [/key:\s*'offerpacks'/], // the tile lists moved out of ServiceGrid.js
     'src/components/serviceEmoji.js': [/offerpacks:/],
     'src/firebase/gridManagementService.js': [/'offerpacks'/],
     'src/steps/OfferPacksSteps.js': [/'drive'/, /isDriveWindowOpen/, /packageId/],
