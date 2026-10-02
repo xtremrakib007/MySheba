@@ -36,6 +36,7 @@
     "audit:escapes": "node scripts/audit-escapes.js",
     "deploy:functions": "node scripts/deploy-functions.js",
     "test:face": "node scripts/test-face-event.js",
+    "test:facecapture": "node scripts/test-face-capture.js",
     "postinstall": "patch-package",
     "lint": "eslint src App.js scripts functions",
     "test:session": "node scripts/test-session-persistence.js",
