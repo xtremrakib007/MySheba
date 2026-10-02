@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, Modal 
 import { showAlert } from '../utils/appAlert';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
+import { countryLabel } from '../utils/phoneCountry';
 import { radius } from '../theme/theme';
 import { useTheme } from "../theme/ThemeContext";
 import HeaderDecor from '../components/HeaderDecor';
@@ -330,7 +331,7 @@ export default function UserManagementScreen() {
       <View key={u.id} style={styles.userCard}>
         <View style={{ flex: 1 }}>
           <Text style={styles.userName}>{u.name || '—'}</Text>
-          <Text style={styles.userPhone}>{u.phone || '—'}{u.userId ? ` · ID ${u.userId}` : ''}</Text>
+          <Text style={styles.userPhone}>{u.phone || '—'}{u.userId ? ` · ID ${u.userId}` : ''} · {countryLabel(u)}</Text>
           <View style={{ flexDirection: 'row', gap: 6, marginTop: 2 }}>
             {!!u.suspended && (
               <View style={styles.suspendedBadge}>
@@ -417,7 +418,7 @@ export default function UserManagementScreen() {
               <View key={u.id} style={styles.userCard}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.userName}>{u.name || '—'}</Text>
-                  <Text style={styles.userPhone}>{u.phone || '—'}{u.userId ? ` · ID ${u.userId}` : ''}</Text>
+                  <Text style={styles.userPhone}>{u.phone || '—'}{u.userId ? ` · ID ${u.userId}` : ''} · {countryLabel(u)}</Text>
                 </View>
                 <TouchableOpacity style={styles.upgradeBtn} onPress={() => setAssignTarget(u)}>
                   <Text style={styles.upgradeBtnText}>Assign Dealer</Text>

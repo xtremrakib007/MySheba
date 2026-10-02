@@ -55,6 +55,9 @@ function sanitizeUser(doc) {
     id: doc.id,
     name: typeof d.name === 'string' ? d.name : '',
     phone: typeof d.phone === 'string' ? d.phone : '',
+    // The country a user signed up from is derived from this; there is no
+    // country field on a user. See src/utils/phoneCountry.js.
+    phoneCountryCode: typeof d.phoneCountryCode === 'string' ? d.phoneCountryCode : '',
     role: typeof d.role === 'string' ? d.role : 'customer',
     userId: typeof d.userId === 'string' ? d.userId : '',
     dealerId: typeof d.dealerId === 'string' ? d.dealerId : null,
