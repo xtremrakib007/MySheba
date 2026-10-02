@@ -1,7 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { useTheme } from '../theme/ThemeContext';
 
 export default function ApiWebhookFormModal({ visible, provider, config, onClose, onSave }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const special = provider?.name === 'Success TopUp';
   const [form, setForm] = useState({});
   useEffect(() => setForm({
@@ -48,12 +51,28 @@ export default function ApiWebhookFormModal({ visible, provider, config, onClose
     </View></View>
   </Modal>;
 }
-const styles=StyleSheet.create({
-  backdrop:{flex:1,backgroundColor:'rgba(0,0,0,.45)',justifyContent:'flex-end'},
-  card:{backgroundColor:'white',borderTopLeftRadius:20,borderTopRightRadius:20,padding:18,maxHeight:'90%'},
-  title:{fontSize:19,fontWeight:'800',marginBottom:10},provider:{fontWeight:'700',marginBottom:8},
-  label:{fontWeight:'700',marginTop:8},value:{fontSize:12,marginTop:6,marginBottom:8},token:{fontSize:12,marginTop:6,marginBottom:8,fontFamily:'monospace'},
-  help:{fontSize:11,opacity:.65,lineHeight:16,marginBottom:8},input:{borderWidth:1,borderColor:'#ddd',borderRadius:9,padding:11,marginBottom:9},
-  fixedBox:{marginTop:8,marginBottom:8,padding:12,borderRadius:10,backgroundColor:'#F5F7FA',gap:4},fixedTitle:{fontWeight:'800',marginBottom:4},
-  toggle:{padding:12,marginVertical:10},row:{flexDirection:'row',justifyContent:'flex-end',gap:10},cancel:{padding:12},save:{padding:12,borderRadius:9,backgroundColor:'#1976D2'}
-});
+// Themed, for the same reason as ApiProviderManagementScreen: built at module
+// level, every colour was a literal and most text carried none, so the labels
+// rendered in the platform default against a hardcoded white sheet.
+function createStyles(colors) {
+  return StyleSheet.create({
+    backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,.45)', justifyContent: 'flex-end' },
+    card: { backgroundColor: colors.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18, maxHeight: '90%' },
+    title: { fontSize: 19, fontWeight: '800', marginBottom: 10, color: colors.text },
+    provider: { fontWeight: '700', marginBottom: 8, color: colors.textSecondary },
+    label: { fontWeight: '700', marginTop: 8, color: colors.text },
+    value: { fontSize: 12, marginTop: 6, marginBottom: 8, color: colors.text },
+    token: { fontSize: 12, marginTop: 6, marginBottom: 8, fontFamily: 'monospace', color: colors.text },
+    help: { fontSize: 11, lineHeight: 16, marginBottom: 8, color: colors.textSecondary },
+    input: { borderWidth: 1, borderColor: colors.border, borderRadius: 9, padding: 11, marginBottom: 9, color: colors.text, backgroundColor: colors.inputBg },
+    fixedBox: { marginTop: 8, marginBottom: 8, padding: 12, borderRadius: 10, backgroundColor: colors.surface, gap: 4 },
+    fixedTitle: { fontWeight: '800', marginBottom: 4, color: colors.text },
+    toggle: { padding: 12, marginVertical: 10 },
+    toggleText: { color: colors.primary, fontWeight: '700' },
+    row: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
+    cancel: { padding: 12 },
+    cancelText: { color: colors.textSecondary, fontWeight: '700' },
+    save: { padding: 12, borderRadius: 9, backgroundColor: colors.primary },
+    saveText: { color: colors.onPrimary, fontWeight: '800' },
+  });
+}

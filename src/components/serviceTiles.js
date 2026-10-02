@@ -230,3 +230,22 @@ export function visibleTiles({ role, can, webviewPages, isActive = () => true, h
   const moreTile = active.find((service) => service.kind === 'moreFeaturesLink');
   return [...flagged, ...(moreTile ? [moreTile] : [])];
 }
+
+/**
+ * The customer tiles the home screen does NOT show.
+ *
+ * MoreFeaturesScreen derived this from the declared list so that adding a tile
+ * puts it on the home screen or here, never nowhere. That stopped holding once
+ * a superadmin could move a WebView off the home screen: the declared flags
+ * still said `home: true`, so a page moved off vanished from both - exactly
+ * the failure the derivation existed to prevent.
+ *
+ * Built from the same pipeline as the grids, so a rename or a new icon reaches
+ * this screen too, and a page switched off leaves it.
+ */
+export function overflowTiles({ webviewPages, isActive = () => true, excludeKinds = [] }) {
+  const exclude = new Set(excludeKinds);
+  return withWebviewConfig(CUSTOMER_SERVICES, webviewPages)
+    .filter((tile) => isActive(gridKeyFor(tile)))
+    .filter((tile) => !tile.home && tile.kind !== 'moreFeaturesLink' && !exclude.has(tile.kind));
+}

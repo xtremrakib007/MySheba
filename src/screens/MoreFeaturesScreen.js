@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
-import { useServiceAction, Tile, PRIMARY_SERVICES } from '../components/ServiceGrid';
+import { useServiceAction, Tile } from '../components/ServiceGrid';
+import { overflowTiles } from '../components/serviceTiles';
 import * as gridManagementService from '../firebase/gridManagementService';
 
 
@@ -34,9 +35,8 @@ const PERSONAL_FEATURES = [
 // listed twice; it matches on `kind`, because the same feature is keyed
 // 'documents' in the service list and 'myDocuments' here.
 const PERSONAL_KINDS = new Set(PERSONAL_FEATURES.map((f) => f.kind));
-const OVERFLOW_SERVICES = PRIMARY_SERVICES.filter((t) => (
-  !t.home && t.kind !== 'moreFeaturesLink' && !PERSONAL_KINDS.has(t.kind)
-));
+// Built per render by overflowTiles, because what counts as "not on the home
+// screen" now depends on the live WebView settings as well as the declaration.
 
 const STAFF_FEATURES = [
   { key: 'myDocuments', icon: '📄', name: 'My Documents', kind: 'documents' },
@@ -63,16 +63,15 @@ function Section({ title, subtitle, items, onPress }) {
 export default function MoreFeaturesScreen() {
   const { colors } = useTheme();
   const { goBackOrHome, profile, gridManagement, gridViewer, webviewPages } = useApp();
-  // This file's own rule is that a finished tile lands on the home screen or
-  // here, never nowhere. A WebView a superadmin added and kept off the home
-  // grid is exactly that case, so it joins the overflow list rather than
-  // existing only in the settings screen that created it.
-  const overflow = [
-    ...OVERFLOW_SERVICES,
-    ...Object.values(webviewPages || {})
-      .filter((p) => p.custom && p.active !== false && p.home === false)
-      .map((p) => ({ key: p.key, icon: p.icon || 'moreFeaturesTile', emoji: p.icon || '', name: p.name, kind: 'webview' })),
-  ];
+  // One source for both halves of this file's rule - a finished tile lands on
+  // the home screen or here, never nowhere - whether "not on the home screen"
+  // is how the tile was declared or how a superadmin has since set it. The
+  // Grid Management gate is applied here, so `visible()` is not needed again.
+  const overflow = overflowTiles({
+    webviewPages,
+    isActive: (key) => gridManagementService.isGridActive(gridManagement, key, gridViewer),
+    excludeKinds: PERSONAL_KINDS,
+  });
   const handlePress = useServiceAction();
   const visible = (items) => items.filter((item) => gridManagementService.isGridActive(gridManagement, item.key, gridViewer));
   const isCustomer = !profile?.role || profile.role === 'customer';
@@ -90,8 +89,8 @@ export default function MoreFeaturesScreen() {
           <>
             {/* Hidden when empty - every service tile being on the home
                 screen is the good case, not a reason for a bare heading. */}
-            {visible(OVERFLOW_SERVICES).length > 0 && (
-              <Section title="More Services" subtitle="Not shown on your home screen" items={visible(overflow)} onPress={handlePress} />
+            {overflow.length > 0 && (
+              <Section title="More Services" subtitle="Not shown on your home screen" items={overflow} onPress={handlePress} />
             )}
             <Section title="Personal" subtitle="Your account, documents and activity" items={visible(PERSONAL_FEATURES)} onPress={handlePress} />
           </>

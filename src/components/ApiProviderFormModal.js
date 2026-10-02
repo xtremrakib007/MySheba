@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useTheme } from '../theme/ThemeContext';
 import { Modal, View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { API_SERVICES } from '../firebase/apiProviderService';
 
@@ -103,6 +104,8 @@ function toText(value) {
 }
 
 export default function ApiProviderFormModal({ visible, provider, successTopUp = false, presetService, onClose, onSave }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [form, setForm] = useState({});
   const [showCatalog, setShowCatalog] = useState(false);
 
@@ -167,11 +170,11 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
                 <Text style={styles.help}>{HELP_TEXT}</Text>
                 <View style={styles.field}>
                   <Text style={styles.fieldLabel}>API Key</Text>
-                  <TextInput style={styles.input} placeholder={provider?.hasApiKey ? 'Leave blank to keep current API key' : 'Success TopUp API key'} value={String(form.apiKey || '')} onChangeText={(v) => set('apiKey', v)} secureTextEntry autoCapitalize="none" />
+                  <TextInput style={styles.input} placeholderTextColor={colors.placeholder} placeholder={provider?.hasApiKey ? 'Leave blank to keep current API key' : 'Success TopUp API key'} value={String(form.apiKey || '')} onChangeText={(v) => set('apiKey', v)} secureTextEntry autoCapitalize="none" />
                 </View>
                 <View style={styles.field}>
                   <Text style={styles.fieldLabel}>API Secret</Text>
-                  <TextInput style={styles.input} placeholder={provider?.hasSecretKey ? 'Leave blank to keep current API secret' : 'Success TopUp API secret'} value={String(form.secretKey || '')} onChangeText={(v) => set('secretKey', v)} secureTextEntry autoCapitalize="none" />
+                  <TextInput style={styles.input} placeholderTextColor={colors.placeholder} placeholder={provider?.hasSecretKey ? 'Leave blank to keep current API secret' : 'Success TopUp API secret'} value={String(form.secretKey || '')} onChangeText={(v) => set('secretKey', v)} secureTextEntry autoCapitalize="none" />
                 </View>
                 <View style={styles.fixedBox}>
                   <Text style={styles.fixedTitle}>Automatic configuration</Text>
@@ -270,27 +273,35 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
   );
 }
 
-const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,.45)', justifyContent: 'flex-end' },
-  card: { backgroundColor: 'white', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18, maxHeight: '90%' },
-  title: { fontSize: 19, fontWeight: '800' },
-  subtitle: { fontSize: 12, opacity: 0.6, marginTop: 2, marginBottom: 10 },
-  provider: { fontWeight: '800', marginBottom: 8 },
-  sectionTitle: { fontWeight: '800', fontSize: 13, marginTop: 18, marginBottom: 4, color: '#0A5C78' },
-  disclosure: { paddingVertical: 2 },
-  field: { marginTop: 10 },
-  fieldLabel: { fontWeight: '700', fontSize: 12, marginBottom: 4 },
-  fieldHint: { fontSize: 11, opacity: 0.6, lineHeight: 15, marginBottom: 6 },
-  help: { fontSize: 11, opacity: 0.7, lineHeight: 16, marginTop: 12 },
-  input: { borderWidth: 1, borderColor: '#D5EFE7', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13 },
-  chip: { paddingHorizontal: 13, paddingVertical: 8, borderRadius: 18, borderWidth: 1, borderColor: '#BFE6DA', marginRight: 7, marginTop: 4 },
-  chipOn: { backgroundColor: '#0B8A94', borderColor: '#0B8A94' },
-  chipOnText: { color: 'white', fontWeight: '700' },
-  toggle: { marginTop: 16, paddingVertical: 10 },
-  row: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12, gap: 10 },
-  cancel: { paddingHorizontal: 18, paddingVertical: 12 },
-  save: { backgroundColor: '#0B8A94', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 },
-  saveText: { color: 'white', fontWeight: '700' },
-  fixedBox: { backgroundColor: '#F2FAF7', borderRadius: 12, padding: 12, marginTop: 14 },
-  fixedTitle: { fontWeight: '800', marginBottom: 6 },
-});
+// Themed. Built at module level, so the sheet was hardcoded white and most of
+// its labels carried no colour at all - the same fault as the screen that
+// opens it, and the reason that screen read as blank.
+function createStyles(colors) {
+  return StyleSheet.create({
+    backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,.45)', justifyContent: 'flex-end' },
+    card: { backgroundColor: colors.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18, maxHeight: '90%' },
+    title: { fontSize: 19, fontWeight: '800', color: colors.text },
+    subtitle: { fontSize: 12, marginTop: 2, marginBottom: 10, color: colors.textSecondary },
+    provider: { fontWeight: '800', marginBottom: 8, color: colors.text },
+    sectionTitle: { fontWeight: '800', fontSize: 13, marginTop: 18, marginBottom: 4, color: colors.primary },
+    disclosure: { paddingVertical: 2 },
+    field: { marginTop: 10 },
+    fieldLabel: { fontWeight: '700', fontSize: 12, marginBottom: 4, color: colors.text },
+    fieldHint: { fontSize: 11, lineHeight: 15, marginBottom: 6, color: colors.textSecondary },
+    help: { fontSize: 11, lineHeight: 16, marginTop: 12, color: colors.textSecondary },
+    input: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: colors.text, backgroundColor: colors.inputBg },
+    chip: { paddingHorizontal: 13, paddingVertical: 8, borderRadius: 18, borderWidth: 1, borderColor: colors.border, marginRight: 7, marginTop: 4 },
+    chipText: { color: colors.text, fontSize: 12 },
+    chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+    chipOnText: { color: colors.onPrimary, fontWeight: '700' },
+    toggle: { marginTop: 16, paddingVertical: 10 },
+    toggleText: { color: colors.primary, fontWeight: '700' },
+    row: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12, gap: 10 },
+    cancel: { paddingHorizontal: 18, paddingVertical: 12 },
+    cancelText: { color: colors.textSecondary, fontWeight: '700' },
+    save: { backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 },
+    saveText: { color: colors.onPrimary, fontWeight: '700' },
+    fixedBox: { backgroundColor: colors.surface, borderRadius: 12, padding: 12, marginTop: 14 },
+    fixedTitle: { fontWeight: '800', marginBottom: 6, color: colors.text },
+  });
+}

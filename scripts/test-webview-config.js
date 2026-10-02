@@ -225,9 +225,21 @@ yes('the context subscribes once', /subscribeWebviewConfig\(/.test(ctx) && /^ {4
 yes('the grid builds its list from the shared helper', /visibleTiles\(\{/.test(grid));
 yes('and keeps no copy of its own', !/const withWebviewConfig = \(list\)/.test(grid));
 // MoreFeaturesScreen's own rule: on the home screen or here, never nowhere.
+// Computed, because the list is now derived rather than hand-assembled - and
+// that derivation is what makes a built-in moved off home still reachable,
+// which the hand-assembled version did not do.
 const more = read('src/screens/MoreFeaturesScreen.js');
-yes('a page kept off home is still reachable',
-  /p\.custom && p\.active !== false && p\.home === false/.test(more) && /items=\{visible\(overflow\)\}/.test(more));
+yes('it derives its overflow from the same pipeline', /overflowTiles\(\{/.test(more));
+const OFF_HOME = { fomema: { key: 'fomema', name: 'FOMEMA', url: 'https://a.example.com/f', icon: '🏥', active: true, home: false, custom: false } };
+yes('a built-in moved off home lands in More Services',
+  tiles.overflowTiles({ webviewPages: OFF_HOME }).some((t) => t.key === 'fomema'));
+yes('and leaves the customer home grid',
+  !tiles.visibleTiles({ role: 'customer', can: allCaps, webviewPages: OFF_HOME, homeOnly: true }).some((t) => t.key === 'fomema'));
+yes('an added page kept off home is there too',
+  tiles.overflowTiles({ webviewPages: { wv_off12345: { key: 'wv_off12345', name: 'EPF', url: 'https://a.example.com/e', icon: '🏦', active: true, home: false, custom: true } } })
+    .some((t) => t.key === 'wv_off12345'));
+yes('a page switched off is in neither',
+  !tiles.overflowTiles({ webviewPages: OFF }).some((t) => t.key === 'fomema'));
 yes('the WebView screen prefers the live page', /webviewPages && webviewPages\[webViewKey\]/.test(screen));
 yes('but still falls back to the built-in', /webViewPages\[webViewKey\] \|\| webViewPages\.fomema/.test(screen));
 yes('and only a superadmin may write the document',

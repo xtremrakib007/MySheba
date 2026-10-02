@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, FlatList, StyleSheet, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
@@ -12,6 +12,7 @@ import * as webhookService from '../firebase/apiWebhookService';
 export default function ApiProviderManagementScreen() {
   const { profile, goBackOrHome } = useApp();
   const { colors, brandGradient } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [items,setItems]=useState([]);
   const [webhooks,setWebhooks]=useState({});
   const [editing,setEditing]=useState(null);
@@ -147,21 +148,43 @@ export default function ApiProviderManagementScreen() {
     <ApiWebhookFormModal visible={showWebhook} provider={webhookProvider} config={webhookProvider?webhooks[webhookProvider.id]:null} onClose={()=>setShowWebhook(false)} onSave={saveWebhook}/>
   </View>;
 }
-const styles=StyleSheet.create({
-  screen:{flex:1},header:{flexDirection:'row',alignItems:'center',padding:12,gap:10,overflow:'hidden'},back:{color:'white',fontSize:22},
-  headerTitle:{color:'white',fontSize:17,fontWeight:'800'},intro:{padding:16},h:{fontSize:20,fontWeight:'800'},p:{marginTop:6,lineHeight:20,opacity:.75},
-  feature:{backgroundColor:'white',borderRadius:14,padding:12,marginBottom:12},
-  featureHead:{flexDirection:'row',alignItems:'center',gap:6},
-  featureName:{fontWeight:'800',fontSize:15},featureSub:{fontSize:11,opacity:.6,marginTop:2},
-  warn:{marginTop:8,fontSize:11,color:'#8A5700',lineHeight:16},
-  addForFeature:{marginTop:10,borderWidth:1,borderStyle:'dashed',borderColor:'#BFE6DA',borderRadius:9,paddingVertical:10,alignItems:'center'},
-  addForFeatureText:{fontWeight:'700',fontSize:12,color:'#0A5C78'},
-  meta:{fontSize:12,opacity:.75,marginTop:2},
-  modeBtn:{paddingVertical:7,paddingHorizontal:9,borderWidth:1,borderColor:'#ddd',borderRadius:8},modeOn:{backgroundColor:'#E3F2FD',borderColor:'#2196F3'},
-  saveModes:{marginTop:8,backgroundColor:'#455A64',padding:11,borderRadius:9,alignItems:'center'},saveModesText:{color:'white',fontWeight:'800'},
-  add:{marginTop:14,backgroundColor:'#1976D2',padding:12,borderRadius:9,alignItems:'center'},addText:{color:'white',fontWeight:'800'},
-  
-  item:{backgroundColor:'white',borderRadius:12,padding:14,marginBottom:10,flexDirection:'row',gap:12},name:{fontSize:16,fontWeight:'800'},url:{marginTop:4,opacity:.7},
-  action:{fontWeight:'800',padding:5},webhookAction:{fontWeight:'800',padding:5},delete:{color:'#C62828',fontWeight:'800',padding:5},
-  webhookState:{marginTop:5,fontWeight:'700'}
-});
+// Themed, like every other screen. This stylesheet was built at module level
+// with no colours argument, so the cards were hardcoded white and most text
+// carried no colour at all - it fell back to whatever the platform default
+// was. Every label without an explicit colour rendered invisible on the card,
+// which is why "Delete" and "+ Add provider" were the only readable text on
+// the screen: they were the only two with a colour set.
+function createStyles(colors) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.bg },
+    header: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10, overflow: 'hidden' },
+    // On the brand gradient, so these two stay white.
+    back: { color: 'white', fontSize: 22 },
+    headerTitle: { color: 'white', fontSize: 17, fontWeight: '800' },
+    intro: { padding: 16 },
+    h: { fontSize: 20, fontWeight: '800', color: colors.text },
+    p: { marginTop: 6, lineHeight: 20, color: colors.textSecondary },
+    feature: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 12, marginBottom: 12 },
+    featureHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    featureName: { fontWeight: '800', fontSize: 15, color: colors.text },
+    featureSub: { fontSize: 11, marginTop: 2, color: colors.textSecondary },
+    warn: { marginTop: 8, fontSize: 11, lineHeight: 16, color: colors.warning },
+    addForFeature: { marginTop: 10, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.primary, borderRadius: 9, paddingVertical: 10, alignItems: 'center' },
+    addForFeatureText: { fontWeight: '700', fontSize: 12, color: colors.primary },
+    meta: { fontSize: 12, marginTop: 2, color: colors.textSecondary },
+    modeBtn: { paddingVertical: 7, paddingHorizontal: 9, borderWidth: 1, borderColor: colors.border, borderRadius: 8 },
+    modeOn: { backgroundColor: colors.surface, borderColor: colors.primary },
+    modeText: { color: colors.text, fontSize: 12, fontWeight: '600' },
+    saveModes: { marginTop: 8, backgroundColor: colors.primary, padding: 11, borderRadius: 9, alignItems: 'center' },
+    saveModesText: { color: colors.onPrimary, fontWeight: '800' },
+    add: { marginTop: 14, backgroundColor: colors.primary, padding: 12, borderRadius: 9, alignItems: 'center' },
+    addText: { color: colors.onPrimary, fontWeight: '800' },
+    item: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, marginBottom: 10, flexDirection: 'row', gap: 12 },
+    name: { fontSize: 16, fontWeight: '800', color: colors.text },
+    url: { marginTop: 4, color: colors.textSecondary },
+    action: { fontWeight: '800', padding: 5, color: colors.primary },
+    webhookAction: { fontWeight: '800', padding: 5, color: colors.primary },
+    delete: { fontWeight: '800', padding: 5, color: colors.error },
+    webhookState: { marginTop: 5, fontWeight: '700', color: colors.textSecondary },
+  });
+}
