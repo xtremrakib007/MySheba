@@ -58,7 +58,8 @@
     "test:catalog": "node scripts/test-provider-catalog.js",
     "test:appcheck": "node scripts/test-app-check.js",
     "audit:dialcodes": "node scripts/audit-dial-codes.js",
-    "test:adminfeatures": "node scripts/test-admin-features-nav.js"
+    "test:adminfeatures": "node scripts/test-admin-features-nav.js",
+    "test:biometric": "node scripts/test-biometric-coverage.js"
   },
   "dependencies": {
     "expo": "~53.0.0",

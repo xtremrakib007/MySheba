@@ -9,6 +9,8 @@ import { useTheme } from '../theme/ThemeContext';
 import HeaderDecor from '../components/HeaderDecor';
 import { subscribeManageableUsers } from '../firebase/userManagementService';
 import { transferPoints, subscribeMyTransfers } from '../firebase/pointTransferService';
+import * as pinVault from '../firebase/pinVault';
+import { isBiometricAvailable, authenticateWithBiometric } from '../firebase/biometricAuth';
 
 const ROLE_LABEL = { customer: 'Customer', dealer: 'Dealer', reseller: 'Reseller', admin: 'Admin', superadmin: 'Super Admin' };
 
@@ -19,7 +21,7 @@ function fmt(n) {
 export default function LegacyTransferPointsScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { goBackOrHome, profile, authUser, pricing, requireSecurityPin } = useApp();
+  const { goBackOrHome, profile, authUser, pricing, requireSecurityPin, biometricEnabled } = useApp();
   const myRole = profile?.role;
   const myBalance = typeof profile?.walletBalance === 'number' ? profile.walletBalance : 0;
   const isDealerTier = myRole === 'dealer';
@@ -76,20 +78,72 @@ export default function LegacyTransferPointsScreen() {
     setNote('');
   };
 
-  const onSend = async () => {
-    if (!target) return;
-    if (!/^\d{4,8}$/.test(securityPin)) return showAlert('MySheba', 'Enter your 4-8 digit security PIN.');
+  // Staff get this screen; customers get TransferPointsScreen, which has had
+  // the fingerprint option all along. Same three conditions it uses: the
+  // person turned biometric on, this device can actually do it, and a PIN is
+  // stored for this account here. Without the stored PIN the fingerprint would
+  // pass and there would still be no digits to send.
+  const [bioReady, setBioReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    if (!target || biometricEnabled !== true || !authUser?.uid) {
+      setBioReady(false);
+      return () => { cancelled = true; };
+    }
+    (async () => {
+      const [available, stored] = await Promise.all([
+        isBiometricAvailable(),
+        pinVault.hasPin(authUser.uid),
+      ]);
+      if (!cancelled) setBioReady(available && stored);
+    })();
+    return () => { cancelled = true; };
+  }, [target, biometricEnabled, authUser]);
+
+  // transferPoints verifies the PIN server-side, so the fingerprint is not
+  // standing in for the check - it produces the digits without typing them,
+  // and the server still decides.
+  const sendWithBiometric = async () => {
+    if (busy) return;
+    const ok = await authenticateWithBiometric('Confirm this transfer');
+    if (!ok) return;
+    const stored = await pinVault.readPin(authUser?.uid);
+    if (!stored) {
+      setBioReady(false);
+      return showAlert('MySheba', 'No saved PIN on this device. Please enter your PIN.');
+    }
+    return onSend(stored);
+  };
+
+  const onSend = async (pinOverride) => {
+    if (!target || busy) return;
+    const pinToSend = typeof pinOverride === 'string' ? pinOverride : securityPin;
+    if (!/^\d{4,8}$/.test(pinToSend)) return showAlert('MySheba', 'Enter your 4-8 digit security PIN.');
     setBusy(true);
     try {
       await transferPoints({
         to: { uid: target.id, name: target.name || target.phone || '', role: target.role },
         amount,
         note,
-        securityPin,
+        securityPin: pinToSend,
       });
+      // The server accepted it, so this is the PIN the fingerprint should
+      // replay next time. Only a typed one is worth storing - a replayed one
+      // came from the vault already.
+      if (biometricEnabled === true && authUser?.uid && !pinOverride) {
+        await pinVault.rememberPin(authUser.uid, pinToSend);
+      }
       showAlert('MySheba', `${fmt(amount)} sent to ${target.name || target.phone || 'user'}.`);
       setTarget(null);
+      setSecurityPin('');
     } catch (err) {
+      // A stored PIN the server rejects is stale - changed on another device.
+      // Drop it rather than let the fingerprint keep feeding it into this
+      // account's attempt limit.
+      if (pinOverride) {
+        await pinVault.forgetPin(authUser?.uid);
+        setBioReady(false);
+      }
       showAlert('MySheba', err.message || 'Could not complete this transfer.');
     } finally {
       setBusy(false);
@@ -140,11 +194,16 @@ export default function LegacyTransferPointsScreen() {
                 <TextInput style={styles.input} placeholder="Amount (MYR)" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" autoFocus />
                 <TextInput style={styles.input} placeholder="Note (optional)" value={note} onChangeText={setNote} />
                 <TextInput style={styles.input} placeholder="Security PIN (4-8 digits)" value={securityPin} onChangeText={setSecurityPin} keyboardType="number-pad" secureTextEntry maxLength={8} />
+                {!!bioReady && (
+                  <TouchableOpacity style={styles.bioBtn} onPress={sendWithBiometric} disabled={busy}>
+                    <Text style={styles.bioText}>👆 Confirm with Fingerprint / Face</Text>
+                  </TouchableOpacity>
+                )}
                 <Text style={styles.modalLabel}>Your balance after: {fmt(myBalance - (Number(amount) || 0) + earningPreview)}</Text>
                 {earningPreview > 0 && <Text style={styles.earningText}>You'll earn {fmt(earningPreview)} ({dealerEarningPercent}%) on this transfer</Text>}
                 <View style={styles.modalActions}>
                   <TouchableOpacity style={styles.modalCancel} onPress={() => setTarget(null)} disabled={busy}><Text style={styles.modalCancelText}>Cancel</Text></TouchableOpacity>
-                  <TouchableOpacity style={styles.modalConfirm} onPress={onSend} disabled={busy}><Text style={styles.modalConfirmText}>{busy ? 'Sending…' : 'Send'}</Text></TouchableOpacity>
+                  <TouchableOpacity style={styles.modalConfirm} onPress={() => onSend()} disabled={busy}><Text style={styles.modalConfirmText}>{busy ? 'Sending…' : 'Send'}</Text></TouchableOpacity>
                 </View>
               </View>
             </View>
@@ -158,6 +217,8 @@ export default function LegacyTransferPointsScreen() {
 function createStyles(colors) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg },
+    bioBtn: { marginTop: 12, paddingVertical: 8, alignItems: 'center' },
+    bioText: { color: colors.primary, fontWeight: '600', fontSize: 13 },
     header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, overflow: 'hidden' },
     backBtn: { padding: 4 },
     backText: { color: 'white', fontSize: 20 },
