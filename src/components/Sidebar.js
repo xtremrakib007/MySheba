@@ -50,6 +50,7 @@ const ADMIN_GROUPS = [
     { key: 'inquiries', icon: 'inquiries', label: 'Inquiries', tab: true },
     { key: 'topups', icon: 'topup', label: 'Top-Ups', tab: true },
     { key: 'support', icon: 'support', label: 'Support' },
+    { key: 'reconcileTransactions', icon: 'reports', label: 'Uncertain Transactions' },
   ] },
   { title: 'Finance & Pricing', icon: 'topup', color: 'primary', items: [
     { key: 'rates', icon: 'rates', label: 'Rates', tab: true },

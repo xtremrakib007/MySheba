@@ -30,6 +30,7 @@
     "test:device": "node scripts/test-device-trust.js",
     "test:deviceid": "node scripts/test-device-id.js",
     "test:transfer": "node scripts/test-transfer-policy.js",
+    "test:reconcile": "node scripts/test-reconcile.js",
     "test:topup": "node scripts/test-topup-flow.js",
     "test:dates": "node scripts/test-date-field.js",
     "audit:jsxdefs": "node scripts/audit-undefined-jsx.js",
