@@ -7,7 +7,7 @@ import * as gridManagementService from '../firebase/gridManagementService';
 import { serviceEmoji } from './serviceEmoji';
 import BusOperatorLogo, { hasBusLogo } from './BusOperatorLogo';
 import ServiceArt, { hasServiceArt } from './ServiceArt';
-import { CUSTOMER_SERVICES, STAFF_ROLES, servicesForRole, withWebviewConfig } from './serviceTiles';
+import { CUSTOMER_SERVICES, STAFF_ROLES, visibleTiles } from './serviceTiles';
 
 // `home: true` marks the tiles the customer home shows. Everything else is
 // one tap away on the Services tab, which renders this list in full.
@@ -93,18 +93,13 @@ export default function ServiceGrid({ homeOnly }) {
   // Both of these live in serviceTiles.js, so what a role sees - and that an
   // added WebView reaches every staff role through the one ...SHARED_SERVICES
   // line - is something a test can compute rather than infer from a render.
-  const allServices = withWebviewConfig(servicesForRole(role, can), webviewPages);
-  const gridKeyFor = (service) => ({ buspicker: 'bus', webview: service.key, adminFeatures: 'adminFeatures', dealerFeatures: 'dealerFeatures', resellerFeatures: 'resellerFeatures', adminTopup: 'topup' }[service.kind] || service.key);
-  const active = allServices.filter((service) => gridManagementService.isGridActive(gridManagement, gridKeyFor(service), gridViewer));
-  const moreTile = active.find((service) => service.kind === 'moreFeaturesLink');
-  // homeOnly keeps the tiles flagged for the home screen, in declaration
-  // order, and always ends on More Services so nothing dropped is stranded.
-  // A staff list carries no home flags, so it falls back to the full set
-  // rather than rendering an empty grid.
-  const flagged = active.filter((service) => service.home);
-  const services = !homeOnly || flagged.length === 0
-    ? active
-    : [...flagged, ...(moreTile ? [moreTile] : [])];
+  const services = visibleTiles({
+    role,
+    can,
+    webviewPages,
+    isActive: (key) => gridManagementService.isGridActive(gridManagement, key, gridViewer),
+    homeOnly,
+  });
   return <View><View style={styles.sectionHead}><Text style={[styles.sectionTitle, { color: colors.navy || colors.text }]}>{isStaff ? 'Management Dashboard' : 'Quick Services'}</Text><Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>{isStaff ? 'Manage transactions, accounts and operations' : 'Money, remittance and travel'}</Text></View><View style={[styles.gridCanvas, { backgroundColor: colors.canvasBg || colors.surface }]}><View style={styles.grid}>{services.map((service) => <Tile key={service.key} s={service} disabled={service.kind === 'webview' && !!webViewBusy} onPress={() => handlePress(service)} />)}</View></View></View>;
 }
 

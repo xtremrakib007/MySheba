@@ -191,3 +191,42 @@ export function adminLandingTiles(webviewPages, hasArt = () => false) {
   const extra = Object.values(pages).filter((p) => p.custom && p.active !== false).map(tileFor);
   return [...overlaid, ...extra];
 }
+
+/** The Grid Management key a tile is gated by - not always its own key. */
+export function gridKeyFor(service) {
+  return ({
+    buspicker: 'bus',
+    webview: service.key,
+    adminFeatures: 'adminFeatures',
+    dealerFeatures: 'dealerFeatures',
+    resellerFeatures: 'resellerFeatures',
+    adminTopup: 'topup',
+  }[service.kind] || service.key);
+}
+
+/**
+ * The tiles a grid finally renders.
+ *
+ * The last two steps used to live inline in ServiceGrid, which left the end of
+ * the chain - the Grid Management gate and the home-screen split - as the only
+ * part no test could run. They are the steps that decide whether a tile a
+ * superadmin added is on the screen or not, so they belong here with the rest.
+ *
+ * `isActive(key)` is the Grid Management test, passed in so this stays free of
+ * Firestore. `homeOnly` is the customer home screen; a staff list carries no
+ * home flags, so it falls back to the whole set rather than rendering nothing.
+ */
+export function visibleTiles({ role, can, webviewPages, isActive = () => true, homeOnly = false }) {
+  const all = withWebviewConfig(servicesForRole(role, can), webviewPages);
+  const active = all.filter((service) => isActive(gridKeyFor(service)));
+  // Staff grids show everything. SHARED_SERVICES strips the home flags for
+  // exactly that reason, and the old guard - fall back when nothing is flagged
+  // - stood in for the rule. It stopped holding the moment a superadmin added
+  // a WebView: that tile carries a home flag of its own, so one flagged tile
+  // in a staff list would have collapsed the whole grid to just it.
+  if (!homeOnly || STAFF_ROLES.includes(role)) return active;
+  const flagged = active.filter((service) => service.home);
+  if (flagged.length === 0) return active;
+  const moreTile = active.find((service) => service.kind === 'moreFeaturesLink');
+  return [...flagged, ...(moreTile ? [moreTile] : [])];
+}

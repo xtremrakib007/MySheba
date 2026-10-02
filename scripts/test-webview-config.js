@@ -123,6 +123,40 @@ for (const role of ['customer', 'reseller', 'support', 'superadmin']) {
     !tiles.withWebviewConfig(tiles.servicesForRole(role, allCaps), OFF).some((t) => t.key === 'fomema'));
 }
 
+console.log('\nAnd they survive to the end of the chain, on every home screen');
+// The Grid Management gate and the home-screen split were the last steps no
+// test could run, and they are the ones that decide whether an added tile is
+// on the screen. StaffHomeScreen renders <ServiceGrid /> with no props, the
+// customer home passes homeOnly, and dealer/reseller pass neither - so all
+// three shapes are run here.
+const allActive = () => true;
+const render = (role, homeOnly) => tiles.visibleTiles({ role, can: allCaps, webviewPages: CUSTOM, isActive: allActive, homeOnly })
+  .map((t) => t.key);
+
+yes('support sees it on the staff home grid', render('support', false).includes('wv_abcd1234'));
+yes('finance too', render('finance', false).includes('wv_abcd1234'));
+yes('dealer and reseller too',
+  render('dealer', false).includes('wv_abcd1234') && render('reseller', false).includes('wv_abcd1234'));
+yes('and the customer home screen, which filters to home tiles',
+  render('customer', true).includes('wv_abcd1234'));
+
+// A staff grid shows everything. The old guard for that was "fall back when
+// nothing is flagged", which an added WebView broke: it carries a home flag,
+// so one flagged tile in a staff list collapsed the grid to just that tile.
+yes('a staff grid is never cut down to the home set', render('support', true).length > 5);
+yes('even with an added page flagged for home',
+  render('support', true).includes('wv_abcd1234') && render('support', true).length === render('support', false).length);
+
+// Grid Management can switch a built-in off; a wv_ key is not one of its tiles,
+// so the only switch for an added page is the one in WebView Pages.
+const off = (key) => (k) => k !== key;
+yes('Grid Management still hides a built-in',
+  !tiles.visibleTiles({ role: 'customer', can: allCaps, webviewPages: CUSTOM, isActive: off('fomema') })
+    .some((t) => t.key === 'fomema'));
+yes('and an added page is governed by its own switch',
+  tiles.visibleTiles({ role: 'customer', can: allCaps, webviewPages: CUSTOM, isActive: off('fomema') })
+    .some((t) => t.key === 'wv_abcd1234'));
+
 console.log('\nAdmin and superadmin land on a different grid, and it is covered');
 // App.js renders AdminFeaturesScreen - not ServiceGrid - for admin and
 // superadmin when they are not inside a section, so servicesForRole() proves
@@ -188,8 +222,7 @@ yes('the context subscribes once', /subscribeWebviewConfig\(/.test(ctx) && /^ {4
 // The behaviour itself is computed above; this is the wiring, which a
 // computed test cannot see: the grid must use the shared helpers rather than
 // keep a second copy that drifts.
-yes('the grid builds its list from the shared helpers',
-  /withWebviewConfig\(servicesForRole\(role, can\), webviewPages\)/.test(grid));
+yes('the grid builds its list from the shared helper', /visibleTiles\(\{/.test(grid));
 yes('and keeps no copy of its own', !/const withWebviewConfig = \(list\)/.test(grid));
 // MoreFeaturesScreen's own rule: on the home screen or here, never nowhere.
 const more = read('src/screens/MoreFeaturesScreen.js');
