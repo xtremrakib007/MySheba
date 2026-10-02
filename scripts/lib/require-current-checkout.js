@@ -24,11 +24,26 @@ function die(...lines) {
   process.exit(1);
 }
 
+/** The path a `git status --porcelain` line refers to. */
+function pathOf(line) {
+  const p = line.slice(3).trim();
+  const renamed = p.split(' -> ');
+  return (renamed.length > 1 ? renamed[1] : p).replace(/^"|"$/g, '');
+}
+
 /**
  * @param {string} what  what is about to ship, for the error text
  * @param {string} rerun the command to run again once the checkout is fixed
+ * @param {object} [options]
+ * @param {string[]} [options.shipPaths]
+ *   The directories this particular upload actually sends. `firebase deploy`
+ *   uploads firebase.json's "source": "functions" and nothing else, so a
+ *   scratch file at the repo root cannot reach production and blocking on it
+ *   is a guard being wrong rather than careful - which is how people learn to
+ *   work around guards. Omit it when the whole directory ships, as it does for
+ *   an EAS build or an OTA publish.
  */
-function requireCurrentCheckout(what, rerun) {
+function requireCurrentCheckout(what, rerun, { shipPaths } = {}) {
   console.log('Checking the tree before uploading it...\n');
 
   try {
@@ -71,15 +86,25 @@ function requireCurrentCheckout(what, rerun) {
     );
   }
 
-  const dirty = git('status --porcelain');
-  if (dirty) {
+  const dirty = git('status --porcelain').split('\n').filter(Boolean);
+  const inScope = (line) => !shipPaths
+    || shipPaths.some((p) => pathOf(line) === p || pathOf(line).startsWith(`${p}/`));
+  const shipping = dirty.filter(inScope);
+  const elsewhere = dirty.filter((l) => !inScope(l));
+
+  if (shipping.length) {
     die(
-      'This checkout has uncommitted changes:',
-      dirty.split('\n').map((l) => `  ${l}`).join('\n'),
+      `This checkout has uncommitted changes in what ${what} uploads:`,
+      shipping.map((l) => `  ${l}`).join('\n'),
       '',
       'Whatever is uncommitted would ship and then be impossible to',
       'reproduce from the repository. Commit it or stash it first.',
     );
+  }
+  if (elsewhere.length) {
+    console.log(`Uncommitted elsewhere in the tree (not uploaded by ${what}):`);
+    for (const line of elsewhere) console.log(`  ${line}`);
+    console.log('');
   }
 
   const head = git('rev-parse HEAD');
@@ -101,7 +126,9 @@ function requireCurrentCheckout(what, rerun) {
     );
   }
 
-  console.log(`On origin/main at ${head.slice(0, 7)}, tree clean.\n`);
+  // Say what was actually checked: "tree clean" would be untrue when there
+  // are uncommitted files the upload simply does not carry.
+  console.log(`On origin/main at ${head.slice(0, 7)}, ${shipPaths ? `${shipPaths.join(', ')} clean` : 'tree clean'}.\n`);
   return head;
 }
 

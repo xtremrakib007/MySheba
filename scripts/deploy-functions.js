@@ -21,7 +21,9 @@ const target = names.length
   ? names.map((n) => `functions:${n}`).join(',')
   : 'functions';
 
-requireCurrentCheckout('this deploy', `npm run deploy:functions${names.length ? ` ${names.join(' ')}` : ''}`);
+// firebase.json sends only the functions directory, so that is the only
+// place an uncommitted change could reach production from.
+requireCurrentCheckout('this deploy', `npm run deploy:functions${names.length ? ` ${names.join(' ')}` : ''}`, { shipPaths: ['functions'] });
 
 if (dryRun) {
   console.log(`--dry-run: checks passed, would deploy --only ${target}`);

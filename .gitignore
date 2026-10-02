@@ -42,3 +42,6 @@ firebase-debug.log
 # Misc temp
 *.tmp
 /tmp/
+
+# `firebase functions:list > deployed.txt` for npm run audit:deployed
+deployed.txt
