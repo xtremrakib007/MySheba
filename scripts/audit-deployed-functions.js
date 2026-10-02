@@ -32,23 +32,74 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 
-function parseListing(text) {
+function stripAnsi(text) {
+  // Redirected output can still carry colour codes, which break every match.
+  return text.replace(/\u001b\[[0-9;]*m/g, '');
+}
+
+/** `firebase functions:list --json` - much the most reliable input. */
+function parseJsonListing(text) {
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const list = Array.isArray(parsed) ? parsed
+    : Array.isArray(parsed.result) ? parsed.result
+      : Array.isArray(parsed.functions) ? parsed.functions
+        : null;
+  if (!list) return null;
   const rows = [];
-  for (const line of text.split('\n')) {
-    // The CLI prints a box-drawn table; borders have no word characters.
-    if (!line.includes('│')) continue;
-    const cells = line.split('│').map((c) => c.trim()).filter((c) => c !== '');
-    if (cells.length < 2) continue;
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue;
+    // Field names have moved between CLI versions, so take the first that fits
+    // rather than insisting on one spelling.
+    const name = String(item.id || item.functionName || item.name || '').split('/').pop();
+    if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(name)) continue;
+    rows.push({
+      name,
+      runtime: String(item.runtime || item.serviceConfig?.runtime || item.buildConfig?.runtime || ''),
+      region: String(item.region || item.location || ''),
+    });
+  }
+  return rows.length ? rows : null;
+}
+
+/**
+ * The human table, in whatever shape the CLI printed it.
+ *
+ * The first version of this insisted on box-drawing pipes, which is what the
+ * table looks like in a terminal - and then found nothing at all in a
+ * redirected file. Any of │ or | separates columns, and a file with neither is
+ * read as whitespace columns, so a plain listing still works.
+ */
+function parseTableListing(text) {
+  const rows = [];
+  for (const raw of stripAnsi(text).split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    const cells = (/[│|]/.test(line) ? line.split(/[│|]/) : line.split(/\s{2,}|\t/))
+      .map((c) => c.trim())
+      .filter((c) => c !== '');
+    if (!cells.length) continue;
     const name = cells[0];
-    if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(name)) continue; // skips the header
-    if (name === 'Function') continue;
-    // Runtime is whichever cell looks like one, rather than a fixed column, so
-    // a CLI that adds or reorders columns does not silently read the wrong one.
+    if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(name)) continue;
+    if (name === 'Function' || name === 'Name') continue;
+    // Found by shape, not by column number, so a reordered table still reads
+    // the right field.
     const runtime = cells.find((c) => /^nodejs\d+$/.test(c)) || '';
     const region = cells.find((c) => /^[a-z]+-[a-z]+\d+$/.test(c)) || '';
+    // A bare word on its own line is not a function row; require either a
+    // recognisable runtime/region or a plausible multi-column row.
+    if (!runtime && !region && cells.length < 3) continue;
     rows.push({ name, runtime, region });
   }
   return rows;
+}
+
+function parseListing(text) {
+  return parseJsonListing(text) || parseTableListing(text);
 }
 
 function main() {
@@ -65,7 +116,12 @@ function main() {
 
   const deployed = parseListing(fs.readFileSync(file, 'utf8'));
   if (!deployed.length) {
-    console.error('No functions parsed from that file. Is it the output of `firebase functions:list`?');
+    const sample = fs.readFileSync(file, 'utf8').split('\n').slice(0, 8);
+    console.error('No functions parsed from that file.');
+    console.error('The most reliable input is JSON:');
+    console.error(`  firebase functions:list --project <id> --json > ${path.basename(file)}`);
+    console.error('\nThe first lines of what was read:');
+    for (const line of sample) console.error(`  | ${line}`);
     process.exit(2);
   }
 
