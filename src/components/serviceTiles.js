@@ -142,3 +142,52 @@ export function withWebviewConfig(list, webviewPages) {
     .map((p) => ({ key: p.key, icon: p.icon || 'moreFeaturesTile', emoji: p.icon || '', name: p.name, kind: 'webview', home: p.home !== false }));
   return [...overlaid, ...extra];
 }
+
+export const ADMIN_HOME = [
+  { key: 'finance', icon: '\uD83D\uDCB0', name: 'Financial Management', section: 'finance' },
+  { key: 'adminAnalytics', icon: '\uD83D\uDCCA', name: 'Reports & Analytics', screen: 'adminAnalytics' },
+  { key: 'userManagement', icon: '\uD83D\uDC65', name: 'User Management', screen: 'userManagement' },
+  { key: 'verificationManagement', icon: '\uD83E\uDEAA', name: 'KYC Management', screen: 'verificationManagement' },
+
+  { key: 'adminSupport', icon: '\uD83C\uDFA7', name: 'Support Inbox', screen: 'adminSupport' },
+  { key: 'recharge', icon: '\uD83D\uDCF1', name: 'Recharge', service: { key: 'recharge', kind: 'service' } },
+  { key: 'remittance', icon: '\uD83D\uDCB8', name: 'Remittance', service: { key: 'remittance', kind: 'service' } },
+  { key: 'mobilebanking', icon: '\uD83C\uDFE6', name: 'Mobile Banking', service: { key: 'mobilebanking', kind: 'service' } },
+
+  { key: 'internet', icon: '\uD83D\uDCE1', name: 'Internet', service: { key: 'internet', kind: 'service' } },
+  { key: 'flight', icon: '\u2708\uFE0F', name: 'Flight', service: { key: 'flight', kind: 'service' } },
+  { key: 'bus', icon: '\uD83D\uDE8C', name: 'Bus', service: { key: 'bus', kind: 'buspicker' } },
+  { key: 'train', icon: '\uD83D\uDE82', name: 'Train', service: { key: 'train', kind: 'webview' } },
+
+  { key: 'visa', icon: '\uD83D\uDEC2', name: 'Visa', service: { key: 'visa', kind: 'webview' } },
+  { key: 'mydigital', icon: '\uD83D\uDCBB', name: 'Malaysia Arrival Card', service: { key: 'mydigital', kind: 'webview' } },
+  { key: 'passport', icon: '\uD83D\uDCD9', name: 'Passport', service: { key: 'passport', kind: 'webview' } },
+  { key: 'moreFeaturesTile', icon: '\u2728', name: 'More Features', screen: 'moreFeatures' },
+];
+
+/**
+ * The admin and superadmin landing grid, with the WebView configuration on it.
+ *
+ * Admin and superadmin do not land on ServiceGrid - App.js renders
+ * AdminFeaturesScreen for them - so this is a second list, and it needs the
+ * same treatment or a superadmin's own change never reaches the screen they
+ * open the app on.
+ *
+ * `hasArt` is passed in rather than imported: FeatureGrid draws by tile key,
+ * and an added page's key is a generated wv_ one that names no drawing, so a
+ * chosen art icon has to travel as `art` or it prints as the word.
+ */
+export function adminLandingTiles(webviewPages, hasArt = () => false) {
+  const pages = webviewPages || {};
+  const tileFor = (page) => ({
+    key: page.key,
+    ...(hasArt(page.icon) ? { art: page.icon, icon: '\uD83C\uDF10' } : { icon: page.icon || '\uD83C\uDF10' }),
+    name: page.name,
+    service: { key: page.key, kind: 'webview' },
+  });
+  const overlaid = ADMIN_HOME
+    .filter((item) => !(item.service && item.service.kind === 'webview' && pages[item.key] && pages[item.key].active === false))
+    .map((item) => (item.service && item.service.kind === 'webview' && pages[item.key] ? { ...item, ...tileFor(pages[item.key]) } : item));
+  const extra = Object.values(pages).filter((p) => p.custom && p.active !== false).map(tileFor);
+  return [...overlaid, ...extra];
+}

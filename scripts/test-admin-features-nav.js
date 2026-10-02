@@ -49,8 +49,10 @@ console.log('\nEvery hub tile says which capability opens it');
 const capabilities = keysIn(slice('const CAPABILITY_FOR', 'const SYSTEM'));
 // A hub is any landing tile routed by `section`. Each one needs an entry, or
 // the filter silently reduces to isSuperadmin for it.
-const hubs = [...slice('const ADMIN_HOME', 'const OPERATIONS').matchAll(/key: '([a-zA-Z]+)'[^}]*section: '([a-zA-Z]+)'/g)]
-  .map((m) => m[1]);
+// ADMIN_HOME moved to components/serviceTiles.js when the WebView
+// configuration had to be applied to this grid as well as ServiceGrid's.
+const adminHome = read('src/components/serviceTiles.js');
+const hubs = [...adminHome.matchAll(/key: '([a-zA-Z]+)'[^}]*section: '([a-zA-Z]+)'/g)].map((m) => m[1]);
 check('the landing grid still has at least one hub tile', hubs.length > 0);
 for (const hub of hubs) {
   check(`'${hub}' is in CAPABILITY_FOR`, capabilities.includes(hub),

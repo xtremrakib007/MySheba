@@ -12,6 +12,7 @@ import PromptModal from '../components/PromptModal';
 import * as ratesService from '../firebase/ratesService';
 import * as gridManagementService from '../firebase/gridManagementService';
 import { hasServiceArt } from '../components/ServiceArt';
+import { adminLandingTiles } from '../components/serviceTiles';
 
 const CATEGORIES = [
   { key: 'operations', icon: '⚙️', bg: '#E3F2FD', name: 'Operations' },
@@ -27,27 +28,6 @@ const CATEGORIES = [
 // still sells a top-up and books a bus. `section` opens one of the hubs
 // below, `screen` goes straight to a screen, and `service` runs the same
 // action the customer grid runs, through useServiceAction.
-const ADMIN_HOME = [
-  { key: 'finance', icon: '\uD83D\uDCB0', name: 'Financial Management', section: 'finance' },
-  { key: 'adminAnalytics', icon: '\uD83D\uDCCA', name: 'Reports & Analytics', screen: 'adminAnalytics' },
-  { key: 'userManagement', icon: '\uD83D\uDC65', name: 'User Management', screen: 'userManagement' },
-  { key: 'verificationManagement', icon: '\uD83E\uDEAA', name: 'KYC Management', screen: 'verificationManagement' },
-
-  { key: 'adminSupport', icon: '\uD83C\uDFA7', name: 'Support Inbox', screen: 'adminSupport' },
-  { key: 'recharge', icon: '\uD83D\uDCF1', name: 'Recharge', service: { key: 'recharge', kind: 'service' } },
-  { key: 'remittance', icon: '\uD83D\uDCB8', name: 'Remittance', service: { key: 'remittance', kind: 'service' } },
-  { key: 'mobilebanking', icon: '\uD83C\uDFE6', name: 'Mobile Banking', service: { key: 'mobilebanking', kind: 'service' } },
-
-  { key: 'internet', icon: '\uD83D\uDCE1', name: 'Internet', service: { key: 'internet', kind: 'service' } },
-  { key: 'flight', icon: '\u2708\uFE0F', name: 'Flight', service: { key: 'flight', kind: 'service' } },
-  { key: 'bus', icon: '\uD83D\uDE8C', name: 'Bus', service: { key: 'bus', kind: 'buspicker' } },
-  { key: 'train', icon: '\uD83D\uDE82', name: 'Train', service: { key: 'train', kind: 'webview' } },
-
-  { key: 'visa', icon: '\uD83D\uDEC2', name: 'Visa', service: { key: 'visa', kind: 'webview' } },
-  { key: 'mydigital', icon: '\uD83D\uDCBB', name: 'Malaysia Arrival Card', service: { key: 'mydigital', kind: 'webview' } },
-  { key: 'passport', icon: '\uD83D\uDCD9', name: 'Passport', service: { key: 'passport', kind: 'webview' } },
-  { key: 'moreFeaturesTile', icon: '\u2728', name: 'More Features', screen: 'moreFeatures' },
-];
 
 const OPERATIONS = [
   { key: 'all', icon: '📋', bg: '#E3F2FD', name: 'Transactions' },
@@ -249,26 +229,9 @@ export default function AdminFeaturesScreen() {
   // and the two most-used destinations - users and KYC - were two levels
   // down. The category hubs still exist; More Features and the sidebar
   // reach them, and openHomeItem routes the tiles that live in one.
-  // Staff sell these services too, so the admin landing takes the same WebView
-  // configuration the customer grid does: a superadmin's rename, icon or new
-  // address shows here as well, and a page added in WebView Pages appears
-  // rather than existing only for customers.
-  const webviewTile = (page) => ({
-    key: page.key,
-    // FeatureGrid draws by key, and an added page's key names no drawing - so
-    // an art name is passed as `art` and anything else stays an emoji.
-    ...(hasServiceArt(page.icon) ? { art: page.icon, icon: '🌐' } : { icon: page.icon || '🌐' }),
-    name: page.name,
-    service: { key: page.key, kind: 'webview' },
-  });
-  const adminHomeList = (() => {
-    const pages = webviewPages || {};
-    const overlaid = ADMIN_HOME
-      .filter((item) => !(item.service?.kind === 'webview' && pages[item.key] && pages[item.key].active === false))
-      .map((item) => (item.service?.kind === 'webview' && pages[item.key] ? { ...item, ...webviewTile(pages[item.key]) } : item));
-    const extra = Object.values(pages).filter((p) => p.custom && p.active !== false).map(webviewTile);
-    return [...overlaid, ...extra];
-  })();
+  // Admin and superadmin land here rather than on ServiceGrid, so the WebView
+  // configuration has to be applied to this list too - see serviceTiles.
+  const adminHomeList = adminLandingTiles(webviewPages, hasServiceArt);
 
   const homeItems = adminHomeList.filter((item) => {
     if (item.section === 'system' && !isSuperadmin) return false;

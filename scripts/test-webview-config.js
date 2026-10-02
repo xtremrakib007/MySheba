@@ -123,19 +123,41 @@ for (const role of ['customer', 'reseller', 'support', 'superadmin']) {
     !tiles.withWebviewConfig(tiles.servicesForRole(role, allCaps), OFF).some((t) => t.key === 'fomema'));
 }
 
+console.log('\nAdmin and superadmin land on a different grid, and it is covered');
+// App.js renders AdminFeaturesScreen - not ServiceGrid - for admin and
+// superadmin when they are not inside a section, so servicesForRole() proves
+// nothing about the screen they actually open the app on. This runs that
+// list's real builder.
+const hasArt = (name) => ['visa', 'passport', 'fomema', 'train', 'bus'].includes(name);
+const landing = tiles.adminLandingTiles(CUSTOM, hasArt);
+const landingWebviews = landing.filter((t) => t.service && t.service.kind === 'webview').map((t) => t.key);
+yes('the built-in WebView tiles are still there', landingWebviews.filter((k) => svc.BUILT_IN_KEYS.includes(k)).length >= 3);
+yes('an added page appears on it', landingWebviews.includes('wv_abcd1234'));
+yes('and it routes to the WebView, not nowhere',
+  landing.find((t) => t.key === 'wv_abcd1234').service.key === 'wv_abcd1234');
+
+// Same switch-off behaviour as every other grid.
+yes('a page switched off leaves this grid too',
+  !tiles.adminLandingTiles(OFF, hasArt).some((t) => t.key === 'fomema'));
+
+// FeatureGrid draws by key; a wv_ key names no drawing, so a chosen art icon
+// has to arrive as `art` or the tile prints the word "visa".
+const artTile = tiles.adminLandingTiles(
+  { wv_art1234: { key: 'wv_art1234', name: 'Visa Check', url: 'https://a.example.com/v', icon: 'visa', active: true, home: true, custom: true } },
+  hasArt,
+).find((t) => t.key === 'wv_art1234');
+check('an art icon travels as art, not as the label', artTile.art, 'visa');
+check('and an emoji icon stays an emoji',
+  landing.find((t) => t.key === 'wv_abcd1234').icon, '\uD83C\uDFE6');
+
 console.log('\nStaff see the same WebViews as customers');
 const admin = read('src/screens/AdminFeaturesScreen.js');
 const gridSrc = read('src/components/ServiceGrid.js');
 const featureGrid = read('src/components/FeatureGrid.js');
-yes('the admin landing reads the config', /webviewPages/.test(admin) && /adminHomeList/.test(admin));
-yes('it overlays the built-in admin tiles', /item\.service\?\.kind === 'webview' && pages\[item\.key\]/.test(admin));
-yes('and appends the added ones', /p\.custom && p\.active !== false\)\.map\(webviewTile\)/.test(admin));
+yes('the admin landing uses the shared builder', /adminLandingTiles\(webviewPages, hasServiceArt\)/.test(admin));
 // Looking the tapped key up in the static list made an added tile inert.
 yes('a tapped tile is looked up in the live list', /adminHomeList\.find\(\(x\) => x\.key === key\)/.test(admin));
-yes('a page switched off leaves the admin grid too', /pages\[item\.key\]\.active === false/.test(admin));
-// FeatureGrid draws by key, and an added page's key names no drawing.
-yes('an added tile can still carry a drawing', /hasServiceArt\(it\.art \|\| it\.key\)/.test(featureGrid));
-yes('and the admin tile passes one when it has it', /hasServiceArt\(page\.icon\) \? \{ art: page\.icon/.test(admin));
+yes('FeatureGrid can draw a tile whose key names no art', /hasServiceArt\(it\.art \|\| it\.key\)/.test(featureGrid));
 // Dealers and resellers take SHARED_SERVICES through ServiceGrid, which
 // already runs the overlay - this is the line that keeps that true.
 yes('one line carries them to every staff role',
