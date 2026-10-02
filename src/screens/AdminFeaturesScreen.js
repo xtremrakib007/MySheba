@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
@@ -70,6 +70,13 @@ const USERS = [
 // role defaults + per-user overrides (accessControlService); a superadmin
 // has every capability.
 const CAPABILITY_FOR = {
+  // The hub tiles on the landing grid need an entry too, not just the items
+  // inside them. Without one the filter falls through to a branch that ends in
+  // `isSuperadmin`, so Financial Management was invisible to every ordinary
+  // admin - including one holding both capabilities every tile inside it asks
+  // for. Either capability opens the hub, because Rates, Pricing and Payments
+  // want 'settings' while Transfers wants 'finance'.
+  finance: ['settings', 'finance'],
   all: ['orders', 'finance'], pending: ['orders'], inquiries: ['support'], topups: ['finance'],
   support: ['support'], adminAnalytics: ['reports'],
   rates: ['settings'], pricing: ['settings'], payments: ['settings'], categories: ['settings'], banners: ['settings'],
@@ -118,11 +125,33 @@ const SCREEN_FOR = { apiManagement: 'apiProviderManagement' };
 export default function AdminFeaturesScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { profile, goBackOrHome, setScreen, openSidebar, dealerTxs, inquiries, topups, setAdminTab, setAdminViewingSection, rates, gridManagement, gridViewer, can } = useApp();
+  const { profile, goBackOrHome, setScreen, openSidebar, dealerTxs, inquiries, topups, setAdminTab, setAdminViewingSection, setHomeBackInterceptor, rates, gridManagement, gridViewer, can } = useApp();
   const [section, setSection] = useState(null);
   const [rateView, setRateView] = useState(false);
   const [editRateKey, setEditRateKey] = useState(null);
   const isSuperadmin = profile?.role === 'superadmin';
+
+  // Both views below are local state, not screens, so the hardware back button
+  // knew nothing about them: it fell through to goBack() and left this screen
+  // entirely. From Financial Management one press landed on the dashboard -
+  // skipping both the section grid and this landing - and the next press there
+  // armed "press back again to exit", so backing out of a feature page looked
+  // like the app was trying to close. The on-screen arrow always worked, which
+  // is why it reads as the device button being wrong rather than the screen.
+  //
+  // Same contract the three home screens use: return true when the press was
+  // handled. Rates opens from inside a section, so it unwinds first and leaves
+  // the section grid behind it, exactly as its own arrow does. The PromptModal
+  // needs no case here - a React Native Modal takes the back press itself
+  // through onRequestClose.
+  useEffect(() => {
+    setHomeBackInterceptor(() => {
+      if (rateView) { setRateView(false); return true; }
+      if (section) { setSection(null); return true; }
+      return false;
+    });
+    return () => setHomeBackInterceptor(null);
+  }, [rateView, section, setHomeBackInterceptor]);
 
   const allow = (items) => items.filter((item) => {
     const gridKey = item.key === 'all' ? 'history' : item.key;
