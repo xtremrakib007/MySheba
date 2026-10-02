@@ -58,4 +58,39 @@ assert.throws(() => api.validate({ service: 'Recharge PIN', name: 'Test', baseUr
 assert.throws(() => api.validate({ service: 'Recharge', name: 'Test', baseUrl: 'https://api.example.com', authType: 'apiKey', apiKey: '' }));
 assert.throws(() => api.validate({ service: 'Recharge', name: 'Test', baseUrl: 'https://api.example.com', authType: 'basic', username: 'u', password: '' }));
 
+// ---- the superadmin can configure every service the backend routes ----
+// 'Offer Packs' was allowed and charged server-side but missing from the
+// client list, so no superadmin could create a provider for it; the only one
+// that existed was the companion Success TopUp provisions for itself. That is
+// exactly the "why is this Success TopUp only" shape, and it turned out to be
+// a one-line omission rather than a design decision.
+{
+  const fs = require('fs');
+  const path = require('path');
+  const root = path.join(__dirname, '..');
+  const serverSrc = fs.readFileSync(path.join(root, 'functions', 'apiProviderService.js'), 'utf8');
+  const clientSrc = fs.readFileSync(path.join(root, 'src', 'firebase', 'apiProviderService.js'), 'utf8');
+
+  const serverMatch = serverSrc.match(/const ALLOWED_SERVICES\s*=\s*(\[[^\]]*\])/);
+  const clientMatch = clientSrc.match(/export const API_SERVICES\s*=\s*(\[[^\]]*\])/);
+  assert.ok(serverMatch && clientMatch, 'could not read both service lists');
+
+  const parseList = (literal) => [...literal.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  const server = parseList(serverMatch[1]);
+  const client = parseList(clientMatch[1]);
+
+  const missing = server.filter((x) => !client.includes(x));
+  const extra = client.filter((x) => !server.includes(x));
+
+  assert.ok(
+    missing.length === 0,
+    `Services the backend routes but the superadmin UI cannot configure: ${missing.join(', ')}`
+  );
+  assert.ok(
+    extra.length === 0,
+    `Services the superadmin UI offers but the backend rejects: ${extra.join(', ')}`
+  );
+  console.log(`  superadmin can configure all ${server.length} routed services`);
+}
+
 console.log('apiProviderService tests: PASS');

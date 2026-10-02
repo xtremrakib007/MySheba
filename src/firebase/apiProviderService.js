@@ -10,7 +10,12 @@ const drivesFn = httpsCallable(functions, 'listSuccessTopUpDrives');
 const testFn = httpsCallable(functions, 'testApiProvider');
 const adminCatalogFn = httpsCallable(functions, 'listSuccessTopUpCatalogForAdmin');
 
-export const API_SERVICES = ['Recharge', 'Internet', 'Bill Payment', 'Bus', 'Train', 'Flight', 'Mobile Banking', 'Remittance', 'Payment Gateway', 'Entertainment', 'Recharge PIN'];
+// Must match ALLOWED_SERVICES in functions/apiProviderService.js. A service
+// the backend routes but this list omits cannot be configured by a
+// superadmin at all: 'Offer Packs' was missing, so the only provider that
+// could ever serve it was the one Success TopUp provisions for itself.
+// scripts/test-api-provider.js fails the build if the two lists drift.
+export const API_SERVICES = ['Recharge', 'Internet', 'Offer Packs', 'Bill Payment', 'Bus', 'Train', 'Flight', 'Mobile Banking', 'Remittance', 'Payment Gateway', 'Entertainment', 'Recharge PIN'];
 export async function listApiProviders() { const res = await listFn({}); return res.data?.providers || res.data || []; }
 export async function saveApiProvider(provider) { return (await saveFn(provider)).data; }
 export async function deleteApiProvider(id) { return (await deleteFn({ id })).data; }
