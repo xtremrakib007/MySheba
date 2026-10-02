@@ -543,6 +543,42 @@ check('every documented status settles rather than parking', () => {
   return null;
 });
 
+// Every bill operator code the documentation lists, exactly as written. The
+// billOperator description says the code is matched exactly and is case
+// sensitive, which is why Dhaka WASA is here in capitals among lower-case
+// codes - it looks like a typo and is not one.
+const DOCUMENTED_BILL_CODES = {
+  pbp: 'Palli Bidyut (Prepaid)', pbd: 'Palli Bidyut (Postpaid)',
+  dsp: 'DESCO (Prepaid)', dsd: 'DESCO (Postpaid)',
+  nsp: 'NESCO (Prepaid)', nsd: 'NESCO (Postpaid)',
+  dpp: 'DPDC (Prepaid)', dpd: 'DPDC (Postpaid)',
+  ttg: 'Titas Gas', krp: 'Karnaphuli Gas', jlb: 'Jalalabad Gas',
+  sbg: 'Sundarban Gas', brd: 'Bakhrabad Gas',
+  art: 'Amber IT', DAWA: 'Dhaka WASA',
+};
+
+check('every documented bill operator code is configured, exactly as written', () => {
+  const src = read('functions/apiProviderService.js');
+  const block = src.match(/const SUCCESS_TOPUP_BILL_OPERATORS = \{([\s\S]*?)\n\};/);
+  if (!block) return 'SUCCESS_TOPUP_BILL_OPERATORS not found';
+  const ours = new Set([...block[1].matchAll(/'([^']+)':\s*'([^']+)'/g)].map((m) => m[2]));
+  const missing = Object.keys(DOCUMENTED_BILL_CODES).filter((code) => !ours.has(code));
+  if (missing.length) return `not configured: ${missing.join(', ')}`;
+  const extra = [...ours].filter((code) => !DOCUMENTED_BILL_CODES[code]);
+  if (extra.length) return `configured but not documented: ${extra.join(', ')}`;
+  return null;
+});
+
+check('billAmount goes out as the documented number', () => {
+  const api = require('../functions/apiProviderService')._test;
+  // The bill-pay table types billAmount as `number`, like amount on recharge.
+  const out = api.render({ billAmount: '{{amount}}', billOperator: '{{billOperator}}' }, { amount: 350, billOperator: 'DAWA' });
+  if (typeof out.billAmount !== 'number') return `billAmount rendered as ${typeof out.billAmount}, documented as number`;
+  // A code is matched exactly, so the rendering must not case-fold it.
+  if (out.billOperator !== 'DAWA') return 'billOperator was not passed through unchanged';
+  return null;
+});
+
 check('amount goes out as the documented number', () => {
   const api = require('../functions/apiProviderService')._test;
   // The docs table types amount as `number` and the example sends 50.
