@@ -64,9 +64,21 @@ export default function WebviewManagementScreen() {
     ]);
   };
 
+  // The switch is driven by the stored page, so a refused write left it exactly
+  // where it was and the screen looked like the button did nothing. It now
+  // shows which row is in flight, and a failure always says so - a silent
+  // no-op is the one outcome this must not have.
+  const [savingKey, setSavingKey] = useState('');
   const toggleActive = async (page) => {
-    try { await webviewConfigService.saveWebviewPage(page.key, { ...page, active: !page.active }); }
-    catch (e) { showAlert('WebView Pages', e?.message || 'Could not update this page.'); }
+    if (savingKey) return;
+    setSavingKey(page.key);
+    try {
+      await webviewConfigService.saveWebviewPage(page.key, { ...page, active: !page.active });
+    } catch (e) {
+      showAlert('WebView Pages', e?.message || 'Could not update this page.');
+    } finally {
+      setSavingKey('');
+    }
   };
 
   if (!isSuperadmin) {
@@ -171,8 +183,13 @@ export default function WebviewManagementScreen() {
                 <Text style={styles.rowUrl} numberOfLines={1}>{page.url}</Text>
                 <Text style={styles.rowMeta}>{page.custom ? 'Added here' : 'Built in'} · {page.home === false ? 'More Services' : 'Home screen'}</Text>
               </TouchableOpacity>
-              <Switch value={page.active !== false} onValueChange={() => toggleActive(page)}
-                trackColor={{ false: colors.border, true: colors.primary }} thumbColor={colors.onPrimary} />
+              {savingKey === page.key ? (
+                <ActivityIndicator color={colors.primary} style={styles.rowBusy} />
+              ) : (
+                <Switch value={page.active !== false} onValueChange={() => toggleActive(page)}
+                  disabled={!!savingKey}
+                  trackColor={{ false: colors.border, true: colors.primary }} thumbColor={colors.onPrimary} />
+              )}
             </View>
           ))}
         </ScrollView>
@@ -214,6 +231,7 @@ function createStyles(colors) {
     rowBody: { flex: 1, marginRight: 8 },
     rowName: { fontSize: 13, fontWeight: '800', color: colors.text },
     rowUrl: { fontSize: 10.5, color: colors.textSecondary, marginTop: 2 },
+    rowBusy: { width: 50 },
     rowMeta: { fontSize: 9.5, color: colors.textSecondary, marginTop: 3, fontWeight: '700' },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
     denied: { textAlign: 'center', color: colors.textSecondary },

@@ -123,6 +123,25 @@ for (const role of ['customer', 'reseller', 'support', 'superadmin']) {
     !tiles.withWebviewConfig(tiles.servicesForRole(role, allCaps), OFF).some((t) => t.key === 'fomema'));
 }
 
+console.log('\nA refused write is never silent');
+// The switch is driven by the stored page, so a refused write left it where it
+// was and the screen read as a dead button. Firestore's own wording for a
+// rules refusal - "Missing or insufficient permissions" - does not say what to
+// do about it either, and until deploy:rules exists nothing in this repo did.
+const denied = Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' });
+yes('a rules refusal names the remedy', /deploy:rules/.test(svc._test.describeWriteError(denied)));
+yes('and so does one recognised by message alone',
+  /deploy:rules/.test(svc._test.describeWriteError(new Error('Missing or insufficient permissions.'))));
+yes('any other failure keeps its own message',
+  svc._test.describeWriteError(new Error('Network request failed')) === 'Network request failed');
+yes('and a failure with no message still says something',
+  svc._test.describeWriteError(undefined).length > 0);
+
+const screenSrc = read('src/screens/WebviewManagementScreen.js');
+yes('the row shows which toggle is in flight', /savingKey === page\.key/.test(screenSrc));
+yes('and releases it whatever happens', /finally \{\s*setSavingKey\(''\);/.test(screenSrc));
+yes('a failed toggle always reports', /showAlert\('WebView Pages'/.test(screenSrc));
+
 console.log('\nAnd they survive to the end of the chain, on every home screen');
 // The Grid Management gate and the home-screen split were the last steps no
 // test could run, and they are the ones that decide whether an added tile is

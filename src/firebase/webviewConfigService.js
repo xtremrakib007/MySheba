@@ -123,12 +123,29 @@ export async function ensureWebviewConfig() {
   return mergePages(snap.exists() ? snap.data() : null);
 }
 
+/**
+ * Firestore's own wording for a rules refusal is "Missing or insufficient
+ * permissions", which says nothing about what to do. The rule for this
+ * document exists in firestore.rules; until it is deployed every write here is
+ * refused, and that is the likeliest reason a save or a toggle does nothing.
+ */
+function describeWriteError(err) {
+  if (err && (err.code === 'permission-denied' || /insufficient permissions/i.test(err.message || ''))) {
+    return 'The server refused this write. If you are signed in as a superadmin, the Firestore rules for WebView pages have not been deployed yet - run "npm run deploy:rules".';
+  }
+  return (err && err.message) || 'Could not save this page.';
+}
+
 /** Create or edit one page. `key` is a built-in key or a wv_ key. */
 export async function saveWebviewPage(key, page) {
   const id = String(key || '').trim();
   if (!BUILT_IN_KEYS.includes(id) && !isCustomKey(id)) throw new Error('Unknown WebView page.');
   const clean = validatePage(page);
-  await setDoc(DOC, { pages: { [id]: clean }, updatedAt: serverTimestamp() }, { merge: true });
+  try {
+    await setDoc(DOC, { pages: { [id]: clean }, updatedAt: serverTimestamp() }, { merge: true });
+  } catch (err) {
+    throw new Error(describeWriteError(err));
+  }
 }
 
 /**
@@ -139,7 +156,11 @@ export async function saveWebviewPage(key, page) {
 export async function deleteWebviewPage(key) {
   const id = String(key || '').trim();
   if (!isCustomKey(id)) throw new Error('A built-in WebView cannot be deleted. Turn it off instead.');
-  await setDoc(DOC, { pages: { [id]: deleteField() }, updatedAt: serverTimestamp() }, { merge: true });
+  try {
+    await setDoc(DOC, { pages: { [id]: deleteField() }, updatedAt: serverTimestamp() }, { merge: true });
+  } catch (err) {
+    throw new Error(describeWriteError(err));
+  }
 }
 
-export const _test = { sanitizePages, CUSTOM_KEY_RE };
+export const _test = { sanitizePages, CUSTOM_KEY_RE, describeWriteError };
