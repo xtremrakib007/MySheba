@@ -16,6 +16,7 @@
     "audit:lockfiles": "node scripts/audit-lockfiles.js",
     "audit:deps": "node scripts/audit-deps.js",
     "audit:nav": "node scripts/audit-navigation.js",
+    "test:adminnav": "node scripts/test-admin-nav.js",
     "audit:callables": "node scripts/audit-callables.js",
     "test:api-provider": "node scripts/test-api-provider-service.js",
     "test:apimanagement": "node scripts/test-api-management.js",

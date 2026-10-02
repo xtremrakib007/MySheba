@@ -13,18 +13,30 @@ import { useTheme } from '../theme/ThemeContext';
 // destination that always makes sense there, and it frees the corner the
 // scanner was occupying for Account.
 //
-// Staff keep Management in place of Services, since a dealer or admin has
-// no customer service grid to open.
+// Staff get a second tab in place of Services, since a dealer or admin has no
+// customer service grid to open.
+//
+// For an admin that tab used to be Management, which opened AdminFeaturesScreen
+// - a grid of categories. Home opens AdminHomeScreen, which lands on its own
+// grid. Two tabs, two grids, nothing in the labels to tell them apart. It now
+// opens Operations: the pending queue, which is what an admin actually comes
+// here to work through. Dealers and resellers keep Management, because theirs
+// is the only management screen they have.
 const STAFF_ROLES = ['admin', 'superadmin', 'dealer', 'reseller'];
+const ADMIN_TIER = ['admin', 'superadmin'];
+// The AdminHomeScreen tab Operations opens: the queue needing action.
+const OPERATIONS_TAB = 'pending';
 const HOME_SCREENS = ['customerHome', 'dealerHome', 'resellerHome', 'adminHome'];
 
 function tabsFor(role) {
   const staff = STAFF_ROLES.includes(role);
   return [
     { key: 'account', icon: '👤', label: 'Account' },
-    staff
-      ? { key: 'management', icon: '⚙️', label: 'Management' }
-      : { key: 'services', icon: '🧩', label: 'Services' },
+    !staff
+      ? { key: 'services', icon: '🧩', label: 'Services' }
+      : ADMIN_TIER.includes(role)
+        ? { key: 'operations', icon: '📋', label: 'Operations' }
+        : { key: 'management', icon: '⚙️', label: 'Management' },
     { key: 'home', icon: '🏠', label: 'Home', centre: true },
     { key: 'history', icon: '🧾', label: 'History' },
     { key: 'support', icon: '🎧', label: 'Support' },
@@ -32,7 +44,7 @@ function tabsFor(role) {
 }
 
 function screenFor(key, role) {
-  const isAdminTier = role === 'admin' || role === 'superadmin';
+  const isAdminTier = ADMIN_TIER.includes(role);
   if (key === 'account') return 'myAccount';
   if (key === 'services') return 'moreFeatures';
   if (key === 'history') return 'history';
@@ -49,12 +61,22 @@ function screenFor(key, role) {
 export default function BottomNav() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { goHome, screen, setScreen, profile } = useApp();
+  const { goHome, screen, setScreen, profile, setAdminTab, setAdminViewingSection, adminTab, adminViewingSection } = useApp();
   const role = profile?.role;
   const tabs = tabsFor(role);
 
   const onPressTab = (key) => {
     if (key === 'home') return goHome();
+    // Operations is an AdminHomeScreen TAB, not a screen App.js renders.
+    // Passing a tab key to setScreen matches no branch there and renders a
+    // blank white page - the same way nine sidebar items used to. It takes the
+    // three steps goTo() uses: pick the tab, say we are showing one, then go.
+    if (key === 'operations') {
+      setAdminTab(OPERATIONS_TAB);
+      setAdminViewingSection(true);
+      setScreen('adminHome');
+      return;
+    }
     const target = screenFor(key, role);
     if (target) setScreen(target);
   };
@@ -63,7 +85,15 @@ export default function BottomNav() {
     <View style={styles.nav}>
       {tabs.map((tab) => {
         const target = screenFor(tab.key, role);
-        const isActive = tab.key === 'home' ? HOME_SCREENS.includes(screen) : screen === target;
+        // Home and Operations are both AdminHomeScreen, so `screen` alone
+        // cannot tell them apart: without the section flag, Home stayed lit
+        // while you were working in Operations.
+        const onOperations = screen === 'adminHome' && adminViewingSection && adminTab === OPERATIONS_TAB;
+        const isActive = tab.key === 'home'
+          ? HOME_SCREENS.includes(screen) && !onOperations
+          : tab.key === 'operations'
+            ? onOperations
+            : screen === target;
         if (tab.centre) {
           return (
             <TouchableOpacity key={tab.key} style={styles.centreBtn} onPress={() => onPressTab(tab.key)} accessibilityRole="button" accessibilityLabel={tab.label} accessibilityState={{ selected: isActive }}>

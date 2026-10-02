@@ -56,6 +56,9 @@ jobs:
       - name: Audit navigation targets
         run: npm run audit:nav
 
+      - name: Admin navigation
+        run: npm run test:adminnav
+
       - name: Audit context usage
         run: npm run audit:context
 

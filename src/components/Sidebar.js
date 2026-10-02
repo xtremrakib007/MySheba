@@ -106,7 +106,12 @@ export default function Sidebar() {
   const { sidebarVisible, closeSidebar, setScreen, screen, profile, logout, gridManagement, adminTab, adminViewingSection, setAdminTab, setAdminViewingSection } = useApp();
   const translateX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
-  const [collapsed, setCollapsed] = useState({});
+  // Collapsed by default, so opening the sidebar shows the groups rather than
+  // a wall of every destination at once. Tracked as `expanded` rather than
+  // `collapsed` so the empty state means "all shut" without seeding it with
+  // every group title - the groups depend on the role, so there is no one
+  // list to seed from. The reset on open below then starts each visit shut.
+  const [expanded, setExpanded] = useState({});
 
   const isSuperadmin = profile?.role === 'superadmin';
   const isAdmin = profile?.role === 'admin' || isSuperadmin;
@@ -118,7 +123,7 @@ export default function Sidebar() {
     backdropOpacity.stopAnimation();
     translateX.setValue(-DRAWER_WIDTH);
     backdropOpacity.setValue(0);
-    setCollapsed({});
+    setExpanded({});
     Animated.parallel([
       Animated.timing(translateX, { toValue: 0, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
       Animated.timing(backdropOpacity, { toValue: 1, duration: 240, useNativeDriver: true }),
@@ -136,7 +141,7 @@ export default function Sidebar() {
     if (asTab) { setAdminTab(key); setAdminViewingSection(true); setScreen('adminHome'); return; }
     setScreen(key);
   };
-  const toggleGroup = (title) => setCollapsed((prev) => ({ ...prev, [title]: !prev[title] }));
+  const toggleGroup = (title) => setExpanded((prev) => ({ ...prev, [title]: !prev[title] }));
   const onLogout = () => {
     closeSidebar();
     showAlert('Log Out', 'Are you sure you want to log out?', [
@@ -189,7 +194,7 @@ export default function Sidebar() {
 
           <ScrollView style={styles.menuScroll} contentContainerStyle={styles.menuContent} showsVerticalScrollIndicator={false}>
             {groups.map((group, groupIndex) => {
-              const isCollapsed = !!collapsed[group.title];
+              const isCollapsed = !expanded[group.title];
               return (
                 <View key={group.title} style={styles.groupBlock}>
                   <TouchableOpacity style={[styles.groupHeader, { borderColor: colors[group.color] }]} onPress={() => toggleGroup(group.title)} activeOpacity={0.8}>

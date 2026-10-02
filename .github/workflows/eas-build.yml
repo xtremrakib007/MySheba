@@ -84,6 +84,9 @@ jobs:
       - name: Doubled-escape audit
         run: npm run audit:escapes
 
+      - name: Admin navigation
+        run: npm run test:adminnav
+
       # scripts/test-api-provider-service.js requires functions/apiProviderService.js,
       # which requires firebase-functions/v2/https - a dependency of functions/,
       # not of the root package. The root `npm ci` above does not install it, so
