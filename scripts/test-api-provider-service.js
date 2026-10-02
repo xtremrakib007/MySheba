@@ -93,4 +93,40 @@ assert.throws(() => api.validate({ service: 'Recharge', name: 'Test', baseUrl: '
   console.log(`  superadmin can configure all ${server.length} routed services`);
 }
 
+// ---- the pinned DNS lookup answers in the shape Node asked for ----
+// A custom lookup has two callback contracts, chosen by options.all:
+//   all falsy -> callback(err, address, family)
+//   all true  -> callback(err, [{ address, family }])
+// Node has defaulted autoSelectFamily to true since v20, so it asks with
+// all:true. Answering positionally made it read addresses[0].address as
+// undefined and throw "Invalid IP address: undefined" before a byte left the
+// server - breaking every provider request: the recharge and bill-payment
+// calls, the catalogue fetch and the Test API button. Reproduced on node
+// v22.22.2 against a real host before this was fixed.
+{
+  const pinned = { address: '203.0.113.10', family: 4 };
+  const lookup = api.pinnedLookup(pinned);
+
+  let got;
+  lookup('api.example.com', { all: true }, (err, value) => { got = { err, value }; });
+  assert.strictEqual(got.err, null, 'all:true must not error');
+  assert.ok(Array.isArray(got.value), 'all:true must answer with an array, or Node reads undefined');
+  assert.strictEqual(got.value.length, 1);
+  assert.strictEqual(got.value[0].address, '203.0.113.10');
+  assert.strictEqual(got.value[0].family, 4);
+
+  let positional;
+  lookup('api.example.com', {}, (err, address, family) => { positional = { err, address, family }; });
+  assert.strictEqual(positional.address, '203.0.113.10', 'all:false keeps the positional form');
+  assert.strictEqual(positional.family, 4);
+
+  // Node has passed undefined options in the past; it must not crash.
+  let noOpts;
+  lookup('api.example.com', undefined, (err, address, family) => { noOpts = { address, family }; });
+  assert.strictEqual(noOpts.address, '203.0.113.10');
+  assert.strictEqual(noOpts.family, 4);
+
+  console.log('  pinned DNS lookup answers both callback shapes');
+}
+
 console.log('apiProviderService tests: PASS');

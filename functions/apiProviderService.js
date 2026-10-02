@@ -54,6 +54,33 @@ async function resolvePublicAddress(hostname) {
   if (!addresses.length || addresses.some(a => isPrivateIp(a.address))) throw new Error('Provider hostname resolves to a private or reserved address.');
   return addresses[0];
 }
+/**
+ * The DNS answer for a pinned request, in whichever shape Node asked for.
+ *
+ * A custom lookup has two callback contracts and Node picks between them with
+ * options.all: (err, address, family) when it is false, (err, [{address,
+ * family}]) when it is true. Node has defaulted autoSelectFamily to true since
+ * v20, so it passes all:true, and answering with the positional form made it
+ * read addresses[0].address as undefined and throw
+ *
+ *   Invalid IP address: undefined
+ *
+ * before a single byte left the server. That broke every outbound provider
+ * request - the recharge and bill-payment calls in executeConfiguredApi, the
+ * catalogue fetch, and the Test API button - from the moment the functions
+ * moved off Node 18. An ambiguous failure in the charge path is recorded as
+ * `unknown`, which is why it surfaced to customers as "The API request outcome
+ * is uncertain" rather than as anything naming DNS.
+ */
+function pinnedLookup(pinnedAddress) {
+  return (_hostname, opts, callback) => {
+    if (opts && opts.all) {
+      return callback(null, [{ address: pinnedAddress.address, family: pinnedAddress.family }]);
+    }
+    return callback(null, pinnedAddress.address, pinnedAddress.family);
+  };
+}
+
 function requestHttpsPinned(url, options, pinnedAddress) {
   return new Promise((resolve, reject) => {
     const request = https.request(url, {
@@ -62,7 +89,7 @@ function requestHttpsPinned(url, options, pinnedAddress) {
       signal: options.signal,
       // Pin the already-validated DNS result for this request. TLS still uses
       // the original hostname, so certificate/SNI validation is preserved.
-      lookup: (_hostname, _opts, callback) => callback(null, pinnedAddress.address, pinnedAddress.family),
+      lookup: pinnedLookup(pinnedAddress),
     }, (response) => {
       let bytes = 0;
       const chunks = [];
@@ -575,7 +602,7 @@ exports.executeConfiguredApi = executeConfiguredApi;
 
 // Pure validation helpers exported for backend unit tests. These do not expose
 // provider credentials and do not perform network or Firestore operations.
-exports._test = { isPrivateIp, validateBaseUrl, validateHeaders, validateTemplate, getPath, render, providerAuth, validate };
+exports._test = { isPrivateIp, pinnedLookup, validateBaseUrl, validateHeaders, validateTemplate, getPath, render, providerAuth, validate };
 
 exports.testApiProvider = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
