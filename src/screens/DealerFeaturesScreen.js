@@ -41,15 +41,16 @@ export default function DealerFeaturesScreen() {
     setDealerTab, setDealerViewingSection,
     featureAccess,
     gridManagement,
+    gridViewer,
   } = useApp();
-  const tools = FEATURE_DEFS.filter((t) => profile && gridManagementService.isGridActive(gridManagement, t.key) && canAccessFeature(featureAccess, t.key, profile.role, profile.uid));
+  const tools = FEATURE_DEFS.filter((t) => profile && gridManagementService.isGridActive(gridManagement, t.key, gridViewer) && canAccessFeature(featureAccess, t.key, profile.role, profile.uid));
 
   const dashboardBadges = {
     pending: dealerTxs.filter((t) => t.status === 'pending').length || undefined,
     processing: dealerTxs.filter((t) => t.status === 'processing').length || undefined,
   };
   const dashboardTools = DASHBOARD_TOOL_DEFS
-    .filter((t) => profile && t.roles.includes(profile.role) && gridManagementService.isGridActive(gridManagement, t.key === 'processing' || t.key === 'completed' ? 'history' : t.key))
+    .filter((t) => profile && t.roles.includes(profile.role) && gridManagementService.isGridActive(gridManagement, t.key === 'processing' || t.key === 'completed' ? 'history' : t.key, gridViewer))
     .map((t) => ({ ...t, badge: dashboardBadges[t.key] }));
 
   const openDashboardTile = (key) => {

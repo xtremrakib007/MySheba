@@ -62,9 +62,9 @@ function Section({ title, subtitle, items, onPress }) {
 
 export default function MoreFeaturesScreen() {
   const { colors } = useTheme();
-  const { goBackOrHome, profile, gridManagement } = useApp();
+  const { goBackOrHome, profile, gridManagement, gridViewer } = useApp();
   const handlePress = useServiceAction();
-  const visible = (items) => items.filter((item) => gridManagementService.isGridActive(gridManagement, item.key));
+  const visible = (items) => items.filter((item) => gridManagementService.isGridActive(gridManagement, item.key, gridViewer));
   const isCustomer = !profile?.role || profile.role === 'customer';
 
   return (

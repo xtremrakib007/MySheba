@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, Dimensions, Easing, Image, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
+import * as gridService from '../firebase/gridManagementService';
 import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import HeaderDecor from './HeaderDecor';
@@ -103,7 +104,7 @@ function roleGroups(role) {
 export default function Sidebar() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { sidebarVisible, closeSidebar, setScreen, screen, profile, logout, gridManagement, adminTab, adminViewingSection, setAdminTab, setAdminViewingSection } = useApp();
+  const { sidebarVisible, closeSidebar, setScreen, screen, profile, logout, gridManagement, gridViewer, adminTab, adminViewingSection, setAdminTab, setAdminViewingSection } = useApp();
   const translateX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   // Collapsed by default, so opening the sidebar shows the groups rather than
@@ -134,7 +135,9 @@ export default function Sidebar() {
 
   const goTo = (key, asTab) => {
     const always = ['adminHome','adminFeatures','gridManagement'];
-    if (!always.includes(key) && gridManagement?.[key] === false) { showAlert('MySheba', 'This feature is currently unavailable.'); return; }
+    // Resolved for this person, not globally: a tile hidden from them in the
+    // grid must not still be reachable from the sidebar.
+    if (!always.includes(key) && !gridService.isGridActive(gridManagement, key, gridViewer)) { showAlert('MySheba', 'This feature is currently unavailable.'); return; }
     closeSidebar();
     // Same three steps AdminFeaturesScreen's openItem uses for a section:
     // pick the tab, tell AdminHomeScreen it is showing one, then go there.

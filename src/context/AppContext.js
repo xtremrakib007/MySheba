@@ -236,6 +236,14 @@ export function AppProvider({ children }) {
   const [capabilities, setCapabilities] = useState([]);
   const capabilityUid = profile?.uid || authUser?.uid || null;
   const capabilityRole = profile?.role || null;
+  // Who grid tiles are resolved against. A tile can now be turned off for one
+  // role, country or person (see firebase/gridManagementService), so every gate
+  // below has to ask the same question the grid asked when it drew the tile -
+  // otherwise a hidden feature stays reachable by another route.
+  const gridViewer = useMemo(
+    () => gridManagementService.viewerFor(profile),
+    [profile?.uid, profile?.role, profile?.phoneCountryCode],
+  );
   useEffect(
     () => accessControlService.subscribeMyCapabilities(capabilityUid, capabilityRole, setCapabilities),
     [capabilityUid, capabilityRole],
@@ -880,12 +888,12 @@ export function AppProvider({ children }) {
 
     const gridKey = SCREEN_GRID_KEYS[nextScreen];
     const isSuperadminGridManager = nextScreen === 'gridManagement' && role === 'superadmin';
-    if (gridKey && !isSuperadminGridManager && !gridManagementService.isGridActive(gridManagement, gridKey)) {
+    if (gridKey && !isSuperadminGridManager && !gridManagementService.isGridActive(gridManagement, gridKey, gridViewer)) {
       showAlert('MySheba', 'This feature is currently unavailable.');
       return;
     }
     setScreenState(nextScreen);
-  }, [authUser, gridManagement, profile?.role]);
+  }, [authUser, gridManagement, gridViewer, profile?.role]);
 
   useEffect(() => {
     const role = profile?.role;
@@ -894,7 +902,7 @@ export function AppProvider({ children }) {
     const roleDenied = allowedRoles && (!role || !allowedRoles.includes(role));
     const gridDenied = gridKey && !(
       screen === 'gridManagement' && role === 'superadmin'
-    ) && !gridManagementService.isGridActive(gridManagement, gridKey);
+    ) && !gridManagementService.isGridActive(gridManagement, gridKey, gridViewer);
 
     // No role yet means the profile has not arrived, which is not a denial.
     // Sending someone to Login for it is indistinguishable from being logged
@@ -905,7 +913,7 @@ export function AppProvider({ children }) {
     if (roleDenied || gridDenied) {
       setScreenState(getHomeForRole(role));
     }
-  }, [screen, gridManagement, profile?.role, getHomeForRole]);
+  }, [screen, gridManagement, gridViewer, profile?.role, getHomeForRole]);
 
   // PHASE 4 - Global/per-feature advertisement controls (ad_settings/general,
   // ad_feature_controls/{featureId}), subscribed once here rather than once
@@ -2420,7 +2428,7 @@ export function AppProvider({ children }) {
   }, [authUser]);
 
   const startService = useCallback((service) => {
-    if (!gridManagementService.isGridActive(gridManagement, service)) {
+    if (!gridManagementService.isGridActive(gridManagement, service, gridViewer)) {
       showAlert("MySheba", "This feature is currently unavailable.");
       return;
     }
@@ -2428,7 +2436,7 @@ export function AppProvider({ children }) {
     setCurrentStep(0);
     setServiceData({});
     setScreen("service");
-  }, [gridManagement, showAlert]);
+  }, [gridManagement, gridViewer, showAlert]);
 
   // Every "point deduct" webview (FOMEMA/Visa, MY Digital/Passport, Bus
   // redBus/Bus Online Ticket/Easybook, MY e-SIM) is gated right here, at the door, before
@@ -2466,7 +2474,7 @@ export function AppProvider({ children }) {
   const [webViewPaymentCharged, setWebViewPaymentCharged] = useState(false);
   const openWebView = useCallback(
     async (key) => {
-      if (!gridManagementService.isGridActive(gridManagement, key)) {
+      if (!gridManagementService.isGridActive(gridManagement, key, gridViewer)) {
         showAlert('MySheba', 'This feature is currently unavailable.');
         return;
       }
@@ -2534,7 +2542,7 @@ export function AppProvider({ children }) {
         ],
       );
     },
-    [authUser, webViewBusy, profile, pointCosts, gridManagement],
+    [authUser, webViewBusy, profile, pointCosts, gridManagement, gridViewer],
   );
 
   // Shows the Bus screen's 3-option grid (redBus / Bus Online Ticket /  // Easybook) instead of opening a WebView directly - each card then
@@ -2799,6 +2807,9 @@ export function AppProvider({ children }) {
     accessWindowHours,
     featureAccess,
     gridManagement,
+    // Consumers resolve tiles against this rather than building their own
+    // viewer, so a tile cannot be drawn by one rule and gated by another.
+    gridViewer,
     supportContact,
 
     paymentSettings,

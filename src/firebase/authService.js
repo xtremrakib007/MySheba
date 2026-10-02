@@ -358,9 +358,15 @@ export function subscribeAuth(callback) {
   return onAuthStateChanged(auth, callback);
 }
 
+// uid is carried on the profile, the same way login() and the device-verify
+// paths return it. A users document does not store its own id, so a profile
+// built from snap.data() alone has no uid - and the live listener below then
+// replaced the one from login with a profile that had none. Anything resolving
+// a per-user setting from profile.uid (per-user feature access, a byUser grid
+// override) silently matched nothing from the first snapshot onwards.
 export async function fetchProfile(uid) {
   const snap = await getDoc(doc(db, 'users', uid));
-  return snap.exists() ? snap.data() : null;
+  return snap.exists() ? { uid, ...snap.data() } : null;
 }
 
 // The second callback argument says where the snapshot came from. A missing
@@ -371,7 +377,7 @@ export async function fetchProfile(uid) {
 export function subscribeProfile(uid, callback, onError) {
   return onSnapshot(
     doc(db, 'users', uid),
-    (snap) => callback(snap.exists() ? snap.data() : null, { fromCache: !!snap.metadata?.fromCache }),
+    (snap) => callback(snap.exists() ? { uid, ...snap.data() } : null, { fromCache: !!snap.metadata?.fromCache }),
     onError,
   );
 }

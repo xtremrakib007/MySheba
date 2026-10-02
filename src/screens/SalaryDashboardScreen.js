@@ -49,7 +49,7 @@ export default function SalaryDashboardScreen() {
   // gridManagement gates the Salary Settings button below and was not
   // destructured, so opening the salary dashboard threw "Property
   // 'gridManagement' doesn't exist" - the same omission as AdminHomeScreen.
-  const { goBackOrHome, authUser, setScreen, openCreatePayslip, openPayslipHistory, gridManagement } = useApp();
+  const { goBackOrHome, authUser, setScreen, openCreatePayslip, openPayslipHistory, gridManagement, gridViewer } = useApp();
 
   const [settings, setSettings] = useState(undefined); // undefined = still loading, null = none saved yet
   const [workLogEntries, setWorkLogEntries] = useState([]);
@@ -137,7 +137,7 @@ export default function SalaryDashboardScreen() {
           <Text style={styles.setupSubtitle}>
             Add your basic salary and working hours so MySheba can estimate your monthly pay and overtime.
           </Text>
-          <PrimaryButton label="Get Started" onPress={() => gridManagementService.isGridActive(gridManagement, 'salarySettings') && setScreen('salarySettings')} style={styles.setupBtn} />
+          <PrimaryButton label="Get Started" onPress={() => gridManagementService.isGridActive(gridManagement, 'salarySettings', gridViewer) && setScreen('salarySettings')} style={styles.setupBtn} />
         </View>
       </View>
     );

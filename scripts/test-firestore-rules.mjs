@@ -91,6 +91,18 @@ await check('admin writes pricing', 'allow', () => setDoc(doc(as('admin1'), 'set
 await check('customer CANNOT write pricing', 'deny', () => setDoc(doc(as('customer1'), 'settings/pricing'), { notepadCost: 3 }, { merge: true }));
 await check('admin CANNOT write paymentMethods', 'deny', () => setDoc(doc(as('admin1'), 'settings/paymentMethods'), { jompayBillerId: '2' }, { merge: true }));
 await check('superadmin writes paymentMethods', 'allow', () => setDoc(doc(as('super1'), 'settings/paymentMethods'), { jompayBillerId: '3' }, { merge: true }));
+// settings/gridManagement: the scoped override maps are new keys on a doc whose
+// rule is an exact allowlist, so a rule that compiles can still refuse every
+// write the new screen makes.
+await check('superadmin turns a tile off for everyone', 'allow', () => setDoc(doc(as('super1'), 'settings/gridManagement'), { fomema: false, updatedAt: serverTimestamp() }, { merge: true }));
+await check('superadmin turns it off for one country', 'allow', () => setDoc(doc(as('super1'), 'settings/gridManagement'), { byCountry: { BD: { fomema: false } }, updatedAt: serverTimestamp() }, { merge: true }));
+await check('superadmin turns it off for one role', 'allow', () => setDoc(doc(as('super1'), 'settings/gridManagement'), { byRole: { dealer: { rates: false } }, updatedAt: serverTimestamp() }, { merge: true }));
+await check('superadmin turns it off for one person', 'allow', () => setDoc(doc(as('super1'), 'settings/gridManagement'), { byUser: { customer1: { recharge: false } }, updatedAt: serverTimestamp() }, { merge: true }));
+await check('admin CANNOT set an override', 'deny', () => setDoc(doc(as('admin1'), 'settings/gridManagement'), { byUser: { customer1: { recharge: false } }, updatedAt: serverTimestamp() }, { merge: true }));
+await check('a customer reads the grid, overrides and all', 'allow', () => getDoc(doc(as('customer1'), 'settings/gridManagement')));
+await check('a customer CANNOT un-hide themselves', 'deny', () => setDoc(doc(as('customer1'), 'settings/gridManagement'), { byUser: { customer1: { recharge: true } } }, { merge: true }));
+await check('not even a superadmin may invent a scope', 'deny', () => setDoc(doc(as('super1'), 'settings/gridManagement'), { byDevice: { abc: { recharge: false } } }, { merge: true }));
+
 await check('admin updates a remittance rate (new key + legacy alias)', 'allow', () => updateDoc(doc(as('admin1'), 'rates/current'), { remittanceBD_ACC: 28, BD_ACC: 28, updatedAt: new Date() }));
 await check('admin CANNOT change a Recharge rate', 'deny', () => updateDoc(doc(as('admin1'), 'rates/current'), { rechargeBD: 26, updatedAt: new Date() }));
 await check('superadmin changes a Recharge rate', 'allow', () => updateDoc(doc(as('super1'), 'rates/current'), { rechargeBD: 26, updatedAt: new Date() }));

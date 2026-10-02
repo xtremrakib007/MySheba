@@ -119,9 +119,9 @@ export function Tile({ s, onPress, disabled }) {
 }
 
 export function useServiceAction() {
-  const { startService, openWebView, openBusPicker, openSalary, openMyDocuments, setScreen, gridManagement, setAdminTab, setAdminViewingSection } = useApp();
+  const { startService, openWebView, openBusPicker, openSalary, openMyDocuments, setScreen, gridManagement, setAdminTab, setAdminViewingSection, gridViewer } = useApp();
   return (s) => {
-    if (!s || !gridManagementService.isGridActive(gridManagement, s.key)) return;
+    if (!s || !gridManagementService.isGridActive(gridManagement, s.key, gridViewer)) return;
     if (s.kind === 'webview') return openWebView(s.key);
     if (s.kind === 'buspicker') return openBusPicker();
     if (s.kind === 'salary') return openSalary();
@@ -178,7 +178,7 @@ export const PRIMARY_SERVICES = CUSTOMER_SERVICES;
 // overflow section from this list, so dropping `home` moves a tile there
 // rather than deleting it from the app.
 export default function ServiceGrid({ homeOnly }) {
-  const { colors } = useTheme(); const { webViewBusy, profile, gridManagement, can } = useApp();
+  const { colors } = useTheme(); const { webViewBusy, profile, gridManagement, gridViewer, can } = useApp();
   const handlePress = useServiceAction(); const role = profile?.role || 'customer';
   const isStaff = ['dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin'].includes(role);
   const roleSpecificServices = role === 'support' || role === 'finance'
@@ -188,7 +188,7 @@ export default function ServiceGrid({ homeOnly }) {
       : (STAFF_SERVICES[role] || STAFF_SERVICES.admin);
   const allServices = !isStaff ? CUSTOMER_SERVICES : [...roleSpecificServices, ...SHARED_SERVICES];
   const gridKeyFor = (service) => ({ buspicker: 'bus', webview: service.key, adminFeatures: 'adminFeatures', dealerFeatures: 'dealerFeatures', resellerFeatures: 'resellerFeatures', adminTopup: 'topup' }[service.kind] || service.key);
-  const active = allServices.filter((service) => gridManagementService.isGridActive(gridManagement, gridKeyFor(service)));
+  const active = allServices.filter((service) => gridManagementService.isGridActive(gridManagement, gridKeyFor(service), gridViewer));
   const moreTile = active.find((service) => service.kind === 'moreFeaturesLink');
   // homeOnly keeps the tiles flagged for the home screen, in declaration
   // order, and always ends on More Services so nothing dropped is stranded.

@@ -118,7 +118,7 @@ const SCREEN_FOR = { apiManagement: 'apiProviderManagement' };
 export default function AdminFeaturesScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { profile, goBackOrHome, setScreen, openSidebar, dealerTxs, inquiries, topups, setAdminTab, setAdminViewingSection, rates, gridManagement, can } = useApp();
+  const { profile, goBackOrHome, setScreen, openSidebar, dealerTxs, inquiries, topups, setAdminTab, setAdminViewingSection, rates, gridManagement, gridViewer, can } = useApp();
   const [section, setSection] = useState(null);
   const [rateView, setRateView] = useState(false);
   const [editRateKey, setEditRateKey] = useState(null);
@@ -127,7 +127,7 @@ export default function AdminFeaturesScreen() {
   const allow = (items) => items.filter((item) => {
     const gridKey = item.key === 'all' ? 'history' : item.key;
     if (gridKey === 'gridManagement') return isSuperadmin;
-    if (!gridManagementService.isGridActive(gridManagement, gridKey)) return false;
+    if (!gridManagementService.isGridActive(gridManagement, gridKey, gridViewer)) return false;
     if (item.key === 'featureAccess') return isSuperadmin;
     const need = CAPABILITY_FOR[item.key];
     return need ? need.some((cap) => can(cap)) : isSuperadmin;
@@ -214,7 +214,7 @@ export default function AdminFeaturesScreen() {
   // reach them, and openHomeItem routes the tiles that live in one.
   const homeItems = ADMIN_HOME.filter((item) => {
     if (item.section === 'system' && !isSuperadmin) return false;
-    if (!gridManagementService.isGridActive(gridManagement, item.key)) return false;
+    if (!gridManagementService.isGridActive(gridManagement, item.key, gridViewer)) return false;
     const need = CAPABILITY_FOR[item.key];
     // A service tile is not a management capability - every role may use it.
     if (!need) return !item.section || isSuperadmin || item.service || item.screen;

@@ -24,18 +24,19 @@ export default function ResellerFeaturesScreen() {
     setResellerTab, setResellerViewingSection,
     featureAccess,
     gridManagement,
+    gridViewer,
   } = useApp();
 
   // Reseller gets none of these tools by default (unchanged behavior) -
   // but a superadmin can grant a reseller access to any of them from
   // Admin Features > Feature Access, same shared list as
   // AdminFeaturesScreen/DealerFeaturesScreen (see featureAccessService.js).
-  const tools = FEATURE_DEFS.filter((t) => profile && gridManagementService.isGridActive(gridManagement, t.key) && canAccessFeature(featureAccess, t.key, profile.role, profile.uid));
+  const tools = FEATURE_DEFS.filter((t) => profile && gridManagementService.isGridActive(gridManagement, t.key, gridViewer) && canAccessFeature(featureAccess, t.key, profile.role, profile.uid));
 
   const dashboardBadges = {
     pending: resellerTxs.filter((t) => !t.dealerId).length || undefined,
   };
-  const dashboardTools = DASHBOARD_TOOL_DEFS.filter((t) => gridManagementService.isGridActive(gridManagement, t.key === 'processing' ? 'history' : t.key)).map((t) => ({ ...t, badge: dashboardBadges[t.key] }));
+  const dashboardTools = DASHBOARD_TOOL_DEFS.filter((t) => gridManagementService.isGridActive(gridManagement, t.key === 'processing' ? 'history' : t.key, gridViewer)).map((t) => ({ ...t, badge: dashboardBadges[t.key] }));
 
   const openDashboardTile = (key) => {
     setResellerTab(key);

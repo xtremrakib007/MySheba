@@ -272,6 +272,7 @@ export default function AdminHomeScreen() {
     // superadmin dashboard down on render - the same regression as
     // viewingSection, from the same deleted line.
     gridManagement,
+    gridViewer,
     can,
   } = useApp();
   // Verifying a top-up is finance's step; releasing the money is an admin's.
@@ -489,7 +490,7 @@ export default function AdminHomeScreen() {
     inquiries: inquiries.filter((i) => (i.status || 'new') === 'new').length || undefined,
     topups: topups.filter((t) => t.status === 'pending').length || undefined,
   };
-  const features = FEATURES.filter((f) => gridManagementService.isGridActive(gridManagement, f.key === 'all' ? 'history' : f.key)).map((f) => ({ ...f, badge: featureBadges[f.key] }));
+  const features = FEATURES.filter((f) => gridManagementService.isGridActive(gridManagement, f.key === 'all' ? 'history' : f.key, gridViewer)).map((f) => ({ ...f, badge: featureBadges[f.key] }));
   // Section header (icon + name) for whichever Dashboard tile the user
   // opened from AdminFeaturesScreen - the grid itself now lives there.
   const activeFeature = features.find((f) => f.key === adminTab);

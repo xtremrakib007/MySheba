@@ -49,8 +49,12 @@ function compare(label, docPath, expected, always = []) {
 // settings/gridManagement <- GRID_DEFS
 const grid = read('src/firebase/gridManagementService.js');
 const gridBody = grid.slice(grid.indexOf('export const GRID_DEFS'), grid.indexOf('].map('));
+// The scoped override maps are not tiles, so they come from GRID_SCOPES
+// rather than GRID_DEFS - read from the service so the two cannot drift.
+const gridScopes = [...(grid.match(/export const GRID_SCOPES = \[([^\]]*)\]/)?.[1] || '').matchAll(/'([a-zA-Z]+)'/g)].map((m) => m[1]);
+if (!gridScopes.length) problems.push('gridManagementService: GRID_SCOPES not found, so the rule allowlist cannot be checked against it');
 compare('GRID_DEFS', 'settings/gridManagement',
-  [...gridBody.matchAll(/\['([a-zA-Z]+)','/g)].map((m) => m[1]), ['updatedAt']);
+  [...gridBody.matchAll(/\['([a-zA-Z]+)','/g)].map((m) => m[1]), [...gridScopes, 'updatedAt']);
 
 // settings/featureAccess <- FEATURE_DEFS, plus the per-user override bag
 const fa = read('src/firebase/featureAccessService.js');
