@@ -98,7 +98,7 @@ export default {
     resend: 'Tidak dapat kod? Hantar semula',
     switchToEmail: 'Hantar kod melalui e-mel sebaliknya',
     switchToSms: 'Hantar kod melalui SMS sebaliknya',
-    otpHintSms: 'Masukkan kod 6-digit yang kami hantar ke +60{phone}.',
+    otpHintSms: 'Masukkan kod 6-digit yang kami hantar ke {phone}.',
     otpHintEmail: 'Masukkan kod 6-digit yang kami hantar ke {email}.',
     errNoName: 'Sila masukkan nama penuh anda.',
     errBadPhone: 'Sila masukkan nombor telefon yang sah.',

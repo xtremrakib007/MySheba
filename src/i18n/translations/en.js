@@ -110,7 +110,7 @@ export default {
     resend: "Didn't get a code? Resend",
     switchToEmail: 'Send the code by email instead',
     switchToSms: 'Send the code by SMS instead',
-    otpHintSms: 'Enter the 6-digit code we texted to +60{phone}.',
+    otpHintSms: 'Enter the 6-digit code we texted to {phone}.',
     otpHintEmail: 'Enter the 6-digit code we sent to {email}.',
     emailLinkHint: "We sent a verification link to {email}. Tap it on this device to continue - this screen will move on automatically once you do.",
     errNoName: 'Please enter your full name.',

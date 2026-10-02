@@ -56,7 +56,8 @@
     "test:adminlogin": "node scripts/test-admin-login.js",
     "test:successtopup": "node scripts/test-success-topup.js",
     "test:catalog": "node scripts/test-provider-catalog.js",
-    "test:appcheck": "node scripts/test-app-check.js"
+    "test:appcheck": "node scripts/test-app-check.js",
+    "audit:dialcodes": "node scripts/audit-dial-codes.js"
   },
   "dependencies": {
     "expo": "~53.0.0",
