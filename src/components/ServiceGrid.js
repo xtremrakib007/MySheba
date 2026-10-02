@@ -113,7 +113,7 @@ export function Tile({ s, onPress, disabled }) {
       ? <View style={styles.logoWrap}><BusOperatorLogo operatorKey={artKey} size={32} /></View>
       : hasServiceArt(artKey)
         ? <View style={styles.logoWrap}><ServiceArt name={artKey} size={32} color={colors.primary} /></View>
-        : <Text style={styles.emoji} numberOfLines={1}>{serviceEmoji(artKey)}</Text>}
+        : <Text style={styles.emoji} numberOfLines={1}>{asSafeText(s?.emoji, '') || serviceEmoji(artKey)}</Text>}
     <Text style={[styles.name, { color: colors.text || '#222' }]} numberOfLines={2}>{label}</Text>
   </TouchableOpacity>;
 }
@@ -178,7 +178,7 @@ export const PRIMARY_SERVICES = CUSTOMER_SERVICES;
 // overflow section from this list, so dropping `home` moves a tile there
 // rather than deleting it from the app.
 export default function ServiceGrid({ homeOnly }) {
-  const { colors } = useTheme(); const { webViewBusy, profile, gridManagement, gridViewer, can } = useApp();
+  const { colors } = useTheme(); const { webViewBusy, profile, gridManagement, gridViewer, can, webviewPages } = useApp();
   const handlePress = useServiceAction(); const role = profile?.role || 'customer';
   const isStaff = ['dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin'].includes(role);
   const roleSpecificServices = role === 'support' || role === 'finance'
@@ -186,7 +186,22 @@ export default function ServiceGrid({ homeOnly }) {
     : role === 'admin'
       ? STAFF_SERVICES.admin.filter((t) => !ADMIN_TILE_NEEDS[t.key] || ADMIN_TILE_NEEDS[t.key].some((cap) => can(cap)))
       : (STAFF_SERVICES[role] || STAFF_SERVICES.admin);
-  const allServices = !isStaff ? CUSTOMER_SERVICES : [...roleSpecificServices, ...SHARED_SERVICES];
+  // A superadmin can rename a built-in WebView tile, give it another icon, or
+  // add a new one (see firebase/webviewConfigService). The declared list stays
+  // the source of order and behaviour; only the label and icon are overlaid,
+  // and anything added is appended.
+  const withWebviewConfig = (list) => {
+    const pages = webviewPages || {};
+    const overlaid = list.map((item) => {
+      const page = item.kind === 'webview' ? pages[item.key] : null;
+      return page ? { ...item, name: page.name || item.name, emoji: page.icon || '' } : item;
+    }).filter((item) => item.kind !== 'webview' || !pages[item.key] || pages[item.key].active !== false);
+    const extra = Object.values(pages)
+      .filter((p) => p.custom && p.active !== false)
+      .map((p) => ({ key: p.key, icon: p.icon || 'moreFeaturesTile', emoji: p.icon || '', name: p.name, kind: 'webview', home: false }));
+    return [...overlaid, ...extra];
+  };
+  const allServices = withWebviewConfig(!isStaff ? CUSTOMER_SERVICES : [...roleSpecificServices, ...SHARED_SERVICES]);
   const gridKeyFor = (service) => ({ buspicker: 'bus', webview: service.key, adminFeatures: 'adminFeatures', dealerFeatures: 'dealerFeatures', resellerFeatures: 'resellerFeatures', adminTopup: 'topup' }[service.kind] || service.key);
   const active = allServices.filter((service) => gridManagementService.isGridActive(gridManagement, gridKeyFor(service), gridViewer));
   const moreTile = active.find((service) => service.kind === 'moreFeaturesLink');

@@ -88,6 +88,7 @@ const CAPABILITY_FOR = {
 const SYSTEM = [
   { key: 'featureAccess', icon: '🔐', bg: '#EDE7F6', name: 'Feature Access' },
   { key: 'gridManagement', icon: '🧩', bg: '#E0F7FA', name: 'Grid Management' },
+  { key: 'webviewManagement', icon: '🌐', bg: '#E8F5E9', name: 'WebView Pages' },
   { key: 'banners', icon: '🖼️', bg: '#FFF0F0', name: 'Banners' },
   { key: 'announcements', icon: '📣', bg: '#E0F7FA', name: 'Announcements' },
   { key: 'apiManagement', icon: '🔌', bg: '#E0F7FA', name: 'API Management' },
@@ -118,7 +119,7 @@ const RECHARGE_RATE_FIELDS = [
 // a tab that does not exist. gridManagement and apiManagement were already
 // special-cased by hand in openItem; folding them in gives one path, so the
 // navigation audit reads a single list instead of chasing special cases.
-const SCREEN_FEATURES = ['adminAnalytics', 'transferPoints', 'userManagement', 'verificationManagement', 'featureAccess', 'gridManagement', 'apiManagement'];
+const SCREEN_FEATURES = ['adminAnalytics', 'transferPoints', 'userManagement', 'verificationManagement', 'featureAccess', 'gridManagement', 'webviewManagement', 'apiManagement'];
 // Where the tile key and the screen name differ.
 const SCREEN_FOR = { apiManagement: 'apiProviderManagement' };
 
@@ -156,8 +157,10 @@ export default function AdminFeaturesScreen() {
   const allow = (items) => items.filter((item) => {
     const gridKey = item.key === 'all' ? 'history' : item.key;
     if (gridKey === 'gridManagement') return isSuperadmin;
+    if (gridKey === 'webviewManagement') return isSuperadmin;
     if (!gridManagementService.isGridActive(gridManagement, gridKey, gridViewer)) return false;
     if (item.key === 'featureAccess') return isSuperadmin;
+    if (item.key === 'webviewManagement') return isSuperadmin;
     const need = CAPABILITY_FOR[item.key];
     return need ? need.some((cap) => can(cap)) : isSuperadmin;
   });

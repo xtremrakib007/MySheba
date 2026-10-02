@@ -40,6 +40,7 @@ import * as transactionService from "../firebase/transactionService";
 import * as ratesService from "../firebase/ratesService";
 import * as settingsService from "../firebase/settingsService";
 import * as featureAccessService from "../firebase/featureAccessService";
+import * as webviewConfigService from '../firebase/webviewConfigService';
 import * as gridManagementService from "../firebase/gridManagementService";
 import * as accessControlService from "../firebase/accessControlService";
 import * as adControlsService from "../firebase/adControlsService";
@@ -799,6 +800,19 @@ export function AppProvider({ children }) {
     featureAccessService.DEFAULT_FEATURE_ACCESS,
   );
   const [gridManagement, setGridManagement] = useState(gridManagementService.DEFAULT_GRID_MANAGEMENT);
+
+  // WebView pages: the built-ins from src/data/countries.js with whatever a
+  // superadmin has changed on top (settings/webviews). Starts from the
+  // built-ins so the grid is right before the first snapshot arrives, and
+  // stays right if the document never exists.
+  const [webviewPages, setWebviewPages] = useState(() => webviewConfigService.mergePages(null));
+  useEffect(() => {
+    if (!authUser || !profile) return undefined;
+    return webviewConfigService.subscribeWebviewConfig(
+      setWebviewPages,
+      logListenerError('webviewPages'),
+    );
+  }, [authUser, profile]);
 
   // Central navigation boundary. UI hiding is not a security boundary:
   // every internal setScreen() call (notifications, deep links, callbacks,
@@ -2810,6 +2824,7 @@ export function AppProvider({ children }) {
     // Consumers resolve tiles against this rather than building their own
     // viewer, so a tile cannot be drawn by one rule and gated by another.
     gridViewer,
+    webviewPages,
     supportContact,
 
     paymentSettings,

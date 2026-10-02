@@ -103,6 +103,14 @@ await check('a customer reads the grid, overrides and all', 'allow', () => getDo
 await check('a customer CANNOT un-hide themselves', 'deny', () => setDoc(doc(as('customer1'), 'settings/gridManagement'), { byUser: { customer1: { recharge: true } } }, { merge: true }));
 await check('not even a superadmin may invent a scope', 'deny', () => setDoc(doc(as('super1'), 'settings/gridManagement'), { byDevice: { abc: { recharge: false } } }, { merge: true }));
 
+// settings/webviews: the customer grid is built from it, so everyone signed in
+// has to read it, and a wrong address here opens inside the app.
+await check('superadmin adds a WebView page', 'allow', () => setDoc(doc(as('super1'), 'settings/webviews'), { pages: { wv_abcd1234: { name: 'EPF', url: 'https://epf.gov.my/x', title: 'EPF', icon: '🏦', active: true } }, updatedAt: serverTimestamp() }, { merge: true }));
+await check('a customer reads the WebView pages', 'allow', () => getDoc(doc(as('customer1'), 'settings/webviews')));
+await check('a customer CANNOT change one', 'deny', () => setDoc(doc(as('customer1'), 'settings/webviews'), { pages: { fomema: { url: 'https://evil.example.com' } } }, { merge: true }));
+await check('an admin CANNOT change one either', 'deny', () => setDoc(doc(as('admin1'), 'settings/webviews'), { pages: { fomema: { url: 'https://evil.example.com' } } }, { merge: true }));
+await check('not even a superadmin may add a stray key', 'deny', () => setDoc(doc(as('super1'), 'settings/webviews'), { pages: {}, sneaky: true }, { merge: true }));
+
 await check('admin updates a remittance rate (new key + legacy alias)', 'allow', () => updateDoc(doc(as('admin1'), 'rates/current'), { remittanceBD_ACC: 28, BD_ACC: 28, updatedAt: new Date() }));
 await check('admin CANNOT change a Recharge rate', 'deny', () => updateDoc(doc(as('admin1'), 'rates/current'), { rechargeBD: 26, updatedAt: new Date() }));
 await check('superadmin changes a Recharge rate', 'allow', () => updateDoc(doc(as('super1'), 'rates/current'), { rechargeBD: 26, updatedAt: new Date() }));

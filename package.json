@@ -62,7 +62,8 @@
     "test:biometric": "node scripts/test-biometric-coverage.js",
     "test:sidebarforgot": "node scripts/test-sidebar-forgot.js",
     "test:companions": "node scripts/test-companion-services.js",
-    "test:topupproguard": "node scripts/test-topup-proguard.js"
+    "test:topupproguard": "node scripts/test-topup-proguard.js",
+    "test:webviews": "node scripts/test-webview-config.js"
   },
   "dependencies": {
     "expo": "~53.0.0",

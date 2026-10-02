@@ -20,8 +20,12 @@ export default function WebViewScreen() {
   const {
     webViewKey, goHome, goBackOrHome, profile, submitWebviewApplication, webViewSubmitBusy, confirmWebviewAccess, webViewBusy,
     confirmPaymentSuccess, webViewPaymentBusy, webViewPaymentCharged, pointCosts, setWebViewBackInterceptor,
+    webviewPages,
   } = useApp();
-  const page = webViewPages[webViewKey] || webViewPages.fomema;
+  // The live page a superadmin can edit, falling back to the built-in literal
+  // so this screen still opens before the first snapshot and on a project with
+  // no settings/webviews document.
+  const page = (webviewPages && webviewPages[webViewKey]) || webViewPages[webViewKey] || webViewPages.fomema;
   const webviewRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
