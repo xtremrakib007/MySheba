@@ -127,7 +127,8 @@
             "targetSdkVersion": 36,
             "buildToolsVersion": "36.0.0",
             "enableProguardInReleaseBuilds": true,
-            "enableShrinkResourcesInReleaseBuilds": true
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "extraProguardRules": "# --- KYC face capture: keep what MediaPipe reads by reflection ---\n# @rdnf-magiba/expo-face-recognition runs MediaPipe Tasks Vision on LiteRT.\n# MediaPipe configures its graph with protobuf messages whose generated fields\n# are read reflectively, so R8 renaming them killed the detector at runtime:\n#   Field platform_ for Q8.u not found. Known fields are [private int Q8.u.e, ...]\n# Obfuscated class names in a field-not-found error are the signature of a\n# stripped protobuf field, and the screen showed it in place of the camera.\n-keepclassmembers class * extends com.google.protobuf.GeneratedMessageLite { <fields>; }\n-keep class com.google.protobuf.** { *; }\n-dontwarn com.google.protobuf.**\n-keep class com.google.mediapipe.** { *; }\n-dontwarn com.google.mediapipe.**\n# LiteRT and TensorFlow Lite resolve delegates and ops by name at load time.\n-keep class com.google.ai.edge.litert.** { *; }\n-keep class org.tensorflow.lite.** { *; }\n-dontwarn org.tensorflow.lite.**\n"
           }
         }
       ],

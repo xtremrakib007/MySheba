@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Image, ActivityIndicator, StyleSheet } from 'react-native';
 import { showAlert } from '../utils/appAlert';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -37,6 +37,8 @@ export default function TopUpScreen() {
   const [refNo, setRefNo] = useState('');
   const [receiptUri, setReceiptUri] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  // One idempotency key per attempt, kept across retries - see onSubmit.
+  const requestIdRef = useRef(null);
 
   const walletCurrency = profile?.walletCurrency || profile?.walletBalanceCurrency || 'MYR';
   const walletBalance = profile && typeof profile.walletBalance === 'number' ? profile.walletBalance : 0;
@@ -71,10 +73,21 @@ export default function TopUpScreen() {
     setSubmitting(true);
     try {
       const receiptUrl = await topupService.uploadReceipt(receiptUri, authUser.uid);
+      // createTopupRequest's second argument is the requestId, and this was
+      // handing it a {uid, phone, name, role} object left over from an older
+      // signature - so every submission was refused with "requestId is required
+      // and must be 16-128 safe characters". The server reads the submitter
+      // from request.auth and the user document, so none of that was needed.
+      //
+      // Held in a ref rather than generated per call: the server de-duplicates
+      // on this id, so a retry after a lost response must reuse it or one
+      // top-up becomes two.
+      if (!requestIdRef.current) requestIdRef.current = topupService.newTopupRequestId();
       await topupService.createTopupRequest(
         { amount: amountNum, method, bankName, refNo, receiptUrl },
-        { uid: authUser.uid, phone: profile ? profile.phone : '', name: profile ? profile.name : '', role: profile ? profile.role : 'customer' }
+        requestIdRef.current,
       );
+      requestIdRef.current = null;
       showAlert(
         'Request Submitted',
         'Your top-up request has been sent to Admin for review. The approved amount will be added to your MYR wallet balance. You can check the status under History > Top-Ups.',

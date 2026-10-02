@@ -61,7 +61,8 @@
     "test:adminfeatures": "node scripts/test-admin-features-nav.js",
     "test:biometric": "node scripts/test-biometric-coverage.js",
     "test:sidebarforgot": "node scripts/test-sidebar-forgot.js",
-    "test:companions": "node scripts/test-companion-services.js"
+    "test:companions": "node scripts/test-companion-services.js",
+    "test:topupproguard": "node scripts/test-topup-proguard.js"
   },
   "dependencies": {
     "expo": "~53.0.0",

@@ -13,6 +13,17 @@ function createRequestId(prefix = 'pt') {
   return `${prefix}_${Crypto.randomUUID()}`;
 }
 
+/**
+ * An idempotency key for one top-up attempt.
+ *
+ * Exported so a screen can hold the SAME id across retries. submitTopupRequest
+ * de-duplicates on it (topupSubmissionOperations/{uid}_{requestId}), so a fresh
+ * id on each tap would turn one lost response into two top-up requests.
+ */
+export function newTopupRequestId() {
+  return createRequestId('topup');
+}
+
 export async function uploadReceipt(localUri, uid) {
   const response = await fetch(localUri);
   const blob = await response.blob();
