@@ -97,12 +97,16 @@ export default function ServiceScreen() {
   const isBangladeshApiService =
     ['recharge', 'internet', 'offerpacks', 'entertainment', 'billpayment'].includes(currentService) &&
     String(serviceData?.country || '').trim().toUpperCase() === 'BD';
+  // Only Bill Payment pays a bill. Internet, Offer Packs and Entertainment are
+  // all one package purchase through /api/recharge, and the chain here named
+  // only `internet`, so Offer Packs and Entertainment both finished on "Pay
+  // Bill" - telling someone buying a data pack they are paying a bill.
   const finalButtonLabel = isBangladeshApiService
     ? (currentService === 'recharge'
       ? 'Recharge Now'
-      : currentService === 'internet'
-        ? 'Buy Package'
-        : 'Pay Bill')
+      : currentService === 'billpayment'
+        ? 'Pay Bill'
+        : 'Buy Package')
     : 'Submit';
 
   // Same step-at-a-time behaviour as the "← Back" button in the nav bar

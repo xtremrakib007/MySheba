@@ -360,6 +360,25 @@ const SUCCESS_TOPUP_PACKAGE_SERVICES = ['Internet', 'Offer Packs', 'Entertainmen
 // as separately editable rows in Superadmin.
 const SUCCESS_TOPUP_COMPANION_SERVICES = ['Internet', 'Offer Packs', 'Entertainment', 'Bill Payment'];
 
+/**
+ * "Not configured" was a dead end for exactly these four services.
+ *
+ * They are provisioned as companions when the Recharge provider is saved
+ * (see the companion block in saveApiProvider), and listApiProviders filters
+ * them out so nobody edits them by hand. So the message sent a superadmin to
+ * look for an Offer Packs row in API Management that is deliberately not
+ * there, with no way to act on what it told them.
+ */
+function unconfiguredError(service) {
+  if (SUCCESS_TOPUP_COMPANION_SERVICES.includes(service)) {
+    return new HttpsError(
+      'failed-precondition',
+      `Success TopUp ${service} is set up from the Recharge provider, not on its own. Open API Management, save the Success TopUp Recharge provider, and ${service} is provisioned with it.`,
+    );
+  }
+  return new HttpsError('failed-precondition', `Success TopUp ${service} API is not configured.`);
+}
+
 function resolveSuccessTopUpOperator(value) {
   const raw = String(value || '').trim();
   if (!raw) return '';
@@ -660,7 +679,7 @@ exports.listSuccessTopUpDrives = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, 
     .where('active', '==', true)
     .limit(1)
     .get();
-  if (snap.empty) throw new HttpsError('failed-precondition', `Success TopUp ${service} API is not configured.`);
+  if (snap.empty) throw unconfiguredError(service);
   const provider = { id: snap.docs[0].id, ...(snap.docs[0].data() || {}) };
   Object.assign(provider, await providerSecretService.getCredentials(provider));
   if (!provider.apiKey || !provider.secretKey) throw new HttpsError('failed-precondition', 'Success TopUp credentials are not configured.');
@@ -698,7 +717,7 @@ exports.listSuccessTopUpCatalogForAdmin = onCall({ enforceAppCheck: false }, asy
     throw new HttpsError('invalid-argument', `Package pricing is available for ${SUCCESS_TOPUP_PACKAGE_SERVICES.join(', ')} only.`);
   }
   const provider = await catalog.readProvider(db, service);
-  if (!provider) throw new HttpsError('failed-precondition', `Success TopUp ${service} API is not configured.`);
+  if (!provider) throw unconfiguredError(service);
   if (!provider.apiKey || !provider.secretKey) throw new HttpsError('failed-precondition', 'Success TopUp credentials are not configured.');
   const operator = String(request.data?.operator || 'ALL').trim().toUpperCase();
   const operatorName = cleanString(request.data?.operatorName, 100);
