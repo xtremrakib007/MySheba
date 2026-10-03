@@ -130,6 +130,13 @@ exports.walletTransfer = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (r
       const existingTransferSnap = await tx.get(transferRef);
       if (existingTransferSnap.exists) { const existing = existingTransferSnap.data() || {}; if (existing.fromUid !== senderUid || existing.toUid !== recipientUid || Number(existing.amountMinor) !== amountCents || existing.requestId !== requestId) throw new HttpsError('already-exists', 'That request ID was already used for a different transfer.'); replayData = { amount: Number(existing.amount || 0), currency: existing.currency || senderCurrency, recipientAmount: Number(existing.recipientAmount || 0), recipientCurrency: existing.recipientCurrency || recipient.walletCurrency || 'MYR', baseAmountMyr: Number(existing.baseAmountMyr || 0), fxRate: Number(existing.senderFxRate || 0), recipientFxRate: Number(existing.recipientFxRate || 0) }; replay = true; return; }
       const pinSnap = await tx.get(pinRef);
+      // Every read in a Firestore transaction must happen before the first
+      // write, and the PIN attempt counter below is written unconditionally on
+      // the correct-PIN path. Reading the recipient after it threw, so every
+      // successful wallet transfer failed as INTERNAL [500] while a wrong PIN
+      // returned cleanly - the one path that never reached the read.
+      // Reading it here costs one extra document on a wrong PIN.
+      const recipientSnap = await tx.get(recipientRef);
       if (!pinSnap.exists) throw new HttpsError('failed-precondition', 'Set up your security PIN before making wallet transfers.');
       const pinData = pinSnap.data() || {};
       const pinCheck = verifySecurityPinData(pinData, securityPin);
@@ -146,7 +153,6 @@ exports.walletTransfer = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (r
         return { pinValid: false, locked: attempts >= SECURITY_PIN_MAX_ATTEMPTS };
       }
       tx.update(pinRef, { attempts: 0, lockedUntil: null, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-      const recipientSnap = await tx.get(recipientRef);
       if (!senderSnap.exists || !recipientSnap.exists) throw new HttpsError('not-found', 'Wallet account not found.');
       const senderData = senderSnap.data(), recipientData = recipientSnap.data();
       requireSessionMatch(request, senderData);

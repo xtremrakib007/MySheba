@@ -629,8 +629,13 @@ check('the auto-provisioned webhook matches the documented payload', () => {
   //   statuses Success, Cancel, Processing
   const src = read('functions/apiProviderService.js');
   if (!src) return 'apiProviderService.js is missing';
-  const block = src.slice(src.indexOf("const webhookRef = db.collection('api_webhooks')"));
-  if (!block) return 'the Success TopUp webhook is never provisioned';
+  // Anchored on the provisioning write rather than on how webhookRef happens
+  // to be declared: that declaration has already moved once, for the
+  // transaction's read-before-write ordering, and the write is the thing this
+  // check is actually about.
+  const at = src.indexOf('tx.set(webhookRef, {');
+  if (at === -1) return 'the Success TopUp webhook is never provisioned';
+  const block = src.slice(at);
   const want = {
     authHeader: "'x-webhook-token'",
     transactionIdPath: "'transactionId'",

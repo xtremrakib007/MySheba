@@ -1024,12 +1024,21 @@ exports.saveApiProvider = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (
       if (!stored.secretKeySecretName && currentDb.secretKeySecretName) stored.secretKeySecretName = currentDb.secretKeySecretName;
       if (!stored.passwordSecretName && currentDb.passwordSecretName) stored.passwordSecretName = currentDb.passwordSecretName;
     }
+    // Firestore requires every read in a transaction to happen before the first
+    // write. The Success TopUp branch below used to call tx.get after this
+    // tx.set, which throws a plain Error - and a plain Error out of a callable
+    // reaches the app as "INTERNAL [500]", naming nothing. So the branch's
+    // reads are hoisted here, above every write in this transaction.
+    const isSuccessTopUpSetup = data.name === 'Success TopUp' && data.service === 'Recharge';
+    const webhookRef = isSuccessTopUpSetup ? db.collection('api_webhooks').doc(ref.id) : null;
+    const settingsRef = isSuccessTopUpSetup ? db.doc(SETTINGS) : null;
+    const [webhookSnap, settingsSnap] = isSuccessTopUpSetup
+      ? await Promise.all([tx.get(webhookRef), tx.get(settingsRef)])
+      : [null, null];
+
     tx.set(ref, stored, { merge: false });
 
-    if (data.name === 'Success TopUp' && data.service === 'Recharge') {
-      const webhookRef = db.collection('api_webhooks').doc(ref.id);
-      const settingsRef = db.doc(SETTINGS);
-      const [webhookSnap, settingsSnap] = await Promise.all([tx.get(webhookRef), tx.get(settingsRef)]);
+    if (isSuccessTopUpSetup) {
       const oldHook = webhookSnap.exists ? (webhookSnap.data() || {}) : {};
       const oldSettings = settingsSnap.exists ? (settingsSnap.data() || {}) : {};
       webhookToken = oldHook.webhookToken || crypto.randomBytes(32).toString('hex');
