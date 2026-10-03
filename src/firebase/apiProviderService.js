@@ -31,7 +31,12 @@ export async function saveApiProvider(provider) { return (await saveFn(provider)
 export async function getSuccessTopUpBalance() { return (await balanceFn({})).data; }
 export async function deleteApiProvider(id) { return (await deleteFn({ id })).data; }
 export async function getServiceApiSettings() { return (await getModesFn({})).data; }
-export async function saveServiceApiSettings(modes) { return (await saveModesFn({ modes })).data; }
+/**
+ * Service defaults plus the per-country overrides. countryModes is what keeps
+ * Bangladesh on the API while every other country keeps going to a human, so
+ * it is sent on every save - omitting it would clear the matrix.
+ */
+export async function saveServiceApiSettings(modes, countryModes) { return (await saveModesFn({ modes, countryModes })).data; }
 
 export async function testApiProvider(id) { return (await testFn({ id })).data; }
 

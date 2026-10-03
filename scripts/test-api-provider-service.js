@@ -227,4 +227,57 @@ assert.throws(() => api.validate({ service: 'Recharge', name: 'Test', baseUrl: '
   console.log('  a whole-placeholder keeps its value type, so amount sends as a number');
 }
 
+{
+  // Execution routing. The bug this pins: saving Success TopUp switched
+  // Recharge to API service-wide, and Recharge - unlike Internet and Bill
+  // Payment - had no country guard, so a Malaysian recharge was dispatched to
+  // a Bangladesh-only provider and came back "outcome is uncertain [503]" on a
+  // wallet that had already been charged.
+  const resolve = api.resolveExecutionMode;
+  const bdOnly = [{ country: 'BD', active: true }];
+  const everywhere = [{ country: 'ALL', active: true }];
+  const bdOn = { countryModes: { BD: { Recharge: 'api' } } };
+
+  assert.strictEqual(resolve({ country: 'BD', service: 'Recharge', settings: bdOn, providers: bdOnly }), 'api',
+    'Bangladesh keeps running on the API');
+  assert.strictEqual(resolve({ country: 'MY', service: 'Recharge', settings: bdOn, providers: bdOnly }), 'legacy',
+    'Malaysia must become a manual dealer order, not an API dispatch');
+
+  // Intent cannot beat reality: API is impossible with nothing behind it.
+  assert.strictEqual(resolve({ country: 'MY', service: 'Recharge', settings: { countryModes: { MY: { Recharge: 'api' } } }, providers: bdOnly }), 'legacy',
+    'API for a country with no provider serving it must fall back to manual');
+  assert.strictEqual(resolve({ country: 'MY', service: 'Recharge', settings: { modes: { Recharge: 'api' } }, providers: [] }), 'legacy',
+    'no provider at all means manual');
+  assert.strictEqual(resolve({ country: 'MY', service: 'Recharge', settings: { countryModes: { MY: { Recharge: 'api' } } }, providers: everywhere }), 'api',
+    'a provider that serves everywhere does serve Malaysia');
+  assert.strictEqual(resolve({ country: 'MY', service: 'Recharge', settings: { countryModes: { MY: { Recharge: 'api' } } }, providers: [{ country: 'ALL', active: false }] }), 'legacy',
+    'an inactive provider does not count');
+
+  // The per-country row overrides the service-wide default in both directions.
+  assert.strictEqual(resolve({ country: 'MY', service: 'Recharge', settings: { modes: { Recharge: 'api' }, countryModes: { MY: { Recharge: 'legacy' } } }, providers: everywhere }), 'legacy',
+    'an explicit country opt-out beats the service default');
+  assert.strictEqual(resolve({ country: 'SG', service: 'Recharge', settings: { modes: { Recharge: 'api' } }, providers: everywhere }), 'api',
+    'a country with no row of its own inherits the service default');
+  assert.strictEqual(resolve({ country: '', service: 'Recharge', settings: {}, providers: everywhere }), 'legacy',
+    'an unknown country is manual, never API');
+
+  console.log('  execution routing is per country, and never API without a provider behind it');
+}
+
+{
+  // Saving Success TopUp must not switch a service on for every country. The
+  // service-wide default staying 'legacy' is the whole fix.
+  const fs = require('fs');
+  const path = require('path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'functions', 'apiProviderService.js'), 'utf8');
+  const save = src.slice(src.indexOf('const priorCountryModes'), src.indexOf('const priorCountryModes') + 900);
+  assert(save, 'the Success TopUp settings write must be findable');
+  assert(/BD: \{ \.\.\.\(priorCountryModes\.BD \|\| \{\}\), Recharge: 'api'/.test(save),
+    'saving Success TopUp must enable the API for Bangladesh');
+  assert(!/modes: \{ \.\.\.DEFAULT_MODES, \.\.\.\(oldSettings\.modes \|\| \{\}\), Recharge: 'api'/.test(src),
+    'saving Success TopUp must no longer switch services to API service-wide');
+
+  console.log('  configuring Success TopUp enables Bangladesh only');
+}
+
 console.log('apiProviderService tests: PASS');

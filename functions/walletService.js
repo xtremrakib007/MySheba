@@ -113,54 +113,30 @@ exports.transferPoints=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>{c
 const CHARGEABLE={recharge:'rechargePointCostPerUnit',internet:'internetPointCostPerUnit',offerpacks:'internetPointCostPerUnit',entertainment:'internetPointCostPerUnit',billpayment:'billPaymentPointCostPerUnit',mobilebanking:null,remittance:null};
 async function chargeProduct(request,service,payload,customer){const uid=requireAuth(request),db=admin.firestore(),rates=await getRates(db);payload=await resolvePackagePricing(db,service,payload);const calc=recompute(service,payload?.raw,rates),clientAmount=Number(payload?.amount),clientTotal=Number(payload?.total),charge=service==='mobilebanking'||service==='remittance'?calc.total:calc.amount;if(!Number.isFinite(calc.amount)||calc.amount<=0||!Number.isFinite(charge)||charge<=0)throw new HttpsError('invalid-argument','Amount must be greater than zero.');if(Number.isFinite(clientAmount)&&Math.abs(clientAmount-calc.amount)>.01)throw new HttpsError('failed-precondition','Rate changed - please review your order.');if(Number.isFinite(clientTotal)&&Math.abs(clientTotal-calc.total)>.01)throw new HttpsError('failed-precondition','Order total changed - please review your order.');const p=await getPricing(db),settings=await progressionService.getProgressionSettings(),uref=db.collection('users').doc(uid),requestId=payload?.requestId;if(typeof requestId!=='string'||!REQUEST_ID_RE.test(requestId))throw new HttpsError('invalid-argument','A valid requestId is required.');const txId=crypto.createHash('sha256').update(`${uid}|${service}|${requestId}`).digest('hex').slice(0,40);const txref=db.collection('transactions').doc(txId);const collectionPin=String(crypto.randomInt(0,10000)).padStart(4,'0');const serviceLabel = { recharge: 'Recharge', internet: 'Internet', offerpacks: 'Offer Packs', entertainment: 'Entertainment', billpayment: 'Bill Payment', mobilebanking: 'Mobile Banking', remittance: 'Remittance' }[service];
 const apiSettingsSnap = serviceLabel ? await db.collection('api_settings').doc('service_modes').get() : null;
-const configuredMode = apiSettingsSnap?.exists ? apiSettingsSnap.data()?.modes?.[serviceLabel] || 'legacy' : 'legacy';
-// Success TopUp is a fixed direct-recharge integration. If its provider is
-// present and active, do not silently fall back to the legacy dealer/reseller
-// order queue because a stale/missing service_modes document exists.
-let apiMode = configuredMode;
-if (serviceLabel === 'Recharge' && configuredMode !== 'api') {
-  const providerSnap = await db.collection('api_providers')
-    .where('service', '==', 'Recharge')
-    .where('active', '==', true)
-    .get();
-  const hasSuccessTopUp = providerSnap.docs.some((doc) => String(doc.data()?.name || '').trim().toLowerCase() === 'success topup');
-  if (hasSuccessTopUp) apiMode = 'api';
-}
-if (serviceLabel === 'Internet' && configuredMode !== 'api') {
-  const providerSnap = await db.collection('api_providers')
-    .where('service', '==', 'Internet')
-    .where('active', '==', true)
-    .get();
-  const hasSuccessTopUp = providerSnap.docs.some((doc) => String(doc.data()?.name || '').trim().toLowerCase() === 'success topup');
-  if (hasSuccessTopUp && String(payload?.raw?.country || '').toUpperCase() === 'BD') apiMode = 'api';
-}
-if (serviceLabel === 'Internet' && configuredMode === 'api' && String(payload?.raw?.country || '').toUpperCase() !== 'BD') {
-  const providerSnap = await db.collection('api_providers')
-    .where('service', '==', 'Internet')
-    .where('active', '==', true)
-    .get();
-  const topUpOnly = providerSnap.docs.length > 0 && providerSnap.docs.every((doc) => String(doc.data()?.name || '').trim().toLowerCase() === 'success topup');
-  if (topUpOnly) apiMode = 'legacy';
-}
-if (serviceLabel === 'Bill Payment' && configuredMode !== 'api') {
-  const providerSnap = await db.collection('api_providers')
-    .where('service', '==', 'Bill Payment')
-    .where('active', '==', true)
-    .get();
-  const hasSuccessTopUp = providerSnap.docs.some((doc) => String(doc.data()?.name || '').trim().toLowerCase() === 'success topup');
-  if (hasSuccessTopUp && String(payload?.raw?.country || '').toUpperCase() === 'BD') apiMode = 'api';
-}
-if (serviceLabel === 'Bill Payment' && configuredMode === 'api' && String(payload?.raw?.country || '').toUpperCase() !== 'BD') {
-  const providerSnap = await db.collection('api_providers')
-    .where('service', '==', 'Bill Payment')
-    .where('active', '==', true)
-    .get();
-  const topUpOnly = providerSnap.docs.length > 0 && providerSnap.docs.every((doc) => String(doc.data()?.name || '').trim().toLowerCase() === 'success topup');
-  if (topUpOnly) apiMode = 'legacy';
+const apiSettings = apiSettingsSnap?.exists ? (apiSettingsSnap.data() || {}) : {};
+const transactionCountry = String(payload?.raw?.country || '').trim().toUpperCase();
+
+// One rule, replacing six per-service country patches that had drifted apart:
+// Internet and Bill Payment each carried a `country !== 'BD'` downgrade to the
+// manual queue, and Recharge never got one. So once saving Success TopUp
+// flipped Recharge to API service-wide, a Malaysian recharge was dispatched to
+// a provider that does not serve Malaysia and came back uncertain.
+//
+// resolveExecutionMode decides from the superadmin's country matrix and then
+// refuses API for any country with no active provider behind it, which is a
+// property of the data rather than a list of countries to keep in step here.
+let apiMode = 'legacy';
+if (serviceLabel) {
+  const serviceProviders = await apiProviderService.providersForService(db, serviceLabel);
+  apiMode = apiProviderService.resolveExecutionMode({
+    country: transactionCountry,
+    service: serviceLabel,
+    settings: apiSettings,
+    providers: serviceProviders,
+  });
 }
 
 // Bangladesh recharge, internet/data and bill payment are API-only. Fail closed rather than creating a manual order.
-const transactionCountry = String(payload?.raw?.country || '').trim().toUpperCase();
 if (transactionCountry === 'BD' && ['Recharge', 'Internet', 'Bill Payment'].includes(serviceLabel) && apiMode !== 'api') {
   throw new HttpsError('failed-precondition', 'Bangladesh ' + serviceLabel + ' is API-only. Please configure an active Bangladesh API provider.');
 }

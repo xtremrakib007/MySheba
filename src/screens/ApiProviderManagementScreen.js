@@ -9,6 +9,10 @@ import ApiWebhookFormModal from '../components/ApiWebhookFormModal';
 import * as apiService from '../firebase/apiProviderService';
 import * as webhookService from '../firebase/apiWebhookService';
 
+// Mirrors ALLOWED_COUNTRIES in functions/apiProviderService.js, minus 'ALL'.
+// 'ALL' is how far a provider reaches, not where an order comes from.
+const SCOPE_COUNTRIES=['BD','MY','SG','ID','IN','PH'];
+
 export default function ApiProviderManagementScreen() {
   const { profile, goBackOrHome } = useApp();
   const { colors, brandGradient } = useTheme();
@@ -21,6 +25,11 @@ export default function ApiProviderManagementScreen() {
   const [showWebhook,setShowWebhook]=useState(false);
   const [loading,setLoading]=useState(true);
   const [modes,setModes]=useState(Object.fromEntries(apiService.API_SERVICES.map((x)=>[x,'legacy'])));
+  // The matrix the backend resolves against, and which row is being edited.
+  // DEFAULT is the service-wide fallback a country row inherits when it says
+  // nothing; it is not a country, which is why it is not in COUNTRIES.
+  const [countryModes,setCountryModes]=useState({});
+  const [scope,setScope]=useState('BD');
   const [savingModes,setSavingModes]=useState(false);
   const [successTopUpSetup,setSuccessTopUpSetup]=useState(false);
   const [presetService,setPresetService]=useState('');
@@ -35,6 +44,7 @@ export default function ApiProviderManagementScreen() {
       ]);
       setItems(providers);
       setModes(settings.modes||{});
+      setCountryModes(settings.countryModes||{});
       setWebhooks(Object.fromEntries((hookList||[]).map((x)=>[x.providerId,x])));
     }catch(e){
       Alert.alert('API settings',e.message||'Unable to load APIs');
@@ -125,21 +135,37 @@ export default function ApiProviderManagementScreen() {
   };
 
   const providersFor=(service)=>items.filter((x)=>servicesOf(x).includes(service)).sort((a,b)=>Number(b.priority||0)-Number(a.priority||0));
+  // A provider only counts for a country if it serves that country, or serves
+  // everywhere. This mirrors resolveExecutionMode on the server, so the
+  // warning below matches what a real order would actually do.
+  const servesScope=(p)=>{const reach=String(p?.country||'ALL').toUpperCase();return scope==='DEFAULT'||reach===scope||reach==='ALL';};
+  const modeFor=(service)=>{
+    if(scope==='DEFAULT')return modes[service]==='api'?'api':'legacy';
+    const row=countryModes[scope]||{};
+    if(row[service]==='api'||row[service]==='legacy')return row[service];
+    return modes[service]==='api'?'api':'legacy';
+  };
+  const inherited=(service)=>scope!=='DEFAULT'&&!(countryModes[scope]||{})[service];
+  const setMode=(service,value)=>{
+    if(scope==='DEFAULT'){setModes((m)=>({...m,[service]:value}));return;}
+    setCountryModes((m)=>({...m,[scope]:{...(m[scope]||{}),[service]:value}}));
+  };
 
   const renderFeature=({item:service})=>{
     const mine=providersFor(service);
-    const mode=modes[service]==='api'?'api':'legacy';
+    const mode=modeFor(service);
+    const serving=mine.filter(servesScope);
     return <View style={styles.feature}>
       <View style={styles.featureHead}>
         <View style={{flex:1}}>
           <Text style={styles.featureName}>{service}</Text>
-          <Text style={styles.featureSub}>{mine.length?`${mine.length} provider${mine.length>1?'s':''}`:'No provider'} • {mode==='api'?'API mode':'Previous logic'}</Text>
+          <Text style={styles.featureSub}>{serving.length?`${serving.length} provider${serving.length>1?'s':''}`:'No provider'} • {mode==='api'?'API mode':'Manual order'}{inherited(service)?' • inherited':''}</Text>
         </View>
-        <TouchableOpacity style={[styles.modeBtn,mode==='legacy'&&styles.modeOn]} onPress={()=>setModes((m)=>({...m,[service]:'legacy'}))}><Text>Previous</Text></TouchableOpacity>
-        <TouchableOpacity style={[styles.modeBtn,mode==='api'&&styles.modeOn]} onPress={()=>setModes((m)=>({...m,[service]:'api'}))}><Text>API</Text></TouchableOpacity>
+        <TouchableOpacity style={[styles.modeBtn,mode==='legacy'&&styles.modeOn]} onPress={()=>setMode(service,'legacy')}><Text style={styles.modeBtnText}>Manual</Text></TouchableOpacity>
+        <TouchableOpacity style={[styles.modeBtn,mode==='api'&&styles.modeOn]} onPress={()=>setMode(service,'api')}><Text style={styles.modeBtnText}>API</Text></TouchableOpacity>
       </View>
 
-      {mode==='api'&&!mine.length&&<Text style={styles.warn}>API mode is on but no provider is configured — this feature will fail until one is added.</Text>}
+      {mode==='api'&&!serving.length?<Text style={styles.warn}>{scope==='DEFAULT'?'API mode is on but no provider is configured — this feature will fail until one is added.':`No provider serves ${scope}, so ${scope} orders go to a dealer as a manual request regardless of this setting.`}</Text>:null}
 
       {mine.map((item)=>{
         const hook=webhooks[item.id];
@@ -187,11 +213,19 @@ export default function ApiProviderManagementScreen() {
       renderItem={renderFeature}
       ListHeaderComponent={<View style={styles.intro}>
         <Text style={styles.h}>Service APIs</Text>
-        <Text style={styles.p}>Every feature can use its own API from its own provider, and a different one per country. Set a feature to API mode, add a provider for it, and the highest-priority active provider matching the customer&apos;s country handles it. Keys and webhook credentials are kept server-side.</Text>
+        <Text style={styles.p}>Pick a country, then choose per feature whether it runs on the API or goes to a dealer as a manual request with accept and reject. A country with no provider stays manual whatever this says. Every feature can use its own API from its own provider, and a different one per country. Set a feature to API mode, add a provider for it, and the highest-priority active provider matching the customer&apos;s country handles it. Keys and webhook credentials are kept server-side.</Text>
+        <Text style={styles.scopeLabel}>Country</Text>
+        <View style={styles.scopeRow}>
+          {['DEFAULT',...SCOPE_COUNTRIES].map((code)=>
+            <TouchableOpacity key={code} style={[styles.scopeChip,scope===code&&styles.scopeChipOn]} onPress={()=>setScope(code)}>
+              <Text style={[styles.scopeChipText,scope===code&&styles.scopeChipTextOn]}>{code==='DEFAULT'?'Default':code}</Text>
+            </TouchableOpacity>)}
+        </View>
+        <Text style={styles.scopeHint}>{scope==='DEFAULT'?'The fallback every country inherits when it has no setting of its own.':`Settings for ${scope}. Anything left untouched follows Default.`}</Text>
         <TouchableOpacity style={styles.add} onPress={()=>{setEditing(null);setPresetService('');setSuccessTopUpSetup(true);setShow(true);}}><Text style={styles.addText}>+ Configure Success TopUp (Recharge + BD Internet + BD Bills)</Text></TouchableOpacity>
       </View>}
       ListFooterComponent={<TouchableOpacity disabled={savingModes} style={styles.saveModes} onPress={async()=>{
-        try{setSavingModes(true);await apiService.saveServiceApiSettings(modes);Alert.alert('Saved','Service processing modes updated.');}
+        try{setSavingModes(true);await apiService.saveServiceApiSettings(modes,countryModes);Alert.alert('Saved','Processing modes updated for every country.');}
         catch(e){Alert.alert('Save failed',e.message||'Unable to save modes');}
         finally{setSavingModes(false);}
       }}><Text style={styles.saveModesText}>{savingModes?'Saving…':'Save Processing Modes'}</Text></TouchableOpacity>}
@@ -220,6 +254,14 @@ function createStyles(colors) {
     featureHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     featureName: { fontWeight: '800', fontSize: 15, color: colors.text },
     featureSub: { fontSize: 11, marginTop: 2, color: colors.textSecondary },
+    scopeLabel: { fontWeight: '800', marginTop: 10, marginBottom: 6, color: colors.text },
+    scopeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    scopeChip: { paddingVertical: 7, paddingHorizontal: 13, borderRadius: 999, borderWidth: 1, borderColor: colors.border },
+    scopeChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+    scopeChipText: { fontWeight: '700', fontSize: 12, color: colors.text },
+    scopeChipTextOn: { color: colors.onPrimary },
+    scopeHint: { fontSize: 11, lineHeight: 16, marginTop: 7, color: colors.textSecondary },
+    modeBtnText: { fontWeight: '700', fontSize: 12, color: colors.text },
     warn: { marginTop: 8, fontSize: 11, lineHeight: 16, color: colors.warning },
     addForFeature: { marginTop: 10, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.primary, borderRadius: 9, paddingVertical: 10, alignItems: 'center' },
     addForFeatureText: { fontWeight: '700', fontSize: 12, color: colors.primary },

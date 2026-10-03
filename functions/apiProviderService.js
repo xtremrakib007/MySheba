@@ -17,6 +17,43 @@ const ALLOWED_AUTH = ['none', 'apiKey', 'bearer', 'basic'];
 const ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH'];
 const ALLOWED_COUNTRIES = ['ALL', 'BD', 'MY', 'SG', 'ID', 'IN', 'PH'];
 const DEFAULT_MODES = Object.fromEntries(ALLOWED_SERVICES.map((service) => [service, 'legacy']));
+// 'ALL' is a provider's reach, not a place an order comes from, so it is not a
+// row in the country matrix - the service-wide default already plays that part.
+const COUNTRY_CODES = ALLOWED_COUNTRIES.filter((c) => c !== 'ALL');
+
+/**
+ * Which path a (country, service) order takes: the configured API, or the
+ * manual dealer/reseller queue with its accept and reject buttons.
+ *
+ * Two rules, applied in order.
+ *
+ * 1. The superadmin's matrix states intent. countryModes[country][service]
+ *    wins over the service-wide modes[service] default, so Bangladesh can run
+ *    on the API while every other country keeps going to a human.
+ *
+ * 2. Intent cannot overrule reality. API mode only survives if an active
+ *    provider actually serves that service for that country, or everywhere.
+ *    Without this rule a country with no provider dispatches into nothing and
+ *    the customer is told the outcome is uncertain on a wallet that has
+ *    already been debited - which is exactly what a Malaysian recharge did
+ *    while Recharge was switched to API globally for Bangladesh's sake.
+ *
+ * Returning 'legacy' is always safe: it creates the ordinary manual order.
+ */
+function resolveExecutionMode({ country, service, settings, providers }) {
+  const code = String(country || '').trim().toUpperCase();
+  const perCountry = settings?.countryModes?.[code]?.[service];
+  const intent = (perCountry === 'api' || perCountry === 'legacy')
+    ? perCountry
+    : (settings?.modes?.[service] === 'api' ? 'api' : 'legacy');
+  if (intent !== 'api') return 'legacy';
+  const served = (providers || []).some((p) => {
+    if (!p || p.active === false) return false;
+    const reach = String(p.country || 'ALL').trim().toUpperCase();
+    return reach === code || reach === 'ALL';
+  });
+  return served ? 'api' : 'legacy';
+}
 
 function assertSuperadmin(db, request) {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
@@ -687,7 +724,10 @@ exports.executeConfiguredApi = executeConfiguredApi;
 
 // Pure validation helpers exported for backend unit tests. These do not expose
 // provider credentials and do not perform network or Firestore operations.
-exports._test = { isPrivateIp, pinnedLookup, validateBaseUrl, validateHeaders, validateTemplate, getPath, render, providerAuth, validate };
+exports.resolveExecutionMode = resolveExecutionMode;
+exports.providersForService = providersForService;
+exports.COUNTRY_CODES = COUNTRY_CODES;
+exports._test = { isPrivateIp, resolveExecutionMode, pinnedLookup, validateBaseUrl, validateHeaders, validateTemplate, getPath, render, providerAuth, validate };
 
 exports.testApiProvider = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
@@ -999,8 +1039,19 @@ exports.saveApiProvider = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (
         successStatus: 'Success', processingStatus: 'Processing', cancelStatus: 'Cancel',
         updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: request.auth.uid
       }, { merge: false });
+      // Success TopUp serves Bangladesh, so saving it enables the API for
+      // Bangladesh and nothing else. This used to flip the service-wide
+      // default to 'api', which also routed Malaysian and Singaporean orders
+      // down a path with no provider behind them: the dispatch failed, and the
+      // customer was told the outcome was uncertain on an already-debited
+      // wallet instead of the order reaching a dealer.
+      const priorCountryModes = readCountryModes(oldSettings.countryModes);
       tx.set(settingsRef, {
-        modes: { ...DEFAULT_MODES, ...(oldSettings.modes || {}), Recharge: 'api', Internet: 'api', 'Offer Packs': 'api', Entertainment: 'api', 'Bill Payment': 'api' },
+        modes: { ...DEFAULT_MODES, ...(oldSettings.modes || {}) },
+        countryModes: {
+          ...priorCountryModes,
+          BD: { ...(priorCountryModes.BD || {}), Recharge: 'api', Internet: 'api', 'Offer Packs': 'api', Entertainment: 'api', 'Bill Payment': 'api' },
+        },
         updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: request.auth.uid
       }, { merge: true });
 
@@ -1108,11 +1159,37 @@ exports.migrateApiProviderSecrets = onCall({ enforceAppCheck: ENFORCE_APP_CHECK 
   return { migrated };
 });
 
+/**
+ * Only known countries and known services survive a read or a write, so a
+ * stale or hand-edited document cannot smuggle an extra row into the matrix
+ * that the admin screen will never show and nobody will ever notice.
+ */
+function readCountryModes(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const code of COUNTRY_CODES) {
+    const row = raw[code];
+    if (!row || typeof row !== 'object') continue;
+    const clean = {};
+    for (const service of ALLOWED_SERVICES) {
+      if (row[service] === 'api' || row[service] === 'legacy') clean[service] = row[service];
+    }
+    if (Object.keys(clean).length) out[code] = clean;
+  }
+  return out;
+}
+
 exports.getServiceApiSettings = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   const snap = await db.doc(SETTINGS).get();
-  return { modes: { ...DEFAULT_MODES, ...(snap.exists ? (snap.data().modes || {}) : {}) } };
+  const stored = snap.exists ? (snap.data() || {}) : {};
+  return {
+    modes: { ...DEFAULT_MODES, ...(stored.modes || {}) },
+    countryModes: readCountryModes(stored.countryModes),
+    countries: COUNTRY_CODES,
+    services: ALLOWED_SERVICES,
+  };
 });
 exports.saveServiceApiSettings = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
@@ -1123,13 +1200,14 @@ exports.saveServiceApiSettings = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, 
     const mode = incoming[service];
     if (mode === 'api' || mode === 'legacy') modes[service] = mode;
   }
+  const countryModes = readCountryModes(request.data?.countryModes);
   await db.runTransaction(async (tx) => {
     const callerSnap = await tx.get(db.collection('users').doc(request.auth.uid));
     const caller = callerSnap.exists ? callerSnap.data() : null;
     if (!caller || caller.role !== 'superadmin' || caller.suspended === true || caller.inactive === true || caller.disabled === true || caller.active === false || caller.mergedInto) {
       throw new HttpsError('permission-denied', 'Your account is no longer active.');
     }
-    tx.set(db.doc(SETTINGS), { modes, updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: request.auth.uid }, { merge: true });
+    tx.set(db.doc(SETTINGS), { modes, countryModes, updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: request.auth.uid }, { merge: true });
   });
-  return { modes };
+  return { modes, countryModes };
 });

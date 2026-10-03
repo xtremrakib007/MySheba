@@ -47,7 +47,14 @@ check('each feature can be given its own provider',
 check('and that opens the form already on that feature',
   /setPresetService\(service\)/.test(screen) && /presetService=\{presetService\}/.test(screen));
 check('the per-feature mode switch is still there',
-  /setModes\(\(m\)=>\(\{\.\.\.m,\[service\]:'api'\}\)\)/.test(screen));
+  /setMode\(service,'api'\)/.test(screen) && /setMode\(service,'legacy'\)/.test(screen));
+// Per country, not service-wide. Switching Bangladesh to the API used to
+// switch every country with it, which is how a Malaysian recharge ended up
+// dispatched to a provider that does not serve Malaysia.
+check('and it writes to the chosen country, not every country at once',
+  /countryModes\[scope\]/.test(screen) && /setCountryModes/.test(screen) && /saveServiceApiSettings\(modes,countryModes\)/.test(screen));
+check('the country being edited can be chosen',
+  /SCOPE_COUNTRIES/.test(screen) && /setScope\(code\)/.test(screen));
 
 // The failure that leaves a feature dead: API mode on, nothing configured.
 check('API mode with no provider is called out',
