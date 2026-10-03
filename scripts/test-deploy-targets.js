@@ -14,7 +14,18 @@ const assert = require('assert');
 const { exportedFunctions, functionsDependingOn, unknownNames } = require('./lib/exported-functions');
 
 const exported = exportedFunctions();
-assert(exported.size > 50, `expected the entrypoint to export many functions, saw ${exported.size}`);
+assert(exported.size > 100, `expected the entrypoint to export many functions, saw ${exported.size}`);
+
+// The deployed entrypoint is secureIndexV2.js, not index.js - functions/package.json
+// says so. It attaches about thirty callables index.js never exports, and
+// reading index.js alone reported every one of them as undeployable: a correct
+// `deploy:functions walletTransfer` was refused with "did you mean
+// listWalletTransfers". The chain has to be followed, and the later file wins.
+assert.strictEqual(exported.get('walletTransfer'), 'secureWalletTransfer',
+  'a callable attached only by secureIndexV2 must be deployable, and resolve to its own module');
+for (const name of ['rejectTransaction', 'approveTransaction', 'saveSalarySettings']) {
+  assert(exported.has(name), `${name} is attached by secureIndexV2 and must be deployable`);
+}
 
 // Both export shapes index.js uses must be understood. If either stops
 // resolving, the derived list silently shrinks and a deploy silently skips

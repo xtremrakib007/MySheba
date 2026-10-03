@@ -19,27 +19,61 @@ const fs = require('fs');
 const path = require('path');
 
 const FUNCTIONS_DIR = path.join(__dirname, '..', '..', 'functions');
-const ENTRYPOINT = path.join(FUNCTIONS_DIR, 'index.js');
 
-/** Every `exports.name = ...` in index.js, mapped to the module behind it. */
+/**
+ * The deployed entrypoint, which is NOT index.js.
+ *
+ * functions/package.json names secureIndexV2.js: it requires index.js,
+ * overwrites the charge callables with their guarded versions and attaches
+ * about thirty more - walletTransfer, the topup reviews, the salary mutations.
+ * Reading index.js alone reports every one of those as undeployable, which is
+ * how a correct `deploy:functions walletTransfer` was refused.
+ */
+function entryChain() {
+  const pkg = JSON.parse(fs.readFileSync(path.join(FUNCTIONS_DIR, 'package.json'), 'utf8'));
+  const main = (pkg.main || 'index.js').replace(/\.js$/, '');
+  const chain = [];
+  const seen = new Set();
+  const visit = (mod) => {
+    if (seen.has(mod)) return;
+    seen.add(mod);
+    const file = path.join(FUNCTIONS_DIR, `${mod}.js`);
+    if (!fs.existsSync(file)) return;
+    const src = fs.readFileSync(file, 'utf8');
+    // An entrypoint that re-exports another one must be read after it, so its
+    // own bindings win.
+    for (const m of src.matchAll(/^const\s+[A-Za-z_$][\w$]*\s*=\s*require\('\.\/(index|secureIndexV2)'\)/gm)) {
+      visit(m[1]);
+    }
+    chain.push({ mod, src });
+  };
+  visit(main);
+  return chain;
+}
+
+/** Every callable the entrypoint exposes, mapped to the module behind it. */
 function exportedFunctions() {
-  const src = fs.readFileSync(ENTRYPOINT, 'utf8');
-
-  // The `const alias = require(...)` form - index.js uses both this and the
-  // inline form, so resolving aliases is not optional.
-  const aliases = new Map();
-  for (const m of src.matchAll(/^const\s+([A-Za-z_$][\w$]*)\s*=\s*require\('\.\/([\w.-]+)'\)/gm)) {
-    aliases.set(m[1], m[2].replace(/\.js$/, ''));
-  }
-
   const out = new Map();
-  for (const m of src.matchAll(/^exports\.([A-Za-z_$][\w$]*)\s*=\s*([^;]+);/gm)) {
-    const [, name, rhs] = m;
-    const inline = rhs.match(/require\('\.\/([\w.-]+)'\)/);
-    if (inline) { out.set(name, inline[1].replace(/\.js$/, '')); continue; }
-    const viaAlias = rhs.match(/^\s*([A-Za-z_$][\w$]*)\s*\./);
-    if (viaAlias && aliases.has(viaAlias[1])) { out.set(name, aliases.get(viaAlias[1])); continue; }
-    out.set(name, null); // defined inline in index.js; it ships with everything
+  for (const { src } of entryChain()) {
+    const aliases = new Map();
+    for (const m of src.matchAll(/^const\s+([A-Za-z_$][\w$]*)\s*=\s*require\('\.\/([\w.-]+)'\)/gm)) {
+      aliases.set(m[1], m[2].replace(/\.js$/, ''));
+    }
+    // `exports.name =` in index.js, and `functions.name =` in secureIndexV2,
+    // where `functions` is whatever local holds the required index.
+    const holders = ['exports'];
+    for (const m of src.matchAll(/^const\s+([A-Za-z_$][\w$]*)\s*=\s*require\('\.\/(?:index|secureIndexV2)'\)/gm)) {
+      holders.push(m[1]);
+    }
+    const assignment = new RegExp(`^(?:${holders.join('|')})\\.([A-Za-z_$][\\w$]*)\\s*=\\s*([^;]+);`, 'gm');
+    for (const m of src.matchAll(assignment)) {
+      const [, name, rhs] = m;
+      const inline = rhs.match(/require\('\.\/([\w.-]+)'\)/);
+      if (inline) { out.set(name, inline[1].replace(/\.js$/, '')); continue; }
+      const viaAlias = rhs.match(/^\s*([A-Za-z_$][\w$]*)\s*\./);
+      if (viaAlias && aliases.has(viaAlias[1])) { out.set(name, aliases.get(viaAlias[1])); continue; }
+      out.set(name, null); // defined inline; it ships with everything
+    }
   }
   return out;
 }
