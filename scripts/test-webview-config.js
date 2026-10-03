@@ -285,7 +285,9 @@ yes('and keeps no copy of its own', !/const withWebviewConfig = \(list\)/.test(g
 // that derivation is what makes a built-in moved off home still reachable,
 // which the hand-assembled version did not do.
 const more = read('src/screens/MoreFeaturesScreen.js');
-yes('it derives its overflow from the same pipeline', /overflowTiles\(\{/.test(more));
+// Through moreFeaturesSections now, which calls overflowTiles and then removes
+// whatever the account rows already cover - see its note on the duplicate.
+yes('it derives its overflow from the same pipeline', /moreFeaturesSections\(\{/.test(more));
 const OFF_HOME = { fomema: { key: 'fomema', name: 'FOMEMA', url: 'https://a.example.com/f', icon: '🏥', active: true, home: false, custom: false } };
 yes('a built-in moved off home lands in More Services',
   tiles.overflowTiles({ webviewPages: OFF_HOME }).some((t) => t.key === 'fomema'));

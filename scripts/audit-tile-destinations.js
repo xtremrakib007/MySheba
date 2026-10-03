@@ -160,7 +160,9 @@ for (const s of ['OPERATIONS', 'FINANCE', 'USERS', 'SYSTEM']) {
   }
 }
 
-const mf = declarations('src/screens/MoreFeaturesScreen.js', ['PERSONAL_FEATURES', 'STAFF_FEATURES']);
+// PERSONAL_FEATURES and STAFF_FEATURES moved into serviceTiles.js so that
+// choosing between them by role is something a test can run.
+const mf = declarations('src/components/serviceTiles.js', ['PERSONAL_FEATURES', 'STAFF_FEATURES']);
 all.push(...tiles(mf.PERSONAL_FEATURES, mf, 'more > personal'));
 all.push(...tiles(mf.STAFF_FEATURES, mf, 'more > staff'));
 

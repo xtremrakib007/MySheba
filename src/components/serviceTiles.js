@@ -333,6 +333,61 @@ export function visibleTiles({ role, can, webviewPages, isActive = () => true, h
  * Built from the same pipeline as the grids, so a rename or a new icon reaches
  * this screen too, and a page switched off leaves it.
  */
+/**
+ * The account rows on the More Features screen.
+ *
+ * 'My Business' is deliberately absent from the customer list: it routed to a
+ * 'businessProfile' screen that no longer exists, so the tile outlived the
+ * feature and opened a blank page. A tile with nowhere to go is worse than no
+ * tile.
+ *
+ * These are here rather than in the screen so that choosing between them is
+ * something a test can run - see moreFeaturesSections.
+ */
+export const PERSONAL_FEATURES = [
+  { key: 'walletTransfer', icon: '\uD83D\uDCB8', name: 'Wallet Transfer', kind: 'walletTransfer' },
+  { key: 'myDocuments', icon: '\uD83D\uDCC4', name: 'My Documents', kind: 'documents' },
+  { key: 'salary', icon: '\uD83D\uDCBC', name: 'Salary & OT', kind: 'salary' },
+  { key: 'history', icon: '\uD83D\uDCCB', name: 'Transactions', kind: 'history' },
+  { key: 'myAccount', icon: '\uD83D\uDC64', name: 'My Account', kind: 'myaccount' },
+  { key: 'kyc', icon: '\uD83E\uDEAA', name: 'Profile & KYC', kind: 'kyc' },
+  { key: 'support', icon: '\uD83C\uDFA7', name: 'Support', kind: 'support' },
+];
+
+export const STAFF_FEATURES = [
+  { key: 'myDocuments', icon: '\uD83D\uDCC4', name: 'My Documents', kind: 'documents' },
+  { key: 'salary', icon: '\uD83D\uDCBC', name: 'Salary & OT', kind: 'salary' },
+  { key: 'history', icon: '\uD83D\uDCCB', name: 'Transactions', kind: 'history' },
+  { key: 'myAccount', icon: '\uD83D\uDC64', name: 'My Account', kind: 'myaccount' },
+  { key: 'profile', icon: '\uD83E\uDEAA', name: 'Profile & KYC', kind: 'profile' },
+  { key: 'support', icon: '\uD83C\uDFA7', name: 'Support', kind: 'support' },
+];
+
+/**
+ * Both halves of the More Features screen, from one call.
+ *
+ * They are returned together because they were able to disagree. The screen
+ * picked an account list by role, and separately excluded a set of kinds built
+ * from the CUSTOMER list - so on a staff account, whose rows use kind `profile`
+ * rather than `kyc`, Profile was drawn under "My Account" AND under "Account &
+ * Operations", two headings apart on one screen. Choosing the list and deriving
+ * the exclusions are now the same step, so there is nothing left to mismatch.
+ *
+ * Exclusion is by kind and by key: the same feature is `documents` in the
+ * catalogue and `myDocuments` in the account rows, so neither alone is enough.
+ * The `personal` category is held back as well - the account section already is
+ * the personal section, and two headings describing the same thing read as a
+ * duplicate even when no tile is repeated.
+ */
+export function moreFeaturesSections({ role = 'customer', can, webviewPages, isActive = () => true }) {
+  const account = (!role || role === 'customer') ? PERSONAL_FEATURES : STAFF_FEATURES;
+  const kinds = new Set(account.map((f) => f.kind));
+  const keys = new Set(account.map((f) => f.key));
+  const overflow = overflowTiles({ role, can, webviewPages, isActive, excludeKinds: kinds })
+    .filter((tile) => tile.cat !== 'personal' && !keys.has(tile.key));
+  return { sections: groupTilesByCategory(overflow), account };
+}
+
 export function overflowTiles({ role = 'customer', can, webviewPages, isActive = () => true, excludeKinds = [] }) {
   const exclude = new Set(excludeKinds);
   return withWebviewConfig(servicesForRole(role, can), webviewPages)

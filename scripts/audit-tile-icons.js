@@ -23,7 +23,7 @@ const { SERVICE_EMOJI } = require(path.join(root, 'src/components/serviceEmoji.j
 // tile carries.
 const SOURCES = [
   'src/components/ServiceGrid.js',
-  'src/screens/MoreFeaturesScreen.js',
+  'src/components/serviceTiles.js',
   'src/data/countries.js',
 ];
 

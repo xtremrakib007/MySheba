@@ -3,49 +3,9 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-nati
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import { useServiceAction, Tile } from '../components/ServiceGrid';
-import { overflowTiles, groupTilesByCategory } from '../components/serviceTiles';
+import { moreFeaturesSections } from '../components/serviceTiles';
 import * as gridManagementService from '../firebase/gridManagementService';
 
-
-// 'My Business' is deliberately absent: it routed to a 'businessProfile'
-// screen that no longer exists (see AppContext's "retired listing routes are
-// no longer exposed"), so the tile survived the feature and gave customers a
-// blank page. A tile with nowhere to go is worse than no tile.
-const PERSONAL_FEATURES = [
-  { key: 'walletTransfer', icon: '💸', name: 'Wallet Transfer', kind: 'walletTransfer' },
-  { key: 'myDocuments', icon: '📄', name: 'My Documents', kind: 'documents' },
-  { key: 'salary', icon: '💼', name: 'Salary & OT', kind: 'salary' },
-  { key: 'history', icon: '📋', name: 'Transactions', kind: 'history' },
-  { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount' },
-  { key: 'kyc', icon: '🪪', name: 'Profile & KYC', kind: 'kyc' },
-  { key: 'support', icon: '🎧', name: 'Support', kind: 'support' },
-];
-
-// Every customer tile that the home screen does NOT show, so a finished
-// feature cannot go unreachable just because nobody flagged it `home: true`.
-//
-// This used to be a hand-written list of FOMEMA / Visa / Arrival Card /
-// Passport - all four of which are already ON the home screen, so this
-// screen duplicated four tiles while PIN Generate, Bill Payment and
-// Entertainment appeared in neither place and could not be opened at all.
-// Deriving it means adding a tile to PRIMARY_SERVICES is enough: it shows
-// up on the home screen or here, never nowhere.
-//
-// Anything the Personal section already covers is left out rather than
-// listed twice; it matches on `kind`, because the same feature is keyed
-// 'documents' in the service list and 'myDocuments' here.
-const PERSONAL_KINDS = new Set(PERSONAL_FEATURES.map((f) => f.kind));
-// Built per render by overflowTiles, because what counts as "not on the home
-// screen" now depends on the live WebView settings as well as the declaration.
-
-const STAFF_FEATURES = [
-  { key: 'myDocuments', icon: '📄', name: 'My Documents', kind: 'documents' },
-  { key: 'salary', icon: '💼', name: 'Salary & OT', kind: 'salary' },
-  { key: 'history', icon: '📋', name: 'Transactions', kind: 'history' },
-  { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount' },
-  { key: 'profile', icon: '🪪', name: 'Profile & KYC', kind: 'profile' },
-  { key: 'support', icon: '🎧', name: 'Support', kind: 'support' },
-];
 
 function Section({ title, subtitle, items, onPress }) {
   const { colors } = useTheme();
@@ -71,14 +31,15 @@ export default function MoreFeaturesScreen() {
   // same pipeline as the grids, so a tile that left a dealer's home screen
   // lands here rather than nowhere - which is the whole point of deriving this
   // instead of hand-listing it.
-  const overflow = overflowTiles({
-    role: profile?.role || 'customer',
+  const role = profile?.role || 'customer';
+  // One call returns both halves, so the overflow and the account rows cannot
+  // disagree about which features the account section already covers.
+  const { sections, account } = moreFeaturesSections({
+    role,
     can,
     webviewPages,
     isActive: (key) => gridManagementService.isGridActive(gridManagement, key, gridViewer),
-    excludeKinds: PERSONAL_KINDS,
   });
-  const overflowSections = groupTilesByCategory(overflow);
   const handlePress = useServiceAction();
   const visible = (items) => items.filter((item) => gridManagementService.isGridActive(gridManagement, item.key, gridViewer));
   const isCustomer = !profile?.role || profile.role === 'customer';
@@ -96,7 +57,7 @@ export default function MoreFeaturesScreen() {
             screen does rather than as one long undifferentiated list. Hidden
             when empty - every tile being on the home screen is the good case,
             not a reason for a bare heading. */}
-        {overflowSections.map((section) => (
+        {sections.map((section) => (
           <Section key={section.key} title={section.label} subtitle={section.subtitle} items={section.tiles} onPress={handlePress} />
         ))}
         {/* The account rows are the same for everyone; only the list differs,
@@ -107,7 +68,7 @@ export default function MoreFeaturesScreen() {
         <Section
           title={isCustomer ? 'Personal' : 'Account & Operations'}
           subtitle={isCustomer ? 'Your account, documents and activity' : 'Manage your account and operational features'}
-          items={visible(isCustomer ? PERSONAL_FEATURES : STAFF_FEATURES)}
+          items={visible(account)}
           onPress={handlePress}
         />
       </ScrollView>
@@ -125,5 +86,6 @@ const styles = StyleSheet.create({
   section: { marginBottom: 18 },
   sectionTitle: { fontSize: 16, fontWeight: '800', marginBottom: 2 },
   sectionSubtitle: { fontSize: 11, marginBottom: 10 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  // Same packing as the home grid; see ServiceGrid's note on space-between.
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', columnGap: 8 },
 });
