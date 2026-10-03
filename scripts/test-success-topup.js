@@ -359,18 +359,26 @@ check('a package detail line never starts with a stray separator', () => {
   return null;
 });
 
-check('a package row shows what the wallet pays, not only the catalogue price', () => {
-  // The catalogue is priced in BDT and the wallet is held in MYR. Recharge
-  // offers six amounts so its summary card is enough; a 63-row catalogue
-  // leaves the customer no way to see the cost of a row until they have
-  // chosen it and scrolled past the list.
+check('a package is priced only in the wallet the customer pays from', () => {
+  // A Malaysian sees MYR, an Indian sees INR, a Bangladeshi sees BDT. The
+  // catalogue figure is in the destination country's currency, which is not
+  // what leaves the wallet and not a number the customer can act on, so it is
+  // not shown at all - on the row or in the summary.
   for (const rel of ['src/steps/InternetSteps.js', 'src/steps/OfferPacksSteps.js', 'src/steps/EntertainmentSteps.js']) {
     const src = code(read(rel) || '');
-    if (!/subPrice=\{walletCost\(p\.price\)\}/.test(src)) return `${rel} does not show the wallet cost on each package.`;
-    if (!/amountToPoints\(Number\(price\), serviceData\.country, rates\)/.test(src)) {
-      return `${rel} does not convert with the same helper the summary card uses.`;
+    if (!/price=\{shownPrice\(p\)\} currency=\{shownCurrency\(p\)\}/.test(src)) {
+      return `${rel} still prices its rows in the catalogue currency.`;
     }
+    if (/walletDeductionMyr/.test(src)) return `${rel} still computes the wallet figure on the device.`;
+    if (/amountToPoints/.test(src)) return `${rel} still converts prices itself instead of using the server quote.`;
+    if (/Package Price|Pack Price/.test(src)) return `${rel} still shows the foreign catalogue price in its summary.`;
   }
+  // The quote has to come from the server, where the per-unit price, the tier
+  // discount and the wallet sell rate actually live.
+  const fn = code(read('functions/apiProviderService.js') || '');
+  if (!/customerWalletQuoter/.test(fn)) return 'the drives listing does not quote a wallet price.';
+  if (!/walletPrice/.test(fn)) return 'the drives listing does not return a wallet price.';
+
   // And the card must let a long name wrap without pushing the price away:
   // a Bengali package name runs to two lines and took the price off the card.
   const ui = code(read('src/components/ui.js') || '');

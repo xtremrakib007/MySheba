@@ -329,4 +329,57 @@ assert.throws(() => api.validate({ service: 'Recharge', name: 'Test', baseUrl: '
   console.log('  a Secret Manager failure explains itself instead of reaching the app as INTERNAL');
 }
 
+{
+  // The price shown and the price charged must be one calculation. A client
+  // line that converted at the recharge rate alone - omitting the per-unit
+  // price, the tier discount and the wallet sell rate - quoted a number the
+  // wallet never charged.
+  const { walletChargeFor, safePrice, PER_UNIT_PRICE_KEYS } = require('../functions/walletPricing');
+  const myr = { currency: 'MYR', sellRate: 1 };
+
+  // 1199 BDT at 26.0 is 46.12 MYR; nothing else applied.
+  const plain = walletChargeFor({ baseAmount: 46.12, fx: myr });
+  assert.strictEqual(plain.walletCost, 46.12, 'with no markup the base is the charge');
+
+  // The markup and the discount both land, and in that order.
+  const marked = walletChargeFor({ baseAmount: 100, unitPrice: 1.01, fx: myr });
+  assert.strictEqual(marked.walletCost, 101, 'a 1% per-unit price is applied');
+  const discounted = walletChargeFor({ baseAmount: 100, unitPrice: 1.01, discountPercent: 10, fx: myr });
+  assert.strictEqual(discounted.walletCost, 90.9, 'the tier discount applies after the markup');
+
+  // A non-MYR wallet is charged at its sell rate, which is the step the
+  // client could never have known about.
+  const inr = walletChargeFor({ baseAmount: 100, fx: { currency: 'INR', sellRate: 19.5 } });
+  assert.strictEqual(inr.walletCost, 1950, 'the wallet sell rate is applied');
+  assert.strictEqual(inr.currency, 'INR', 'and the charge is reported in that currency');
+
+  // Zero-decimal currencies round to whole units, as the wallet does.
+  assert.strictEqual(walletChargeFor({ baseAmount: 10, fx: { currency: 'IDR', sellRate: 3500.4 } }).walletCost, 35004);
+
+  // An unset or zero per-unit price means no markup, not a free order.
+  assert.strictEqual(safePrice({}, 'internetPointCostPerUnit', 'customer'), 1);
+  assert.strictEqual(safePrice({ internetPointCostPerUnit: 0 }, 'internetPointCostPerUnit', 'customer'), 1);
+  assert.strictEqual(safePrice({ internetPointCostPerUnit: 1.01 }, 'internetPointCostPerUnit', 'customer'), 1.01);
+  // Role pricing wins over the global one.
+  assert.strictEqual(safePrice({ internetPointCostPerUnit: 1.01, rolePricing: { dealer: { internetPointCostPerUnit: 1.2 } } }, 'internetPointCostPerUnit', 'dealer'), 1.2);
+  assert.throws(() => safePrice({ internetPointCostPerUnit: -1 }, 'internetPointCostPerUnit', 'customer'),
+    'a negative per-unit price is a misconfiguration, not a discount');
+
+  // The three package services share the internet per-unit key.
+  for (const kind of ['internet', 'offerpacks', 'entertainment']) {
+    assert.strictEqual(PER_UNIT_PRICE_KEYS[kind], 'internetPointCostPerUnit', `${kind} prices off the internet key`);
+  }
+
+  // Both sides must call it, or they can drift apart again.
+  const fs = require('fs');
+  const path = require('path');
+  const readFn = (f) => fs.readFileSync(path.join(__dirname, '..', 'functions', f), 'utf8');
+  assert(/walletPricing\.walletChargeFor\(/.test(readFn('walletService.js')),
+    'the charge path must price through walletPricing');
+  assert(/walletPricing\.walletChargeFor\(/.test(readFn('apiProviderService.js')),
+    'the package listing must quote through the same function');
+
+  console.log('  the price shown and the price charged are one calculation');
+}
+
 console.log('apiProviderService tests: PASS');

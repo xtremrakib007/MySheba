@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useApp } from '../context/AppContext';
-import { countries, rechargeOperators, amountToPoints } from '../data/countries';
+import { countries, rechargeOperators } from '../data/countries';
 import { getMergedPackages } from '../utils/internetPackages';
 import { getOperatorBrand } from '../data/operatorBrand';
 import { FormLabel, Grid3, OperatorCard, FormInput, PackageCard, SummaryCard } from '../components/ui';
@@ -12,7 +12,7 @@ import * as apiProviderService from '../firebase/apiProviderService';
 // Customer-facing wallet values are always displayed as MYR. The legacy
 // conversion helper remains internal for settlement compatibility.
 export default function InternetStep({ step }) {
-  const { serviceData, updateServiceData, nextStep, internetPricing, rates } = useApp();
+  const { serviceData, updateServiceData, nextStep, internetPricing } = useApp();
   const [successTopUpPackages, setSuccessTopUpPackages] = useState([]);
   const [packageLoading, setPackageLoading] = useState(false);
   const [packageError, setPackageError] = useState('');
@@ -48,23 +48,23 @@ export default function InternetStep({ step }) {
     const packages = serviceData.country === 'BD' ? successTopUpPackages : getMergedPackages(serviceData.operator, internetPricing[serviceData.operator]);
     const cur = serviceData.currency || 'MYR';
     const isForeign = serviceData.country && serviceData.country !== 'MY';
-    // What the wallet is actually charged, on every row rather than only on the
-    // one already chosen. Recharge offers six amounts, so its summary card is
-    // enough; a 63-package catalogue priced in BDT tells a MYR wallet holder
-    // nothing until they have picked one and scrolled past the list.
-    const walletCost = (price) => (isForeign && Number(price) > 0
-      ? `≈ ${amountToPoints(Number(price), serviceData.country, rates).toFixed(2)} MYR`
-      : '');
+    // One number, in the customer's own wallet currency, from the server. The
+    // catalogue price is a foreign figure the customer neither pays nor needs,
+    // and anything computed here could only ever approximate the charge: the
+    // per-unit price, the tier discount and the wallet sell rate are not on
+    // this device. Falls back to the catalogue price if the server could not
+    // quote, which beats showing nothing.
+    const shownPrice = (p) => (p.walletPrice != null ? p.walletPrice : p.price);
+    const shownCurrency = (p) => (p.walletPrice != null ? p.walletCurrency : cur);
     const selectedPackage = packages.find((p) => p.name === serviceData.package);
-    const walletDeductionMyr = isForeign && selectedPackage ? amountToPoints(selectedPackage.price, serviceData.country, rates) : null;
     return (
       <View>
         <FormLabel>Select Package</FormLabel>
         {!!packageLoading && <FormLabel>Loading Success TopUp packages…</FormLabel>}
         {!!packageError && <FormLabel>{packageError}</FormLabel>}
         {!packageLoading && !packageError && serviceData.country === 'BD' && packages.length === 0 && <FormLabel>No internet packages are available for this operator right now. Try another operator, or use Recharge for a plain top-up.</FormLabel>}
-        {!packageLoading && !packageError && packages.map((p) => <PackageCard key={p.id || p.name} subPrice={walletCost(p.price)} name={p.name} detail={[p.data, p.valid, p.category].filter(Boolean).join(' • ')} price={p.price} currency={cur} selected={serviceData.package === p.name} onPress={() => updateServiceData({ package: p.name, packageId: p.id, amount: p.price })} />)}
-        {!!(isForeign && selectedPackage) && <SummaryCard rows={[{ label: 'Package Price', value: `${cur} ${Number(selectedPackage.price).toFixed(2)}` }]} totalLabel="Wallet deduction" totalValue={`${walletDeductionMyr.toFixed(2)} MYR`} />}
+        {!packageLoading && !packageError && packages.map((p) => <PackageCard key={p.id || p.name} name={p.name} detail={[p.data, p.valid, p.category].filter(Boolean).join(' • ')} price={shownPrice(p)} currency={shownCurrency(p)} selected={serviceData.package === p.name} onPress={() => updateServiceData({ package: p.name, packageId: p.id, amount: p.price })} />)}
+        {!!selectedPackage && <SummaryCard totalLabel="Wallet deduction" totalValue={`${shownCurrency(selectedPackage)} ${Number(shownPrice(selectedPackage)).toFixed(2)}`} />}
       </View>
     );
   }

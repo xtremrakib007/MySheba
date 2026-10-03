@@ -4,6 +4,9 @@ const dns = require('dns').promises;
 const https = require('https');
 const crypto = require('crypto');
 const providerSecretService = require('./providerSecretService');
+const walletPricing = require('./walletPricing');
+const progressionService = require('./progressionService');
+const { getWalletCurrencyAndFx } = require('./walletCurrencyService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const catalog = require('./successTopUpCatalog');
 const providerCatalog = require('./providerCatalog');
@@ -442,6 +445,56 @@ const SUCCESS_TOPUP_OPERATORS = {
 const SUCCESS_TOPUP_OPERATOR_CODES = Object.values(SUCCESS_TOPUP_OPERATORS);
 const SUCCESS_TOPUP_POSTPAID_BILL_OPERATORS = { Grameenphone: 'GP', Robi: 'RB', Banglalink: 'BL' };
 const SUCCESS_TOPUP_PACKAGE_SERVICES = ['Internet', 'Offer Packs', 'Entertainment'];
+const PACKAGE_CHARGE_KINDS = { Internet: 'internet', 'Offer Packs': 'offerpacks', Entertainment: 'entertainment' };
+
+/**
+ * A function from a catalogue price to what this customer's wallet pays.
+ *
+ * The catalogue is in BDT and the wallet may be in MYR, INR or anything else
+ * supported, with a per-unit price for the role, a tier discount and a sell
+ * rate in between. Doing that arithmetic on the client gave a figure that was
+ * none of those things - the rate conversion alone - so the list quoted one
+ * number and the charge took another.
+ *
+ * Every input is read once per listing, not once per package, and the sums are
+ * walletPricing's, the same ones chargeProduct uses.
+ *
+ * Returns null for a package it cannot price, so the caller can fall back to
+ * showing the catalogue price rather than a wrong one or a blank.
+ */
+async function customerWalletQuoter(db, uid, service, country) {
+  const chargeKind = PACKAGE_CHARGE_KINDS[service];
+  const rateKey = { BD: 'rechargeBD', IN: 'rechargeIN', NP: 'rechargeNP', ID: 'rechargeID', PK: 'rechargePK', MM: 'rechargeMM', PH: 'rechargePH', KH: 'rechargeKH' }[String(country || 'BD').toUpperCase()];
+  try {
+    const [userSnap, pricingSnap, ratesSnap, settings] = await Promise.all([
+      db.collection('users').doc(uid).get(),
+      db.collection('settings').doc('pricing').get(),
+      db.collection('rates').doc('current').get(),
+      progressionService.getProgressionSettings(),
+    ]);
+    const profile = userSnap.exists ? (userSnap.data() || {}) : {};
+    const pricing = pricingSnap.exists ? (pricingSnap.data() || {}) : {};
+    const rate = Number((ratesSnap.exists ? (ratesSnap.data() || {}) : {})[rateKey]);
+    const fx = await getWalletCurrencyAndFx(db, profile);
+    const unitKey = walletPricing.PER_UNIT_PRICE_KEYS[chargeKind];
+    const unitPrice = unitKey ? walletPricing.safePrice(pricing, unitKey, profile.role) : 1;
+    const discountPercent = progressionService.discountPercentFromSettings(settings, profile.tier);
+    return (localPrice) => {
+      const n = Number(localPrice);
+      if (!Number.isFinite(n) || n <= 0 || !Number.isFinite(rate) || rate <= 0) return null;
+      // Rounded to the cent before the markup, exactly as amountToPoints does
+      // in the charge path - rounding later would differ by a cent.
+      const baseAmount = Math.round((n / rate) * 100) / 100;
+      try {
+        const { walletCost, currency } = walletPricing.walletChargeFor({ baseAmount, unitPrice, discountPercent, fx });
+        return { walletPrice: walletCost, walletCurrency: currency };
+      } catch { return null; }
+    };
+  } catch (error) {
+    console.error('Wallet quote unavailable', String(error?.message || error));
+    return () => null;
+  }
+}
 // Provisioned automatically from the Recharge provider, so they are not shown
 // as separately editable rows in Superadmin.
 const SUCCESS_TOPUP_COMPANION_SERVICES = ['Internet', 'Offer Packs', 'Entertainment', 'Bill Payment'];
@@ -801,9 +854,13 @@ exports.listSuccessTopUpDrives = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, 
     // catalogue cost is deliberately NOT returned - the client has no use for
     // it and it is our margin.
     const pricingDoc = await catalog.readPricingDoc(db, operatorName);
+    const quote = await customerWalletQuoter(db, request.auth.uid, service, 'BD');
     const drives = packages
       .filter((pkg) => !catalog.isHidden(pkg, pricingDoc))
-      .map((pkg) => ({ ...pkg, price: catalog.sellPriceFor(pkg, pricingDoc) }));
+      .map((pkg) => {
+        const price = catalog.sellPriceFor(pkg, pricingDoc);
+        return { ...pkg, price, ...(quote(price) || { walletPrice: null, walletCurrency: '' }) };
+      });
     return { drives, driveWindowOpen: true, driveWindowMessage: '' };
   } catch (e) {
     throw new HttpsError('unavailable', String(e?.message || 'Unable to load Success TopUp packages.').slice(0, 500));
