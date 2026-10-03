@@ -7,7 +7,6 @@ import { getOperatorBrand } from '../data/operatorBrand';
 import { FormLabel, Grid3, OperatorCard, FormInput, PackageCard, SummaryCard } from '../components/ui';
 import CountrySelectCard from '../components/CountrySelectCard';
 import * as apiProviderService from '../firebase/apiProviderService';
-import { isInternetPackage } from '../utils/packageCategory';
 
 // Internet flow: country -> operator -> phone -> package.
 // Customer-facing wallet values are always displayed as MYR. The legacy
@@ -23,7 +22,10 @@ export default function InternetStep({ step }) {
     setPackageLoading(true); setPackageError('');
     const operatorMap = { Grameenphone: 'GP', Robi: 'RB', Banglalink: 'BL', Airtel: 'AT', Teletalk: 'TT', Skitto: 'SK', 'Brilliant Connect': 'BT', Ryze: 'RY' };
     apiProviderService.listSuccessTopUpDrives(operatorMap[serviceData.operator] || 'ALL', 'regular', 'Internet', serviceData.operator || '')
-      .then((items) => { if (alive) setSuccessTopUpPackages(items.filter(isInternetPackage)); })
+      // Success TopUp's `regular` catalogue IS the internet catalogue, so it is
+      // shown whole. It used to be filtered to Data and Bundle, which hid the
+      // Voice and Call Rate packs that are sold on the same screen.
+      .then((items) => { if (alive) setSuccessTopUpPackages(items); })
       .catch((e) => { if (alive) { setSuccessTopUpPackages([]); setPackageError(e?.message || 'Unable to load Success TopUp packages.'); } })
       .finally(() => { if (alive) setPackageLoading(false); });
     return () => { alive = false; };

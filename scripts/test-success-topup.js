@@ -295,7 +295,7 @@ check('the app never holds a literal Success TopUp credential', () => {
     : null;
 });
 
-check('packages are classified, not dumped into one list', () => {
+check('each package screen sells the catalogue it should', () => {
   const server = read('functions/apiProviderService.js');
   const util = read('src/utils/packageCategory.js');
   const internet = read('src/steps/InternetSteps.js');
@@ -321,25 +321,23 @@ check('packages are classified, not dumped into one list', () => {
   if (!/category/.test(JSON.stringify(preset.itemMap))) {
     return 'the Success TopUp preset no longer maps a category key.';
   }
-  if (!/isInternetPackage/.test(code(internet))) return 'the Internet step no longer filters to data packages.';
+  // The regular catalogue is the internet catalogue, so the Internet screen
+  // sells it whole - Voice and Call Rate packs included. Filtering it to Data
+  // and Bundle hid packages Success TopUp lists for that operator.
+  if (/isInternetPackage/.test(code(internet))) return 'the Internet step filters the regular catalogue; it is sold whole.';
+  if (!/'regular'/.test(code(internet))) return 'the Internet step no longer requests the regular catalogue.';
   if (!/isEntertainmentPackage/.test(code(ent))) return 'the Entertainment step no longer filters by category.';
 
   // Loading the classifier for real beats pattern-matching its source.
   const src = util.replace(/^export (const|function) /gm, '$1 ').replace(/^export \{[^}]*\};?$/gm, '');
   const mod = {};
-  new Function('module', 'exports', `${src}\nmodule.exports={isInternetPackage,isEntertainmentPackage};`)(mod, {});
-  const { isInternetPackage, isEntertainmentPackage } = mod.exports;
+  new Function('module', 'exports', `${src}\nmodule.exports={isEntertainmentPackage};`)(mod, {});
+  const { isEntertainmentPackage } = mod.exports;
 
-  // The four categories the Bangladesh catalogue actually uses.
-  for (const [category, internetExpected] of [['Data', true], ['Bundle', true], ['Voice', false], ['Call Rate', false]]) {
-    if (isInternetPackage({ category }) !== internetExpected) {
-      return `"${category}" is ${internetExpected ? 'not treated as' : 'treated as'} an internet package.`;
-    }
+  // The four categories the Bangladesh catalogue actually uses. None is
+  // entertainment, so none may be pulled onto that screen.
+  for (const category of ['Data', 'Bundle', 'Voice', 'Call Rate']) {
     if (isEntertainmentPackage({ category })) return `"${category}" is treated as entertainment; it is a mobile pack.`;
-  }
-  // A renamed or absent category must not empty the picker.
-  if (!isInternetPackage({ category: '' }) || !isInternetPackage({ category: 'something-new' })) {
-    return 'an unknown or missing category is hidden from the Internet picker instead of kept.';
   }
   if (isEntertainmentPackage({ category: '' })) return 'a package with no category counts as entertainment.';
   if (!isEntertainmentPackage({ category: 'Streaming' })) return 'a genuine entertainment category is not recognised.';
