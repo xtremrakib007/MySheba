@@ -41,11 +41,17 @@ async function ensure(name) {
 }
 async function put(name, value) {
   if (!value || value === MASK) return;
-  await ensure(name);
-  await request(`${encodeURI(resource(name))}:addVersion`, {
-    method: 'POST',
-    body: JSON.stringify({ payload: { data: Buffer.from(String(value), 'utf8').toString('base64') } }),
-  });
+  try {
+    await ensure(name);
+    await request(`${encodeURI(resource(name))}:addVersion`, {
+      method: 'POST',
+      body: JSON.stringify({ payload: { data: Buffer.from(String(value), 'utf8').toString('base64') } }),
+    });
+  } catch (e) {
+    // Saving a provider writes its key and secret here before anything is
+    // stored, so this is the first thing that fails when the role is missing.
+    throw secretError(e, 'store this credential');
+  }
 }
 async function read(name) {
   if (!name) return '';
@@ -62,13 +68,39 @@ async function remove(name) {
   try { await request(encodeURI(resource(name)), { method: 'DELETE' }); }
   catch (e) { if (e.code !== 5) throw e; }
 }
+/**
+ * Turn a Secret Manager failure into something the caller can act on.
+ *
+ * read() and put() throw a plain Error carrying the HTTP status, and a plain
+ * Error out of a callable reaches the app as "INTERNAL [500]" - naming neither
+ * the secret, the status, nor the fix. "API test failed INTERNAL [500]" was
+ * this. A missing secret is already handled as empty (code 5), so anything
+ * reaching here is a real failure, and by far the most common is the functions
+ * service account lacking Secret Manager Secret Accessor.
+ */
+function secretError(e, action) {
+  if (e instanceof HttpsError) return e;
+  const detail = String(e?.message || e);
+  const status = /\((\d{3})\)/.exec(detail)?.[1];
+  const denied = status === '403' || status === '401';
+  return new HttpsError('failed-precondition',
+    `Could not ${action} in Secret Manager${status ? ` (HTTP ${status})` : ''}. ` +
+    (denied
+      ? 'Grant the Cloud Functions service account the Secret Manager Secret Accessor role on this project.'
+      : 'Check the Secret Manager API is enabled for this project and try again.'));
+}
+
 async function getCredentials(provider) {
-  return {
-    apiKey: provider.apiKeySecretName ? await read(provider.apiKeySecretName) : '',
-    secretKey: provider.secretKeySecretName ? await read(provider.secretKeySecretName) : '',
-    password: provider.passwordSecretName ? await read(provider.passwordSecretName) : '',
-    username: String(provider.username || ''),
-  };
+  try {
+    return {
+      apiKey: provider.apiKeySecretName ? await read(provider.apiKeySecretName) : '',
+      secretKey: provider.secretKeySecretName ? await read(provider.secretKeySecretName) : '',
+      password: provider.passwordSecretName ? await read(provider.passwordSecretName) : '',
+      username: String(provider.username || ''),
+    };
+  } catch (e) {
+    throw secretError(e, "read this provider's stored credentials");
+  }
 }
 async function migrateDocument(doc) {
   const data = doc.data() || {};
@@ -120,4 +152,5 @@ async function cleanupUnreferenced(db, names) {
 module.exports = {
   MASK, secretName, getCredentials, migrateDocument, cleanupUnreferenced,
   put, remove,
+  _test: { secretError },
 };

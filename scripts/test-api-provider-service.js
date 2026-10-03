@@ -280,4 +280,46 @@ assert.throws(() => api.validate({ service: 'Recharge', name: 'Test', baseUrl: '
   console.log('  configuring Success TopUp enables Bangladesh only');
 }
 
+{
+  // Secret Manager failures must not reach the app as a bare INTERNAL [500].
+  // "API test failed INTERNAL [500]" was a plain Error from read(), which
+  // named neither the secret, the HTTP status, nor what to do about it.
+  const { secretError } = require('../functions/providerSecretService')._test;
+  // firebase-functions lives under functions/, not at the repo root, so it has
+  // to be resolved the way the functions code itself resolves it.
+  const { createRequire } = require('module');
+  const fromFunctions = createRequire(require.resolve('../functions/package.json'));
+  const { HttpsError } = fromFunctions('firebase-functions/v2/https');
+
+  const denied = secretError(new Error('Secret Manager request failed (403): permission denied'), 'read it');
+  assert(denied instanceof HttpsError, 'a Secret Manager failure must become an HttpsError');
+  assert.strictEqual(denied.code, 'failed-precondition', 'and not INTERNAL');
+  assert(/403/.test(denied.message), 'the status belongs in the message');
+  assert(/Secret Accessor/.test(denied.message), 'a 403 must name the role that fixes it');
+
+  const other = secretError(new Error('Secret Manager request failed (500): backend error'), 'read it');
+  assert(/500/.test(other.message) && !/Secret Accessor/.test(other.message),
+    'a non-permission failure must not blame permissions');
+
+  // An HttpsError thrown deliberately below keeps its own message.
+  const passed = new HttpsError('failed-precondition', 'Google Cloud credentials are unavailable.');
+  assert.strictEqual(secretError(passed, 'read it'), passed, 'an existing HttpsError passes through unchanged');
+
+  // Testing the helper alone is not enough: removing the wrap at either call
+  // site left the suite green, which is the trap this check closes. Both
+  // entry points into Secret Manager must route their failures through it.
+  const fs = require('fs');
+  const path = require('path');
+  const svc = fs.readFileSync(path.join(__dirname, '..', 'functions', 'providerSecretService.js'), 'utf8');
+  for (const [fn, marker] of [['getCredentials', "read this provider's stored credentials"], ['put', 'store this credential']]) {
+    const at = svc.indexOf(`async function ${fn}(`);
+    assert(at !== -1, `${fn} must exist`);
+    const body = svc.slice(at, svc.indexOf('\nasync function ', at + 1));
+    assert(body.includes(`secretError(e, '${marker}')`) || body.includes(`secretError(e, "${marker}")`),
+      `${fn} must route Secret Manager failures through secretError, or they reach the app as INTERNAL [500]`);
+  }
+
+  console.log('  a Secret Manager failure explains itself instead of reaching the app as INTERNAL');
+}
+
 console.log('apiProviderService tests: PASS');
