@@ -65,37 +65,38 @@ export function groupTilesByCategory(tiles) {
 }
 
 const CUSTOMER_SERVICES = [
-  // Recharge & bills - what somebody opens the app for most weeks, so this is
-  // the category the home screen leads with.
-  { key: 'recharge', icon: 'recharge', name: 'Mobile Top-Up', kind: 'service', cat: 'recharge', home: true },
-  { key: 'internet', icon: 'internet', name: 'Internet (Data & Voice)', kind: 'service', cat: 'recharge', home: true },
-  { key: 'offerpacks', icon: 'internet', name: 'Offer Packs', kind: 'service', cat: 'recharge', home: true },
-  { key: 'billpayment', icon: 'billpayment', name: 'Bill Payment', kind: 'service', cat: 'recharge', home: true },
-  { key: 'rechargePin', icon: 'recharge', name: 'PIN Generate', kind: 'rechargePin', cat: 'recharge' },
-  { key: 'entertainment', icon: 'entertainment', name: 'Entertainment', kind: 'service', cat: 'recharge' },
+  // The home screen is these twelve, in this order: four rows of three, no
+  // short row and no gap. Declaration order IS render order, so the rows below
+  // are the rows on the phone.
+  //
+  // Row 1 - airtime and data
+  { key: 'recharge', icon: 'recharge', name: 'Mobile Recharge', kind: 'service', cat: 'recharge', home: true },
+  { key: 'internet', icon: 'internet', name: 'Internet', kind: 'service', cat: 'recharge', home: true },
+  { key: 'rechargePin', icon: 'recharge', name: 'PIN Generate', kind: 'rechargePin', cat: 'recharge', home: true },
 
-  // Sending money home is the other weekly errand.
-  { key: 'remittance', icon: 'remittance', name: 'Remittance', kind: 'service', cat: 'money', home: true },
+  // Row 2 - bills and money
+  { key: 'billpayment', icon: 'billpayment', name: 'Bill Pay', kind: 'service', cat: 'recharge', home: true },
   { key: 'mobilebanking', icon: 'mobilebanking', name: 'Mobile Banking', kind: 'service', cat: 'money', home: true },
+  { key: 'remittance', icon: 'remittance', name: 'Remittance', kind: 'service', cat: 'money', home: true },
 
-  // Travel: booked occasionally and thought about first, so one tap away.
-  { key: 'bus', icon: 'bus', name: 'Bus', kind: 'buspicker', cat: 'travel' },
-  { key: 'train', icon: 'train', name: 'Train', kind: 'webview', cat: 'travel' },
-  { key: 'flight', icon: 'flight', name: 'Flight', kind: 'service', cat: 'travel' },
+  // Row 3 - tickets
+  { key: 'flight', icon: 'flight', name: 'Flight Ticket', kind: 'service', cat: 'travel', home: true },
+  { key: 'bus', icon: 'bus', name: 'Bus Ticket', kind: 'buspicker', cat: 'travel', home: true },
+  { key: 'train', icon: 'train', name: 'Train Ticket', kind: 'webview', cat: 'travel', home: true },
 
-  // Malaysia worker / immigration services: a few times a year at most, and
-  // never in a hurry at a counter.
+  // Row 4 - immigration, then the way to everything else
+  { key: 'mydigital', icon: 'mydigital', name: 'Malaysia Arrival Card', kind: 'webview', cat: 'immigration', home: true },
+  { key: 'passport', icon: 'passport', name: 'Passport Appointment', kind: 'webview', cat: 'immigration', home: true },
+  { key: 'moreFeaturesTile', icon: 'more', name: 'More Features', kind: 'moreFeaturesLink', home: true },
+
+  // Everything below is reached through More Features. Still categorised,
+  // because that screen groups them.
+  { key: 'offerpacks', icon: 'internet', name: 'Offer Packs', kind: 'service', cat: 'recharge' },
+  { key: 'entertainment', icon: 'entertainment', name: 'Entertainment', kind: 'service', cat: 'recharge' },
   { key: 'visa', icon: 'visa', name: 'Visa', kind: 'webview', cat: 'immigration' },
   { key: 'fomema', icon: 'fomema', name: 'FOMEMA', kind: 'webview', cat: 'immigration' },
-  { key: 'mydigital', icon: 'mydigital', name: 'Malaysia Arrival Card', kind: 'webview', cat: 'immigration' },
-  { key: 'passport', icon: 'passport', name: 'Passport', kind: 'webview', cat: 'immigration' },
-
   { key: 'salary', icon: 'salary', name: 'Salary & Payslip', kind: 'salary', cat: 'personal' },
   { key: 'documents', icon: 'passport', name: 'Documents', kind: 'documents', cat: 'personal' },
-
-  // Always last, never in a category: it is the way to everything above that
-  // the home screen did not show.
-  { key: 'moreFeaturesTile', icon: 'more', name: 'More Services', kind: 'moreFeaturesLink' },
 ];
 
 // The services every role can actually use. A dealer still sells a top-up
@@ -322,6 +323,10 @@ export function visibleTiles({ role, can, webviewPages, isActive = () => true, h
   // and nothing else, which looks like the app failed to load.
   const flagged = active.filter((service) => service.home);
   if (flagged.length === 0) return active;
+  // More Features is flagged for home like everything else now, so appending it
+  // unconditionally drew it twice - once in its declared place at the end of the
+  // last row, once again on a row of its own below.
+  if (flagged.some((service) => service.kind === 'moreFeaturesLink')) return flagged;
   const moreTile = active.find((service) => service.kind === 'moreFeaturesLink');
   return [...flagged, ...(moreTile ? [moreTile] : [])];
 }

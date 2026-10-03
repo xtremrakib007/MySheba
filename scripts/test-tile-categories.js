@@ -57,27 +57,53 @@ for (const role of ROLES) {
   assert.strictEqual(lost.length, 0, `a ${role} cannot reach: ${lost.join(', ')}`);
 }
 
-console.log('The weekly errands are the ones that stayed');
+console.log('The home screen is twelve tiles, four rows of three');
+// Named and ordered, because the point of a fixed twelve is that there is no
+// short row and no gap - and a tile added without thought breaks exactly that.
+const EXPECTED_HOME = [
+  'recharge', 'internet', 'rechargePin',
+  'billpayment', 'mobilebanking', 'remittance',
+  'flight', 'bus', 'train',
+  'mydigital', 'passport', 'moreFeaturesTile',
+];
 const customerHome = visibleTiles({ role: 'customer', can: allCaps, homeOnly: true }).map((t) => t.key);
-for (const key of ['recharge', 'internet', 'billpayment', 'remittance', 'mobilebanking']) {
-  assert(customerHome.includes(key), `${key} is a weekly errand and belongs on the home screen`);
+assert.deepStrictEqual(customerHome, EXPECTED_HOME,
+  'the customer home must be these twelve, in this order');
+assert.strictEqual(customerHome.length % 3, 0, 'and divide into whole rows of three');
+
+// More Features is the twelfth tile. It is also what visibleTiles appends when
+// nothing else flagged it, so it was being drawn twice - once in place, once on
+// a row of its own underneath.
+assert.strictEqual(customerHome.filter((k) => k === 'moreFeaturesTile').length, 1,
+  'More Features appears once, not twice');
+
+// Everything off the home screen is still reachable.
+for (const key of ['offerpacks', 'entertainment', 'visa', 'fomema']) {
+  assert(!customerHome.includes(key), `${key} belongs under More Features`);
 }
-// Researched, occasional decisions. Nobody opens the app at a bus stop to renew
-// a passport, and these four were crowding out the ones people came for.
-for (const key of ['passport', 'visa', 'fomema', 'train']) {
-  assert(!customerHome.includes(key), `${key} is occasional and belongs under More Services`);
+
+// Staff carry management tiles on top; what is left must still be the twelve,
+// so their service block is four whole rows as well.
+for (const role of ['dealer', 'support', 'finance']) {
+  const home = visibleTiles({ role, can: allCaps, homeOnly: true });
+  const services = home.filter((t) => t.cat !== 'manage').map((t) => t.key);
+  assert.deepStrictEqual(services, EXPECTED_HOME, `a ${role}'s service block is the same twelve`);
 }
-assert(customerHome.includes('moreFeaturesTile'), 'and the way to them must be on the home screen');
 
 console.log('The screens render it');
 const grid = read('src/components/ServiceGrid.js');
 const more = read('src/screens/MoreFeaturesScreen.js');
-assert(/groupTilesByCategory\(services\.filter/.test(grid), 'the grid groups its tiles');
-// More Services is not a category and must come after every section, or it
-// sits in the middle of the page as the last tile of whichever group it fell in.
-assert(/kind !== 'moreFeaturesLink'/.test(grid), 'More Services is held out of the grouping');
-assert(grid.indexOf('moreTile &&') > grid.indexOf('sections.map'), 'and rendered after the sections');
-assert(/sections\.length > 1 &&/.test(grid), 'one category needs no heading');
+// The home screen is one block of services, not a heading per category: that
+// was what produced a TRAVEL section of one tile beside three empty columns.
+// Management is split off because a dealer's tools are a different kind of
+// thing from the services they also sell - and splitting it leaves exactly the
+// twelve behind.
+assert(/const manage = services\.filter\(\(t\) => t\.cat === 'manage'\)/.test(grid), 'management is its own block');
+assert(/const rest = services\.filter\(\(t\) => t\.cat !== 'manage'\)/.test(grid), 'and the services are the other');
+assert(/blocks\.length > 1 &&/.test(grid), 'a customer has one block, so it needs no heading');
+// Three across, so a row of three is a full row.
+assert(/item: \{ width: '31\.3%'/.test(grid), 'tiles are three across');
+assert(!/moreRow:/.test(grid), 'More Features is a tile in the grid, not a row below it');
 
 
 // The staff branch used to REPLACE the overflow with a fixed list, so a tile
@@ -153,18 +179,24 @@ for (const key of ['train', 'visa', 'fomema', 'mydigital', 'passport']) {
   storedPages[key] = { key, name: key, url: 'https://example.test', active: true, home: true };
 }
 const withPages = visibleTiles({ role: 'customer', can: allCaps, webviewPages: storedPages, homeOnly: true }).map((t) => t.key);
-for (const key of ['train', 'visa', 'fomema', 'mydigital', 'passport']) {
+// Declared off the home screen. A stored page saying home:true must not put
+// them back - that is what filled TRAVEL and VISA & IMMIGRATION with tiles the
+// list had already moved to More Features.
+for (const key of ['visa', 'fomema']) {
   assert(!withPages.includes(key), `${key} is declared off the home screen; a stored page must not put it back`);
 }
-// And the control that does exist still works: a page switched off home leaves.
-const offHome = { billpayment: { key: 'billpayment', name: 'Bill Payment', url: 'x', active: true, home: false } };
-assert(visibleTiles({ role: 'customer', can: allCaps, homeOnly: true }).some((t) => t.key === 'billpayment'),
-  'bill payment is on the home screen to begin with');
+// Declared on, and a stored page must not knock them off either.
+for (const key of ['train', 'mydigital', 'passport']) {
+  assert(withPages.includes(key), `${key} is one of the twelve and must stay`);
+}
+// The control that does exist still works: taking a built-in off home removes it.
+const movedOff = { train: { key: 'train', name: 'Train Ticket', url: 'x', active: true, home: false } };
+assert(!visibleTiles({ role: 'customer', can: allCaps, webviewPages: movedOff, homeOnly: true }).some((t) => t.key === 'train'),
+  'a superadmin can still move a built-in off the home screen');
 // A custom page carries no declared flag, so its own setting is all there is.
 const custom = { wv_x: { key: 'wv_x', custom: true, name: 'Custom', url: 'x', active: true, home: true } };
 assert(visibleTiles({ role: 'customer', can: allCaps, webviewPages: custom, homeOnly: true }).some((t) => t.key === 'wv_x'),
   'a superadmin\u2019s own added page may be on the home screen');
-void offHome;
 
 console.log('Partial rows pack left instead of spreading');
 // `space-between` put a two-tile category's tiles against opposite margins with

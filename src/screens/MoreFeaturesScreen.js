@@ -93,7 +93,9 @@ function createStyles(colors) {
     sectionTitle: { fontSize: 12, fontWeight: '800', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 2, marginLeft: 2 },
     sectionSubtitle: { fontSize: 11.5, color: colors.textSecondary, marginBottom: 9, marginLeft: 2 },
     sectionCard: { backgroundColor: colors.canvasBg || colors.surface, borderRadius: 18, padding: 10 },
-    // Same packing as the home grid; see ServiceGrid's note on space-between.
+    // Three across, left-packed, same as the home grid: the tile width is
+    // ServiceGrid's, so the two screens cannot disagree about how wide a
+    // service is.
     grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', columnGap: 8 },
   });
 }

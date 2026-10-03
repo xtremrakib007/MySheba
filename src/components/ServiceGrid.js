@@ -103,54 +103,48 @@ export default function ServiceGrid({ homeOnly }) {
     homeOnly,
   });
 
-  // More Services is not a category. It used to be a tile, which left it alone
-  // on a row of its own below the last section - three empty columns and a
-  // button that read as a forgotten service. It is a full-width row now, which
-  // is what it always was: the way out of this screen, not a service on it.
-  const moreTile = services.find((s) => s.kind === 'moreFeaturesLink');
-  const sections = groupTilesByCategory(services.filter((s) => s.kind !== 'moreFeaturesLink'));
+  // The home screen is one block of services, three across, in declaration
+  // order - which for a customer is exactly twelve: four full rows, no short
+  // row and no gap. More Features is the twelfth tile, not a row of its own.
+  //
+  // Staff carry management tiles as well, and those are a different kind of
+  // thing from the services they also sell, so they get their own block above.
+  // What is left is the same twelve. A customer has no management block, so the
+  // heading is dropped and the screen's own title does that work.
+  const blocks = [];
+  const manage = services.filter((t) => t.cat === 'manage');
+  const rest = services.filter((t) => t.cat !== 'manage');
+  if (manage.length) blocks.push({ key: 'manage', label: 'Management', tiles: manage });
+  if (rest.length) blocks.push({ key: 'services', label: 'Quick Services', tiles: rest });
 
   return (
     <View>
       <View style={styles.sectionHead}>
         <Text style={[styles.sectionTitle, { color: colors.navy || colors.text }]}>{isStaff ? 'Management Dashboard' : 'Quick Services'}</Text>
         <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
-          {isStaff ? 'Manage transactions, accounts and operations' : 'Top-ups, bills and sending money home'}
+          {isStaff ? 'Manage transactions, accounts and operations' : 'Top-ups, bills, tickets and sending money home'}
         </Text>
       </View>
       <View style={[styles.gridCanvas, { backgroundColor: colors.canvasBg || colors.surface }]}>
-        {sections.map((section, i) => (
-          <View key={section.key} style={i > 0 && styles.sectionSpacer}>
-            {/* One category needs no heading to tell it apart from the others. */}
-            {sections.length > 1 && (
-              <Text style={[styles.catLabel, { color: colors.textSecondary }]}>{section.label}</Text>
+        {blocks.map((block, i) => (
+          <View key={block.key} style={i > 0 && styles.sectionSpacer}>
+            {blocks.length > 1 && (
+              <Text style={[styles.catLabel, { color: colors.textSecondary }]}>{block.label}</Text>
             )}
             <View style={styles.grid}>
-              {section.tiles.map((service) => (
+              {block.tiles.map((service) => (
                 <Tile key={service.key} s={service} disabled={service.kind === 'webview' && !!webViewBusy} onPress={() => handlePress(service)} />
               ))}
             </View>
           </View>
         ))}
-        {!!moreTile && (
-          <TouchableOpacity
-            style={[styles.moreRow, { borderColor: colors.primary }]}
-            onPress={() => handlePress(moreTile)}
-            activeOpacity={0.75}
-            accessibilityRole="button"
-            accessibilityLabel="All services"
-          >
-            <Text style={[styles.moreRowText, { color: colors.primary }]}>All services</Text>
-            <Text style={[styles.moreRowChevron, { color: colors.primary }]}>›</Text>
-          </TouchableOpacity>
-        )}
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({ sectionSpacer: { marginTop: 14 }, moreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 14, paddingVertical: 12, borderRadius: 14, borderWidth: 1.5 }, moreRowText: { fontSize: 13, fontWeight: '800', letterSpacing: 0.2 }, moreRowChevron: { fontSize: 18, fontWeight: '800' }, catLabel: { fontSize: 10.5, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8, marginLeft: 2 }, sectionHead: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8 }, sectionTitle: { fontSize: 17, fontWeight: '800', letterSpacing: 0.2 }, sectionSubtitle: { fontSize: 11, marginTop: 2 }, gridCanvas: { marginHorizontal: 4, padding: 10, borderRadius: 18 }, // `space-between` spreads a partial row to both edges, so a category with two
+const styles = StyleSheet.create({ sectionSpacer: { marginTop: 14 }, catLabel: { fontSize: 10.5, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8, marginLeft: 2 }, sectionHead: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8 }, sectionTitle: { fontSize: 17, fontWeight: '800', letterSpacing: 0.2 }, sectionSubtitle: { fontSize: 11, marginTop: 2 }, gridCanvas: { marginHorizontal: 4, padding: 10, borderRadius: 18 }, // `space-between` spreads a partial row to both edges, so a category with two
 // tiles drew one against the left margin and one against the right with a
 // canyon between them. Packing left with a fixed gap means a row of two looks
 // like the first two of a row of four, which is what it is.
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', columnGap: 8 }, item: { width: '22%', minHeight: 88, marginBottom: 10, paddingHorizontal: 2, paddingVertical: 10, borderWidth: 1.5, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 1 }, itemDisabled: { opacity: 0.45 }, emoji: { fontSize: 30, lineHeight: 36, marginBottom: 6, textAlign: 'center' }, logoWrap: { height: 36, marginBottom: 6, alignItems: 'center', justifyContent: 'center' }, iconText: { fontSize: 28 }, name: { fontSize: 10.5, lineHeight: 13, fontWeight: '700', textAlign: 'center' } });
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', columnGap: 8 }, item: { width: '31.3%', minHeight: 94, marginBottom: 10, paddingHorizontal: 2, paddingVertical: 10, borderWidth: 1.5, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 1 }, itemDisabled: { opacity: 0.45 }, emoji: { fontSize: 30, lineHeight: 36, marginBottom: 6, textAlign: 'center' }, logoWrap: { height: 36, marginBottom: 6, alignItems: 'center', justifyContent: 'center' }, iconText: { fontSize: 28 }, name: { fontSize: 11.5, lineHeight: 14, fontWeight: '700', textAlign: 'center' } });
