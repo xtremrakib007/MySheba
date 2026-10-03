@@ -14,6 +14,7 @@
  */
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { assertWalletUnfrozen } = require('./walletFreeze');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 const { inferWalletCurrency, money } = require('./walletCurrencyService');
 const { logAudit, logServerError } = require('./logService');
@@ -150,6 +151,7 @@ exports.decideWalletFunding = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
       const fundingRequest = reqSnap.data() || {};
       const approver = approverSnap.exists ? (approverSnap.data() || {}) : null;
       if (!approver || !activeAccount(approver)) throw new HttpsError('permission-denied', 'Your account is not active.');
+      assertWalletUnfrozen(approver, 'Your wallet');
       requireSessionMatch(request, approver);
       if (fundingRequest.approverRole !== approver.role) {
         throw new HttpsError('permission-denied', 'This funding request is not yours to decide.');
@@ -161,6 +163,7 @@ exports.decideWalletFunding = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
       if (!requesterSnap.exists) throw new HttpsError('not-found', 'That account no longer exists.');
       const requester = requesterSnap.data() || {};
       if (!activeAccount(requester)) throw new HttpsError('failed-precondition', 'That account is not active.');
+      assertWalletUnfrozen(requester, `${fundingRequest.fromName || 'That'} wallet`);
 
       const stamp = admin.firestore.FieldValue.serverTimestamp();
       if (!approve) {

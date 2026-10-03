@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { assertWalletUnfrozen } = require('./walletFreeze');
 const { hasCapability } = require('./accessControl');
 const { inferWalletCurrency } = require('./walletCurrencyService');
 const ZERO_DECIMAL_CURRENCIES = new Set(['IDR', 'KHR', 'MMK']);
@@ -69,6 +70,7 @@ async function creditPlan(tx, db, topup) {
   const userSnap = await tx.get(userRef);
   if (!userSnap.exists) throw new HttpsError('not-found', 'That user account no longer exists.');
   const user = userSnap.data() || {};
+  assertWalletUnfrozen(user, `${user.name || 'That'} wallet`);
   if (!activeAccount(user)) throw new HttpsError('failed-precondition', 'The recipient account is not active.');
   if (!ALLOWED_RECIPIENT_ROLES.includes(user.role)) throw new HttpsError('failed-precondition', 'That account cannot receive wallet top-ups.');
   const currency = inferWalletCurrency(user);
@@ -98,6 +100,7 @@ async function creditPlan(tx, db, topup) {
  * resubmit.
  */
 function debitPlan(approverRef, approver, plan) {
+  assertWalletUnfrozen(approver, 'Your wallet');
   const currency = inferWalletCurrency(approver);
   if (currency !== plan.currency) {
     throw new HttpsError('failed-precondition', `Your wallet is in ${currency} and this top-up is in ${plan.currency}. They must match to transfer.`);

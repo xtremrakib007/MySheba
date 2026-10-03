@@ -1,6 +1,7 @@
 // Customer MYR wallet-to-wallet transfers.
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { assertWalletUnfrozen } = require('./walletFreeze');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { checkIpAnomaly } = require('./anomalyService');
 const { logAudit, logServerError } = require('./logService');
@@ -123,6 +124,7 @@ exports.walletTransfer = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (r
       if (!senderSnap.exists) throw new HttpsError('not-found', 'Wallet account not found.');
       const liveSender = senderSnap.data() || {};
       requireSessionMatch(request, liveSender);
+      assertWalletUnfrozen(liveSender, 'Your wallet');
       if (!active(liveSender) || liveSender.role !== 'customer' || !isKycApproved(liveSender)) {
         throw new HttpsError('permission-denied', 'Your wallet account is not eligible for this transfer.');
       }
@@ -156,6 +158,7 @@ exports.walletTransfer = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (r
       if (!senderSnap.exists || !recipientSnap.exists) throw new HttpsError('not-found', 'Wallet account not found.');
       const senderData = senderSnap.data(), recipientData = recipientSnap.data();
       requireSessionMatch(request, senderData);
+      assertWalletUnfrozen(recipientData, "The recipient's wallet");
       if (!active(senderData) || !active(recipientData)) throw new HttpsError('failed-precondition', 'Both customer accounts must be active.');
       if (senderData.role !== 'customer' || recipientData.role !== 'customer') throw new HttpsError('permission-denied', 'Only customer wallets can use this transfer.');
       if (!isKycApproved(senderData) || !isKycApproved(recipientData)) throw new HttpsError('failed-precondition', 'Both customer wallets must complete KYC.');

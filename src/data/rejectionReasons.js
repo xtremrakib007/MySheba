@@ -37,3 +37,12 @@ export const FUNDING_REJECT_REASONS = [
   'Send a separate request per branch',
   'Already funded earlier today',
 ];
+
+/** Support or a superadmin holding a wallet while something is looked into. */
+export const WALLET_FREEZE_REASONS = [
+  'Suspected unauthorised access',
+  'Customer reported their account stolen',
+  'Under review for unusual activity',
+  'Disputed top-up being checked',
+  'Requested by the account holder',
+];

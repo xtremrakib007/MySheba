@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { assertWalletUnfrozen } = require('./walletFreeze');
 const { hasCapability } = require('./accessControl');
 const { logAudit, logServerError } = require('./logService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
@@ -160,6 +161,8 @@ exports.transferPoints = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (r
       const toData = toSnap.data();
       requireSessionMatch(request, fromData);
       if (!active(fromData) || !active(toData)) throw new HttpsError('failed-precondition', 'Both accounts must be active.');
+      assertWalletUnfrozen(fromData, 'Your wallet');
+      assertWalletUnfrozen(toData, "The recipient's wallet");
       if (fromData.role !== caller.role || toData.role !== recipient.role) throw new HttpsError('failed-precondition', 'Account status changed. Please retry.');
       const fromBalance = validBalance(fromData.walletBalance);
       const toBalance = validBalance(toData.walletBalance);

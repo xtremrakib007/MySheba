@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { assertWalletUnfrozen } = require('./walletFreeze');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { logAudit, logServerError } = require('./logService');
 const { getWalletCurrencyAndFx, baseToWallet } = require('./walletCurrencyService');
@@ -145,6 +146,7 @@ exports.chargeWallet = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (req
         tx.create(opRef, { uid, type: 'chargeWallet', kind, key: cleanKeyValue, requestId: rid, result: resultData, status: 'completed', createdAt: admin.firestore.FieldValue.serverTimestamp() });
         return resultData;
       }
+      assertWalletUnfrozen(user, 'Your wallet');
       if (!field) throw new HttpsError('failed-precondition', 'Wallet charge target is invalid.');
       const walletCost = baseToWallet(cost, walletFx);
       if (balance < walletCost) throw new HttpsError('failed-precondition', `You need ${walletCost.toFixed(2)} ${walletFx.currency} in your wallet.`);

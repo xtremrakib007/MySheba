@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { assertWalletUnfrozen } = require('./walletFreeze');
 const crypto = require('crypto');
 const progressionService = require('./progressionService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
@@ -79,6 +80,9 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
     throw new HttpsError('failed-precondition', 'Recharge PIN pricing is not configured correctly.');
   }
   requireSessionMatch(request, userSnap.data());
+  // The purchase only. The refund below returns money already taken, and a
+  // frozen customer must not be left out of pocket for a PIN they never got.
+  assertWalletUnfrozen(userSnap.data(), 'Your wallet');
   await checkVelocity(db, uid, 'rechargePin', { ip: getClientIp(request) });
   const discount = progressionService.discountPercentFromSettings(tierSettings, userSnap.data().tier);
   const cost = Math.round(denomination * priceMultiplier * (1 - discount / 100) * 100) / 100;

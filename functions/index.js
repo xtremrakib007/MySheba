@@ -72,6 +72,7 @@ exports.rejectTopup = secureTopupReview.rejectTopup;
 exports.createSelfTopup = secureWalletMutations.createSelfTopup;
 exports.submitTopupRequest = require('./topupSubmissionService').submitTopupRequest;
 exports.adminTopUpPoints = require('./adminTopUpService').adminTopUpPoints;
+exports.setWalletFrozen = require('./walletFreeze').setWalletFrozen;
 exports.requestWalletFunding = require('./walletFundingService').requestWalletFunding;
 exports.listWalletFundingRequests = require('./walletFundingService').listWalletFundingRequests;
 exports.decideWalletFunding = require('./walletFundingService').decideWalletFunding;

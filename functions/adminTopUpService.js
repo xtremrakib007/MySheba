@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { assertWalletUnfrozen } = require('./walletFreeze');
 const { hasCapability } = require('./accessControl');
 const { logAudit, logServerError } = require('./logService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
@@ -89,6 +90,8 @@ exports.adminTopUpPoints = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async 
       if (!['dealer', 'reseller'].includes(target.role)) {
         throw new HttpsError('failed-precondition', 'Only dealer/reseller accounts can receive admin top-ups.');
       }
+      // A superadmin topping up a held wallet would undo the hold.
+      assertWalletUnfrozen(target, `${target.name || 'That'} wallet`);
       if (!activeAccount(target)) {
         throw new HttpsError('failed-precondition', 'The target account is not active.');
       }

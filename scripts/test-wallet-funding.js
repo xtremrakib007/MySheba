@@ -79,3 +79,40 @@ assert(/resource\.data\.approverRole == myRole\(\)/.test(block.slice(0, 400)),
   'the approver must see what they have to decide');
 
 console.log('\nEvery hop is a transfer, and nobody sends what they do not hold.');
+
+console.log('A frozen wallet holds still');
+const freeze = strip(read('functions/walletFreeze.js'));
+// Support can freeze: a customer whose wallet is draining reaches support,
+// and waiting for a superadmin to come online is how it keeps draining.
+assert(/FREEZER_ROLES = \['support', 'superadmin'\]/.test(freeze), 'support and superadmin may freeze');
+assert(/A reason is required to freeze a wallet/.test(freeze),
+  'a freeze without a reason tells the customer nothing and leaves no record');
+assert(/You cannot freeze your own wallet/.test(freeze), 'freezing yourself is not a moderation action');
+// Support holding the wallet that funds every top-up would stop the system.
+assert(/Only a superadmin can freeze an admin or superadmin wallet/.test(freeze),
+  'support must not freeze the wallets the funding chain runs on');
+
+// The guard must be in the money paths, not merely defined.
+for (const [file, who] of [
+  ['walletService.js', 'the customer charge'],
+  ['walletTransferService.js', 'a customer-to-customer transfer'],
+  ['walletFundingService.js', 'a staff funding transfer'],
+  ['secureTopupReview.js', 'a top-up'],
+  ['secureTransfer.js', 'a staff transfer'],
+  ['secureWalletCharge.js', 'a feature charge'],
+  ['rechargePinService.js', 'a PIN purchase'],
+  ['adminTopUpService.js', 'a direct top-up'],
+  ['secureWalletMutations.js', 'a self top-up'],
+]) {
+  assert(/assertWalletUnfrozen\(/.test(strip(read(`functions/${file}`))),
+    `${who} must refuse a frozen wallet (${file})`);
+}
+
+// And must NOT be in the reversal paths: a frozen customer who is owed a
+// refund is already out of pocket, and blocking it makes that permanent.
+for (const file of ['apiWebhookService.js', 'successTopupPoller.js', 'rejectionService.js']) {
+  assert(!/assertWalletUnfrozen\(/.test(strip(read(`functions/${file}`))),
+    `${file} refunds money already taken and must not be blocked by a freeze`);
+}
+
+console.log('  frozen wallets cannot spend, and are still refunded');

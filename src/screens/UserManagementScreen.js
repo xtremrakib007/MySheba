@@ -1,3 +1,5 @@
+import PromptModal from '../components/PromptModal';
+import { WALLET_FREEZE_REASONS } from '../data/rejectionReasons';
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, Modal } from 'react-native';
 import { showAlert } from '../utils/appAlert';
@@ -10,6 +12,7 @@ import HeaderDecor from '../components/HeaderDecor';
 import {
   ROLE_PERMISSIONS,
   downgradeTargetsFor,
+  setWalletFrozen,
   subscribeManageableUsers,
   subscribeUnassignedCustomers,
   createManagedUser,
@@ -115,6 +118,7 @@ export default function UserManagementScreen() {
   const [createOpen, setCreateOpen] = useState(false);
   const [upgradeTarget, setUpgradeTarget] = useState(null); // user object
   const [downgradeTarget, setDowngradeTarget] = useState(null); // user object
+  const [freezeTarget, setFreezeTarget] = useState(null); // user object
   const [assignTarget, setAssignTarget] = useState(null); // customer with no dealer
   const [resellerAssignTarget, setResellerAssignTarget] = useState(null); // customer being (re)assigned a reseller
   const [name, setName] = useState('');
@@ -235,6 +239,45 @@ export default function UserManagementScreen() {
     }
   };
 
+  // Support can freeze, which is the point: a customer reaching support about
+  // a wallet draining should not wait for a superadmin to come online.
+  const canFreeze = myRole === 'support' || myRole === 'superadmin';
+
+  const onToggleFreeze = (u) => {
+    if (u.walletFrozen) {
+      showAlert(`Unfreeze ${u.name || 'this wallet'}?`, 'They will be able to spend and transfer again.', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Unfreeze',
+          onPress: async () => {
+            setBusy(true);
+            try {
+              await setWalletFrozen({ targetUid: u.id, frozen: false });
+              showAlert('MySheba', `${u.name || 'That'} wallet is active again.`);
+            } catch (err) {
+              showAlert('MySheba', err.message || 'Could not unfreeze this wallet.');
+            } finally { setBusy(false); }
+          },
+        },
+      ]);
+      return;
+    }
+    setFreezeTarget(u);
+  };
+
+  const confirmFreeze = async (reason) => {
+    const u = freezeTarget;
+    setFreezeTarget(null);
+    if (!u || !String(reason || '').trim()) return;
+    setBusy(true);
+    try {
+      await setWalletFrozen({ targetUid: u.id, frozen: true, reason });
+      showAlert('MySheba', `${u.name || 'That'} wallet is frozen. They can sign in and see it, but cannot move money.`);
+    } catch (err) {
+      showAlert('MySheba', err.message || 'Could not freeze this wallet.');
+    } finally { setBusy(false); }
+  };
+
   const onToggleSuspend = (u) => {
     const suspending = !u.suspended;
     showAlert(
@@ -340,6 +383,11 @@ export default function UserManagementScreen() {
                 <Text style={styles.suspendedBadgeText}>Suspended</Text>
               </View>
             )}
+            {!!u.walletFrozen && (
+              <View style={styles.frozenBadge}>
+                <Text style={styles.frozenBadgeText}>Wallet frozen</Text>
+              </View>
+            )}
           </View>
         </View>
         <View style={{ alignItems: 'flex-end', gap: 6 }}>
@@ -358,6 +406,11 @@ export default function UserManagementScreen() {
             {!!canDowngrade && (
               <TouchableOpacity style={styles.downgradeBtn} onPress={() => onDowngrade(u)}>
                 <Text style={styles.downgradeBtnText}>Downgrade</Text>
+              </TouchableOpacity>
+            )}
+            {!!canFreeze && (
+              <TouchableOpacity style={styles.freezeBtn} onPress={() => onToggleFreeze(u)}>
+                <Text style={styles.freezeBtnText}>{u.walletFrozen ? 'Unfreeze' : 'Freeze wallet'}</Text>
               </TouchableOpacity>
             )}
             {!!canModerate && (
@@ -591,6 +644,15 @@ export default function UserManagementScreen() {
         </View>
       </Modal>
 
+      <PromptModal
+        visible={!!freezeTarget}
+        title={`Freeze ${freezeTarget?.name || 'this wallet'} - reason:`}
+        placeholder="Why is this wallet being held?"
+        suggestions={WALLET_FREEZE_REASONS}
+        onSubmit={confirmFreeze}
+        onCancel={() => setFreezeTarget(null)}
+      />
+
       {/* Downgrade role modal - the same shape as Upgrade, because the
           decision is now the same kind of decision. */}
       <Modal visible={!!downgradeTarget} transparent animationType="fade" onRequestClose={() => setDowngradeTarget(null)}>
@@ -691,6 +753,10 @@ function createStyles(colors) {
     deleteBtn: { backgroundColor: '#FDECEC', borderRadius: radius.pill, paddingVertical: 6, paddingHorizontal: 12 },
     deleteBtnText: { color: '#C0392B', fontSize: 11, fontWeight: '700' },
     suspendedBadge: { backgroundColor: '#FDECEC', borderRadius: radius.pill, paddingVertical: 2, paddingHorizontal: 8 },
+    frozenBadge: { backgroundColor: '#E8F0FE', borderRadius: radius.pill, paddingVertical: 2, paddingHorizontal: 8 },
+    frozenBadgeText: { color: '#1A56B8', fontSize: 10, fontWeight: '700' },
+    freezeBtn: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: radius.pill, borderWidth: 1, borderColor: '#1A56B8' },
+    freezeBtnText: { color: '#1A56B8', fontSize: 11, fontWeight: '700' },
     suspendedBadgeText: { color: '#C0392B', fontSize: 10, fontWeight: '700' },
     emptyText: { textAlign: 'center', color: '#999', marginTop: 30 },
     modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 20 },

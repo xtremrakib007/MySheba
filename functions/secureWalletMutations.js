@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { assertWalletUnfrozen } = require('./walletFreeze');
 const { hasCapability } = require('./accessControl');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { logAudit, logServerError } = require('./logService');
@@ -60,6 +61,7 @@ exports.createSelfTopup = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (
       requireSessionMatch(request, caller);
       callerRole = caller.role;
       if (!active(caller) || !ADMIN_ROLES.includes(caller.role)) throw new HttpsError('permission-denied', 'Your account cannot self top-up.');
+      assertWalletUnfrozen(caller, 'Your wallet');
 
       const opSnap = await tx.get(opRef);
       if (opSnap.exists) {

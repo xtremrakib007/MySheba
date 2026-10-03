@@ -203,6 +203,20 @@ export async function upgradeUserRole({ targetUid, newRole }) {
   return data;
 }
 
+/**
+ * Hold a wallet still, or release it. Support and superadmin only.
+ *
+ * Not a suspension: the person signs in, sees their balance and their history,
+ * and cannot move money while someone looks into it. A refund still reaches
+ * them, because refusing one would leave them frozen and out of pocket for an
+ * order that failed.
+ */
+export async function setWalletFrozen({ targetUid, frozen, reason }) {
+  const fn = httpsCallable(functions, 'setWalletFrozen');
+  const { data } = await fn({ targetUid, frozen, reason });
+  return data;
+}
+
 export async function downgradeUserRole({ targetUid, newRole }) {
   const fn = httpsCallable(functions, 'manageUser');
   const { data } = await fn({ action: 'downgradeRole', targetUid, newRole });
