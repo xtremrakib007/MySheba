@@ -139,6 +139,33 @@ assert(/moreFeaturesSections\(\{/.test(more), 'MoreFeaturesScreen must use the s
 assert(!/overflowTiles\(/.test(more), 'and must not filter the overflow itself');
 assert(!/const (PERSONAL|STAFF)_FEATURES = \[/.test(more), 'nor keep its own account lists');
 
+console.log('A stored WebView page cannot force a tile onto the home screen');
+// What the screenshot showed: TRAVEL with only Train, and a full VISA &
+// IMMIGRATION section, on a home screen both categories are declared off. Every
+// leaked tile was a WebView; Bus and Flight, which are not, correctly stayed
+// off. webviewConfigService normalises every page it writes to
+// `home: page?.home !== false`, so the stored value is ALWAYS true and never
+// undefined - and reading it as authoritative let it override the list.
+//
+// A superadmin may take a built-in OFF the home screen. They may not put one on.
+const storedPages = {};
+for (const key of ['train', 'visa', 'fomema', 'mydigital', 'passport']) {
+  storedPages[key] = { key, name: key, url: 'https://example.test', active: true, home: true };
+}
+const withPages = visibleTiles({ role: 'customer', can: allCaps, webviewPages: storedPages, homeOnly: true }).map((t) => t.key);
+for (const key of ['train', 'visa', 'fomema', 'mydigital', 'passport']) {
+  assert(!withPages.includes(key), `${key} is declared off the home screen; a stored page must not put it back`);
+}
+// And the control that does exist still works: a page switched off home leaves.
+const offHome = { billpayment: { key: 'billpayment', name: 'Bill Payment', url: 'x', active: true, home: false } };
+assert(visibleTiles({ role: 'customer', can: allCaps, homeOnly: true }).some((t) => t.key === 'billpayment'),
+  'bill payment is on the home screen to begin with');
+// A custom page carries no declared flag, so its own setting is all there is.
+const custom = { wv_x: { key: 'wv_x', custom: true, name: 'Custom', url: 'x', active: true, home: true } };
+assert(visibleTiles({ role: 'customer', can: allCaps, webviewPages: custom, homeOnly: true }).some((t) => t.key === 'wv_x'),
+  'a superadmin\u2019s own added page may be on the home screen');
+void offHome;
+
 console.log('Partial rows pack left instead of spreading');
 // `space-between` put a two-tile category's tiles against opposite margins with
 // a canyon between them, which read as a layout failure rather than a short row.

@@ -103,7 +103,10 @@ export default function ServiceGrid({ homeOnly }) {
     homeOnly,
   });
 
-  // More Services is not a category and must stay last, after every section.
+  // More Services is not a category. It used to be a tile, which left it alone
+  // on a row of its own below the last section - three empty columns and a
+  // button that read as a forgotten service. It is a full-width row now, which
+  // is what it always was: the way out of this screen, not a service on it.
   const moreTile = services.find((s) => s.kind === 'moreFeaturesLink');
   const sections = groupTilesByCategory(services.filter((s) => s.kind !== 'moreFeaturesLink'));
 
@@ -111,14 +114,16 @@ export default function ServiceGrid({ homeOnly }) {
     <View>
       <View style={styles.sectionHead}>
         <Text style={[styles.sectionTitle, { color: colors.navy || colors.text }]}>{isStaff ? 'Management Dashboard' : 'Quick Services'}</Text>
-        <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>{isStaff ? 'Manage transactions, accounts and operations' : 'Money, remittance and travel'}</Text>
+        <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
+          {isStaff ? 'Manage transactions, accounts and operations' : 'Top-ups, bills and sending money home'}
+        </Text>
       </View>
       <View style={[styles.gridCanvas, { backgroundColor: colors.canvasBg || colors.surface }]}>
         {sections.map((section, i) => (
-          <View key={section.key}>
+          <View key={section.key} style={i > 0 && styles.sectionSpacer}>
             {/* One category needs no heading to tell it apart from the others. */}
             {sections.length > 1 && (
-              <Text style={[styles.catLabel, { color: colors.textSecondary }, i > 0 && styles.catLabelSpaced]}>{section.label}</Text>
+              <Text style={[styles.catLabel, { color: colors.textSecondary }]}>{section.label}</Text>
             )}
             <View style={styles.grid}>
               {section.tiles.map((service) => (
@@ -128,16 +133,23 @@ export default function ServiceGrid({ homeOnly }) {
           </View>
         ))}
         {!!moreTile && (
-          <View style={styles.grid}>
-            <Tile key={moreTile.key} s={moreTile} onPress={() => handlePress(moreTile)} />
-          </View>
+          <TouchableOpacity
+            style={[styles.moreRow, { borderColor: colors.primary }]}
+            onPress={() => handlePress(moreTile)}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel="All services"
+          >
+            <Text style={[styles.moreRowText, { color: colors.primary }]}>All services</Text>
+            <Text style={[styles.moreRowChevron, { color: colors.primary }]}>›</Text>
+          </TouchableOpacity>
         )}
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({ catLabel: { fontSize: 10.5, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 7, marginLeft: 2 }, catLabelSpaced: { marginTop: 4 }, sectionHead: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8 }, sectionTitle: { fontSize: 17, fontWeight: '800', letterSpacing: 0.2 }, sectionSubtitle: { fontSize: 11, marginTop: 2 }, gridCanvas: { marginHorizontal: 4, padding: 10, borderRadius: 18 }, // `space-between` spreads a partial row to both edges, so a category with two
+const styles = StyleSheet.create({ sectionSpacer: { marginTop: 14 }, moreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 14, paddingVertical: 12, borderRadius: 14, borderWidth: 1.5 }, moreRowText: { fontSize: 13, fontWeight: '800', letterSpacing: 0.2 }, moreRowChevron: { fontSize: 18, fontWeight: '800' }, catLabel: { fontSize: 10.5, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8, marginLeft: 2 }, sectionHead: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8 }, sectionTitle: { fontSize: 17, fontWeight: '800', letterSpacing: 0.2 }, sectionSubtitle: { fontSize: 11, marginTop: 2 }, gridCanvas: { marginHorizontal: 4, padding: 10, borderRadius: 18 }, // `space-between` spreads a partial row to both edges, so a category with two
 // tiles drew one against the left margin and one against the right with a
 // canyon between them. Packing left with a fixed gap means a row of two looks
 // like the first two of a row of four, which is what it is.

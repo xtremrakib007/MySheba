@@ -196,12 +196,20 @@ export function withWebviewConfig(list, webviewPages) {
   const overlaid = list
     .map((item) => {
       const page = item.kind === 'webview' ? pages[item.key] : null;
-      // `page.home === undefined` means a superadmin has never said either way,
-      // so the declared flag stands. Reading it as `!== false` made silence mean
-      // yes, which would drag Train, Visa, FOMEMA and Passport back onto the
-      // home screen the moment their page had any config row at all.
+      // A superadmin can take a built-in OFF the home screen. They cannot force
+      // one ON - where a built-in belongs is the list's decision.
+      //
+      // Reading the stored flag as `page.home !== false` let the config decide
+      // outright, and webviewConfigService normalises every page it writes to
+      // `home: page?.home !== false` - so the stored value is ALWAYS true and is
+      // never undefined. Guarding on undefined therefore did nothing, and every
+      // WebView tile was dragged onto the home screen: Train, Visa, FOMEMA,
+      // Arrival Card and Passport all reappeared there, while Bus and Flight -
+      // the travel tiles that are not WebViews - correctly stayed off. That is
+      // what the two half-empty TRAVEL and VISA sections on the home screen
+      // were.
       return page
-        ? { ...item, name: page.name || item.name, emoji: page.icon || '', home: page.home === undefined ? item.home : page.home !== false }
+        ? { ...item, name: page.name || item.name, emoji: page.icon || '', home: item.home === true && page.home !== false }
         : item;
     })
     .filter((item) => item.kind !== 'webview' || !pages[item.key] || pages[item.key].active !== false);
