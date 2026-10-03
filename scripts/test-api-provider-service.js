@@ -291,19 +291,26 @@ assert.throws(() => api.validate({ service: 'Recharge', name: 'Test', baseUrl: '
   const fromFunctions = createRequire(require.resolve('../functions/package.json'));
   const { HttpsError } = fromFunctions('firebase-functions/v2/https');
 
-  const denied = secretError(new Error('Secret Manager request failed (403): permission denied'), 'read it');
+  const denied = secretError(new Error('Secret Manager request failed (403): permission denied'), 'read it', 'the Secret Manager Secret Accessor role');
   assert(denied instanceof HttpsError, 'a Secret Manager failure must become an HttpsError');
   assert.strictEqual(denied.code, 'failed-precondition', 'and not INTERNAL');
   assert(/403/.test(denied.message), 'the status belongs in the message');
   assert(/Secret Accessor/.test(denied.message), 'a 403 must name the role that fixes it');
 
-  const other = secretError(new Error('Secret Manager request failed (500): backend error'), 'read it');
+  const other = secretError(new Error('Secret Manager request failed (500): backend error'), 'read it', 'the Secret Manager Secret Accessor role');
   assert(/500/.test(other.message) && !/Secret Accessor/.test(other.message),
     'a non-permission failure must not blame permissions');
 
   // An HttpsError thrown deliberately below keeps its own message.
   const passed = new HttpsError('failed-precondition', 'Google Cloud credentials are unavailable.');
-  assert.strictEqual(secretError(passed, 'read it'), passed, 'an existing HttpsError passes through unchanged');
+  assert.strictEqual(secretError(passed, 'read it', 'a role'), passed, 'an existing HttpsError passes through unchanged');
+
+  // Writing needs more than Accessor: put() creates the secret and adds a
+  // version. Naming Accessor on a failed save sends the reader to a role that
+  // cannot fix it.
+  const write = secretError(new Error('Secret Manager request failed (403): denied'), 'store this credential', 'the Secret Manager Admin role');
+  assert(/Admin/.test(write.message) && !/Accessor/.test(write.message),
+    'a write failure must name a role that permits creating secrets');
 
   // Testing the helper alone is not enough: removing the wrap at either call
   // site left the suite green, which is the trap this check closes. Both
@@ -315,7 +322,7 @@ assert.throws(() => api.validate({ service: 'Recharge', name: 'Test', baseUrl: '
     const at = svc.indexOf(`async function ${fn}(`);
     assert(at !== -1, `${fn} must exist`);
     const body = svc.slice(at, svc.indexOf('\nasync function ', at + 1));
-    assert(body.includes(`secretError(e, '${marker}')`) || body.includes(`secretError(e, "${marker}")`),
+    assert(body.includes(`secretError(e, '${marker}'`) || body.includes(`secretError(e, "${marker}"`),
       `${fn} must route Secret Manager failures through secretError, or they reach the app as INTERNAL [500]`);
   }
 

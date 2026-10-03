@@ -50,7 +50,10 @@ async function put(name, value) {
   } catch (e) {
     // Saving a provider writes its key and secret here before anything is
     // stored, so this is the first thing that fails when the role is missing.
-    throw secretError(e, 'store this credential');
+    // Not Secret Accessor: saving creates the secret the first time and adds a
+    // version every time, neither of which that role permits. Naming it here
+    // would send the reader to a role that cannot fix what they are seeing.
+    throw secretError(e, 'store this credential', 'the Secret Manager Admin role');
   }
 }
 async function read(name) {
@@ -78,7 +81,7 @@ async function remove(name) {
  * reaching here is a real failure, and by far the most common is the functions
  * service account lacking Secret Manager Secret Accessor.
  */
-function secretError(e, action) {
+function secretError(e, action, role) {
   if (e instanceof HttpsError) return e;
   const detail = String(e?.message || e);
   const status = /\((\d{3})\)/.exec(detail)?.[1];
@@ -86,7 +89,7 @@ function secretError(e, action) {
   return new HttpsError('failed-precondition',
     `Could not ${action} in Secret Manager${status ? ` (HTTP ${status})` : ''}. ` +
     (denied
-      ? 'Grant the Cloud Functions service account the Secret Manager Secret Accessor role on this project.'
+      ? `Grant the Cloud Functions service account ${role} on this project, and check the Secret Manager API is enabled.`
       : 'Check the Secret Manager API is enabled for this project and try again.'));
 }
 
@@ -99,7 +102,7 @@ async function getCredentials(provider) {
       username: String(provider.username || ''),
     };
   } catch (e) {
-    throw secretError(e, "read this provider's stored credentials");
+    throw secretError(e, "read this provider's stored credentials", 'the Secret Manager Secret Accessor role');
   }
 }
 async function migrateDocument(doc) {
