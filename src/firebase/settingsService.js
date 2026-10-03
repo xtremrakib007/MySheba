@@ -10,7 +10,7 @@ const SETTINGS_DOC = doc(db, 'settings', 'pricing');
 
 export const ROLE_PRICE_ROLES = ['customer', 'dealer', 'reseller', 'admin'];
 
-export const ROLE_PRICE_KEYS = ['webviewAccessCost', 'webviewSubmitCost', 'paymentSuccessCost', 'notepadCost', 'myDocumentsCost', 'salaryOtCost', 'rechargePointCostPerUnit', 'internetPointCostPerUnit'];
+export const ROLE_PRICE_KEYS = ['webviewAccessCost', 'webviewSubmitCost', 'paymentSuccessCost', 'notepadCost', 'myDocumentsCost', 'salaryOtCost', 'rechargePointCostPerUnit', 'internetPointCostPerUnit', 'offerPacksPointCostPerUnit'];
 
 export const DEFAULT_PRICING = {
   dealerEarningPercent: 1.5,
@@ -18,6 +18,10 @@ export const DEFAULT_PRICING = {
   rechargeProfitPercent: 5,
   rechargePointCostPerUnit: 1,
   internetPointCostPerUnit: 1,
+  // Offer packs sell at the converted rate. 1 is no markup, and is the
+  // deliberate default rather than an unset field: they used to inherit the
+  // internet multiplier, so a markup there reached them silently.
+  offerPacksPointCostPerUnit: 1,
   webviewAccessCost: 2,
   webviewSubmitCost: 2,
   paymentSuccessCost: 3,

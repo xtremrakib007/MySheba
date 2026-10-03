@@ -335,6 +335,9 @@ assert.throws(() => api.validate({ service: 'Recharge', name: 'Test', baseUrl: '
   // price, the tier discount and the wallet sell rate - quoted a number the
   // wallet never charged.
   const { walletChargeFor, safePrice, PER_UNIT_PRICE_KEYS } = require('../functions/walletPricing');
+  const fs = require('fs');
+  const path = require('path');
+  const readFnEarly = (f) => fs.readFileSync(path.join(__dirname, '..', 'functions', f), 'utf8');
   const myr = { currency: 'MYR', sellRate: 1 };
 
   // 1199 BDT at 26.0 is 46.12 MYR; nothing else applied.
@@ -365,15 +368,26 @@ assert.throws(() => api.validate({ service: 'Recharge', name: 'Test', baseUrl: '
   assert.throws(() => safePrice({ internetPointCostPerUnit: -1 }, 'internetPointCostPerUnit', 'customer'),
     'a negative per-unit price is a misconfiguration, not a discount');
 
-  // The three package services share the internet per-unit key.
-  for (const kind of ['internet', 'offerpacks', 'entertainment']) {
-    assert.strictEqual(PER_UNIT_PRICE_KEYS[kind], 'internetPointCostPerUnit', `${kind} prices off the internet key`);
-  }
+  // Offer packs sell at the converted rate, with nothing added. They used to
+  // read internetPointCostPerUnit, so a markup set on internet packages
+  // reached them silently - the opposite of what offer packs are for.
+  assert.strictEqual(PER_UNIT_PRICE_KEYS.internet, 'internetPointCostPerUnit');
+  assert.strictEqual(PER_UNIT_PRICE_KEYS.entertainment, 'internetPointCostPerUnit');
+  assert.notStrictEqual(PER_UNIT_PRICE_KEYS.offerpacks, 'internetPointCostPerUnit',
+    'offer packs must not inherit the internet markup');
+  const withInternetMarkup = { internetPointCostPerUnit: 1.01 };
+  assert.strictEqual(safePrice(withInternetMarkup, PER_UNIT_PRICE_KEYS.offerpacks, 'customer'), 1,
+    'a markup on internet packages must not reach offer packs');
+  assert.strictEqual(safePrice(withInternetMarkup, PER_UNIT_PRICE_KEYS.internet, 'customer'), 1.01,
+    'but it must still reach internet packages');
+
+  // And the charge path must read this same table, or it prices off one key
+  // while the listing quotes off another.
+  assert(/CHARGEABLE=walletPricing\.PER_UNIT_PRICE_KEYS/.test(readFnEarly('walletService.js')),
+    'the charge path must use the shared per-unit price keys');
 
   // Both sides must call it, or they can drift apart again.
-  const fs = require('fs');
-  const path = require('path');
-  const readFn = (f) => fs.readFileSync(path.join(__dirname, '..', 'functions', f), 'utf8');
+  const readFn = readFnEarly;
   assert(/walletPricing\.walletChargeFor\(/.test(readFn('walletService.js')),
     'the charge path must price through walletPricing');
   assert(/walletPricing\.walletChargeFor\(/.test(readFn('apiProviderService.js')),
