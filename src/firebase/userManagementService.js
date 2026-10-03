@@ -16,11 +16,30 @@ export const ROLE_PERMISSIONS = {
   finance: { canCreate: [], canUpgradeTo: [] },
 };
 
-export const DOWNGRADE_PERMISSIONS = {
-  dealer: { dealer: 'customer' },
-  admin: { dealer: 'customer', reseller: 'customer', support: 'customer', finance: 'customer' },
-  superadmin: { dealer: 'customer', admin: 'dealer', reseller: 'customer', support: 'customer', finance: 'customer' },
+// Mirrors DOWNGRADABLE / ROLE_RANK / downgradeTargetsFor in
+// functions/userManagement.js, which is what actually decides.
+//
+// WHO may downgrade whom is unchanged from the fixed map this replaced. Only
+// the TARGET is a choice now, drawn from what the caller may assign anyway, so
+// the choice can never hand out a role they could not otherwise create.
+export const DOWNGRADABLE = {
+  dealer: ['dealer'],
+  admin: ['dealer', 'reseller', 'support', 'finance'],
+  superadmin: ['dealer', 'admin', 'reseller', 'support', 'finance'],
 };
+
+export const ROLE_RANK = { customer: 0, dealer: 1, reseller: 1, support: 1, finance: 1, admin: 2, superadmin: 3 };
+
+export function downgradeTargetsFor(callerRole, targetRole) {
+  const perms = ROLE_PERMISSIONS[callerRole];
+  const mayDowngrade = DOWNGRADABLE[callerRole] || [];
+  const targetRank = ROLE_RANK[targetRole];
+  if (!perms || targetRank == null || !mayDowngrade.includes(targetRole)) return [];
+  const assignable = new Set([...(perms.canUpgradeTo || []), 'customer']);
+  return [...assignable]
+    .filter((r) => r !== targetRole && ROLE_RANK[r] != null && ROLE_RANK[r] <= targetRank)
+    .sort((a, b) => ROLE_RANK[b] - ROLE_RANK[a] || a.localeCompare(b));
+}
 
 export function canManageUsers(role) { return !!ROLE_PERMISSIONS[role]; }
 
@@ -184,9 +203,9 @@ export async function upgradeUserRole({ targetUid, newRole }) {
   return data;
 }
 
-export async function downgradeUserRole({ targetUid }) {
+export async function downgradeUserRole({ targetUid, newRole }) {
   const fn = httpsCallable(functions, 'manageUser');
-  const { data } = await fn({ action: 'downgradeRole', targetUid });
+  const { data } = await fn({ action: 'downgradeRole', targetUid, newRole });
   return data;
 }
 

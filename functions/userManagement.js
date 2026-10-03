@@ -10,7 +10,35 @@ function normalizePhone(phone) { return String(phone || '').replace(/[^0-9]/g, '
 function phoneToEmail(phone) { return `${normalizePhone(phone)}@${APP_EMAIL_DOMAIN}`; }
 function active(profile) { return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto && profile.active !== false; }
 const ROLE_PERMISSIONS = { dealer: { canCreate: ['customer'], canUpgradeTo: [] }, admin: { canCreate: ['customer', 'dealer', 'reseller', 'support', 'finance'], canUpgradeTo: ['dealer', 'reseller', 'support', 'finance'] }, superadmin: { canCreate: ['customer', 'dealer', 'admin', 'reseller', 'support', 'finance'], canUpgradeTo: ['dealer', 'admin', 'reseller', 'support', 'finance'] }, support: { canCreate: [], canUpgradeTo: [] }, finance: { canCreate: [], canUpgradeTo: [] } };
-const DOWNGRADE_PERMISSIONS = { dealer: { dealer: 'customer' }, admin: { dealer: 'customer', reseller: 'customer', support: 'customer', finance: 'customer' }, superadmin: { dealer: 'customer', admin: 'dealer', reseller: 'customer', support: 'customer', finance: 'customer' } };
+// What a downgrade may target.
+//
+// This was a fixed map: an admin always became a dealer, everyone else always
+// became a customer, and there was nothing to choose.
+//
+// WHO may be downgraded by whom is unchanged - those are the keys the fixed
+// map already had, kept verbatim, because deriving that part from rank let an
+// admin demote another admin and let support demote a dealer, neither of which
+// was ever allowed. Only the TARGET is now a choice, and it is drawn from what
+// the caller may assign anyway, so choosing can never hand out a role they
+// could not otherwise create. Equal-rank roles are offered - moving a dealer
+// to finance is sideways, not a promotion - and the role already held is not.
+const DOWNGRADABLE = {
+  dealer: ['dealer'],
+  admin: ['dealer', 'reseller', 'support', 'finance'],
+  superadmin: ['dealer', 'admin', 'reseller', 'support', 'finance'],
+};
+const ROLE_RANK = { customer: 0, dealer: 1, reseller: 1, support: 1, finance: 1, admin: 2, superadmin: 3 };
+
+function downgradeTargetsFor(callerRole, targetRole) {
+  const perms = ROLE_PERMISSIONS[callerRole];
+  const mayDowngrade = DOWNGRADABLE[callerRole] || [];
+  const targetRank = ROLE_RANK[targetRole];
+  if (!perms || targetRank == null || !mayDowngrade.includes(targetRole)) return [];
+  const assignable = new Set([...(perms.canUpgradeTo || []), 'customer']);
+  return [...assignable]
+    .filter((r) => r !== targetRole && ROLE_RANK[r] != null && ROLE_RANK[r] <= targetRank)
+    .sort((a, b) => ROLE_RANK[b] - ROLE_RANK[a] || a.localeCompare(b));
+}
 async function getCallerProfile(uid) { const snap = await admin.firestore().collection('users').doc(uid).get(); return snap.exists ? { id: snap.id, ...snap.data() } : null; }
 async function getCustomerTarget(db, targetUid) { const ref = db.collection('users').doc(targetUid); const snap = await ref.get(); if (!snap.exists) throw new HttpsError('not-found', 'That user does not exist.'); if (snap.data().role !== 'customer') throw new HttpsError('invalid-argument', 'Only a customer account can be changed here.'); return { ref, snap }; }
 function assertActiveAssignment(profile, expectedRole, label) { if (!profile || profile.role !== expectedRole) throw new HttpsError('invalid-argument', `That ${label} was not found.`); if (!active(profile)) throw new HttpsError('failed-precondition', `That ${label} is not active.`); }
@@ -134,7 +162,7 @@ exports.manageUser = onCall({ enforceAppCheck: false }, async (request) => {
   }
 
   if (action === 'downgradeRole') {
-    const { targetUid } = request.data;
+    const { targetUid, newRole: requestedRole } = request.data;
     if (!targetUid) throw new HttpsError('invalid-argument', 'targetUid is required.');
     const targetRef = db.collection('users').doc(targetUid);
     const callerRef = db.collection('users').doc(callerUid);
@@ -142,13 +170,17 @@ exports.manageUser = onCall({ enforceAppCheck: false }, async (request) => {
       const [callerSnap, targetSnap] = await Promise.all([tx.get(callerRef), tx.get(targetRef)]);
       if (!callerSnap.exists || !active(callerSnap.data())) throw new HttpsError('permission-denied', 'Your account is not active.');
       const currentRole = callerSnap.data().role;
-      const downgrades = DOWNGRADE_PERMISSIONS[currentRole];
-      if (!downgrades) throw new HttpsError('permission-denied', 'You cannot downgrade users.');
       if (!targetSnap.exists) throw new HttpsError('not-found', 'That user does not exist.');
       const target = targetSnap.data();
       const previousRole = target.role;
-      const newRole = downgrades[previousRole];
-      if (!newRole) throw new HttpsError('permission-denied', `A ${currentRole} cannot downgrade a ${previousRole}.`);
+      const allowed = downgradeTargetsFor(currentRole, previousRole);
+      if (allowed.length === 0) throw new HttpsError('permission-denied', `A ${currentRole} cannot downgrade a ${previousRole}.`);
+      // The caller now chooses, so the choice is checked rather than computed.
+      // An absent one keeps the old behaviour for a client that has not been
+      // updated: the lowest role on offer, which is what the fixed map gave.
+      const requested = String(requestedRole || '').trim();
+      const newRole = requested || allowed[allowed.length - 1];
+      if (!allowed.includes(newRole)) throw new HttpsError('permission-denied', `A ${currentRole} cannot make a ${previousRole} into a ${newRole}.`);
       if (currentRole === 'dealer' && previousRole === 'dealer' && target.dealerId !== callerUid) throw new HttpsError('permission-denied', 'You can only downgrade your own dealers.');
       tx.update(targetRef, { role: newRole });
       return { previousRole, newRole, role: currentRole };

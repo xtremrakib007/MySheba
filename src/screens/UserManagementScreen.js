@@ -9,7 +9,7 @@ import { useTheme } from "../theme/ThemeContext";
 import HeaderDecor from '../components/HeaderDecor';
 import {
   ROLE_PERMISSIONS,
-  DOWNGRADE_PERMISSIONS,
+  downgradeTargetsFor,
   subscribeManageableUsers,
   subscribeUnassignedCustomers,
   createManagedUser,
@@ -103,7 +103,7 @@ export default function UserManagementScreen() {
   const { goBackOrHome, profile, authUser } = useApp();
   const myRole = profile?.role;
   const perms = ROLE_PERMISSIONS[myRole] || { canCreate: [], canUpgradeTo: [] };
-  const downgradeMap = DOWNGRADE_PERMISSIONS[myRole] || {};
+  const downgradeOptionsFor = (role) => downgradeTargetsFor(myRole, role);
   const isAdminTier = myRole === 'admin' || myRole === 'superadmin';
   const isSuperadmin = myRole === 'superadmin';
   // Same scoping AppContext uses for the dealer transaction feed: a dealer's
@@ -114,6 +114,7 @@ export default function UserManagementScreen() {
   const [unassigned, setUnassigned] = useState([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [upgradeTarget, setUpgradeTarget] = useState(null); // user object
+  const [downgradeTarget, setDowngradeTarget] = useState(null); // user object
   const [assignTarget, setAssignTarget] = useState(null); // customer with no dealer
   const [resellerAssignTarget, setResellerAssignTarget] = useState(null); // customer being (re)assigned a reseller
   const [name, setName] = useState('');
@@ -215,27 +216,23 @@ export default function UserManagementScreen() {
     }
   };
 
-  const onDowngrade = (u) => {
-    const newRole = downgradeMap[u.role];
-    if (!newRole) return;
-    showAlert(`Downgrade ${u.name || 'this user'}?`, `They will become a ${ROLE_LABEL[newRole] || newRole}.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Downgrade',
-        style: 'destructive',
-        onPress: async () => {
-          setBusy(true);
-          try {
-            await downgradeUserRole({ targetUid: u.id });
-            showAlert('MySheba', `${u.name || 'User'} is now a ${ROLE_LABEL[newRole] || newRole}.`);
-          } catch (err) {
-            showAlert('MySheba', err.message || 'Could not downgrade this user.');
-          } finally {
-            setBusy(false);
-          }
-        },
-      },
-    ]);
+  // A downgrade used to be one fixed outcome, so a confirmation was the whole
+  // interaction. There is a choice now, so it opens a picker like Upgrade
+  // does - and the role is sent rather than recomputed on the server.
+  const onDowngrade = (u) => setDowngradeTarget(u);
+
+  const applyDowngrade = async (role) => {
+    if (!downgradeTarget) return;
+    setBusy(true);
+    try {
+      await downgradeUserRole({ targetUid: downgradeTarget.id, newRole: role });
+      showAlert('MySheba', `${downgradeTarget.name || 'User'} is now a ${ROLE_LABEL[role] || role}.`);
+      setDowngradeTarget(null);
+    } catch (err) {
+      showAlert('MySheba', err.message || 'Could not downgrade this user.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const onToggleSuspend = (u) => {
@@ -321,7 +318,7 @@ export default function UserManagementScreen() {
 
     const styles = createStyles(colors);
     const upgradeOptions = validUpgradeOptions(perms.canUpgradeTo, u.role);
-    const canDowngrade = !!downgradeMap[u.role];
+    const canDowngrade = downgradeOptionsFor(u.role).length > 0;
     // Suspend/Delete are superadmin-only, and a superadmin account itself
     // is never a valid target - mirrors the server-side guard in
     // functions/userManagement.js so the buttons don't even appear for an
@@ -588,6 +585,27 @@ export default function UserManagementScreen() {
               ))}
             </View>
             <TouchableOpacity style={styles.modalCancel} onPress={() => setUpgradeTarget(null)} disabled={busy}>
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Downgrade role modal - the same shape as Upgrade, because the
+          decision is now the same kind of decision. */}
+      <Modal visible={!!downgradeTarget} transparent animationType="fade" onRequestClose={() => setDowngradeTarget(null)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Downgrade {downgradeTarget?.name || 'User'}</Text>
+            <Text style={styles.modalLabel}>Currently: {ROLE_LABEL[downgradeTarget?.role] || downgradeTarget?.role}</Text>
+            <View style={styles.roleRow}>
+              {downgradeOptionsFor(downgradeTarget?.role).map((r) => (
+                <TouchableOpacity key={r} style={styles.roleChip} onPress={() => applyDowngrade(r)} disabled={busy}>
+                  <Text style={styles.roleChipText}>{ROLE_LABEL[r] || r}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity style={styles.modalCancel} onPress={() => setDowngradeTarget(null)} disabled={busy}>
               <Text style={styles.modalCancelText}>Cancel</Text>
             </TouchableOpacity>
           </View>
