@@ -1,4 +1,5 @@
-import React from 'react';
+import { operatorForNumber } from '../data/operatorPrefix';
+import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { countries, rechargeOperators, amountToPoints } from '../data/countries';
@@ -13,6 +14,26 @@ import { useTheme } from '../theme/ThemeContext';
 // conversion helper remains internal for settlement compatibility.
 export default function RechargeStep({ step }) {
   const { serviceData, updateServiceData, nextStep, rates } = useApp();
+  const OPERATOR_LIST = rechargeOperators[serviceData.country] || [];
+
+  // The number is collected first so the operator can be read off it. A
+  // detected operator is selected and its step skipped, as asked. Prefixes are
+  // the original allocation, so a ported number can be detected wrongly; the
+  // grid is still reachable with Back, and a prefix two operators share is
+  // left undetected so the grid shows instead of a guess.
+  //
+  // Keyed on the number already skipped for: without that, stepping back to
+  // the operator would skip forward again and the grid could never be opened.
+  const autoSkippedFor = useRef('');
+  useEffect(() => {
+    if (step !== 2) return;
+    const phone = String(serviceData.phone || '');
+    const detected = operatorForNumber(serviceData.country, phone, OPERATOR_LIST);
+    if (!detected || autoSkippedFor.current === phone) return;
+    autoSkippedFor.current = phone;
+    if (serviceData.operator !== detected) updateServiceData({ operator: detected });
+    nextStep();
+  });
   const { colors, isDark } = useTheme();
   const styles = createStyles(colors, isDark);
 
@@ -20,11 +41,11 @@ export default function RechargeStep({ step }) {
     return (<View><FormLabel>Select Country</FormLabel><View style={styles.grid3}>{countries.map((c) => (<CountrySelectCard key={c.code} code={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr }); nextStep(); }} />))}</View></View>);
   }
   if (step === 1) {
-    const list = rechargeOperators[serviceData.country] || ['Operator 1', 'Operator 2'];
-    return (<View><FormLabel>Select Operator</FormLabel><View style={styles.grid3}>{list.map((o) => { const brand = getOperatorBrand(o); return <RechargeOperatorCard key={o} name={o} logo={brand.logo} color={brand.color} initials={brand.initials} selected={serviceData.operator === o} onPress={() => { updateServiceData({ operator: o }); nextStep(); }} styles={styles} primaryColor={colors.primary} />; })}</View></View>);
+    return (<View><FormLabel>Enter Mobile Number</FormLabel><FormInput placeholder="Enter number" placeholderTextColor={isDark ? '#9AA6BA' : '#777777'} keyboardType="phone-pad" value={serviceData.phone || ''} onChangeText={(v) => updateServiceData({ phone: v })} style={styles.phoneInput} /></View>);
   }
   if (step === 2) {
-    return (<View><FormLabel>Enter Mobile Number</FormLabel><FormInput placeholder="Enter number" placeholderTextColor={isDark ? '#9AA6BA' : '#777777'} keyboardType="phone-pad" value={serviceData.phone || ''} onChangeText={(v) => updateServiceData({ phone: v })} style={styles.phoneInput} /></View>);
+    const list = rechargeOperators[serviceData.country] || ['Operator 1', 'Operator 2'];
+    return (<View><FormLabel>Select Operator</FormLabel><View style={styles.grid3}>{list.map((o) => { const brand = getOperatorBrand(o); return <RechargeOperatorCard key={o} name={o} logo={brand.logo} color={brand.color} initials={brand.initials} selected={serviceData.operator === o} onPress={() => { updateServiceData({ operator: o }); nextStep(); }} styles={styles} primaryColor={colors.primary} />; })}</View></View>);
   }
   if (step === 3) {
     const cur = serviceData.currency || 'MYR';
@@ -38,7 +59,7 @@ export default function RechargeStep({ step }) {
 
 function RechargeOperatorCard({ name, logo, color, initials, selected, onPress, styles, primaryColor }) { return <TouchableOpacity style={[styles.selectCard, styles.operatorCard, selected && styles.selectCardSelected]} onPress={onPress} activeOpacity={0.8}>{logo ? <Image source={logo} style={styles.operatorLogo} resizeMode="contain" /> : <View style={[styles.operatorBadge, { backgroundColor: color || primaryColor }]}><Text style={styles.operatorBadgeText}>{initials}</Text></View>}<Text style={[styles.selectName, styles.operatorName, selected && styles.selectNameSelected]} numberOfLines={2}>{String(name || '')}</Text></TouchableOpacity>; }
 function RechargeAmountButton({ label, selected, onPress, styles }) { return <TouchableOpacity style={[styles.amountBtn, selected && styles.amountBtnSelected]} onPress={onPress} activeOpacity={0.8}><Text style={[styles.amountBtnText, selected && styles.amountBtnTextSelected]}>{label}</Text></TouchableOpacity>; }
-export function validateStep(step, serviceData) { if (step === 0 && !serviceData.country) return 'Please select a country.'; if (step === 1 && !serviceData.operator) return 'Please select an operator.'; if (step === 2 && !(serviceData.phone || '').trim()) return 'Please enter a mobile number.'; if (step === 3 && !(serviceData.amount > 0)) return 'Please select or enter an amount.'; return null; }
+export function validateStep(step, serviceData) { if (step === 0 && !serviceData.country) return 'Please select a country.'; if (step === 2 && !serviceData.operator) return 'Please select an operator.'; if (step === 1 && !(serviceData.phone || '').trim()) return 'Please enter a mobile number.'; if (step === 3 && !(serviceData.amount > 0)) return 'Please select or enter an amount.'; return null; }
 function createStyles(colors, isDark) {
   const tileBg = colors.surface;
   const tileText = colors.text;

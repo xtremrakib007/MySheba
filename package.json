@@ -44,6 +44,7 @@
     "audit:escapes": "node scripts/audit-escapes.js",
     "deploy:functions": "node scripts/deploy-functions.js",
     "deploy:api": "node scripts/deploy-api.js",
+    "test:operator": "node scripts/test-operator-detect.js",
     "test:deploytargets": "node scripts/test-deploy-targets.js",
     "test:face": "node scripts/test-face-event.js",
     "test:facecapture": "node scripts/test-face-capture.js",

@@ -1,5 +1,6 @@
+import { operatorForNumber } from '../data/operatorPrefix';
 import { groupByValidity } from '../utils/packageValidity';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { countries, rechargeOperators } from '../data/countries';
@@ -14,6 +15,26 @@ import * as apiProviderService from '../firebase/apiProviderService';
 // conversion helper remains internal for settlement compatibility.
 export default function InternetStep({ step }) {
   const { serviceData, updateServiceData, nextStep, internetPricing } = useApp();
+  const OPERATOR_LIST = rechargeOperators[serviceData.country] || [];
+
+  // The number is collected first so the operator can be read off it. A
+  // detected operator is selected and its step skipped, as asked. Prefixes are
+  // the original allocation, so a ported number can be detected wrongly; the
+  // grid is still reachable with Back, and a prefix two operators share is
+  // left undetected so the grid shows instead of a guess.
+  //
+  // Keyed on the number already skipped for: without that, stepping back to
+  // the operator would skip forward again and the grid could never be opened.
+  const autoSkippedFor = useRef('');
+  useEffect(() => {
+    if (step !== 2) return;
+    const phone = String(serviceData.phone || '');
+    const detected = operatorForNumber(serviceData.country, phone, OPERATOR_LIST);
+    if (!detected || autoSkippedFor.current === phone) return;
+    autoSkippedFor.current = phone;
+    if (serviceData.operator !== detected) updateServiceData({ operator: detected });
+    nextStep();
+  });
   const [successTopUpPackages, setSuccessTopUpPackages] = useState([]);
   const [packageLoading, setPackageLoading] = useState(false);
   const [packageError, setPackageError] = useState('');
@@ -37,12 +58,12 @@ export default function InternetStep({ step }) {
   }
 
   if (step === 1) {
-    const list = rechargeOperators[serviceData.country] || ['Operator 1', 'Operator 2'];
-    return <View><FormLabel>Select Operator</FormLabel><Grid3>{list.map((o) => { const brand = getOperatorBrand(o); return <OperatorCard key={o} name={o} logo={brand.logo} color={brand.color} initials={brand.initials} selected={serviceData.operator === o} onPress={() => { updateServiceData({ operator: o, package: null, amount: null }); nextStep(); }} />; })}</Grid3></View>;
+    return <View><FormLabel>Enter Mobile Number</FormLabel><FormInput placeholder="Mobile number" keyboardType="phone-pad" value={serviceData.phone || ''} onChangeText={(v) => updateServiceData({ phone: v })} /></View>;
   }
 
   if (step === 2) {
-    return <View><FormLabel>Enter Mobile Number</FormLabel><FormInput placeholder="Mobile number" keyboardType="phone-pad" value={serviceData.phone || ''} onChangeText={(v) => updateServiceData({ phone: v })} /></View>;
+    const list = rechargeOperators[serviceData.country] || ['Operator 1', 'Operator 2'];
+    return <View><FormLabel>Select Operator</FormLabel><Grid3>{list.map((o) => { const brand = getOperatorBrand(o); return <OperatorCard key={o} name={o} logo={brand.logo} color={brand.color} initials={brand.initials} selected={serviceData.operator === o} onPress={() => { updateServiceData({ operator: o, package: null, amount: null }); nextStep(); }} />; })}</Grid3></View>;
   }
 
   if (step === 3) {
@@ -80,8 +101,8 @@ export default function InternetStep({ step }) {
 
 export function validateStep(step, serviceData) {
   if (step === 0 && !serviceData.country) return 'Please select a country.';
-  if (step === 1 && !serviceData.operator) return 'Please select an operator.';
-  if (step === 2 && !(serviceData.phone || '').trim()) return 'Please enter a mobile number.';
+  if (step === 2 && !serviceData.operator) return 'Please select an operator.';
+  if (step === 1 && !(serviceData.phone || '').trim()) return 'Please enter a mobile number.';
   if (step === 3 && !serviceData.package) return 'Please select a package.';
   return null;
 }
