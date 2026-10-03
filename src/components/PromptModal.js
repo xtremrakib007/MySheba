@@ -4,7 +4,15 @@ import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import AppModalHeader from './AppModalHeader';
 
-export default function PromptModal({ visible, title, placeholder, secure, maxLength, onSubmit, onCancel }) {
+/**
+ * `suggestions` fills the box; it does not replace it.
+ *
+ * A reason is still ordinary text, so nothing downstream learns that presets
+ * exist, and anything unlisted is still typed. Tapping one is a starting
+ * point - it can be edited before OK, which is why these are not a dropdown
+ * that commits a value.
+ */
+export default function PromptModal({ visible, title, placeholder, secure, maxLength, suggestions, onSubmit, onCancel }) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const [value, setValue] = useState('');
@@ -17,6 +25,15 @@ export default function PromptModal({ visible, title, placeholder, secure, maxLe
           <AppModalHeader />
           <View style={styles.content}>
             <Text style={styles.title}>{title}</Text>
+            {Array.isArray(suggestions) && suggestions.length > 0 ? (
+              <View style={styles.suggestions}>
+                {suggestions.map((s) => (
+                  <TouchableOpacity key={s} style={styles.suggestion} onPress={() => setValue(s)}>
+                    <Text style={styles.suggestionText}>{s}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : null}
             <TextInput
               style={styles.input}
               placeholder={placeholder}
@@ -26,7 +43,7 @@ export default function PromptModal({ visible, title, placeholder, secure, maxLe
               keyboardType={secure ? 'number-pad' : 'default'}
               value={value}
               onChangeText={setValue}
-              autoFocus
+              autoFocus={!Array.isArray(suggestions) || suggestions.length === 0}
               selectionColor={colors.primary}
             />
             <View style={styles.row}>
@@ -50,6 +67,9 @@ function createStyles(colors) {
     box: { backgroundColor: colors.card, borderRadius: radius.lg, width: '85%', maxWidth: 340, overflow: 'hidden' },
     content: { padding: 20 },
     title: { fontWeight: '600', fontSize: 15, marginBottom: 10, color: colors.text },
+    suggestions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
+    suggestion: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg },
+    suggestionText: { fontSize: 12, color: colors.text },
     input: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, color: colors.text, borderRadius: radius.md, paddingVertical: 10, paddingHorizontal: 12, fontSize: 14, marginBottom: 14 },
     row: { flexDirection: 'row', gap: 10 },
     cancelBtn: { flex: 1, paddingVertical: 10, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },

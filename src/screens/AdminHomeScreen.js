@@ -1,3 +1,4 @@
+import { TRANSACTION_REJECT_REASONS, TOPUP_REJECT_REASONS } from '../data/rejectionReasons';
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Linking, Image, StyleSheet } from 'react-native';
 import { showAlert } from '../utils/appAlert';
@@ -1460,6 +1461,7 @@ export default function AdminHomeScreen() {
         visible={!!rejectTopupId}
         title="Rejection reason:"
         placeholder="Enter reason"
+        suggestions={TOPUP_REJECT_REASONS}
         onSubmit={confirmRejectTopup}
         onCancel={() => setRejectTopupId(null)}
       />
@@ -1467,6 +1469,7 @@ export default function AdminHomeScreen() {
         visible={!!rejectTxId}
         title="Rejection reason:"
         placeholder="Enter reason"
+        suggestions={TRANSACTION_REJECT_REASONS}
         onSubmit={confirmRejectTx}
         onCancel={() => setRejectTxId(null)}
       />

@@ -44,6 +44,7 @@
     "audit:escapes": "node scripts/audit-escapes.js",
     "deploy:functions": "node scripts/deploy-functions.js",
     "deploy:api": "node scripts/deploy-api.js",
+    "test:reasons": "node scripts/test-reject-reasons.js",
     "test:userroles": "node scripts/test-user-roles.js",
     "test:funding": "node scripts/test-wallet-funding.js",
     "test:operator": "node scripts/test-operator-detect.js",

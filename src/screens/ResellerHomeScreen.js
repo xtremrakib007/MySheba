@@ -1,3 +1,4 @@
+import { TRANSACTION_REJECT_REASONS } from '../data/rejectionReasons';
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Linking } from 'react-native';
 import { showAlert } from '../utils/appAlert';
@@ -375,7 +376,8 @@ export default function ResellerHomeScreen() {
         </>
         )}
       </ScrollView>
-      <PromptModal visible={!!rejectId} title="Rejection reason:" placeholder="Enter reason" onSubmit={confirmReject} onCancel={() => setRejectId(null)} />
+      <PromptModal visible={!!rejectId} title="Rejection reason:" placeholder="Enter reason"
+        suggestions={TRANSACTION_REJECT_REASONS} onSubmit={confirmReject} onCancel={() => setRejectId(null)} />
       <PromptModal visible={!!pinId} title={PIN_PROMPT_TITLE} placeholder={PIN_PROMPT_PLACEHOLDER} secure maxLength={PIN_MAX} onSubmit={confirmPin} onCancel={() => setPinId(null)} />
       <AttachFileModal
         visible={!!receiptTxId}
