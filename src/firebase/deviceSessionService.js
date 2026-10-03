@@ -111,6 +111,49 @@ export async function getSessionProof() {
   return { sessionId: repaired, deviceId: deviceId || (await getDeviceId()) };
 }
 
+/**
+ * Fetch a fresh session proof even though a local one exists.
+ *
+ * getSessionProof repairs only a MISSING session. A STALE one is the common
+ * case - signing in anywhere else rotates activeSessionId - and it is held
+ * locally, sent, and refused with "This device session is no longer active",
+ * with nothing retrying. The person is told to sign in again for a session the
+ * app could have refreshed by itself.
+ *
+ * The cached promise is cleared first: it holds the id that was just refused,
+ * so reusing it would repair straight back to the stale one.
+ */
+export async function forceRepairSessionProof() {
+  repairPromise = null;
+  const sessionId = await repairSessionProof();
+  return { sessionId, deviceId: await getDeviceId() };
+}
+
+/** Whether the backend refused the session proof rather than the request. */
+export function isSessionRejection(error) {
+  const message = String(error?.message || '');
+  return /device session is no longer active|secure session is missing|secure admin session is missing/i.test(message);
+}
+
+/**
+ * Run a callable with session proof, refreshing it once if it is refused.
+ *
+ * Safe to retry: the refusal happens in the session gate, before any read or
+ * write, so the first attempt changed nothing. The money paths guard
+ * themselves too - a refund already paid is refused by rejectionRefunded, and
+ * a settled transaction reports alreadyReconciled - so a retry cannot pay
+ * twice even if the first call had got further than it did.
+ */
+export async function callWithSessionProof(name, payload = {}) {
+  const invoke = async (session) => (await httpsCallable(functions, name)({ ...payload, ...session })).data;
+  try {
+    return await invoke(await getSessionProof());
+  } catch (error) {
+    if (!isSessionRejection(error)) throw error;
+    return invoke(await forceRepairSessionProof());
+  }
+}
+
 export async function setLocalSessionId(sessionId) {
   if (!sessionId) return;
   await AsyncStorage.setItem(LOCAL_SESSION_ID_KEY, sessionId);

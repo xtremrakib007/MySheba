@@ -4,7 +4,7 @@ import { httpsCallable } from 'firebase/functions';
 import * as Crypto from 'expo-crypto';
 import { db, functions, auth } from './config';
 import { logActivity } from './logService';
-import { getSessionProof } from './deviceSessionService';
+import { getSessionProof, callWithSessionProof } from './deviceSessionService';
 
 const COLLECTION = 'transactions';
 const QUEUE_COLLECTION = 'transactionQueue';
@@ -95,11 +95,12 @@ export async function reconcileUnknownTransaction(transactionId, outcome, provid
   const reference = String(providerReference || '').trim();
   if (!reference) throw new Error('Enter the provider reference you checked before settling this.');
   try {
-    const session = await getSessionProof();
-    const { data } = await httpsCallable(functions, 'reconcileUnknownTransaction')({
-      transactionId, outcome, providerReference: reference, ...session,
+    // Through callWithSessionProof: a stale session proof is refreshed and the
+    // call retried once, instead of telling an admin who is signed in to sign
+    // in again.
+    return await callWithSessionProof('reconcileUnknownTransaction', {
+      transactionId, outcome, providerReference: reference,
     });
-    return data;
   } catch (err) {
     throw new Error(err.message || 'Could not reconcile this transaction right now.');
   }
@@ -107,7 +108,7 @@ export async function reconcileUnknownTransaction(transactionId, outcome, provid
 
 export async function approveTransaction(id) { try { await httpsCallable(functions, 'approveTransaction')({ transactionId: id }); } catch (err) { throw new Error(err.message || 'Could not approve this order.'); } }
 export async function acceptTransaction(id) { try { await httpsCallable(functions, 'acceptTransaction')({ transactionId: id }); } catch (err) { throw new Error(err.message || 'Could not accept this order.'); } }
-export async function rejectTransaction(id, reason, service) { if (!['Recharge', 'Internet', 'Bill Payment', 'Mobile Banking', 'Remittance'].includes(service)) throw new Error('This order type does not support rejection.'); try { const session = await getSessionProof(); return (await httpsCallable(functions, 'rejectTransaction')({ transactionId: id, reason: reason || '', ...session })).data; } catch (err) { throw new Error(err.message || 'Could not reject this order right now.'); } }
+export async function rejectTransaction(id, reason, service) { if (!['Recharge', 'Internet', 'Bill Payment', 'Mobile Banking', 'Remittance'].includes(service)) throw new Error('This order type does not support rejection.'); try { return await callWithSessionProof('rejectTransaction', { transactionId: id, reason: reason || '' }); } catch (err) { throw new Error(err.message || 'Could not reject this order right now.'); } }
 export async function completeTransaction(id, pin, receiptUrl) { try { await httpsCallable(functions, 'completeTransaction')({ transactionId: id, pin: pin || '', receiptUrl: receiptUrl || '' }); } catch (err) { throw new Error(err.message || 'Could not complete this order.'); } }
 export async function assignDealer(id, dealerId) { try { await httpsCallable(functions, 'assignDealer')({ transactionId: id, dealerId }); } catch (err) { throw new Error(err.message || 'Could not assign this dealer.'); } }
 

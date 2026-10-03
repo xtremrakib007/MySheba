@@ -35,7 +35,9 @@ console.log('\nThe callable is reachable from a human surface');
 const clientService = read('src/firebase/transactionService.js');
 check(
   'the app can call reconcileUnknownTransaction',
-  /httpsCallable\(functions, 'reconcileUnknownTransaction'\)/.test(clientService)
+  // Named through callWithSessionProof now rather than httpsCallable directly,
+  // so the call is checked by the name it sends, not by the helper it uses.
+  /callWithSessionProof\('reconcileUnknownTransaction'/.test(clientService)
 );
 check(
   'and can list the transactions needing it',
@@ -70,6 +72,21 @@ check(
 check('settling as failed refunds the wallet', /walletBalance: nextBalance/.test(backend));
 check('and records who did it', /reconciledBy: currentActor\.uid/.test(backend));
 
+console.log('\nA stale session is refreshed, not handed back to the user');
+// "This admin device session is no longer active. Please sign in again. [403]"
+// on a signed-in admin. getSessionProof repairs only a MISSING session, so a
+// stale one - signing in anywhere else rotates activeSessionId - was sent,
+// refused, and never retried.
+const client = read('src/firebase/transactionService.js');
+const sessions = read('src/firebase/deviceSessionService.js');
+check('both refund paths refresh and retry once',
+  (client.match(/callWithSessionProof\('(reconcileUnknownTransaction|rejectTransaction)'/g) || []).length === 2);
+check('the retry clears the cached repair, which holds the refused id',
+  /repairPromise = null;\n  const sessionId = await repairSessionProof\(\)/.test(sessions));
+check('and only a session refusal is retried, not any failure',
+  /isSessionRejection/.test(sessions)
+  && /if \(!isSessionRejection\(error\)\) throw error;/.test(sessions));
+
 console.log('\nThe client refuses a decision it cannot justify');
 
 // These run before the callable, so a mistake never reaches the money path.
@@ -77,7 +94,9 @@ const fn = clientService.slice(clientService.indexOf('export async function reco
 const body = fn.slice(0, fn.indexOf('\n}') + 2);
 check('an unknown outcome is rejected', /\['completed', 'failed'\]\.includes\(outcome\)/.test(body));
 check('an empty provider reference is rejected', /if \(!reference\) throw/.test(body));
-check('the session proof is attached', /getSessionProof\(\)/.test(body));
+// The proof is attached by the helper, which also refreshes it once if the
+// backend refuses it - what getSessionProof alone never did.
+check('the session proof is attached', /callWithSessionProof\(/.test(body));
 
 console.log('\nThe screen makes the consequence explicit');
 
