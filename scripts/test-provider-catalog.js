@@ -243,6 +243,30 @@ async function main() {
   check('and one unusable row among usable ones is still just dropped',
     pc.parseCatalogResponse(cfg, { drives: [{ id: '1', name: 'A', price: 10 }, { name: 'no id', price: 5 }] }).length === 1);
 
+  console.log('\nThe live /api/drives shape');
+  // Copied from a real response, reported by the diagnostic above after all 63
+  // packages were dropped: title, price, driveId, operator, type, commission,
+  // duration, product_type. No field name here is a guess.
+  const live = {
+    title: '2GB 7 Days',
+    price: 98,
+    driveId: 'D-4417',
+    operator: 'GP',
+    type: 'regular',
+    commission: 2.5,
+    duration: '7 Days',
+    product_type: 'Data',
+  };
+  const [got] = pc.parseCatalogResponse(cfg, { drives: [live] });
+  check('driveId is the id a package is bought by', got.id === 'D-4417');
+  check('title is its name', got.name === '2GB 7 Days');
+  check('duration is its validity', got.valid === '7 Days');
+  check('price survives', got.price === 98);
+  // `type` is the catalogue being read, not what the package is. Reading a
+  // category from it would label every row "regular" and send none of them to
+  // the Entertainment screen correctly.
+  check('product_type is the category, not type', got.category === 'Data');
+
   console.log('');
   if (failed) {
     console.error(`${failed} check(s) failed.`);

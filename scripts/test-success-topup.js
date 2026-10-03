@@ -344,6 +344,21 @@ check('each package screen sells the catalogue it should', () => {
   return null;
 });
 
+check('a package detail line never starts with a stray separator', () => {
+  // The live /api/drives rows carry no `data` field at all - they are title,
+  // price, driveId, operator, type, commission, duration, product_type - so
+  // `${p.data} • ${p.valid}` rendered as " • 7 Days" on every row. Offer Packs
+  // already joined the parts it had; the other two screens now do the same.
+  for (const rel of ['src/steps/InternetSteps.js', 'src/steps/EntertainmentSteps.js', 'src/steps/OfferPacksSteps.js']) {
+    const src = code(read(rel) || '');
+    if (/\$\{p\.data\}\s*•/.test(src)) return `${rel} prints an empty data field with its separator.`;
+    if (!/\[p\.data, p\.valid, p\.category\]\.filter\(Boolean\)/.test(src)) {
+      return `${rel} does not build its detail line from the parts that exist.`;
+    }
+  }
+  return null;
+});
+
 check('both package screens explain an empty catalogue', () => {
   for (const rel of ['src/steps/InternetSteps.js', 'src/steps/EntertainmentSteps.js']) {
     const src = read(rel);

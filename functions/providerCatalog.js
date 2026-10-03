@@ -58,12 +58,22 @@ const PRESETS = {
     successPath: 'result',
     successValue: true,
     listPath: 'drives',
+    // Field names observed on a live /api/drives response, not inferred:
+    //   title, price, driveId, operator, type, commission, duration, product_type
+    //
+    // driveId is the one that mattered. Without it every package failed the
+    // `id && price > 0` filter and all 63 were dropped, which the screen
+    // reported as the operator having no packages.
+    //
+    // product_type is listed before type deliberately: `type` here is the
+    // catalogue being read (regular or drive), not what the package is, so
+    // reading a category from it would label every row "regular".
     itemMap: {
-      id: ['id', 'package_id', 'packageId'],
+      id: ['id', 'package_id', 'packageId', 'driveId', 'drive_id'],
       name: ['name', 'title', 'package_name'],
       data: ['data', 'data_amount', 'volume'],
       valid: ['valid', 'validity', 'duration'],
-      category: ['category', 'pack_type', 'packType', 'type'],
+      category: ['category', 'pack_type', 'packType', 'product_type', 'type'],
       price: ['price', 'amount'],
     },
     // `regular` first so it wins a duplicate id.

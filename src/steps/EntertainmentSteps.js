@@ -93,7 +93,7 @@ export default function EntertainmentStep({ step }) {
         {!!error && <FormLabel>{error}</FormLabel>}
         {!!driveClosed && <FormLabel>{driveWindowClosedMessage()} Packages outside those hours are not shown.</FormLabel>}
         {!loading && !error && serviceData.country === 'BD' && packages.length === 0 && <FormLabel>Success TopUp has no entertainment packages for this operator yet. Data and minutes packs are under Internet and Recharge.</FormLabel>}
-        {!loading && !error && packages.map((p) => <PackageCard key={p.id} name={p.name} detail={`${p.data} • ${p.valid}`} price={p.price} currency={cur} selected={serviceData.package === p.name} onPress={() => updateServiceData({ package: p.name, packageId: p.id, amount: p.price })} />)}
+        {!loading && !error && packages.map((p) => <PackageCard key={p.id} name={p.name} detail={[p.data, p.valid, p.category].filter(Boolean).join(' • ')} price={p.price} currency={cur} selected={serviceData.package === p.name} onPress={() => updateServiceData({ package: p.name, packageId: p.id, amount: p.price })} />)}
         {!!(isForeign && selected) && <SummaryCard rows={[{ label: 'Package Price', value: `${cur} ${Number(selected.price).toFixed(2)}` }]} totalLabel="Wallet deduction" totalValue={`${walletDeductionMyr.toFixed(2)} MYR`} />}
       </View>
     );
