@@ -244,10 +244,12 @@ console.log('\nStaff see the same WebViews as customers');
 const admin = read('src/screens/AdminFeaturesScreen.js');
 const gridSrc = read('src/components/ServiceGrid.js');
 const featureGrid = read('src/components/FeatureGrid.js');
-yes('the admin landing uses the shared builder', /adminLandingTiles\(webviewPages, hasServiceArt\)/.test(admin));
+yes('the admin landing uses the shared builder', /adminLandingTiles\(webviewPages, hasServiceArt, tileLabels\)/.test(admin));
 // Looking the tapped key up in the static list made an added tile inert.
 yes('a tapped tile is looked up in the live list', /adminHomeList\.find\(\(x\) => x\.key === key\)/.test(admin));
-yes('FeatureGrid can draw a tile whose key names no art', /hasServiceArt\(it\.art \|\| it\.key\)/.test(featureGrid));
+// `it.emoji ? '' : it.key` so a superadmin's chosen emoji beats the drawing the
+// key would otherwise pick - see test:tilelabels.
+yes('FeatureGrid can draw a tile whose key names no art', /hasServiceArt\(it\.art \|\| \(it\.emoji \? '' : it\.key\)\)/.test(featureGrid));
 // Dealers and resellers take SHARED_SERVICES through ServiceGrid, which
 // already runs the overlay - this is the line that keeps that true.
 yes('one line carries them to every staff role',

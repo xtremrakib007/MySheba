@@ -29,13 +29,17 @@ export function Tile({ s, onPress, disabled }) {
   // carries the colour, and the outline carries the brand.
   // A bus partner gets its own brand mark, anything with a drawing gets
   // that, and the emoji map is the fallback for whatever is left.
-  const artKey = asSafeText(s?.key, icon);
+  // A chosen icon beats the one the key implies. `art` names a drawing, `emoji`
+  // is text to print; a superadmin setting either in Tile Labels must see it,
+  // and both used to lose to whatever drawing this tile's KEY happened to have.
+  const chosenEmoji = asSafeText(s?.emoji, '');
+  const artKey = asSafeText(s?.art, '') || (chosenEmoji ? '' : asSafeText(s?.key, icon));
   return <TouchableOpacity style={[styles.item, { borderColor: `${colors.primary}66`, backgroundColor: colors.card }, disabled && styles.itemDisabled]} activeOpacity={0.82} disabled={!!disabled} onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
     {hasBusLogo(artKey)
       ? <View style={styles.logoWrap}><BusOperatorLogo operatorKey={artKey} size={32} /></View>
       : hasServiceArt(artKey)
         ? <View style={styles.logoWrap}><ServiceArt name={artKey} size={32} color={colors.primary} /></View>
-        : <Text style={styles.emoji} numberOfLines={1}>{asSafeText(s?.emoji, '') || serviceEmoji(artKey)}</Text>}
+        : <Text style={styles.emoji} numberOfLines={1}>{chosenEmoji || serviceEmoji(asSafeText(s?.key, icon))}</Text>}
     <Text style={[styles.name, { color: colors.text || '#222' }]} numberOfLines={2}>{label}</Text>
   </TouchableOpacity>;
 }
@@ -89,7 +93,7 @@ export const PRIMARY_SERVICES = CUSTOMER_SERVICES;
 // overflow section from this list, so dropping `home` moves a tile there
 // rather than deleting it from the app.
 export default function ServiceGrid({ homeOnly }) {
-  const { colors } = useTheme(); const { webViewBusy, profile, gridManagement, gridViewer, can, webviewPages } = useApp();
+  const { colors } = useTheme(); const { webViewBusy, profile, gridManagement, gridViewer, can, webviewPages, tileLabels } = useApp();
   const handlePress = useServiceAction(); const role = profile?.role || 'customer';
   const isStaff = STAFF_ROLES.includes(role);
   // Both of these live in serviceTiles.js, so what a role sees - and that an
@@ -99,6 +103,7 @@ export default function ServiceGrid({ homeOnly }) {
     role,
     can,
     webviewPages,
+    tileLabels,
     isActive: (key) => gridManagementService.isGridActive(gridManagement, key, gridViewer),
     homeOnly,
   });

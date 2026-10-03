@@ -187,6 +187,73 @@ export function servicesForRole(role, can = () => true) {
 }
 
 /**
+ * Every tile a superadmin can rename, once each, grouped by where it appears.
+ *
+ * Built from the declared lists rather than written out again, so a tile added
+ * anywhere becomes editable without anybody remembering to add it here - which
+ * is the failure this would otherwise have: an editor that silently covers most
+ * of the app.
+ *
+ * Keyed by tile key, and a key appears in several lists (Transactions is on the
+ * dealer grid, the capability grid and the account rows), so it is listed once
+ * under the first place it is found. Renaming it renames all of them, which is
+ * the point: they are one destination.
+ */
+export function editableTiles() {
+  const groups = [
+    ['Customer services', CUSTOMER_SERVICES],
+    ['Staff management', [...STAFF_CAPABILITY_TILES, ...Object.values(STAFF_SERVICES).flat()]],
+    ['Admin landing', ADMIN_HOME],
+    ['Account rows', [...PERSONAL_FEATURES, ...STAFF_FEATURES]],
+  ];
+  const seen = new Set();
+  const out = [];
+  for (const [label, list] of groups) {
+    const tiles = [];
+    for (const tile of list) {
+      if (!tile || !tile.key || seen.has(tile.key)) continue;
+      seen.add(tile.key);
+      tiles.push({ key: tile.key, name: tile.name, icon: tile.icon, art: tile.art });
+    }
+    if (tiles.length) out.push({ label, tiles });
+  }
+  return out;
+}
+
+/**
+ * A superadmin's own name and icon for a tile, over the declared one.
+ *
+ * Applied to every grid, after the WebView overlay and before anything is
+ * filtered, so one rename reaches the home screen, More Features, the admin
+ * landing and the staff grids at once rather than four lists having to agree.
+ *
+ * Only `name` and `icon` move. Nothing here touches `kind`, `key`, `screen`,
+ * `service` or `cat`: a tile renamed badly is a bad label, but a tile repointed
+ * would be a way to dress one feature up as another, and a label editor has no
+ * business being able to do that.
+ *
+ * An icon is either the name of a drawing the app ships - set as `art`, which
+ * the Tile prefers over the drawing its key would otherwise pick - or a short
+ * piece of text drawn as an emoji.
+ */
+export function applyTileLabels(list, tileLabels) {
+  const labels = tileLabels || {};
+  return (list || []).map((item) => {
+    const override = labels[item.key];
+    if (!override) return item;
+    const next = { ...item };
+    if (override.name) next.name = override.name;
+    if (override.icon) {
+      if (override.iconIsArt) { next.art = override.icon; next.emoji = ''; }
+      // `art: ''` matters: without it a tile whose key has a drawing would keep
+      // drawing it and the chosen emoji would never appear.
+      else { next.emoji = override.icon; next.art = ''; }
+    }
+    return next;
+  });
+}
+
+/**
  * A superadmin can rename a built-in WebView tile, give it another icon, move
  * it off the home screen or switch it off, and can add new ones. The declared
  * list stays the source of order and behaviour; only the label and icon are
@@ -271,7 +338,7 @@ export const ADMIN_HOME = [
  * and an added page's key is a generated wv_ one that names no drawing, so a
  * chosen art icon has to travel as `art` or it prints as the word.
  */
-export function adminLandingTiles(webviewPages, hasArt = () => false) {
+export function adminLandingTiles(webviewPages, hasArt = () => false, tileLabels) {
   const pages = webviewPages || {};
   const tileFor = (page) => ({
     key: page.key,
@@ -283,7 +350,7 @@ export function adminLandingTiles(webviewPages, hasArt = () => false) {
     .filter((item) => !(item.service && item.service.kind === 'webview' && pages[item.key] && pages[item.key].active === false))
     .map((item) => (item.service && item.service.kind === 'webview' && pages[item.key] ? { ...item, ...tileFor(pages[item.key]) } : item));
   const extra = Object.values(pages).filter((p) => p.custom && p.active !== false).map(tileFor);
-  return [...overlaid, ...extra];
+  return applyTileLabels([...overlaid, ...extra], tileLabels);
 }
 
 /** The Grid Management key a tile is gated by - not always its own key. */
@@ -310,8 +377,8 @@ export function gridKeyFor(service) {
  * Firestore. `homeOnly` is the customer home screen; a staff list carries no
  * home flags, so it falls back to the whole set rather than rendering nothing.
  */
-export function visibleTiles({ role, can, webviewPages, isActive = () => true, homeOnly = false }) {
-  const all = withWebviewConfig(servicesForRole(role, can), webviewPages);
+export function visibleTiles({ role, can, webviewPages, tileLabels, isActive = () => true, homeOnly = false }) {
+  const all = applyTileLabels(withWebviewConfig(servicesForRole(role, can), webviewPages), tileLabels);
   const active = all.filter((service) => isActive(gridKeyFor(service)));
   if (!homeOnly) return active;
   // Staff used to be exempt: their grids showed the whole catalogue, which made
@@ -392,18 +459,18 @@ export const STAFF_FEATURES = [
  * the personal section, and two headings describing the same thing read as a
  * duplicate even when no tile is repeated.
  */
-export function moreFeaturesSections({ role = 'customer', can, webviewPages, isActive = () => true }) {
-  const account = (!role || role === 'customer') ? PERSONAL_FEATURES : STAFF_FEATURES;
+export function moreFeaturesSections({ role = 'customer', can, webviewPages, tileLabels, isActive = () => true }) {
+  const account = applyTileLabels((!role || role === 'customer') ? PERSONAL_FEATURES : STAFF_FEATURES, tileLabels);
   const kinds = new Set(account.map((f) => f.kind));
   const keys = new Set(account.map((f) => f.key));
-  const overflow = overflowTiles({ role, can, webviewPages, isActive, excludeKinds: kinds })
+  const overflow = overflowTiles({ role, can, webviewPages, tileLabels, isActive, excludeKinds: kinds })
     .filter((tile) => tile.cat !== 'personal' && !keys.has(tile.key));
   return { sections: groupTilesByCategory(overflow), account };
 }
 
-export function overflowTiles({ role = 'customer', can, webviewPages, isActive = () => true, excludeKinds = [] }) {
+export function overflowTiles({ role = 'customer', can, webviewPages, tileLabels, isActive = () => true, excludeKinds = [] }) {
   const exclude = new Set(excludeKinds);
-  return withWebviewConfig(servicesForRole(role, can), webviewPages)
+  return applyTileLabels(withWebviewConfig(servicesForRole(role, can), webviewPages), tileLabels)
     .filter((tile) => isActive(gridKeyFor(tile)))
     .filter((tile) => !tile.home && tile.kind !== 'moreFeaturesLink' && !exclude.has(tile.kind));
 }

@@ -128,7 +128,8 @@ console.log('Nothing is drawn twice, and nothing is dropped');
 for (const role of ROLES) {
   const { sections, account } = moreFeaturesSections({ role, can: allCaps });
   const expected = (role === 'customer') ? PERSONAL_FEATURES : STAFF_FEATURES;
-  assert.strictEqual(account, expected, `a ${role} must get the right account list`);
+  assert.deepStrictEqual(account.map((f) => f.key), expected.map((f) => f.key),
+    `a ${role} must get the right account list`);
 
   const accountKinds = new Set(account.map((f) => f.kind));
   const accountKeys = new Set(account.map((f) => f.key));
@@ -156,8 +157,8 @@ for (const role of ROLES) {
 
 // A staff member and a customer must not be handed the same rows: that swap is
 // precisely what produced the duplicate.
-assert.notStrictEqual(moreFeaturesSections({ role: 'dealer', can: allCaps }).account,
-  moreFeaturesSections({ role: 'customer', can: allCaps }).account,
+assert.notDeepStrictEqual(moreFeaturesSections({ role: 'dealer', can: allCaps }).account.map((f) => f.key),
+  moreFeaturesSections({ role: 'customer', can: allCaps }).account.map((f) => f.key),
   'staff and customer account rows are different lists');
 
 // The screen must call it rather than keeping its own copy.

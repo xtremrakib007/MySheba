@@ -28,7 +28,7 @@ function Section({ title, subtitle, items, onPress }) {
 }
 
 export default function MoreFeaturesScreen() {
-  const { goBackOrHome, profile, gridManagement, gridViewer, webviewPages, can } = useApp();
+  const { goBackOrHome, profile, gridManagement, gridViewer, webviewPages, can, tileLabels } = useApp();
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
   // This screen's rule: a finished tile lands on the home screen or here, never
@@ -41,6 +41,7 @@ export default function MoreFeaturesScreen() {
     role,
     can,
     webviewPages,
+    tileLabels,
     isActive: (key) => gridManagementService.isGridActive(gridManagement, key, gridViewer),
   });
   const handlePress = useServiceAction();

@@ -43,6 +43,7 @@ import * as ratesService from "../firebase/ratesService";
 import * as settingsService from "../firebase/settingsService";
 import * as featureAccessService from "../firebase/featureAccessService";
 import * as webviewConfigService from '../firebase/webviewConfigService';
+import * as tileLabelService from '../firebase/tileLabelService';
 import * as gridManagementService from "../firebase/gridManagementService";
 import * as accessControlService from "../firebase/accessControlService";
 import * as adControlsService from "../firebase/adControlsService";
@@ -807,6 +808,18 @@ export function AppProvider({ children }) {
     );
   }, [authUser, profile]);
 
+  // A superadmin's own names and icons for tiles. Empty is the normal state and
+  // means every tile keeps what it ships with, so the grids are right before
+  // the first snapshot and stay right if the document never exists.
+  const [tileLabels, setTileLabels] = useState({});
+  useEffect(() => {
+    if (!authUser || !profile) return undefined;
+    return tileLabelService.subscribeTileLabels(
+      setTileLabels,
+      logListenerError('tileLabels'),
+    );
+  }, [authUser, profile]);
+
   // Central navigation boundary. UI hiding is not a security boundary:
   // every internal setScreen() call (notifications, deep links, callbacks,
   // and manually triggered handlers) must pass role + live grid checks here.
@@ -852,6 +865,8 @@ export function AppProvider({ children }) {
     featureAccess: ['admin', 'superadmin'],
     apiProviderManagement: ['superadmin'],
     gridManagement: ['superadmin'],
+    // Renaming a tile changes what every role sees, so it is superadmin's alone.
+    tileLabels: ['superadmin'],
     adFeatureControls: ['superadmin'],
     adAnalytics: ['superadmin'],
     advertiserManagement: ['superadmin'],
@@ -2821,6 +2836,7 @@ export function AppProvider({ children }) {
     // viewer, so a tile cannot be drawn by one rule and gated by another.
     gridViewer,
     webviewPages,
+    tileLabels,
     supportContact,
 
     paymentSettings,

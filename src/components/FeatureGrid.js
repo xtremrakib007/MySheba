@@ -101,9 +101,12 @@ export default function FeatureGrid({ title, items, activeKey, onPress, numColum
                   {/* `art` names a drawing for a tile whose key is not one -
                       a WebView a superadmin added has a generated key, and
                       without this its chosen icon would print as the word. */}
-                  {hasServiceArt(it.art || it.key)
+                  {/* A chosen emoji beats the drawing this tile's key implies,
+                      or a superadmin picking one in Tile Labels would see no
+                      change on any tile whose key happens to have art. */}
+                  {hasServiceArt(it.art || (it.emoji ? '' : it.key))
                     ? <ServiceArt name={it.art || it.key} size={28 * iconRender.scale} color={tileTint || iconColor} />
-                    : <Text style={[styles.iconText, { color: tileTint || iconColor, fontSize: 27 * iconRender.scale, fontWeight: iconRender.weight }]}>{iconFor(it.key, iconStyle, it.icon)}</Text>}
+                    : <Text style={[styles.iconText, { color: tileTint || iconColor, fontSize: 27 * iconRender.scale, fontWeight: iconRender.weight }]}>{it.emoji || iconFor(it.key, iconStyle, it.icon)}</Text>}
                 </View>
                 <Text style={labelStyle} numberOfLines={2}>{String(it.name || '')}</Text>
               </>
