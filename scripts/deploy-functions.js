@@ -12,10 +12,15 @@
  */
 const { spawnSync } = require('child_process');
 const { requireCurrentCheckout } = require('./lib/require-current-checkout');
+const { assertDeployable } = require('./lib/exported-functions');
 
 const names = process.argv.slice(2).filter((a) => !a.startsWith('-'));
 const passthrough = process.argv.slice(2).filter((a) => a.startsWith('-') && a !== '--dry-run');
 const dryRun = process.argv.includes('--dry-run');
+
+// Firebase only rejects a bad name after analysing and uploading the bundle,
+// and then deploys nothing. Checking the entrypoint first costs milliseconds.
+if (names.length) assertDeployable(names);
 
 const target = names.length
   ? names.map((n) => `functions:${n}`).join(',')
