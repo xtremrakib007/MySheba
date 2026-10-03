@@ -205,6 +205,20 @@ function fillTemplate(template, values) {
 }
 
 /** Turn one provider item into the shape the rest of the app expects. */
+/**
+ * A price as the provider chose to write it.
+ *
+ * Number('1,198') and Number('BDT 198') are both NaN, and a NaN price fails
+ * the `price > 0` filter below - so one thousand-separator drops the package
+ * with no error anywhere. Providers are no more consistent about number
+ * formatting than they are about true vs "true".
+ */
+function toAmount(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const n = Number(String(value ?? '').replace(/[^0-9.-]/g, ''));
+  return Number.isFinite(n) ? n : 0;
+}
+
 function normaliseItem(item, itemMap) {
   const map = itemMap || DEFAULT_ITEM_MAP;
   return {
@@ -213,7 +227,7 @@ function normaliseItem(item, itemMap) {
     data: String(firstOf(item, map.data) ?? '').slice(0, 100),
     valid: String(firstOf(item, map.valid) ?? '').slice(0, 100),
     category: String(firstOf(item, map.category) ?? '').slice(0, 60),
-    price: Number(firstOf(item, map.price) ?? 0),
+    price: toAmount(firstOf(item, map.price)),
   };
 }
 
@@ -240,10 +254,25 @@ function parseCatalogResponse(config, data) {
   }
   const list = config.listPath ? valueAtPath(body, config.listPath) : body;
   const items = Array.isArray(list) ? list : [];
-  return items
+  const usable = items
     .slice(0, MAX_ITEMS)
     .map((item) => normaliseItem(item && typeof item === 'object' ? item : {}, config.itemMap))
     .filter((item) => item.id && item.price > 0);
+
+  // A package with no id cannot be ordered and one with no price cannot be
+  // charged, so dropping it is right. Dropping ALL of them silently is not:
+  // the customer is told no packages are available for their operator, which
+  // reads as the operator having none rather than as a mapping that no longer
+  // fits the response. Naming the fields that did arrive is what makes it
+  // fixable without guessing at the provider's field names.
+  if (items.length && !usable.length) {
+    const sample = items.find((i) => i && typeof i === 'object' && !Array.isArray(i)) || {};
+    const fields = Object.keys(sample).slice(0, 12).join(', ');
+    throw new Error(
+      `${config.errorLabel} returned ${items.length} package(s), but none had both an id and a price. ` +
+      `Fields received: ${fields || 'none'}.`);
+  }
+  return usable;
 }
 
 /**

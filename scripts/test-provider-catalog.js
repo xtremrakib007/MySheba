@@ -214,6 +214,35 @@ async function main() {
   check('an unknown placeholder is left alone rather than blanked',
     pc.fillTemplate({ k: '{{nope}}' }, {}).k === '{{nope}}');
 
+  console.log('\nPrices and silent drops');
+  // A package with no id or no price is correctly dropped - but dropping every
+  // one without a word tells the customer their operator has no packages,
+  // which is a different and wrong statement.
+  const cfg = { listPath: 'drives', itemMap: pc.PRESETS['success-topup'].itemMap, errorLabel: 'Success TopUp' };
+
+  check('a thousand separator is still a price, not a dropped package',
+    pc.parseCatalogResponse(cfg, { drives: [{ id: '1', name: 'A', price: '1,198' }] })[0].price === 1198);
+  check('and so is a price written with its currency',
+    pc.parseCatalogResponse(cfg, { drives: [{ id: '2', name: 'B', price: 'BDT 198.50' }] })[0].price === 198.5);
+  check('a real number is untouched',
+    pc.parseCatalogResponse(cfg, { drives: [{ id: '3', name: 'C', price: 49 }] })[0].price === 49);
+
+  let threw = '';
+  try {
+    pc.parseCatalogResponse(cfg, { drives: [{ sku: 'x', title: 'A', cost: 10 }, { sku: 'y', title: 'B', cost: 20 }] });
+  } catch (e) { threw = e.message; }
+  check('a catalogue that maps to nothing says so instead of looking empty',
+    /returned 2 package/.test(threw));
+  check('and names the fields that did arrive, so the mapping can be corrected',
+    /sku/.test(threw) && /title/.test(threw) && /cost/.test(threw));
+
+  // An genuinely empty catalogue is not an error: that operator may simply
+  // have no packages today.
+  check('an empty catalogue stays empty rather than throwing',
+    pc.parseCatalogResponse(cfg, { drives: [] }).length === 0);
+  check('and one unusable row among usable ones is still just dropped',
+    pc.parseCatalogResponse(cfg, { drives: [{ id: '1', name: 'A', price: 10 }, { name: 'no id', price: 5 }] }).length === 1);
+
   console.log('');
   if (failed) {
     console.error(`${failed} check(s) failed.`);
