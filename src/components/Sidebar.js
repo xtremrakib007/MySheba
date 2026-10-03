@@ -45,7 +45,6 @@ const ADMIN_GROUPS = [
   { title: 'Admin Overview', icon: 'home', color: 'primary', items: [
     { key: 'adminHome', icon: 'adminHome', label: 'Control Center', featured: true },
     { key: 'adminAnalytics', icon: 'adminAnalytics', label: 'Analytics' },
-    { key: 'reports', icon: 'reports', label: 'Reports' },
   ] },
   { title: 'Operations', icon: 'settings', color: 'secondary', items: [
     { key: 'all', icon: 'history', label: 'Transactions', tab: true },
@@ -81,18 +80,22 @@ const SUPERADMIN_GROUPS = [
     { key: 'tierPromotions', icon: 'tierPromotions', label: 'Tier Promotions' },
     { key: 'superAdminTopup', icon: 'superAdminTopup', label: 'Wallet Top-Up' },
   ] },
-  // Who sees what. These three were reachable only through System Control >
-  // System, two taps in, so the grid scoping and the WebView editor read as
-  // missing features. "Tool Access" is gone from the list above: it opened
-  // featureAccess, the same screen the Platform group already calls Feature
-  // Access, so the sidebar offered one screen twice under two names.
+  // Who sees what. These were reachable only through System Control > System,
+  // two taps in, so the grid scoping and the WebView editor read as missing
+  // features.
+  //
+  // Three rows have been removed from this drawer for the same reason, and the
+  // reason is worth keeping: a superadmin sees COMMON + ADMIN + SUPERADMIN
+  // groups at once, so a key listed in two of them is one screen offered twice.
+  // "Tool Access" and "Feature Access" were both featureAccess. "Verification
+  // Queue" and "KYC Verification" were both verificationManagement - one screen
+  // under two names, which reads as two features rather than as a duplicate.
+  // "Reports" sat in Admin Overview while COMMON_GROUPS already gave it to
+  // every role. audit:nav fails on a repeat now, so this stops being a thing
+  // somebody has to notice.
   { title: 'Access Control', icon: 'featureAccess', color: 'secondary', items: [
     { key: 'gridManagement', icon: 'gridManagement', label: 'Grid Access' },
-    { key: 'featureAccess', icon: 'featureAccess', label: 'Feature Access' },
     { key: 'webviewManagement', icon: 'apiManagement', label: 'WebView Pages' },
-  ] },
-  { title: 'Risk & Moderation', icon: 'kyc', color: 'primary', items: [
-    { key: 'verificationManagement', icon: 'verificationManagement', label: 'Verification Queue' },
   ] },
   { title: 'Advertising', icon: 'more', color: 'secondary', items: [
     { key: 'adAnalytics', icon: 'adAnalytics', label: 'Ad Analytics' },
@@ -314,8 +317,11 @@ function createStyles(colors) {
     groupIconBox: { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center', marginRight: 9 },
     groupIcon: { fontSize: 15 }, groupHeaderText: { color: colors.text, fontSize: 11.5, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
     groupLine: { flex: 1 }, chevron: { color: colors.textSecondary, fontSize: 21, lineHeight: 21, paddingHorizontal: 7 },
-    grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', paddingTop: 9 },
-    gridItem: { width: '48.2%', minHeight: 57, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, borderRadius: 13, paddingVertical: 9, paddingHorizontal: 8, marginBottom: 8 },
+    // Packed left with a fixed gap: `space-between` pushed a two-item group's
+    // rows against opposite margins with a gap between them, which reads as a
+    // layout fault rather than a short row.
+    grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', columnGap: 8, paddingTop: 9 },
+    gridItem: { width: '47%', minHeight: 57, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, borderRadius: 13, paddingVertical: 9, paddingHorizontal: 8, marginBottom: 8 },
     featuredItem: { borderColor: colors.primary, backgroundColor: colors.card },
     gridItemActive: { borderColor: colors.primary, backgroundColor: colors.card, elevation: 2, shadowColor: colors.primary, shadowOpacity: 0.12, shadowRadius: 4 },
     itemIconBox: { width: 34, height: 34, borderRadius: 10, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', marginRight: 7 },

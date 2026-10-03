@@ -211,12 +211,26 @@ for (const file of [...reachable]) {
     const found = o.properties.find((x) => x.key && x.key.name === name);
     return found ? found.value : undefined;
   };
+  // Which groups each destination appears in.
+  //
+  // A superadmin sees COMMON + ADMIN + SUPERADMIN groups at once, so a key
+  // listed in two of them is one screen offered twice in one drawer - and when
+  // the two rows are labelled differently ("KYC Verification" and "Verification
+  // Queue" were both verificationManagement) it reads as two features rather
+  // than as a duplicate. Four of these have been found and removed by hand;
+  // this is so the fifth fails a build instead.
+  const appearsIn = new Map();
+
   for (const node of groupNodes) {
     for (const group of node.elements) {
       const items = prop(group, 'items');
       if (!items) continue;
+      const title = (prop(group, 'title') || {}).value || '(untitled)';
       for (const item of items.elements) {
         const key = prop(item, 'key').value;
+        const label = (prop(item, 'label') || {}).value || key;
+        if (!appearsIn.has(key)) appearsIn.set(key, []);
+        appearsIn.get(key).push(`${title} > ${label}`);
         const isTab = !!prop(item, 'tab');
         if (isTab) {
           check('sidebar tab', key, 'AdminHomeScreen has no such adminTab branch', adminTabs.has(key));
@@ -225,6 +239,12 @@ for (const file of [...reachable]) {
         }
       }
     }
+  }
+
+  for (const [key, places] of appearsIn) {
+    check('sidebar duplicate', key,
+      `listed ${places.length} times in one drawer - ${places.join(' / ')}`,
+      places.length === 1);
   }
 }
 

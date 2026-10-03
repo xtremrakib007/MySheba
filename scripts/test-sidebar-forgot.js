@@ -67,8 +67,16 @@ console.log('\nThe access screens are findable, and listed once');
 for (const key of ['gridManagement', 'featureAccess', 'webviewManagement']) {
   check(`${key} is in the sidebar`, new RegExp(`key: '${key}'`).test(sidebar));
 }
-check('and featureAccess is listed once per role',
-  (sidebar.match(/key: 'featureAccess'/g) || []).length === 2, 'admin group + superadmin group, no more');
+// This used to require TWO entries - "admin group + superadmin group, no more"
+// - which was the bug it was written to catch, half-fixed. A superadmin sees
+// COMMON + ADMIN + SUPERADMIN groups at once, so the admin group's copy already
+// reaches them: the second was the same screen listed twice in one drawer, the
+// very thing removing "Tool Access" was meant to end. One entry, in a group an
+// admin can see, serves both roles.
+check('and featureAccess is listed exactly once',
+  (sidebar.match(/key: 'featureAccess'/g) || []).length === 1, 'one screen, one row');
+check('in a group an admin sees, so it is not superadmin-only',
+  sidebar.indexOf("key: 'featureAccess'") < sidebar.indexOf('const SUPERADMIN_GROUPS'));
 check('Tool Access is gone', !/Tool Access/.test(sidebar));
 // goTo refuses anything Grid Management switched off, and these are how a
 // superadmin switches things back on - locking yourself out of the unlock.
