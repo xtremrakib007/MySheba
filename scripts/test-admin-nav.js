@@ -71,6 +71,41 @@ check('tapping a header toggles that one group', /setExpanded\(\(prev\) => \(\{ 
 check('and every open starts shut again', /setExpanded\(\{\}\);/.test(sidebar));
 check('no collapsed state is left behind', !/setCollapsed|collapsed\[/.test(sidebar));
 
+console.log('\nEvery role lands somewhere it can work');
+// Three copies of "where does this role live" disagreed. The one the route
+// guard calls omitted support and finance, so a staff agent was sent to the
+// customer home whenever it ran and their features were simply absent.
+{
+  const utilSrc = read('src/utils/homeScreen.js')
+    .replace(/^export (const|function) /gm, '$1 ')
+    .replace(/^export \{[^}]*\};?$/gm, '');
+  const mod = {};
+  new Function('module', 'exports', `${utilSrc}\nmodule.exports={homeScreenForRole,STAFF_HOME_ROLES};`)(mod, {});
+  const { homeScreenForRole, STAFF_HOME_ROLES } = mod.exports;
+
+  for (const [role, home] of [
+    ['customer', 'customerHome'], ['dealer', 'dealerHome'], ['reseller', 'resellerHome'],
+    ['support', 'staffHome'], ['finance', 'staffHome'],
+    ['admin', 'adminHome'], ['superadmin', 'adminHome'],
+  ]) {
+    check(`${role} lands on ${home}`, homeScreenForRole(role) === home);
+  }
+  check('an unknown role is a customer, not an error', homeScreenForRole(undefined) === 'customerHome');
+
+  const ctx = read('src/context/AppContext.js');
+  const verify = read('src/screens/DeviceVerifyScreen.js');
+  check('the route guard uses the shared resolver',
+    /getHomeForRole = useCallback\(\(role\) => homeForRoleShared\(role\)/.test(ctx));
+  check('and device verify does too', /const homeForRole = homeScreenForRole;/.test(verify));
+  check('no screen keeps its own role-to-home list', !/return 'customerHome';/.test(verify));
+
+  // Absent from SCREEN_ROLES the staff home was unguarded; absent from the
+  // sign-in transition list it would be denied to the staff signing in.
+  check('the staff home is guarded', /staffHome: STAFF_HOME_ROLES/.test(ctx));
+  check('to exactly support and finance', STAFF_HOME_ROLES.join(',') === 'support,finance');
+  check('and reachable while the profile commits', /'adminHome', 'staffHome'\]\.includes\(nextScreen\)/.test(ctx));
+}
+
 console.log('');
 if (failed) {
   console.error(`${failed} check(s) failed.`);

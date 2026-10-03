@@ -1,3 +1,4 @@
+import { homeScreenForRole } from '../utils/homeScreen';
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Linking, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -36,12 +37,7 @@ export default function DeviceVerifyScreen() {
   const [sent, setSent] = useState(false);
   const [phoneConfirmation, setPhoneConfirmation] = useState(null);
 
-  const homeForRole = (role) => {
-    if (role === 'admin' || role === 'superadmin') return 'adminHome';
-    if (role === 'dealer') return 'dealerHome';
-    if (role === 'reseller') return 'resellerHome';
-    return 'customerHome';
-  };
+  const homeForRole = homeScreenForRole;
 
   const finish = async (credential) => {
     setLocalError(''); setBusy(true);

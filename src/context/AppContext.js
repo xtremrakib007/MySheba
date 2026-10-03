@@ -1,3 +1,4 @@
+import { homeScreenForRole as homeForRoleShared, STAFF_HOME_ROLES } from '../utils/homeScreen';
 import React, {
   createContext,
   useContext,
@@ -311,15 +312,8 @@ export function AppProvider({ children }) {
   // back-history stack below.
   const PRE_AUTH_SCREENS = ["login", "register", "deviceVerify", "googlePhone"];
 
-  // One place that answers "where does this role live". It was inlined in the
-  // auth effect and duplicated in DeviceVerifyScreen; both are now this.
-  const homeScreenForRole = (role) => {
-    if (role === "dealer") return "dealerHome";
-    if (role === "reseller") return "resellerHome";
-    if (role === "support" || role === "finance") return "staffHome";
-    if (role === "admin" || role === "superadmin") return "adminHome";
-    return "customerHome";
-  };
+  // One place that answers "where does this role live" - src/utils/homeScreen.js.
+  const homeScreenForRole = homeForRoleShared;
 
   useEffect(() => {
     const prev = prevScreenRef.current;
@@ -870,14 +864,14 @@ export function AppProvider({ children }) {
     superAdminTopup: ['superadmin'],
     dealerFeatures: ['dealer'],
     resellerFeatures: ['reseller'],
+    // Absent, this screen was simply unguarded: SCREEN_ROLES[undefined] is
+    // falsy, so anyone could open it.
+    staffHome: STAFF_HOME_ROLES,
     };
 
-  const getHomeForRole = useCallback((role) => {
-    if (role === 'dealer') return 'dealerHome';
-    if (role === 'reseller') return 'resellerHome';
-    if (role === 'admin' || role === 'superadmin') return 'adminHome';
-    return 'customerHome';
-  }, []);
+  // The route guard calls this. Its own copy omitted support and finance, so
+  // every time the guard ran it sent a staff agent to the customer home.
+  const getHomeForRole = useCallback((role) => homeForRoleShared(role), []);
 
   const setScreen = useCallback((nextScreen) => {
     const role = profile?.role;
@@ -893,7 +887,7 @@ export function AppProvider({ children }) {
       const rolePendingHome =
         !role &&
         !!authUser &&
-        ['customerHome', 'dealerHome', 'resellerHome', 'adminHome'].includes(nextScreen);
+        ['customerHome', 'dealerHome', 'resellerHome', 'adminHome', 'staffHome'].includes(nextScreen);
       if (!rolePendingHome && (!role || !allowedRoles.includes(role))) {
         if (authUser) showAlert('MySheba', 'You do not have access to this feature.');
         return;
