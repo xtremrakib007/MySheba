@@ -10,6 +10,7 @@ import HeaderDecor from './HeaderDecor';
 import VerifiedBadge from './VerifiedBadge';
 import Constants from 'expo-constants';
 import { showAlert } from '../utils/appAlert';
+import { useAppSync } from './SyncButton';
 import ServiceIcon from './ServiceIcon';
 // Rows draw from the same set the grids use, so the menu and the grid agree
 // and there are enough icons to give each row its own. Group headers and the
@@ -164,6 +165,11 @@ export default function Sidebar() {
     setScreen(key);
   };
   const toggleGroup = (title) => setExpanded((prev) => ({ ...prev, [title]: !prev[title] }));
+  // Every role reaches the sidebar; only two screens use AppHeader. So this is
+  // the row that puts refresh in front of a dealer, a reseller and support,
+  // who would otherwise have no way to ask for one.
+  const { sync, busy: syncing } = useAppSync();
+  const onSync = () => { closeSidebar(); sync(); };
   const onLogout = () => {
     closeSidebar();
     showAlert('Log Out', 'Are you sure you want to log out?', [
@@ -262,7 +268,7 @@ export default function Sidebar() {
             </View>
             <Text style={styles.brandVersion}>v{APP_VERSION}</Text>
           </View>
-          <View style={[styles.footer, { paddingBottom: insets.bottom + 17 }]}><TouchableOpacity style={styles.logoutRow} onPress={onLogout} activeOpacity={0.8}><View style={styles.logoutIcon}><ServiceIcon name="profile" size={18} color={colors.danger || '#B00020'} /></View><Text style={styles.logoutLabel}>Logout</Text><Text style={styles.logoutArrow}>→</Text></TouchableOpacity></View>
+          <View style={[styles.footer, { paddingBottom: insets.bottom + 17 }]}><TouchableOpacity style={styles.syncRow} onPress={onSync} activeOpacity={0.8} disabled={syncing} accessibilityRole="button" accessibilityLabel="Refresh and check for updates"><View style={styles.logoutIcon}><Text style={[styles.syncIcon, { color: colors.primary }]}>↻</Text></View><Text style={[styles.syncLabel, { color: colors.text }]}>{syncing ? 'Refreshing…' : 'Refresh & check for updates'}</Text></TouchableOpacity><TouchableOpacity style={styles.logoutRow} onPress={onLogout} activeOpacity={0.8}><View style={styles.logoutIcon}><ServiceIcon name="profile" size={18} color={colors.danger || '#B00020'} /></View><Text style={styles.logoutLabel}>Logout</Text><Text style={styles.logoutArrow}>→</Text></TouchableOpacity></View>
         </Animated.View>
       </View>
     </Modal>
@@ -317,6 +323,9 @@ function createStyles(colors) {
     brandIdentity: { flexDirection: 'row', alignItems: 'center' }, brandLogo: { width: 30, height: 30, marginRight: 8, opacity: 0.9 }, brandRow: { flexDirection: 'row' }, brandDark: { fontSize: 14, fontWeight: '900', color: colors.navy }, brandTeal: { fontSize: 14, fontWeight: '900', color: colors.primary }, brandCompany: { color: colors.textSecondary, fontSize: 8.5, marginTop: 1 }, brandVersion: { color: colors.textSecondary, fontSize: 9, fontWeight: '700' },
     // paddingBottom comes from the safe-area inset at the call site.
     footer: { borderTopWidth: 1, borderTopColor: colors.border },
+    syncRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 11, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
+    syncIcon: { fontSize: 17, fontWeight: '800' },
+    syncLabel: { flex: 1, fontSize: 13, fontWeight: '700' },
     logoutRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 11, paddingHorizontal: 16 }, logoutIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', marginRight: 9 }, logoutLabel: { flex: 1, color: colors.error, fontSize: 13, fontWeight: '800' }, logoutArrow: { color: colors.error, fontSize: 18, fontWeight: '700' },
   });
 }

@@ -33,6 +33,7 @@
     "audit:buttons": "node scripts/audit-button-labels.js",
     "test:receipt": "node scripts/test-receipt-html.js",
     "test:packagecategory": "node scripts/test-package-category.js",
+    "test:appsync": "node scripts/test-app-sync.js",
     "audit:tiles": "node scripts/audit-tile-destinations.js",
     "test:auth": "node scripts/test-profile-gate.js",
     "publish:ota": "node scripts/publish-ota.js",

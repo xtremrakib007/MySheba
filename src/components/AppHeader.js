@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import HeaderDecor from './HeaderDecor';
+import SyncButton from './SyncButton';
 
 // Menu - logo - MySheba - bell - username.
 //
@@ -38,6 +39,8 @@ export default function AppHeader({ unreadCount = 0, onPressMenu }) {
         <Image source={require('../../assets/icon-transparent.png')} style={styles.logo} resizeMode="contain" />
         <Text style={styles.brand} numberOfLines={1}>MySheba</Text>
       </View>
+
+      <SyncButton />
 
       <TouchableOpacity style={styles.bellWrap} onPress={() => setScreen('notifications')} accessibilityRole="button" accessibilityLabel={`Notifications, ${unreadCount} unread`}>
         <Text style={styles.bell}>🔔</Text>
