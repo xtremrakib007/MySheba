@@ -27,6 +27,7 @@ const path = require('path');
 const root = path.join(__dirname, '..');
 const ctx = fs.readFileSync(path.join(root, 'src', 'context', 'AppContext.js'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'App.js'), 'utf8');
+const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
 const failures = [];
 const checks = [];
@@ -122,6 +123,34 @@ check('every auth routing path shares one role-to-home mapping',
   && /if \(screen !== "login"\) return;[\s\S]{0,300}?setScreen\(homeScreenForRole/.test(ctx)
   && /const getHomeForRole = useCallback\(\(role\) => homeScreenForRole\(role\)/.test(ctx),
   'AppContext must import it and define none of its own');
+
+// --- the screens you may be on while signed out -----------------------------
+// Being signed out is not an error on these; it is the point of them. Every
+// other screen with no Firebase user means a session ended, so the guard sends
+// you to login.
+//
+// forgotPassword was missing from the list this guard reads, while a SECOND
+// copy in BiometricOptInPrompt had it. The copy that mattered was the one
+// without: the only moment anybody taps "Forgot Password?" is while signed out,
+// so the guard fired the instant the screen was set and bounced them back
+// before it drew. Tapping the link did nothing whatsoever.
+const preAuth = read('src/utils/preAuthScreens.js');
+check('the pre-auth list is shared, not copied',
+  /export const PRE_AUTH_SCREENS/.test(preAuth)
+  && /import \{ PRE_AUTH_SCREENS \} from '\.\.\/utils\/preAuthScreens'/.test(ctx)
+  && !/const PRE_AUTH_SCREENS = \[/.test(ctx),
+  'AppContext must import it and define none of its own');
+check('and the prompt reads the same one',
+  /import \{ PRE_AUTH_SCREENS \} from '\.\.\/utils\/preAuthScreens'/.test(read('src/components/BiometricOptInPrompt.js'))
+  && !/const preAuthScreens = \[/.test(read('src/components/BiometricOptInPrompt.js')));
+
+// Every screen App.js can render before anybody signs in has to be on it, or
+// the guard throws you off the moment you arrive.
+for (const screen of ['login', 'register', 'forgotPassword', 'deviceVerify', 'googlePhone']) {
+  check(`${screen} survives being signed out`,
+    new RegExp(`'${screen}'`).test(preAuth),
+    'the signed-out guard sends anything missing straight back to login');
+}
 
 // --- the watchdog that exposed all this ------------------------------------
 check('the first-route watchdog still exists',

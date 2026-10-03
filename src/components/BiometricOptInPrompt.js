@@ -3,6 +3,7 @@ import { Modal, View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } fr
 import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
+import { PRE_AUTH_SCREENS } from '../utils/preAuthScreens';
 
 // Shown once per fresh sign-in after the authentication/onboarding flow has
 // reached a real home screen. Pre-auth screens intentionally hide the modal.
@@ -12,8 +13,8 @@ export default function BiometricOptInPrompt() {
   const { screen, showBiometricPrompt, dismissBiometricPrompt } = useApp();
   const [busy, setBusy] = useState(false);
 
-  const preAuthScreens = ['login', 'register', 'deviceVerify', 'forgotPassword'];
-  if (!showBiometricPrompt || preAuthScreens.includes(screen)) return null;
+  // The shared list - this one used to be its own, and the two disagreed.
+  if (!showBiometricPrompt || PRE_AUTH_SCREENS.includes(screen)) return null;
 
   const onEnable = async () => {
     setBusy(true);

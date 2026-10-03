@@ -1,116 +1,112 @@
-import React, { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import React from 'react';
+import { View, Text } from 'react-native';
 import { useApp } from '../context/AppContext';
-import { countries, rechargeOperators } from '../data/countries';
-import { getOperatorBrand } from '../data/operatorBrand';
-import { FormLabel, Grid3, OperatorCard, FormInput, SummaryCard } from '../components/ui';
-import PackagePicker from '../components/PackagePicker';
-import CountrySelectCard from '../components/CountrySelectCard';
-import * as apiProviderService from '../firebase/apiProviderService';
-import { isEntertainmentPackage } from '../utils/packageCategory';
-import { isDriveWindowOpen, driveWindowClosedMessage } from '../utils/driveWindow';
+import { FormLabel, Grid3, OperatorCard, FormInput, PackageCard, SummaryCard } from '../components/ui';
+import { GAME_TOP_UPS, gameByKey, packById } from '../data/gameTopUps';
 
-// Entertainment flow: country -> operator -> phone -> package.
+// Entertainment is game top-ups: PUBG UC, Free Fire diamonds, ML diamonds.
 //
-// Success TopUp has no entertainment product today, and this screen is honest
-// about that rather than filling itself with something else. The supplied
-// catalogue (BD_Mobile_Operator_Packages.xlsx) is 239 regular + 211 drive
-// packages across four categories - Data, Bundle, Voice, Call Rate - and a
-// keyword sweep for Toffee, Bioscope, Hoichoi, Chorki, YouTube and the rest
-// matched zero of those 450 rows.
+// It used to ask for a country, a mobile operator and a phone number, then show
+// nothing at all - because it searched the Success TopUp catalogue for a
+// category that catalogue has no rows in. All 450 packages Success TopUp sells
+// are Data, Bundle, Voice and Call Rate; there is no game voucher among them.
+// So the screen was asking for a mobile operator, which a game top-up does not
+// have, in order to list products that do not exist.
 //
-// An earlier version of this screen read the `drive` catalogue and called it
-// entertainment. That was wrong: "Drive Recharge" is a parallel,
-// commission-bearing catalogue of the SAME minutes-and-data packs (0-12% of
-// price, averaging 4.9%), not content.
+// The flow is now the three things an order actually needs: which game, which
+// pack, and who to credit. Fulfilment is manual - staff buy the code and
+// deliver it - which is the same path every order the provider cannot serve
+// already takes.
 //
-// So it reads both catalogues and keeps only entries the provider itself
-// categorises as entertainment. That is nothing right now, which is the
-// truthful answer - and the screen starts working on its own the day Success
-// TopUp adds such SKUs, with no code change.
-//
-// Buying is unchanged and documented: POST /api/recharge with the chosen
-// package_id, which is why the server treats this and Internet as one path
-// (SUCCESS_TOPUP_PACKAGE_SERVICES).
-const DRIVE_OPERATOR_CODES = {
-  Grameenphone: 'GP', Robi: 'RB', Banglalink: 'BL', Airtel: 'AT',
-  Teletalk: 'TT', Skitto: 'SK', 'Brilliant Connect': 'BT', Ryze: 'RY',
-};
-
+// Steps: game -> pack -> player ID.
 export default function EntertainmentStep({ step }) {
   const { serviceData, updateServiceData, nextStep } = useApp();
-  const [packages, setPackages] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [driveClosed, setDriveClosed] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    if (serviceData.country !== 'BD' || step !== 3) return () => { alive = false; };
-    setLoading(true); setError('');
-    const operator = DRIVE_OPERATOR_CODES[serviceData.operator] || 'ALL';
-    const driveOpen = isDriveWindowOpen();
-    setDriveClosed(!driveOpen);
-    Promise.all([
-      apiProviderService.listSuccessTopUpDrives(operator, 'regular', 'Entertainment', serviceData.operator || ''),
-      driveOpen
-        ? apiProviderService.listSuccessTopUpDrives(operator, 'drive', 'Entertainment', serviceData.operator || '')
-        : Promise.resolve([]),
-    ])
-      .then(([regular, drive]) => {
-        if (!alive) return;
-        const byId = new Map();
-        for (const pkg of [...regular, ...drive]) if (isEntertainmentPackage(pkg)) byId.set(pkg.id, pkg);
-        setPackages([...byId.values()]);
-      })
-      .catch((e) => { if (alive) { setPackages([]); setError(e?.message || 'Unable to load entertainment packages.'); } })
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
-  }, [serviceData.country, serviceData.operator, step]);
+  const game = gameByKey(serviceData.gameKey);
 
   if (step === 0) {
-    return <View><FormLabel>Select Country</FormLabel><Grid3>{countries.map((c) => <CountrySelectCard key={c.code} code={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr, operator: null, package: null, packageId: null, amount: null }); nextStep(); }} />)}</Grid3></View>;
+    return (
+      <View>
+        <FormLabel>Choose a game</FormLabel>
+        <Grid3>
+          {GAME_TOP_UPS.map((g) => (
+            <OperatorCard
+              key={g.key}
+              name={g.name}
+              initials={g.emoji}
+              selected={serviceData.gameKey === g.key}
+              onPress={() => {
+                // Changing game invalidates the pack: a PUBG pack id means
+                // nothing under Free Fire, and leaving it set would charge for
+                // a product nobody picked.
+                updateServiceData({
+                  gameKey: g.key, game: g.name,
+                  package: null, packageId: null, amount: null,
+                  playerId: '', serverId: '',
+                });
+                nextStep();
+              }}
+            />
+          ))}
+        </Grid3>
+      </View>
+    );
   }
 
   if (step === 1) {
-    const list = rechargeOperators[serviceData.country] || [];
-    return <View><FormLabel>Select Operator</FormLabel><Grid3>{list.map((o) => { const brand = getOperatorBrand(o); return <OperatorCard key={o} name={o} logo={brand.logo} color={brand.color} initials={brand.initials} selected={serviceData.operator === o} onPress={() => { updateServiceData({ operator: o, package: null, packageId: null, amount: null }); nextStep(); }} />; })}</Grid3></View>;
+    if (!game) return <FormLabel>Please choose a game first.</FormLabel>;
+    return (
+      <View>
+        <FormLabel>{`${game.name} — choose a pack`}</FormLabel>
+        {game.packs.map((p) => (
+          <PackageCard
+            key={p.id}
+            name={p.name}
+            price={p.price}
+            currency="MYR"
+            selected={serviceData.packageId === p.id}
+            onPress={() => updateServiceData({ package: p.name, packageId: p.id, amount: p.price })}
+          />
+        ))}
+      </View>
+    );
   }
 
   if (step === 2) {
-    return <View><FormLabel>Enter Mobile Number</FormLabel><FormInput placeholder="Mobile number" keyboardType="phone-pad" value={serviceData.phone || ''} onChangeText={(v) => updateServiceData({ phone: v })} /></View>;
-  }
-
-  if (step === 3) {
-    const cur = serviceData.currency || 'MYR';
-    const isForeign = serviceData.country && serviceData.country !== 'MY';
-    // One number, in the customer's own wallet currency, from the server. The
-    // catalogue price is a foreign figure the customer neither pays nor needs,
-    // and anything computed here could only ever approximate the charge: the
-    // per-unit price, the tier discount and the wallet sell rate are not on
-    // this device. Falls back to the catalogue price if the server could not
-    // quote, which beats showing nothing.
-    const shownPrice = (p) => (p.walletPrice != null ? p.walletPrice : p.price);
-    const shownCurrency = (p) => (p.walletPrice != null ? p.walletCurrency : cur);
-    const selected = packages.find((p) => p.name === serviceData.package);
+    if (!game) return <FormLabel>Please choose a game first.</FormLabel>;
+    const pack = packById(game.key, serviceData.packageId);
     return (
       <View>
-        {serviceData.country !== 'BD' && <FormLabel>Entertainment packages are available for Bangladesh only right now.</FormLabel>}
-        {!!loading && <FormLabel>Loading entertainment packages…</FormLabel>}
-        {!!error && <FormLabel>{error}</FormLabel>}
-        {!!driveClosed && <FormLabel>{driveWindowClosedMessage()} Packages outside those hours are not shown.</FormLabel>}
-        {!loading && !error && serviceData.country === 'BD' && packages.length === 0 && <FormLabel>Success TopUp has no entertainment packages for this operator yet. Data and minutes packs are under Internet and Recharge.</FormLabel>}
-        {!loading && !error && (
-          <PackagePicker
-            packages={packages}
-            label="Select Entertainment Package"
-            selectedName={serviceData.package}
-            priceOf={shownPrice}
-            currencyOf={shownCurrency}
-            onSelect={(p) => updateServiceData({ package: p.name, packageId: p.id, amount: p.price })}
+        {/* Named per game, because every one calls this something different and
+            entering the wrong number is how a top-up reaches a stranger. */}
+        <FormLabel>{game.playerIdLabel}</FormLabel>
+        <FormInput
+          placeholder={game.playerIdHint}
+          value={serviceData.playerId || ''}
+          onChangeText={(v) => updateServiceData({ playerId: v })}
+          autoCapitalize="none"
+        />
+        {!!game.needsServer && (
+          <>
+            <FormLabel>{game.serverLabel}</FormLabel>
+            <FormInput
+              placeholder={game.serverHint}
+              value={serviceData.serverId || ''}
+              onChangeText={(v) => updateServiceData({ serverId: v })}
+              autoCapitalize="none"
+            />
+          </>
+        )}
+        <Text style={{ fontSize: 11.5, lineHeight: 17, opacity: 0.7, marginBottom: 12 }}>
+          Check the ID before you continue. A top-up sent to the wrong ID cannot be reversed.
+        </Text>
+        {!!pack && (
+          <SummaryCard
+            title={game.name}
+            rows={[{ label: 'Pack', value: pack.name }, { label: game.playerIdLabel, value: serviceData.playerId || '—' }]}
+            totalLabel="Wallet deduction"
+            totalValue={`MYR ${Number(pack.price).toFixed(2)}`}
           />
         )}
-        {!!selected && <SummaryCard totalLabel="Wallet deduction" totalValue={`${shownCurrency(selected)} ${Number(shownPrice(selected)).toFixed(2)}`} />}
       </View>
     );
   }
@@ -119,11 +115,14 @@ export default function EntertainmentStep({ step }) {
 }
 
 export function validateStep(step, serviceData) {
-  if (step === 0 && !serviceData.country) return 'Please select a country.';
-  if (step === 1 && !serviceData.operator) return 'Please select an operator.';
-  if (step === 2 && !(serviceData.phone || '').trim()) return 'Please enter a mobile number.';
-  // packageId is what the provider actually buys - a name with no id cannot be
-  // dispatched, so never let the order through on the label alone.
-  if (step === 3 && !serviceData.packageId) return 'Please select an entertainment package.';
+  if (step === 0 && !serviceData.gameKey) return 'Please choose a game.';
+  if (step === 1 && !serviceData.packageId) return 'Please choose a pack.';
+  if (step === 2) {
+    const game = gameByKey(serviceData.gameKey);
+    if (!(serviceData.playerId || '').trim()) return `Please enter your ${game ? game.playerIdLabel : 'player ID'}.`;
+    // A Mobile Legends ID without its zone, or a Genshin UID without its
+    // server, is not something anybody can deliver to.
+    if (game && game.needsServer && !(serviceData.serverId || '').trim()) return `Please enter your ${game.serverLabel}.`;
+  }
   return null;
 }

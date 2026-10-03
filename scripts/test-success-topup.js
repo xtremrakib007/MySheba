@@ -215,7 +215,7 @@ check('Offer Packs is wired end to end', () => {
   // It must read the drive catalogue, and must NOT category-filter: all four
   // categories are legitimately on offer there.
   const steps = code(read('src/steps/OfferPacksSteps.js') || '');
-  if (/isInternetPackage|isEntertainmentPackage/.test(steps)) {
+  if (/isInternetPackage/.test(steps)) {
     return 'OfferPacksSteps filters by category. The drive catalogue is sold whole - Bundle, Voice, Data and Call Rate alike.';
   }
   if (!/'drive'/.test(steps)) return 'OfferPacksSteps does not request the drive catalogue.';
@@ -250,8 +250,10 @@ check('Entertainment is wired end to end', () => {
     'functions/index.js': [/exports\.chargeEntertainment\s*=/],
     'functions/secureIndexV2.js': [/functions\.chargeEntertainment\s*=/],
     'src/firebase/transactionService.js': [/Entertainment:\s*'chargeEntertainment'/],
-    'src/context/AppContext.js': [/entertainment:\s*"Entertainment"/, /entertainment:\s*4/, /service === "entertainment"/],
-    'src/steps/EntertainmentSteps.js': [/listSuccessTopUpDrives/, /packageId/],
+    // Three steps now - game, pack, player ID - not four. The fourth was a
+    // mobile operator, which a game top-up does not have.
+    'src/context/AppContext.js': [/entertainment:\s*"Entertainment"/, /entertainment:\s*3/, /service === "entertainment"/],
+    'src/steps/EntertainmentSteps.js': [/GAME_TOP_UPS/, /packageId/],
   };
   for (const [rel, patterns] of Object.entries(files)) {
     const src = read(rel);
@@ -262,6 +264,14 @@ check('Entertainment is wired end to end', () => {
   }
   const steps = read('src/steps/EntertainmentSteps.js');
   if (/Coming Soon/i.test(steps || '')) return 'EntertainmentSteps is still the Coming Soon placeholder.';
+  // The screen used to ask for a country, a mobile operator and a phone number
+  // and then list nothing, because it searched the Success TopUp catalogue for
+  // a category with no rows in it. None of those belong on a game top-up.
+  if (/listSuccessTopUpDrives/.test(code(steps))) return 'Entertainment is game top-ups; it must not call the package catalogue.';
+  if (/rechargeOperators/.test(code(steps))) return 'Entertainment must not ask for a mobile operator.';
+  // A top-up sent to the wrong ID cannot be reversed, so the field has to name
+  // the game's own term rather than say "ID".
+  if (!/playerIdLabel/.test(code(steps))) return 'the player ID field must be labelled per game.';
   return null;
 });
 
@@ -326,21 +336,91 @@ check('each package screen sells the catalogue it should', () => {
   // and Bundle hid packages Success TopUp lists for that operator.
   if (/isInternetPackage/.test(code(internet))) return 'the Internet step filters the regular catalogue; it is sold whole.';
   if (!/'regular'/.test(code(internet))) return 'the Internet step no longer requests the regular catalogue.';
-  if (!/isEntertainmentPackage/.test(code(ent))) return 'the Entertainment step no longer filters by category.';
+  // Entertainment no longer reads this catalogue at all: it sells game
+  // vouchers from a local list. It used to filter the catalogue by an
+  // entertainment category, which matched zero of the 450 rows - so the screen
+  // was a mobile-operator grid in front of an empty list.
+  if (/listSuccessTopUpDrives/.test(code(ent))) return 'the Entertainment step must not read the package catalogue.';
+  if (!/GAME_TOP_UPS/.test(code(ent))) return 'the Entertainment step must sell game top-ups.';
 
-  // Loading the classifier for real beats pattern-matching its source.
-  const src = util.replace(/^export (const|function) /gm, '$1 ').replace(/^export \{[^}]*\};?$/gm, '');
-  const mod = {};
-  new Function('module', 'exports', `${src}\nmodule.exports={isEntertainmentPackage};`)(mod, {});
-  const { isEntertainmentPackage } = mod.exports;
+  // The entertainment classifier that used to be checked here is gone: that
+  // screen sells game top-ups from a local list now, so nothing filters this
+  // catalogue for a category it has never had a row in.
+  return null;
+});
 
-  // The four categories the Bangladesh catalogue actually uses. None is
-  // entertainment, so none may be pulled onto that screen.
-  for (const category of ['Data', 'Bundle', 'Voice', 'Call Rate']) {
-    if (isEntertainmentPackage({ category })) return `"${category}" is treated as entertainment; it is a mobile pack.`;
+check('the app never holds a literal Success TopUp credential', () => {
+  const dir = path.join(ROOT, 'src');
+  const hits = [];
+  const assigned = /successtopup_(?:key|secret)\s*:\s*(['"`])([^'"`]*)\1/g;
+  const walk = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const full = path.join(d, e.name);
+      if (e.isDirectory()) { walk(full); continue; }
+      if (!/\.(js|jsx|ts|tsx)$/.test(e.name)) continue;
+      const body = fs.readFileSync(full, 'utf8');
+      for (const m of body.matchAll(assigned)) {
+        const value = m[2].trim();
+        // '' and '{{apiKey}}' are placeholders the server fills in. Anything
+        // else is a real credential sitting in the shipped bundle.
+        if (value && !/^\{\{\s*[A-Za-z0-9_]+\s*\}\}$/.test(value)) {
+          hits.push(`${path.relative(ROOT, full)} assigns a literal value`);
+        }
+      }
+      // A key/secret must never be read from app config either.
+      if (/(?:EXPO_PUBLIC_[A-Z_]*SUCCESS|successTopUpSecret|successtopupSecret)/.test(body)) {
+        hits.push(`${path.relative(ROOT, full)} reads a Success TopUp secret from app config`);
+      }
+    }
+  };
+  walk(dir);
+  return hits.length
+    ? `${[...new Set(hits)].join('; ')}. Success TopUp credentials are server-only and must never ship in the bundle.`
+    : null;
+});
+
+check('each package screen sells the catalogue it should', () => {
+  const server = read('functions/apiProviderService.js');
+  const util = read('src/utils/packageCategory.js');
+  const internet = read('src/steps/InternetSteps.js');
+  const ent = read('src/steps/EntertainmentSteps.js');
+  if (!server || !util || !internet || !ent) return 'unreadable';
+
+  // Without category the app cannot tell a data pack from a voice or call-rate
+  // pack, and listed all of them under "Internet". Checked by running the
+  // normaliser rather than matching source, so moving it does not break this
+  // and quietly dropping the field still does.
+  const providerCatalog = require(path.join(ROOT, 'functions', 'providerCatalog.js'));
+  const preset = providerCatalog.PRESETS['success-topup'];
+  const sample = providerCatalog.normaliseItem(
+    { id: '7', name: '1GB 7 Days', data: '1GB', valid: '7 Days', category: 'Internet', price: 98 },
+    preset.itemMap
+  );
+  if (sample.category !== 'Internet') {
+    return 'the catalogue normaliser no longer passes category through, so neither screen can filter.';
   }
-  if (isEntertainmentPackage({ category: '' })) return 'a package with no category counts as entertainment.';
-  if (!isEntertainmentPackage({ category: 'Streaming' })) return 'a genuine entertainment category is not recognised.';
+  if (sample.id !== '7' || sample.price !== 98) {
+    return 'the catalogue normaliser drops the id or price a package is bought and billed by.';
+  }
+  if (!/category/.test(JSON.stringify(preset.itemMap))) {
+    return 'the Success TopUp preset no longer maps a category key.';
+  }
+  // The regular catalogue is the internet catalogue, so the Internet screen
+  // sells it whole - Voice and Call Rate packs included. Filtering it to Data
+  // and Bundle hid packages Success TopUp lists for that operator.
+  if (/isInternetPackage/.test(code(internet))) return 'the Internet step filters the regular catalogue; it is sold whole.';
+  if (!/'regular'/.test(code(internet))) return 'the Internet step no longer requests the regular catalogue.';
+  // Entertainment no longer reads this catalogue at all: it sells game
+  // vouchers from a local list. It used to filter the catalogue by an
+  // entertainment category, which matched zero of the 450 rows - so the screen
+  // was a mobile-operator grid in front of an empty list.
+  if (/listSuccessTopUpDrives/.test(code(ent))) return 'the Entertainment step must not read the package catalogue.';
+  if (!/GAME_TOP_UPS/.test(code(ent))) return 'the Entertainment step must sell game top-ups.';
+
+  // The classifier that used to be loaded and exercised here is gone with the
+  // screen that called it: Entertainment sells game top-ups from a local list,
+  // so nothing filters this catalogue for a category it has never had a row in.
+  void util;
   return null;
 });
 
@@ -351,7 +431,11 @@ check('each package screen sells the catalogue it should', () => {
 // which file it is written in, so they follow the rendering instead of asserting
 // an address - which is how the role-home checks ended up red while the
 // behaviour they protected was intact.
-const PACKAGE_STEPS = ['src/steps/InternetSteps.js', 'src/steps/OfferPacksSteps.js', 'src/steps/EntertainmentSteps.js'];
+// Entertainment is NOT one of these any more: it sells game vouchers from a
+// local list, priced in MYR and fulfilled by hand, so it has no provider
+// catalogue to price against, no validity to group by and no foreign currency
+// to convert out of.
+const PACKAGE_STEPS = ['src/steps/InternetSteps.js', 'src/steps/OfferPacksSteps.js'];
 
 function rendererFor(rel) {
   const step = code(read(rel) || '');
@@ -455,7 +539,7 @@ check('packages are grouped by how long they last', () => {
 });
 
 check('both package screens explain an empty catalogue', () => {
-  for (const rel of ['src/steps/InternetSteps.js', 'src/steps/EntertainmentSteps.js']) {
+  for (const rel of ['src/steps/InternetSteps.js', 'src/steps/OfferPacksSteps.js']) {
     const src = read(rel);
     if (!src) return `${rel} unreadable`;
     // Skitto is in the operator picker with no packages in either catalogue,

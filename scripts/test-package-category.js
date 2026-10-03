@@ -26,7 +26,7 @@ function load(rel, names) {
   return mod.exports;
 }
 
-const { categoryOf, groupByCategory, isEntertainmentPackage } = load('src/utils/packageCategory.js', ['categoryOf', 'groupByCategory', 'isEntertainmentPackage']);
+const { categoryOf, groupByCategory } = load('src/utils/packageCategory.js', ['categoryOf', 'groupByCategory']);
 const { groupByValidity } = load('src/utils/packageValidity.js', ['validityDays', 'groupByValidity']);
 
 console.log('The four categories the real catalogue actually uses');
@@ -39,13 +39,6 @@ assert.strictEqual(categoryOf({ category: 'Call Rate' }).label, 'Voice',
   'Call Rate joins Voice rather than making a section of one');
 assert.strictEqual(categoryOf({ category: 'Voice' }).label, 'Voice');
 assert.strictEqual(categoryOf({ category: 'Bundle' }).label, 'Bundle');
-
-console.log('Entertainment is still classified, and still empty');
-// This lived in the same file and must keep living there: EntertainmentSteps
-// imports it, and nothing in the 450 real packs matches it - which is the point.
-assert.strictEqual(isEntertainmentPackage({ category: 'Streaming' }), true);
-assert.strictEqual(isEntertainmentPackage({ category: 'Data' }), false, 'a data pack is not entertainment');
-assert.strictEqual(isEntertainmentPackage({}), false, 'and no category is not a match');
 
 console.log('The provider\'s own word decides');
 assert.strictEqual(categoryOf({ category: 'Internet' }).key, 'internet');

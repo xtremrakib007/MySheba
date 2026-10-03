@@ -1,4 +1,5 @@
 import { homeScreenForRole, STAFF_HOME_ROLES } from '../utils/homeScreen';
+import { PRE_AUTH_SCREENS } from '../utils/preAuthScreens';
 import React, {
   createContext,
   useContext,
@@ -98,7 +99,7 @@ const SERVICE_STEPS = {
   mobilebanking: 3,
   internet: 4,
   offerpacks: 4,
-  entertainment: 4,
+  entertainment: 3,
   billpayment: 5,
   remittance: 7,
   bus: 3,
@@ -310,7 +311,8 @@ export function AppProvider({ children }) {
   // hardware back should never be able to land here again (there's no valid
   // "go back to login" while signed in), so they're never pushed onto the
   // back-history stack below.
-  const PRE_AUTH_SCREENS = ["login", "register", "deviceVerify", "googlePhone"];
+  // src/utils/preAuthScreens.js - shared, because a second copy of this list
+  // in BiometricOptInPrompt had forgotPassword while this one did not.
 
   useEffect(() => {
     const prev = prevScreenRef.current;
