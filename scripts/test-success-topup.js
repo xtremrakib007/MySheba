@@ -688,6 +688,60 @@ check('the webhook token can be recovered after the one-time alert', () => {
   return null;
 });
 
+check('Bangladesh internet, offer packs and bills run on the same API', () => {
+  // One set of credentials, four extra providers. Superadmin configures only
+  // the Recharge provider; saving it provisions these, which is why none of
+  // them existed while that save was failing with INTERNAL [500].
+  const src = read('functions/apiProviderService.js');
+  if (!src) return 'apiProviderService.js is missing';
+  const at = src.indexOf('const companions = [');
+  if (at === -1) return 'the companion providers are never provisioned';
+  const block = src.slice(at, at + 2000);
+
+  const want = {
+    Internet: 'success-topup-internet',
+    'Offer Packs': 'success-topup-offer-packs',
+    Entertainment: 'success-topup-entertainment',
+    'Bill Payment': 'success-topup-bill-payment',
+  };
+  for (const [service, id] of Object.entries(want)) {
+    if (!block.includes(`id: '${id}'`)) return `${service} has no Success TopUp provider`;
+    if (!block.includes(`service: '${service}'`)) return `${id} is not registered for ${service}`;
+  }
+
+  // They must be Bangladesh providers, or resolveExecutionMode will not let a
+  // Bangladeshi order reach them, and must carry the same credentials rather
+  // than a second copy to keep in step.
+  const base = src.slice(src.indexOf('const companionBase = {'), src.indexOf('const companions = ['));
+  if (!/country: 'BD'/.test(base)) return 'the companions are not Bangladesh providers';
+  for (const field of ['apiKeySecretName: secretNames.apiKeySecretName', 'secretKeySecretName: secretNames.secretKeySecretName']) {
+    if (!base.includes(field)) return `the companions do not share the Recharge credentials (${field})`;
+  }
+
+  // And Bangladesh must be switched on for each of them.
+  const bd = src.slice(src.indexOf('BD: { ...(priorCountryModes.BD || {})'), src.indexOf('BD: { ...(priorCountryModes.BD || {})') + 300);
+  for (const service of ['Recharge', 'Internet', "'Offer Packs'", 'Entertainment', "'Bill Payment'"]) {
+    const key = service.startsWith("'") ? service : service;
+    if (!bd.includes(`${key}: 'api'`)) return `${service} is not enabled for Bangladesh`;
+  }
+  return null;
+});
+
+check('and only Bangladesh reaches them', () => {
+  // The companions are BD providers, so the same resolver that sends a
+  // Malaysian recharge to a dealer sends a Malaysian data pack there too.
+  const { resolveExecutionMode } = require('../functions/apiProviderService')._test;
+  const companion = [{ country: 'BD', active: true }];
+  const settings = { countryModes: { BD: { Internet: 'api', 'Offer Packs': 'api', 'Bill Payment': 'api', Entertainment: 'api' } } };
+  for (const service of ['Internet', 'Offer Packs', 'Bill Payment', 'Entertainment']) {
+    const bd = resolveExecutionMode({ country: 'BD', service, settings, providers: companion });
+    if (bd !== 'api') return `Bangladesh ${service} resolved to ${bd}, not the API`;
+    const my = resolveExecutionMode({ country: 'MY', service, settings, providers: companion });
+    if (my !== 'legacy') return `Malaysia ${service} resolved to ${my}, not a manual order`;
+  }
+  return null;
+});
+
 if (failures.length) {
   console.error('Success TopUp contract FAILED:\n');
   for (const f of failures) console.error(`  - ${f}`);
