@@ -133,6 +133,17 @@ export default function Sidebar() {
   // That is the "scroll problem": the last rows and the logout button were
   // behind the nav bar, so the list looked like it would not scroll far enough.
   const insets = useSafeAreaInsets();
+  // Every role reaches the sidebar; only two screens use AppHeader. So this is
+  // the row that puts refresh in front of a dealer, a reseller and support,
+  // who would otherwise have no way to ask for one.
+  //
+  // Up here with the other hooks, NOT down beside onLogout where it reads
+  // better: `if (!sidebarVisible) return null` sits between the two, so a hook
+  // below it runs only when the drawer is open. React counts the hooks each
+  // render, and going from closed to open is then "more hooks than the previous
+  // render" - which crashed the whole app the first time anybody opened the
+  // sidebar.
+  const { sync, busy: syncing } = useAppSync();
 
   const isSuperadmin = profile?.role === 'superadmin';
   const isAdmin = profile?.role === 'admin' || isSuperadmin;
@@ -165,10 +176,6 @@ export default function Sidebar() {
     setScreen(key);
   };
   const toggleGroup = (title) => setExpanded((prev) => ({ ...prev, [title]: !prev[title] }));
-  // Every role reaches the sidebar; only two screens use AppHeader. So this is
-  // the row that puts refresh in front of a dealer, a reseller and support,
-  // who would otherwise have no way to ask for one.
-  const { sync, busy: syncing } = useAppSync();
   const onSync = () => { closeSidebar(); sync(); };
   const onLogout = () => {
     closeSidebar();

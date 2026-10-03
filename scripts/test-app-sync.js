@@ -65,6 +65,12 @@ console.log('Every role can reach it');
 // sidebar row is the one that covers everybody.
 assert(/<SyncButton \/>/.test(header), 'the header carries the button');
 assert(/useAppSync\(\)/.test(sidebar), 'and the sidebar carries the same action');
+// WHERE it is called is not checked here on purpose. It was called below
+// Sidebar's `if (!sidebarVisible) return null`, so the hook ran only when the
+// drawer was open - "more hooks than the previous render" - and the app went to
+// the error screen the first time anybody opened the sidebar. A string match
+// for that is weak and only covers this one file; react-hooks/rules-of-hooks is
+// on in eslint.config.mjs now and covers every component in the repo.
 assert(/closeSidebar\(\); sync\(\);/.test(sidebar), 'closing first, so the alert is not behind the drawer');
 
 console.log('\nOne button: reconnect now, restart only if asked.');
