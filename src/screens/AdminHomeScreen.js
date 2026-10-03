@@ -575,7 +575,10 @@ export default function AdminHomeScreen() {
     const key = editPricingKey;
     setEditPricingKey(null);
     const num = parseFloat(value);
-    if (!key || Number.isNaN(num)) return;
+    // A negative multiplier is stored happily and then throws at charge time
+    // as "Pricing configuration is invalid" - a long way from the screen that
+    // accepted it.
+    if (!key || Number.isNaN(num) || num < 0) return;
     try {
       await settingsService.updatePricing(key, num);
     } catch (e) {
@@ -861,6 +864,30 @@ export default function AdminHomeScreen() {
                 A customer is locked out of a feature if their wallet balance can't cover its price, and sees the exact price
                 in a confirmation prompt before it opens. Changing a value here updates it everywhere immediately.
                 FOMEMA/Visa charge once, then stay free for the Access Window above before the next search charges again.
+              </Text>
+            </View>
+
+            {/* The per-unit multipliers had no global editor at all - they
+                appeared only inside Role-Based Pricing, so the value every
+                role falls back to could be changed only from the Firebase
+                console. A margin nobody can set from the app is a margin
+                nobody sets. */}
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>📶 Recharge &amp; Package Multipliers</Text>
+              {RECHARGE_PRICING_FIELDS.map((r) => (
+                <View key={r.key} style={styles.rateRow}>
+                  <Text style={{ flex: 1 }}>{r.label}</Text>
+                  <Text style={styles.rateValue}>{pricing[r.key] != null ? pricing[r.key] : 1}×</Text>
+                  <TouchableOpacity style={styles.editBtn} onPress={() => setEditPricingKey(r.key)}>
+                    <Text style={styles.editBtnText}>Edit</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+              <Text style={styles.hintText}>
+                Multiplies the converted price a customer pays. 1 is the rate with nothing added, 1.01 adds 1%,
+                0.95 sells 5% cheaper. The customer sees one all-in price in their own wallet currency and is
+                charged exactly that. Offer Packs and Entertainment default to 1 so they sell at the rate;
+                each role can be given its own multiplier under Role-Based Pricing below.
               </Text>
             </View>
 
@@ -1369,8 +1396,8 @@ export default function AdminHomeScreen() {
       />
       <PromptModal
         visible={!!editPricingKey}
-        title="New value (%):"
-        placeholder="e.g. 1.5"
+        title={RECHARGE_PRICING_FIELDS.some((f) => f.key === editPricingKey) ? 'New multiplier (\u00D7 face value):' : 'New value (%):'}
+        placeholder={RECHARGE_PRICING_FIELDS.some((f) => f.key === editPricingKey) ? 'e.g. 1.01 for 1%' : 'e.g. 1.5'}
         onSubmit={savePricing}
         onCancel={() => setEditPricingKey(null)}
       />

@@ -398,6 +398,17 @@ assert.throws(() => api.validate({ service: 'Recharge', name: 'Test', baseUrl: '
   assert(/walletPricing\.walletChargeFor\(/.test(readFn('apiProviderService.js')),
     'the package listing must quote through the same function');
 
+  // Every multiplier must be settable from the app. They were visible only
+  // inside Role-Based Pricing, so the value every role falls back to could be
+  // changed only from the Firebase console.
+  const screen = fs.readFileSync(path.join(__dirname, '..', 'src', 'screens', 'AdminHomeScreen.js'), 'utf8');
+  assert(/RECHARGE_PRICING_FIELDS\.map/.test(screen), 'the multipliers need a global editor, not only a per-role one');
+  assert(/New multiplier/.test(screen), 'a multiplier must not be prompted for as a percentage');
+  const settings = fs.readFileSync(path.join(__dirname, '..', 'src', 'firebase', 'settingsService.js'), 'utf8');
+  for (const key of ['internetPointCostPerUnit', 'offerPacksPointCostPerUnit', 'entertainmentPointCostPerUnit']) {
+    assert(new RegExp(`'${key}'`).test(settings), `${key} must be storable per role`);
+  }
+
   console.log('  the price shown and the price charged are one calculation');
 }
 
