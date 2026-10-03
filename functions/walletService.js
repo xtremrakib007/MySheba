@@ -20,11 +20,21 @@ const RECHARGE_RATE_KEYS={BD:'rechargeBD',IN:'rechargeIN',NP:'rechargeNP',ID:'re
 const SESSION_ID_RE=/^[A-Za-z0-9_-]{16,128}$/;
 const DEVICE_ID_RE=/^[A-Za-z0-9-]{16,100}$/;
 const REQUEST_ID_RE=/^[A-Za-z0-9_-]{16,128}$/;
+// Only these fields of a client's `raw` survive to the provider. Anything a
+// service needs and this omits is silently dropped, which is the quietest
+// failure in the file: the order is placed, the money moves, and the provider
+// refuses it over a field that was never sent.
+//
+// That is what happened to recharge. `operator` was missing here - from the one
+// service that is entirely about which operator - so every Bangladesh recharge
+// reached Success TopUp with no operator and came back "Invalid operator
+// [400]". Internet, Offer Packs and Entertainment all listed it; recharge did
+// not.
 const TRANSACTION_RAW_FIELDS = {
-  recharge: new Set(['phone', 'country', 'amount']),
+  recharge: new Set(['phone', 'country', 'amount', 'operator']),
   internet: new Set(['phone', 'country', 'amount', 'provider', 'operator', 'operatorCode', 'packageId', 'package', 'packageCostAmount']),
   offerpacks: new Set(['phone', 'country', 'amount', 'provider', 'operator', 'operatorCode', 'packageId', 'package', 'packageCostAmount']),
-  entertainment: new Set(['phone', 'country', 'amount', 'provider', 'operator', 'operatorCode', 'packageId', 'package', 'packageCostAmount']),
+  entertainment: new Set(['country', 'amount', 'gameKey', 'game', 'packageId', 'package', 'playerId', 'serverId']),
   billpayment: new Set(['phone', 'country', 'amount', 'provider', 'category', 'accountNumber', 'billNumber', 'mobileNumber', 'monthName', 'note']),
   mobilebanking: new Set(['phone', 'country', 'amount', 'provider', 'category', 'accountNumber']),
   remittance: new Set([

@@ -39,6 +39,9 @@ export default function EntertainmentStep({ step }) {
                 // nothing under Free Fire, and leaving it set would charge for
                 // a product nobody picked.
                 updateServiceData({
+                  // MYR, unconverted: the packs are priced in it, and MY is the one
+                  // country the server's amountToPoints passes through as-is.
+                  country: 'MY',
                   gameKey: g.key, game: g.name,
                   package: null, packageId: null, amount: null,
                   playerId: '', serverId: '',
