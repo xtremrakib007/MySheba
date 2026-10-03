@@ -1,4 +1,4 @@
-import { homeScreenForRole as homeForRoleShared, STAFF_HOME_ROLES } from '../utils/homeScreen';
+import { homeScreenForRole, STAFF_HOME_ROLES } from '../utils/homeScreen';
 import React, {
   createContext,
   useContext,
@@ -311,9 +311,6 @@ export function AppProvider({ children }) {
   // "go back to login" while signed in), so they're never pushed onto the
   // back-history stack below.
   const PRE_AUTH_SCREENS = ["login", "register", "deviceVerify", "googlePhone"];
-
-  // One place that answers "where does this role live" - src/utils/homeScreen.js.
-  const homeScreenForRole = homeForRoleShared;
 
   useEffect(() => {
     const prev = prevScreenRef.current;
@@ -871,7 +868,10 @@ export function AppProvider({ children }) {
 
   // The route guard calls this. Its own copy omitted support and finance, so
   // every time the guard ran it sent a staff agent to the customer home.
-  const getHomeForRole = useCallback((role) => homeForRoleShared(role), []);
+  // Same answer as routeForRole below, from the same function - the route
+  // guard having its own copy is what sent support and finance to the customer
+  // home. useCallback only to keep the identity stable for the dep array.
+  const getHomeForRole = useCallback((role) => homeScreenForRole(role), []);
 
   const setScreen = useCallback((nextScreen) => {
     const role = profile?.role;

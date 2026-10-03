@@ -110,10 +110,18 @@ check('no history is pushed when navigating TO a pre-auth screen',
 // correction - go through one mapping. The six sign-in handlers still inline
 // theirs because each also picks a default tab; that duplication is real and
 // worth removing, but it is not what this bug was.
-check('both auth routing paths share one role-to-home mapping',
-  /const homeScreenForRole = \(role\) =>/.test(ctx)
+// The mapping now lives in src/utils/homeScreen.js, because the route guard had
+// its own copy that did not know about support or finance and sent them to the
+// customer home. So this no longer asserts a local definition - it asserts that
+// nobody redefines one, and that all three paths call the shared function: the
+// cold-start router, the login-form correction, and the route guard.
+check('every auth routing path shares one role-to-home mapping',
+  /import \{ homeScreenForRole[^}]*\} from '\.\.\/utils\/homeScreen'/.test(ctx)
+  && !/(const|function) homeScreenForRole *[=(]/.test(ctx)
   && /const routeForRole = \(p\) => setScreen\(homeScreenForRole/.test(ctx)
-  && /if \(screen !== "login"\) return;[\s\S]{0,300}?setScreen\(homeScreenForRole/.test(ctx));
+  && /if \(screen !== "login"\) return;[\s\S]{0,300}?setScreen\(homeScreenForRole/.test(ctx)
+  && /const getHomeForRole = useCallback\(\(role\) => homeScreenForRole\(role\)/.test(ctx),
+  'AppContext must import it and define none of its own');
 
 // --- the watchdog that exposed all this ------------------------------------
 check('the first-route watchdog still exists',

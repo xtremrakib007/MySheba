@@ -94,8 +94,12 @@ console.log('\nEvery role lands somewhere it can work');
 
   const ctx = read('src/context/AppContext.js');
   const verify = read('src/screens/DeviceVerifyScreen.js');
+  // Asserted against the imported function's own name, not an alias: the alias
+  // this used to name was removed, and a check that breaks on a rename while
+  // the behaviour is intact teaches people to edit the test.
   check('the route guard uses the shared resolver',
-    /getHomeForRole = useCallback\(\(role\) => homeForRoleShared\(role\)/.test(ctx));
+    /getHomeForRole = useCallback\(\(role\) => homeScreenForRole\(role\)/.test(ctx)
+    && /import \{ homeScreenForRole[^}]*\} from '\.\.\/utils\/homeScreen'/.test(ctx));
   check('and device verify does too', /const homeForRole = homeScreenForRole;/.test(verify));
   check('no screen keeps its own role-to-home list', !/return 'customerHome';/.test(verify));
 
