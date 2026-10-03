@@ -123,6 +123,29 @@ for (const role of ['customer', 'reseller', 'support', 'superadmin']) {
     !tiles.withWebviewConfig(tiles.servicesForRole(role, allCaps), OFF).some((t) => t.key === 'fomema'));
 }
 
+console.log('\nEvery role gets every customer service, once');
+// Two ways a role lost a service, both invisible on the screen: the staff
+// lists ended with the shared catalogue AND servicesForRole appended it, so
+// everything was drawn twice with duplicate keys; and admin/superadmin do not
+// render ServiceGrid at all - App.js gives them AdminFeaturesScreen - so a
+// service missing from ADMIN_HOME was simply unreachable for them.
+const customerKeys = tiles.CUSTOMER_SERVICES.map((t) => t.key);
+for (const role of ['customer', 'dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin']) {
+  const list = tiles.servicesForRole(role, allCaps);
+  const keys = list.map((t) => t.key);
+  const missing = customerKeys.filter((k) => !keys.includes(k));
+  const dupes = [...new Set(keys.filter((k, i) => keys.indexOf(k) !== i))];
+  yes(`${role} gets every customer service`, missing.length === 0);
+  yes(`${role} gets each of them once`, dupes.length === 0);
+}
+
+// The landing grid admin and superadmin actually open.
+const adminKeys = tiles.ADMIN_HOME.map((t) => t.key);
+yes('the admin landing grid carries every customer service',
+  customerKeys.every((k) => adminKeys.includes(k)));
+yes('and each of its tiles goes somewhere',
+  tiles.ADMIN_HOME.every((t) => t.section || t.screen || t.service));
+
 console.log('\nA refused write is never silent');
 // The switch is driven by the stored page, so a refused write left it where it
 // was and the screen read as a dead button. Firestore's own wording for a

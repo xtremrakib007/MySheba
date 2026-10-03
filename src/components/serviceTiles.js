@@ -49,6 +49,10 @@ const CUSTOMER_SERVICES = [
 // must never lose the same service catalogue a customer can use.
 const SHARED_SERVICES = CUSTOMER_SERVICES.map(({ home, ...service }) => ({ ...service }));
 
+// Role-specific management tiles ONLY. servicesForRole appends the shared
+// service catalogue once; these lists used to end with it as well, so every
+// staff role was handed all eighteen customer tiles twice - 42 tiles where 24
+// were meant, with duplicate React keys and every service drawn on two rows.
 const STAFF_SERVICES = {
   dealer: [
     { key: 'dealerFeatures', icon: 'more', name: 'Dealer Features', kind: 'dealerFeatures' },
@@ -57,7 +61,6 @@ const STAFF_SERVICES = {
     { key: 'support', icon: 'support', name: 'Support', kind: 'support' },
     { key: 'myAccount', icon: 'account', name: 'My Account', kind: 'myaccount' },
     { key: 'profile', icon: 'profile', name: 'Profile', kind: 'profile' },
-    ...SHARED_SERVICES,
   ],
   reseller: [
     { key: 'resellerFeatures', icon: 'more', name: 'Reseller Features', kind: 'resellerFeatures' },
@@ -66,7 +69,6 @@ const STAFF_SERVICES = {
     { key: 'support', icon: '🎧', name: 'Support', kind: 'support' },
     { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount' },
     { key: 'profile', icon: '🪪', name: 'Profile', kind: 'profile' },
-    ...SHARED_SERVICES,
   ],
   admin: [
     { key: 'adminFeatures', icon: 'more', name: 'Admin Features', kind: 'adminFeatures' },
@@ -75,7 +77,6 @@ const STAFF_SERVICES = {
     { key: 'support', icon: '🎧', name: 'Support', kind: 'support' },
     { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount' },
     { key: 'profile', icon: '🪪', name: 'Profile', kind: 'profile' },
-    ...SHARED_SERVICES,
   ],
   superadmin: [
     { key: 'adminFeatures', icon: '⚙️', name: 'Superadmin Features', kind: 'adminFeatures' },
@@ -84,7 +85,6 @@ const STAFF_SERVICES = {
     { key: 'support', icon: '🎧', name: 'Support', kind: 'support' },
     { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount' },
     { key: 'profile', icon: '🪪', name: 'Profile', kind: 'profile' },
-    ...SHARED_SERVICES,
   ],
 };
 
@@ -96,7 +96,6 @@ const STAFF_CAPABILITY_TILES = [
   { key: 'reports', icon: '📊', name: 'Reports', kind: 'staffReports', needs: ['reports'] },
   { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount' },
   { key: 'profile', icon: '🪪', name: 'Profile', kind: 'profile' },
-  ...SHARED_SERVICES,
 ];
 
 // Admin keeps its hub; the money tiles appear only with finance/orders.
@@ -143,6 +142,11 @@ export function withWebviewConfig(list, webviewPages) {
   return [...overlaid, ...extra];
 }
 
+// Admin and superadmin land here instead of ServiceGrid, so a customer service
+// missing from this list is a service they simply cannot reach - which is what
+// had happened to bill payment, PIN generate, offer packs, entertainment,
+// FOMEMA, salary and documents. A test now fails if any customer tile is
+// absent, because the omission is invisible on the screen itself.
 export const ADMIN_HOME = [
   { key: 'finance', icon: '\uD83D\uDCB0', name: 'Financial Management', section: 'finance' },
   { key: 'adminAnalytics', icon: '\uD83D\uDCCA', name: 'Reports & Analytics', screen: 'adminAnalytics' },
@@ -155,6 +159,12 @@ export const ADMIN_HOME = [
   { key: 'mobilebanking', icon: '\uD83C\uDFE6', name: 'Mobile Banking', service: { key: 'mobilebanking', kind: 'service' } },
 
   { key: 'internet', icon: '\uD83D\uDCE1', name: 'Internet', service: { key: 'internet', kind: 'service' } },
+  { key: 'billpayment', icon: '\uD83E\uDDFE', name: 'Bill Payment', service: { key: 'billpayment', kind: 'service' } },
+  { key: 'rechargePin', icon: '\uD83D\uDD22', name: 'PIN Generate', service: { key: 'rechargePin', kind: 'rechargePin' } },
+  // offerpacks is the one customer key ServiceArt has no drawing for, so this
+  // emoji is what renders rather than a fallback nobody sees.
+  { key: 'offerpacks', icon: '\uD83C\uDF81', name: 'Offer Packs', service: { key: 'offerpacks', kind: 'service' } },
+  { key: 'entertainment', icon: '\uD83C\uDFAC', name: 'Entertainment', service: { key: 'entertainment', kind: 'service' } },
   { key: 'flight', icon: '\u2708\uFE0F', name: 'Flight', service: { key: 'flight', kind: 'service' } },
   { key: 'bus', icon: '\uD83D\uDE8C', name: 'Bus', service: { key: 'bus', kind: 'buspicker' } },
   { key: 'train', icon: '\uD83D\uDE82', name: 'Train', service: { key: 'train', kind: 'webview' } },
@@ -162,6 +172,10 @@ export const ADMIN_HOME = [
   { key: 'visa', icon: '\uD83D\uDEC2', name: 'Visa', service: { key: 'visa', kind: 'webview' } },
   { key: 'mydigital', icon: '\uD83D\uDCBB', name: 'Malaysia Arrival Card', service: { key: 'mydigital', kind: 'webview' } },
   { key: 'passport', icon: '\uD83D\uDCD9', name: 'Passport', service: { key: 'passport', kind: 'webview' } },
+  { key: 'fomema', icon: '\uD83E\uDE7A', name: 'FOMEMA', service: { key: 'fomema', kind: 'webview' } },
+
+  { key: 'salary', icon: '\uD83D\uDCB5', name: 'Salary & Payslip', service: { key: 'salary', kind: 'salary' } },
+  { key: 'documents', icon: '\uD83D\uDCC4', name: 'Documents', service: { key: 'documents', kind: 'documents' } },
   { key: 'moreFeaturesTile', icon: '\u2728', name: 'More Features', screen: 'moreFeatures' },
 ];
 
