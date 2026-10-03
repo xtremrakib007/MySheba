@@ -76,6 +76,7 @@ exports.setWalletFrozen = require('./walletFreeze').setWalletFrozen;
 exports.requestWalletFunding = require('./walletFundingService').requestWalletFunding;
 exports.listWalletFundingRequests = require('./walletFundingService').listWalletFundingRequests;
 exports.decideWalletFunding = require('./walletFundingService').decideWalletFunding;
+exports.getLedgerReport = require('./ledgerReport').getLedgerReport;
 exports.transferPoints = secureTransfer.transferPoints;
 exports.findWalletRecipient = walletTransferService.findWalletRecipient;
 exports.listWalletTransfers = walletTransferService.listWalletTransfers;

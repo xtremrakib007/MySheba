@@ -19,8 +19,8 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'ledger.j
   .replace(/^export \{[^}]*\};?$/gm, '');
 const mod = {};
 new Function('module', 'exports',
-  `${src}\nmodule.exports={buildLedger,filterLedger,totalsByCurrency,ledgerToCsv,LEDGER_KINDS};`)(mod, {});
-const { buildLedger, filterLedger, totalsByCurrency, ledgerToCsv } = mod.exports;
+  `${src}\nmodule.exports={buildLedger,filterLedger,totalsByCurrency,ledgerToCsv,LEDGER_KINDS,LEDGER_SOURCE_KEYS};`)(mod, {});
+const { buildLedger, filterLedger, totalsByCurrency, ledgerToCsv, LEDGER_SOURCE_KEYS } = mod.exports;
 
 const names = {
   u1: { name: 'Allen Mithu', phone: '0123456789', role: 'customer' },
@@ -94,5 +94,18 @@ assert(csv.includes(quoted),
   'commas, newlines and quotes in a note must be escaped, not left to corrupt the file');
 // And a field needing none of that is left bare rather than needlessly quoted.
 assert(csv.includes(',Allen Mithu,'), 'an ordinary name is not quoted');
+
+console.log('Server and client name the same six sources');
+// The server picks the keys and this file consumes them. Renaming one side
+// would drop a whole source from every report and nothing would look broken -
+// the list would just be short. So the two lists are asserted equal, and an
+// unknown key throws rather than being silently skipped.
+const serverKeys = require(path.join(__dirname, '..', 'functions', 'ledgerReport.js')).LEDGER_SOURCE_KEYS;
+assert.deepStrictEqual([...serverKeys].sort(), [...LEDGER_SOURCE_KEYS].sort(),
+  'getLedgerReport must return exactly the sources buildLedger reads');
+assert.deepStrictEqual(Object.keys(sources).sort(), [...LEDGER_SOURCE_KEYS].sort(),
+  'this test must cover every declared source');
+assert.throws(() => buildLedger({ walletFundingRequests: [] }), /does not know the source/,
+  'a source key buildLedger cannot read must throw, not be skipped');
 
 console.log('\nOne ledger, both sides named, exportable.');

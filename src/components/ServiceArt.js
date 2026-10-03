@@ -456,6 +456,8 @@ const ALIASES = {
   all: 'history',
   orders: 'history',
   staffReports: 'reports',
+  staffLedger: 'reports',
+  ledger: 'reports',
   staffInquiries: 'inquiries',
   operations: 'adminFeatures',
   system: 'adminFeatures',

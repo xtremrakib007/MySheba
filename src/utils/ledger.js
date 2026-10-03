@@ -45,6 +45,18 @@ function who(names, uid, fallbackName = '', fallbackPhone = '') {
 const SYSTEM = { id: '', name: 'MySheba', phone: '', role: 'system' };
 
 /**
+ * The sources this file knows how to read, in the shape the server returns.
+ *
+ * Exported because the server picks these keys and this file consumes them: a
+ * rename on one side would otherwise drop a whole source from every report and
+ * nothing would look broken - the list would just be short. buildLedger throws
+ * on a key it does not know, so the drift fails instead of hiding.
+ */
+export const LEDGER_SOURCE_KEYS = [
+  'topups', 'transactions', 'pointTransfers', 'walletTransfers', 'fundingRequests', 'selfTopups',
+];
+
+/**
  * One ledger row per record, whatever collection it came from.
  *
  * `sources` is { topups, transactions, pointTransfers, walletTransfers,
@@ -52,6 +64,11 @@ const SYSTEM = { id: '', name: 'MySheba', phone: '', role: 'system' };
  * so a screen can show what it has while the rest loads.
  */
 export function buildLedger(sources = {}, names = {}) {
+  for (const key of Object.keys(sources || {})) {
+    if (!LEDGER_SOURCE_KEYS.includes(key)) {
+      throw new Error(`buildLedger does not know the source "${key}". Add it here or fix the name.`);
+    }
+  }
   const rows = [];
   const push = (r) => { if (r) rows.push(r); };
 

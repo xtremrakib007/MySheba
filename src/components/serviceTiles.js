@@ -94,12 +94,13 @@ const STAFF_CAPABILITY_TILES = [
   { key: 'history', icon: '📋', name: 'Transactions', kind: 'history', needs: ['orders', 'finance'] },
   { key: 'topup', icon: '💰', name: 'Top-Ups', kind: 'adminTopup', needs: ['finance'] },
   { key: 'reports', icon: '📊', name: 'Reports', kind: 'staffReports', needs: ['reports'] },
+  { key: 'ledger', icon: '📒', name: 'Ledger', kind: 'staffLedger', needs: ['reports'] },
   { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount' },
   { key: 'profile', icon: '🪪', name: 'Profile', kind: 'profile' },
 ];
 
 // Admin keeps its hub; the money tiles appear only with finance/orders.
-const ADMIN_TILE_NEEDS = { topup: ['finance'], history: ['orders', 'finance'] };
+const ADMIN_TILE_NEEDS = { topup: ['finance'], history: ['orders', 'finance'], ledger: ['reports'] };
 
 export { CUSTOMER_SERVICES, SHARED_SERVICES, STAFF_SERVICES, STAFF_CAPABILITY_TILES, ADMIN_TILE_NEEDS };
 
@@ -150,6 +151,7 @@ export function withWebviewConfig(list, webviewPages) {
 export const ADMIN_HOME = [
   { key: 'finance', icon: '\uD83D\uDCB0', name: 'Financial Management', section: 'finance' },
   { key: 'adminAnalytics', icon: '\uD83D\uDCCA', name: 'Reports & Analytics', screen: 'adminAnalytics' },
+  { key: 'ledger', icon: '\uD83D\uDCD2', name: 'Transaction Ledger', screen: 'ledger' },
   { key: 'userManagement', icon: '\uD83D\uDC65', name: 'User Management', screen: 'userManagement' },
   { key: 'verificationManagement', icon: '\uD83E\uDEAA', name: 'KYC Management', screen: 'verificationManagement' },
 
