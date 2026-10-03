@@ -10,6 +10,7 @@ import * as topupService from '../firebase/topupService';
 import * as supportTicketService from '../firebase/supportTicketService';
 import { useApp } from '../context/AppContext';
 import { buildReceiptHtml } from './RemittanceReceipt';
+import { receiptDocument, receiptRows, imageBlock, highlightBlock } from '../utils/receiptHtml';
 
 const BADGE_COLORS = {
   pending: { bg: '#FFF8E1', text: '#F57F17' },
@@ -36,6 +37,108 @@ function formatDate(ts) {
   return d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) +
     ' · ' +
     d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
+/**
+ * An order as a printable receipt.
+ *
+ * Lifted out of the Print handler unchanged except that escaping now happens
+ * inside receiptRows rather than being this function's job - a receiver name or
+ * an address is text somebody typed, and one unescaped one turns a receipt into
+ * whatever they wrote.
+ */
+function orderReceiptHtml(item, pinOverride) {
+  const raw = item.raw || {};
+  const currency = txCurrency(item);
+  // Only these two services carry a collection PIN at all.
+  const requiresCollectionPin = item.service === 'Mobile Banking' || item.service === 'Remittance';
+  // collectionPin first: completeTransaction deletes the live pin, so on a
+  // completed order it is the only copy left.
+  const pin = requiresCollectionPin ? (pinOverride || item.collectionPin || item.pin || '') : '';
+  return receiptDocument({
+    subtitle: 'Transaction Receipt',
+    rowsHtml: receiptRows([
+      ['Service', item.service],
+      ['Order ID', item.id],
+      ['Customer', item.customerPhone || item.customerId || ''],
+      ['Phone / Number', raw.phone || item.customerPhone || ''],
+      ['Operator', raw.operator || item.operator || ''],
+      ['Country', raw.country || item.country || ''],
+      ['Package', raw.package || item.package || ''],
+      ['Package ID', raw.packageId || item.packageId || ''],
+      ['Amount', txAmount(item.total, currency)],
+      ['Status', String(item.status || '').toUpperCase()],
+      ['Transaction ID', raw.trxid || raw.transactionId || item.trxid || item.transactionId || ''],
+      ['Provider', raw.provider || item.provider || ''],
+      ['Details', item.details || ''],
+      ['Sender', raw.senderName || ''],
+      ['Sender Phone', raw.senderPhone || ''],
+      ['Sender Company', raw.senderCompany || ''],
+      ['Sender Passport No.', raw.senderPassportNo || ''],
+      ['Passport Expiry', raw.senderPassportExpiry || ''],
+      ['Sender Address', raw.senderAddress || ''],
+      ['Receiver Name', [raw.receiverFirstName, raw.receiverLastName].filter(Boolean).join(' ')],
+      ['Receiver Relationship', raw.receiverRelationship || ''],
+      ['Receiver Mobile', raw.receiverPhone || ''],
+      ['Receiver Bank', raw.receiverBankName || ''],
+      ['Account No.', raw.receiverAccountNumber || ''],
+      ['Branch', raw.receiverBranch || ''],
+      ['Routing No.', raw.receiverRoutingNumber || ''],
+      ['Pickup Network', raw.receiverPickupNetwork || ''],
+      ['Receiver ID', [raw.receiverIdType, raw.receiverIdNumber].filter(Boolean).join(' - ')],
+      ['Pickup City', raw.receiverPickupCity || ''],
+      ['Wallet Provider', raw.receiverWalletProvider || ''],
+      ['Wallet Number', raw.receiverWalletNumber || ''],
+      ['Created', formatDate(item.createdAt)],
+      ['Updated', formatDate(item.updatedAt)],
+      ['Completed By', item.completedByName || item.operatorName || ''],
+    ]),
+    blocks: [
+      highlightBlock('COLLECTION PIN', pin),
+      imageBlock('TRANSFER RECEIPT', item.receiptUrl),
+      imageBlock('PASSPORT PHOTO', raw.passportUrl),
+    ],
+  });
+}
+
+/**
+ * A wallet top-up as a printable receipt.
+ *
+ * What a customer wants after paying money in, and what was missing: the Print
+ * button only ever appeared on orders.
+ *
+ * Two amounts, deliberately both: what was paid and what the wallet was
+ * credited. They can differ - a currency conversion, a rejected request credited
+ * nothing - and a receipt showing only one of them cannot be checked against a
+ * bank statement. Who approved it is on here for the same reason: a credit with
+ * nobody's name against it is not something a dispute can be opened about.
+ */
+function topupReceiptHtml(item) {
+  const currency = txCurrency(item);
+  const status = String(item.status || 'pending').toUpperCase();
+  return receiptDocument({
+    subtitle: 'Wallet Top-Up Receipt',
+    rowsHtml: receiptRows([
+      ['Top-up ID', item.id],
+      ['Status', status],
+      ['Method', topupService.METHODS[item.method] || item.method],
+      ['Account', item.userName || ''],
+      ['Phone', item.userPhone || ''],
+      ['Bank', item.bankName || ''],
+      ['Reference', item.refNo || ''],
+      ['Amount paid', txAmount(item.amount, currency)],
+      ['Credited to wallet', txAmount(item.creditedAmount ?? item.walletAmount ?? item.amount, item.creditedCurrency || currency)],
+      ['Requested', formatDate(item.createdAt)],
+      ['Verified by', item.verifiedByName || ''],
+      ['Approved by', item.completedByName || ''],
+      ['Completed', formatDate(item.completedAt)],
+      ['Reject reason', item.status === 'rejected' ? (item.rejectReason || '') : ''],
+    ]),
+    blocks: [imageBlock('PAYMENT RECEIPT', item.receiptUrl)],
+    footer: item.status === 'approved'
+      ? 'Please keep this receipt for your records.'
+      : `This top-up is ${status.toLowerCase()}. It is not proof that the wallet was credited.`,
+  });
 }
 
 /** One label/value line inside the modal body. */
@@ -243,9 +346,13 @@ function TopupBody({ item }) {
       <Row label="Created" value={formatDate(item.createdAt)} />
       {item.status === 'rejected' && <Row label="Reject reason" value={item.rejectReason} />}
       {!!item.receiptUrl && (
-        <TouchableOpacity onPress={() => Linking.openURL(item.receiptUrl).catch(() => {})}>
-          <Image source={{ uri: item.receiptUrl }} style={styles.receiptThumb} resizeMode="cover" />
-        </TouchableOpacity>
+        <>
+          <Text style={styles.rowLabel}>PAYMENT RECEIPT</Text>
+          <TouchableOpacity onPress={() => Linking.openURL(item.receiptUrl).catch(() => {})}>
+            <Image source={{ uri: item.receiptUrl }} style={styles.receiptThumb} resizeMode="cover" />
+          </TouchableOpacity>
+          <DownloadButton url={item.receiptUrl} filename={`topup-receipt-${item.id}.jpg`} label="Download Receipt" />
+        </>
       )}
     </>
   );
@@ -313,83 +420,14 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
           </ScrollView>
 
           <View style={styles.footer}>
-            {type === 'tx' && (
+            {(type === 'tx' || type === 'topup') && (
               <TouchableOpacity style={styles.printBtn} onPress={async () => {
                 try {
-                  const safe = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-                  const raw = item.raw || {};
-                  const currency = txCurrency(item);
-                  // Only these two services carry a collection PIN at all.
-                  const requiresCollectionPin = item.service === 'Mobile Banking' || item.service === 'Remittance';
-                  // collectionPin first: completeTransaction deletes the live
-                  // pin, so on a completed order it is the only copy left.
-                  const pin = requiresCollectionPin ? (pinOverride || item.collectionPin || item.pin || '') : '';
-                  const esc = (v) => safe(v);
-                  const rows = [
-                    ['Service', item.service],
-                    ['Order ID', item.id],
-                    ['Customer', item.customerPhone || item.customerId || ''],
-                    ['Phone / Number', raw.phone || item.customerPhone || ''],
-                    ['Operator', raw.operator || item.operator || ''],
-                    ['Country', raw.country || item.country || ''],
-                    ['Package', raw.package || item.package || ''],
-                    ['Package ID', raw.packageId || item.packageId || ''],
-                    ['Amount', txAmount(item.total, currency)],
-                    ['Status', String(item.status || '').toUpperCase()],
-                    ['Transaction ID', raw.trxid || raw.transactionId || item.trxid || item.transactionId || ''],
-                    ['Provider', raw.provider || item.provider || ''],
-                    ['Details', item.details || ''],
-                    ['Sender', raw.senderName || ''],
-                    ['Sender Phone', raw.senderPhone || ''],
-                    ['Sender Company', raw.senderCompany || ''],
-                    ['Sender Passport No.', raw.senderPassportNo || ''],
-                    ['Passport Expiry', raw.senderPassportExpiry || ''],
-                    ['Sender Address', raw.senderAddress || ''],
-                    ['Receiver Name', [raw.receiverFirstName, raw.receiverLastName].filter(Boolean).join(' ')],
-                    ['Receiver Relationship', raw.receiverRelationship || ''],
-                    ['Receiver Mobile', raw.receiverPhone || ''],
-                    ['Receiver Bank', raw.receiverBankName || ''],
-                    ['Account No.', raw.receiverAccountNumber || ''],
-                    ['Branch', raw.receiverBranch || ''],
-                    ['Routing No.', raw.receiverRoutingNumber || ''],
-                    ['Pickup Network', raw.receiverPickupNetwork || ''],
-                    ['Receiver ID', [raw.receiverIdType, raw.receiverIdNumber].filter(Boolean).join(' - ')],
-                    ['Pickup City', raw.receiverPickupCity || ''],
-                    ['Wallet Provider', raw.receiverWalletProvider || ''],
-                    ['Wallet Number', raw.receiverWalletNumber || ''],
-                    ['Created', formatDate(item.createdAt)],
-                    ['Updated', formatDate(item.updatedAt)],
-                    ['Completed By', item.completedByName || item.operatorName || ''],
-                  ].filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== '');
-
-                  const rowsHtml = rows.map(([label, value]) =>
-                    `<tr><td style="padding:7px 6px;border-bottom:1px solid #e5e7eb;color:#555;font-weight:600;width:38%">${esc(label)}</td><td style="padding:7px 6px;border-bottom:1px solid #e5e7eb;word-break:break-word">${esc(value)}</td></tr>`
-                  ).join('');
-
-                  const pinBlock = requiresCollectionPin && pin
-                    ? `<div style="margin:16px 0;padding:14px;border:2px solid #0B8A94;text-align:center"><div style="font-size:11px;font-weight:700">COLLECTION PIN</div><div style="font-size:28px;font-weight:bold;letter-spacing:6px;margin-top:5px">${esc(pin)}</div></div>`
-                    : '';
-
-                  const receiptImage = item.receiptUrl
-                    ? `<div style="margin-top:18px"><b>TRANSFER RECEIPT</b><br><img src="${esc(item.receiptUrl)}" style="max-width:100%;max-height:420px;margin-top:8px;object-fit:contain"></div>`
-                    : '';
-
-                  const passportImage = raw.passportUrl
-                    ? `<div style="margin-top:18px"><b>PASSPORT PHOTO</b><br><img src="${esc(raw.passportUrl)}" style="max-width:100%;max-height:420px;margin-top:8px;object-fit:contain"></div>`
-                    : '';
-
-                  const html = `<!doctype html>
-<html><head><meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
-@page{margin:12mm}body{font-family:Arial,sans-serif;color:#111;font-size:12px;margin:0}
-h1{font-size:20px;text-align:center;margin:0 0 4px}.sub{text-align:center;color:#666;margin-bottom:14px}
-table{width:100%;border-collapse:collapse}.footer{margin-top:18px;padding-top:10px;border-top:1px solid #ddd;text-align:center;color:#666;font-size:10px}
-</style></head><body>
-<h1>MySheba</h1><div class="sub">Transaction Receipt</div>
-<table>${rowsHtml}</table>
-${pinBlock}${receiptImage}${passportImage}
-<div class="footer">Please keep this receipt for your records.</div>
-</body></html>`;
+                  // A top-up had no printable receipt at all, which is the one
+                  // thing a customer asks for after paying money in. The
+                  // document, and the escaping, come from src/utils/receiptHtml.js
+                  // so the two cannot drift apart.
+                  const html = type === 'topup' ? topupReceiptHtml(item) : orderReceiptHtml(item, pinOverride);
                   await Print.printAsync({ html });
                 } catch (err) { showAlert('Printer', err?.message || 'Printing is not available on this device.'); }
               }}>
