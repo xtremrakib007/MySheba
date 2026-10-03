@@ -35,6 +35,7 @@
     "test:packagecategory": "node scripts/test-package-category.js",
     "test:appsync": "node scripts/test-app-sync.js",
     "test:tilecategories": "node scripts/test-tile-categories.js",
+    "test:usermgmtui": "node scripts/test-user-management-ui.js",
     "audit:tiles": "node scripts/audit-tile-destinations.js",
     "test:auth": "node scripts/test-profile-gate.js",
     "publish:ota": "node scripts/publish-ota.js",

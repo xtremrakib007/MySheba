@@ -1,4 +1,5 @@
 import PromptModal from '../components/PromptModal';
+import ActionSheet from '../components/ActionSheet';
 import { WALLET_FREEZE_REASONS } from '../data/rejectionReasons';
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, Modal } from 'react-native';
@@ -46,15 +47,83 @@ function validUpgradeOptions(canUpgradeTo, targetRole) {
   return canUpgradeTo.filter((r) => (ROLE_RANK[r] ?? -1) > currentRank);
 }
 
-function RoleBadge({ role }) {
-  const {
-    colors
-  } = useTheme();
+/**
+ * A role's colour, by tier rather than by name.
+ *
+ * Six roles each with their own colour is a legend to memorise. Three tiers -
+ * the people who buy, the staff who serve them, the people who can change the
+ * system - is the distinction that actually matters when scanning a list, and
+ * it survives a seventh role being added.
+ */
+function roleTone(role, colors) {
+  if (role === 'superadmin' || role === 'admin') return colors.error;
+  if (role === 'dealer' || role === 'reseller' || role === 'support' || role === 'finance') return colors.primary;
+  return colors.textSecondary;
+}
 
+function RoleBadge({ role }) {
+  const { colors } = useTheme();
   const styles = createStyles(colors);
+  const tone = roleTone(role, colors);
   return (
-    <View style={styles.roleBadge}>
-      <Text style={styles.roleBadgeText}>{ROLE_LABEL[role] || role}</Text>
+    <View style={[styles.roleBadge, { borderColor: tone }]}>
+      <Text style={[styles.roleBadgeText, { color: tone }]}>{ROLE_LABEL[role] || role}</Text>
+    </View>
+  );
+}
+
+/** The one or two letters that stand in for a face. */
+function initialsOf(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+/**
+ * One account, as a row.
+ *
+ * At module scope on purpose. This was declared inside UserManagementScreen's
+ * body, which makes it a NEW component type on every render - so React threw
+ * away and rebuilt every row in the list on each keystroke in the search box,
+ * which is exactly when the list is longest and the typing most deserves to
+ * feel smooth.
+ *
+ * The actions are one button, not six. They used to be a wrapping row of small
+ * pills in the corner, where Delete ended up the same size as Upgrade and a
+ * thumb's width from it.
+ */
+function UserCard({ u, onManage, actionCount, manageLabel = 'Manage' }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+  const tone = roleTone(u.role, colors);
+  const meta = [u.phone || '—', u.userId ? `ID ${u.userId}` : '', countryLabel(u)].filter(Boolean).join(' · ');
+  return (
+    <View style={styles.userCard}>
+      <View style={[styles.avatar, { borderColor: tone }]}>
+        <Text style={[styles.avatarText, { color: tone }]}>{initialsOf(u.name)}</Text>
+      </View>
+      <View style={styles.userMain}>
+        <View style={styles.userNameRow}>
+          <Text style={styles.userName} numberOfLines={1}>{u.name || '—'}</Text>
+          <RoleBadge role={u.role} />
+        </View>
+        <Text style={styles.userPhone} numberOfLines={1}>{meta}</Text>
+        {(!!u.suspended || !!u.walletFrozen) && (
+          <View style={styles.badgeRow}>
+            {!!u.suspended && <View style={styles.suspendedBadge}><Text style={styles.suspendedBadgeText}>Suspended</Text></View>}
+            {!!u.walletFrozen && <View style={styles.frozenBadge}><Text style={styles.frozenBadgeText}>Wallet frozen</Text></View>}
+          </View>
+        )}
+      </View>
+      {/* Hidden rather than disabled when there is nothing to do: a dealer
+          looking at their own customers can act on none of them, and a column
+          of dead buttons says less than no column at all. */}
+      {actionCount > 0 && (
+        <TouchableOpacity style={styles.manageBtn} onPress={() => onManage(u)} accessibilityRole="button" accessibilityLabel={`${manageLabel}, ${u.name || 'account'}`}>
+          <Text style={styles.manageBtnText}>{manageLabel}</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -119,6 +188,7 @@ export default function UserManagementScreen() {
   const [upgradeTarget, setUpgradeTarget] = useState(null); // user object
   const [downgradeTarget, setDowngradeTarget] = useState(null); // user object
   const [freezeTarget, setFreezeTarget] = useState(null); // user object
+  const [manageTarget, setManageTarget] = useState(null); // user whose action sheet is open
   const [assignTarget, setAssignTarget] = useState(null); // customer with no dealer
   const [resellerAssignTarget, setResellerAssignTarget] = useState(null); // customer being (re)assigned a reseller
   const [name, setName] = useState('');
@@ -354,80 +424,66 @@ export default function UserManagementScreen() {
   // true platform-wide total, used instead on the Activity Logs screen).
   const totalVisibleCount = visibleUsers.length + unassigned.length + 1;
 
-  function UserCard({ u }) {
-    const {
-      colors
-    } = useTheme();
-
-    const styles = createStyles(colors);
+  /**
+   * Everything this caller may do to that account, as action-sheet rows.
+   *
+   * One list, built once per user, used both to render the sheet and to decide
+   * whether the Manage button appears at all - so a button that opens an empty
+   * sheet is not a state that can exist.
+   *
+   * Each guard mirrors a server-side one in functions/userManagement.js. They
+   * are not the security boundary; the server is. They are here so a person is
+   * not offered an action that can only come back as a permission error.
+   */
+  const actionsFor = (u) => {
     const upgradeOptions = validUpgradeOptions(perms.canUpgradeTo, u.role);
-    const canDowngrade = downgradeOptionsFor(u.role).length > 0;
-    // Suspend/Delete are superadmin-only, and a superadmin account itself
-    // is never a valid target - mirrors the server-side guard in
-    // functions/userManagement.js so the buttons don't even appear for an
-    // action that would just come back as a permission error.
+    // Suspend/Delete are superadmin-only, and a superadmin account is never a
+    // valid target.
     const canModerate = isSuperadmin && u.role !== 'superadmin';
-    // Admin/superadmin can (re)assign which reseller a customer's orders
-    // route to first, same "pick from the picker" shape as the unassigned-
-    // customer "Assign Dealer" flow above, just usable any time (a
-    // customer can already have a dealer and still get/change a reseller).
+    // Admin/superadmin can (re)assign which reseller a customer's orders route
+    // to, any time - a customer can already have a dealer and still get one.
     const canSetReseller = isAdminTier && u.role === 'customer';
-    return (
-      <View key={u.id} style={styles.userCard}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.userName}>{u.name || '—'}</Text>
-          <Text style={styles.userPhone}>{u.phone || '—'}{u.userId ? ` · ID ${u.userId}` : ''} · {countryLabel(u)}</Text>
-          <View style={{ flexDirection: 'row', gap: 6, marginTop: 2 }}>
-            {!!u.suspended && (
-              <View style={styles.suspendedBadge}>
-                <Text style={styles.suspendedBadgeText}>Suspended</Text>
-              </View>
-            )}
-            {!!u.walletFrozen && (
-              <View style={styles.frozenBadge}>
-                <Text style={styles.frozenBadgeText}>Wallet frozen</Text>
-              </View>
-            )}
-          </View>
-        </View>
-        <View style={{ alignItems: 'flex-end', gap: 6 }}>
-          <RoleBadge role={u.role} />
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'flex-end' }}>
-            {upgradeOptions.length > 0 && (
-              <TouchableOpacity style={styles.upgradeBtn} onPress={() => setUpgradeTarget(u)}>
-                <Text style={styles.upgradeBtnText}>Upgrade</Text>
-              </TouchableOpacity>
-            )}
-            {!!canSetReseller && (
-              <TouchableOpacity style={styles.downgradeBtn} onPress={() => setResellerAssignTarget(u)}>
-                <Text style={styles.downgradeBtnText}>{u.resellerId ? 'Change Reseller' : 'Set Reseller'}</Text>
-              </TouchableOpacity>
-            )}
-            {!!canDowngrade && (
-              <TouchableOpacity style={styles.downgradeBtn} onPress={() => onDowngrade(u)}>
-                <Text style={styles.downgradeBtnText}>Downgrade</Text>
-              </TouchableOpacity>
-            )}
-            {!!canFreeze && (
-              <TouchableOpacity style={styles.freezeBtn} onPress={() => onToggleFreeze(u)}>
-                <Text style={styles.freezeBtnText}>{u.walletFrozen ? 'Unfreeze' : 'Freeze wallet'}</Text>
-              </TouchableOpacity>
-            )}
-            {!!canModerate && (
-              <TouchableOpacity style={styles.suspendBtn} onPress={() => onToggleSuspend(u)}>
-                <Text style={styles.suspendBtnText}>{u.suspended ? 'Reactivate' : 'Suspend'}</Text>
-              </TouchableOpacity>
-            )}
-            {!!canModerate && (
-              <TouchableOpacity style={styles.deleteBtn} onPress={() => onDeleteUser(u)}>
-                <Text style={styles.deleteBtnText}>Delete</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      </View>
-    );
-  }
+    return [
+      upgradeOptions.length > 0 && {
+        key: 'upgrade', label: 'Upgrade role', tone: 'primary',
+        description: `Promote to ${upgradeOptions.map((r) => ROLE_LABEL[r] || r).join(' or ')}`,
+        onPress: () => setUpgradeTarget(u),
+      },
+      downgradeOptionsFor(u.role).length > 0 && {
+        key: 'downgrade', label: 'Downgrade role',
+        description: `Move down to ${downgradeOptionsFor(u.role).map((r) => ROLE_LABEL[r] || r).join(' or ')}`,
+        onPress: () => onDowngrade(u),
+      },
+      canSetReseller && {
+        key: 'reseller', label: u.resellerId ? 'Change reseller' : 'Set reseller',
+        description: 'Which reseller this customer\u2019s orders route to first',
+        onPress: () => setResellerAssignTarget(u),
+      },
+      canFreeze && {
+        key: 'freeze',
+        label: u.walletFrozen ? 'Unfreeze wallet' : 'Freeze wallet',
+        description: u.walletFrozen
+          ? 'Let this account spend and transfer again'
+          : 'Stop this account spending while something is looked into',
+        tone: u.walletFrozen ? 'default' : 'danger',
+        onPress: () => onToggleFreeze(u),
+      },
+      canModerate && {
+        key: 'suspend',
+        label: u.suspended ? 'Reactivate account' : 'Suspend account',
+        description: u.suspended ? 'Let them sign in again' : 'Block sign-in without deleting anything',
+        tone: u.suspended ? 'default' : 'danger',
+        onPress: () => onToggleSuspend(u),
+      },
+      canModerate && {
+        key: 'delete', label: 'Delete account', tone: 'danger',
+        description: 'Permanent. Their history and wallet go with it.',
+        onPress: () => onDeleteUser(u),
+      },
+    ].filter(Boolean);
+  };
+
+  const manageActions = manageTarget ? actionsFor(manageTarget) : [];
 
   return (
     <View style={styles.screen}>
@@ -455,7 +511,7 @@ export default function UserManagementScreen() {
           value={searchTerm}
           onChangeText={setSearchTerm}
           placeholder="Search by name, phone, or user ID"
-          placeholderTextColor="#999"
+          placeholderTextColor={colors.placeholder}
         />
       </View>
 
@@ -470,15 +526,13 @@ export default function UserManagementScreen() {
             emptyText="No matches in this section."
           >
             {filteredUnassigned.map((u) => (
-              <View key={u.id} style={styles.userCard}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.userName}>{u.name || '—'}</Text>
-                  <Text style={styles.userPhone}>{u.phone || '—'}{u.userId ? ` · ID ${u.userId}` : ''} · {countryLabel(u)}</Text>
-                </View>
-                <TouchableOpacity style={styles.upgradeBtn} onPress={() => setAssignTarget(u)}>
-                  <Text style={styles.upgradeBtnText}>Assign Dealer</Text>
-                </TouchableOpacity>
-              </View>
+              <UserCard
+                key={u.id}
+                u={u}
+                actionCount={1}
+                manageLabel="Assign dealer"
+                onManage={setAssignTarget}
+              />
             ))}
           </Section>
         )}
@@ -494,7 +548,7 @@ export default function UserManagementScreen() {
                 isEmpty={adminList.length === 0}
                 emptyText={isSearching ? 'No matches in this section.' : 'No admins yet.'}
               >
-                {adminList.map((u) => <UserCard key={u.id} u={u} />)}
+                {adminList.map((u) => <UserCard key={u.id} u={u} onManage={setManageTarget} actionCount={actionsFor(u).length} />)}
               </Section>
             )}
 
@@ -506,7 +560,7 @@ export default function UserManagementScreen() {
               isEmpty={dealerList.length === 0}
               emptyText={isSearching ? 'No matches in this section.' : 'No dealers yet.'}
             >
-              {dealerList.map((u) => <UserCard key={u.id} u={u} />)}
+              {dealerList.map((u) => <UserCard key={u.id} u={u} onManage={setManageTarget} actionCount={actionsFor(u).length} />)}
             </Section>
 
             <Section
@@ -517,7 +571,7 @@ export default function UserManagementScreen() {
               isEmpty={resellerList.length === 0}
               emptyText={isSearching ? 'No matches in this section.' : 'No resellers yet.'}
             >
-              {resellerList.map((u) => <UserCard key={u.id} u={u} />)}
+              {resellerList.map((u) => <UserCard key={u.id} u={u} onManage={setManageTarget} actionCount={actionsFor(u).length} />)}
             </Section>
 
             <Section
@@ -528,7 +582,7 @@ export default function UserManagementScreen() {
               isEmpty={staffList.length === 0}
               emptyText={isSearching ? 'No matches in this section.' : 'No support or finance agents yet.'}
             >
-              {staffList.map((u) => <UserCard key={u.id} u={u} />)}
+              {staffList.map((u) => <UserCard key={u.id} u={u} onManage={setManageTarget} actionCount={actionsFor(u).length} />)}
             </Section>
 
             <Section
@@ -539,7 +593,7 @@ export default function UserManagementScreen() {
               isEmpty={customerList.length === 0}
               emptyText={isSearching ? 'No matches in this section.' : 'No customers yet.'}
             >
-              {customerList.map((u) => <UserCard key={u.id} u={u} />)}
+              {customerList.map((u) => <UserCard key={u.id} u={u} onManage={setManageTarget} actionCount={actionsFor(u).length} />)}
             </Section>
           </>
         ) : (
@@ -551,7 +605,7 @@ export default function UserManagementScreen() {
             isEmpty={filteredVisibleUsers.length === 0}
             emptyText={isSearching ? 'No matches in this section.' : 'No users found yet.'}
           >
-            {filteredVisibleUsers.map((u) => <UserCard key={u.id} u={u} />)}
+            {filteredVisibleUsers.map((u) => <UserCard key={u.id} u={u} onManage={setManageTarget} actionCount={actionsFor(u).length} />)}
           </Section>
         )}
       </ScrollView>
@@ -644,6 +698,14 @@ export default function UserManagementScreen() {
         </View>
       </Modal>
 
+      <ActionSheet
+        visible={!!manageTarget}
+        title={manageTarget?.name || 'Account'}
+        subtitle={manageTarget ? `${ROLE_LABEL[manageTarget.role] || manageTarget.role} · ${manageTarget.phone || 'no phone'}` : ''}
+        actions={manageActions}
+        onClose={() => setManageTarget(null)}
+      />
+
       <PromptModal
         visible={!!freezeTarget}
         title={`Freeze ${freezeTarget?.name || 'this wallet'} - reason:`}
@@ -726,43 +788,40 @@ function createStyles(colors) {
     backBtn: { padding: 4 },
     backText: { color: 'white', fontSize: 20 },
     headerTitle: { color: 'white', fontWeight: '600', fontSize: 16, marginLeft: 10 },
-    totalRow: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.border },
-    totalRowText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
+    totalRow: { paddingHorizontal: 16, paddingVertical: 10, backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.border },
+    totalRowText: { fontSize: 12, fontWeight: '700', color: colors.textSecondary, letterSpacing: 0.2 },
     createBtn: { backgroundColor: colors.primary, margin: 16, marginBottom: 0, borderRadius: radius.md, paddingVertical: 12, alignItems: 'center' },
-    createBtnText: { color: 'white', fontWeight: '700', fontSize: 13 },
+    createBtnText: { color: colors.onPrimary, fontWeight: '700', fontSize: 13 },
     searchRow: { paddingHorizontal: 16, paddingTop: 12 },
     searchInput: {
       backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.pill,
       paddingHorizontal: 16, paddingVertical: 10, fontSize: 14, color: colors.text,
     },
     section: { marginBottom: 4 },
-    sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 },
-    sectionChevron: { fontSize: 11, color: '#999' },
-    sectionTitle: { fontSize: 12, fontWeight: '700', color: '#999', textTransform: 'uppercase' },
-    userCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: 12, marginBottom: 10, gap: 10 },
-    userName: { fontSize: 14, fontWeight: '600', color: colors.text },
-    userPhone: { fontSize: 12, color: '#999', marginTop: 2 },
-    roleBadge: { backgroundColor: '#EEF2FF', borderRadius: radius.pill, paddingVertical: 4, paddingHorizontal: 10 },
-    roleBadgeText: { fontSize: 11, fontWeight: '600', color: colors.primary },
-    upgradeBtn: { backgroundColor: colors.primary, borderRadius: radius.pill, paddingVertical: 6, paddingHorizontal: 12 },
-    upgradeBtnText: { color: 'white', fontSize: 11, fontWeight: '700' },
-    downgradeBtn: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.pill, paddingVertical: 6, paddingHorizontal: 12 },
-    downgradeBtnText: { color: colors.textSecondary || '#666', fontSize: 11, fontWeight: '700' },
-    suspendBtn: { backgroundColor: '#FFF3CD', borderRadius: radius.pill, paddingVertical: 6, paddingHorizontal: 12 },
-    suspendBtnText: { color: '#8A6D00', fontSize: 11, fontWeight: '700' },
-    deleteBtn: { backgroundColor: '#FDECEC', borderRadius: radius.pill, paddingVertical: 6, paddingHorizontal: 12 },
-    deleteBtnText: { color: '#C0392B', fontSize: 11, fontWeight: '700' },
-    suspendedBadge: { backgroundColor: '#FDECEC', borderRadius: radius.pill, paddingVertical: 2, paddingHorizontal: 8 },
-    frozenBadge: { backgroundColor: '#E8F0FE', borderRadius: radius.pill, paddingVertical: 2, paddingHorizontal: 8 },
-    frozenBadgeText: { color: '#1A56B8', fontSize: 10, fontWeight: '700' },
-    freezeBtn: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: radius.pill, borderWidth: 1, borderColor: '#1A56B8' },
-    freezeBtnText: { color: '#1A56B8', fontSize: 11, fontWeight: '700' },
-    suspendedBadgeText: { color: '#C0392B', fontSize: 10, fontWeight: '700' },
-    emptyText: { textAlign: 'center', color: '#999', marginTop: 30 },
+    sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 },
+    sectionChevron: { fontSize: 11, color: colors.textSecondary },
+    sectionTitle: { fontSize: 11.5, fontWeight: '800', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.6 },
+    userCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: 12, marginBottom: 10, gap: 11 },
+    avatar: { width: 40, height: 40, borderRadius: 20, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
+    avatarText: { fontSize: 13.5, fontWeight: '800' },
+    userMain: { flex: 1, minWidth: 0 },
+    userNameRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+    userName: { fontSize: 14.5, fontWeight: '700', color: colors.text, flexShrink: 1 },
+    userPhone: { fontSize: 11.5, color: colors.textSecondary, marginTop: 3 },
+    badgeRow: { flexDirection: 'row', gap: 6, marginTop: 6 },
+    manageBtn: { paddingVertical: 8, paddingHorizontal: 13, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.primary },
+    manageBtnText: { fontSize: 11.5, fontWeight: '800', color: colors.primary },
+    roleBadge: { borderRadius: radius.pill, borderWidth: 1, paddingVertical: 2, paddingHorizontal: 8 },
+    roleBadgeText: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.3 },
+    suspendedBadge: { borderWidth: 1, borderColor: colors.error, borderRadius: radius.pill, paddingVertical: 2, paddingHorizontal: 8 },
+    frozenBadge: { borderWidth: 1, borderColor: colors.secondary, borderRadius: radius.pill, paddingVertical: 2, paddingHorizontal: 8 },
+    frozenBadgeText: { color: colors.secondary, fontSize: 10, fontWeight: '800' },
+    suspendedBadgeText: { color: colors.error, fontSize: 10, fontWeight: '800' },
+    emptyText: { textAlign: 'center', color: colors.textSecondary, fontSize: 12.5, paddingVertical: 18 },
     modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 20 },
     modalCard: { backgroundColor: colors.card, borderRadius: radius.lg, padding: 20 },
     modalTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 12 },
-    modalLabel: { fontSize: 12, color: '#999', marginBottom: 8 },
+    modalLabel: { fontSize: 12, color: colors.textSecondary, marginBottom: 8 },
     input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 10, fontSize: 13 },
     roleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
     roleChip: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.pill, paddingVertical: 8, paddingHorizontal: 14 },
@@ -771,7 +830,7 @@ function createStyles(colors) {
     roleChipTextActive: { color: 'white' },
     modalActions: { flexDirection: 'row', gap: 10 },
     modalCancel: { flex: 1, alignItems: 'center', paddingVertical: 10 },
-    modalCancelText: { color: '#999', fontWeight: '600' },
+    modalCancelText: { color: colors.textSecondary, fontWeight: '700' },
     modalConfirm: { flex: 1, backgroundColor: colors.primary, borderRadius: radius.md, alignItems: 'center', paddingVertical: 10 },
     modalConfirmText: { color: 'white', fontWeight: '700' },
   });
