@@ -1,11 +1,11 @@
 import { operatorForNumber } from '../data/operatorPrefix';
-import { groupByValidity } from '../utils/packageValidity';
 import React, { useEffect, useState, useRef } from 'react';
 import { View } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { countries, rechargeOperators } from '../data/countries';
 import { getOperatorBrand } from '../data/operatorBrand';
-import { FormLabel, Grid3, OperatorCard, FormInput, PackageCard, SummaryCard } from '../components/ui';
+import { FormLabel, Grid3, OperatorCard, FormInput, SummaryCard } from '../components/ui';
+import PackagePicker from '../components/PackagePicker';
 import CountrySelectCard from '../components/CountrySelectCard';
 import * as apiProviderService from '../firebase/apiProviderService';
 import { isDriveWindowOpen, driveWindowClosedMessage } from '../utils/driveWindow';
@@ -101,18 +101,21 @@ export default function OfferPacksStep({ step }) {
     const selected = packages.find((p) => p.name === serviceData.package);
     return (
       <View>
-        <FormLabel>Select Offer Pack</FormLabel>
         {serviceData.country !== 'BD' && <FormLabel>Offer packs are available for Bangladesh only.</FormLabel>}
         {!!windowClosed && <FormLabel>{driveWindowClosedMessage()} Please come back during those hours.</FormLabel>}
         {!!loading && <FormLabel>Loading offer packs…</FormLabel>}
         {!!error && <FormLabel>{error}</FormLabel>}
         {!loading && !error && !windowClosed && serviceData.country === 'BD' && packages.length === 0 && <FormLabel>No offer packs are available for this operator right now. Try another operator, or use Internet or Recharge.</FormLabel>}
-        {!loading && !error && groupByValidity(packages).map((g) => (
-          <View key={g.key}>
-            <FormLabel>{g.label}</FormLabel>
-            {g.packages.map((p) => <PackageCard key={p.id} name={p.name} detail={[p.data, p.valid, p.category].filter(Boolean).join(' • ')} price={shownPrice(p)} currency={shownCurrency(p)} selected={serviceData.package === p.name} onPress={() => updateServiceData({ package: p.name, packageId: p.id, amount: p.price })} />)}
-          </View>
-        ))}
+        {!loading && !error && (
+          <PackagePicker
+            packages={packages}
+            label="Select Offer Pack"
+            selectedName={serviceData.package}
+            priceOf={shownPrice}
+            currencyOf={shownCurrency}
+            onSelect={(p) => updateServiceData({ package: p.name, packageId: p.id, amount: p.price })}
+          />
+        )}
         {!!selected && <SummaryCard totalLabel="Wallet deduction" totalValue={`${shownCurrency(selected)} ${Number(shownPrice(selected)).toFixed(2)}`} />}
       </View>
     );

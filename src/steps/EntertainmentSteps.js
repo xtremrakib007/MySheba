@@ -3,7 +3,8 @@ import { View } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { countries, rechargeOperators } from '../data/countries';
 import { getOperatorBrand } from '../data/operatorBrand';
-import { FormLabel, Grid3, OperatorCard, FormInput, PackageCard, SummaryCard } from '../components/ui';
+import { FormLabel, Grid3, OperatorCard, FormInput, SummaryCard } from '../components/ui';
+import PackagePicker from '../components/PackagePicker';
 import CountrySelectCard from '../components/CountrySelectCard';
 import * as apiProviderService from '../firebase/apiProviderService';
 import { isEntertainmentPackage } from '../utils/packageCategory';
@@ -94,13 +95,21 @@ export default function EntertainmentStep({ step }) {
     const selected = packages.find((p) => p.name === serviceData.package);
     return (
       <View>
-        <FormLabel>Select Entertainment Package</FormLabel>
         {serviceData.country !== 'BD' && <FormLabel>Entertainment packages are available for Bangladesh only right now.</FormLabel>}
         {!!loading && <FormLabel>Loading entertainment packages…</FormLabel>}
         {!!error && <FormLabel>{error}</FormLabel>}
         {!!driveClosed && <FormLabel>{driveWindowClosedMessage()} Packages outside those hours are not shown.</FormLabel>}
         {!loading && !error && serviceData.country === 'BD' && packages.length === 0 && <FormLabel>Success TopUp has no entertainment packages for this operator yet. Data and minutes packs are under Internet and Recharge.</FormLabel>}
-        {!loading && !error && packages.map((p) => <PackageCard key={p.id} name={p.name} detail={[p.data, p.valid, p.category].filter(Boolean).join(' • ')} price={shownPrice(p)} currency={shownCurrency(p)} selected={serviceData.package === p.name} onPress={() => updateServiceData({ package: p.name, packageId: p.id, amount: p.price })} />)}
+        {!loading && !error && (
+          <PackagePicker
+            packages={packages}
+            label="Select Entertainment Package"
+            selectedName={serviceData.package}
+            priceOf={shownPrice}
+            currencyOf={shownCurrency}
+            onSelect={(p) => updateServiceData({ package: p.name, packageId: p.id, amount: p.price })}
+          />
+        )}
         {!!selected && <SummaryCard totalLabel="Wallet deduction" totalValue={`${shownCurrency(selected)} ${Number(shownPrice(selected)).toFixed(2)}`} />}
       </View>
     );

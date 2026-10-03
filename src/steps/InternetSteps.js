@@ -1,12 +1,12 @@
 import { operatorForNumber } from '../data/operatorPrefix';
-import { groupByValidity } from '../utils/packageValidity';
 import React, { useEffect, useState, useRef } from 'react';
 import { View } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { countries, rechargeOperators } from '../data/countries';
 import { getMergedPackages } from '../utils/internetPackages';
 import { getOperatorBrand } from '../data/operatorBrand';
-import { FormLabel, Grid3, OperatorCard, FormInput, PackageCard, SummaryCard } from '../components/ui';
+import { FormLabel, Grid3, OperatorCard, FormInput, SummaryCard } from '../components/ui';
+import PackagePicker from '../components/PackagePicker';
 import CountrySelectCard from '../components/CountrySelectCard';
 import * as apiProviderService from '../firebase/apiProviderService';
 
@@ -81,16 +81,19 @@ export default function InternetStep({ step }) {
     const selectedPackage = packages.find((p) => p.name === serviceData.package);
     return (
       <View>
-        <FormLabel>Select Package</FormLabel>
         {!!packageLoading && <FormLabel>Loading Success TopUp packages…</FormLabel>}
         {!!packageError && <FormLabel>{packageError}</FormLabel>}
         {!packageLoading && !packageError && serviceData.country === 'BD' && packages.length === 0 && <FormLabel>No internet packages are available for this operator right now. Try another operator, or use Recharge for a plain top-up.</FormLabel>}
-        {!packageLoading && !packageError && groupByValidity(packages).map((g) => (
-          <View key={g.key}>
-            <FormLabel>{g.label}</FormLabel>
-            {g.packages.map((p) => <PackageCard key={p.id || p.name} name={p.name} detail={[p.data, p.valid, p.category].filter(Boolean).join(' • ')} price={shownPrice(p)} currency={shownCurrency(p)} selected={serviceData.package === p.name} onPress={() => updateServiceData({ package: p.name, packageId: p.id, amount: p.price })} />)}
-          </View>
-        ))}
+        {!packageLoading && !packageError && (
+          <PackagePicker
+            packages={packages}
+            label="Select Package"
+            selectedName={serviceData.package}
+            priceOf={shownPrice}
+            currencyOf={shownCurrency}
+            onSelect={(p) => updateServiceData({ package: p.name, packageId: p.id, amount: p.price })}
+          />
+        )}
         {!!selectedPackage && <SummaryCard totalLabel="Wallet deduction" totalValue={`${shownCurrency(selectedPackage)} ${Number(shownPrice(selectedPackage)).toFixed(2)}`} />}
       </View>
     );

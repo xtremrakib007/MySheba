@@ -344,15 +344,32 @@ check('each package screen sells the catalogue it should', () => {
   return null;
 });
 
+// Where a step's package rows are actually rendered.
+//
+// All three screens delegate to PackagePicker now; they used to each render the
+// list themselves. The checks below are about what the customer sees, not about
+// which file it is written in, so they follow the rendering instead of asserting
+// an address - which is how the role-home checks ended up red while the
+// behaviour they protected was intact.
+const PACKAGE_STEPS = ['src/steps/InternetSteps.js', 'src/steps/OfferPacksSteps.js', 'src/steps/EntertainmentSteps.js'];
+
+function rendererFor(rel) {
+  const step = code(read(rel) || '');
+  if (/<PackagePicker/.test(step)) return { step, rows: code(read('src/components/PackagePicker.js') || ''), shared: true };
+  return { step, rows: step, shared: false };
+}
+
 check('a package detail line never starts with a stray separator', () => {
   // The live /api/drives rows carry no `data` field at all - they are title,
   // price, driveId, operator, type, commission, duration, product_type - so
   // `${p.data} • ${p.valid}` rendered as " • 7 Days" on every row. Offer Packs
   // already joined the parts it had; the other two screens now do the same.
-  for (const rel of ['src/steps/InternetSteps.js', 'src/steps/EntertainmentSteps.js', 'src/steps/OfferPacksSteps.js']) {
-    const src = code(read(rel) || '');
-    if (/\$\{p\.data\}\s*•/.test(src)) return `${rel} prints an empty data field with its separator.`;
-    if (!/\[p\.data, p\.valid, p\.category\]\.filter\(Boolean\)/.test(src)) {
+  for (const rel of PACKAGE_STEPS) {
+    const { rows } = rendererFor(rel);
+    if (/\$\{p\.data\}\s*•/.test(rows)) return `${rel} prints an empty data field with its separator.`;
+    // The category used to be on the line too. It is a chip and a heading now,
+    // so repeating it on every card only crowded out the data and validity.
+    if (!/\[p\.data, p\.valid\]\.filter\(Boolean\)/.test(rows)) {
       return `${rel} does not build its detail line from the parts that exist.`;
     }
   }
@@ -364,14 +381,21 @@ check('a package is priced only in the wallet the customer pays from', () => {
   // catalogue figure is in the destination country's currency, which is not
   // what leaves the wallet and not a number the customer can act on, so it is
   // not shown at all - on the row or in the summary.
-  for (const rel of ['src/steps/InternetSteps.js', 'src/steps/OfferPacksSteps.js', 'src/steps/EntertainmentSteps.js']) {
-    const src = code(read(rel) || '');
-    if (!/price=\{shownPrice\(p\)\} currency=\{shownCurrency\(p\)\}/.test(src)) {
-      return `${rel} still prices its rows in the catalogue currency.`;
+  for (const rel of PACKAGE_STEPS) {
+    const { step, rows, shared } = rendererFor(rel);
+    // The step still owns the quoter - only the rendering moved - so it must
+    // hand it over, and the renderer must use what it was handed rather than
+    // reaching for the catalogue price.
+    if (shared && !/priceOf=\{shownPrice\}\s*\n\s*currencyOf=\{shownCurrency\}/.test(step)) {
+      return `${rel} does not pass its wallet quote to the picker.`;
     }
-    if (/walletDeductionMyr/.test(src)) return `${rel} still computes the wallet figure on the device.`;
-    if (/amountToPoints/.test(src)) return `${rel} still converts prices itself instead of using the server quote.`;
-    if (/Package Price|Pack Price/.test(src)) return `${rel} still shows the foreign catalogue price in its summary.`;
+    const priced = shared
+      ? /price=\{priceOf\(p\)\}\s*\n\s*currency=\{currencyOf\(p\)\}/.test(rows)
+      : /price=\{shownPrice\(p\)\} currency=\{shownCurrency\(p\)\}/.test(rows);
+    if (!priced) return `${rel} still prices its rows in the catalogue currency.`;
+    if (/walletDeductionMyr/.test(step)) return `${rel} still computes the wallet figure on the device.`;
+    if (/amountToPoints/.test(step)) return `${rel} still converts prices itself instead of using the server quote.`;
+    if (/Package Price|Pack Price/.test(step)) return `${rel} still shows the foreign catalogue price in its summary.`;
   }
   // The quote has to come from the server, where the per-unit price, the tier
   // discount and the wallet sell rate actually live.
@@ -416,11 +440,17 @@ check('packages are grouped by how long they last', () => {
   // Dropping one would hide a product that is for sale.
   if (groups.reduce((n, g) => n + g.packages.length, 0) !== 4) return 'grouping lost a package';
 
-  for (const rel of ['src/steps/InternetSteps.js', 'src/steps/OfferPacksSteps.js']) {
-    if (!/groupByValidity\(packages\)\.map/.test(code(read(rel) || ''))) {
+  for (const rel of PACKAGE_STEPS) {
+    const { rows } = rendererFor(rel);
+    if (!/groupByValidity\(shown\)\.map|groupByValidity\(packages\)\.map/.test(rows)) {
       return `${rel} still renders one flat list.`;
     }
   }
+  // And grouped by kind as well, so a Voice pack is not something you have to
+  // read a 30-day Data section to rule out.
+  const picker = code(read('src/components/PackagePicker.js') || '');
+  if (!/groupByCategory\(packages\)/.test(picker)) return 'the picker no longer groups by kind.';
+  if (!/label="All"/.test(picker)) return 'the picker has no All chip, so a miscategorised pack is unreachable.';
   return null;
 });
 
