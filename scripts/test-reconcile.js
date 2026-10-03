@@ -51,7 +51,15 @@ check('the screen file exists', fs.existsSync(path.join(ROOT, 'src/screens/Recon
 console.log('\nThe backend still guards the money');
 
 const backend = read('functions/transactionService.js');
-check('only admins may settle', /\['admin', 'superadmin'\]\.includes\(actorProfile\.role\)/.test(backend));
+// Settling refunds or confirms a charge, so finance settles it too - that is
+// the role whose job this is. Asserting the named list rather than a literal
+// array in one gate: there are two gates, and the point is that they agree.
+check('finance, admin and superadmin may settle',
+  /const RECONCILE_ROLES = \['finance', 'admin', 'superadmin'\]/.test(backend)
+  && (backend.match(/RECONCILE_ROLES/g) || []).length >= 3);
+// And no further: a dealer or a reseller settling their own uncertain order
+// would be marking their own homework against the customer's wallet.
+check('and nobody else', !/RECONCILE_ROLES = \[[^\]]*(dealer|reseller|support|customer)/.test(backend));
 check('only an unknown transaction may be settled', /Only unknown transactions can be reconciled/.test(backend));
 check('the outcome is limited to completed or failed', /\['completed', 'failed'\]\.includes\(outcome\)/.test(backend));
 check('a provider reference is required', /Provider confirmation\/reference is required/.test(backend));

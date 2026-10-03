@@ -412,4 +412,62 @@ assert.throws(() => api.validate({ service: 'Recharge', name: 'Test', baseUrl: '
   console.log('  the price shown and the price charged are one calculation');
 }
 
+{
+  const fs = require('fs');
+  const path = require('path');
+  const readFnEarly = (f) => fs.readFileSync(path.join(__dirname, '..', 'functions', f), 'utf8');
+  // A provider that answers and refuses has decided. Classifying that as an
+  // uncertain outcome left the customer charged for a recharge that never
+  // happened, waiting on a human - which is what "Insufficient balance" and
+  // "Invalid number" were doing in the Uncertain queue.
+  const src = readFnEarly('apiProviderService.js');
+
+  // The decision must rest on facts, not on the wording of a message. When
+  // responseMessagePath is set - and Success TopUp's is - the thrown text is
+  // the provider's own, so no phrase the classifier looked for appeared in it.
+  assert(/rejection\.providerRejected = true/.test(src),
+    'a provider refusal must be marked, not recognised by its phrasing');
+  assert(/definitive=requestSent===false\|\|e\?\.providerRejected===true/.test(src),
+    'definitive must be decided by whether the request was sent and whether the provider refused');
+
+  // requestSent is set immediately before the call: everything failing above
+  // it never reached the provider, so no recharge can exist.
+  const sendAt = src.indexOf('requestSent = true;');
+  const callAt = src.indexOf('response=await requestHttpsPinned(');
+  assert(sendAt !== -1 && callAt !== -1 && sendAt < callAt,
+    'requestSent must be set before the request leaves, not after');
+
+  // walletService refunds anything that is not ambiguous, so a definitive
+  // failure now reaches that branch instead of the unknown one.
+  const wallet = readFnEarly('walletService.js');
+  assert(/const ambiguousProviderOutcome = providerSucceeded \|\| errorCode === 'unavailable'/.test(wallet),
+    'the refund branch still keys off an unavailable code');
+
+  console.log('  a provider that refuses is a failed order, not an uncertain one');
+}
+
+{
+  const fs = require('fs');
+  const path = require('path');
+  const readFnEarly = (f) => fs.readFileSync(path.join(__dirname, '..', 'functions', f), 'utf8');
+  // Refunding is finance work, and the finance role could not do it at all.
+  const rejection = readFnEarly('rejectionService.js');
+  assert(/'dealer', 'reseller', 'finance', 'admin', 'superadmin'/.test(rejection),
+    'finance must be able to reach the rejection path');
+  assert(/actor\.role === 'finance'/.test(rejection),
+    'finance must be able to reject any order, like admin');
+
+  // Two gates guard reconciliation, one before the transaction and one inside
+  // it. Widening one alone leaves the other turning finance away.
+  const txs = readFnEarly('transactionService.js');
+  assert(/const RECONCILE_ROLES = \['finance', 'admin', 'superadmin'\]/.test(txs),
+    'the reconcile roles must be named once');
+  assert((txs.match(/RECONCILE_ROLES/g) || []).length >= 3,
+    'both reconcile gates must read that one list');
+  assert(!/\['admin', 'superadmin'\]\.includes\(actorProfile\.role\)/.test(txs),
+    'the gate before the transaction must not keep its own narrower list');
+
+  console.log('  finance can refund and reconcile, through one role list');
+}
+
 console.log('apiProviderService tests: PASS');

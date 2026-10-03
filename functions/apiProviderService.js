@@ -646,6 +646,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     if (state.status === 'failed') throw new HttpsError('failed-precondition',state.message || 'The provider rejected this request.');
     throw new HttpsError('aborted','This API request is already being processed.');
   }
+  let requestSent = false;
   if (service === 'Recharge PIN' && !provider.responsePinPath) throw new Error('Recharge PIN provider is missing responsePinPath configuration.');
   const raw = payload?.raw || {};
   const isSuccessTopUpBill = service === 'Bill Payment' && String(provider.name || '').trim().toLowerCase() === 'success topup';
@@ -742,13 +743,28 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
       if(Buffer.byteLength(body,'utf8')>100000) throw new Error('Rendered API request body is too large.');
     }
     const ctl=new AbortController(), timer=setTimeout(()=>ctl.abort(),Math.max(3000,Math.min(60000,Number(provider.timeoutMs)||15000)));
+    // Set before the call, not after: everything that throws above this line
+    // failed before the request left us, so no recharge can exist and the
+    // charge is always safe to refund. Only once it is sent can an outcome be
+    // genuinely unknown.
+    requestSent = true;
     let response; try { response=await requestHttpsPinned(url,{method,headers,body,signal:ctl.signal},pinnedAddress); } finally { clearTimeout(timer); }
     const responseText=await response.text();
     if(Buffer.byteLength(responseText,'utf8')>1000000) throw new Error('Provider response is too large.');
     let data={}; try { data=responseText?JSON.parse(responseText):{}; } catch { data={raw:responseText.slice(0,5000)}; }
     if(!response.ok) throw new Error(`Provider HTTP ${response.status}`);
     const success=provider.responseSuccessPath?getPath(data,provider.responseSuccessPath):true;
-    if(success===false || (provider.responseSuccessValue && String(success)!==String(provider.responseSuccessValue))) throw new Error(provider.responseMessagePath?String(getPath(data,provider.responseMessagePath)||'Provider rejected the request.'):'Provider rejected the request.');
+    if(success===false || (provider.responseSuccessValue && String(success)!==String(provider.responseSuccessValue))) {
+      // The provider answered and said no. That is a decision, not a doubt, so
+      // it carries a flag rather than a phrase: when responseMessagePath is
+      // configured this message is the PROVIDER's wording - "Insufficient
+      // balance", "Invalid number" - which matches none of the strings the
+      // classifier used to look for, so every clear refusal was filed as an
+      // uncertain outcome and the customer stayed charged.
+      const rejection = new Error(provider.responseMessagePath?String(getPath(data,provider.responseMessagePath)||'Provider rejected the request.'):'Provider rejected the request.');
+      rejection.providerRejected = true;
+      throw rejection;
+    }
     const responseId = provider.responseIdPath ? getPath(data, provider.responseIdPath) : null;
     const responseMessage = provider.responseMessagePath ? getPath(data, provider.responseMessagePath) : null;
     const isProcessing = Boolean(provider.responseProcessingPath && provider.responseProcessingValue && String(getPath(data, provider.responseProcessingPath)) === String(provider.responseProcessingValue));
@@ -768,7 +784,13 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
       .replace(/((?:api[-_]?key|access[-_]?token|auth[-_]?token|token|password|passwd|secret|credential|private[-_]?key)\s*[:=]\s*)[^,;\s]+/gi, '$1[REDACTED]')
       .slice(0,500);
     const message = sanitizedMessage || 'Provider execution failed.';
-    const definitive=/^Provider HTTP 4\d{2}$/.test(message)||message.includes('Provider rejected the request')||message.includes('missing responsePinPath configuration')||message.includes('Provider did not return a valid recharge PIN.');
+    // Definitive means: no recharge can have happened, so refunding is safe.
+    // Two facts decide it - the request never left us, or the provider replied
+    // and refused. The string tests stay only as a backstop for paths that
+    // predate the flags.
+    const definitive=requestSent===false||e?.providerRejected===true
+      ||/^Provider HTTP 4\d{2}$/.test(message)||message.includes('Provider rejected the request')
+      ||message.includes('missing responsePinPath configuration')||message.includes('Provider did not return a valid recharge PIN.');
     await executionRef.set({status:definitive?'failed':'unknown',message,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
     throw definitive?new HttpsError('failed-precondition',message):new HttpsError('unavailable',message);
   }

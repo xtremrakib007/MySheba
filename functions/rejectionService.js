@@ -13,7 +13,10 @@ const SERVICE_ALIASES = {
   'bill_payment': 'Bill Payment',
   remittance: 'Remittance'
 };
-const STAFF_ROLES = ['dealer', 'reseller', 'admin', 'superadmin'];
+// finance belongs here: refunding a customer is money work, and the finance
+// role exists to do money work. Leaving it out meant the one role whose whole
+// job this is could not reach the screen at all.
+const STAFF_ROLES = ['dealer', 'reseller', 'finance', 'admin', 'superadmin'];
 const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const DEVICE_ID_RE = /^[A-Za-z0-9-]{16,100}$/;
 
@@ -59,7 +62,9 @@ async function getActor(uid) {
 }
 
 function canReject(actor, tx) {
-  if (actor.role === 'admin' || actor.role === 'superadmin') return true;
+  // Any order, like admin and superadmin. dealer and reseller stay narrowed to
+  // the orders that are theirs, below.
+  if (actor.role === 'admin' || actor.role === 'superadmin' || actor.role === 'finance') return true;
   if (actor.role === 'dealer') {
     return tx.service === 'Mobile Banking' &&
       (tx.dealerId === actor.uid || tx.assignedTo === actor.uid || tx.claimedBy === actor.uid);

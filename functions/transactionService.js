@@ -27,6 +27,11 @@ const PIN_MIN = 4;
 const PIN_MAX = 12;
 const PIN_RE = new RegExp(`^\\d{${PIN_MIN},${PIN_MAX}}$`);
 function requireAuth(request) { if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.'); }
+
+// Settling an uncertain transaction refunds or confirms a charge, which is
+// finance work. Named once so the gate before the transaction and the gate
+// inside it cannot disagree.
+const RECONCILE_ROLES = ['finance', 'admin', 'superadmin'];
 async function getActor(uid) {
   const snap = await admin.firestore().collection('users').doc(uid).get();
   if (!snap.exists) throw new HttpsError('permission-denied', 'Your staff profile was not found.');
@@ -179,10 +184,13 @@ exports.reconcileUnknownTransaction = onCall({ enforceAppCheck: ENFORCE_APP_CHEC
   const actorSnap = await db.collection('users').doc(uid).get();
   if (!actorSnap.exists) throw new HttpsError('permission-denied', 'Your staff profile was not found.');
   const actorProfile = actorSnap.data() || {};
-  if (!['admin', 'superadmin'].includes(actorProfile.role) ||
+  // Both gates, or neither: this one runs before the transaction and the one
+  // inside it re-checks on the live profile. Widening only the inner list
+  // would still have turned finance away here, with a message naming admin.
+  if (!RECONCILE_ROLES.includes(actorProfile.role) ||
       actorProfile.suspended === true || actorProfile.inactive === true ||
       actorProfile.disabled === true || actorProfile.active === false || actorProfile.mergedInto) {
-    throw new HttpsError('permission-denied', 'Only an active admin can reconcile an uncertain transaction.');
+    throw new HttpsError('permission-denied', 'Only an active finance, admin or superadmin account can reconcile an uncertain transaction.');
   }
   const id = String(request.data?.transactionId || '').trim();
   const outcome = String(request.data?.outcome || '').trim().toLowerCase();
@@ -203,7 +211,9 @@ exports.reconcileUnknownTransaction = onCall({ enforceAppCheck: ENFORCE_APP_CHEC
   const ref = db.collection('transactions').doc(id);
   let result;
   await db.runTransaction(async (tx) => {
-    const currentActor = await assertActorStillActive(tx, uid, ['admin', 'superadmin']);
+    // Settling an uncertain transaction refunds or confirms a charge, which is
+    // finance work. Superadmin-only actions below keep their own narrower list.
+    const currentActor = await assertActorStillActive(tx, uid, RECONCILE_ROLES);
     if (currentActor.activeSessionId !== sessionId || currentActor.activeDeviceId !== deviceId) {
       throw new HttpsError('permission-denied', 'This admin device session is no longer active. Please sign in again.');
     }
