@@ -83,6 +83,13 @@ export default function EntertainmentStep({ step }) {
   if (step === 3) {
     const cur = serviceData.currency || 'MYR';
     const isForeign = serviceData.country && serviceData.country !== 'MY';
+    // What the wallet is actually charged, on every row rather than only on the
+    // one already chosen. Recharge offers six amounts, so its summary card is
+    // enough; a 63-package catalogue priced in BDT tells a MYR wallet holder
+    // nothing until they have picked one and scrolled past the list.
+    const walletCost = (price) => (isForeign && Number(price) > 0
+      ? `≈ ${amountToPoints(Number(price), serviceData.country, rates).toFixed(2)} MYR`
+      : '');
     const selected = packages.find((p) => p.name === serviceData.package);
     const walletDeductionMyr = isForeign && selected ? amountToPoints(selected.price, serviceData.country, rates) : null;
     return (
@@ -93,7 +100,7 @@ export default function EntertainmentStep({ step }) {
         {!!error && <FormLabel>{error}</FormLabel>}
         {!!driveClosed && <FormLabel>{driveWindowClosedMessage()} Packages outside those hours are not shown.</FormLabel>}
         {!loading && !error && serviceData.country === 'BD' && packages.length === 0 && <FormLabel>Success TopUp has no entertainment packages for this operator yet. Data and minutes packs are under Internet and Recharge.</FormLabel>}
-        {!loading && !error && packages.map((p) => <PackageCard key={p.id} name={p.name} detail={[p.data, p.valid, p.category].filter(Boolean).join(' • ')} price={p.price} currency={cur} selected={serviceData.package === p.name} onPress={() => updateServiceData({ package: p.name, packageId: p.id, amount: p.price })} />)}
+        {!loading && !error && packages.map((p) => <PackageCard key={p.id} subPrice={walletCost(p.price)} name={p.name} detail={[p.data, p.valid, p.category].filter(Boolean).join(' • ')} price={p.price} currency={cur} selected={serviceData.package === p.name} onPress={() => updateServiceData({ package: p.name, packageId: p.id, amount: p.price })} />)}
         {!!(isForeign && selected) && <SummaryCard rows={[{ label: 'Package Price', value: `${cur} ${Number(selected.price).toFixed(2)}` }]} totalLabel="Wallet deduction" totalValue={`${walletDeductionMyr.toFixed(2)} MYR`} />}
       </View>
     );

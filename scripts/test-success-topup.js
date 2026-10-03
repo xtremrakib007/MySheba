@@ -359,6 +359,26 @@ check('a package detail line never starts with a stray separator', () => {
   return null;
 });
 
+check('a package row shows what the wallet pays, not only the catalogue price', () => {
+  // The catalogue is priced in BDT and the wallet is held in MYR. Recharge
+  // offers six amounts so its summary card is enough; a 63-row catalogue
+  // leaves the customer no way to see the cost of a row until they have
+  // chosen it and scrolled past the list.
+  for (const rel of ['src/steps/InternetSteps.js', 'src/steps/OfferPacksSteps.js', 'src/steps/EntertainmentSteps.js']) {
+    const src = code(read(rel) || '');
+    if (!/subPrice=\{walletCost\(p\.price\)\}/.test(src)) return `${rel} does not show the wallet cost on each package.`;
+    if (!/amountToPoints\(Number\(price\), serviceData\.country, rates\)/.test(src)) {
+      return `${rel} does not convert with the same helper the summary card uses.`;
+    }
+  }
+  // And the card must let a long name wrap without pushing the price away:
+  // a Bengali package name runs to two lines and took the price off the card.
+  const ui = code(read('src/components/ui.js') || '');
+  if (!/pkgText:\{flex:1/.test(ui)) return 'the package name does not flex, so a long one pushes the price off the card.';
+  if (!/pkgPriceWrap:\{flexShrink:0/.test(ui)) return 'the package price can be shrunk away by a long name.';
+  return null;
+});
+
 check('both package screens explain an empty catalogue', () => {
   for (const rel of ['src/steps/InternetSteps.js', 'src/steps/EntertainmentSteps.js']) {
     const src = read(rel);
