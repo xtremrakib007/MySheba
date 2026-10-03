@@ -1,3 +1,4 @@
+import { groupByValidity } from '../utils/packageValidity';
 import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useApp } from '../context/AppContext';
@@ -85,7 +86,12 @@ export default function OfferPacksStep({ step }) {
         {!!loading && <FormLabel>Loading offer packs…</FormLabel>}
         {!!error && <FormLabel>{error}</FormLabel>}
         {!loading && !error && !windowClosed && serviceData.country === 'BD' && packages.length === 0 && <FormLabel>No offer packs are available for this operator right now. Try another operator, or use Internet or Recharge.</FormLabel>}
-        {!loading && !error && packages.map((p) => <PackageCard key={p.id} name={p.name} detail={[p.data, p.valid, p.category].filter(Boolean).join(' • ')} price={shownPrice(p)} currency={shownCurrency(p)} selected={serviceData.package === p.name} onPress={() => updateServiceData({ package: p.name, packageId: p.id, amount: p.price })} />)}
+        {!loading && !error && groupByValidity(packages).map((g) => (
+          <View key={g.key}>
+            <FormLabel>{g.label}</FormLabel>
+            {g.packages.map((p) => <PackageCard key={p.id} name={p.name} detail={[p.data, p.valid, p.category].filter(Boolean).join(' • ')} price={shownPrice(p)} currency={shownCurrency(p)} selected={serviceData.package === p.name} onPress={() => updateServiceData({ package: p.name, packageId: p.id, amount: p.price })} />)}
+          </View>
+        ))}
         {!!selected && <SummaryCard totalLabel="Wallet deduction" totalValue={`${shownCurrency(selected)} ${Number(shownPrice(selected)).toFixed(2)}`} />}
       </View>
     );

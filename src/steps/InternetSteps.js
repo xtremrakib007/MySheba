@@ -1,3 +1,4 @@
+import { groupByValidity } from '../utils/packageValidity';
 import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useApp } from '../context/AppContext';
@@ -63,7 +64,12 @@ export default function InternetStep({ step }) {
         {!!packageLoading && <FormLabel>Loading Success TopUp packages…</FormLabel>}
         {!!packageError && <FormLabel>{packageError}</FormLabel>}
         {!packageLoading && !packageError && serviceData.country === 'BD' && packages.length === 0 && <FormLabel>No internet packages are available for this operator right now. Try another operator, or use Recharge for a plain top-up.</FormLabel>}
-        {!packageLoading && !packageError && packages.map((p) => <PackageCard key={p.id || p.name} name={p.name} detail={[p.data, p.valid, p.category].filter(Boolean).join(' • ')} price={shownPrice(p)} currency={shownCurrency(p)} selected={serviceData.package === p.name} onPress={() => updateServiceData({ package: p.name, packageId: p.id, amount: p.price })} />)}
+        {!packageLoading && !packageError && groupByValidity(packages).map((g) => (
+          <View key={g.key}>
+            <FormLabel>{g.label}</FormLabel>
+            {g.packages.map((p) => <PackageCard key={p.id || p.name} name={p.name} detail={[p.data, p.valid, p.category].filter(Boolean).join(' • ')} price={shownPrice(p)} currency={shownCurrency(p)} selected={serviceData.package === p.name} onPress={() => updateServiceData({ package: p.name, packageId: p.id, amount: p.price })} />)}
+          </View>
+        ))}
         {!!selectedPackage && <SummaryCard totalLabel="Wallet deduction" totalValue={`${shownCurrency(selectedPackage)} ${Number(shownPrice(selectedPackage)).toFixed(2)}`} />}
       </View>
     );

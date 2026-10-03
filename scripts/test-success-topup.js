@@ -387,6 +387,43 @@ check('a package is priced only in the wallet the customer pays from', () => {
   return null;
 });
 
+check('packages are grouped by how long they last', () => {
+  // Sixty-three rows in one list buries the only choice that matters. The
+  // duration arrives as the provider wrote it - Bengali for Success TopUp -
+  // so the grouping reads a number out of the string rather than a format
+  // nobody promised.
+  const util = read('src/utils/packageValidity.js');
+  if (!util) return 'src/utils/packageValidity.js is missing';
+  const src = util.replace(/^export (const|function) /gm, '$1 ').replace(/^export \{[^}]*\};?$/gm, '');
+  const mod = {};
+  new Function('module', 'exports', `${src}\nmodule.exports={validityDays,groupByValidity};`)(mod, {});
+  const { validityDays, groupByValidity } = mod.exports;
+
+  for (const [text, days] of [['\u09E9\u09E6 \u09A6\u09BF\u09A8', 30], ['7 Days', 7], ['1 Month', 30], ['3 Year', 1095]]) {
+    if (validityDays(text) !== days) return `"${text}" read as ${validityDays(text)} days, not ${days}`;
+  }
+  // A month must not sort before a week on its number alone.
+  if (!(validityDays('1 Month') > validityDays('7 Days'))) return 'a month sorts before a week';
+  if (validityDays('Unlimited') !== null || validityDays('') !== null) {
+    return 'a validity naming no duration must not be read as a number';
+  }
+
+  const groups = groupByValidity([
+    { valid: '\u09E9\u09E6 \u09A6\u09BF\u09A8' }, { valid: '7 Days' }, { valid: 'Unlimited' }, { valid: '\u09E9\u09E6 \u09A6\u09BF\u09A8' },
+  ]);
+  if (groups.map((g) => g.days).join(',') !== '7,30,') return 'groups are not ordered shortest first with the unknown last';
+  if (groups[1].packages.length !== 2) return 'packages of the same duration are not grouped together';
+  // Dropping one would hide a product that is for sale.
+  if (groups.reduce((n, g) => n + g.packages.length, 0) !== 4) return 'grouping lost a package';
+
+  for (const rel of ['src/steps/InternetSteps.js', 'src/steps/OfferPacksSteps.js']) {
+    if (!/groupByValidity\(packages\)\.map/.test(code(read(rel) || ''))) {
+      return `${rel} still renders one flat list.`;
+    }
+  }
+  return null;
+});
+
 check('both package screens explain an empty catalogue', () => {
   for (const rel of ['src/steps/InternetSteps.js', 'src/steps/EntertainmentSteps.js']) {
     const src = read(rel);
