@@ -3,16 +3,23 @@ import { httpsCallable } from 'firebase/functions';
 import { collection, query, where, getCountFromServer } from 'firebase/firestore';
 import { functions, db } from './config';
 
+// This mirrors ROLE_PERMISSIONS in functions/userManagement.js, which is what
+// actually decides. The backend has allowed support and finance all along;
+// this copy did not offer them, so neither role could be created or upgraded
+// to from the app - the accounts the staff home exists for could not exist.
+// scripts/test-user-roles.js fails if the two drift again.
 export const ROLE_PERMISSIONS = {
   dealer: { canCreate: ['customer'], canUpgradeTo: [] },
-  admin: { canCreate: ['customer', 'dealer', 'reseller'], canUpgradeTo: ['dealer', 'reseller'] },
-  superadmin: { canCreate: ['customer', 'dealer', 'admin', 'reseller'], canUpgradeTo: ['dealer', 'admin', 'reseller'] },
+  admin: { canCreate: ['customer', 'dealer', 'reseller', 'support', 'finance'], canUpgradeTo: ['dealer', 'reseller', 'support', 'finance'] },
+  superadmin: { canCreate: ['customer', 'dealer', 'admin', 'reseller', 'support', 'finance'], canUpgradeTo: ['dealer', 'admin', 'reseller', 'support', 'finance'] },
+  support: { canCreate: [], canUpgradeTo: [] },
+  finance: { canCreate: [], canUpgradeTo: [] },
 };
 
 export const DOWNGRADE_PERMISSIONS = {
   dealer: { dealer: 'customer' },
-  admin: { dealer: 'customer', reseller: 'customer' },
-  superadmin: { dealer: 'customer', admin: 'dealer', reseller: 'customer' },
+  admin: { dealer: 'customer', reseller: 'customer', support: 'customer', finance: 'customer' },
+  superadmin: { dealer: 'customer', admin: 'dealer', reseller: 'customer', support: 'customer', finance: 'customer' },
 };
 
 export function canManageUsers(role) { return !!ROLE_PERMISSIONS[role]; }
