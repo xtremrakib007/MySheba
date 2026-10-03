@@ -10,7 +10,7 @@ import HeaderDecor from './HeaderDecor';
 import VerifiedBadge from './VerifiedBadge';
 import Constants from 'expo-constants';
 import { showAlert } from '../utils/appAlert';
-import { useAppSync } from './SyncButton';
+import { useAppSync } from './useAppSync';
 import ServiceIcon from './ServiceIcon';
 // Rows draw from the same set the grids use, so the menu and the grid agree
 // and there are enough icons to give each row its own. Group headers and the

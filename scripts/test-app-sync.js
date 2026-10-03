@@ -18,7 +18,7 @@ const ROOT = path.join(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 
 const util = read('src/utils/appSync.js');
-const button = read('src/components/SyncButton.js');
+const hook = read('src/components/useAppSync.js');
 const header = read('src/components/AppHeader.js');
 const sidebar = read('src/components/Sidebar.js');
 
@@ -37,33 +37,36 @@ console.log('An already-downloaded bundle is not reported as "no update"');
 // date while the new version sits on disk.
 assert(/export async function fetchUpdateIfAny\(pending\) \{\s*\n\s*if \(pending\) return true;/.test(util),
   'a pending bundle must short-circuit the check');
-assert(/useUpdates\(\)/.test(button), 'and the button must read that flag');
-assert(/fetchUpdateIfAny\(isUpdatePending\)/.test(button), 'and pass it in');
+assert(/useUpdates\(\)/.test(hook), 'and the button must read that flag');
+assert(/fetchUpdateIfAny\(isUpdatePending\)/.test(hook), 'and pass it in');
 
 console.log('Nothing restarts without being asked');
 // A restart discards a half-filled remittance form. Nobody taps refresh
 // expecting to lose one.
-assert(!/await reloadApp\(\)/.test(button), 'the button must not restart as part of its own flow');
-assert(/onPress: \(\) => \{\s*\n\s*reloadApp\(\)/.test(button),
+assert(!/await reloadApp\(\)/.test(hook), 'the button must not restart as part of its own flow');
+assert(/onPress: \(\) => \{\s*\n\s*reloadApp\(\)/.test(hook),
   'a restart may only happen from a button the person pressed');
-assert(/text: 'Later', style: 'cancel'/.test(button), 'and declining must be offered');
+assert(/text: 'Later', style: 'cancel'/.test(hook), 'and declining must be offered');
 
 console.log('A dead network stops before offering a restart');
 // Restarting with no connection drops somebody on a login screen they cannot
 // get past, so a failed reconnect must not fall through to the update check.
-assert(/if \(!refreshed\) \{ setBusy\(false\); return; \}/.test(button),
+assert(/if \(!refreshed\) \{ setBusy\(false\); return; \}/.test(hook),
   'a failed refresh must return, not continue to the restart offer');
 
 console.log('A build that cannot restart says so');
 assert(/This build cannot restart itself/.test(util), 'reloadApp explains itself when updates are off');
-assert(/updatesActive\(\)\s*\n\s*\? \[\{ text: 'Done'/.test(button),
+assert(/updatesActive\(\)\s*\n\s*\? \[\{ text: 'Done'/.test(hook),
   'and no "Restart anyway" is offered where it could only fail');
 
 console.log('Every role can reach it');
 // AppHeader is on two screens. Dealer, reseller, support and finance homes
 // each roll their own header, and all of them open the sidebar - so the
 // sidebar row is the one that covers everybody.
-assert(/<SyncButton \/>/.test(header), 'the header carries the button');
+// The sidebar is the only place it is offered. It briefly had an icon in the
+// header too, on the two screens that use AppHeader - a second entry point for
+// one action, on a bar that is already menu, logo, bell and name.
+assert(!/SyncButton/.test(header), 'the header must not carry a second copy of it');
 assert(/useAppSync\(\)/.test(sidebar), 'and the sidebar carries the same action');
 // WHERE it is called is not checked here on purpose. It was called below
 // Sidebar's `if (!sidebarVisible) return null`, so the hook ran only when the

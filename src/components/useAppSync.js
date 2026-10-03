@@ -1,11 +1,16 @@
-import React, { useCallback, useState } from 'react';
-import { Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
+import { useCallback, useState } from 'react';
 import * as Updates from 'expo-updates';
 import { showAlert } from '../utils/appAlert';
 import { resyncData, fetchUpdateIfAny, reloadApp, updatesActive } from '../utils/appSync';
 
 /**
  * Refresh what is on screen, and restart into a new version when there is one.
+ *
+ * A hook rather than a button: the only place this is offered is the sidebar,
+ * which every role reaches and which already draws its own rows. It briefly had
+ * an icon in the header too, on the two screens that use AppHeader - a second
+ * entry point for one action, on a bar that is already menu, logo, bell and
+ * name.
  *
  * Two different complaints wear the same words. "It's not updating" can mean
  * the balance is stale because the listener dropped with the signal, or it can
@@ -80,26 +85,3 @@ export function useAppSync() {
 
   return { sync, busy };
 }
-
-/** The icon button, for a header. */
-export default function SyncButton({ color = '#FFFFFF', size = 19 }) {
-  const { sync, busy } = useAppSync();
-  return (
-    <TouchableOpacity
-      style={styles.btn}
-      onPress={sync}
-      disabled={busy}
-      accessibilityRole="button"
-      accessibilityLabel={busy ? 'Refreshing' : 'Refresh and check for updates'}
-    >
-      {busy
-        ? <ActivityIndicator size="small" color={color} />
-        : <Text style={[styles.icon, { color, fontSize: size }]}>↻</Text>}
-    </TouchableOpacity>
-  );
-}
-
-const styles = StyleSheet.create({
-  btn: { padding: 5, minWidth: 29, alignItems: 'center', justifyContent: 'center' },
-  icon: { fontWeight: '700', lineHeight: 23 },
-});
