@@ -182,12 +182,26 @@ yes('dealer and reseller too',
 yes('and the customer home screen, which filters to home tiles',
   render('customer', true).includes('wv_abcd1234'));
 
-// A staff grid shows everything. The old guard for that was "fall back when
-// nothing is flagged", which an added WebView broke: it carries a home flag,
-// so one flagged tile in a staff list collapsed the grid to just that tile.
-yes('a staff grid is never cut down to the home set', render('support', true).length > 5);
-yes('even with an added page flagged for home',
-  render('support', true).includes('wv_abcd1234') && render('support', true).length === render('support', false).length);
+// A staff home used to show the whole catalogue, and this asserted that: the
+// home set and the full set were the same length. Staff homes are trimmed now
+// like everyone else's, so that is no longer the rule - but the bug it was
+// written for still is. An added WebView carries a home flag of its own, and
+// the old "fall back when nothing is flagged" guard meant one such tile in a
+// staff list collapsed the entire grid to just it.
+yes('a staff home is a grid, not one tile', render('support', true).length > 5);
+yes('and an added page flagged for home is on it', render('support', true).includes('wv_abcd1234'));
+
+// The thing trimming can break: a tile that is on no home screen and in no
+// overflow is a finished feature nobody can open. Checked per role, because
+// each role has a different catalogue and a different home set.
+for (const role of ['customer', 'dealer', 'reseller', 'support', 'finance', 'admin']) {
+  const home = new Set(render(role, true));
+  const over = new Set(tiles.overflowTiles({ role, can: allCaps, webviewPages: CUSTOM, isActive: allActive }).map((t) => t.key));
+  const missing = render(role, false).filter((k) => !home.has(k) && !over.has(k));
+  yes(`nothing a ${role} has goes missing when the home screen is trimmed`, missing.length === 0, missing.join(', '));
+  // And the trim has to actually trim, or the categories bought nothing.
+  yes(`a ${role} home is shorter than the full catalogue`, render(role, true).length < render(role, false).length);
+}
 
 // Grid Management can switch a built-in off; a wv_ key is not one of its tiles,
 // so the only switch for an added page is the one in WebView Pages.

@@ -7,7 +7,7 @@ import * as gridManagementService from '../firebase/gridManagementService';
 import { serviceEmoji } from './serviceEmoji';
 import BusOperatorLogo, { hasBusLogo } from './BusOperatorLogo';
 import ServiceArt, { hasServiceArt } from './ServiceArt';
-import { CUSTOMER_SERVICES, STAFF_ROLES, visibleTiles } from './serviceTiles';
+import { CUSTOMER_SERVICES, STAFF_ROLES, visibleTiles, groupTilesByCategory } from './serviceTiles';
 
 // `home: true` marks the tiles the customer home shows. Everything else is
 // one tap away on the Services tab, which renders this list in full.
@@ -102,7 +102,39 @@ export default function ServiceGrid({ homeOnly }) {
     isActive: (key) => gridManagementService.isGridActive(gridManagement, key, gridViewer),
     homeOnly,
   });
-  return <View><View style={styles.sectionHead}><Text style={[styles.sectionTitle, { color: colors.navy || colors.text }]}>{isStaff ? 'Management Dashboard' : 'Quick Services'}</Text><Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>{isStaff ? 'Manage transactions, accounts and operations' : 'Money, remittance and travel'}</Text></View><View style={[styles.gridCanvas, { backgroundColor: colors.canvasBg || colors.surface }]}><View style={styles.grid}>{services.map((service) => <Tile key={service.key} s={service} disabled={service.kind === 'webview' && !!webViewBusy} onPress={() => handlePress(service)} />)}</View></View></View>;
+
+  // More Services is not a category and must stay last, after every section.
+  const moreTile = services.find((s) => s.kind === 'moreFeaturesLink');
+  const sections = groupTilesByCategory(services.filter((s) => s.kind !== 'moreFeaturesLink'));
+
+  return (
+    <View>
+      <View style={styles.sectionHead}>
+        <Text style={[styles.sectionTitle, { color: colors.navy || colors.text }]}>{isStaff ? 'Management Dashboard' : 'Quick Services'}</Text>
+        <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>{isStaff ? 'Manage transactions, accounts and operations' : 'Money, remittance and travel'}</Text>
+      </View>
+      <View style={[styles.gridCanvas, { backgroundColor: colors.canvasBg || colors.surface }]}>
+        {sections.map((section, i) => (
+          <View key={section.key}>
+            {/* One category needs no heading to tell it apart from the others. */}
+            {sections.length > 1 && (
+              <Text style={[styles.catLabel, { color: colors.textSecondary }, i > 0 && styles.catLabelSpaced]}>{section.label}</Text>
+            )}
+            <View style={styles.grid}>
+              {section.tiles.map((service) => (
+                <Tile key={service.key} s={service} disabled={service.kind === 'webview' && !!webViewBusy} onPress={() => handlePress(service)} />
+              ))}
+            </View>
+          </View>
+        ))}
+        {!!moreTile && (
+          <View style={styles.grid}>
+            <Tile key={moreTile.key} s={moreTile} onPress={() => handlePress(moreTile)} />
+          </View>
+        )}
+      </View>
+    </View>
+  );
 }
 
-const styles = StyleSheet.create({ sectionHead: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8 }, sectionTitle: { fontSize: 17, fontWeight: '800', letterSpacing: 0.2 }, sectionSubtitle: { fontSize: 11, marginTop: 2 }, gridCanvas: { marginHorizontal: 4, padding: 10, borderRadius: 18 }, grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }, item: { width: '23%', minHeight: 88, marginBottom: 10, paddingHorizontal: 2, paddingVertical: 10, borderWidth: 1.5, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 1 }, itemDisabled: { opacity: 0.45 }, emoji: { fontSize: 30, lineHeight: 36, marginBottom: 6, textAlign: 'center' }, logoWrap: { height: 36, marginBottom: 6, alignItems: 'center', justifyContent: 'center' }, iconText: { fontSize: 28 }, name: { fontSize: 10.5, lineHeight: 13, fontWeight: '700', textAlign: 'center' } });
+const styles = StyleSheet.create({ catLabel: { fontSize: 10.5, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 7, marginLeft: 2 }, catLabelSpaced: { marginTop: 4 }, sectionHead: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8 }, sectionTitle: { fontSize: 17, fontWeight: '800', letterSpacing: 0.2 }, sectionSubtitle: { fontSize: 11, marginTop: 2 }, gridCanvas: { marginHorizontal: 4, padding: 10, borderRadius: 18 }, grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }, item: { width: '23%', minHeight: 88, marginBottom: 10, paddingHorizontal: 2, paddingVertical: 10, borderWidth: 1.5, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 1 }, itemDisabled: { opacity: 0.45 }, emoji: { fontSize: 30, lineHeight: 36, marginBottom: 6, textAlign: 'center' }, logoWrap: { height: 36, marginBottom: 6, alignItems: 'center', justifyContent: 'center' }, iconText: { fontSize: 28 }, name: { fontSize: 10.5, lineHeight: 13, fontWeight: '700', textAlign: 'center' } });

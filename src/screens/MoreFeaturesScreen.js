@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-nati
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import { useServiceAction, Tile } from '../components/ServiceGrid';
-import { overflowTiles } from '../components/serviceTiles';
+import { overflowTiles, groupTilesByCategory } from '../components/serviceTiles';
 import * as gridManagementService from '../firebase/gridManagementService';
 
 
@@ -62,16 +62,23 @@ function Section({ title, subtitle, items, onPress }) {
 
 export default function MoreFeaturesScreen() {
   const { colors } = useTheme();
-  const { goBackOrHome, profile, gridManagement, gridViewer, webviewPages } = useApp();
+  const { goBackOrHome, profile, gridManagement, gridViewer, webviewPages, can } = useApp();
   // One source for both halves of this file's rule - a finished tile lands on
   // the home screen or here, never nowhere - whether "not on the home screen"
   // is how the tile was declared or how a superadmin has since set it. The
   // Grid Management gate is applied here, so `visible()` is not needed again.
+  // Role-aware, because staff home screens are trimmed now too. Built from the
+  // same pipeline as the grids, so a tile that left a dealer's home screen
+  // lands here rather than nowhere - which is the whole point of deriving this
+  // instead of hand-listing it.
   const overflow = overflowTiles({
+    role: profile?.role || 'customer',
+    can,
     webviewPages,
     isActive: (key) => gridManagementService.isGridActive(gridManagement, key, gridViewer),
     excludeKinds: PERSONAL_KINDS,
   });
+  const overflowSections = groupTilesByCategory(overflow);
   const handlePress = useServiceAction();
   const visible = (items) => items.filter((item) => gridManagementService.isGridActive(gridManagement, item.key, gridViewer));
   const isCustomer = !profile?.role || profile.role === 'customer';
@@ -85,18 +92,24 @@ export default function MoreFeaturesScreen() {
         </TouchableOpacity>
       </View>
       <ScrollView contentContainerStyle={styles.content}>
-        {isCustomer ? (
-          <>
-            {/* Hidden when empty - every service tile being on the home
-                screen is the good case, not a reason for a bare heading. */}
-            {overflow.length > 0 && (
-              <Section title="More Services" subtitle="Not shown on your home screen" items={overflow} onPress={handlePress} />
-            )}
-            <Section title="Personal" subtitle="Your account, documents and activity" items={visible(PERSONAL_FEATURES)} onPress={handlePress} />
-          </>
-        ) : (
-          <Section title="Account & Operations" subtitle="Manage your account and operational features" items={visible(STAFF_FEATURES)} onPress={handlePress} />
-        )}
+        {/* One section per category, so this screen reads the same way the home
+            screen does rather than as one long undifferentiated list. Hidden
+            when empty - every tile being on the home screen is the good case,
+            not a reason for a bare heading. */}
+        {overflowSections.map((section) => (
+          <Section key={section.key} title={section.label} subtitle={section.subtitle} items={section.tiles} onPress={handlePress} />
+        ))}
+        {/* The account rows are the same for everyone; only the list differs,
+            and a staff member's includes the management shortcuts. Shown for
+            staff too, which it was not: the staff branch used to replace the
+            overflow entirely, so a tile that left a dealer's home screen had
+            nowhere to appear. */}
+        <Section
+          title={isCustomer ? 'Personal' : 'Account & Operations'}
+          subtitle={isCustomer ? 'Your account, documents and activity' : 'Manage your account and operational features'}
+          items={visible(isCustomer ? PERSONAL_FEATURES : STAFF_FEATURES)}
+          onPress={handlePress}
+        />
       </ScrollView>
     </View>
   );
