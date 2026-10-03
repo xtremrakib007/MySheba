@@ -52,7 +52,14 @@ const approve = body(review, 'approveTopup');
 
 console.log('Who may do what:');
 is('only a superadmin can add money directly', roleList(instant, 'INSTANT_TOPUP_ROLES'), ['superadmin']);
-is('an admin or superadmin completes', roleList(review, 'COMPLETER_ROLES'), ['admin', 'superadmin']);
+// Finance completes now, because finance pays: a top-up is a transfer out of
+// the approver's own wallet rather than credit conjured for the customer.
+is('finance, admin or superadmin completes', roleList(review, 'COMPLETER_ROLES'), ['finance', 'admin', 'superadmin']);
+// And whoever completes it is debited. Minting was the old behaviour and is
+// the thing worth failing on if it ever comes back.
+if (!/debitPlan\(caller\.__ref, caller, plan\)/.test(review)) {
+  failed += 1; console.error('  FAIL  completing a top-up does not debit the approver');
+} else { console.log('  ok    and the approver pays for it'); }
 
 console.log('\nVerifying must not move money:');
 if (!verify) { failed += 1; console.error('  FAIL  verifyTopup is not exported'); }

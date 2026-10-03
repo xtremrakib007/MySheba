@@ -100,6 +100,14 @@ service cloud.firestore {
     match /transactionQueue/{id} { allow read: if activeProfile() && (can('orders') || (isDealerTier() && resource.data.operatorRole == 'dealer' && resource.data['service'] == 'Mobile Banking' && (resource.data.get('dealerId', null) == null || resource.data.dealerId == request.auth.uid) && (resource.data.status == 'pending' || resource.data.get('claimedBy', null) == request.auth.uid)) || (isReseller() && resource.data.operatorRole == 'reseller' && resource.data['service'] in ['Recharge', 'Internet', 'Bill Payment', 'Remittance'] && (resource.data.get('resellerId', null) == null || resource.data.resellerId == request.auth.uid) && (resource.data.status == 'pending' || resource.data.get('claimedBy', null) == request.auth.uid))); allow create, update, delete: if false; }
     match /topups/{id} { allow create, update, delete: if false; allow read: if activeProfile() && (resource.data.userId == request.auth.uid || can('finance')); }
     match /selfTopups/{id} { allow read: if activeProfile() && resource.data.userId == request.auth.uid; allow create, update, delete: if false; }
+    // Funding requests are written only by the callables, which do the
+    // transfer in one transaction. Reading is for the person who asked and the
+    // level that must decide - a finance agent has no business reading what
+    // admin asked superadmin for.
+    match /walletFundingRequests/{id} {
+      allow read: if activeProfile() && (resource.data.fromUid == request.auth.uid || resource.data.approverRole == myRole());
+      allow create, update, delete: if false;
+    }
     match /pointTransfers/{id} { allow read: if activeProfile() && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid || can('finance')); allow create, update, delete: if false; }
     match /recommendationViews/{id} { allow read, write: if false; }
     match /announcements/{id} { allow read: if activeProfile() && can('support'); allow write: if false; }

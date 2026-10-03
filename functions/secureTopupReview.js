@@ -58,7 +58,8 @@ function validBalance(value) {
 // and superadmin, which no override can restrict); completing is admin or
 // superadmin. A superadmin may do both steps, so a top-up is never stuck
 // waiting for someone else to be online.
-const COMPLETER_ROLES = ['admin', 'superadmin'];
+// Finance pays the customer from its own wallet, so finance completes.
+const COMPLETER_ROLES = ['finance', 'admin', 'superadmin'];
 
 /** Everything needed to credit a wallet, or an HttpsError saying why not. */
 async function creditPlan(tx, db, topup) {
@@ -83,12 +84,44 @@ async function creditPlan(tx, db, topup) {
   return { userId, userRef, currency, points, newBalance: newBalanceCents / scale };
 }
 
+/**
+ * What the approver pays, or an HttpsError saying why they cannot.
+ *
+ * A top-up used to be minted: the customer's balance went up and nobody's went
+ * down, so the total in circulation was whatever had been approved. It is a
+ * transfer now - finance pays the customer, and is funded by admin, who is
+ * funded by superadmin - which is what ties the money to something.
+ *
+ * A short wallet is refused, deliberately leaving the customer's request
+ * pending rather than failing it: the approver raises a funding request, and
+ * approves this one when the money arrives. The customer waits; they do not
+ * resubmit.
+ */
+function debitPlan(approverRef, approver, plan) {
+  const currency = inferWalletCurrency(approver);
+  if (currency !== plan.currency) {
+    throw new HttpsError('failed-precondition', `Your wallet is in ${currency} and this top-up is in ${plan.currency}. They must match to transfer.`);
+  }
+  const balance = validBalance(approver.walletBalance);
+  if (balance === null) throw new HttpsError('failed-precondition', 'Your wallet balance is invalid.');
+  if (balance < plan.points) {
+    throw new HttpsError('failed-precondition',
+      `Your wallet holds ${balance.toFixed(2)} ${currency}, less than the ${plan.points.toFixed(2)} ${currency} this top-up needs. Request wallet funding, then approve this again - it stays pending until you do.`);
+  }
+  const scale = 10 ** (ZERO_DECIMAL_CURRENCIES.has(currency) ? 0 : 2);
+  return { approverRef, currency, newBalance: (Math.round(balance * scale) - Math.round(plan.points * scale)) / scale };
+}
+
 /** Load the caller and re-check them inside the transaction. */
 async function callerInTx(tx, db, uid, request) {
-  const snap = await tx.get(db.collection('users').doc(uid));
+  const ref = db.collection('users').doc(uid);
+  const snap = await tx.get(ref);
   if (!snap.exists || !activeAccount(snap.data())) throw new HttpsError('permission-denied', 'Your account is not active.');
   const caller = snap.data() || {};
   requireSessionMatch(request, caller);
+  // The ref travels with the caller because the approver now pays for the
+  // top-up, so this document is written to, not only read.
+  caller.__ref = ref;
   return caller;
 }
 
@@ -140,13 +173,15 @@ exports.completeTopup = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async req
     const out = await db.runTransaction(async tx => {
       const snap = await tx.get(ref);
       const caller = await callerInTx(tx, db, uid, request);
-      if (!COMPLETER_ROLES.includes(caller.role)) throw new HttpsError('permission-denied', 'Only an admin or superadmin can complete a top-up.');
+      if (!COMPLETER_ROLES.includes(caller.role)) throw new HttpsError('permission-denied', 'Only finance, an admin or a superadmin can complete a top-up.');
       if (!snap.exists) throw new HttpsError('not-found', 'That top-up request does not exist.');
       const topup = snap.data() || {};
       if (topup.status === 'approved') throw new HttpsError('failed-precondition', 'That top-up has already been completed.');
       if (topup.status !== 'verified') throw new HttpsError('failed-precondition', 'That top-up has not been verified yet.');
       const plan = await creditPlan(tx, db, topup);
+      const debit = debitPlan(caller.__ref, caller, plan);
       const who = actor(uid, caller);
+      tx.update(debit.approverRef, { walletBalance: debit.newBalance, walletCurrency: debit.currency });
       tx.update(plan.userRef, { walletBalance: plan.newBalance, walletCurrency: plan.currency, walletBalanceCurrency: plan.currency });
       tx.update(ref, {
         // 'approved' stays the terminal status: ReportsScreen totals filter
@@ -189,8 +224,10 @@ exports.approveTopup = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async requ
       const topup = snap.data() || {};
       if (topup.status !== 'pending' && topup.status !== 'verified') throw new HttpsError('failed-precondition', 'That request has already been reviewed.');
       const plan = await creditPlan(tx, db, topup);
+      const debit = debitPlan(caller.__ref, caller, plan);
       const who = actor(uid, caller);
       const stamp = admin.firestore.FieldValue.serverTimestamp();
+      tx.update(debit.approverRef, { walletBalance: debit.newBalance, walletCurrency: debit.currency });
       tx.update(plan.userRef, { walletBalance: plan.newBalance, walletCurrency: plan.currency, walletBalanceCurrency: plan.currency });
       tx.update(ref, {
         status: 'approved',
