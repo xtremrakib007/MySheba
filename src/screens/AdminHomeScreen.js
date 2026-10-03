@@ -154,6 +154,7 @@ const RECHARGE_PRICING_FIELDS = [
   { key: 'rechargePointCostPerUnit', label: '📶 Mobile Recharge (× face value)' },
   { key: 'internetPointCostPerUnit', label: '🌐 Internet Package (× face value)' },
   { key: 'offerPacksPointCostPerUnit', label: '🎁 Offer Pack (× face value)' },
+  { key: 'entertainmentPointCostPerUnit', label: '🎬 Entertainment (× face value)' },
 ];
 
 // Role-Based Pricing (superadmin only) - lets a superadmin give any of
@@ -172,7 +173,7 @@ const ROLE_PRICE_FIELDS = [...POINT_COST_FIELDS, ...BOOST_COST_FIELDS, ...MODULE
 // property to every field object) so POINT_COST_FIELDS/BOOST_COST_FIELDS/
 // MODULE_SUBSCRIPTION_COST_FIELDS - each also rendered elsewhere with
 // their own already-correct hardcoded "pts" - don't need touching.
-const ROLE_PRICE_UNIT_OVERRIDES = { rechargePointCostPerUnit: '×', internetPointCostPerUnit: '×', offerPacksPointCostPerUnit: '×' };
+const ROLE_PRICE_UNIT_OVERRIDES = { rechargePointCostPerUnit: '×', internetPointCostPerUnit: '×', offerPacksPointCostPerUnit: '×', entertainmentPointCostPerUnit: '×' };
 function rolePriceUnitFor(key) {
   return ROLE_PRICE_UNIT_OVERRIDES[key] || 'pts';
 }

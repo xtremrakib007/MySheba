@@ -368,18 +368,23 @@ assert.throws(() => api.validate({ service: 'Recharge', name: 'Test', baseUrl: '
   assert.throws(() => safePrice({ internetPointCostPerUnit: -1 }, 'internetPointCostPerUnit', 'customer'),
     'a negative per-unit price is a misconfiguration, not a discount');
 
-  // Offer packs sell at the converted rate, with nothing added. They used to
-  // read internetPointCostPerUnit, so a markup set on internet packages
-  // reached them silently - the opposite of what offer packs are for.
+  // Offer packs and entertainment sell at the converted rate, with nothing
+  // added. Both used to read internetPointCostPerUnit, so a markup set on
+  // internet packages reached them silently - the opposite of what they are
+  // for. Internet is the only one of the three that marks up.
   assert.strictEqual(PER_UNIT_PRICE_KEYS.internet, 'internetPointCostPerUnit');
-  assert.strictEqual(PER_UNIT_PRICE_KEYS.entertainment, 'internetPointCostPerUnit');
-  assert.notStrictEqual(PER_UNIT_PRICE_KEYS.offerpacks, 'internetPointCostPerUnit',
-    'offer packs must not inherit the internet markup');
   const withInternetMarkup = { internetPointCostPerUnit: 1.01 };
-  assert.strictEqual(safePrice(withInternetMarkup, PER_UNIT_PRICE_KEYS.offerpacks, 'customer'), 1,
-    'a markup on internet packages must not reach offer packs');
+  for (const kind of ['offerpacks', 'entertainment']) {
+    assert.notStrictEqual(PER_UNIT_PRICE_KEYS[kind], 'internetPointCostPerUnit',
+      `${kind} must not inherit the internet markup`);
+    assert.strictEqual(safePrice(withInternetMarkup, PER_UNIT_PRICE_KEYS[kind], 'customer'), 1,
+      `a markup on internet packages must not reach ${kind}`);
+  }
   assert.strictEqual(safePrice(withInternetMarkup, PER_UNIT_PRICE_KEYS.internet, 'customer'), 1.01,
     'but it must still reach internet packages');
+  // Each has a key of its own, so one can be given a margin without the other.
+  assert.notStrictEqual(PER_UNIT_PRICE_KEYS.offerpacks, PER_UNIT_PRICE_KEYS.entertainment,
+    'offer packs and entertainment must be priceable separately');
 
   // And the charge path must read this same table, or it prices off one key
   // while the listing quotes off another.

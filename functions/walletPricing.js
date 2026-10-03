@@ -18,17 +18,17 @@ const { baseToWallet } = require('./walletCurrencyService');
 /**
  * Per-unit price key per chargeable service. Absent means a multiplier of 1.
  *
- * Offer packs has its own key, unset, so it sells at the converted rate with
- * nothing added. It used to read internetPointCostPerUnit, which meant a
- * markup put on internet packages silently applied to offer packs too - and
- * offer packs are meant to carry none. Entertainment still shares internet's
- * key; nobody has asked for it to differ.
+ * Offer packs and entertainment each have their own key, both defaulting to
+ * no markup, so they sell at the converted rate. Both used to read
+ * internetPointCostPerUnit, which meant a markup put on internet packages
+ * silently applied to them as well - and neither is meant to carry one.
+ * Internet keeps its own, which is the only one of the three that marks up.
  */
 const PER_UNIT_PRICE_KEYS = {
   recharge: 'rechargePointCostPerUnit',
   internet: 'internetPointCostPerUnit',
   offerpacks: 'offerPacksPointCostPerUnit',
-  entertainment: 'internetPointCostPerUnit',
+  entertainment: 'entertainmentPointCostPerUnit',
   billpayment: 'billPaymentPointCostPerUnit',
   mobilebanking: null,
   remittance: null,
