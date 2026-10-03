@@ -65,6 +65,7 @@ export function useServiceAction() {
     if (s.kind === 'staffInquiries') { setAdminTab('inquiries'); setAdminViewingSection(true); return setScreen('adminHome'); }
     if (s.kind === 'staffReports') return setScreen('reports');
     if (s.kind === 'staffLedger') return setScreen('ledger');
+    if (s.kind === 'staffFunding') return setScreen('walletFunding');
     return startService(s.key);
   };
 }

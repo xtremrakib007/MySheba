@@ -78,7 +78,6 @@ assert(/resource\.data\.fromUid == request\.auth\.uid/.test(block.slice(0, 400))
 assert(/resource\.data\.approverRole == myRole\(\)/.test(block.slice(0, 400)),
   'the approver must see what they have to decide');
 
-console.log('\nEvery hop is a transfer, and nobody sends what they do not hold.');
 
 console.log('A frozen wallet holds still');
 const freeze = strip(read('functions/walletFreeze.js'));
@@ -116,3 +115,37 @@ for (const file of ['apiWebhookService.js', 'successTopupPoller.js', 'rejectionS
 }
 
 console.log('  frozen wallets cannot spend, and are still refunded');
+
+// --- the screen that renders all this ----------------------------------------
+// The three callables were written, tested and reachable from nothing: finance
+// could be short of funds with no way to say so, and the queue just stopped
+// moving. These check the screen is wired to them and phrases the chain the way
+// the server enforces it.
+const screen = read('src/screens/WalletFundingScreen.js');
+for (const fn of ['requestWalletFunding', 'listWalletFundingRequests', 'decideWalletFunding']) {
+  assert(new RegExp(`fundingService\\.${fn}\\(`).test(screen), `the screen must call ${fn}`);
+}
+
+// The screen tells each role who to ask. That duplicates FUNDS_FROM, so it is
+// asserted equal rather than trusted: wrong here and finance is told to ask
+// superadmin while the server routes the request to admin, where nobody who
+// was told to look for it ever sees it.
+const approverFor = {};
+for (const m of screen.matchAll(/(\w+): '(\w+)'/g)) {
+  if (['finance', 'admin'].includes(m[1]) && ['admin', 'superadmin'].includes(m[2])) approverFor[m[1]] = m[2];
+}
+assert.deepStrictEqual(approverFor, FUNDS_FROM,
+  'the screen and the server must agree on who funds whom');
+
+// A rejection without a reason is the thing the reason presets exist to stop.
+assert(/FUNDING_REJECT_REASONS/.test(screen), 'rejecting offers the common reasons');
+assert(/A reason is required/.test(screen), 'and refuses an empty one');
+
+// Approving spends the approver's own money. Doing that on one tap, with no
+// statement of whose wallet it leaves, is how an approver funds the wrong
+// person and finds out from the ledger.
+assert(/out of YOUR wallet/.test(screen), 'approval must say whose balance it spends');
+
+console.log('  the funding screen is wired to the chain it describes');
+
+console.log('\nEvery hop is a transfer, and nobody sends what they do not hold.');

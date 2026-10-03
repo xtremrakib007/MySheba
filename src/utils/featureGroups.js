@@ -42,7 +42,7 @@ export const FEATURE_GROUPS = {
   // The hubs and the management screens they list.
   admin: [
     'adminFeatures', 'dealerFeatures', 'resellerFeatures', 'moreFeatures',
-    'userManagement', 'reports', 'ledger', 'adminAnalytics', 'verificationManagement',
+    'userManagement', 'reports', 'ledger', 'walletFunding', 'adminAnalytics', 'verificationManagement',
     'featureAccess', 'gridManagement', 'tierPromotions', 'apiProviderManagement',
   ],
 
