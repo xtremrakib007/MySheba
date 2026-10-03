@@ -79,4 +79,30 @@ console.log('A dropped field is not a thing the client can fix');
 // failure is only ever an omission, never the filtering itself.
 assert(/for \(const key of allowed\)/.test(wallet), 'the filter still copies only allowlisted keys');
 
+console.log('The client cannot overwrite what the server worked out');
+// The provider payload is one object literal: computed values, then a spread of
+// the client's raw fields. Last wins, so the spread has to come FIRST or every
+// computation above it is undone.
+//
+// It came last. operator was resolved to the provider's code and overwritten by
+// the raw name, so Success TopUp answered "Invalid operator [400]" on every
+// Bangladesh recharge. amount was set to the catalogue cost and overwritten by
+// the sell price - what the comment beside it says must never reach the
+// provider. apiKey and secretKey were overwritable by a client field of the
+// same name.
+const varsLine = provider.split('\n').find((l) => l.includes('const vars = {'));
+assert(varsLine, 'the vars object must be findable');
+const spreadAt = varsLine.indexOf('...Object.fromEntries(Object.entries(raw)');
+assert(spreadAt !== -1, 'the raw spread must still be there');
+for (const key of ['operator:', 'amount:', 'apiKey:', 'secretKey:', 'internetOperator', 'packageId']) {
+  assert(varsLine.indexOf(key) > spreadAt,
+    `"${key}" must be written AFTER the raw spread, or a client field of that name overwrites it`);
+}
+
+// phone is the exception and must stay one: it is the number being topped up,
+// which comes from raw, NOT the customer's own number. Reversing the order
+// without saying so would have sent every recharge to the wrong phone.
+assert(/phone:raw\.phone\|\|customer\?\.phone/.test(varsLine),
+  'phone must take the raw number first - it is the number being recharged');
+
 console.log('\nEvery order carries what the provider needs to fulfil it.');

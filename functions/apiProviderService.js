@@ -680,7 +680,25 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   const providerAmount = isSuccessTopUpBd
     ? (Number.isFinite(packageCost) && packageCost > 0 ? packageCost : (raw.amount ?? payload?.amount ?? ''))
     : (payload?.amount ?? raw.amount ?? '');
-  const vars = { requestId, uid:customer?.uid||'', phone:customer?.phone||'', amount:providerAmount, total:payload?.total??raw.total??'', service, country:raw.country||'', operator:(String(provider.name || '').trim().toLowerCase() === 'success topup' && String(raw.country || '').toUpperCase() === 'BD' ? rechargeOperator : (raw.operator || '')), internetOperator, packageId, billOperator, billNumber:raw.billNumber||raw.accountNumber||'', mobileNumber:raw.mobileNumber||'', monthName, note:raw.note||'', packageCode:raw.packageCode||'', details:payload?.details||'', apiKey:provider.apiKey||'', secretKey:provider.secretKey||'', ...Object.fromEntries(Object.entries(raw).filter(([k,v]) => !['requestId'].includes(k) && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')).slice(0,100)) };
+  // The client's own fields FIRST, so nothing it sends can overwrite a value
+  // this server worked out. They used to come last, and last wins:
+  //
+  //   operator was resolved to the provider's code ("GP") and then overwritten
+  //   by the raw name ("Grameenphone"), so Success TopUp answered "Invalid
+  //   operator [400]" on every Bangladesh recharge;
+  //
+  //   amount was set to the catalogue cost and then overwritten by raw.amount,
+  //   the SELL price - the exact thing the comment above it says must never
+  //   reach the provider, because /api/recharge checks amount against
+  //   package_id;
+  //
+  //   and apiKey/secretKey were overwritable by a client field of the same
+  //   name.
+  //
+  // `phone` is the one value that genuinely comes from raw - it is the number
+  // being topped up, not the customer's own - so it says so explicitly rather
+  // than relying on the spread to win.
+  const vars = { ...Object.fromEntries(Object.entries(raw).filter(([k,v]) => !['requestId'].includes(k) && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')).slice(0,100)), requestId, uid:customer?.uid||'', phone:raw.phone||customer?.phone||'', amount:providerAmount, total:payload?.total??raw.total??'', service, country:raw.country||'', operator:(String(provider.name || '').trim().toLowerCase() === 'success topup' && String(raw.country || '').toUpperCase() === 'BD' ? rechargeOperator : (raw.operator || '')), internetOperator, packageId, billOperator, billNumber:raw.billNumber||raw.accountNumber||'', mobileNumber:raw.mobileNumber||'', monthName, note:raw.note||'', packageCode:raw.packageCode||'', details:payload?.details||'', apiKey:provider.apiKey||'', secretKey:provider.secretKey||'' };
   try {
     let base; try { base = new URL(provider.baseUrl); } catch { throw new Error('Provider URL is invalid.'); }
     if (base.protocol !== 'https:') throw new Error('Provider URL is not allowed.');
