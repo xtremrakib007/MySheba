@@ -29,6 +29,10 @@ export const billerBrand = {
   Astro: { logo: require('../../assets/billers/astro.jpg'), color: '#EC008C', initials: 'AS' },
   Maxis: { logo: require('../../assets/billers/maxis.png'), color: '#00A94F', initials: 'MX' },
   'Telekom Malaysia (TM)': { logo: null, color: '#00539F', initials: 'TM' },
+  // The JomPAY rail itself, which is a biller row of one: the customer types
+  // the biller code off their bill rather than picking a biller, so the mark
+  // on that row is the one they are matching against the bill in their hand.
+  JomPAY: { logo: require('../../assets/billers/jompay.png'), color: '#1B2A6B', initials: 'JP' },
   // Malaysia - the state water boards and the two east-Malaysian grids
   'Sabah Electricity (SESB)': { logo: null, color: '#E01F26', initials: 'SB' },
   'Sarawak Energy (SESCO)': { logo: null, color: '#0F8A4C', initials: 'SC' },

@@ -6,6 +6,7 @@ import { useLanguage } from '../i18n/LanguageContext';
 import * as gridManagementService from '../firebase/gridManagementService';
 import { serviceEmoji } from './serviceEmoji';
 import BusOperatorLogo, { hasBusLogo } from './BusOperatorLogo';
+import BrandTileLogo, { hasBrandTileLogo } from './BrandTileLogo';
 import ServiceArt, { hasServiceArt } from './ServiceArt';
 import { CUSTOMER_SERVICES, STAFF_ROLES, visibleTiles, groupTilesByCategory } from './serviceTiles';
 
@@ -35,7 +36,9 @@ export function Tile({ s, onPress, disabled }) {
   const chosenEmoji = asSafeText(s?.emoji, '');
   const artKey = asSafeText(s?.art, '') || (chosenEmoji ? '' : asSafeText(s?.key, icon));
   return <TouchableOpacity style={[styles.item, { borderColor: `${colors.primary}66`, backgroundColor: colors.card }, disabled && styles.itemDisabled]} activeOpacity={0.82} disabled={!!disabled} onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
-    {hasBusLogo(artKey)
+    {hasBrandTileLogo(artKey)
+      ? <View style={styles.logoWrap}><BrandTileLogo art={artKey} size={32} /></View>
+      : hasBusLogo(artKey)
       ? <View style={styles.logoWrap}><BusOperatorLogo operatorKey={artKey} size={32} /></View>
       : hasServiceArt(artKey)
         ? <View style={styles.logoWrap}><ServiceArt name={artKey} size={32} color={colors.primary} /></View>

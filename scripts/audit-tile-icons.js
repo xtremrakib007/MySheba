@@ -50,6 +50,31 @@ for (const file of SOURCES) {
 
 const missing = [...keys].filter(([key]) => !SERVICE_EMOJI[key] && !drawn.has(key));
 
+// A tile may also name its artwork explicitly with `art:`, which BEATS the one
+// its key implies - so an `art:` naming nothing silently drops the tile back to
+// its key's emoji. That is not a crash and not a blank, which is exactly why it
+// survives review: the tile still looks fine, just not like what was asked for.
+// Brand marks make it worse, because the whole point of one is to be the mark
+// people recognise.
+const brand = new Set(
+  [...fs.readFileSync(path.join(root, 'src/components/BrandTileLogo.js'), 'utf8')
+    .matchAll(/^  ([a-zA-Z]+): require\(/gm)].map((m) => m[1]),
+);
+const unresolvedArt = [];
+for (const file of SOURCES) {
+  const src = fs.readFileSync(path.join(root, file), 'utf8');
+  for (const m of src.matchAll(/\{\s*key:\s*'([^']+)'[^}]*?\bart:\s*'([^']+)'/g)) {
+    const [, key, artName] = m;
+    if (!drawn.has(artName) && !brand.has(artName)) unresolvedArt.push([key, artName, file]);
+  }
+}
+if (unresolvedArt.length) {
+  console.error(`\nTile icon audit: ${unresolvedArt.length} tile(s) name artwork that does not exist:\n`);
+  for (const [key, artName, file] of unresolvedArt) console.error(`  ${key}  art: '${artName}'  (${file})`);
+  console.error('\nDraw it in ServiceArt, add it to BrandTileLogo, or remove the art: line.\n');
+  process.exit(1);
+}
+
 if (!keys.size) {
   console.error('Tile icon audit: found no tiles at all - the patterns above have gone stale.');
   process.exit(1);

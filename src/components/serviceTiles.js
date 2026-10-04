@@ -76,7 +76,7 @@ const CUSTOMER_SERVICES = [
 
   // Row 2 - bills
   { key: 'billpayment', icon: 'billpayment', name: 'Bill Pay', kind: 'service', cat: 'recharge', home: true },
-  { key: 'jompay', icon: 'billpayment', art: 'billpayment', name: 'JomPAY', kind: 'billShortcut', cat: 'recharge', home: true,
+  { key: 'jompay', icon: 'billpayment', art: 'jompayBrand', name: 'JomPAY', kind: 'billShortcut', cat: 'recharge', home: true,
     seed: { country: 'MY', category: 'jompay', provider: 'JomPAY' }, startStep: 3 },
   { key: 'tngewallet', icon: 'walletTransfer', art: 'walletTransfer', name: 'TnG eWallet', kind: 'billShortcut', cat: 'money', home: true,
     seed: { country: 'MY', category: 'ewallet', provider: "Touch 'n Go eWallet" }, startStep: 3 },
