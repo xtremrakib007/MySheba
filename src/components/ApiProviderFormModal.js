@@ -238,7 +238,7 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
         ...baseForm,
         ...IIMMPACT_DEFAULTS,
         ...catalogue,
-        services: ['Recharge', 'Internet', 'Bill Payment', 'Entertainment'],
+        services: ['Recharge', 'Internet', 'Bill Payment', 'Recharge PIN', 'Entertainment'],
         service,
         countries: ['MY', 'SG', 'ID', 'IN', 'PH', 'NP', 'PK', 'MM', 'KH'],
         country: 'MY',
@@ -285,9 +285,11 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
       ...IIMMPACT_DEFAULTS,
       ...catalogue,
       // One IIMMPACT account can serve several product families, so the preset
-      // configures the four requested API services together instead of making
-      // the operator duplicate the same credentials into four provider rows.
-      services: ['Recharge', 'Internet', 'Bill Payment', 'Entertainment'],
+      // configures the five requested API services together instead of making
+      // the operator duplicate the same credentials into five provider rows.
+      // Offer Packs is deliberately absent: that one stays with Success TopUp,
+      // which is Bangladesh's provider, and IIMMPACT does not serve Bangladesh.
+      services: ['Recharge', 'Internet', 'Bill Payment', 'Recharge PIN', 'Entertainment'],
       service: f.service || service,
       // Keep Bangladesh out of this preset. MySheba routes Bangladesh to
       // Success TopUp; every other supported country is selected explicitly.

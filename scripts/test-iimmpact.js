@@ -412,6 +412,50 @@ test('every message fits the cap the callable truncates at', () => {
   }
 });
 
+console.log('\nSelling vouchers from the same account as airtime');
+
+test('a provider that lists Recharge PIN keeps its PIN path', () => {
+  // One iimmpact account sells airtime and vouchers, so its record lists
+  // Recharge PIN beside Recharge with Recharge as the primary. Both the
+  // requirement and the stored value keyed on the PRIMARY service, so the
+  // `data.pin` the form already sends was dropped on the way to the document -
+  // and every voucher sale would then have failed at dispatch with "missing
+  // responsePinPath configuration", after the wallet was debited.
+  const api = require('../functions/apiProviderService')._test;
+  const base = {
+    name: 'iimmpact', baseUrl: 'https://api.iimmpact.com', authType: 'iimmpactHmac',
+    countries: ['MY'], country: 'MY', apiKey: 'k', secretKey: 'c2VjcmV0',
+  };
+  const multi = { ...base, service: 'Recharge', services: ['Recharge', 'Recharge PIN'], responsePinPath: 'data.pin' };
+  assert.strictEqual(api.validate(multi).responsePinPath, 'data.pin');
+  // Still required, so it cannot be saved half-configured.
+  assert.throws(() => api.validate({ ...multi, responsePinPath: '' }), /must define Response PIN Path/);
+  // The primary-service case it always handled still works.
+  assert.strictEqual(
+    api.validate({ ...base, service: 'Recharge PIN', services: ['Recharge PIN'], responsePinPath: 'data.pin' }).responsePinPath,
+    'data.pin');
+  // A provider that does not sell vouchers stores nothing, so a stray path
+  // cannot make a non-PIN provider look like a PIN one.
+  assert.strictEqual(
+    api.validate({ ...base, service: 'Recharge', services: ['Recharge'], responsePinPath: 'data.pin' }).responsePinPath, '');
+});
+
+test('data.pin is iimmpact\u2019s documented field, and the preset sends it', () => {
+  // Their /v2/topup response carries sn, pin, expiry and voucherlink; `pin` is
+  // documented as "PIN for vouchers, gift cards, and similar products". Not a
+  // guess, unlike extras.server_id elsewhere in this preset.
+  const form = require('fs').readFileSync(require('path').join(__dirname, '..', 'src/components/ApiProviderFormModal.js'), 'utf8');
+  assert.ok(/responsePinPath: 'data\.pin'/.test(form));
+  // And the preset has to actually list the service, or the record it writes
+  // is never selected for a voucher sale in the first place.
+  const presets = form.match(/services: \[[^\]]*\]/g) || [];
+  assert.ok(presets.length >= 2, 'both preset paths must set services');
+  for (const list of presets) {
+    assert.ok(/'Recharge PIN'/.test(list), 'Recharge PIN missing from: ' + list);
+    assert.ok(!/'Offer Packs'/.test(list), 'Offer Packs stays with Success TopUp: ' + list);
+  }
+});
+
 console.log('\nA refused order says why');
 
 const providerSource = () => require('fs').readFileSync(

@@ -124,6 +124,27 @@ A GET callback means the full URL, parameters and all, is replayable by anyone
 who sees it. That is IIMMPACT's protocol, not a MySheba choice; the duplicate
 check below is what makes a replay harmless.
 
+### Which provider serves what
+
+| Service | IIMMPACT | Success TopUp |
+| --- | --- | --- |
+| Recharge | every country except BD | BD |
+| Internet | every country except BD | BD |
+| Bill Payment | every country except BD | BD |
+| Recharge PIN | every country except BD | - |
+| Entertainment | every country except BD | - |
+| Offer Packs | - | BD |
+
+Bangladesh is protected by the provider record itself, not by a setting:
+IIMMPACT's country list names the nine countries it serves and BD is not one of
+them, and provider selection prefers a provider that names a country over one
+that serves `ALL`. So a Bangladeshi order cannot reach IIMMPACT even if both
+providers carry the same service.
+
+Recharge PIN needs **Response PIN Path** set to `data.pin` - the field
+IIMMPACT's `/v2/topup` returns a voucher PIN in. The preset fills it. A provider
+that lists Recharge PIN will not save without it.
+
 ### Which countries actually use the API
 
 Processing mode is per country, not per provider. API Management opens on the

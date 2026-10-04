@@ -55,6 +55,20 @@ const ALLOWED_COUNTRIES = ['ALL', 'BD', 'MY', 'SG', 'ID', 'IN', 'PH', 'NP', 'PK'
 // list is checked at every layer that could still route one: the mode, the
 // stored settings, saving a provider, and the dispatch itself.
 const NON_API_SERVICES = ['Mobile Banking', 'Remittance'];
+/**
+ * Does this provider sell vouchers at all?
+ *
+ * A PIN has to be read out of the provider's response by a configured path,
+ * and there is no sane default for it. Both the requirement and the stored
+ * value used to key on the PRIMARY service, which is Recharge for a provider
+ * that sells airtime and vouchers from one account - so the path the form
+ * sent was silently dropped on the way to the document.
+ */
+function servesRechargePin(service, services) {
+  return service === 'Recharge PIN' || (Array.isArray(services) && services.includes('Recharge PIN'));
+}
+exports._test_servesRechargePin = servesRechargePin;
+
 function isNonApiService(service) {
   return NON_API_SERVICES.includes(String(service || '').trim());
 }
@@ -583,7 +597,13 @@ function validate(data) {
   }
   if (!ALLOWED_COUNTRIES.includes(country)) throw new HttpsError('invalid-argument', 'Invalid provider country.');
   if (!name) throw new HttpsError('invalid-argument', 'API provider name is required.');
-  if (service === 'Recharge PIN' && !cleanString(data.responsePinPath, 200)) throw new HttpsError('invalid-argument', 'Recharge PIN providers must define Response PIN Path.');
+  // Serving Recharge PIN at all, not just as the primary feature. One iimmpact
+  // account sells airtime and vouchers from the same credentials, so its
+  // record lists Recharge PIN alongside Recharge - and keying this on the
+  // primary let such a record save with no PIN path, pass validation, be
+  // selected for every voucher sale, and fail each one at dispatch with
+  // "missing responsePinPath configuration".
+  if (servesRechargePin(service, services) && !cleanString(data.responsePinPath, 200)) throw new HttpsError('invalid-argument', 'A provider that sells Recharge PIN must define Response PIN Path.');
   validateBaseUrl(baseUrl);
   if (!ALLOWED_AUTH.includes(authType)) throw new HttpsError('invalid-argument', 'Invalid authentication type.');
   if (successTopUp && (!apiKey || !secretKey)) throw new HttpsError('invalid-argument', 'Success TopUp API key and API secret are required.');
@@ -608,7 +628,7 @@ function validate(data) {
     headers: validateHeaders(headers), queryTemplate: validateTemplate(queryTemplate, 'Query template'),
     requestTemplate: validateTemplate(requestTemplate, 'Request template'),
     responseSuccessPath, responseSuccessValue, responseProcessingPath, responseProcessingValue,
-    responseIdPath, responseMessagePath, responsePinPath: service === 'Recharge PIN' ? cleanString(data.responsePinPath, 200) : '',
+    responseIdPath, responseMessagePath, responsePinPath: servesRechargePin(service, services) ? cleanString(data.responsePinPath, 200) : '',
     ...validateCatalog(data),
   };
 }
