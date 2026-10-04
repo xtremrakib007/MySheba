@@ -281,16 +281,38 @@ function validateCatalog(data) {
   // screen is. Named by OUR biller name, because that is what the screen has;
   // a biller with no entry simply gets no bill presentment, which is one of
   // the provider's own documented non-blocking answers anyway.
-  for (const [field, label] of [['billerProductCodes', 'Biller product code'], ['operatorProductCodes', 'Operator product code']]) {
+  for (const [field, label] of [
+    ['billerProductCodes', 'Biller product code'],
+    ['operatorProductCodes', 'Operator product code'],
+    ['pinProductCodes', 'PIN product code'],
+  ]) {
     if (data[field] === undefined || data[field] === null || data[field] === ''
         || Object.keys(asObject(data[field])).length === 0) continue;
     const map = validateTemplate(data[field], label + 's', 4000);
+    const cleanCode = (value, where) => {
+      const code = cleanString(Array.isArray(value) ? value[0] : value, 40);
+      if (!code) throw new HttpsError('invalid-argument', `${label} for ${where} is empty.`);
+      if (!/^[A-Za-z0-9_.-]+$/.test(code)) throw new HttpsError('invalid-argument', `${label} for ${where} must be a plain product code.`);
+      return code;
+    };
     const cleaned = {};
     for (const [name, code] of Object.entries(map)) {
-      const value = cleanString(Array.isArray(code) ? code[0] : code, 40);
-      if (!value) throw new HttpsError('invalid-argument', `${label} for "${name}" is empty.`);
-      if (!/^[A-Za-z0-9_.-]+$/.test(value)) throw new HttpsError('invalid-argument', `${label} for "${name}" must be a plain product code.`);
-      cleaned[name] = value;
+      // A voucher range can be one product per denomination, so a value may be
+      // an object keyed by amount rather than a single code.
+      const perDenomination = asObject(code);
+      if (code !== null && typeof code === 'object' && !Array.isArray(code) && Object.keys(perDenomination).length) {
+        const inner = {};
+        for (const [denomination, value] of Object.entries(perDenomination)) {
+          const amount = Number(denomination);
+          if (!Number.isFinite(amount) || amount <= 0) {
+            throw new HttpsError('invalid-argument', `${label} for "${name}" is keyed by denomination, so "${String(denomination).slice(0, 20)}" must be an amount.`);
+          }
+          inner[String(denomination)] = cleanCode(value, `"${name}" at ${denomination}`);
+        }
+        cleaned[name] = inner;
+        continue;
+      }
+      cleaned[name] = cleanCode(code, `"${name}"`);
     }
     out[field] = cleaned;
   }
@@ -852,7 +874,11 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   // top-up buys, and the screen has no business naming it. raw.operatorCode
   // still wins where the server already put one there - an internet order
   // carries the product its plan was actually found under.
-  const mappedOperatorCode = productCodes.operatorProductCode(provider, raw.operator);
+  // Per SERVICE, because airtime, a voucher PIN and an internet plan are three
+  // different products for the same operator with three different codes.
+  // The denomination goes too: a voucher range sold as one product per
+  // denomination needs it to pick the right one.
+  const mappedOperatorCode = productCodes.operatorProductCode(provider, raw.operator, { service, denomination: raw.amount });
   const providerOperatorCode = raw.operatorCode || mappedOperatorCode;
   const monthName = raw.monthName || new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
   if (isSuccessTopUpBill && String(raw.country || '').toUpperCase() === 'BD') {
@@ -964,7 +990,8 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
       // guarding on the map alone would refuse every bill the moment somebody
       // filled in recharge codes.
       if (productCodes.declaresOperatorCodes(provider) && String(raw.operator || '').trim() && !providerOperatorCode) {
-        throw new Error(`${provider.name || 'This provider'} has no product code configured for "${String(raw.operator || '').slice(0, 40)}". Add it under Operator product codes.`);
+        const field = productCodes.codeFieldFor(service) === 'pinProductCodes' ? 'PIN product codes' : 'Operator product codes';
+        throw new Error(`${provider.name || 'This provider'} has no ${service} product code configured for "${String(raw.operator || '').slice(0, 40)}". Add it under ${field}.`);
       }
       if (isSuccessTopUpInternet && !vars.packageId) throw new Error('Success TopUp package ID is required for an internet/data-pack purchase.');
       if (isSuccessTopUpPackage && !(Number.isFinite(packageCost) && packageCost > 0)) throw new Error('The package cost price was not resolved on the server; refusing to send a customer-facing price to Success TopUp.');
@@ -1398,7 +1425,13 @@ function statusProductCodeFor(provider, { service, billerName, operatorName, pro
   // A recharge is charged against exactly one product, named by the same map
   // the charge itself uses - so there is nothing ambiguous and nothing for the
   // client to name.
-  if (service === 'Recharge') return productCodes.operatorProductCode(provider, operatorName);
+  // A charge against exactly one product, named by the same map the charge
+  // itself uses - so there is nothing ambiguous and nothing for the client to
+  // name. Any code from an operator's voucher range will do here: they all
+  // belong to that operator, and this only decides whether to show a sentence.
+  if (service === 'Recharge' || service === 'Recharge PIN') {
+    return productCodes.anyOperatorProductCode(provider, operatorName, service);
+  }
   const codes = providerCatalog.productCodesFor(provider, operatorName);
   const named = String(productCode || '').trim();
   if (named) return codes.includes(named) ? named : '';
@@ -1640,6 +1673,7 @@ exports.listApiProviders = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async 
       catalogOperatorCodes: x.catalogOperatorCodes || null,
       billerProductCodes: x.billerProductCodes || null,
       operatorProductCodes: x.operatorProductCodes || null,
+      pinProductCodes: x.pinProductCodes || null,
       billPresentmentPath: x.billPresentmentPath || '',
       networkStatusPath: x.networkStatusPath || '',
       productListPath: x.productListPath || '',

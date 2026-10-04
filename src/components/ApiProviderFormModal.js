@@ -86,6 +86,7 @@ const SECTIONS = [
       { key: 'catalogPerAccount', label: 'Priced per phone number?', placeholder: 'true or false', hint: 'true when the provider personalises plans to the number. The number then becomes required, and no answer is ever reused for another number.' },
       { key: 'catalogOperatorCodes', label: 'Operator product codes (JSON)', placeholder: '{"Hotlink":"HI","CelcomDigi":["CEL","DI"]}', hint: 'Which product code each operator\u2019s plans come from. A list where one operator could be more than one product - every code is asked and the plan keeps the one that answered. An operator left out keeps its built-in package list.' },
       { key: 'operatorProductCodes', label: 'Operator product codes (JSON)', placeholder: '{"Hotlink":"H","U Mobile":"U"}', hint: 'The provider\u2019s code for each operator, for a top-up. Nothing is built in: tap Product list above to read the real codes from the provider. An operator left out has its top-ups refused rather than sent under its display name.' },
+      { key: 'pinProductCodes', label: 'PIN product codes (JSON)', placeholder: '{"Hotlink":"HPIN","Celcom":{"10":"C10","30":"C30"}}', hint: 'A voucher PIN is a different product from airtime, so it has its own codes. One code per operator, or - where a range is sold as one product per denomination - an object keyed by amount.' },
       { key: 'billerProductCodes', label: 'Biller product codes (JSON)', placeholder: '{"TNB":"TNB","JomPAY":"JOMPAY","Air Selangor":"AIRSEL"}', hint: 'Which product code each biller on the Bill Pay screen is, for reading a bill before paying it. TNB and JomPAY are built in; everything else comes from the provider\u2019s product list. A biller left out simply gets no bill details - it is never a reason a payment fails.' },
       { key: 'billPresentmentPath', label: 'Bill presentment path', placeholder: '/v2/bill-presentment', hint: 'Leave blank for the default.' },
     ],
@@ -188,10 +189,10 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
     }
     if (provider) {
       const next = { ...provider };
-      for (const key of ['catalogTypes', 'catalogItemMap', 'catalogWindow', 'catalogQueryTemplate', 'catalogOperatorCodes', 'catalogPerAccount', 'billerProductCodes', 'operatorProductCodes']) next[key] = toText(provider[key]);
+      for (const key of ['catalogTypes', 'catalogItemMap', 'catalogWindow', 'catalogQueryTemplate', 'catalogOperatorCodes', 'catalogPerAccount', 'billerProductCodes', 'operatorProductCodes', 'pinProductCodes']) next[key] = toText(provider[key]);
       setForm(next);
       // Open the catalogue section straight away when there is something in it.
-      setShowCatalog(Boolean(provider.catalogPath || provider.catalogPreset || provider.catalogPerAccount || provider.billerProductCodes || provider.operatorProductCodes));
+      setShowCatalog(Boolean(provider.catalogPath || provider.catalogPreset || provider.catalogPerAccount || provider.billerProductCodes || provider.operatorProductCodes || provider.pinProductCodes));
       return;
     }
     setForm({

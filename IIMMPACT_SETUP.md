@@ -254,7 +254,7 @@ through an allowlist of likely keys (`customer_name`, `outstanding_amount`,
 screen. If a biller returns a field under a name not in that list it simply
 will not show — tell me the name and it takes one line.
 
-## 8. Operator product codes (recharge)
+## 8. Operator and PIN product codes
 
 A top-up needs the provider's code for the operator, and **nothing is built in**
 — not one code. There are 37 non-Bangladesh operators across the countries the
@@ -285,18 +285,47 @@ customer's money comes straight back.
 A provider record with **no** map at all is unaffected and keeps working exactly
 as before — this only applies where you have said codes are needed.
 
-Three separate maps exist and they hold three different code sets for the same
-names, which is why they are not one field:
+### A PIN is a different product again
+
+**PIN product codes** is a separate map, used by PIN Generate. A voucher is not
+airtime: iimmpact sells Hotlink airtime, a Hotlink voucher and a Hotlink
+internet plan as three products under three codes, so a PIN never falls back to
+the airtime code — it is refused instead, naming the PIN map.
+
+Most voucher ranges are one product with the denomination sent as the amount:
+
+```json
+{ "Hotlink": "HPIN", "U Mobile": "UPIN" }
+```
+
+Where a range is sold as **one product per denomination**, key that operator by
+amount instead:
+
+```json
+{ "Celcom": { "10": "C10", "30": "C30" } }
+```
+
+The product list will show you which it is — separate `Celcom RM10 Voucher` and
+`Celcom RM30 Voucher` rows mean the second form. A denomination the range does
+not sell is refused rather than sold as the nearest thing.
+
+PIN Generate is Malaysia-only and its operator list is the same eight names.
+
+### Four maps, not one
 
 | Field | For | Shape |
 | --- | --- | --- |
 | Operator product codes | charging a top-up | one code per operator (`Hotlink` → `H`) |
+| PIN product codes | a voucher PIN | one per operator, or one per denomination |
 | Operator product codes *(catalogue)* | browsing per-number internet plans | one or more per operator (`CelcomDigi` → `CEL`, `DI`) |
 | Biller product codes | bills and their presentment | one code per biller (`TNB` → `TNB`) |
 
-iimmpact sells Hotlink airtime and Hotlink internet as different products under
-different codes (`H` and `HI`), so reading one map for the other would charge
-the wrong thing.
+They are four fields because they hold four different code sets for the same
+names. Reading one for another charges the wrong thing.
+
+Filling in **any** of them tells the app this provider works in product codes.
+From then on an order that names an operator and finds no code for the service
+being sold is refused, rather than going out with an empty or borrowed product.
 
 The code is resolved **on the server** from this map. It is deliberately not
 something the app can send: it decides which product real money buys. Where the
@@ -324,9 +353,11 @@ healthy, not as a warning containing the word.
 
 ### Which product it asks about
 
-* **Recharge** — the operator's code from **Operator product codes**, so the
-  warning is about the product that would actually be charged. An unmapped
-  operator is not asked about.
+* **Recharge** and **PIN Generate** — the operator's code from the map that
+  service charges from, so the warning is about the product that would actually
+  be bought. An unmapped operator is not asked about. For a per-denomination
+  voucher range any one of its codes is used, which is safe because they all
+  belong to the same operator.
 * **Bill Pay** — the biller's own product code, from the same **Biller product
   codes** map as presentment. A biller with no code is not asked about.
 * **Internet** — the operator's code where that is unambiguous. **CelcomDigi is
