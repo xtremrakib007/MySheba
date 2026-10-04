@@ -285,34 +285,45 @@ function validateCatalog(data) {
     ['billerProductCodes', 'Biller product code'],
     ['operatorProductCodes', 'Operator product code'],
     ['pinProductCodes', 'PIN product code'],
+    ['gameProductCodes', 'Game product code'],
   ]) {
     if (data[field] === undefined || data[field] === null || data[field] === ''
         || Object.keys(asObject(data[field])).length === 0) continue;
     const map = validateTemplate(data[field], label + 's', 4000);
-    const cleanCode = (value, where) => {
-      const code = cleanString(Array.isArray(value) ? value[0] : value, 40);
+    // A value is a code, or a code with the amount the PROVIDER wants for it,
+    // or - for a voucher range sold one product per denomination - a map from
+    // amount to either of those.
+    const cleanLeaf = (value, where) => {
+      const object = value !== null && typeof value === 'object' && !Array.isArray(value) ? value : null;
+      const code = cleanString(object ? object.code : (Array.isArray(value) ? value[0] : value), 40);
       if (!code) throw new HttpsError('invalid-argument', `${label} for ${where} is empty.`);
       if (!/^[A-Za-z0-9_.-]+$/.test(code)) throw new HttpsError('invalid-argument', `${label} for ${where} must be a plain product code.`);
-      return code;
+      if (!object || object.amount === undefined || object.amount === null || object.amount === '') return code;
+      const amount = Number(object.amount);
+      if (!Number.isFinite(amount) || amount <= 0 || !Number.isSafeInteger(Math.round(amount * 100))) {
+        throw new HttpsError('invalid-argument', `${label} for ${where} has an invalid amount.`);
+      }
+      return { code, amount: Math.round(amount * 100) / 100 };
     };
     const cleaned = {};
-    for (const [name, code] of Object.entries(map)) {
-      // A voucher range can be one product per denomination, so a value may be
-      // an object keyed by amount rather than a single code.
-      const perDenomination = asObject(code);
-      if (code !== null && typeof code === 'object' && !Array.isArray(code) && Object.keys(perDenomination).length) {
+    for (const [name, entry] of Object.entries(map)) {
+      const object = entry !== null && typeof entry === 'object' && !Array.isArray(entry) ? entry : null;
+      // `code` present means this is one product; anything else keyed by an
+      // object is a denomination range.
+      if (object && object.code === undefined) {
+        if (!Object.keys(object).length) throw new HttpsError('invalid-argument', `${label} for "${name}" is empty.`);
         const inner = {};
-        for (const [denomination, value] of Object.entries(perDenomination)) {
+        for (const [denomination, value] of Object.entries(object)) {
           const amount = Number(denomination);
           if (!Number.isFinite(amount) || amount <= 0) {
             throw new HttpsError('invalid-argument', `${label} for "${name}" is keyed by denomination, so "${String(denomination).slice(0, 20)}" must be an amount.`);
           }
-          inner[String(denomination)] = cleanCode(value, `"${name}" at ${denomination}`);
+          inner[String(denomination)] = cleanLeaf(value, `"${name}" at ${denomination}`);
         }
         cleaned[name] = inner;
         continue;
       }
-      cleaned[name] = cleanCode(code, `"${name}"`);
+      cleaned[name] = cleanLeaf(entry, `"${name}"`);
     }
     out[field] = cleaned;
   }
@@ -505,10 +516,13 @@ function getPath(obj, path) { return path ? path.split('.').reduce((v,k) => v ==
  * so there is no client value left here to trust. It used to be read only for
  * Bangladesh; any resolved catalogue now gets the same treatment.
  */
-function providerAmountFor({ raw, payload, isSuccessTopUpBd }) {
+function providerAmountFor({ raw, payload, isSuccessTopUpBd, mappedAmount }) {
   const r = raw || {};
   const packageCost = Number(r.packageCostAmount);
   if (Number.isFinite(packageCost) && packageCost > 0) return packageCost;
+  // Stated on the provider record for a fixed product that has no catalogue to
+  // resolve a price from - a game pack, a voucher. Same rule, different source.
+  if (Number.isFinite(mappedAmount) && mappedAmount > 0) return mappedAmount;
   // The legacy orders differ and are kept: a Success TopUp Bangladesh order
   // reads raw first, everything else reads the payload first.
   return isSuccessTopUpBd
@@ -874,12 +888,21 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   // top-up buys, and the screen has no business naming it. raw.operatorCode
   // still wins where the server already put one there - an internet order
   // carries the product its plan was actually found under.
-  // Per SERVICE, because airtime, a voucher PIN and an internet plan are three
-  // different products for the same operator with three different codes.
-  // The denomination goes too: a voucher range sold as one product per
-  // denomination needs it to pick the right one.
-  const mappedOperatorCode = productCodes.operatorProductCode(provider, raw.operator, { service, denomination: raw.amount });
+  // Per SERVICE, because airtime, a voucher PIN, a game pack and an internet
+  // plan are different products with different codes - and per SUBJECT,
+  // because what a map is keyed by differs too: nobody buys "PUBG", they buy
+  // "60 UC", so Entertainment is keyed by the pack rather than by an operator.
+  // The denomination goes along for a voucher range sold one product per
+  // denomination.
+  const codeSubject = productCodes.codeSubjectFor(service, raw);
+  const codeOptions = { service, denomination: raw.amount };
+  const mappedOperatorCode = productCodes.productCodeFor(provider, codeSubject, codeOptions);
   const providerOperatorCode = raw.operatorCode || mappedOperatorCode;
+  // A fixed product's amount is the provider's to state. Ours is the
+  // customer's SELL price, and sending that buys the wrong thing or is
+  // refused - so where the map says what the provider wants, that is what
+  // goes, exactly as a resolved catalogue price does.
+  const mappedProductAmount = productCodes.productAmountFor(provider, codeSubject, codeOptions);
   const monthName = raw.monthName || new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
   if (isSuccessTopUpBill && String(raw.country || '').toUpperCase() === 'BD') {
     const category = String(raw.category || '').toLowerCase();
@@ -904,7 +927,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   // packageCostAmount being present is what makes it server-resolved:
   // resolvePackagePricing drops whatever the client sent before setting its
   // own, so there is no client value left for this to trust.
-  const providerAmount = providerAmountFor({ raw, payload, isSuccessTopUpBd });
+  const providerAmount = providerAmountFor({ raw, payload, isSuccessTopUpBd, mappedAmount: mappedProductAmount });
   // The client's own fields FIRST, so nothing it sends can overwrite a value
   // this server worked out. They used to come last, and last wins:
   //
@@ -989,9 +1012,12 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
       // remittance has none, and the same provider record can serve those too -
       // guarding on the map alone would refuse every bill the moment somebody
       // filled in recharge codes.
-      if (productCodes.declaresOperatorCodes(provider) && String(raw.operator || '').trim() && !providerOperatorCode) {
-        const field = productCodes.codeFieldFor(service) === 'pinProductCodes' ? 'PIN product codes' : 'Operator product codes';
-        throw new Error(`${provider.name || 'This provider'} has no ${service} product code configured for "${String(raw.operator || '').slice(0, 40)}". Add it under ${field}.`);
+      if (productCodes.declaresProductCodes(provider) && codeSubject && !providerOperatorCode) {
+        const field = {
+          pinProductCodes: 'PIN product codes',
+          gameProductCodes: 'Game product codes',
+        }[productCodes.codeFieldFor(service)] || 'Operator product codes';
+        throw new Error(`${provider.name || 'This provider'} has no ${service} product code configured for "${codeSubject.slice(0, 40)}". Add it under ${field}.`);
       }
       if (isSuccessTopUpInternet && !vars.packageId) throw new Error('Success TopUp package ID is required for an internet/data-pack purchase.');
       if (isSuccessTopUpPackage && !(Number.isFinite(packageCost) && packageCost > 0)) throw new Error('The package cost price was not resolved on the server; refusing to send a customer-facing price to Success TopUp.');
@@ -1430,7 +1456,7 @@ function statusProductCodeFor(provider, { service, billerName, operatorName, pro
   // name. Any code from an operator's voucher range will do here: they all
   // belong to that operator, and this only decides whether to show a sentence.
   if (service === 'Recharge' || service === 'Recharge PIN') {
-    return productCodes.anyOperatorProductCode(provider, operatorName, service);
+    return productCodes.anyProductCodeFor(provider, operatorName, service);
   }
   const codes = providerCatalog.productCodesFor(provider, operatorName);
   const named = String(productCode || '').trim();
@@ -1674,6 +1700,7 @@ exports.listApiProviders = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async 
       billerProductCodes: x.billerProductCodes || null,
       operatorProductCodes: x.operatorProductCodes || null,
       pinProductCodes: x.pinProductCodes || null,
+      gameProductCodes: x.gameProductCodes || null,
       billPresentmentPath: x.billPresentmentPath || '',
       networkStatusPath: x.networkStatusPath || '',
       productListPath: x.productListPath || '',

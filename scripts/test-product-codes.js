@@ -1,11 +1,12 @@
 'use strict';
 
-// What the provider calls the operator the customer picked.
+// What the provider calls the thing a customer is buying.
 //
-// Our screens say "Hotlink"; a provider's API wants a code, and the code
-// differs per provider, per country and per PRODUCT - iimmpact sells Hotlink
-// airtime and Hotlink internet as two different products under two different
-// codes. So nothing here is compiled in.
+// Our screens say "Hotlink" and "60 UC"; a provider's API wants a code, and the
+// code differs per provider, per country and per PRODUCT - iimmpact sells
+// Hotlink airtime, a Hotlink voucher and a Hotlink internet plan as three
+// products under three codes. What the map is keyed BY differs too: nobody
+// buys "PUBG", they buy "60 UC". So nothing here is compiled in.
 //
 // That is a deliberate refusal rather than an omission. There are 37 non-
 // Bangladesh operators across the countries the app sells recharge for,
@@ -32,7 +33,7 @@ const WITH_PINS = {
   operatorProductCodes: { Hotlink: 'H', Celcom: 'CEL' },
   pinProductCodes: { Hotlink: 'HPIN', Celcom: { 10: 'C10', 30: 'C30' } },
 };
-const code = (provider, operator, opts) => productCodes.operatorProductCode(provider, operator, opts);
+const code = (provider, subject, opts) => productCodes.productCodeFor(provider, subject, opts);
 
 console.log('\nThe lookup');
 
@@ -52,14 +53,14 @@ test('an operator that is not in it resolves to nothing, not to its name', () =>
 test('a provider with no map at all is unchanged', () => {
   // Every provider that worked before this existed takes operator names
   // directly and must go on doing so.
-  assert.strictEqual(productCodes.declaresOperatorCodes(UNMAPPED), false);
-  assert.strictEqual(productCodes.declaresOperatorCodes({ operatorProductCodes: {} }), false, 'an empty map is no map');
-  assert.strictEqual(productCodes.declaresOperatorCodes({ operatorProductCodes: [] }), false);
+  assert.strictEqual(productCodes.declaresProductCodes(UNMAPPED), false);
+  assert.strictEqual(productCodes.declaresProductCodes({ operatorProductCodes: {} }), false, 'an empty map is no map');
+  assert.strictEqual(productCodes.declaresProductCodes({ operatorProductCodes: [] }), false);
   assert.strictEqual(code(UNMAPPED, 'Hotlink'), '');
 });
 
 test('declaring a map is what says "this provider needs codes"', () => {
-  assert.strictEqual(productCodes.declaresOperatorCodes(MAPPED), true);
+  assert.strictEqual(productCodes.declaresProductCodes(MAPPED), true);
 });
 
 console.log('\nA voucher PIN is a different product from airtime');
@@ -78,7 +79,7 @@ test('a PIN does NOT fall back to the airtime code', () => {
   assert.strictEqual(code(airtimeOnly, 'Hotlink', { service: 'Recharge PIN' }), '');
   // And is still refused rather than sent empty, because the record declares
   // codes elsewhere.
-  assert.strictEqual(productCodes.declaresOperatorCodes(airtimeOnly), true);
+  assert.strictEqual(productCodes.declaresProductCodes(airtimeOnly), true);
 });
 
 test('a voucher range sold one product per denomination resolves by amount', () => {
@@ -102,16 +103,95 @@ test('one code covers every denomination when that is how it is sold', () => {
 test('which map a service charges from is explicit', () => {
   assert.strictEqual(productCodes.codeFieldFor('Recharge PIN'), 'pinProductCodes');
   assert.strictEqual(productCodes.codeFieldFor('Recharge'), 'operatorProductCodes');
-  assert.strictEqual(productCodes.codeFieldFor('Entertainment'), 'operatorProductCodes');
+  assert.strictEqual(productCodes.codeFieldFor('Entertainment'), 'gameProductCodes');
+  assert.strictEqual(productCodes.codeFieldFor('Internet'), 'operatorProductCodes');
   assert.strictEqual(productCodes.codeFieldFor(undefined), 'operatorProductCodes');
 });
 
 test('any map at all means this provider works in codes', () => {
   // A record with voucher codes but no airtime codes is misconfigured, and
   // sending an empty product is worse than refusing.
-  assert.strictEqual(productCodes.declaresOperatorCodes({ pinProductCodes: { Hotlink: 'HPIN' } }), true);
-  assert.strictEqual(productCodes.declaresOperatorCodes({ billerProductCodes: { TNB: 'TNB' } }), true);
-  assert.strictEqual(productCodes.declaresOperatorCodes({}), false);
+  assert.strictEqual(productCodes.declaresProductCodes({ pinProductCodes: { Hotlink: 'HPIN' } }), true);
+  assert.strictEqual(productCodes.declaresProductCodes({ billerProductCodes: { TNB: 'TNB' } }), true);
+  assert.strictEqual(productCodes.declaresProductCodes({}), false);
+});
+
+console.log('\nA game top-up is bought by the PACK');
+
+const GAMES = {
+  name: 'iimmpact',
+  gameProductCodes: {
+    'pubg-60': 'PUBG60',
+    'ml-86': { code: 'ML86', amount: 5.8 },
+  },
+};
+
+test('nobody buys "PUBG", so the map is keyed by the pack', () => {
+  assert.strictEqual(productCodes.codeSubjectKeyFor('Entertainment'), 'packageId');
+  assert.strictEqual(productCodes.codeSubjectKeyFor('Recharge'), 'operator');
+  assert.strictEqual(productCodes.codeSubjectFor('Entertainment', { packageId: 'pubg-60', operator: 'Hotlink' }), 'pubg-60');
+  assert.strictEqual(productCodes.codeSubjectFor('Recharge', { packageId: 'pubg-60', operator: 'Hotlink' }), 'Hotlink');
+});
+
+test('a pack resolves to its own code', () => {
+  assert.strictEqual(code(GAMES, 'pubg-60', { service: 'Entertainment' }), 'PUBG60');
+  assert.strictEqual(code(GAMES, 'ml-86', { service: 'Entertainment' }), 'ML86');
+  assert.strictEqual(code(GAMES, 'pubg-325', { service: 'Entertainment' }), '', 'a pack with no code is not guessed from its neighbours');
+});
+
+test('every pack id on the screen is a key somebody can fill in', () => {
+  // The map is useless if its keys are not the ones the Entertainment step
+  // actually sends. These are the ids it puts in packageId.
+  const data = require('fs').readFileSync(require('path').join(__dirname, '..', 'src/data/gameTopUps.js'), 'utf8');
+  const ids = [...data.matchAll(/id: '([^']+)'/g)].map((m) => m[1]);
+  assert.ok(ids.length >= 30, `expected the full pack list, got ${ids.length}`);
+  assert.strictEqual(new Set(ids).size, ids.length, 'pack ids must be unique for a flat map to key by them');
+  assert.ok(ids.includes('pubg-60') && ids.includes('ml-86'));
+});
+
+test('the provider\u2019s own price is sent, not the customer\u2019s', () => {
+  // Ours is the sell price. A fixed product's amount belongs to the provider,
+  // and sending a marked-up figure buys the wrong thing or is refused.
+  assert.strictEqual(productCodes.productAmountFor(GAMES, 'ml-86', { service: 'Entertainment' }), 5.8);
+  assert.strictEqual(productCodes.productAmountFor(GAMES, 'pubg-60', { service: 'Entertainment' }), null,
+    'and where the map states none, the order\u2019s own amount still goes');
+  // Not a price. Reading one as a price would ask the provider for a free
+  // product and have the request refused, or worse honoured.
+  for (const amount of [0, -1, '', 'free', null]) {
+    const odd = { gameProductCodes: { 'x-1': { code: 'X', amount } } };
+    assert.strictEqual(productCodes.productAmountFor(odd, 'x-1', { service: 'Entertainment' }), null, String(amount));
+    assert.strictEqual(code(odd, 'x-1', { service: 'Entertainment' }), 'X', 'but the code still stands');
+  }
+});
+
+test('the charge actually passes the stated amount through', () => {
+  // The logic above is worth nothing if the one line that reaches it is
+  // missing - which is exactly how a voucher came to be charged as airtime
+  // last time.
+  const source = require('fs').readFileSync(require('path').join(__dirname, '..', 'functions/apiProviderService.js'), 'utf8');
+  assert.ok(/const mappedProductAmount = productCodes\.productAmountFor\(provider, codeSubject, codeOptions\);/.test(source));
+  assert.ok(/providerAmountFor\(\{ raw, payload, isSuccessTopUpBd, mappedAmount: mappedProductAmount \}\)/.test(source));
+});
+
+test('a stated amount reaches the provider ahead of the sell price', () => {
+  const amountFor = apiProviderService._test.providerAmountFor;
+  assert.strictEqual(amountFor({ raw: { amount: 6 }, payload: { amount: 6 }, mappedAmount: 5.8 }), 5.8);
+  assert.strictEqual(amountFor({ raw: { amount: 6 }, payload: { amount: 6 }, mappedAmount: null }), 6);
+  assert.strictEqual(amountFor({ raw: { amount: 6 }, payload: { amount: 6 }, mappedAmount: 0 }), 6, 'zero is not a price');
+  // A catalogue that resolved a real cost still wins: that came from the live
+  // product list, this is a figure somebody typed.
+  assert.strictEqual(amountFor({ raw: { amount: 6, packageCostAmount: 4.2 }, payload: { amount: 6 }, mappedAmount: 5.8 }), 4.2);
+});
+
+test('a game pack does not read the airtime or voucher maps', () => {
+  const mixed = { operatorProductCodes: { 'pubg-60': 'WRONG' }, pinProductCodes: { 'pubg-60': 'ALSO-WRONG' }, gameProductCodes: { 'pubg-60': 'RIGHT' } };
+  assert.strictEqual(code(mixed, 'pubg-60', { service: 'Entertainment' }), 'RIGHT');
+});
+
+test('a game record with no game codes is refused, not sent empty', () => {
+  const airtimeOnly = { operatorProductCodes: { Hotlink: 'H' } };
+  assert.strictEqual(productCodes.declaresProductCodes(airtimeOnly), true);
+  assert.strictEqual(code(airtimeOnly, 'pubg-60', { service: 'Entertainment' }), '');
 });
 
 console.log('\nThe guard: nothing is sent on a guess');
@@ -134,20 +214,20 @@ test('a missing code refuses the charge BEFORE the request leaves', () => {
   assert.ok(guardAt < sentAt, 'the guard must run before the request is marked sent, or a refused order looks uncertain');
 });
 
-test('the refusal names the operator, the service and where to fix it', () => {
+test('the refusal names what was bought, the service and where to fix it', () => {
   const guard = guardSource();
   assert.ok(/Add it under \$\{field\}/.test(guard));
-  assert.ok(/pinProductCodes' \? 'PIN product codes' : 'Operator product codes'/.test(guard),
-    'a PIN must point at the PIN map, not at the airtime one');
-  assert.ok(/String\(raw\.operator \|\| ''\)\.slice\(0, 40\)/.test(guard));
+  assert.ok(/pinProductCodes: 'PIN product codes'/.test(guard), 'a PIN must point at the PIN map, not the airtime one');
+  assert.ok(/gameProductCodes: 'Game product codes'/.test(guard), 'and a game pack at the game map');
+  assert.ok(/codeSubject\.slice\(0, 40\)/.test(guard));
   assert.ok(/no \$\{service\} product code/.test(guard));
 });
 
-test('the guard only fires for an order that NAMES an operator', () => {
-  // The same provider record can serve bills and remittances, which have no
-  // operator. Guarding on the map alone would refuse every bill the moment
-  // somebody filled in recharge codes.
-  assert.ok(/declaresOperatorCodes\(provider\) && String\(raw\.operator \|\| ''\)\.trim\(\) && !providerOperatorCode/.test(guardSource()));
+test('the guard only fires for an order that NAMES what it is buying', () => {
+  // The same provider record can serve bills and remittances, which name no
+  // operator and no pack. Guarding on the map alone would refuse every bill
+  // the moment somebody filled in recharge codes.
+  assert.ok(/declaresProductCodes\(provider\) && codeSubject && !providerOperatorCode/.test(guardSource()));
 });
 
 console.log('\nWhere the code comes from');
@@ -166,7 +246,10 @@ test('the charge resolves the code for its OWN service and denomination', () => 
   // denomination a per-denomination voucher range resolves to nothing and the
   // sale is refused.
   const source = require('fs').readFileSync(require('path').join(__dirname, '..', 'functions/apiProviderService.js'), 'utf8');
-  assert.ok(/productCodes\.operatorProductCode\(provider, raw\.operator, \{ service, denomination: raw\.amount \}\)/.test(source));
+  assert.ok(/const codeSubject = productCodes\.codeSubjectFor\(service, raw\);/.test(source),
+    'what the map is keyed by depends on the service too');
+  assert.ok(/const codeOptions = \{ service, denomination: raw\.amount \};/.test(source));
+  assert.ok(/productCodes\.productCodeFor\(provider, codeSubject, codeOptions\)/.test(source));
 });
 
 test('a server-resolved code already on the order wins', () => {

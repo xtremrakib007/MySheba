@@ -87,6 +87,7 @@ const SECTIONS = [
       { key: 'catalogOperatorCodes', label: 'Operator product codes (JSON)', placeholder: '{"Hotlink":"HI","CelcomDigi":["CEL","DI"]}', hint: 'Which product code each operator\u2019s plans come from. A list where one operator could be more than one product - every code is asked and the plan keeps the one that answered. An operator left out keeps its built-in package list.' },
       { key: 'operatorProductCodes', label: 'Operator product codes (JSON)', placeholder: '{"Hotlink":"H","U Mobile":"U"}', hint: 'The provider\u2019s code for each operator, for a top-up. Nothing is built in: tap Product list above to read the real codes from the provider. An operator left out has its top-ups refused rather than sent under its display name.' },
       { key: 'pinProductCodes', label: 'PIN product codes (JSON)', placeholder: '{"Hotlink":"HPIN","Celcom":{"10":"C10","30":"C30"}}', hint: 'A voucher PIN is a different product from airtime, so it has its own codes. One code per operator, or - where a range is sold as one product per denomination - an object keyed by amount.' },
+      { key: 'gameProductCodes', label: 'Game product codes (JSON)', placeholder: '{"pubg-60":"PUBG60","ml-86":{"code":"ML86","amount":"5.80"}}', hint: 'Keyed by PACK, not by game - nobody buys "PUBG", they buy "60 UC". The pack ids are the ones in the Entertainment screen (pubg-60, ff-100, ml-86 and so on). Add an amount where the provider sets the price for that product: ours is the customer\u2019s sell price and sending it buys the wrong thing.' },
       { key: 'billerProductCodes', label: 'Biller product codes (JSON)', placeholder: '{"TNB":"TNB","JomPAY":"JOMPAY","Air Selangor":"AIRSEL"}', hint: 'Which product code each biller on the Bill Pay screen is, for reading a bill before paying it. TNB and JomPAY are built in; everything else comes from the provider\u2019s product list. A biller left out simply gets no bill details - it is never a reason a payment fails.' },
       { key: 'billPresentmentPath', label: 'Bill presentment path', placeholder: '/v2/bill-presentment', hint: 'Leave blank for the default.' },
     ],
@@ -144,6 +145,13 @@ const IIMMPACT_BODIES = {
   Internet: { refid: '{{requestId}}', product: '{{operatorCode}}', account: '{{phone}}', amount: '{{amount}}', extras: { subproduct_code: '{{packageId}}' } },
   'Recharge PIN': { refid: '{{requestId}}', product: '{{operatorCode}}', account: '{{phone}}', amount: '{{amount}}' },
   'Bill Payment': { refid: '{{requestId}}', product: '{{provider}}', account: '{{accountNumber}}', amount: '{{amount}}' },
+  // A game top-up has no phone number: the account IS the player's in-game id.
+  // `extras.server_id` is the key Mobile Legends and its like need for a zone,
+  // and it is a GUESS - iimmpact documents extras for subproduct_code,
+  // ic_number, biller_code and ref2 only. Check it against their product list
+  // or support before selling a game that needs a zone; the games that do not
+  // ignore the field.
+  Entertainment: { refid: '{{requestId}}', product: '{{operatorCode}}', account: '{{playerId}}', amount: '{{amount}}', extras: { server_id: '{{serverId}}' } },
 };
 
 // JomPAY is its own body: the biller code and the payer's IC are mandatory and
@@ -189,10 +197,10 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
     }
     if (provider) {
       const next = { ...provider };
-      for (const key of ['catalogTypes', 'catalogItemMap', 'catalogWindow', 'catalogQueryTemplate', 'catalogOperatorCodes', 'catalogPerAccount', 'billerProductCodes', 'operatorProductCodes', 'pinProductCodes']) next[key] = toText(provider[key]);
+      for (const key of ['catalogTypes', 'catalogItemMap', 'catalogWindow', 'catalogQueryTemplate', 'catalogOperatorCodes', 'catalogPerAccount', 'billerProductCodes', 'operatorProductCodes', 'pinProductCodes', 'gameProductCodes']) next[key] = toText(provider[key]);
       setForm(next);
       // Open the catalogue section straight away when there is something in it.
-      setShowCatalog(Boolean(provider.catalogPath || provider.catalogPreset || provider.catalogPerAccount || provider.billerProductCodes || provider.operatorProductCodes || provider.pinProductCodes));
+      setShowCatalog(Boolean(provider.catalogPath || provider.catalogPreset || provider.catalogPerAccount || provider.billerProductCodes || provider.operatorProductCodes || provider.pinProductCodes || provider.gameProductCodes));
       return;
     }
     setForm({

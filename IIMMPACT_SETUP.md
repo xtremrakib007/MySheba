@@ -254,7 +254,7 @@ through an allowlist of likely keys (`customer_name`, `outstanding_amount`,
 screen. If a biller returns a field under a name not in that list it simply
 will not show — tell me the name and it takes one line.
 
-## 8. Operator and PIN product codes
+## 8. Product codes
 
 A top-up needs the provider's code for the operator, and **nothing is built in**
 — not one code. There are 37 non-Bangladesh operators across the countries the
@@ -311,17 +311,53 @@ not sell is refused rather than sold as the nearest thing.
 
 PIN Generate is Malaysia-only and its operator list is the same eight names.
 
-### Four maps, not one
+### A game pack is bought by the pack
 
-| Field | For | Shape |
+**Game product codes** is keyed by the **pack**, not the game — nobody buys
+"PUBG", they buy "60 UC". The keys are the pack ids the Entertainment screen
+sends:
+
+```json
+{ "pubg-60": "PUBG60", "ff-100": "FF100", "ml-86": "ML86" }
+```
+
+All 30: `pubg-60/325/660/1800/3850/8100`, `ff-100/310/520/1060/2180/weekly/
+monthly`, `ml-86/172/257/706/2195/weekly`, `codm-80/420/880/2400`,
+`ffm-100/310/1060`, `gi-60/330/1090/welkin`.
+
+A pack is a fixed product, so its price is the provider's rather than ours.
+Where theirs differs from what the customer pays, state it:
+
+```json
+{ "ml-86": { "code": "ML86", "amount": "5.80" } }
+```
+
+That figure is what goes to the provider; the customer still pays the price in
+Admin → Pricing. Without it the order's own amount is sent, which is the sell
+price and may be refused or buy the wrong thing.
+
+Entertainment is currently fulfilled by hand. Filling in these codes and
+switching the service to API in the country matrix is what moves it to the
+provider — until then nothing here is used.
+
+**One guess to check before selling a game that needs a zone.** The preset
+sends the player id as `account` and a zone as `extras.server_id`. iimmpact
+documents `extras` for `subproduct_code`, `ic_number`, `biller_code` and `ref2`
+only — `server_id` is my guess at the key Mobile Legends needs. Confirm it with
+their product list or support; games without a zone ignore the field.
+
+### Five maps, not one
+
+| Field | For | Keyed by |
 | --- | --- | --- |
-| Operator product codes | charging a top-up | one code per operator (`Hotlink` → `H`) |
-| PIN product codes | a voucher PIN | one per operator, or one per denomination |
-| Operator product codes *(catalogue)* | browsing per-number internet plans | one or more per operator (`CelcomDigi` → `CEL`, `DI`) |
-| Biller product codes | bills and their presentment | one code per biller (`TNB` → `TNB`) |
+| Operator product codes | charging a top-up | operator (`Hotlink` → `H`) |
+| PIN product codes | a voucher PIN | operator, or operator + denomination |
+| Game product codes | a game top-up | pack (`pubg-60` → `PUBG60`) |
+| Operator product codes *(catalogue)* | browsing per-number internet plans | operator, one or more codes (`CelcomDigi` → `CEL`, `DI`) |
+| Biller product codes | bills and their presentment | biller (`TNB` → `TNB`) |
 
-They are four fields because they hold four different code sets for the same
-names. Reading one for another charges the wrong thing.
+They are five fields because they hold five different code sets. Reading one
+for another charges the wrong thing.
 
 Filling in **any** of them tells the app this provider works in product codes.
 From then on an order that names an operator and finds no code for the service
