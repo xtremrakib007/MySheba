@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { countries } from '../data/countries';
@@ -7,6 +7,8 @@ import { FormLabel, FormInput, Grid3, OperatorCard, SummaryCard } from '../compo
 import { getBillerBrand } from '../data/billerBrand';
 import ServiceArt from '../components/ServiceArt';
 import { useTheme } from '../theme/ThemeContext';
+import { presentmentRequest, presentmentKey } from '../utils/billPresentmentInputs';
+import * as apiProviderService from '../firebase/apiProviderService';
 
 // An entry is a name, or { name, amount } when the denomination IS the
 // product. Prepaid electricity tokens are sold that way - you buy a 50,000
@@ -152,8 +154,96 @@ const cardStyles = StyleSheet.create({
   label: { fontSize: 11.5, fontWeight: '700', textAlign: 'center', marginTop: 8 },
 });
 
+/**
+ * The bill behind the account number, as the provider reads it.
+ *
+ * Only ever advisory. One answer stops the payment - the provider saying the
+ * account is not theirs - and it is stored on serviceData so validateStep can
+ * refuse to move on. Everything else, a biller that does not support this, a
+ * provider that is down, a reply nobody has seen before, shows nothing and
+ * changes nothing: somebody paying their electricity bill should not be stopped
+ * because a read-only extra went quiet.
+ */
+function BillDetails({ bill, loading }) {
+  const { colors } = useTheme();
+  if (loading) return <Text style={[billStyles.note, { color: colors.textSecondary }]}>Checking this account…</Text>;
+  if (!bill) return null;
+  if (bill.blocking) return <Text style={[billStyles.error, { color: colors.danger || colors.primary }]}>{bill.message}</Text>;
+  if (!bill.fields || !bill.fields.length) return null;
+  return (
+    <View style={[billStyles.card, { borderColor: `${colors.primary}44`, backgroundColor: colors.surface }]}>
+      <Text style={[billStyles.title, { color: colors.text }]}>Bill details</Text>
+      {bill.fields.map((f) => (
+        <View key={f.key} style={billStyles.row}>
+          <Text style={[billStyles.label, { color: colors.textSecondary }]}>{f.label}</Text>
+          <Text style={[billStyles.value, { color: colors.text }]}>{f.value}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const billStyles = StyleSheet.create({
+  card: { borderWidth: 1, borderRadius: 14, padding: 14, marginTop: 12, marginBottom: 4, gap: 7 },
+  title: { fontSize: 13, fontWeight: '800', marginBottom: 2 },
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
+  label: { fontSize: 12.5, flexShrink: 0 },
+  value: { fontSize: 12.5, fontWeight: '700', flexShrink: 1, textAlign: 'right' },
+  note: { fontSize: 12.5, paddingVertical: 8 },
+  error: { fontSize: 13, fontWeight: '700', paddingVertical: 8, lineHeight: 19 },
+});
+
 export default function BillPaymentStep({ step }) {
   const { serviceData, updateServiceData, nextStep } = useApp();
+
+  // Every hook before the first `return`, without exception. The sidebar once
+  // shipped a crash because one sat below an early return, and this component
+  // is all early returns.
+  const [bill, setBill] = useState(null);
+  const [billLoading, setBillLoading] = useState(false);
+  const askedFor = useRef('');
+  const request = presentmentRequest(serviceData);
+  const requestKey = presentmentKey(request);
+  const onBillSteps = step === 3 || step === 4;
+  const storedBlock = String(serviceData.billPresentmentBlock || '');
+  const fixedAmount = fixedAmountFor(serviceData);
+  const typedAmount = Number(serviceData.amount);
+  useEffect(() => {
+    let alive = true;
+    if (!onBillSteps || !requestKey) {
+      // The account was cleared or changed to something incomplete. A verdict
+      // on the old one must not go on blocking the new one.
+      askedFor.current = '';
+      if (storedBlock) updateServiceData({ billPresentmentBlock: '' });
+      if (bill) setBill(null);
+      return () => { alive = false; };
+    }
+    if (askedFor.current === requestKey) return () => { alive = false; };
+    askedFor.current = requestKey;
+    setBillLoading(true);
+    setBill(null);
+    if (storedBlock) updateServiceData({ billPresentmentBlock: '' });
+    apiProviderService.getBillPresentment(request)
+      .then((result) => {
+        if (!alive) return;
+        setBill(result);
+        if (result.blocking) {
+          updateServiceData({ billPresentmentBlock: result.message || 'That account number was not recognised.' });
+          return;
+        }
+        // Offered, not imposed: the figure comes from the provider's own
+        // reading of this bill, it lands in a field the customer can see and
+        // change, and it never overwrites one they have already filled in or
+        // one the voucher fixed.
+        if (result.outstanding && fixedAmount == null && !(Number.isFinite(typedAmount) && typedAmount > 0)) {
+          updateServiceData({ amount: result.outstanding });
+        }
+      })
+      .finally(() => { if (alive) setBillLoading(false); });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestKey, onBillSteps]);
+
   if (step === 0) return <View><FormLabel>Select Country</FormLabel><Grid3>{countries.map((c) => <CountrySelectCard key={c.code} code={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr, category: null, provider: null, accountNumber: '', mobileNumber: '', amount: null }); nextStep(); }} />)}</Grid3></View>;
   if (step === 1) {
     const cats = categoriesFor(serviceData.country);
@@ -186,9 +276,10 @@ export default function BillPaymentStep({ step }) {
         <FormInput placeholder='Leave empty if not shown' autoCapitalize='characters' value={serviceData.ref2 || ''} onChangeText={(v) => updateServiceData({ ref2: v })} />
         <FormLabel>IC / Passport Number of the payer</FormLabel>
         <FormInput placeholder='e.g. 941123045001' autoCapitalize='characters' value={serviceData.icNumber || ''} onChangeText={(v) => updateServiceData({ icNumber: v.replace(/[^A-Za-z0-9]/g, '').slice(0, 20) })} />
+        <BillDetails bill={bill} loading={billLoading} />
       </View>;
     }
-    return <View><FormLabel>{serviceData.category === 'ewallet' ? 'Mobile number registered to the wallet' : 'Enter Bill / Account Number'}</FormLabel><FormInput placeholder={serviceData.category === 'ewallet' ? 'e.g. 0123456789' : 'Bill / account number'} keyboardType={serviceData.category === 'ewallet' ? 'phone-pad' : 'default'} autoCapitalize={serviceData.category === 'ewallet' ? 'none' : 'characters'} value={serviceData.accountNumber || ''} onChangeText={(v) => updateServiceData({ accountNumber: v })} />{serviceData.country === 'BD' && <><FormLabel>Bangladesh Mobile Number</FormLabel><FormInput placeholder='01XXXXXXXXX' keyboardType='phone-pad' value={serviceData.mobileNumber || ''} onChangeText={(v) => updateServiceData({ mobileNumber: v.replace(/\D/g, '').slice(0, 11) })} /></>}</View>;
+    return <View><FormLabel>{serviceData.category === 'ewallet' ? 'Mobile number registered to the wallet' : 'Enter Bill / Account Number'}</FormLabel><FormInput placeholder={serviceData.category === 'ewallet' ? 'e.g. 0123456789' : 'Bill / account number'} keyboardType={serviceData.category === 'ewallet' ? 'phone-pad' : 'default'} autoCapitalize={serviceData.category === 'ewallet' ? 'none' : 'characters'} value={serviceData.accountNumber || ''} onChangeText={(v) => updateServiceData({ accountNumber: v })} />{serviceData.country === 'BD' && <><FormLabel>Bangladesh Mobile Number</FormLabel><FormInput placeholder='01XXXXXXXXX' keyboardType='phone-pad' value={serviceData.mobileNumber || ''} onChangeText={(v) => updateServiceData({ mobileNumber: v.replace(/\D/g, '').slice(0, 11) })} /></>}<BillDetails bill={bill} loading={billLoading} /></View>;
   }
   if (step === 4) {
     const fixed = fixedAmountFor(serviceData);
@@ -197,6 +288,7 @@ export default function BillPaymentStep({ step }) {
       {fixed != null
         ? <><FormLabel>Amount</FormLabel><Text style={noneStyles.fixed}>{cur} {Number(fixed).toFixed(2)} - set by the voucher you chose</Text></>
         : <><FormLabel>Enter Amount ({cur})</FormLabel><FormInput placeholder='Amount' keyboardType='decimal-pad' value={serviceData.amount != null ? String(serviceData.amount) : ''} onChangeText={(v) => updateServiceData({ amount: parseFloat(v) || 0 })} /></>}
+      <BillDetails bill={bill} loading={billLoading} />
       <SummaryCard rows={serviceData.category === 'jompay'
         ? [
             { label: 'Biller Code', value: serviceData.billerCode || '' },
@@ -212,11 +304,8 @@ export default function BillPaymentStep({ step }) {
   return null;
 }
 
-export function validateStep(step, serviceData) {
-  if (step === 0 && !serviceData.country) return 'Please select a country.';
-  if (step === 1 && !serviceData.category) return 'Please select a bill category.';
-  if (step === 2 && !serviceData.provider) return 'Please select a bill provider.';
-  if (step === 3 && serviceData.category === 'jompay') {
+function validateAccountStep(serviceData) {
+  if (serviceData.category === 'jompay') {
     if (!/^\d{4,6}$/.test(String(serviceData.billerCode || '').trim())) return 'Please enter the JomPAY Biller Code printed on your bill.';
     if (!(serviceData.accountNumber || '').trim()) return 'Please enter Ref-1, the account or bill number on your bill.';
     // Length only - the shape of a passport number is not ours to decide, and
@@ -224,9 +313,28 @@ export function validateStep(step, serviceData) {
     if (!/^[A-Za-z0-9]{6,20}$/.test(String(serviceData.icNumber || '').trim())) return 'Please enter the payer\u2019s IC or passport number. JomPAY requires it by law.';
     return null;
   }
-  if (step === 3 && !(serviceData.accountNumber || '').trim()) return 'Please enter the bill or account number.';
-  if (step === 3 && serviceData.country === 'BD' && !/^01\d{9}$/.test(String(serviceData.mobileNumber || '').trim())) return 'Please enter a valid Bangladesh mobile number.';
+  if (!(serviceData.accountNumber || '').trim()) return 'Please enter the bill or account number.';
+  if (serviceData.country === 'BD' && !/^01\d{9}$/.test(String(serviceData.mobileNumber || '').trim())) return 'Please enter a valid Bangladesh mobile number.';
+  return null;
+}
+
+export function validateStep(step, serviceData) {
+  if (step === 0 && !serviceData.country) return 'Please select a country.';
+  if (step === 1 && !serviceData.category) return 'Please select a bill category.';
+  if (step === 2 && !serviceData.provider) return 'Please select a bill provider.';
+  if (step === 3) {
+    const fieldError = validateAccountStep(serviceData);
+    if (fieldError) return fieldError;
+  }
   if (step === 4 && !(Number(serviceData.amount) > 0)) return 'Please enter a valid amount.';
+  // The single provider answer that stops a payment: this account number is
+  // not theirs. Checked AFTER the field rules so an empty form complains about
+  // the empty field rather than about a bill nobody has asked for yet, and
+  // never set for any other outcome - see utils/billPresentmentInputs and
+  // functions/billPresentment.
+  if ((step === 3 || step === 4) && String(serviceData.billPresentmentBlock || '').trim()) {
+    return String(serviceData.billPresentmentBlock).slice(0, 300);
+  }
   return null;
 }
 

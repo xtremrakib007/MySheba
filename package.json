@@ -43,6 +43,7 @@
     "test:ewallet": "node scripts/test-ewallet-reload.js",
     "test:iimmpact": "node scripts/test-iimmpact.js",
     "test:dataplans": "node scripts/test-data-plans.js",
+    "test:presentment": "node scripts/test-bill-presentment.js",
     "audit:tiles": "node scripts/audit-tile-destinations.js",
     "test:auth": "node scripts/test-profile-gate.js",
     "publish:ota": "node scripts/publish-ota.js",

@@ -26,6 +26,9 @@ const DEFAULT_LIMITS = {
   // reopen as often as they like. Generous enough to re-check a few numbers,
   // low enough that a loop stops being free.
   listProviderDataPlans: { max: 40, windowMinutes: 10 },
+  // Reads a bill, changes nothing, and re-runs as the customer corrects an
+  // account number - so it is looser than a charge and still bounded.
+  getBillPresentment: { max: 60, windowMinutes: 10 },
   deleteApiProvider: { max: 10, windowMinutes: 60 },
 };
 

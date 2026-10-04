@@ -14,6 +14,7 @@ const driveWindow = require('./successTopUpWindow');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 const { signIimmpactRequest, decodeSecret: decodeIimmpactSecret } = require('./iimmpactSigning');
 const { matchesStatus } = require('./statusMatch');
+const billPresentment = require('./billPresentment');
 
 const COLLECTION = 'api_providers';
 const SETTINGS = 'api_settings/service_modes';
@@ -273,6 +274,29 @@ function validateCatalog(data) {
       }
     }
     out.catalogItemMap = map;
+  }
+  // Which of the provider's product codes each biller on our Bill Payment
+  // screen is. Named by OUR biller name, because that is what the screen has;
+  // a biller with no entry simply gets no bill presentment, which is one of
+  // the provider's own documented non-blocking answers anyway.
+  if (data.billerProductCodes !== undefined && data.billerProductCodes !== null && data.billerProductCodes !== ''
+      && Object.keys(asObject(data.billerProductCodes)).length > 0) {
+    const map = validateTemplate(data.billerProductCodes, 'Biller product codes', 4000);
+    const cleaned = {};
+    for (const [biller, code] of Object.entries(map)) {
+      const value = cleanString(Array.isArray(code) ? code[0] : code, 40);
+      if (!value) throw new HttpsError('invalid-argument', `Biller product code for "${biller}" is empty.`);
+      if (!/^[A-Za-z0-9_.-]+$/.test(value)) throw new HttpsError('invalid-argument', `Biller product code for "${biller}" must be a plain product code.`);
+      cleaned[biller] = value;
+    }
+    out.billerProductCodes = cleaned;
+  }
+  if (data.billPresentmentPath !== undefined && data.billPresentmentPath !== null) {
+    const path = cleanString(data.billPresentmentPath, 300);
+    if (path && (path.includes('?') || path.includes('#') || /^https?:\/\//i.test(path))) {
+      throw new HttpsError('invalid-argument', 'Bill presentment path must be relative and carry no query string.');
+    }
+    out.billPresentmentPath = path;
   }
   if (data.catalogQueryTemplate !== undefined && data.catalogQueryTemplate !== null && data.catalogQueryTemplate !== '') {
     out.catalogQueryTemplate = validateTemplate(data.catalogQueryTemplate, 'Catalogue query template');
@@ -666,21 +690,20 @@ function resolveSuccessTopUpOperator(value) {
 // treatment. What stays here is the part that must not be configurable - the
 // public-hostname assertion and the DNS pinning that stop a provider URL being
 // pointed at an internal address.
-async function catalogHttpsRequest(url, init, config, provider) {
+//
+// Signed with the provider's own credentials. Until catalogues, every provider
+// here put them in the request body (Success TopUp's successtopup_key/secret),
+// so this needed none and had none. A signed API has nowhere to put them but
+// the headers, and an unsigned read against one is simply a 401 - nothing would
+// load and nothing would say why.
+//
+// Signing happens last because it covers the URL and the body exactly as they
+// go out: the query is already on the URL by this point.
+async function signedProviderRequest(url, init, provider) {
   await assertPublicHostname(url.hostname);
   const addresses = await dns.lookup(url.hostname, { all: true, verbatim: true });
   const pinned = addresses.find((a) => !isPrivateIp(a.address));
   if (!pinned) throw new Error('Provider hostname resolved to an invalid address.');
-  // Catalogue requests authenticate the same way charge requests do.
-  //
-  // Until now every catalogue provider put its credentials in the request body
-  // (Success TopUp's successtopup_key/secret), so this function needed none and
-  // had none. A signed API has nowhere to put them but the headers, and an
-  // unsigned catalogue call against one is simply a 401 - the packages would
-  // never load and nothing would say why.
-  //
-  // Signed over the URL and body as they will actually be sent, which is why
-  // this is here rather than anywhere earlier: the query is already on the URL.
   const headers = { ...(init && init.headers) };
   if (provider && provider.authType === 'iimmpactHmac') {
     Object.assign(headers, signIimmpactRequest({
@@ -695,14 +718,19 @@ async function catalogHttpsRequest(url, init, config, provider) {
   }
   const response = await requestHttpsPinned(url, { ...init, headers }, pinned);
   const text = await response.text();
-  if (!response.ok) throw new Error(`${config.errorLabel} catalogue request failed.`);
-  try {
-    return JSON.parse(text || '{}');
-  } catch {
-    throw new Error(`${config.errorLabel} returned invalid catalogue data.`);
-  }
+  let json = null;
+  try { json = text ? JSON.parse(text) : {}; } catch { json = null; }
+  // Returned rather than thrown: a catalogue treats a non-200 as a failure, a
+  // bill presentment reads the body either way. The caller decides.
+  return { ok: response.ok, status: response.status, json };
 }
 
+async function catalogHttpsRequest(url, init, config, provider) {
+  const { ok, json } = await signedProviderRequest(url, init, provider);
+  if (!ok) throw new Error(`${config.errorLabel} catalogue request failed.`);
+  if (json === null) throw new Error(`${config.errorLabel} returned invalid catalogue data.`);
+  return json;
+}
 /** Fetch any provider's catalogue, normalised. */
 function fetchProviderCatalog(provider, operator, type, account) {
   return providerCatalog.fetchCatalog(provider, { operator, type, account }, { request: catalogHttpsRequest });
@@ -1162,12 +1190,15 @@ exports.listProviderDataPlans = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, a
   const operatorName = cleanString(request.data?.operator, 100);
   if (!operatorName) throw new HttpsError('invalid-argument', 'An operator is required.');
 
-  const provider = await catalog.readProvider(db, service, { country });
+  // The SAME lookup the charge path uses, by calling the same function. Asking
+  // the question a second way here is what would let the picker offer a list
+  // the charge has never heard of - and `catalog` in this file is the Success
+  // TopUp wrapper, which pins the provider name and accepts no country at all.
+  const perAccount = await providerCatalog.perAccountCatalogFor(db, service, country, operatorName);
   // Not an error: most country/operator pairs have no per-number catalogue and
   // the screen simply keeps the package list it already had.
-  if (!provider || !catalog.isPerAccountCatalog(provider)) return { plans: [], supported: false };
-  const codes = catalog.productCodesFor(provider, operatorName);
-  if (!codes.length) return { plans: [], supported: false };
+  if (!perAccount) return { plans: [], supported: false };
+  const { provider, codes } = perAccount;
   if (!provider.apiKey || !provider.secretKey) throw new HttpsError('failed-precondition', 'The package provider is not configured.');
 
   const account = nationalAccountNumber(request.data?.phone, country);
@@ -1212,6 +1243,87 @@ exports.listProviderDataPlans = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, a
       return { ...rest, price, ...(quote(price) || { walletPrice: null, walletCurrency: '' }) };
     });
   return { plans, supported: true };
+});
+
+/**
+ * The provider's product code for one of our billers.
+ *
+ * Only the two that iimmpact's own documentation names are built in - TNB,
+ * which is the worked example throughout their guide, and JomPAY, which is a
+ * product in its own right. Every other biller is for whoever configures the
+ * provider to fill in from the product list, because guessing a product code
+ * here would mean reading somebody's electricity bill against the wrong utility.
+ * A biller with no code gets no presentment, which is one of the provider's own
+ * documented non-blocking answers.
+ */
+const DEFAULT_BILLER_PRODUCT_CODES = { TNB: 'TNB', JomPAY: 'JOMPAY' };
+function billerProductCodeFor(provider, billerName) {
+  const map = (provider && provider.billerProductCodes && typeof provider.billerProductCodes === 'object')
+    ? provider.billerProductCodes
+    : DEFAULT_BILLER_PRODUCT_CODES;
+  const code = map[String(billerName || '').trim()];
+  return typeof code === 'string' ? code.trim() : '';
+}
+exports._test_billerProductCodeFor = billerProductCodeFor;
+
+/**
+ * Read a bill before paying it.
+ *
+ * Advisory, and deliberately hard to fail with. Of everything this can answer,
+ * exactly one outcome stops a payment - the provider saying the account number
+ * is not theirs. A biller that does not support presentment, a provider having
+ * a bad afternoon, a reply nobody has seen before, a timeout: all of those
+ * return "nothing to show, carry on". Never throwing for a provider problem is
+ * part of that; a thrown error would surface on the screen as a reason not to
+ * pay a bill the customer owes.
+ */
+exports.getBillPresentment = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  const db = admin.firestore();
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
+  const nothing = { status: 'unavailable', blocking: false, message: '', fields: [], outstanding: null };
+
+  const country = String(request.data?.country || '').trim().toUpperCase();
+  const billerName = cleanString(request.data?.provider, 100);
+  const account = cleanString(request.data?.accountNumber, 100);
+  if (!/^[A-Z]{2}$/.test(country) || !billerName || !account) return nothing;
+
+  const provider = await providerCatalog.readProvider(db, 'Bill Payment', { country, strictCountry: true });
+  if (!provider || !provider.apiKey || !provider.secretKey) return nothing;
+  const productCode = billerProductCodeFor(provider, billerName);
+  if (!productCode) return nothing;
+
+  await checkVelocity(db, request.auth.uid, 'getBillPresentment', { ip: getClientIp(request) });
+
+  let url;
+  try {
+    const path = cleanString(provider.billPresentmentPath, 300) || '/v2/bill-presentment';
+    url = new URL(path, provider.baseUrl);
+    if (url.protocol !== 'https:') return nothing;
+  } catch { return nothing; }
+  url.searchParams.set('product', productCode);
+  url.searchParams.set('account', account);
+  // JomPAY validates the biller code, the amount and - for some billers - Ref-2
+  // as well as the account, so they go when we have them. Each is omitted
+  // rather than sent empty: an empty biller_code is a different question from
+  // no biller_code.
+  const billerCode = cleanString(request.data?.billerCode, 40);
+  const ref2 = cleanString(request.data?.ref2, 100);
+  const amount = Number(request.data?.amount);
+  if (billerCode) url.searchParams.set('biller_code', billerCode);
+  if (ref2) url.searchParams.set('ref2', ref2);
+  if (Number.isFinite(amount) && amount > 0) url.searchParams.set('amount', amount.toFixed(2));
+
+  try {
+    const { json } = await signedProviderRequest(url, { method: 'GET', headers: { accept: 'application/json' } }, provider);
+    if (json === null) return nothing;
+    // Their envelope is `data` on every v2 endpoint; a flat body is read as
+    // itself rather than as nothing.
+    const body = (json && typeof json.data === 'object' && json.data !== null) ? json.data : json;
+    return billPresentment.readBillPresentment(body);
+  } catch (error) {
+    console.warn('Bill presentment unavailable', String(error?.message || error).slice(0, 200));
+    return billPresentment.readBillPresentment({}, { reachable: false });
+  }
 });
 
 /**
@@ -1305,6 +1417,8 @@ exports.listApiProviders = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async 
       catalogQueryTemplate: x.catalogQueryTemplate || null,
       catalogPerAccount: x.catalogPerAccount === true,
       catalogOperatorCodes: x.catalogOperatorCodes || null,
+      billerProductCodes: x.billerProductCodes || null,
+      billPresentmentPath: x.billPresentmentPath || '',
       catalogWindow: x.catalogWindow || null,
       hasCatalogRequestTemplate: Boolean(x.catalogRequestTemplate && Object.keys(x.catalogRequestTemplate).length),
     };

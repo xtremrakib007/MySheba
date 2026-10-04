@@ -8,6 +8,7 @@ const getModesFn = httpsCallable(functions, 'getServiceApiSettings');
 const saveModesFn = httpsCallable(functions, 'saveServiceApiSettings');
 const drivesFn = httpsCallable(functions, 'listSuccessTopUpDrives');
 const dataPlansFn = httpsCallable(functions, 'listProviderDataPlans');
+const presentmentFn = httpsCallable(functions, 'getBillPresentment');
 const testFn = httpsCallable(functions, 'testApiProvider');
 const adminCatalogFn = httpsCallable(functions, 'listSuccessTopUpCatalogForAdmin');
 const balanceFn = httpsCallable(functions, 'getSuccessTopUpBalance');
@@ -60,6 +61,25 @@ export async function listSuccessTopUpDrives(operator, type, service = 'Internet
 export async function listProviderDataPlans({ service = 'Internet', country, operator, phone }) {
   const { data } = await dataPlansFn({ service, country, operator, phone });
   return { plans: data?.plans || [], supported: data?.supported === true };
+}
+
+/**
+ * The bill behind an account number, where the provider can read one.
+ *
+ * Advisory: `blocking` is true for exactly one answer - the provider saying the
+ * account number is not theirs. Everything else, including a failure, comes
+ * back as "nothing to show" and the customer carries on. A rejected promise is
+ * treated the same way for the same reason, so a caller never has to decide
+ * whether a network error is a reason not to pay a bill.
+ */
+export async function getBillPresentment(input) {
+  const blank = { status: 'unavailable', blocking: false, message: '', fields: [], outstanding: null };
+  try {
+    const { data } = await presentmentFn(input);
+    return { ...blank, ...(data || {}) };
+  } catch {
+    return blank;
+  }
 }
 
 /** Superadmin only: the catalogue with cost, sell and hidden state per package. */

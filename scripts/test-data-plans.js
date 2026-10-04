@@ -369,6 +369,28 @@ test('the price quoted and the price charged use the same rate for every country
   assert.strictEqual(quoteRate('MY', rates), 1, 'Malaysia needs no conversion, and says so with 1 rather than nothing');
 });
 
+test('the customer-facing listing resolves the SAME provider as the charge', () => {
+  // These were two different lookups, and the one the listing used was the
+  // Success TopUp wrapper: it pins the provider name, accepts no country, and
+  // silently dropped both - so a Malaysian per-number listing searched for a
+  // provider called "Success TopUp" and could never find iimmpact. The feature
+  // was dead on arrival and nothing failed.
+  const fs = require('fs');
+  const path = require('path');
+  const service = fs.readFileSync(path.join(__dirname, '..', 'functions/apiProviderService.js'), 'utf8');
+  const listing = service.slice(service.indexOf('exports.listProviderDataPlans'), service.indexOf('exports.getBillPresentment'));
+  assert.ok(/providerCatalog\.perAccountCatalogFor\(db, service, country, operatorName\)/.test(listing),
+    'the listing must ask the one shared question');
+  assert.ok(!/\bcatalog\.readProvider/.test(listing), 'and never the Success TopUp wrapper');
+});
+
+test('the wrapper refuses options it cannot honour, rather than dropping them', () => {
+  // A silent drop is what made the bug above invisible. It throws now, so the
+  // same mistake is a stack trace rather than a feature that never fires.
+  const successTopUpCatalog = require('../functions/successTopUpCatalog');
+  assert.throws(() => successTopUpCatalog.readProvider({}, 'Internet', { country: 'MY' }), /takes no options/);
+});
+
 console.log('\nWhat the customer is offered');
 
 // The screen's own rule, lifted out of the JSX so the failure case can be

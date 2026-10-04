@@ -31,8 +31,21 @@ const BASE_URL = providerCatalog.PRESETS['success-topup'].baseUrl;
 // carries the id. `regular` first so it wins a duplicate id.
 const CATALOG_TYPES = providerCatalog.PRESETS['success-topup'].types;
 
-/** The active Success TopUp provider for a service. */
-function readProvider(db, service) {
+/**
+ * The active Success TopUp provider for a service.
+ *
+ * It pins the provider NAME, which is the whole point of this module and also
+ * its trap: it looks exactly like providerCatalog.readProvider, which takes a
+ * country and a strict flag. A caller that passed those here had them silently
+ * dropped and got Success TopUp back for a question about somebody else - the
+ * per-number Malaysian plan listing did precisely that and could never have
+ * found its provider. So options are refused rather than ignored: anything
+ * that needs them wants providerCatalog.readProvider, not this.
+ */
+function readProvider(db, service, options) {
+  if (options !== undefined) {
+    throw new Error('successTopUpCatalog.readProvider pins the provider name and takes no options - use providerCatalog.readProvider for a country-scoped lookup.');
+  }
   return providerCatalog.readProvider(db, service, { name: PROVIDER_NAME });
 }
 

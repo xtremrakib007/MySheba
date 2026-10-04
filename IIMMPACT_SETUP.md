@@ -194,10 +194,67 @@ number the plans were listed for. Before this, a Malaysian package order was
 priced by whatever the client sent — it was only ever safe because the provider
 rejects a nonsense denomination.
 
+## 7. Bill presentment
+
+After the customer types an account number, the Bill Pay screen asks
+`GET /v2/bill-presentment` and shows whatever the biller publishes — account
+name, bill number, due date, outstanding. Only fields that actually come back
+are shown; billers differ in what they return and a label with nothing behind
+it is worse than no label. When an outstanding amount comes back it is offered
+as the amount, in a field the customer can still change, and it never
+overwrites one they have already typed or one a voucher fixed.
+
+**Exactly one answer stops a payment**, and this is the part worth
+understanding before you configure anything:
+
+| `data.message` | What happens |
+| --- | --- |
+| `Account no is valid` | The bill is shown. |
+| **`Invalid account no`** | **The customer cannot continue.** `error_message` is shown — "Ref-2 is required", "The provided biller code is invalid" — because that tells them what to fix. |
+| `Bill presentment is unavailable for this product` | Nothing shown, payment proceeds. |
+| `Service unavailable. Please try again later` | Nothing shown, payment proceeds. |
+| anything else, including a message nobody has seen | Nothing shown, payment proceeds. |
+
+A call that times out, 401s or never arrives is treated the same as the last
+row. Presentment is advisory and in Beta: a read-only extra going quiet is not
+a reason to stand between somebody and their electricity bill.
+
+Note that `error_message` can also read `Invalid account no`, but it is **not**
+what the decision is keyed on — their table keys it on `data.message`, and
+blocking on both would refuse payments their own documentation permits.
+
+### Configuring it
+
+**Biller product codes** on the Bill Payment provider record maps each biller on
+our screen to the iimmpact product it is:
+
+```json
+{ "TNB": "TNB", "JomPAY": "JOMPAY", "Air Selangor": "AIRSEL" }
+```
+
+`TNB` and `JomPAY` are built in — they are the two their own documentation
+names. **Every other biller is yours to fill in** from `/v2/product-list`.
+Nothing is guessed, because a guessed code would read somebody's bill against
+the wrong utility. A biller with no code simply gets no bill details, which is
+one of the provider's own non-blocking answers anyway.
+
+JomPAY is read differently from the rest: it validates the biller code, the
+amount and sometimes Ref-2 alongside the account, so it is only asked once all
+of those are filled in — asking earlier returns "The provided amount is
+invalid" against a field the customer has not reached. Every other biller is
+read from the account number alone, and the amount is deliberately not sent:
+it is what we are hoping to be told.
+
+Set **Bill presentment path** only if it is ever anything but
+`/v2/bill-presentment`.
+
+One thing to verify against a live call: the bill field names. The reply is read
+through an allowlist of likely keys (`customer_name`, `outstanding_amount`,
+`due_date` and friends) and anything unrecognised is ignored rather than put on
+screen. If a biller returns a field under a name not in that list it simply
+will not show — tell me the name and it takes one line.
+
 ## Still to do
 
-* **Bill presentment.** `GET /v2/bill-presentment` would show the outstanding
-  amount before paying, and would catch an invalid account number before the
-  charge. Not wired up.
 * **Network status.** `GET /v2/networkstatus?product=…` would warn the customer
   about a provider interruption without blocking the payment. Not wired up.

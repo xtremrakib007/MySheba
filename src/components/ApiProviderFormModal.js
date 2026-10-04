@@ -84,6 +84,8 @@ const SECTIONS = [
       { key: 'catalogQueryTemplate', label: 'Catalogue query (JSON)', placeholder: '{"product_code":"{{operator}}","account_number":"{{account}}"}', hint: 'For a catalogue fetched with GET. {{account}} is the customer\u2019s own number.' },
       { key: 'catalogPerAccount', label: 'Priced per phone number?', placeholder: 'true or false', hint: 'true when the provider personalises plans to the number. The number then becomes required, and no answer is ever reused for another number.' },
       { key: 'catalogOperatorCodes', label: 'Operator product codes (JSON)', placeholder: '{"Hotlink":"HI","CelcomDigi":["CEL","DI"]}', hint: 'Which product code each operator\u2019s plans come from. A list where one operator could be more than one product - every code is asked and the plan keeps the one that answered. An operator left out keeps its built-in package list.' },
+      { key: 'billerProductCodes', label: 'Biller product codes (JSON)', placeholder: '{"TNB":"TNB","JomPAY":"JOMPAY","Air Selangor":"AIRSEL"}', hint: 'Which product code each biller on the Bill Pay screen is, for reading a bill before paying it. TNB and JomPAY are built in; everything else comes from the provider\u2019s product list. A biller left out simply gets no bill details - it is never a reason a payment fails.' },
+      { key: 'billPresentmentPath', label: 'Bill presentment path', placeholder: '/v2/bill-presentment', hint: 'Leave blank for the default.' },
     ],
   },
   { title: 'Notes', fields: [{ key: 'notes', label: 'Notes', hint: 'For whoever configures this next.' }] },
@@ -176,10 +178,10 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
     }
     if (provider) {
       const next = { ...provider };
-      for (const key of ['catalogTypes', 'catalogItemMap', 'catalogWindow', 'catalogQueryTemplate', 'catalogOperatorCodes', 'catalogPerAccount']) next[key] = toText(provider[key]);
+      for (const key of ['catalogTypes', 'catalogItemMap', 'catalogWindow', 'catalogQueryTemplate', 'catalogOperatorCodes', 'catalogPerAccount', 'billerProductCodes']) next[key] = toText(provider[key]);
       setForm(next);
       // Open the catalogue section straight away when there is something in it.
-      setShowCatalog(Boolean(provider.catalogPath || provider.catalogPreset || provider.catalogPerAccount));
+      setShowCatalog(Boolean(provider.catalogPath || provider.catalogPreset || provider.catalogPerAccount || provider.billerProductCodes));
       return;
     }
     setForm({
