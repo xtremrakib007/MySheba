@@ -1336,10 +1336,10 @@ function iimmpactRejectionHint(status, baseUrl) {
   const onStaging = /staging/i.test(host);
   const other = onStaging ? 'https://api.iimmpact.com' : 'https://staging.iimmpact.com';
   if (status === 403) {
-    return `A 403 is their gateway refusing the call before the credentials are weighed, so this is not the secret. Check first that the key was issued for ${host || 'this host'}: a key from the staging dashboard does not work on production, and this provider points at ${host || 'its base URL'}, so try ${other}. If the key is right for this host, ask iimmpact whether it is attached to a usage plan and whether the account restricts caller IP addresses - Cloud Functions call from a wide Google range, so an allowlist of fixed addresses cannot work without a static egress address.`;
+    return `A 403 is their gateway refusing the call before the credentials are read, so this is not the secret. This provider points at ${host || 'its base URL'}, and a key from the other dashboard will not work there - try ${other}. Otherwise ask iimmpact whether the key is on a usage plan, and whether the account restricts caller IPs: Cloud Functions have no fixed address to allowlist.`;
   }
   if (status === 404) {
-    return `A 404 is the path, not the credentials: check the Base URL has no trailing path and that this endpoint exists on ${host || 'this host'}.`;
+    return `A 404 is the path, not the credentials: the Base URL should have no trailing path, and this endpoint must exist on ${host || 'this host'}.`;
   }
   if (status === 429) return 'That is rate limiting; retry more slowly.';
   if (status >= 500) return 'That is a fault on their side, not a configuration problem here; retry, and tell iimmpact if it persists.';

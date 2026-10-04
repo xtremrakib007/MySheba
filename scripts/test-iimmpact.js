@@ -357,9 +357,12 @@ test('a 403 names the environment mismatch first', () => {
 
 test('a 403 warns that an IP allowlist cannot work from Cloud Functions', () => {
   // Worth saying before they ask iimmpact to allowlist an address that
-  // changes under them.
+  // changes under them. The wording is free to change; naming Cloud Functions
+  // and the absence of a fixed address is not.
   const hint = require('../functions/apiProviderService')._test_iimmpactRejectionHint;
-  assert.ok(/wide Google range|static egress/.test(hint(403, 'https://api.iimmpact.com')));
+  const out = hint(403, 'https://api.iimmpact.com');
+  assert.ok(/Cloud Functions/.test(out), out);
+  assert.ok(/no fixed address|wide Google range|static egress/.test(out), out);
 });
 
 test('each status gets its own cause, and none invents one', () => {
@@ -379,6 +382,34 @@ test('the status reaches the message, so our 503 is not read as theirs', () => {
   const source = require('fs').readFileSync(require('path').join(__dirname, '..', 'functions/apiProviderService.js'), 'utf8');
   assert.ok(/iimmpact rejected the request \(HTTP \$\{response\.status\}\)/.test(source), source.includes('iimmpact rejected the request') ? 'the status is still missing' : 'the message is gone');
   assert.ok(/iimmpactRejectionHint\(response\.status, provider\.baseUrl\)/.test(source), 'and the hint must be used');
+});
+
+test('every message fits the cap the callable truncates at', () => {
+  // The 403 hint was 631 characters and the callable slices at 500, so the
+  // dialog ended "...restricts caller IP address [503]" - the warning that an
+  // IP allowlist cannot work from Cloud Functions was the part cut off, which
+  // is exactly the part that would have sent someone to iimmpact asking for
+  // the wrong thing.
+  const providerService = require('../functions/apiProviderService');
+  const source = require('fs').readFileSync(require('path').join(__dirname, '..', 'functions/apiProviderService.js'), 'utf8');
+  // Read the limit from the code rather than restating it, so changing one
+  // does not leave the other quietly wrong.
+  const cap = Number(/Unable to connect to \$\{label\}\.`\)\.slice\(0, (\d+)\)/.exec(source)?.[1]);
+  assert.ok(Number.isInteger(cap) && cap > 0, 'the truncation point must still be findable in the source');
+
+  // Not "Forbidden": a reason at its shortest measures the budget at its best
+  // case, and the next provider message will not be nine characters.
+  const reason = 'Forbidden: request not permitted for this key';
+  for (const status of [403, 404, 429, 500, 503, 418]) {
+    const message = `iimmpact rejected the request (HTTP ${status}): "${reason}". `
+      + providerService._test_iimmpactRejectionHint(status, 'https://api.iimmpact.com');
+    assert.ok(message.length <= cap, `HTTP ${status} message is ${message.length} > ${cap}: ` + message);
+  }
+  for (const r of ['API key not found', 'Signature mismatch']) {
+    const message = `iimmpact refused the credentials: "${r}". `
+      + providerService._test_iimmpactAuthHint(r, 'https://api.iimmpact.com');
+    assert.ok(message.length <= cap, `401 "${r}" message is ${message.length} > ${cap}`);
+  }
 });
 
 console.log('\nWe say who we are');
