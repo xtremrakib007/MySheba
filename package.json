@@ -47,6 +47,7 @@
     "test:netstatus": "node scripts/test-network-status.js",
     "test:productcodes": "node scripts/test-product-codes.js",
     "test:nonapi": "node scripts/test-non-api-services.js",
+    "test:reach": "node scripts/test-provider-reach.js",
     "audit:tiles": "node scripts/audit-tile-destinations.js",
     "test:auth": "node scripts/test-profile-gate.js",
     "publish:ota": "node scripts/publish-ota.js",

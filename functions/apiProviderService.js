@@ -17,6 +17,7 @@ const { matchesStatus } = require('./statusMatch');
 const billPresentment = require('./billPresentment');
 const networkStatus = require('./networkStatus');
 const productCodes = require('./productCodes');
+const providerReach = require('./providerReach');
 
 const COLLECTION = 'api_providers';
 const SETTINGS = 'api_settings/service_modes';
@@ -93,11 +94,7 @@ function resolveExecutionMode({ country, service, settings, providers }) {
     ? perCountry
     : (settings?.modes?.[service] === 'api' ? 'api' : 'legacy');
   if (intent !== 'api') return 'legacy';
-  const served = (providers || []).some((p) => {
-    if (!p || p.active === false) return false;
-    const reach = String(p.country || 'ALL').trim().toUpperCase();
-    return reach === code || reach === 'ALL';
-  });
+  const served = (providers || []).some((p) => p && p.active !== false && providerReach.servesCountry(p, code));
   return served ? 'api' : 'legacy';
 }
 
@@ -404,7 +401,18 @@ function validateCatalog(data) {
 
 function validate(data) {
   let service = cleanString(data.service, 40), name = cleanString(data.name, 100), baseUrl = cleanString(data.baseUrl, 500);
-  let country = cleanString(data.country, 10).toUpperCase() || 'ALL';
+  // A list, with `country` as its first entry. Every reader written before
+  // multiple countries existed goes on using `country` and keeps working.
+  const countries = providerReach.normaliseCountries(
+    (Array.isArray(data.countries) && data.countries.length) || typeof data.countries === 'string'
+      ? data.countries
+      : [data.country],
+    {
+      allowed: ALLOWED_COUNTRIES,
+      onInvalid: (code) => { throw new HttpsError('invalid-argument', `"${String(code).slice(0, 10)}" is not a country this app serves.`); },
+    },
+  );
+  let country = countries[0];
   let endpointPath = cleanString(data.endpointPath, 500) || '/';
   let authType = cleanString(data.authType, 20) || 'none';
   let method = cleanString(data.method, 10).toUpperCase() || 'POST';
@@ -516,7 +524,7 @@ function validate(data) {
   }
   if (!ALLOWED_METHODS.includes(method)) throw new HttpsError('invalid-argument', 'Invalid HTTP method.');
   return {
-    service, services, name, country, baseUrl, endpointPath, method, authType, apiKey, secretKey,
+    service, services, name, country, countries, baseUrl, endpointPath, method, authType, apiKey, secretKey,
     username: cleanString(data.username, 200), password: cleanString(data.password, 1000),
     active: data.active !== false, priority: Math.max(0, Math.min(9999, Number(priority) || 0)),
     timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)), notes: cleanString(data.notes, 1000),
@@ -849,8 +857,10 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   const allProvidersRaw = await providersForService(db, service);
   const requestedCountry = String(payload?.raw?.country || '').trim().toUpperCase() || 'ALL';
   const allProviders = allProvidersRaw;
-  const countryProviders = allProviders.filter((p) => String(p.country || 'ALL').toUpperCase() === requestedCountry);
-  const globalProviders = allProviders.filter((p) => String(p.country || 'ALL').toUpperCase() === 'ALL');
+  // A provider that NAMES this country beats one that serves all of them, and
+  // a provider now names several.
+  const countryProviders = allProviders.filter((p) => providerReach.isSpecificFor(p, requestedCountry));
+  const globalProviders = allProviders.filter((p) => providerReach.isGlobal(p));
   const providers = [...(countryProviders.length ? countryProviders : globalProviders)].sort((x,y)=>Number(y.priority||0)-Number(x.priority||0));
   if (!providers.length) throw new HttpsError('failed-precondition', `No active API provider is configured for ${service}.`);
   const provider = { ...providers[0] };
@@ -1694,6 +1704,7 @@ exports.listApiProviders = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async 
       service: x.service || '',
       name: x.name || '',
       country: x.country || 'ALL',
+      countries: providerReach.providerCountries(x),
       baseUrl: x.baseUrl || '',
       endpointPath: x.endpointPath || '/',
       method: x.method || 'POST',

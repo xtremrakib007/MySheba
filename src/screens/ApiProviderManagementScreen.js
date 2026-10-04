@@ -7,6 +7,7 @@ import HeaderDecor from '../components/HeaderDecor';
 import ApiProviderFormModal from '../components/ApiProviderFormModal';
 import ApiWebhookFormModal from '../components/ApiWebhookFormModal';
 import * as apiService from '../firebase/apiProviderService';
+import { servesCountry, providerCountries } from '../utils/providerReach';
 import * as webhookService from '../firebase/apiWebhookService';
 
 // Mirrors ALLOWED_COUNTRIES in functions/apiProviderService.js, minus 'ALL'.
@@ -148,7 +149,7 @@ export default function ApiProviderManagementScreen() {
   // A provider only counts for a country if it serves that country, or serves
   // everywhere. This mirrors resolveExecutionMode on the server, so the
   // warning below matches what a real order would actually do.
-  const servesScope=(p)=>{const reach=String(p?.country||'ALL').toUpperCase();return scope==='DEFAULT'||reach===scope||reach==='ALL';};
+  const servesScope=(p)=>scope==='DEFAULT'||servesCountry(p,scope);
   const modeFor=(service)=>{
     if(scope==='DEFAULT')return modes[service]==='api'?'api':'legacy';
     const row=countryModes[scope]||{};
@@ -191,7 +192,7 @@ export default function ApiProviderManagementScreen() {
         return <View key={item.id} style={styles.item}>
           <View style={{flex:1}}>
             <Text style={styles.name}>{item.name}</Text>
-            <Text style={styles.meta}>{countryLabel(item.country)} • Priority {item.priority ?? 0} • {item.active?'Active':'Inactive'}</Text>
+            <Text style={styles.meta}>{providerCountries(item).map(countryLabel).join(', ')} • Priority {item.priority ?? 0} • {item.active?'Active':'Inactive'}</Text>
             {servicesOf(item).length>1&&<Text style={styles.meta}>Also serves {servicesOf(item).filter((x)=>x!==service).join(', ')}</Text>}
             <Text numberOfLines={1} style={styles.url}>{item.baseUrl}</Text>
             <Text style={styles.meta}>{item.authType||'none'} • API secret {item.hasSecretKey?'configured':'not set'}{item.catalogPath?' • catalogue':''}</Text>

@@ -53,10 +53,18 @@ The one value the preset cannot know is **`product`** in the request body. Get
 the product code for each operator or biller from `GET /v2/product-list` (or the
 Price List CSV in their dashboard) and put it in the body template.
 
-Set **Country** to the country this record serves, and **Priority** above any
-other provider for the same service and country. A record with country `ALL`
-is used for any country that has no exact match, so Bangladesh must keep its own
-Success TopUp record at a higher priority.
+Under **Countries**, tap every country this record serves — one API key usually
+covers several, and listing them beats duplicating the whole record with its
+credentials once per country. Set **Priority** above any other provider for the
+same service and country.
+
+A record naming a country by name beats one set to **All countries**, which is
+the fallback for anything not named. `All countries` is exclusive: choosing it
+clears the rest, because a record that was both the named provider for Malaysia
+and the global fallback would make "specific wins" meaningless. So for
+iimmpact, name the countries it serves and leave Bangladesh to Success TopUp —
+or leave it on All countries and keep the Success TopUp Bangladesh record at a
+higher priority.
 
 ## 3. Callback
 

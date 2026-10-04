@@ -30,6 +30,7 @@
 
 const sellingWindow = require('./sellingWindow');
 const providerSecretService = require('./providerSecretService');
+const providerReach = require('./providerReach');
 
 const PRICING_COLLECTION = 'internetPricing';
 const PROVIDER_COLLECTION = 'api_providers';
@@ -497,7 +498,9 @@ async function readProvider(db, service, { name, country, strictCountry } = {}) 
 
   const docs = snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) }));
   const wanted = String(country || '').toUpperCase();
-  const matching = wanted ? docs.filter((p) => String(p.country || 'ALL').toUpperCase() === wanted) : [];
+  // A provider serves a LIST of countries now, so "is this one of them" is a
+  // shared question rather than a string compare repeated per call site.
+  const matching = wanted ? docs.filter((p) => providerReach.isSpecificFor(p, wanted)) : [];
   // Without a country match this falls back to every provider, which was
   // harmless while the only catalogue was Bangladesh's: asking for BD found the
   // BD provider. Asking for MY finds it too, and would price a Malaysian order
@@ -505,7 +508,7 @@ async function readProvider(db, service, { name, country, strictCountry } = {}) 
   // provider that serves all of them, or nothing" - and the pricing path, which
   // is the one that would charge the wrong number, uses it.
   if (strictCountry) {
-    const global = docs.filter((p) => String(p.country || 'ALL').toUpperCase() === 'ALL');
+    const global = docs.filter((p) => providerReach.isGlobal(p));
     const strict = matching.length ? matching : global;
     if (!strict.length) return null;
     const chosen = strict.sort((a, b) => Number(b.priority || 0) - Number(a.priority || 0))[0];

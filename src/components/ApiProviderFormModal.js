@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useTheme } from '../theme/ThemeContext';
 import { Modal, View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { API_SERVICES } from '../firebase/apiProviderService';
+import { providerCountries, toggleCountry } from '../utils/providerReach';
 import * as apiProviderService from '../firebase/apiProviderService';
 
 const COUNTRIES = [
@@ -204,7 +205,7 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
       return;
     }
     setForm({
-      country: 'ALL', service: presetService || API_SERVICES[0], authType: 'none', method: 'POST',
+      country: 'ALL', countries: ['ALL'], service: presetService || API_SERVICES[0], authType: 'none', method: 'POST',
       active: true, priority: 0, timeoutMs: 15000, endpointPath: '/',
       headers: '{}', queryTemplate: '{}', requestTemplate: '{}',
     });
@@ -259,6 +260,14 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
   const selectedServices = Array.isArray(form.services) && form.services.length
     ? form.services
     : [form.service].filter(Boolean);
+  // One list, with the first entry mirrored into `country` so every reader
+  // written before a provider could serve several goes on working.
+  const selectedCountries = providerCountries(form);
+  const toggleFormCountry = (code) => setForm((f) => {
+    const countries = toggleCountry(providerCountries(f), code);
+    return { ...f, countries, country: countries[0] };
+  });
+
   const toggleService = (name) => setForm((f) => {
     const current = Array.isArray(f.services) && f.services.length ? f.services : [f.service].filter(Boolean);
     const next = current.includes(name) ? current.filter((x) => x !== name) : [...current, name];
@@ -294,7 +303,7 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
           </Text>
           {!successTopUp && (
             <Text style={styles.subtitle}>
-              {form.service || '—'}{form.country && form.country !== 'ALL' ? ` · ${form.country}` : ''}
+              {form.service || '—'}{selectedCountries.includes('ALL') ? '' : ` · ${selectedCountries.join(', ')}`}
             </Text>
           )}
 
@@ -355,15 +364,26 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
                     : 'Tap another to have this provider serve it too.'}
                 </Text>
 
-                <Text style={styles.sectionTitle}>Country</Text>
-                <Text style={styles.fieldHint}>A country-specific provider is preferred over an &quot;All countries&quot; one.</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  {COUNTRIES.map((x) => (
-                    <TouchableOpacity key={x.code} onPress={() => set('country', x.code)} style={[styles.chip, form.country === x.code && styles.chipOn]}>
-                      <Text style={form.country === x.code ? styles.chipOnText : null}>{x.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                <Text style={styles.sectionTitle}>Countries</Text>
+                <Text style={styles.fieldHint}>
+                  Tap each country this provider serves. A country-specific provider is preferred over an
+                  &quot;All countries&quot; one, so picking countries by name beats leaving it on All.
+                </Text>
+                <View style={styles.chipWrap}>
+                  {COUNTRIES.map((x) => {
+                    const on = selectedCountries.includes(x.code);
+                    return (
+                      <TouchableOpacity key={x.code} onPress={() => toggleFormCountry(x.code)} style={[styles.chip, on && styles.chipOn]}>
+                        <Text style={on ? styles.chipOnText : null}>{x.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <Text style={styles.fieldHint}>
+                  {selectedCountries.includes('ALL')
+                    ? 'Serving every country. Tap a country by name to narrow it.'
+                    : `Serving ${selectedCountries.length} ${selectedCountries.length === 1 ? 'country' : 'countries'}. Tap All countries to serve the rest as well.`}
+                </Text>
 
                 {SECTIONS.map((section) => {
                   if (section.optional) {
