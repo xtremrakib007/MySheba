@@ -1080,7 +1080,16 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
       // remittance has none, and the same provider record can serve those too -
       // guarding on the map alone would refuse every bill the moment somebody
       // filled in recharge codes.
-      if (productCodes.declaresProductCodes(provider) && codeSubject && !providerOperatorCode) {
+      // `declaresProductCodes` asks whether SOME code was filled in, which is
+      // the right question for a provider that may not use codes at all. It is
+      // the wrong one for a provider that cannot work without them: with every
+      // map still empty it answers false, the guard is skipped, and the order
+      // goes out with no product at all - refused by iimmpact with their own
+      // wording, for a cause that is entirely ours and that this message
+      // already names exactly. An iimmpact order that names an operator always
+      // needs a code, filled maps or not.
+      const requiresProductCode = provider.authType === 'iimmpactHmac';
+      if ((productCodes.declaresProductCodes(provider) || requiresProductCode) && codeSubject && !providerOperatorCode) {
         const field = {
           pinProductCodes: 'PIN product codes',
           gameProductCodes: 'Game product codes',

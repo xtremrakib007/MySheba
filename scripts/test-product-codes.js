@@ -227,7 +227,24 @@ test('the guard only fires for an order that NAMES what it is buying', () => {
   // The same provider record can serve bills and remittances, which name no
   // operator and no pack. Guarding on the map alone would refuse every bill
   // the moment somebody filled in recharge codes.
-  assert.ok(/declaresProductCodes\(provider\) && codeSubject && !providerOperatorCode/.test(guardSource()));
+  assert.ok(/&& codeSubject && !providerOperatorCode/.test(guardSource()));
+});
+
+test('an iimmpact order needs a code even when no map has been filled in yet', () => {
+  // declaresProductCodes asks whether SOME code exists, which is right for a
+  // provider that may not use codes at all and wrong for one that cannot work
+  // without them. With every map still empty it answers false, so the guard
+  // was skipped and the order went out with no product - refused by iimmpact,
+  // in their words, for a cause this message already names exactly.
+  const guard = guardSource();
+  assert.ok(/const requiresProductCode = provider\.authType === 'iimmpactHmac';/.test(guard),
+    'an iimmpact order must require a code regardless of the maps');
+  assert.ok(/\(productCodes\.declaresProductCodes\(provider\) \|\| requiresProductCode\)/.test(guard),
+    'and it must widen the guard, not replace it - a non-iimmpact provider with filled maps is still checked');
+
+  // The empty-map state this fires on is exactly the one the maps start in.
+  assert.strictEqual(productCodes.declaresProductCodes({ authType: 'iimmpactHmac' }), false);
+  assert.strictEqual(productCodes.productCodeFor({ authType: 'iimmpactHmac' }, 'Maxis', { service: 'Recharge' }), '');
 });
 
 console.log('\nWhere the code comes from');
