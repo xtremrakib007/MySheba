@@ -248,9 +248,7 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
     // Only the Internet record gets the per-number catalogue: it is what turns
     // the package step into "plans available on this number". Every other
     // feature is a plain charge with no catalogue to browse.
-    const catalogue = service === 'Internet'
-      ? { catalogPreset: 'iimmpact-options', catalogPath: '/v2/options', catalogMethod: 'GET', catalogFieldId: 'plan', catalogPerAccount: 'true', catalogQueryTemplate: JSON.stringify({ product_code: '{{operator}}', field_id: '{{fieldId}}', account_number: '{{account}}', limit: '25000' }) }
-      : {};
+    const catalogue = { catalogPreset: 'iimmpact-options', catalogPath: '/v2/options', catalogMethod: 'GET', catalogFieldId: 'plan', catalogPerAccount: 'true', catalogQueryTemplate: JSON.stringify({ product_code: '{{operator}}', field_id: '{{fieldId}}', account_number: '{{account}}', limit: '25000' }), catalogListPath: 'items' };
     return {
       ...f,
       ...IIMMPACT_DEFAULTS,
