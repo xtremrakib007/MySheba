@@ -137,5 +137,46 @@ assert(/"Touch 'n Go eWallet": \{[^}]*initials: 'TNG'/.test(brands),
 assert(!/^operatorBrand\[/m.test(brands),
   'added to the map itself, not bolted on after it');
 
+// The server has to agree, or the customer picks a brand and is told it is not
+// supported. These two lists are on opposite sides of the wire and cannot
+// import each other, so this is what keeps them equal.
+const pinService = read('functions/rechargePinService.js');
+
+// The whole object body, not `MY: [...]` - that stopped at the first `]`,
+// which is the one inside `|| []`, so the list read as empty and the brand it
+// was added to check went unseen.
+const clientList = /rechargePinBrands = \{([\s\S]*?)\n\};/.exec(countries);
+assert(clientList, 'the client PIN list must be findable');
+assert(/Touch 'n Go eWallet/.test(clientList[1]), 'the extraction must reach the wallet');
+const serverList = /const MALAYSIA_OPERATORS = new Set\(\[([^\]]*)\]\)/.exec(pinService);
+assert(serverList, 'the server PIN list must be findable');
+
+const names = (block) => (block.match(/'[^']*'|"[^"]*"/g) || [])
+  .map((q) => q.slice(1, -1))
+  .filter((n) => n && !n.includes('..'));
+// The client list spreads rechargeOperators.MY, so compare against the union.
+const recharge = /export const rechargeOperators = \{[\s\S]*?MY: \[([^\]]*)\]/.exec(countries);
+assert(recharge, 'rechargeOperators.MY must be findable');
+const expected = [...names(recharge[1]), ...names(clientList[1])];
+const onServer = names(serverList[1]);
+for (const brand of expected) {
+  assert(onServer.includes(brand), 'the server rejects a brand the picker offers: ' + brand);
+}
+for (const brand of onServer) {
+  assert(expected.includes(brand), 'the server accepts a brand the picker never offers: ' + brand);
+}
+assert(onServer.includes("Touch 'n Go eWallet"), 'the wallet must be buyable server-side too');
+
+// Recharge PIN used to carry its own processing-mode gate, reading only the
+// service-wide default and ignoring the country matrix - so switching Malaysia
+// to API changed nothing and every voucher was refused. It uses the shared
+// rule now, which also refuses a country with no provider behind it.
+assert(/resolveExecutionMode\(\{ country: 'MY', service: PIN_SERVICE/.test(pinService),
+  'Recharge PIN must use the shared execution-mode rule');
+assert(!/modes\?\.\[PIN_SERVICE\]/.test(pinService),
+  'the service-wide-only gate must be gone');
+assert(/providersForService\(db, PIN_SERVICE\)/.test(pinService),
+  'and the rule needs the providers, or it cannot check reach');
+
 console.log('\nA wallet reload, sold down the path that already handles money.');
 console.log('Sold the other way too, as a voucher, from a picker of its own.');

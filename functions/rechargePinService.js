@@ -4,7 +4,7 @@ const { assertWalletUnfrozen } = require('./walletFreeze');
 const crypto = require('crypto');
 const progressionService = require('./progressionService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
-const { executeConfiguredApi } = require('./apiProviderService');
+const { executeConfiguredApi, resolveExecutionMode, providersForService } = require('./apiProviderService');
 const { getWalletCurrencyAndFx, baseToWallet } = require('./walletCurrencyService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
@@ -12,7 +12,15 @@ const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const DEVICE_ID_RE = /^[A-Za-z0-9-]{16,100}$/;
 const PIN_SERVICE = 'Recharge PIN';
-const MALAYSIA_OPERATORS = new Set(['Celcom', 'CelcomDigi', 'U Mobile', 'Hotlink', 'XOX', 'Tunetalk', 'Unifi', 'Yes']);
+// Mirrors rechargePinBrands.MY in src/data/countries.js, which is what the
+// picker renders. The two are separate files on separate sides of the wire and
+// cannot import each other, so a test asserts they stay equal - adding a brand
+// to the screen alone got as far as "Select a supported Malaysian mobile
+// operator", from here, after the customer had already chosen it.
+//
+// Touch 'n Go is a wallet rather than a telco, and is here because it is sold
+// as a voucher like the rest.
+const MALAYSIA_OPERATORS = new Set(['Celcom', 'CelcomDigi', 'U Mobile', 'Hotlink', 'XOX', 'Tunetalk', 'Unifi', 'Yes', "Touch 'n Go eWallet"]);
 
 function active(u) {
   return !!u && u.suspended !== true && u.inactive !== true && u.disabled !== true &&
@@ -58,8 +66,19 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
   const txId = crypto.createHash('sha256').update(`${uid}|recharge-pin|${requestId}`).digest('hex').slice(0, 40);
   const txRef = db.collection('transactions').doc(txId);
 
+  // The same rule every other service uses, rather than a gate of its own.
+  // This read only modes[service] - the service-wide default - and ignored the
+  // country matrix entirely, so switching Malaysia to API for Recharge PIN
+  // changed nothing and every voucher was refused with "not configured for API
+  // processing yet". DEFAULT_MODES is 'legacy' for everything, so that was
+  // every voucher, always.
+  //
+  // Malaysia by name because this is the Malaysia-only flow: the operator set
+  // above is Malaysian, and the screen says so in its title.
   const settingsSnap = await db.collection('api_settings').doc('service_modes').get();
-  const mode = settingsSnap.exists ? settingsSnap.data()?.modes?.[PIN_SERVICE] || 'legacy' : 'legacy';
+  const apiSettings = settingsSnap.exists ? (settingsSnap.data() || {}) : {};
+  const pinProviders = await providersForService(db, PIN_SERVICE);
+  const mode = resolveExecutionMode({ country: 'MY', service: PIN_SERVICE, settings: apiSettings, providers: pinProviders });
   if (mode !== 'api') throw new HttpsError('failed-precondition', 'Recharge PIN is not configured for API processing yet.');
 
   const pricingSnap = await db.collection('settings').doc('pricing').get();
