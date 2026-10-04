@@ -40,6 +40,7 @@
     "test:tilelabels": "node scripts/test-tile-labels.js",
     "test:countryheader": "node scripts/test-country-header.js",
     "test:apicountries": "node scripts/test-api-countries.js",
+    "test:ewallet": "node scripts/test-ewallet-reload.js",
     "audit:tiles": "node scripts/audit-tile-destinations.js",
     "test:auth": "node scripts/test-profile-gate.js",
     "publish:ota": "node scripts/publish-ota.js",

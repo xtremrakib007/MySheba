@@ -27,6 +27,7 @@ const BILLERS = {
     tv: ['Astro'],
     mobile: ['CelcomDigi', 'Maxis', 'U Mobile', 'Yes'],
     utilities: ['Indah Water'],
+    ewallet: ["Touch 'n Go eWallet"],
   },
   BD: {
     // Prepaid and postpaid are separate billers, not a setting on one: they
@@ -91,6 +92,15 @@ const CATEGORIES = [
   { key: 'tv', label: 'TV / Astro', art: 'billTv' },
   { key: 'mobile', label: 'Postpaid Mobile', art: 'billMobile' },
   { key: 'utilities', label: 'Other Utilities', art: 'billUtilities' },
+  // A wallet reload is not a bill, but it is the same transaction: choose who,
+  // say which account, say how much. Here it reuses the whole charged path -
+  // pricing, refund on refusal, the audit trail - instead of growing a service.
+  //
+  // It deliberately is NOT a Recharge operator. Malaysia has prefix detection
+  // for 010-019 and Recharge auto-selects the operator and skips the step, so
+  // somebody entering their TnG number - an ordinary 012 mobile - would be sent
+  // to Hotlink and never offered the choice.
+  { key: 'ewallet', label: 'E-Wallet Reload', art: 'walletTransfer' },
 ];
 
 // Only the categories the chosen country actually bills for. Malaysia has no
@@ -143,7 +153,7 @@ export default function BillPaymentStep({ step }) {
       ? <Grid3>{providers.map((b) => { const brand = getBillerBrand(b.name); return <OperatorCard key={b.name} name={b.name} logo={brand.logo} color={brand.color} initials={brand.initials} selected={serviceData.provider === b.name} onPress={() => { updateServiceData({ provider: b.name, amount: b.amount != null ? b.amount : null }); nextStep(); }} />; })}</Grid3>
       : <Text style={noneStyles.none}>No biller is configured for this country and category yet.</Text>}</View>;
   }
-  if (step === 3) return <View><FormLabel>Enter Bill / Account Number</FormLabel><FormInput placeholder='Bill / account number' autoCapitalize='characters' value={serviceData.accountNumber || ''} onChangeText={(v) => updateServiceData({ accountNumber: v })} />{serviceData.country === 'BD' && <><FormLabel>Bangladesh Mobile Number</FormLabel><FormInput placeholder='01XXXXXXXXX' keyboardType='phone-pad' value={serviceData.mobileNumber || ''} onChangeText={(v) => updateServiceData({ mobileNumber: v.replace(/\D/g, '').slice(0, 11) })} /></>}</View>;
+  if (step === 3) return <View><FormLabel>{serviceData.category === 'ewallet' ? 'Mobile number registered to the wallet' : 'Enter Bill / Account Number'}</FormLabel><FormInput placeholder={serviceData.category === 'ewallet' ? 'e.g. 0123456789' : 'Bill / account number'} keyboardType={serviceData.category === 'ewallet' ? 'phone-pad' : 'default'} autoCapitalize={serviceData.category === 'ewallet' ? 'none' : 'characters'} value={serviceData.accountNumber || ''} onChangeText={(v) => updateServiceData({ accountNumber: v })} />{serviceData.country === 'BD' && <><FormLabel>Bangladesh Mobile Number</FormLabel><FormInput placeholder='01XXXXXXXXX' keyboardType='phone-pad' value={serviceData.mobileNumber || ''} onChangeText={(v) => updateServiceData({ mobileNumber: v.replace(/\D/g, '').slice(0, 11) })} /></>}</View>;
   if (step === 4) {
     const fixed = fixedAmountFor(serviceData);
     const cur = serviceData.currency || 'MYR';
