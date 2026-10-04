@@ -144,7 +144,7 @@ exports.saveApiWebhook = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (r
     // This avoids the dangerous "save succeeded but the provider can never
     // authenticate" setup error, while still allowing an explicitly supplied
     // list to be retained for staging or future provider changes.
-    if (incoming.allowedIps === undefined) {
+    if (incoming.allowedIps === undefined || (isIimmpact && String(incoming.allowedIps || '').trim() === '')) {
       incoming.allowedIps = Array.isArray(current.allowedIps) && current.allowedIps.length
         ? current.allowedIps
         : (isIimmpact ? ['18.140.170.98', '13.215.6.214'] : []);
