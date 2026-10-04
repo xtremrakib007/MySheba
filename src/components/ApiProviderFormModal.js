@@ -206,7 +206,7 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
     }
     if (provider) {
       const next = { ...provider };
-      for (const key of ['catalogTypes', 'catalogItemMap', 'catalogWindow', 'catalogQueryTemplate', 'catalogOperatorCodes', 'catalogPerAccount', 'billerProductCodes', 'operatorProductCodes', 'pinProductCodes', 'gameProductCodes']) next[key] = toText(provider[key]);
+      for (const key of ['catalogTypes', 'catalogItemMap', 'catalogWindow', 'catalogQueryTemplate', 'catalogOperatorCodes', 'catalogPerAccount', 'catalogFieldId', 'billerProductCodes', 'operatorProductCodes', 'pinProductCodes', 'gameProductCodes']) next[key] = toText(provider[key]);
       setForm(next);
       // Open the catalogue section straight away when there is something in it.
       setShowCatalog(Boolean(provider.catalogPath || provider.catalogPreset || provider.catalogPerAccount || provider.billerProductCodes || provider.operatorProductCodes || provider.pinProductCodes || provider.gameProductCodes));
@@ -248,7 +248,7 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
     // the package step into "plans available on this number". Every other
     // feature is a plain charge with no catalogue to browse.
     const catalogue = service === 'Internet'
-      ? { catalogPreset: 'iimmpact-subproducts', catalogPath: '/v2/subproducts', catalogMethod: 'GET', catalogPerAccount: 'true' }
+      ? { catalogPreset: 'iimmpact-options', catalogPath: '/v2/options', catalogMethod: 'GET', catalogFieldId: 'plan', catalogPerAccount: 'true', catalogQueryTemplate: JSON.stringify({ product_code: '{{operator}}', field_id: '{{fieldId}}', account_number: '{{account}}', limit: '25000' }) }
       : {};
     return {
       ...f,
@@ -355,8 +355,8 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
                 <Text style={styles.fieldHint}>
                   Sets the endpoint, the HMAC signing, the status values and the response paths for the
                   feature picked below, then leaves everything editable. The API key and HMAC secret are
-                  still yours to paste in, and `product` in the request body has to be the product code
-                  from iimmpact&apos;s product list.
+                  still yours to paste in. Internet packages use IIMMPACT&apos;s active `/v2/options` catalogue
+                  for the selected phone number, and the selected plan code is sent as `extras.subproduct_code`.
                 </Text>
 
                 <Text style={styles.sectionTitle}>Features</Text>
