@@ -121,7 +121,7 @@ const PRESETS = {
       // ("Unlimited data with hotspot and calls 30-days (3Mbps) H") rather
       // than a short code. It is passed through verbatim.
       id: ['code', 'subproduct_code', 'subproductCode', 'id'],
-      name: ['name', 'description', 'title', 'product_name'],
+      name: ['name', 'label', 'description', 'title', 'product_name'],
       data: ['data', 'volume', 'quota'],
       valid: ['validity', 'valid', 'duration', 'period'],
       category: ['category', 'type', 'product_group'],
@@ -200,7 +200,13 @@ function catalogConfigFor(provider) {
 
   let path = String(provider.catalogPath || (preset && preset.path) || '').trim();
   if (!path) return null;
-  const legacyIimmpact = provider.authType === 'iimmpactHmac' && path === '/v2/subproducts';
+  const legacyIimmpact =
+    path === '/v2/subproducts' &&
+    (
+      provider.authType === 'iimmpactHmac' ||
+      String(provider.name || '').trim().toLowerCase() === 'iimmpact' ||
+      String(provider.catalogPreset || '').trim() === 'iimmpact-subproducts'
+    );
   if (legacyIimmpact) path = '/v2/options';
 
   const baseUrl = String(provider.catalogBaseUrl || provider.baseUrl || (preset && preset.baseUrl) || '').trim();
@@ -224,7 +230,10 @@ function catalogConfigFor(provider) {
       ? provider.catalogPerAccount === true
       : Boolean(preset && preset.perAccount),
     fieldId: String(provider.catalogFieldId || (preset && preset.fieldId) || (legacyIimmpact ? 'plan' : '')).trim(),
-    operatorCodes: asObject(provider.catalogOperatorCodes) || (preset && preset.operatorCodes) || null,
+    operatorCodes:
+      asObject(provider.catalogOperatorCodes) ||
+      (legacyIimmpact ? PRESETS['iimmpact-options'].operatorCodes : (preset && preset.operatorCodes)) ||
+      null,
     successPath: provider.catalogSuccessPath !== undefined
       ? String(provider.catalogSuccessPath || '')
       : (preset ? preset.successPath : ''),
