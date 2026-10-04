@@ -324,6 +324,7 @@ const result=await db.runTransaction(async tx=>{const existingTx=await tx.get(tx
           providerName: api.providerName,
           responseId: api.responseId || null,
           message: api.message || null,
+          ...(api.requestCheck ? { requestCheck: api.requestCheck } : {}),
           updatedAt: admin.firestore.FieldValue.serverTimestamp()
         },
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
