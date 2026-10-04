@@ -249,7 +249,7 @@ export default function ApiProviderManagementScreen() {
             <Text style={styles.builtInMeta}>MY, SG, ID, IN, PH, NP, PK, MM, KH • Bangladesh excluded</Text>
             <Text style={styles.builtInHint}>Production: api.iimmpact.com • HMAC • only API Key + HMAC Secret required</Text>
           </View>
-          <TouchableOpacity style={styles.configureIimmpact} onPress={()=>{setEditing(null);setSuccessTopUpSetup(false);setPresetService('Recharge');setShow(true);}}>
+          <TouchableOpacity style={styles.configureIimmpact} onPress={()=>{setEditing(null);setSuccessTopUpSetup(false);setPresetService('iimmpact');setShow(true);}}>
             <Text style={styles.configureIimmpactText}>Configure</Text>
           </TouchableOpacity>
         </View>
