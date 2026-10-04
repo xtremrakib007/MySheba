@@ -49,12 +49,12 @@ export default function ApiWebhookFormModal({ visible, provider, config, onClose
     enabled: config?.enabled !== false,
     authHeader: config?.authHeader || 'x-webhook-token',
     webhookToken: '',
-    transactionIdPath: config?.transactionIdPath || (iimmpact ? 'data.refid' : 'transactionId'),
-    statusPath: config?.statusPath || (iimmpact ? 'data.status' : 'status'),
-    messagePath: config?.messagePath || (iimmpact ? 'data.remarks' : 'message'),
-    successStatus: config?.successStatus || (iimmpact ? 'Succesful, Successful' : 'Success'),
-    processingStatus: config?.processingStatus || (iimmpact ? 'Processing, Accepted' : 'Processing'),
-    cancelStatus: config?.cancelStatus || (iimmpact ? 'Failed, Refund' : 'Cancel'),
+    transactionIdPath: (iimmpact && (!config?.transactionIdPath || config.transactionIdPath === 'transactionId')) ? 'data.refid' : (config?.transactionIdPath || 'transactionId'),
+    statusPath: (iimmpact && (!config?.statusPath || config.statusPath === 'status')) ? 'data.status' : (config?.statusPath || 'status'),
+    messagePath: (iimmpact && (!config?.messagePath || config.messagePath === 'message')) ? 'data.remarks' : (config?.messagePath || 'message'),
+    successStatus: (iimmpact && (!config?.successStatus || config.successStatus === 'Success')) ? 'Succesful, Successful' : (config?.successStatus || 'Success'),
+    processingStatus: (iimmpact && (!config?.processingStatus || config.processingStatus === 'Processing')) ? 'Processing, Accepted' : (config?.processingStatus || 'Processing'),
+    cancelStatus: (iimmpact && (!config?.cancelStatus || config.cancelStatus === 'Cancel')) ? 'Failed, Refund' : (config?.cancelStatus || 'Cancel'),
     allowedIps: (config?.allowedIps || (iimmpact ? ['18.140.170.98', '13.215.6.214'] : [])).join(', '),
   }), [provider, config, visible, iimmpact]);
 
