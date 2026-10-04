@@ -391,7 +391,18 @@ function validateCatalog(data) {
     }
     out.catalogOperatorCodes = cleaned;
   }
-  if (data.catalogWindow !== undefined && data.catalogWindow !== null) {
+  // null, '' and {} mean "not set", exactly as they do for every field above.
+  // The comment on catalogItemMap already says "the same as they do for
+  // catalogTypes above and catalogWindow below" - but this check never tested
+  // for either, so it was the one field where the claim was untrue.
+  //
+  // The field's own hint reads "Leave empty to sell around the clock", and an
+  // empty box is what the form sends for any provider without a window. So
+  // every save of such a provider was refused, with an error about hours the
+  // form had never been given, on a screen where the hours were not what was
+  // being edited.
+  if (data.catalogWindow !== undefined && data.catalogWindow !== null && data.catalogWindow !== ''
+      && Object.keys(asObject(data.catalogWindow)).length > 0) {
     const w = validateTemplate(data.catalogWindow, 'Catalogue selling window', 2000);
     const open = Number(w.openUtcHour);
     const close = Number(w.closeUtcHour);

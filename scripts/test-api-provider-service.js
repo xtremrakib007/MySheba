@@ -162,6 +162,33 @@ assert.throws(() => api.validate({ service: 'Recharge', name: 'Test', baseUrl: '
   assert.strictEqual(api.validate({ ...base, catalogRequestTemplate: null }).catalogRequestTemplate, undefined);
   assert.strictEqual(api.validate({ ...base, catalogRequestTemplate: '' }).catalogRequestTemplate, undefined);
 
+  // And the selling window, which was the one field where it was not true.
+  // The comment on catalogItemMap says null and '' mean "not set" "the same as
+  // they do for catalogTypes above and catalogWindow below" - catalogWindow
+  // tested for neither. Its own form hint reads "Leave empty to sell around
+  // the clock"; leaving it empty was refused with "must be whole hours between
+  // 0 and 24 (UTC)", which blocked every save of a provider that has no
+  // window, whatever field was actually being edited.
+  for (const [label, value] of [['null', null], ['empty string', ''], ['empty object', {}], ['"{}" as text', '{}']]) {
+    assert.strictEqual(api.validate({ ...base, catalogWindow: value }).catalogWindow, undefined,
+      `catalogWindow ${label} must mean "not set"`);
+  }
+  assert.strictEqual(api.validate(base).catalogWindow, undefined);
+
+  // A real window is still read, and still has to carry sane hours - the
+  // check that was firing is the right check, on the wrong input.
+  assert.deepStrictEqual(
+    api.validate({ ...base, catalogWindow: { type: 'drive', openUtcHour: 4, closeUtcHour: 16, label: '10am-10pm BD' } }).catalogWindow,
+    { type: 'drive', openUtcHour: 4, closeUtcHour: 16, label: '10am-10pm BD', noun: 'Packages' });
+  // Sent as text, the way the form's JSON box sends it.
+  assert.strictEqual(
+    api.validate({ ...base, catalogWindow: '{"openUtcHour":4,"closeUtcHour":16}' }).catalogWindow.openUtcHour, 4);
+  for (const bad of [{ openUtcHour: 25, closeUtcHour: 1 }, { openUtcHour: -1, closeUtcHour: 1 },
+                     { openUtcHour: 1.5, closeUtcHour: 2 }, { openUtcHour: 1 }, { closeUtcHour: 1 }]) {
+    assert.throws(() => api.validate({ ...base, catalogWindow: bad }), /whole hours between 0 and 24/,
+      'window ' + JSON.stringify(bad) + ' must still be refused');
+  }
+
   console.log('  optional catalogue fields accept null, empty and absent alike');
 }
 
