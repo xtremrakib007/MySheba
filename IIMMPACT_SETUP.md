@@ -124,6 +124,29 @@ A GET callback means the full URL, parameters and all, is replayable by anyone
 who sees it. That is IIMMPACT's protocol, not a MySheba choice; the duplicate
 check below is what makes a replay harmless.
 
+### Which countries actually use the API
+
+Processing mode is per country, not per provider. API Management opens on the
+**BD** chip, and every Manual/API toggle on that screen belongs to the country
+chip selected at the top - so toggles set while BD is selected say nothing about
+Malaysia. A country with no setting of its own follows the service-wide default,
+which is `legacy` for every service.
+
+Saving a provider now fills this in: the countries it serves are switched to API
+mode for the services it carries. Three things it will not do, so check them if a
+country is still going to a dealer:
+
+- It never overwrites a setting already made. A country someone switched to
+  Manual stays Manual through a re-save, which is what stops a base URL edit
+  from quietly resuming live API traffic. Switch it back by hand.
+- A provider that serves `ALL` changes nothing, because `ALL` is not a row in
+  the country matrix.
+- An inactive provider changes nothing.
+
+Intent is still only half of it. An order only takes the API path if an active
+provider actually serves that country, so a country enabled here with no provider
+behind it still goes to a dealer - the screen says so under the toggle.
+
 ### When the credential test fails
 
 The **Test** button names the HTTP status iimmpact answered with. The `[503]`

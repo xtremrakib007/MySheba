@@ -192,6 +192,86 @@ assert.throws(() => api.validate({ service: 'Recharge', name: 'Test', baseUrl: '
   console.log('  optional catalogue fields accept null, empty and absent alike');
 }
 
+// Configuring a provider and having nothing route to it.
+//
+// Success TopUp's save enables Bangladesh; nothing enabled anywhere else, and
+// DEFAULT_MODES is 'legacy' for every service. So iimmpact could be added,
+// tested, and shown returning a balance while every Malaysian order still went
+// to a dealer - with nothing on screen saying why, because API Management
+// opens scoped to BD and the toggles there are Bangladesh's.
+{
+  const auto = api.autoCountryModes || require('../functions/apiProviderService')._test_autoCountryModes;
+  const iimmpact = { active: true, countries: ['MY', 'SG', 'ID'], services: ['Recharge', 'Internet', 'Bill Payment'] };
+
+  const filled = auto(iimmpact, {});
+  for (const country of ['MY', 'SG', 'ID']) {
+    for (const service of ['Recharge', 'Internet', 'Bill Payment']) {
+      assert.strictEqual(filled[country][service], 'api', `${country} ${service}`);
+    }
+  }
+  // Only what it serves: a service it does not carry stays unset, so it keeps
+  // following Default rather than being switched on by association.
+  assert.strictEqual(filled.MY.Entertainment, undefined);
+  assert.strictEqual(filled.BD, undefined, 'a country it does not serve is untouched');
+
+  // An explicit choice is never overwritten. Somebody who turned MY off during
+  // an incident must not get live API traffic back because the provider was
+  // re-saved to change its base URL - which is exactly what this session did,
+  // repeatedly.
+  const withOff = auto(iimmpact, { MY: { Recharge: 'legacy' } });
+  assert.strictEqual(withOff.MY.Recharge, 'legacy', 'a deliberate legacy must survive a re-save');
+  assert.strictEqual(withOff.MY.Internet, 'api', 'while the rest of that country is still filled in');
+  // 'legacy' is never written by this function - it only ever fills a blank.
+  assert.strictEqual(auto(iimmpact, {}).MY.Recharge, 'api');
+
+  // Nothing to do is null, so the save does not write settings at all.
+  assert.strictEqual(auto({ active: true, countries: ['MY'], services: ['Recharge'] }, { MY: { Recharge: 'api' } }), null);
+  assert.strictEqual(auto({ active: true, countries: ['MY'], services: ['Recharge'] }, { MY: { Recharge: 'legacy' } }), null);
+
+  // A provider that serves everywhere changes nothing: 'ALL' is not a row in
+  // this matrix, and flipping the service-wide default is what once routed
+  // Malaysian orders into a path with no provider behind them.
+  assert.strictEqual(auto({ active: true, countries: ['ALL'], services: ['Recharge'] }, {}), null);
+  // Reach that includes ALL alongside a named country is still global reach.
+  // Stated separately because dropping 'ALL' as an unknown code and enabling
+  // the named one reads as harmless and is not: it is the whole catalogue
+  // switching to API on the strength of one country being listed.
+  assert.strictEqual(auto({ active: true, countries: ['MY', 'ALL'], services: ['Recharge'] }, {}), null);
+  // A code that is not a country gets no row of its own, so a record written
+  // before the country list was validated cannot invent one.
+  const odd = auto({ active: true, countries: ['MY', 'XX'], services: ['Recharge'] }, {});
+  assert.strictEqual(odd.MY.Recharge, 'api');
+  assert.strictEqual(odd.XX, undefined, 'a non-country code must not become a row');
+  // An inactive provider is not taking orders.
+  assert.strictEqual(auto({ active: false, countries: ['MY'], services: ['Recharge'] }, {}), null);
+  // Mobile Banking and Remittance are structurally non-API; resolveExecutionMode
+  // refuses them outright, so writing intent for them would be a lie on screen.
+  assert.strictEqual(auto({ active: true, countries: ['MY'], services: ['Remittance', 'Mobile Banking'] }, {}), null);
+  const mixed = auto({ active: true, countries: ['MY'], services: ['Recharge', 'Remittance'] }, {});
+  assert.strictEqual(mixed.MY.Recharge, 'api');
+  assert.strictEqual(mixed.MY.Remittance, undefined);
+
+  // Falls back to the single `service` for a record written before `services`.
+  assert.strictEqual(auto({ active: true, countries: ['MY'], service: 'Recharge' }, {}).MY.Recharge, 'api');
+
+  // The settings read has to happen before the first write or the transaction
+  // throws, which reaches the app as a bare INTERNAL [500].
+  const source = require('fs').readFileSync(require('path').join(__dirname, '..', 'functions/apiProviderService.js'), 'utf8');
+  const save = source.slice(source.indexOf('exports.saveApiProvider'));
+  const body = save.slice(0, save.indexOf('exports.deleteApiProvider'));
+  // Both must be PRESENT before comparing positions: a missing read gives
+  // indexOf -1, which compares as "earliest" and passes an assertion that the
+  // read was hoisted when there is no read at all.
+  assert.ok(body.includes('tx.get(settingsRef)'), 'the settings read must exist');
+  assert.ok(body.includes('tx.set(ref, stored'), 'the provider write must exist');
+  assert.ok(body.indexOf('tx.get(settingsRef)') < body.indexOf('tx.set(ref, stored'),
+    'settings must be read before the first write in the transaction');
+  assert.ok(/const settingsRef = db\.doc\(SETTINGS\);/.test(body),
+    'and read for every save, not only Success TopUp\u2019s');
+
+  console.log('  saving a provider enables the countries it serves');
+}
+
 // One API, several features. Bangladesh recharge and Bangladesh internet are
 // the same Success TopUp account; before this each needed its own row with the
 // credentials typed again, and rotating a key meant finding every copy.

@@ -99,6 +99,62 @@ function resolveExecutionMode({ country, service, settings, providers }) {
   return served ? 'api' : 'legacy';
 }
 
+/**
+ * The country rows a newly saved provider switches to API mode on its own.
+ *
+ * Configuring a provider and having nothing route to it is the trap this
+ * closes. Success TopUp's save has always enabled Bangladesh; a provider for
+ * anywhere else left every country it serves sitting on the service-wide
+ * default, which DEFAULT_MODES sets to 'legacy' for everything. So a provider
+ * could be added, tested, and shown returning a balance, while every order for
+ * the countries it serves still went to a dealer - and nothing on the screen
+ * said why, because API Management opens scoped to BD and the toggles there are
+ * Bangladesh's.
+ *
+ * Three limits, each deliberate:
+ *
+ * - An explicit setting is never overwritten. Somebody who turned a country
+ *   off, during an incident or while testing, must not have live API traffic
+ *   resumed under them because the provider was re-saved to change its base
+ *   URL. Only a country with no setting of its own is filled in, and 'legacy'
+ *   is never written here.
+ * - A provider that serves everywhere changes nothing. 'ALL' is not a row in
+ *   this matrix, and the alternative - flipping the service-wide default - is
+ *   the thing that once routed Malaysian orders down a path with no provider
+ *   behind them.
+ * - An inactive provider changes nothing, because it is not taking orders.
+ *
+ * resolveExecutionMode still has the final say: this writes intent, and intent
+ * that no active provider can serve still comes out as 'legacy' there.
+ *
+ * @returns {object|null} the whole countryModes map to write, or null when
+ *   there is nothing to change.
+ */
+function autoCountryModes(provider, priorCountryModes) {
+  if (!provider || provider.active === false) return null;
+  if (providerReach.isGlobal(provider)) return null;
+  const countries = providerReach.providerCountries(provider).filter((c) => COUNTRY_CODES.includes(c));
+  const services = (Array.isArray(provider.services) && provider.services.length
+    ? provider.services
+    : [provider.service]
+  ).filter((s) => s && ALLOWED_SERVICES.includes(s) && !isNonApiService(s));
+  if (!countries.length || !services.length) return null;
+
+  const next = { ...(priorCountryModes || {}) };
+  let changed = false;
+  for (const country of countries) {
+    const row = { ...(next[country] || {}) };
+    for (const service of services) {
+      if (row[service] === 'api' || row[service] === 'legacy') continue;
+      row[service] = 'api';
+      changed = true;
+    }
+    next[country] = row;
+  }
+  return changed ? next : null;
+}
+exports._test_autoCountryModes = autoCountryModes;
+
 function assertSuperadmin(db, request) {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
   return db.doc(`users/${request.auth.uid}`).get().then((snap) => {
@@ -1984,10 +2040,14 @@ exports.saveApiProvider = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (
     // reads are hoisted here, above every write in this transaction.
     const isSuccessTopUpSetup = data.name === 'Success TopUp' && data.service === 'Recharge';
     const webhookRef = isSuccessTopUpSetup ? db.collection('api_webhooks').doc(ref.id) : null;
-    const settingsRef = isSuccessTopUpSetup ? db.doc(SETTINGS) : null;
-    const [webhookSnap, settingsSnap] = isSuccessTopUpSetup
-      ? await Promise.all([tx.get(webhookRef), tx.get(settingsRef)])
-      : [null, null];
+    // Settings are read for EVERY save now, not just Success TopUp's, because
+    // autoCountryModes below needs to know what is already set before it fills
+    // anything in - and this is the last point at which a read is allowed.
+    const settingsRef = db.doc(SETTINGS);
+    const [webhookSnap, settingsSnap] = await Promise.all([
+      webhookRef ? tx.get(webhookRef) : Promise.resolve(null),
+      tx.get(settingsRef),
+    ]);
 
     tx.set(ref, stored, { merge: false });
 
@@ -2063,6 +2123,21 @@ exports.saveApiProvider = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (
           requestTemplate: companion.requestTemplate,
           notes: companion.notes
         }, { merge: false });
+      }
+    } else {
+      // Every other provider gets the same courtesy Success TopUp has always
+      // had for Bangladesh, for the countries this one actually serves. Not
+      // folded into the branch above: Success TopUp's block also enables the
+      // four companion services, which are separate documents this provider's
+      // own `services` array knows nothing about.
+      const oldSettings = settingsSnap.exists ? (settingsSnap.data() || {}) : {};
+      const nextCountryModes = autoCountryModes(stored, readCountryModes(oldSettings.countryModes));
+      if (nextCountryModes) {
+        tx.set(settingsRef, {
+          modes: { ...DEFAULT_MODES, ...(oldSettings.modes || {}) },
+          countryModes: nextCountryModes,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: request.auth.uid
+        }, { merge: true });
       }
     }
   });
