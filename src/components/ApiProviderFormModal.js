@@ -81,6 +81,9 @@ const SECTIONS = [
       { key: 'catalogItemMap', label: 'Item map (JSON)', placeholder: '{"id":"id","price":["price","amount"],"name":"name"}', hint: 'Must map id and price.' },
       { key: 'catalogWindow', label: 'Selling window (JSON)', placeholder: '{"type":"drive","openUtcHour":4,"closeUtcHour":16,"label":"10am-10pm BD","noun":"Drive packages"}', hint: 'Hours in UTC. Leave empty to sell around the clock.' },
       { key: 'catalogRequestTemplate', label: 'Catalogue request body (JSON)', placeholder: '{"operator":"{{operator}}","type":"{{type}}"}', has: 'hasCatalogRequestTemplate' },
+      { key: 'catalogQueryTemplate', label: 'Catalogue query (JSON)', placeholder: '{"product_code":"{{operator}}","account_number":"{{account}}"}', hint: 'For a catalogue fetched with GET. {{account}} is the customer\u2019s own number.' },
+      { key: 'catalogPerAccount', label: 'Priced per phone number?', placeholder: 'true or false', hint: 'true when the provider personalises plans to the number. The number then becomes required, and no answer is ever reused for another number.' },
+      { key: 'catalogOperatorCodes', label: 'Operator product codes (JSON)', placeholder: '{"Hotlink":"HI","CelcomDigi":["CEL","DI"]}', hint: 'Which product code each operator\u2019s plans come from. A list where one operator could be more than one product - every code is asked and the plan keeps the one that answered. An operator left out keeps its built-in package list.' },
     ],
   },
   { title: 'Notes', fields: [{ key: 'notes', label: 'Notes', hint: 'For whoever configures this next.' }] },
@@ -126,7 +129,10 @@ const IIMMPACT_DEFAULTS = {
 // from /v2/product-list rather than guessed here.
 const IIMMPACT_BODIES = {
   Recharge: { refid: '{{requestId}}', product: '{{operator}}', account: '{{phone}}', amount: '{{amount}}' },
-  Internet: { refid: '{{requestId}}', product: '{{operator}}', account: '{{phone}}', amount: '{{amount}}', extras: { subproduct_code: '{{packageId}}' } },
+  // operatorCode, not operator: for a per-number plan the server resolves which
+  // product the plan was actually found under, and {{operator}} is the display
+  // name the customer picked ('CelcomDigi'), not a product code.
+  Internet: { refid: '{{requestId}}', product: '{{operatorCode}}', account: '{{phone}}', amount: '{{amount}}', extras: { subproduct_code: '{{packageId}}' } },
   'Recharge PIN': { refid: '{{requestId}}', product: '{{operator}}', account: '{{phone}}', amount: '{{amount}}' },
   'Bill Payment': { refid: '{{requestId}}', product: '{{provider}}', account: '{{accountNumber}}', amount: '{{amount}}' },
 };
@@ -170,10 +176,10 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
     }
     if (provider) {
       const next = { ...provider };
-      for (const key of ['catalogTypes', 'catalogItemMap', 'catalogWindow']) next[key] = toText(provider[key]);
+      for (const key of ['catalogTypes', 'catalogItemMap', 'catalogWindow', 'catalogQueryTemplate', 'catalogOperatorCodes', 'catalogPerAccount']) next[key] = toText(provider[key]);
       setForm(next);
       // Open the catalogue section straight away when there is something in it.
-      setShowCatalog(Boolean(provider.catalogPath || provider.catalogPreset));
+      setShowCatalog(Boolean(provider.catalogPath || provider.catalogPreset || provider.catalogPerAccount));
       return;
     }
     setForm({
@@ -194,9 +200,16 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
     const body = service === 'Bill Payment' && String(f.name || '').toLowerCase().includes('jompay')
       ? IIMMPACT_JOMPAY_BODY
       : (IIMMPACT_BODIES[service] || IIMMPACT_BODIES.Recharge);
+    // Only the Internet record gets the per-number catalogue: it is what turns
+    // the package step into "plans available on this number". Every other
+    // feature is a plain charge with no catalogue to browse.
+    const catalogue = service === 'Internet'
+      ? { catalogPreset: 'iimmpact-subproducts', catalogPath: '/v2/subproducts', catalogMethod: 'GET', catalogPerAccount: 'true' }
+      : {};
     return {
       ...f,
       ...IIMMPACT_DEFAULTS,
+      ...catalogue,
       // Never clobber a name the operator already chose, or the preset would
       // rename "iimmpact JomPAY" back to "iimmpact" and break the JomPAY body
       // choice above on the next tap.

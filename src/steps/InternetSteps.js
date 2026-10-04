@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { countries, rechargeOperators } from '../data/countries';
 import { getMergedPackages } from '../utils/internetPackages';
+import { resolvePackageSource } from '../utils/packageSource';
 import { getOperatorBrand } from '../data/operatorBrand';
 import { FormLabel, Grid3, OperatorCard, FormInput, SummaryCard } from '../components/ui';
 import PackagePicker from '../components/PackagePicker';
@@ -53,6 +54,36 @@ export default function InternetStep({ step }) {
     return () => { alive = false; };
   }, [serviceData.country, serviceData.operator, step]);
 
+  // Plans the provider resolves for THIS number, where one does that.
+  //
+  // `null` means "not asked yet or not offered here" and is what keeps the
+  // built-in package list showing for every operator and country that works the
+  // old way. An empty array is a different answer - the provider was asked
+  // about this number and had nothing - and says so on screen rather than
+  // quietly falling back to a list this number may not be eligible for.
+  const [perNumberPlans, setPerNumberPlans] = useState(null);
+  const [plansLoading, setPlansLoading] = useState(false);
+  const [plansError, setPlansError] = useState('');
+  const phone = String(serviceData.phone || '').trim();
+  const operator = serviceData.operator || '';
+  useEffect(() => {
+    let alive = true;
+    if (step !== 3 || serviceData.country === 'BD' || !serviceData.country || !operator || !phone) {
+      setPerNumberPlans(null);
+      return () => { alive = false; };
+    }
+    setPlansLoading(true); setPlansError('');
+    apiProviderService.listProviderDataPlans({ service: 'Internet', country: serviceData.country, operator, phone })
+      .then(({ plans, supported }) => { if (alive) setPerNumberPlans(supported ? plans : null); })
+      // A failure here must NOT fall through to the built-in list: that list is
+      // not what this number was quoted from, and the server would refuse the
+      // order anyway once a per-number catalogue is configured. Saying so is
+      // the only honest option.
+      .catch((e) => { if (alive) { setPerNumberPlans(null); setPlansError(e?.message || 'Unable to load the plans for this number.'); } })
+      .finally(() => { if (alive) setPlansLoading(false); });
+    return () => { alive = false; };
+  }, [serviceData.country, operator, phone, step]);
+
   if (step === 0) {
     return <View><FormLabel>Select Country</FormLabel><Grid3>{countries.map((c) => <CountrySelectCard key={c.code} code={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr, operator: null, package: null, amount: null }); nextStep(); }} />)}</Grid3></View>;
   }
@@ -67,7 +98,14 @@ export default function InternetStep({ step }) {
   }
 
   if (step === 3) {
-    const packages = serviceData.country === 'BD' ? successTopUpPackages : getMergedPackages(serviceData.operator, internetPricing[serviceData.operator]);
+    const source = resolvePackageSource({
+      country: serviceData.country,
+      perNumber: perNumberPlans,
+      perNumberError: plansError,
+      successTopUp: successTopUpPackages,
+      builtIn: getMergedPackages(serviceData.operator, internetPricing[serviceData.operator]),
+    });
+    const packages = source.packages;
     const cur = serviceData.currency || 'MYR';
     const isForeign = serviceData.country && serviceData.country !== 'MY';
     // One number, in the customer's own wallet currency, from the server. The
@@ -82,17 +120,28 @@ export default function InternetStep({ step }) {
     return (
       <View>
         {!!packageLoading && <FormLabel>Loading Success TopUp packages…</FormLabel>}
+        {!!plansLoading && <FormLabel>Checking which plans this number can buy…</FormLabel>}
         {!!packageError && <FormLabel>{packageError}</FormLabel>}
+        {!!plansError && <FormLabel>{plansError}</FormLabel>}
         {!packageLoading && !packageError && serviceData.country === 'BD' && packages.length === 0 && <FormLabel>No internet packages are available for this operator right now. Try another operator, or use Recharge for a plain top-up.</FormLabel>}
-        {!packageLoading && !packageError && (
-          <PackagePicker
-            packages={packages}
-            label="Select Package"
-            selectedName={serviceData.package}
-            priceOf={shownPrice}
-            currencyOf={shownCurrency}
-            onSelect={(p) => updateServiceData({ package: p.name, packageId: p.id, amount: p.price })}
-          />
+        {!plansLoading && !!source.emptyForNumber && <FormLabel>This number has no data plans available right now. Try Recharge for a plain top-up.</FormLabel>}
+        {!packageLoading && !packageError && !plansLoading && !source.blocked && (
+          <>
+            {!!source.perNumber && packages.length > 0 && <FormLabel>Plans available on {phone}</FormLabel>}
+            <PackagePicker
+              packages={packages}
+              label="Select Package"
+              selectedName={serviceData.package}
+              priceOf={shownPrice}
+              currencyOf={shownCurrency}
+              // operatorCode rides along so the order is placed against the
+              // product this plan actually came from. The server re-resolves it
+              // either way - it is not taken on trust - but sending it keeps a
+              // provider record that templates {{operatorCode}} working for
+              // operators that map to a single product.
+              onSelect={(p) => updateServiceData({ package: p.name, packageId: p.id, amount: p.price, operatorCode: p.productCode || '' })}
+            />
+          </>
         )}
         {!!selectedPackage && <SummaryCard totalLabel="Wallet deduction" totalValue={`${shownCurrency(selectedPackage)} ${Number(shownPrice(selectedPackage)).toFixed(2)}`} />}
       </View>

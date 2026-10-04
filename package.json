@@ -42,6 +42,7 @@
     "test:apicountries": "node scripts/test-api-countries.js",
     "test:ewallet": "node scripts/test-ewallet-reload.js",
     "test:iimmpact": "node scripts/test-iimmpact.js",
+    "test:dataplans": "node scripts/test-data-plans.js",
     "audit:tiles": "node scripts/audit-tile-destinations.js",
     "test:auth": "node scripts/test-profile-gate.js",
     "publish:ota": "node scripts/publish-ota.js",

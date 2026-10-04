@@ -22,6 +22,10 @@ const DEFAULT_LIMITS = {
   testApiProvider: { max: 5, windowMinutes: 15 },
   migrateApiProviderSecrets: { max: 2, windowMinutes: 60 },
   saveApiProvider: { max: 20, windowMinutes: 60 },
+  // One outbound provider call per product code, on a screen a customer can
+  // reopen as often as they like. Generous enough to re-check a few numbers,
+  // low enough that a loop stops being free.
+  listProviderDataPlans: { max: 40, windowMinutes: 10 },
   deleteApiProvider: { max: 10, windowMinutes: 60 },
 };
 

@@ -12,6 +12,10 @@ const { checkIpAnomaly } = require('./anomalyService');
 const apiProviderService = require('./apiProviderService');
 const { executeConfiguredApi } = apiProviderService;
 const catalog = require('./successTopUpCatalog');
+// The generic engine, used directly for everything that is not Success TopUp.
+// Going through the wrapper above would pin providerName to 'Success TopUp'
+// and look for a Malaysian plan in a Bangladeshi provider's catalogue.
+const providerCatalog = require('./providerCatalog');
 const { getWalletCurrencyAndFx, baseToWallet } = require('./walletCurrencyService');
 
 const DEFAULT_PRICING={dealerEarningPercent:1.5,webviewAccessCost:2,webviewSubmitCost:2,paymentSuccessCost:3,webviewAccessWindowHours:1,notepadCost:0,myDocumentsCost:0,salaryOtCost:0,moduleSubscriptionDays:30};
@@ -83,15 +87,73 @@ async function resolvePackagePricing(db, service, payload) {
   const label = PACKAGE_SERVICE_LABELS[service];
   if (!label) return payload;
   const raw = (payload && payload.raw) || {};
-  if (String(raw.country || '').trim().toUpperCase() !== 'BD') return payload;
-  const packageId = String(raw.packageId || raw.package_id || '').trim();
+  // packageCostAmount is what gets SENT to the provider as the amount, and it
+  // is the server's to set. It is in the allowlist because it has to survive
+  // onto the transaction, which also means a client can put one there - so
+  // whatever arrived is dropped here, before anything can read it. Every
+  // return below either sets it from a resolved catalogue or leaves it absent.
+  const { packageCostAmount: _clientCost, ...clean } = raw;
+  const base = { ...payload, raw: clean };
+  const country = String(clean.country || '').trim().toUpperCase();
+  const operatorName = String(clean.operator || '').trim();
+
+  if (country !== 'BD') {
+    // Outside Bangladesh a package order used to be priced entirely by the
+    // client: recompute() takes raw.amount at face value for MY. That was only
+    // ever safe because the provider rejects a nonsense denomination. A
+    // per-number catalogue makes the price a server fact, so where one serves
+    // this country and operator the order is re-resolved against it - against
+    // the SAME number, because the list it came from was personalised to that
+    // number and another one answers differently.
+    const perAccount = await providerCatalog.perAccountCatalogFor(db, label, country, operatorName);
+    if (!perAccount) return base;
+    const packageId = String(clean.packageId || clean.package_id || '').trim();
+    if (!packageId) throw new HttpsError('invalid-argument', 'Please select a package before placing this order.');
+    const account = apiProviderService.nationalAccountNumber(clean.phone, country);
+    if (!account) throw new HttpsError('invalid-argument', 'A mobile number is required for this package.');
+
+    const found = await providerCatalog.resolveOrderPackage({
+      db,
+      service: label,
+      operatorName,
+      packageId,
+      account,
+      country,
+      strictCountry: true,
+      fetchCatalog: apiProviderService.fetchProviderCatalog,
+    });
+    if (found.error === 'catalog-unreachable') throw new HttpsError('unavailable', 'Package prices could not be confirmed just now. Please try again.');
+    if (found.error === 'package-hidden') throw new HttpsError('failed-precondition', 'That package is no longer offered. Please choose another.');
+    if (found.error) throw new HttpsError('failed-precondition', 'That package is no longer available on this number. Please choose another.');
+    const submitted = Number(clean.amount);
+    if (Number.isFinite(submitted) && Math.abs(submitted - found.sellAmount) > 0.01) {
+      throw new HttpsError('failed-precondition', 'This package price has changed - please review your order.');
+    }
+    return {
+      ...base,
+      amount: undefined,
+      total: undefined,
+      raw: {
+        ...clean,
+        amount: found.sellAmount,
+        packageCostAmount: found.costAmount,
+        // The product the plan was actually found under, not the one the
+        // client named: with CelcomDigi asking both CEL and DI, the client's
+        // claim is a guess and this is the answer.
+        operatorCode: found.productCode || '',
+        package: found.package.name || clean.package || '',
+      },
+    };
+  }
+
+  const packageId = String(clean.packageId || clean.package_id || '').trim();
   if (!packageId) throw new HttpsError('invalid-argument', 'Please select a package before placing this order.');
 
   const resolved = await catalog.resolveOrderPackage({
     db,
     service: label,
-    operatorName: String(raw.operator || '').trim(),
-    operatorCode: String(raw.operatorCode || '').trim(),
+    operatorName,
+    operatorCode: String(clean.operatorCode || '').trim(),
     packageId,
     fetchCatalog: apiProviderService.fetchSuccessTopUpCatalog,
   });
@@ -103,24 +165,28 @@ async function resolvePackagePricing(db, service, payload) {
 
   // The client's amount is only used to tell the customer the price moved. The
   // server's number is the one that gets charged either way.
-  const submitted = Number(raw.amount);
+  const submitted = Number(clean.amount);
   if (Number.isFinite(submitted) && Math.abs(submitted - resolved.sellAmount) > 0.01) {
     throw new HttpsError('failed-precondition', 'This package price has changed - please review your order.');
   }
   return {
-    ...payload,
+    ...base,
     amount: undefined,
     total: undefined,
     raw: {
-      ...raw,
+      ...clean,
       amount: resolved.sellAmount,
       packageCostAmount: resolved.costAmount,
-      package: resolved.package.name || raw.package || '',
+      package: resolved.package.name || clean.package || '',
     },
   };
 }
 
 function active(account){return !!account&&account.suspended!==true&&account.inactive!==true&&account.disabled!==true&&account.active!==false&&account.mergedInto==null;}
+
+// Exported so a test can hold it against apiProviderService's quote rate: the
+// price quoted and the price charged must use the same number for a country.
+exports._test = { amountToPoints, recompute, resolvePackagePricing };
 
 exports.approveTopup=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>{const uid=requireAuth(r),db=admin.firestore(),caller=await getProfile(db,uid);if(!caller||!['admin','superadmin'].includes(caller.role))throw new HttpsError('permission-denied','Only an admin can approve top-ups.');const{id}=r.data||{};const topupId=id||r.data?.topupId;if(!topupId)throw new HttpsError('invalid-argument','topupId is required.');const ref=db.collection('topups').doc(topupId);try{const out=await db.runTransaction(async tx=>{const s=await tx.get(ref);if(!s.exists)throw new HttpsError('not-found','That top-up request does not exist.');const t=s.data();if(t.status!=='pending')throw new HttpsError('failed-precondition','That request has already been reviewed.');const uref=db.collection('users').doc(t.userId),u=await tx.get(uref);if(!u.exists)throw new HttpsError('not-found','That user account no longer exists.');const user=u.data();if(!active(user))throw new HttpsError('failed-precondition','The recipient account is not active.');const pts=Number(t.points||t.amount||0),bal=Number(user.walletBalance||0);if(!Number.isFinite(pts)||pts<=0||!Number.isFinite(bal)||bal<0)throw new HttpsError('invalid-argument','Invalid wallet amount.');const next=bal+pts;if(!Number.isSafeInteger(Math.round(next*100)))throw new HttpsError('failed-precondition','Wallet balance is invalid.');tx.update(uref,{walletBalance:next});tx.update(ref,{status:'approved',approvedBy:uid,updatedAt:admin.firestore.FieldValue.serverTimestamp()});return{userId:t.userId,points:pts};});await logAudit({action:'topup_approved',targetUid:out.userId,performedBy:uid,performedByRole:caller.role,details:{topupId,points:out.points}});return{approved:true};}catch(e){if(e instanceof HttpsError)throw e;await logServerError('approveTopup',e,{userId:uid});throw new HttpsError('internal','Could not approve this top-up.');}});
 exports.rejectTopup=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>{const uid=requireAuth(r),db=admin.firestore(),caller=await getProfile(db,uid);if(!caller||!['admin','superadmin'].includes(caller.role))throw new HttpsError('permission-denied','Only an admin can reject top-ups.');const{topupId,reason}=r.data||{};if(!topupId)throw new HttpsError('invalid-argument','topupId is required.');const ref=db.collection('topups').doc(topupId);const s=await ref.get();if(!s.exists)throw new HttpsError('not-found','That top-up request does not exist.');if(s.data().status!=='pending')throw new HttpsError('failed-precondition','That request has already been reviewed.');await ref.update({status:'rejected',rejectReason:typeof reason==='string'?reason.trim().slice(0,500):'',approvedBy:uid,updatedAt:admin.firestore.FieldValue.serverTimestamp()});return{rejected:true};});

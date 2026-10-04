@@ -274,6 +274,30 @@ function validateCatalog(data) {
     }
     out.catalogItemMap = map;
   }
+  if (data.catalogQueryTemplate !== undefined && data.catalogQueryTemplate !== null && data.catalogQueryTemplate !== '') {
+    out.catalogQueryTemplate = validateTemplate(data.catalogQueryTemplate, 'Catalogue query template');
+  }
+  if (data.catalogPerAccount !== undefined && data.catalogPerAccount !== null && data.catalogPerAccount !== '') {
+    out.catalogPerAccount = data.catalogPerAccount === true || data.catalogPerAccount === 'true';
+  }
+  // Operator display name -> the provider's product code, or a list of them
+  // when one operator could be more than one product. Validated here because a
+  // code that is not a plain token would end up on a URL.
+  if (data.catalogOperatorCodes !== undefined && data.catalogOperatorCodes !== null && data.catalogOperatorCodes !== ''
+      && Object.keys(asObject(data.catalogOperatorCodes)).length > 0) {
+    const map = validateTemplate(data.catalogOperatorCodes, 'Catalogue operator codes', 4000);
+    const cleaned = {};
+    for (const [operator, codes] of Object.entries(map)) {
+      const list = (Array.isArray(codes) ? codes : [codes]).map((c) => cleanString(c, 40)).filter(Boolean);
+      if (!list.length) throw new HttpsError('invalid-argument', `Catalogue operator codes for "${operator}" must name at least one product code.`);
+      if (list.some((c) => !/^[A-Za-z0-9_.-]+$/.test(c))) {
+        throw new HttpsError('invalid-argument', `Catalogue operator codes for "${operator}" must be plain product codes.`);
+      }
+      if (list.length > 4) throw new HttpsError('invalid-argument', `At most 4 product codes for "${operator}" - each one is another request per listing.`);
+      cleaned[operator] = list;
+    }
+    out.catalogOperatorCodes = cleaned;
+  }
   if (data.catalogWindow !== undefined && data.catalogWindow !== null) {
     const w = validateTemplate(data.catalogWindow, 'Catalogue selling window', 2000);
     const open = Number(w.openUtcHour);
@@ -417,6 +441,32 @@ function asObject(value) { if (value && typeof value === 'object' && !Array.isAr
 function getPath(obj, path) { return path ? path.split('.').reduce((v,k) => v == null ? undefined : v[k], obj) : undefined; }
 
 /**
+ * The figure the PROVIDER is told to top up, which is not the one the customer
+ * pays.
+ *
+ * A package order has two numbers. The sell price is what leaves the wallet;
+ * the catalogue figure - Success TopUp's package price, iimmpact's denomination
+ * - is what the provider's own request must carry. Sending the sell price
+ * instead buys a different product or is refused outright, and the difference
+ * is our margin, so getting this backwards is visible only as failed orders.
+ *
+ * packageCostAmount being present is what makes it the server's figure:
+ * resolvePackagePricing drops whatever the client sent before setting its own,
+ * so there is no client value left here to trust. It used to be read only for
+ * Bangladesh; any resolved catalogue now gets the same treatment.
+ */
+function providerAmountFor({ raw, payload, isSuccessTopUpBd }) {
+  const r = raw || {};
+  const packageCost = Number(r.packageCostAmount);
+  if (Number.isFinite(packageCost) && packageCost > 0) return packageCost;
+  // The legacy orders differ and are kept: a Success TopUp Bangladesh order
+  // reads raw first, everything else reads the payload first.
+  return isSuccessTopUpBd
+    ? (r.amount ?? payload?.amount ?? '')
+    : (payload?.amount ?? r.amount ?? '');
+}
+
+/**
  * What a provider's reply means: 'completed', 'processing' or 'rejected'.
  *
  * Pure, and separate from the request, because it is the decision that moves
@@ -517,9 +567,33 @@ const PACKAGE_CHARGE_KINDS = { Internet: 'internet', 'Offer Packs': 'offerpacks'
  * Returns null for a package it cannot price, so the caller can fall back to
  * showing the catalogue price rather than a wrong one or a blank.
  */
+const QUOTE_RATE_KEYS = { BD: 'rechargeBD', IN: 'rechargeIN', NP: 'rechargeNP', ID: 'rechargeID', PK: 'rechargePK', MM: 'rechargeMM', PH: 'rechargePH', KH: 'rechargeKH' };
+
+/**
+ * The exchange rate the CHARGE would use for one country.
+ *
+ * It must agree with walletService's amountToPoints exactly, because this
+ * quotes the price a customer is shown and that computes the price they are
+ * charged. Malaysia is the one that bit: a MYR price is already in wallet
+ * currency and amountToPoints says so by returning a rate of 1, while this had
+ * no MY entry at all and answered NaN - so every Malaysian price quoted as
+ * null. Nothing asked it for one until now, so the only cost was no quote.
+ * With a Malaysian catalogue it is worse than that: the picker falls back to
+ * the raw catalogue price while the wallet is still debited through the
+ * per-unit markup, the tier discount and the wallet FX, and the customer is
+ * shown one number and charged another.
+ */
+function quoteRateFor(country, rates) {
+  const code = String(country || '').toUpperCase();
+  if (code === 'MY') return 1;
+  const key = QUOTE_RATE_KEYS[code];
+  return key ? Number((rates || {})[key]) : NaN;
+}
+exports._test_quoteRateFor = quoteRateFor;
+
 async function customerWalletQuoter(db, uid, service, country) {
   const chargeKind = PACKAGE_CHARGE_KINDS[service];
-  const rateKey = { BD: 'rechargeBD', IN: 'rechargeIN', NP: 'rechargeNP', ID: 'rechargeID', PK: 'rechargePK', MM: 'rechargeMM', PH: 'rechargePH', KH: 'rechargeKH' }[String(country || 'BD').toUpperCase()];
+  const wantedCountry = String(country || 'BD').toUpperCase();
   try {
     const [userSnap, pricingSnap, ratesSnap, settings] = await Promise.all([
       db.collection('users').doc(uid).get(),
@@ -529,17 +603,18 @@ async function customerWalletQuoter(db, uid, service, country) {
     ]);
     const profile = userSnap.exists ? (userSnap.data() || {}) : {};
     const pricing = pricingSnap.exists ? (pricingSnap.data() || {}) : {};
-    const rate = Number((ratesSnap.exists ? (ratesSnap.data() || {}) : {})[rateKey]);
+    const rates = ratesSnap.exists ? (ratesSnap.data() || {}) : {};
     const fx = await getWalletCurrencyAndFx(db, profile);
     const unitKey = walletPricing.PER_UNIT_PRICE_KEYS[chargeKind];
     const unitPrice = unitKey ? walletPricing.safePrice(pricing, unitKey, profile.role) : 1;
     const discountPercent = progressionService.discountPercentFromSettings(settings, profile.tier);
     return (localPrice) => {
       const n = Number(localPrice);
-      if (!Number.isFinite(n) || n <= 0 || !Number.isFinite(rate) || rate <= 0) return null;
+      const effectiveRate = quoteRateFor(wantedCountry, rates);
+      if (!Number.isFinite(n) || n <= 0 || !Number.isFinite(effectiveRate) || effectiveRate <= 0) return null;
       // Rounded to the cent before the markup, exactly as amountToPoints does
       // in the charge path - rounding later would differ by a cent.
-      const baseAmount = Math.round((n / rate) * 100) / 100;
+      const baseAmount = Math.round((n / effectiveRate) * 100) / 100;
       try {
         const { walletCost, currency } = walletPricing.walletChargeFor({ baseAmount, unitPrice, discountPercent, fx });
         return { walletPrice: walletCost, walletCurrency: currency };
@@ -591,12 +666,34 @@ function resolveSuccessTopUpOperator(value) {
 // treatment. What stays here is the part that must not be configurable - the
 // public-hostname assertion and the DNS pinning that stop a provider URL being
 // pointed at an internal address.
-async function catalogHttpsRequest(url, init, config) {
+async function catalogHttpsRequest(url, init, config, provider) {
   await assertPublicHostname(url.hostname);
   const addresses = await dns.lookup(url.hostname, { all: true, verbatim: true });
   const pinned = addresses.find((a) => !isPrivateIp(a.address));
   if (!pinned) throw new Error('Provider hostname resolved to an invalid address.');
-  const response = await requestHttpsPinned(url, init, pinned);
+  // Catalogue requests authenticate the same way charge requests do.
+  //
+  // Until now every catalogue provider put its credentials in the request body
+  // (Success TopUp's successtopup_key/secret), so this function needed none and
+  // had none. A signed API has nowhere to put them but the headers, and an
+  // unsigned catalogue call against one is simply a 401 - the packages would
+  // never load and nothing would say why.
+  //
+  // Signed over the URL and body as they will actually be sent, which is why
+  // this is here rather than anywhere earlier: the query is already on the URL.
+  const headers = { ...(init && init.headers) };
+  if (provider && provider.authType === 'iimmpactHmac') {
+    Object.assign(headers, signIimmpactRequest({
+      apiKey: provider.apiKey,
+      secretKey: provider.secretKey,
+      method: init && init.method,
+      url,
+      body: init && init.body,
+    }));
+  } else if (provider) {
+    Object.assign(headers, providerAuth(provider));
+  }
+  const response = await requestHttpsPinned(url, { ...init, headers }, pinned);
   const text = await response.text();
   if (!response.ok) throw new Error(`${config.errorLabel} catalogue request failed.`);
   try {
@@ -607,8 +704,8 @@ async function catalogHttpsRequest(url, init, config) {
 }
 
 /** Fetch any provider's catalogue, normalised. */
-function fetchProviderCatalog(provider, operator, type) {
-  return providerCatalog.fetchCatalog(provider, { operator, type }, { request: catalogHttpsRequest });
+function fetchProviderCatalog(provider, operator, type, account) {
+  return providerCatalog.fetchCatalog(provider, { operator, type, account }, { request: catalogHttpsRequest });
 }
 
 // Success TopUp's operator codes are still validated here, because they are
@@ -732,9 +829,17 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   // live catalogue. raw.amount is the SELL price and must never reach the
   // provider: /api/recharge checks amount against package_id.
   const packageCost = Number(raw.packageCostAmount);
-  const providerAmount = isSuccessTopUpBd
-    ? (Number.isFinite(packageCost) && packageCost > 0 ? packageCost : (raw.amount ?? payload?.amount ?? ''))
-    : (payload?.amount ?? raw.amount ?? '');
+  //
+  // No longer only Success TopUp's: ANY order whose price the server resolved
+  // from a catalogue sends the catalogue's own figure. iimmpact's guide says
+  // the same thing in its own words - send the selected plan's denomination as
+  // the amount - and sending the customer's price instead buys a different
+  // product or is refused.
+  //
+  // packageCostAmount being present is what makes it server-resolved:
+  // resolvePackagePricing drops whatever the client sent before setting its
+  // own, so there is no client value left for this to trust.
+  const providerAmount = providerAmountFor({ raw, payload, isSuccessTopUpBd });
   // The client's own fields FIRST, so nothing it sends can overwrite a value
   // this server worked out. They used to come last, and last wins:
   //
@@ -899,7 +1004,7 @@ exports.executeConfiguredApi = executeConfiguredApi;
 exports.resolveExecutionMode = resolveExecutionMode;
 exports.providersForService = providersForService;
 exports.COUNTRY_CODES = COUNTRY_CODES;
-exports._test = { isPrivateIp, resolveExecutionMode, pinnedLookup, validateBaseUrl, validateHeaders, validateTemplate, getPath, render, providerAuth, validate, matchesStatus, classifyResponse };
+exports._test = { isPrivateIp, resolveExecutionMode, pinnedLookup, validateBaseUrl, validateHeaders, validateTemplate, getPath, render, providerAuth, validate, matchesStatus, classifyResponse, providerAmountFor };
 
 exports.testApiProvider = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
@@ -1014,6 +1119,102 @@ exports.listSuccessTopUpDrives = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, 
 });
 
 /**
+ * A phone number in the national form a provider expects: digits, leading zero,
+ * no country code.
+ *
+ * iimmpact's own examples are national ("0178855286"), and the number is what
+ * the plan list is resolved against - so a number sent in a different shape
+ * does not merely fail, it answers for a different subscriber or for none.
+ */
+const DIAL_CODES = { MY: '60', BD: '880', IN: '91', NP: '977', ID: '62', PK: '92', MM: '95', PH: '63', KH: '855' };
+function nationalAccountNumber(phone, country) {
+  let digits = String(phone || '').replace(/\D/g, '');
+  const dial = DIAL_CODES[String(country || '').toUpperCase()];
+  if (dial && digits.startsWith(`00${dial}`)) digits = digits.slice(dial.length + 2);
+  else if (dial && digits.startsWith(dial) && digits.length > dial.length + 6) digits = digits.slice(dial.length);
+  if (!digits) return '';
+  return digits.startsWith('0') ? digits : `0${digits}`;
+}
+exports.nationalAccountNumber = nationalAccountNumber;
+
+/**
+ * The data plans one phone number is eligible for.
+ *
+ * Unlike listSuccessTopUpDrives this is not a price list: the provider
+ * personalises the answer per number, so the request carries the number and the
+ * answer is never reused for another one. Nothing is cached.
+ *
+ * An operator can map to more than one product code - CelcomDigi is Celcom and
+ * Digi under one brand while the provider still sells CEL and DI separately -
+ * so every code is asked and each plan carries the one that answered for it.
+ * A code the number is not on simply returns nothing, which is the provider
+ * resolving the ambiguity rather than us guessing at it.
+ */
+exports.listProviderDataPlans = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  const db = admin.firestore();
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
+  const service = String(request.data?.service || 'Internet').trim();
+  if (!SUCCESS_TOPUP_PACKAGE_SERVICES.includes(service)) {
+    throw new HttpsError('invalid-argument', `Package listings are available for ${SUCCESS_TOPUP_PACKAGE_SERVICES.join(', ')} only.`);
+  }
+  const country = String(request.data?.country || '').trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(country)) throw new HttpsError('invalid-argument', 'A country is required.');
+  const operatorName = cleanString(request.data?.operator, 100);
+  if (!operatorName) throw new HttpsError('invalid-argument', 'An operator is required.');
+
+  const provider = await catalog.readProvider(db, service, { country });
+  // Not an error: most country/operator pairs have no per-number catalogue and
+  // the screen simply keeps the package list it already had.
+  if (!provider || !catalog.isPerAccountCatalog(provider)) return { plans: [], supported: false };
+  const codes = catalog.productCodesFor(provider, operatorName);
+  if (!codes.length) return { plans: [], supported: false };
+  if (!provider.apiKey || !provider.secretKey) throw new HttpsError('failed-precondition', 'The package provider is not configured.');
+
+  const account = nationalAccountNumber(request.data?.phone, country);
+  if (account.length < 8 || account.length > 15) {
+    throw new HttpsError('invalid-argument', 'Please enter a valid mobile number to see the plans available on it.');
+  }
+
+  // One outbound call per product code, so this is rate limited like the other
+  // provider-touching callables rather than left open to a loop.
+  await checkVelocity(db, request.auth.uid, 'listProviderDataPlans', { ip: getClientIp(request) });
+
+  const byId = new Map();
+  const failures = [];
+  for (const code of codes) {
+    try {
+      for (const pkg of await fetchProviderCatalog(provider, code, undefined, account)) {
+        // First code wins a duplicate id, which keeps the list stable rather
+        // than reordering on whichever request came back last.
+        if (!byId.has(pkg.id)) byId.set(pkg.id, pkg);
+      }
+    } catch (error) {
+      failures.push(String(error?.message || error));
+    }
+  }
+  // Every code failed and none answered: that is the provider being
+  // unreachable, not the number having no plans, and saying the latter would
+  // send someone looking for a fault on their own line.
+  if (!byId.size && failures.length === codes.length) {
+    throw new HttpsError('unavailable', String(failures[0] || 'Unable to load plans for this number.').slice(0, 500));
+  }
+
+  const pricingDoc = await catalog.readPricingDoc(db, operatorName);
+  const quote = await customerWalletQuoter(db, request.auth.uid, service, country);
+  const plans = [...byId.values()]
+    .filter((pkg) => !catalog.isHidden(pkg, pricingDoc))
+    .map((pkg) => {
+      // Superadmin's sell price is what the customer sees and is charged. The
+      // catalogue denomination stays on the server: it is what the provider
+      // must be sent, and it is our margin.
+      const price = catalog.sellPriceFor(pkg, pricingDoc);
+      const { price: _denomination, ...rest } = pkg;
+      return { ...rest, price, ...(quote(price) || { walletPrice: null, walletCurrency: '' }) };
+    });
+  return { plans, supported: true };
+});
+
+/**
  * Superadmin-only: the catalogue WITH its cost price, so a price can be set
  * against something. Customers get listSuccessTopUpDrives, which never
  * exposes cost.
@@ -1101,6 +1302,9 @@ exports.listApiProviders = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async 
       catalogTypes: Array.isArray(x.catalogTypes) ? x.catalogTypes : [],
       services: Array.isArray(x.services) && x.services.length ? x.services : [x.service || ''].filter(Boolean),
       catalogItemMap: x.catalogItemMap || null,
+      catalogQueryTemplate: x.catalogQueryTemplate || null,
+      catalogPerAccount: x.catalogPerAccount === true,
+      catalogOperatorCodes: x.catalogOperatorCodes || null,
       catalogWindow: x.catalogWindow || null,
       hasCatalogRequestTemplate: Boolean(x.catalogRequestTemplate && Object.keys(x.catalogRequestTemplate).length),
     };

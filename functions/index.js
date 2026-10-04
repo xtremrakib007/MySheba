@@ -113,6 +113,7 @@ exports.saveServiceApiSettings = require('./apiProviderService').saveServiceApiS
 // button and the Bangladesh internet package list.
 exports.testApiProvider = require('./apiProviderService').testApiProvider;
 exports.listSuccessTopUpDrives = require('./apiProviderService').listSuccessTopUpDrives;
+exports.listProviderDataPlans = require('./apiProviderService').listProviderDataPlans;
 exports.listSuccessTopUpCatalogForAdmin = require('./apiProviderService').listSuccessTopUpCatalogForAdmin;
 exports.getSuccessTopUpBalance = require('./apiProviderService').getSuccessTopUpBalance;
 exports.listApiWebhooks = require('./apiWebhookService').listApiWebhooks;

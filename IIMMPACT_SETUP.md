@@ -133,13 +133,69 @@ the provider name contains "jompay":
 So name that record something like **iimmpact JomPAY** and give it the
 Bill Payment feature.
 
+## 6. Per-number data plans (Malaysia internet)
+
+iimmpact personalises mobile-data plans per phone number, so two customers on
+the same operator get different lists. The Internet step now asks
+`GET /v2/subproducts` for the number the customer typed and offers what comes
+back, under the heading **Plans available on 01…**.
+
+Tapping **Fill iimmpact defaults** on an **Internet** provider record sets the
+catalogue up: path `/v2/subproducts`, method `GET`, **Priced per phone
+number** `true`, and the query `{"product_code":"{{operator}}",
+"account_number":"{{account}}"}`.
+
+**Operator product codes** maps each operator to the iimmpact product its plans
+come from. The default:
+
+| Operator | Product code |
+| --- | --- |
+| Celcom | `CEL` |
+| CelcomDigi | `CEL`, `DI` |
+| Hotlink | `HI` |
+| U Mobile | `UMI` |
+| Tunetalk | `TI` |
+| XOX | `OXI` |
+| Yes | `YESI` |
+| Unifi | *(none — iimmpact publishes no internet product for it)* |
+
+**CelcomDigi is deliberately two codes.** Celcom and Digi merged under one brand
+but iimmpact still sells `CEL` and `DI` separately, and our prefix table answers
+"CelcomDigi" for 010/011/013/016/019 without knowing which half a number is on.
+Guessing one would offer a Celcom customer Digi's plans. Instead both are asked;
+because the catalogue is per-number the provider answers for only the one the
+number is actually on, and each plan keeps the code it came from so the order is
+placed against that product. Each extra code is one more request per listing, so
+the list is capped at four.
+
+An operator with no code keeps the built-in package list exactly as before —
+nothing regresses for Unifi, or for any country without such a provider.
+
+Two things to verify against a live call before going to production:
+
+* **The list path.** The preset reads the plans from `data`, inferred from
+  iimmpact's `data` envelope elsewhere. If the real response nests them further,
+  set **List path in the response** on the provider record — no deploy needed.
+  A wrong path does not fail silently: the error names the fields that did
+  arrive.
+* **The price field.** The preset reads `denomination` first, deliberately —
+  that is the face value and is what must be sent back as `amount`. `cost` is a
+  different number (what you pay) and sending it buys a different product.
+
+### Pricing and margin
+
+Set your sell price per plan in **Admin → Pricing**, keyed by the plan's
+subproduct code, exactly as for the Bangladesh catalogue. With no override the
+customer pays the denomination. The customer is charged the sell price; the
+provider is sent the denomination.
+
+The price is now resolved **on the server** at charge time, against the same
+number the plans were listed for. Before this, a Malaysian package order was
+priced by whatever the client sent — it was only ever safe because the provider
+rejects a nonsense denomination.
+
 ## Still to do
 
-* **Per-number data plans.** iimmpact personalises mobile-data plans per phone
-  number (`GET /v2/subproducts?product_code=…&account_number=…`), which is a
-  different shape from the one catalogue the app fetches today. Until that is
-  built, a Malaysian internet pack has to be sold as a fixed product rather
-  than from the customer's own eligible list.
 * **Bill presentment.** `GET /v2/bill-presentment` would show the outstanding
   amount before paying, and would catch an invalid account number before the
   charge. Not wired up.

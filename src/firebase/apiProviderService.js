@@ -7,6 +7,7 @@ const deleteFn = httpsCallable(functions, 'deleteApiProvider');
 const getModesFn = httpsCallable(functions, 'getServiceApiSettings');
 const saveModesFn = httpsCallable(functions, 'saveServiceApiSettings');
 const drivesFn = httpsCallable(functions, 'listSuccessTopUpDrives');
+const dataPlansFn = httpsCallable(functions, 'listProviderDataPlans');
 const testFn = httpsCallable(functions, 'testApiProvider');
 const adminCatalogFn = httpsCallable(functions, 'listSuccessTopUpCatalogForAdmin');
 const balanceFn = httpsCallable(functions, 'getSuccessTopUpBalance');
@@ -44,6 +45,21 @@ export async function testApiProvider(id) { return (await testFn({ id })).data; 
 // apiProviderService.listSuccessTopUpDrives resolved to undefined.
 export async function listSuccessTopUpDrives(operator, type, service = 'Internet', operatorName = '') {
   return (await drivesFn({ operator, type, service, operatorName })).data?.drives || [];
+}
+
+/**
+ * The data plans one number is eligible for, from the configured provider.
+ *
+ * `supported` is the answer to "does this country and operator have per-number
+ * plans at all", and it is false far more often than it is true - most pairs
+ * have no such provider and keep the package list they already had. It is
+ * returned rather than inferred from an empty list, because "this operator
+ * does not work this way" and "this number has no plans available" are
+ * different things to tell somebody.
+ */
+export async function listProviderDataPlans({ service = 'Internet', country, operator, phone }) {
+  const { data } = await dataPlansFn({ service, country, operator, phone });
+  return { plans: data?.plans || [], supported: data?.supported === true };
 }
 
 /** Superadmin only: the catalogue with cost, sell and hidden state per package. */
