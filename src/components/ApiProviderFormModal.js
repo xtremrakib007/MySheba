@@ -254,11 +254,20 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
       ...f,
       ...IIMMPACT_DEFAULTS,
       ...catalogue,
+      // One IIMMPACT account can serve several product families, so the preset
+      // configures the four requested API services together instead of making
+      // the operator duplicate the same credentials into four provider rows.
+      services: ['Recharge', 'Internet', 'Bill Payment', 'Entertainment'],
+      service: f.service || service,
+      // Keep Bangladesh out of this preset. MySheba routes Bangladesh to
+      // Success TopUp; every other supported country is selected explicitly.
+      // This avoids the "ALL" option accidentally including Bangladesh.
+      countries: ['MY', 'SG', 'ID', 'IN', 'PH', 'NP', 'PK', 'MM', 'KH'],
+      country: 'MY',
       // Never clobber a name the operator already chose, or the preset would
       // rename "iimmpact JomPAY" back to "iimmpact" and break the JomPAY body
       // choice above on the next tap.
       name: f.name || IIMMPACT_DEFAULTS.name,
-      service,
       requestTemplate: JSON.stringify(body),
     };
   });
