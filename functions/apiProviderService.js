@@ -1748,6 +1748,7 @@ exports.listApiProviders = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async 
       catalogPath: x.catalogPath || '',
       catalogMethod: x.catalogMethod || '',
       catalogListPath: x.catalogListPath || '',
+      catalogFieldId: x.catalogFieldId || '',
       catalogSuccessPath: x.catalogSuccessPath || '',
       catalogSuccessValue: x.catalogSuccessValue === undefined ? '' : x.catalogSuccessValue,
       catalogTypes: Array.isArray(x.catalogTypes) ? x.catalogTypes : [],
