@@ -85,6 +85,7 @@ const SECTIONS = [
       { key: 'catalogPreset', label: 'Preset', placeholder: 'success-topup', hint: 'Leave blank to match on the provider name.' },
       { key: 'catalogPath', label: 'Catalogue path', placeholder: '/api/drives' },
       { key: 'catalogListPath', label: 'List path in the response', placeholder: 'drives', hint: 'Dotted, e.g. data.trips.' },
+      { key: 'catalogFieldId', label: 'Options field ID', placeholder: 'plan', hint: 'IIMMPACT Options API field ID, for example plan for mobile Internet packages.' },
       { key: 'catalogSuccessPath', label: 'Catalogue success path', placeholder: 'result' },
       { key: 'catalogSuccessValue', label: 'Catalogue success value', placeholder: 'true' },
       { key: 'catalogTypes', label: 'Catalogue types', placeholder: 'regular, drive', hint: 'Comma separated. The first is the default.' },
