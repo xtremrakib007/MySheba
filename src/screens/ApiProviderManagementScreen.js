@@ -11,7 +11,12 @@ import * as webhookService from '../firebase/apiWebhookService';
 
 // Mirrors ALLOWED_COUNTRIES in functions/apiProviderService.js, minus 'ALL'.
 // 'ALL' is how far a provider reaches, not where an order comes from.
-const SCOPE_COUNTRIES=['BD','MY','SG','ID','IN','PH'];
+//
+// The two are checked against each other by scripts/test-api-countries.js: a
+// country the backend accepts but this list omits cannot be given a mode or a
+// provider from the only screen that sets them, which is how NP, PK, MM and KH
+// came to be chargeable countries nobody could configure.
+const SCOPE_COUNTRIES=['BD','MY','SG','ID','IN','PH','NP','PK','MM','KH'];
 
 export default function ApiProviderManagementScreen() {
   const { profile, goBackOrHome } = useApp();

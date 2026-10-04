@@ -18,7 +18,17 @@ const SETTINGS = 'api_settings/service_modes';
 const ALLOWED_SERVICES = ['Recharge', 'Internet', 'Offer Packs', 'Bill Payment', 'Bus', 'Train', 'Flight', 'Mobile Banking', 'Remittance', 'Payment Gateway', 'Entertainment', 'Recharge PIN'];
 const ALLOWED_AUTH = ['none', 'apiKey', 'bearer', 'basic'];
 const ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH'];
-const ALLOWED_COUNTRIES = ['ALL', 'BD', 'MY', 'SG', 'ID', 'IN', 'PH'];
+// Every country the app actually takes a recharge for, plus the places orders
+// are placed FROM. NP, PK, MM and KH were missing: walletService prices a
+// recharge for all eight of RECHARGE_RATE_KEYS, so an order from Nepal or
+// Pakistan was perfectly chargeable while no provider could be scoped to it and
+// no per-country mode could be set for it. A provider reaching 'ALL' served
+// them anyway, which hid the gap - until somebody wanted one country on manual
+// and its neighbour on API, and found there was no way to say so.
+//
+// scripts/test-api-countries.js keeps this in step with RECHARGE_RATE_KEYS and
+// with the admin screen's own copy.
+const ALLOWED_COUNTRIES = ['ALL', 'BD', 'MY', 'SG', 'ID', 'IN', 'PH', 'NP', 'PK', 'MM', 'KH'];
 const DEFAULT_MODES = Object.fromEntries(ALLOWED_SERVICES.map((service) => [service, 'legacy']));
 // 'ALL' is a provider's reach, not a place an order comes from, so it is not a
 // row in the country matrix - the service-wide default already plays that part.
