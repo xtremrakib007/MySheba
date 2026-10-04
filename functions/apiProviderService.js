@@ -241,6 +241,7 @@ function validateCatalog(data) {
     catalogPath,
     catalogMethod: (cleanString(data.catalogMethod, 10) || '').toUpperCase(),
     catalogListPath: cleanString(data.catalogListPath, 200),
+    catalogFieldId: cleanString(data.catalogFieldId, 100),
     catalogSuccessPath: cleanString(data.catalogSuccessPath, 200),
     catalogErrorLabel: cleanString(data.catalogErrorLabel, 100),
   };
