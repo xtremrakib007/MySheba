@@ -455,6 +455,8 @@ const ALIASES = {
   documentsTile: 'documents',
   all: 'history',
   orders: 'history',
+  jompay: 'billpayment',
+  tngewallet: 'walletTransfer',
   staffReports: 'reports',
   staffLedger: 'reports',
   ledger: 'reports',

@@ -49,4 +49,35 @@ const wallet = read('functions/walletService.js');
 assert(/billpayment: new Set\(\[[^\]]*'category'[^\]]*\]\)/.test(wallet), 'category survives to the provider');
 assert(/billpayment: new Set\(\[[^\]]*'accountNumber'[^\]]*\]\)/.test(wallet), 'and so does the account number');
 
+console.log('Each has its own tile, which is Bill Payment part-answered');
+const tiles = require('./lib/load-tiles.js');
+const home = tiles.visibleTiles({ role: 'customer', can: () => true, homeOnly: true });
+const byKey = Object.fromEntries(home.map((t) => [t.key, t]));
+
+for (const key of ['jompay', 'tngewallet']) {
+  assert(byKey[key], `${key} must be on the home grid`);
+  assert.strictEqual(byKey[key].kind, 'billShortcut', `${key} opens the bill flow, it is not a service of its own`);
+  assert.strictEqual(byKey[key].seed.country, 'MY', `${key} is Malaysian`);
+}
+// The seed is the whole point: land on the step that still needs answering,
+// with the ones already decided filled in. A wrong seed sends money to the
+// wrong product with the customer never seeing the field.
+assert.strictEqual(byKey.tngewallet.seed.category, 'ewallet', 'TnG lands in the e-wallet category');
+assert.strictEqual(byKey.tngewallet.seed.provider, "Touch 'n Go eWallet", 'with the biller chosen');
+assert.strictEqual(byKey.tngewallet.startStep, 3, 'so it opens on the number, the only thing left to ask');
+// JomPay covers every Malaysian biller, so it picks the country and no more.
+assert.strictEqual(byKey.jompay.seed.category, undefined, 'JomPay must not pre-pick a category');
+assert.strictEqual(byKey.jompay.startStep, 1, 'and opens on the category list');
+
+const grid = read('src/components/ServiceGrid.js');
+assert(/s\.kind === 'billShortcut'\) return startService\('billpayment', s\.seed, s\.startStep\)/.test(grid),
+  'the shortcut must open billpayment, carrying its seed');
+const ctx = read('src/context/AppContext.js');
+// Switching Bill Payment off has to switch its shortcuts off with it, or a tile
+// survives the service it depends on.
+assert(/isGridActive\(gridManagement, service, gridViewer\)/.test(ctx),
+  'the gate still names the service, not the tile');
+assert(/setCurrentStep\(Number\.isInteger\(startStep\) && startStep > 0 \? startStep : 0\)/.test(ctx),
+  'a nonsense start step falls back to the beginning rather than skipping questions');
+
 console.log('\nA wallet reload, sold down the path that already handles money.');

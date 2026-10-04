@@ -74,24 +74,30 @@ const CUSTOMER_SERVICES = [
   { key: 'internet', icon: 'internet', name: 'Internet', kind: 'service', cat: 'recharge', home: true },
   { key: 'rechargePin', icon: 'recharge', name: 'PIN Generate', kind: 'rechargePin', cat: 'recharge', home: true },
 
-  // Row 2 - bills and money
+  // Row 2 - bills
   { key: 'billpayment', icon: 'billpayment', name: 'Bill Pay', kind: 'service', cat: 'recharge', home: true },
+  { key: 'jompay', icon: 'billpayment', art: 'billpayment', name: 'JomPay', kind: 'billShortcut', cat: 'recharge', home: true,
+    seed: { country: 'MY' }, startStep: 1 },
+  { key: 'tngewallet', icon: 'walletTransfer', art: 'walletTransfer', name: 'TnG eWallet', kind: 'billShortcut', cat: 'money', home: true,
+    seed: { country: 'MY', category: 'ewallet', provider: "Touch 'n Go eWallet" }, startStep: 3 },
+
+  // Row 3 - money
   { key: 'mobilebanking', icon: 'mobilebanking', name: 'Mobile Banking', kind: 'service', cat: 'money', home: true },
   { key: 'remittance', icon: 'remittance', name: 'Remittance', kind: 'service', cat: 'money', home: true },
+  { key: 'offerpacks', icon: 'internet', name: 'Offer Packs', kind: 'service', cat: 'recharge', home: true },
 
-  // Row 3 - tickets
+  // Row 4 - tickets
   { key: 'flight', icon: 'flight', name: 'Flight Ticket', kind: 'service', cat: 'travel', home: true },
   { key: 'bus', icon: 'bus', name: 'Bus Ticket', kind: 'buspicker', cat: 'travel', home: true },
   { key: 'train', icon: 'train', name: 'Train Ticket', kind: 'webview', cat: 'travel', home: true },
 
-  // Row 4 - immigration, then the way to everything else
+  // Row 5 - immigration, then the way to everything else
   { key: 'mydigital', icon: 'mydigital', name: 'Malaysia Arrival Card', kind: 'webview', cat: 'immigration', home: true },
   { key: 'passport', icon: 'passport', name: 'Passport Appointment', kind: 'webview', cat: 'immigration', home: true },
   { key: 'moreFeaturesTile', icon: 'more', name: 'More Features', kind: 'moreFeaturesLink', home: true },
 
   // Everything below is reached through More Features. Still categorised,
   // because that screen groups them.
-  { key: 'offerpacks', icon: 'internet', name: 'Offer Packs', kind: 'service', cat: 'recharge' },
   { key: 'entertainment', icon: 'entertainment', name: 'Entertainment', kind: 'service', cat: 'recharge' },
   { key: 'visa', icon: 'visa', name: 'Visa', kind: 'webview', cat: 'immigration' },
   { key: 'fomema', icon: 'fomema', name: 'FOMEMA', kind: 'webview', cat: 'immigration' },
@@ -307,6 +313,8 @@ export const ADMIN_HOME = [
 
   { key: 'internet', icon: '\uD83D\uDCE1', name: 'Internet', service: { key: 'internet', kind: 'service' } },
   { key: 'billpayment', icon: '\uD83E\uDDFE', name: 'Bill Payment', service: { key: 'billpayment', kind: 'service' } },
+  { key: 'jompay', icon: '\uD83C\uDDF2\uD83C\uDDFE', name: 'JomPay', service: { key: 'jompay', kind: 'billShortcut', seed: { country: 'MY' }, startStep: 1 } },
+  { key: 'tngewallet', icon: '\uD83D\uDC5B', name: 'TnG eWallet', service: { key: 'tngewallet', kind: 'billShortcut', seed: { country: 'MY', category: 'ewallet', provider: "Touch 'n Go eWallet" }, startStep: 3 } },
   { key: 'rechargePin', icon: '\uD83D\uDD22', name: 'PIN Generate', service: { key: 'rechargePin', kind: 'rechargePin' } },
   // offerpacks is the one customer key ServiceArt has no drawing for, so this
   // emoji is what renders rather than a fallback nobody sees.

@@ -2452,14 +2452,26 @@ export function AppProvider({ children }) {
     // first render's value (null) and the cache is never cleared.
   }, [authUser]);
 
-  const startService = useCallback((service) => {
+  /**
+   * `seed` and `startStep` let a tile open a service part-filled.
+   *
+   * JomPay and the TnG reload are both Bill Payment with the country, and for
+   * TnG the category and biller, already chosen - so they are one tile each
+   * that lands further down the same flow, rather than a service each with its
+   * own charge path to get wrong.
+   *
+   * The gate is unchanged and still names the SERVICE, so switching Bill
+   * Payment off switches its shortcuts off with it. The tile's own key is
+   * checked separately by useServiceAction, so either can be turned off alone.
+   */
+  const startService = useCallback((service, seed = null, startStep = 0) => {
     if (!gridManagementService.isGridActive(gridManagement, service, gridViewer)) {
       showAlert("MySheba", "This feature is currently unavailable.");
       return;
     }
     setCurrentService(service);
-    setCurrentStep(0);
-    setServiceData({});
+    setCurrentStep(Number.isInteger(startStep) && startStep > 0 ? startStep : 0);
+    setServiceData(seed && typeof seed === 'object' ? { ...seed } : {});
     setScreen("service");
   }, [gridManagement, gridViewer, showAlert]);
 

@@ -70,6 +70,8 @@ export function useServiceAction() {
     if (s.kind === 'staffReports') return setScreen('reports');
     if (s.kind === 'staffLedger') return setScreen('ledger');
     if (s.kind === 'staffFunding') return setScreen('walletFunding');
+    // A tile that is a service with some steps already answered.
+    if (s.kind === 'billShortcut') return startService('billpayment', s.seed, s.startStep);
     return startService(s.key);
   };
 }
