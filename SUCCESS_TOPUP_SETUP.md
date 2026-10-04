@@ -234,7 +234,13 @@ Create a webhook for the Success TopUp provider:
 
 Webhook URL:
 
-`https://us-central1-satulink-solutions.cloudfunctions.net/apiWebhook?providerId=<PROVIDER_ID>`
+`https://us-central1-satulink-solutions.cloudfunctions.net/apiWebhook/<PROVIDER_ID>`
+
+The provider id is a path segment rather than a `?providerId=` query parameter,
+because IIMMPACT's dashboard refuses to save a callback URL that already carries
+a query string. The older `?providerId=<PROVIDER_ID>` form is still accepted, so
+a Success TopUp webhook already registered that way keeps working and does not
+need re-registering.
 
 The webhook is server-side only. A Success callback completes the transaction; Processing keeps the wallet charge pending; Cancel refunds the exact wallet charge once.
 

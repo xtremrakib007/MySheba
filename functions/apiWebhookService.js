@@ -5,6 +5,7 @@ const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 const { matchesStatus } = require('./statusMatch');
 const { parseAllowedIps, isAllowedSource, callbackSourceIp } = require('./webhookSource');
 const { matchesCallbackRequest } = require('./callbackMatch');
+const { webhookProviderId, webhookPayload, webhookEndpointUrl } = require('./webhookRequest');
 
 const COLLECTION = 'api_webhooks';
 const PROVIDERS = 'api_providers';
@@ -15,7 +16,6 @@ const EVENTS = 'apiWebhookEvents';
 // re-saved - and the delivery history is exactly what you need after a
 // re-save, to see whether the new token actually works.
 const STATS = 'apiWebhookStats';
-const PROJECT_ID = 'satulink-solutions';
 const REGION = 'us-central1';
 
 function clean(v, max = 500) { return typeof v === 'string' ? v.trim().slice(0, max) : ''; }
@@ -50,9 +50,7 @@ function deliverySummary(stat) {
   };
 }
 
-function endpointUrl(providerId) {
-  return 'https://' + REGION + '-' + PROJECT_ID + '.cloudfunctions.net/apiWebhook?providerId=' + encodeURIComponent(providerId);
-}
+const endpointUrl = webhookEndpointUrl;
 function pathGet(obj, path) {
   const p = clean(path, 200);
   return p ? p.split('.').reduce((v, k) => v == null ? undefined : v[k], obj) : undefined;
@@ -230,8 +228,11 @@ async function recordDelivery(db, providerId, fields) {
 }
 
 exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (req, res) => {
-  if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
-  const providerId = clean(req.query?.providerId, 100);
+  // GET as well as POST. iimmpact's transaction callback is configurable
+  // either way and their dashboard defaults to GET, so a POST-only handler
+  // answers 405 to every delivery and no transaction ever settles.
+  if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).send('Method Not Allowed');
+  const providerId = webhookProviderId(req);
   if (!/^[A-Za-z0-9_-]{1,100}$/.test(providerId)) return res.status(400).send('Invalid providerId');
 
   const db = admin.firestore();
@@ -262,7 +263,7 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
   }
 
   if (req.rawBody && req.rawBody.length > 1024 * 1024) return res.status(413).send('Webhook payload too large');
-  const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+  const body = webhookPayload(req);
   const transactionId = safeText(pathGet(body, config.transactionIdPath || 'transactionId'), 200);
   const status = safeText(pathGet(body, config.statusPath || 'status'), 100);
   const message = safeText(pathGet(body, config.messagePath || 'message'), 500);

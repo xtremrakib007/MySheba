@@ -14,6 +14,7 @@ const driveWindow = require('./successTopUpWindow');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 const { signIimmpactRequest, decodeSecret: decodeIimmpactSecret } = require('./iimmpactSigning');
 const { matchesStatus } = require('./statusMatch');
+const { webhookEndpointUrl } = require('./webhookRequest');
 const billPresentment = require('./billPresentment');
 const networkStatus = require('./networkStatus');
 const productCodes = require('./productCodes');
@@ -2009,7 +2010,7 @@ exports.saveApiProvider = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (
     return {
       id: ref.id, successTopUp: true,
       webhookToken,
-      webhookUrl: 'https://us-central1-satulink-solutions.cloudfunctions.net/apiWebhook?providerId=' + encodeURIComponent(ref.id)
+      webhookUrl: webhookEndpointUrl(ref.id)
     };
   }
   return { id: ref.id, successTopUp: false };
