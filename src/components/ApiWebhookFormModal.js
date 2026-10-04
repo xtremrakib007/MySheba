@@ -2,6 +2,28 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 
+// Labelled rather than a bare list of key names, because two of these decide
+// whether a callback is believed at all and one of them decides whether a
+// customer gets their money back.
+const WEBHOOK_FIELDS = [
+  { key: 'webhookToken', label: 'Webhook token', placeholder: 'Shared secret the provider sends back',
+    hint: 'Leave blank to keep the stored token. Providers that send no token at all need the IP list below instead.' },
+  { key: 'allowedIps', label: 'Allowed source IP addresses', placeholder: 'e.g. 18.140.170.98',
+    hint: 'Comma separated. Only for a provider whose callback carries no token - iimmpact is one. A callback from any other address is refused. Get the addresses from the provider, not from a callback you received.' },
+  { key: 'authHeader', label: 'Token header name', placeholder: 'x-webhook-token',
+    hint: 'The header the provider puts the token in.' },
+  { key: 'transactionIdPath', label: 'Our reference, in their callback', placeholder: 'transactionId',
+    hint: 'Dotted path. For iimmpact this is the field echoing the refid we sent.' },
+  { key: 'statusPath', label: 'Status path', placeholder: 'status', hint: 'Dotted path to the outcome.' },
+  { key: 'messagePath', label: 'Message path', placeholder: 'message', hint: 'Dotted path to the provider\u2019s own wording.' },
+  { key: 'successStatus', label: 'Status values that mean DONE', placeholder: 'Success',
+    hint: 'Comma separated for a provider that spells it more than one way - iimmpact sends Succesful with one s.' },
+  { key: 'processingStatus', label: 'Status values that mean NOT FINISHED', placeholder: 'Processing',
+    hint: 'Comma separated, e.g. Accepted, Processing.' },
+  { key: 'cancelStatus', label: 'Status values that REFUND the customer', placeholder: 'Cancel',
+    hint: 'Comma separated. Every value here gives the money back, so list every failure name the provider uses, e.g. Failed, Refund. A failure name missing from this list leaves the customer charged.' },
+];
+
 export default function ApiWebhookFormModal({ visible, provider, config, onClose, onSave, onReveal, onRotate, onUnmatched }) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -32,6 +54,7 @@ export default function ApiWebhookFormModal({ visible, provider, config, onClose
     successStatus: config?.successStatus || 'Success',
     processingStatus: config?.processingStatus || 'Processing',
     cancelStatus: config?.cancelStatus || 'Cancel',
+    allowedIps: (config?.allowedIps || []).join(', '),
   }), [provider, config, visible]);
 
   return <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -79,9 +102,19 @@ export default function ApiWebhookFormModal({ visible, provider, config, onClose
           </View>
         </> : <>
           <Text style={styles.help}>Give this URL to the provider. Webhooks are received by MySheba server-side; the mobile app does not receive provider callbacks.</Text>
-          {['authHeader','webhookToken','transactionIdPath','statusPath','messagePath','successStatus','processingStatus','cancelStatus'].map((k) =>
-            <TextInput key={k} style={styles.input} placeholder={k === 'webhookToken' ? 'Webhook token' : k} value={String(form[k] ?? '')} onChangeText={(v) => setForm((x) => ({ ...x, [k]: v }))} secureTextEntry={k === 'webhookToken'} />
-          )}
+          {WEBHOOK_FIELDS.map((f) => <View key={f.key}>
+            <Text style={styles.label}>{f.label}</Text>
+            <Text style={styles.help}>{f.hint}</Text>
+            <TextInput
+              style={styles.input}
+              placeholder={f.placeholder}
+              placeholderTextColor={colors.placeholder}
+              value={String(form[f.key] ?? '')}
+              onChangeText={(v) => setForm((x) => ({ ...x, [f.key]: v }))}
+              secureTextEntry={f.key === 'webhookToken'}
+              autoCapitalize="none"
+            />
+          </View>)}
           <TouchableOpacity onPress={() => setForm((x) => ({ ...x, enabled: !x.enabled }))} style={styles.toggle}><Text>{form.enabled ? '✓ Webhook Active' : '○ Webhook Inactive'}</Text></TouchableOpacity>
         </>}
       </ScrollView>

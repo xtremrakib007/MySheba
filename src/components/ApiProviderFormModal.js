@@ -86,6 +86,59 @@ const SECTIONS = [
   { title: 'Notes', fields: [{ key: 'notes', label: 'Notes', hint: 'For whoever configures this next.' }] },
 ];
 
+const AUTH_TYPES = ['none', 'apiKey', 'bearer', 'basic', 'iimmpactHmac'];
+const AUTH_LABELS = { iimmpactHmac: 'iimmpact (HMAC)' };
+
+// One tap instead of fourteen fields, two of which are spelling traps:
+// `Succesful` has one s because iimmpact's own docs say the typo is permanent,
+// and the pending statuses have to be listed or an Accepted reply is read as a
+// refusal and refunded. Nothing here is locked - every value is an ordinary
+// form field afterwards - it just stops the integration starting out wrong.
+//
+// Staging is https://staging.iimmpact.com and production is
+// https://api.iimmpact.com; the preset uses production, so change the base URL
+// while testing.
+const IIMMPACT_DEFAULTS = {
+  name: 'iimmpact',
+  baseUrl: 'https://api.iimmpact.com',
+  endpointPath: '/v2/topup',
+  method: 'POST',
+  authType: 'iimmpactHmac',
+  headers: '{}',
+  queryTemplate: '{}',
+  responseSuccessPath: 'data.status',
+  // Both spellings: /v2/topup answers Succesful, /v2/transactions answers Successful.
+  responseSuccessValue: 'Succesful, Successful',
+  // Accepted and Processing both mean "created, not finished". Listing them
+  // keeps the charge pending instead of refunding a live transaction.
+  responseProcessingPath: 'data.status',
+  responseProcessingValue: 'Accepted, Processing',
+  // refid is the reference we sent, echoed back - it is what the webhook
+  // matcher looks for on the transaction.
+  responseIdPath: 'data.refid',
+  responseMessagePath: 'data.remarks',
+  responsePinPath: 'data.pin',
+  timeoutMs: 30000,
+};
+
+// Per-service bodies. `product` is iimmpact's product code and differs per
+// country and operator, so it is left as a placeholder the operator fills in
+// from /v2/product-list rather than guessed here.
+const IIMMPACT_BODIES = {
+  Recharge: { refid: '{{requestId}}', product: '{{operator}}', account: '{{phone}}', amount: '{{amount}}' },
+  Internet: { refid: '{{requestId}}', product: '{{operator}}', account: '{{phone}}', amount: '{{amount}}', extras: { subproduct_code: '{{packageId}}' } },
+  'Recharge PIN': { refid: '{{requestId}}', product: '{{operator}}', account: '{{phone}}', amount: '{{amount}}' },
+  'Bill Payment': { refid: '{{requestId}}', product: '{{provider}}', account: '{{accountNumber}}', amount: '{{amount}}' },
+};
+
+// JomPAY is its own body: the biller code and the payer's IC are mandatory and
+// ref2 is required by some billers. ref2 is sent as an empty string when the
+// bill does not show one, which iimmpact accepts.
+const IIMMPACT_JOMPAY_BODY = {
+  refid: '{{requestId}}', product: 'JOMPAY', account: '{{accountNumber}}', amount: '{{amount}}',
+  extras: { biller_code: '{{billerCode}}', ic_number: '{{icNumber}}', ref2: '{{ref2}}' },
+};
+
 const SUCCESS_TOPUP_DEFAULTS = {
   name: 'Success TopUp', country: 'BD', service: 'Recharge',
   baseUrl: 'https://api.successtopup.com', endpointPath: '/api/recharge', method: 'POST', authType: 'none',
@@ -132,6 +185,26 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
   }, [visible, provider, successTopUp, presetService]);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  // The preset keeps whatever is already typed - name, country, credentials,
+  // the chosen feature - and only fills the wiring. Re-tapping it after
+  // switching feature re-picks that feature's request body.
+  const applyIimmpactPreset = () => setForm((f) => {
+    const service = f.service || presetService || API_SERVICES[0];
+    const body = service === 'Bill Payment' && String(f.name || '').toLowerCase().includes('jompay')
+      ? IIMMPACT_JOMPAY_BODY
+      : (IIMMPACT_BODIES[service] || IIMMPACT_BODIES.Recharge);
+    return {
+      ...f,
+      ...IIMMPACT_DEFAULTS,
+      // Never clobber a name the operator already chose, or the preset would
+      // rename "iimmpact JomPAY" back to "iimmpact" and break the JomPAY body
+      // choice above on the next tap.
+      name: f.name || IIMMPACT_DEFAULTS.name,
+      service,
+      requestTemplate: JSON.stringify(body),
+    };
+  });
 
   // `service` is the primary and is always in the list; the server keeps the
   // same invariant, so a document written here reads back the same way.
@@ -202,6 +275,16 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
               </>
             ) : (
               <>
+                <TouchableOpacity onPress={applyIimmpactPreset} style={styles.preset}>
+                  <Text style={styles.presetText}>Fill iimmpact defaults</Text>
+                </TouchableOpacity>
+                <Text style={styles.fieldHint}>
+                  Sets the endpoint, the HMAC signing, the status values and the response paths for the
+                  feature picked below, then leaves everything editable. The API key and HMAC secret are
+                  still yours to paste in, and `product` in the request body has to be the product code
+                  from iimmpact&apos;s product list.
+                </Text>
+
                 <Text style={styles.sectionTitle}>Features</Text>
                 <Text style={styles.fieldHint}>
                   Everything this one API serves. Bangladesh recharge and Bangladesh internet are usually the
@@ -269,12 +352,19 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
 
                 <Text style={styles.sectionTitle}>Authentication</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  {['none', 'apiKey', 'bearer', 'basic'].map((x) => (
+                  {AUTH_TYPES.map((x) => (
                     <TouchableOpacity key={x} onPress={() => set('authType', x)} style={[styles.chip, form.authType === x && styles.chipOn]}>
-                      <Text style={form.authType === x ? styles.chipOnText : null}>{x}</Text>
+                      <Text style={form.authType === x ? styles.chipOnText : null}>{AUTH_LABELS[x] || x}</Text>
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
+                {form.authType === 'iimmpactHmac' && (
+                  <Text style={styles.fieldHint}>
+                    iimmpact signs every request, so the API key and HMAC secret go in the Credentials
+                    section and no header template is needed. Paste the secret exactly as the dashboard
+                    shows it - it is base64 and a re-typed or hex version fails every call with a 401.
+                  </Text>
+                )}
 
                 <Text style={styles.help}>{HELP_TEXT}</Text>
               </>
@@ -321,6 +411,8 @@ function createStyles(colors) {
     chipWrap: { flexDirection: 'row', flexWrap: 'wrap' },
     chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
     chipOnText: { color: colors.onPrimary, fontWeight: '700' },
+    preset: { alignSelf: 'flex-start', paddingVertical: 9, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1.5, borderColor: colors.primary, marginBottom: 8 },
+    presetText: { color: colors.primary, fontWeight: '800', fontSize: 12.5 },
     toggle: { marginTop: 16, paddingVertical: 10 },
     toggleText: { color: colors.primary, fontWeight: '700' },
     row: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12, gap: 10 },

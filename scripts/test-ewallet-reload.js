@@ -49,7 +49,7 @@ const wallet = read('functions/walletService.js');
 assert(/billpayment: new Set\(\[[^\]]*'category'[^\]]*\]\)/.test(wallet), 'category survives to the provider');
 assert(/billpayment: new Set\(\[[^\]]*'accountNumber'[^\]]*\]\)/.test(wallet), 'and so does the account number');
 
-console.log('Each has its own tile, which is Bill Payment part-answered');
+console.log('Each has its own tile, landing on the only question left to ask');
 const tiles = require('./lib/load-tiles.js');
 const home = tiles.visibleTiles({ role: 'customer', can: () => true, homeOnly: true });
 const byKey = Object.fromEntries(home.map((t) => [t.key, t]));
@@ -65,9 +65,29 @@ for (const key of ['jompay', 'tngewallet']) {
 assert.strictEqual(byKey.tngewallet.seed.category, 'ewallet', 'TnG lands in the e-wallet category');
 assert.strictEqual(byKey.tngewallet.seed.provider, "Touch 'n Go eWallet", 'with the biller chosen');
 assert.strictEqual(byKey.tngewallet.startStep, 3, 'so it opens on the number, the only thing left to ask');
-// JomPay covers every Malaysian biller, so it picks the country and no more.
-assert.strictEqual(byKey.jompay.seed.category, undefined, 'JomPay must not pre-pick a category');
-assert.strictEqual(byKey.jompay.startStep, 1, 'and opens on the category list');
+// JomPAY is its own category now, not a shortcut into the ordinary biller
+// list: the rail asks for a biller CODE off the customer's bill rather than a
+// biller from a list, so landing on the category chooser was a dead end.
+assert.strictEqual(byKey.jompay.seed.category, 'jompay', 'JomPay opens the JomPAY category');
+assert.strictEqual(byKey.jompay.seed.provider, 'JomPAY', 'with the one biller chosen');
+assert.strictEqual(byKey.jompay.startStep, 3, 'so it opens on the fields printed on the bill');
+
+// And those fields have to exist, be required, and reach the provider. The IC
+// is the one that is not ours to make optional: JomPAY falls under Malaysia's
+// AMLA and the provider's stated penalty for a fictitious number is account
+// suspension.
+const billSteps = read('src/steps/BillPaymentSteps.js');
+assert(/jompay: \['JomPAY'\]/.test(billSteps), 'JomPAY is a biller entry so the provider step still resolves');
+assert(/key: 'jompay', label: 'JomPAY Bill'/.test(billSteps), 'and a category of its own');
+for (const field of ['billerCode', 'icNumber', 'ref2']) {
+  assert(new RegExp(`updateServiceData\\(\\{ ${field}:`).test(billSteps), `the JomPAY step must collect ${field}`);
+  assert(new RegExp(`'${field}'`).test(wallet), `${field} must be allowed through to the provider`);
+}
+assert(/Please enter the JomPAY Biller Code/.test(billSteps), 'a missing biller code is refused');
+assert(/IC or passport number\. JomPAY requires it by law/.test(billSteps), 'a missing IC is refused');
+// Shown masked: the full number goes to the provider because AMLA requires it,
+// it does not need to sit on a shop counter screen.
+assert(/label: 'IC \/ Passport', value: maskId\(serviceData\.icNumber\)/.test(billSteps), 'the summary masks the IC');
 
 const grid = read('src/components/ServiceGrid.js');
 assert(/s\.kind === 'billShortcut'\) return startService\('billpayment', s\.seed, s\.startStep\)/.test(grid),

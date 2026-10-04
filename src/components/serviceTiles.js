@@ -76,8 +76,8 @@ const CUSTOMER_SERVICES = [
 
   // Row 2 - bills
   { key: 'billpayment', icon: 'billpayment', name: 'Bill Pay', kind: 'service', cat: 'recharge', home: true },
-  { key: 'jompay', icon: 'billpayment', art: 'billpayment', name: 'JomPay', kind: 'billShortcut', cat: 'recharge', home: true,
-    seed: { country: 'MY' }, startStep: 1 },
+  { key: 'jompay', icon: 'billpayment', art: 'billpayment', name: 'JomPAY', kind: 'billShortcut', cat: 'recharge', home: true,
+    seed: { country: 'MY', category: 'jompay', provider: 'JomPAY' }, startStep: 3 },
   { key: 'tngewallet', icon: 'walletTransfer', art: 'walletTransfer', name: 'TnG eWallet', kind: 'billShortcut', cat: 'money', home: true,
     seed: { country: 'MY', category: 'ewallet', provider: "Touch 'n Go eWallet" }, startStep: 3 },
 
@@ -313,7 +313,7 @@ export const ADMIN_HOME = [
 
   { key: 'internet', icon: '\uD83D\uDCE1', name: 'Internet', service: { key: 'internet', kind: 'service' } },
   { key: 'billpayment', icon: '\uD83E\uDDFE', name: 'Bill Payment', service: { key: 'billpayment', kind: 'service' } },
-  { key: 'jompay', icon: '\uD83C\uDDF2\uD83C\uDDFE', name: 'JomPay', service: { key: 'jompay', kind: 'billShortcut', seed: { country: 'MY' }, startStep: 1 } },
+  { key: 'jompay', icon: '\uD83C\uDDF2\uD83C\uDDFE', name: 'JomPAY', service: { key: 'jompay', kind: 'billShortcut', seed: { country: 'MY', category: 'jompay', provider: 'JomPAY' }, startStep: 3 } },
   { key: 'tngewallet', icon: '\uD83D\uDC5B', name: 'TnG eWallet', service: { key: 'tngewallet', kind: 'billShortcut', seed: { country: 'MY', category: 'ewallet', provider: "Touch 'n Go eWallet" }, startStep: 3 } },
   { key: 'rechargePin', icon: '\uD83D\uDD22', name: 'PIN Generate', service: { key: 'rechargePin', kind: 'rechargePin' } },
   // offerpacks is the one customer key ServiceArt has no drawing for, so this

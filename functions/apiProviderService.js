@@ -12,11 +12,16 @@ const catalog = require('./successTopUpCatalog');
 const providerCatalog = require('./providerCatalog');
 const driveWindow = require('./successTopUpWindow');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+const { signIimmpactRequest, decodeSecret: decodeIimmpactSecret } = require('./iimmpactSigning');
+const { matchesStatus } = require('./statusMatch');
 
 const COLLECTION = 'api_providers';
 const SETTINGS = 'api_settings/service_modes';
 const ALLOWED_SERVICES = ['Recharge', 'Internet', 'Offer Packs', 'Bill Payment', 'Bus', 'Train', 'Flight', 'Mobile Banking', 'Remittance', 'Payment Gateway', 'Entertainment', 'Recharge PIN'];
-const ALLOWED_AUTH = ['none', 'apiKey', 'bearer', 'basic'];
+// `iimmpactHmac` is not a header, it is a signature over the request itself, so
+// unlike the others it cannot be produced until the body exists. providerAuth
+// returns nothing for it; the headers are added further down, next to the send.
+const ALLOWED_AUTH = ['none', 'apiKey', 'bearer', 'basic', 'iimmpactHmac'];
 const ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH'];
 // Every country the app actually takes a recharge for, plus the places orders
 // are placed FROM. NP, PK, MM and KH were missing: walletService prices a
@@ -384,6 +389,16 @@ function validate(data) {
   if (successTopUp && (!apiKey || !secretKey)) throw new HttpsError('invalid-argument', 'Success TopUp API key and API secret are required.');
   if ((authType === 'apiKey' || authType === 'bearer') && !apiKey) throw new HttpsError('invalid-argument', 'API key is required for this authentication type.');
   if (authType === 'basic' && (!cleanString(data.username, 200) || !cleanString(data.password, 1000))) throw new HttpsError('invalid-argument', 'Username and password are required for Basic authentication.');
+  // Both halves, and the secret checked for shape here rather than at charge
+  // time: a secret that is not base64 signs with the wrong key and the
+  // provider answers 401, which is indistinguishable from a wrong canonical
+  // string. Refusing it while someone is looking at the form is the only point
+  // at which the difference can still be explained.
+  if (authType === 'iimmpactHmac') {
+    if (!apiKey || !secretKey) throw new HttpsError('invalid-argument', 'iimmpact requires both an API key and an HMAC secret.');
+    try { decodeIimmpactSecret(secretKey); }
+    catch (error) { throw new HttpsError('invalid-argument', String(error?.message || 'The iimmpact HMAC secret is not valid.')); }
+  }
   if (!ALLOWED_METHODS.includes(method)) throw new HttpsError('invalid-argument', 'Invalid HTTP method.');
   return {
     service, services, name, country, baseUrl, endpointPath, method, authType, apiKey, secretKey,
@@ -400,6 +415,36 @@ function validate(data) {
 
 function asObject(value) { if (value && typeof value === 'object' && !Array.isArray(value)) return value; if (typeof value !== 'string') return {}; try { const x = JSON.parse(value); return x && typeof x === 'object' && !Array.isArray(x) ? x : {}; } catch { return {}; } }
 function getPath(obj, path) { return path ? path.split('.').reduce((v,k) => v == null ? undefined : v[k], obj) : undefined; }
+
+/**
+ * What a provider's reply means: 'completed', 'processing' or 'rejected'.
+ *
+ * Pure, and separate from the request, because it is the decision that moves
+ * money: 'rejected' refunds the customer, and refunding a transaction the
+ * provider actually created pays for it twice.
+ *
+ * Pending is decided FIRST, and this order is the whole point. Some providers
+ * report the final outcome and the "not finished yet" outcome through the SAME
+ * field. iimmpact's /v2/topup answers data.status, which is Accepted, then
+ * Processing, then Succesful or Failed. Testing success first, an Accepted or
+ * Processing reply failed `status === "Succesful"`, was filed as a refusal, and
+ * the customer was refunded for a transaction that then completed anyway.
+ *
+ * So a pending reply is never a rejection. A reply matching neither pending nor
+ * success is - that is a provider saying no, and the charge is safe to return.
+ */
+function classifyResponse(provider, data) {
+  const p = provider || {};
+  if (p.responseProcessingPath && matchesStatus(getPath(data, p.responseProcessingPath), p.responseProcessingValue)) {
+    return 'processing';
+  }
+  // No success path configured at all means the HTTP 200 was the answer.
+  const success = p.responseSuccessPath ? getPath(data, p.responseSuccessPath) : true;
+  if (success === false) return 'rejected';
+  if (p.responseSuccessValue && !matchesStatus(success, p.responseSuccessValue)) return 'rejected';
+  return 'completed';
+}
+
 // A template value that is nothing but one placeholder takes that value's own
 // type; anything with text around it is interpolation and stays a string.
 //
@@ -770,6 +815,30 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
       body=JSON.stringify(requestBody);
       if(Buffer.byteLength(body,'utf8')>100000) throw new Error('Rendered API request body is too large.');
     }
+    // Signed LAST, because the signature covers the body and the query, and
+    // neither existed until now. A header template cannot do this, which is
+    // why this one auth type is code rather than configuration.
+    //
+    // It also overwrites rather than defers to a stored header of the same
+    // name: a leftover x-signature in a provider's header template would
+    // otherwise be sent instead of the real one and fail every call.
+    if (provider.authType === 'iimmpactHmac') {
+      const signed = signIimmpactRequest({
+        apiKey: provider.apiKey,
+        secretKey: provider.secretKey,
+        method,
+        url,
+        body,
+      });
+      // Case-insensitively, because HTTP header names are and a stored
+      // `X-Signature` would otherwise ride along beside our `x-signature`.
+      const signedNames = new Set(Object.keys(signed));
+      for (const existing of Object.keys(headers)) {
+        if (signedNames.has(existing.toLowerCase())) delete headers[existing];
+      }
+      Object.assign(headers, signed);
+      if (Object.keys(headers).length > 50) throw new Error('Too many rendered API headers.');
+    }
     const ctl=new AbortController(), timer=setTimeout(()=>ctl.abort(),Math.max(3000,Math.min(60000,Number(provider.timeoutMs)||15000)));
     // Set before the call, not after: everything that throws above this line
     // failed before the request left us, so no recharge can exist and the
@@ -781,8 +850,9 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     if(Buffer.byteLength(responseText,'utf8')>1000000) throw new Error('Provider response is too large.');
     let data={}; try { data=responseText?JSON.parse(responseText):{}; } catch { data={raw:responseText.slice(0,5000)}; }
     if(!response.ok) throw new Error(`Provider HTTP ${response.status}`);
-    const success=provider.responseSuccessPath?getPath(data,provider.responseSuccessPath):true;
-    if(success===false || (provider.responseSuccessValue && String(success)!==String(provider.responseSuccessValue))) {
+    const outcome = classifyResponse(provider, data);
+    const isProcessing = outcome === 'processing';
+    if(outcome === 'rejected') {
       // The provider answered and said no. That is a decision, not a doubt, so
       // it carries a flag rather than a phrase: when responseMessagePath is
       // configured this message is the PROVIDER's wording - "Insufficient
@@ -795,7 +865,6 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     }
     const responseId = provider.responseIdPath ? getPath(data, provider.responseIdPath) : null;
     const responseMessage = provider.responseMessagePath ? getPath(data, provider.responseMessagePath) : null;
-    const isProcessing = Boolean(provider.responseProcessingPath && provider.responseProcessingValue && String(getPath(data, provider.responseProcessingPath)) === String(provider.responseProcessingValue));
     const safeResponseId = responseId == null ? null : (typeof responseId === 'string' || typeof responseId === 'number' || typeof responseId === 'boolean' ? String(responseId).slice(0, 200) : null);
     const safeResponseMessage = responseMessage == null ? null : (typeof responseMessage === 'string' || typeof responseMessage === 'number' || typeof responseMessage === 'boolean' ? String(responseMessage).slice(0, 500) : null);
     const result={providerId:provider.id,providerName:provider.name,responseId:safeResponseId,message:safeResponseMessage,status:isProcessing?'processing':'completed'};
@@ -830,7 +899,7 @@ exports.executeConfiguredApi = executeConfiguredApi;
 exports.resolveExecutionMode = resolveExecutionMode;
 exports.providersForService = providersForService;
 exports.COUNTRY_CODES = COUNTRY_CODES;
-exports._test = { isPrivateIp, resolveExecutionMode, pinnedLookup, validateBaseUrl, validateHeaders, validateTemplate, getPath, render, providerAuth, validate };
+exports._test = { isPrivateIp, resolveExecutionMode, pinnedLookup, validateBaseUrl, validateHeaders, validateTemplate, getPath, render, providerAuth, validate, matchesStatus, classifyResponse };
 
 exports.testApiProvider = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
@@ -842,36 +911,63 @@ exports.testApiProvider = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (
   if (!snap.exists) throw new HttpsError('not-found', 'API provider not found.');
   const provider = { id, ...(snap.data() || {}) };
   Object.assign(provider, await providerSecretService.getCredentials(provider));
-  if (String(provider.name || '').trim().toLowerCase() !== 'success topup') {
-    throw new HttpsError('failed-precondition', 'Safe connection testing is currently available for Success TopUp only.');
+  // Only providers with a known read-only probe can be tested. A generic
+  // "send the configured request" test would be a live charge.
+  const isSuccessTopUp = String(provider.name || '').trim().toLowerCase() === 'success topup';
+  const isIimmpact = provider.authType === 'iimmpactHmac';
+  if (!isSuccessTopUp && !isIimmpact) {
+    throw new HttpsError('failed-precondition', 'Safe connection testing is available for Success TopUp and iimmpact only.');
   }
   if (!provider.apiKey || !provider.secretKey) throw new HttpsError('failed-precondition', 'API key and API secret are not configured.');
-  const url = new URL('https://api.successtopup.com/api/drives');
-  const body = JSON.stringify({
+
+  // GET /v2/balance is the probe iimmpact's own collection recommends for
+  // checking API-key authentication: it reads, it costs nothing and it
+  // exercises the whole signing path. Signed over an EMPTY body, which still
+  // has a hash - the one place a "no body means no body hash" reading of the
+  // spec would pass every charge and fail every test, or the reverse.
+  const label = isIimmpact ? 'iimmpact' : 'Success TopUp';
+  const url = isIimmpact
+    ? new URL('/v2/balance', provider.baseUrl)
+    : new URL('https://api.successtopup.com/api/drives');
+  const method = isIimmpact ? 'GET' : 'POST';
+  const body = isIimmpact ? undefined : JSON.stringify({
     operator: 'ALL',
     type: 'regular',
     successtopup_key: provider.apiKey,
     successtopup_secret: provider.secretKey
   });
   try {
+    if (isIimmpact && url.protocol !== 'https:') throw new Error('Provider URL is not allowed.');
     await assertPublicHostname(url.hostname);
     const addresses = await dns.lookup(url.hostname, { all: true, verbatim: true });
     const pinned = addresses.find(a => !isPrivateIp(a.address));
     if (!pinned) throw new Error('Provider hostname resolved to an invalid address.');
-    const response = await requestHttpsPinned(url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body
-    }, pinned);
+    const headers = isIimmpact
+      ? { accept: 'application/json', ...signIimmpactRequest({ apiKey: provider.apiKey, secretKey: provider.secretKey, method, url, body }) }
+      : { 'content-type': 'application/json', accept: 'application/json' };
+    const response = await requestHttpsPinned(url, { method, headers, body }, pinned);
     const responseText = await response.text();
     let data = {};
     try { data = JSON.parse(responseText || '{}'); } catch {}
+    if (isIimmpact) {
+      if (!response.ok) {
+        const reason = String(getPath(data, 'error.message') || getPath(data, 'message') || `HTTP ${response.status}`);
+        // 401 here is the one answer worth naming, because it has two causes
+        // and the provider cannot tell them apart for us.
+        throw new Error(response.status === 401
+          ? `iimmpact rejected the signature (${reason}). Check the API key and that the HMAC secret is the base64 value from the dashboard.`
+          : `iimmpact rejected the request: ${reason}`);
+      }
+      const balance = getPath(data, 'data.balance');
+      if (balance == null) throw new Error('iimmpact answered without a balance; the credentials may not be for this environment.');
+      return { ok: true, message: `iimmpact credentials are valid. Account balance: ${String(balance).slice(0, 40)}.` };
+    }
     if (!response.ok || data.result !== true) {
       throw new Error(String(data.message || 'Success TopUp rejected the credentials.'));
     }
     return { ok: true, message: 'Success TopUp API credentials are valid and the API is reachable.' };
   } catch (e) {
-    throw new HttpsError('unavailable', String(e?.message || 'Unable to connect to Success TopUp.').slice(0, 500));
+    throw new HttpsError('unavailable', String(e?.message || `Unable to connect to ${label}.`).slice(0, 500));
   }
 });
 

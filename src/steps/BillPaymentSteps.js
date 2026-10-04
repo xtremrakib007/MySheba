@@ -28,6 +28,12 @@ const BILLERS = {
     mobile: ['CelcomDigi', 'Maxis', 'U Mobile', 'Yes'],
     utilities: ['Indah Water'],
     ewallet: ["Touch 'n Go eWallet"],
+    // JomPAY is one rail covering thousands of billers, so there is no list to
+    // choose from here: the biller code is printed on the customer's own bill
+    // and they type it, exactly as they would at a bank's JomPAY screen. The
+    // single entry keeps the provider step's shape without pretending to offer
+    // a choice.
+    jompay: ['JomPAY'],
   },
   BD: {
     // Prepaid and postpaid are separate billers, not a setting on one: they
@@ -101,6 +107,7 @@ const CATEGORIES = [
   // somebody entering their TnG number - an ordinary 012 mobile - would be sent
   // to Hotlink and never offered the choice.
   { key: 'ewallet', label: 'E-Wallet Reload', art: 'walletTransfer' },
+  { key: 'jompay', label: 'JomPAY Bill', art: 'billpayment' },
 ];
 
 // Only the categories the chosen country actually bills for. Malaysia has no
@@ -128,6 +135,13 @@ function CategoryCard({ item, selected, onPress }) {
   );
 }
 
+/** An identity number as a receipt should show it: the last four, nothing else. */
+function maskId(value) {
+  const id = String(value || '').trim();
+  if (!id) return '';
+  return id.length <= 4 ? id : `${'\u2022'.repeat(Math.min(8, id.length - 4))}${id.slice(-4)}`;
+}
+
 const noneStyles = StyleSheet.create({
   none: { fontSize: 13, lineHeight: 19, opacity: 0.75, paddingVertical: 10 },
   fixed: { fontSize: 15, fontWeight: '700', paddingVertical: 10 },
@@ -153,7 +167,29 @@ export default function BillPaymentStep({ step }) {
       ? <Grid3>{providers.map((b) => { const brand = getBillerBrand(b.name); return <OperatorCard key={b.name} name={b.name} logo={brand.logo} color={brand.color} initials={brand.initials} selected={serviceData.provider === b.name} onPress={() => { updateServiceData({ provider: b.name, amount: b.amount != null ? b.amount : null }); nextStep(); }} />; })}</Grid3>
       : <Text style={noneStyles.none}>No biller is configured for this country and category yet.</Text>}</View>;
   }
-  if (step === 3) return <View><FormLabel>{serviceData.category === 'ewallet' ? 'Mobile number registered to the wallet' : 'Enter Bill / Account Number'}</FormLabel><FormInput placeholder={serviceData.category === 'ewallet' ? 'e.g. 0123456789' : 'Bill / account number'} keyboardType={serviceData.category === 'ewallet' ? 'phone-pad' : 'default'} autoCapitalize={serviceData.category === 'ewallet' ? 'none' : 'characters'} value={serviceData.accountNumber || ''} onChangeText={(v) => updateServiceData({ accountNumber: v })} />{serviceData.country === 'BD' && <><FormLabel>Bangladesh Mobile Number</FormLabel><FormInput placeholder='01XXXXXXXXX' keyboardType='phone-pad' value={serviceData.mobileNumber || ''} onChangeText={(v) => updateServiceData({ mobileNumber: v.replace(/\D/g, '').slice(0, 11) })} /></>}</View>;
+  if (step === 3) {
+    // JomPAY asks for what is printed on the bill - Biller Code, Ref-1, and
+    // Ref-2 where that biller uses one - plus the payer's IC or passport.
+    //
+    // The IC is not ours to make optional: JomPAY transactions fall under
+    // Malaysia's AMLA and the provider requires a verified number, with
+    // account suspension as the stated penalty for sending a made-up one. It
+    // is asked for here rather than defaulted from the profile precisely so
+    // that the person paying confirms whose number it is.
+    if (serviceData.category === 'jompay') {
+      return <View>
+        <FormLabel>JomPAY Biller Code</FormLabel>
+        <FormInput placeholder='e.g. 818625' keyboardType='number-pad' value={serviceData.billerCode || ''} onChangeText={(v) => updateServiceData({ billerCode: v.replace(/\D/g, '').slice(0, 6) })} />
+        <FormLabel>Ref-1 (account / bill number)</FormLabel>
+        <FormInput placeholder='As printed on your bill' autoCapitalize='characters' value={serviceData.accountNumber || ''} onChangeText={(v) => updateServiceData({ accountNumber: v })} />
+        <FormLabel>Ref-2 (only if your bill shows one)</FormLabel>
+        <FormInput placeholder='Leave empty if not shown' autoCapitalize='characters' value={serviceData.ref2 || ''} onChangeText={(v) => updateServiceData({ ref2: v })} />
+        <FormLabel>IC / Passport Number of the payer</FormLabel>
+        <FormInput placeholder='e.g. 941123045001' autoCapitalize='characters' value={serviceData.icNumber || ''} onChangeText={(v) => updateServiceData({ icNumber: v.replace(/[^A-Za-z0-9]/g, '').slice(0, 20) })} />
+      </View>;
+    }
+    return <View><FormLabel>{serviceData.category === 'ewallet' ? 'Mobile number registered to the wallet' : 'Enter Bill / Account Number'}</FormLabel><FormInput placeholder={serviceData.category === 'ewallet' ? 'e.g. 0123456789' : 'Bill / account number'} keyboardType={serviceData.category === 'ewallet' ? 'phone-pad' : 'default'} autoCapitalize={serviceData.category === 'ewallet' ? 'none' : 'characters'} value={serviceData.accountNumber || ''} onChangeText={(v) => updateServiceData({ accountNumber: v })} />{serviceData.country === 'BD' && <><FormLabel>Bangladesh Mobile Number</FormLabel><FormInput placeholder='01XXXXXXXXX' keyboardType='phone-pad' value={serviceData.mobileNumber || ''} onChangeText={(v) => updateServiceData({ mobileNumber: v.replace(/\D/g, '').slice(0, 11) })} /></>}</View>;
+  }
   if (step === 4) {
     const fixed = fixedAmountFor(serviceData);
     const cur = serviceData.currency || 'MYR';
@@ -161,7 +197,16 @@ export default function BillPaymentStep({ step }) {
       {fixed != null
         ? <><FormLabel>Amount</FormLabel><Text style={noneStyles.fixed}>{cur} {Number(fixed).toFixed(2)} - set by the voucher you chose</Text></>
         : <><FormLabel>Enter Amount ({cur})</FormLabel><FormInput placeholder='Amount' keyboardType='decimal-pad' value={serviceData.amount != null ? String(serviceData.amount) : ''} onChangeText={(v) => updateServiceData({ amount: parseFloat(v) || 0 })} /></>}
-      <SummaryCard rows={[{ label: 'Provider', value: serviceData.provider || '' }, { label: 'Account', value: serviceData.accountNumber || '' }]} totalLabel='Bill amount' totalValue={`${cur} ${Number(serviceData.amount || 0).toFixed(2)}`} />
+      <SummaryCard rows={serviceData.category === 'jompay'
+        ? [
+            { label: 'Biller Code', value: serviceData.billerCode || '' },
+            { label: 'Ref-1', value: serviceData.accountNumber || '' },
+            ...(String(serviceData.ref2 || '').trim() ? [{ label: 'Ref-2', value: serviceData.ref2 }] : []),
+            // Last four only. The full number goes to the provider because
+            // AMLA requires it; it does not need to sit on screen in a shop.
+            { label: 'IC / Passport', value: maskId(serviceData.icNumber) },
+          ]
+        : [{ label: 'Provider', value: serviceData.provider || '' }, { label: 'Account', value: serviceData.accountNumber || '' }]} totalLabel='Bill amount' totalValue={`${cur} ${Number(serviceData.amount || 0).toFixed(2)}`} />
     </View>;
   }
   return null;
@@ -171,6 +216,14 @@ export function validateStep(step, serviceData) {
   if (step === 0 && !serviceData.country) return 'Please select a country.';
   if (step === 1 && !serviceData.category) return 'Please select a bill category.';
   if (step === 2 && !serviceData.provider) return 'Please select a bill provider.';
+  if (step === 3 && serviceData.category === 'jompay') {
+    if (!/^\d{4,6}$/.test(String(serviceData.billerCode || '').trim())) return 'Please enter the JomPAY Biller Code printed on your bill.';
+    if (!(serviceData.accountNumber || '').trim()) return 'Please enter Ref-1, the account or bill number on your bill.';
+    // Length only - the shape of a passport number is not ours to decide, and
+    // rejecting a valid one would stop a legitimate payment.
+    if (!/^[A-Za-z0-9]{6,20}$/.test(String(serviceData.icNumber || '').trim())) return 'Please enter the payer\u2019s IC or passport number. JomPAY requires it by law.';
+    return null;
+  }
   if (step === 3 && !(serviceData.accountNumber || '').trim()) return 'Please enter the bill or account number.';
   if (step === 3 && serviceData.country === 'BD' && !/^01\d{9}$/.test(String(serviceData.mobileNumber || '').trim())) return 'Please enter a valid Bangladesh mobile number.';
   if (step === 4 && !(Number(serviceData.amount) > 0)) return 'Please enter a valid amount.';

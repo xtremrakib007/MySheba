@@ -2,6 +2,8 @@ const { onCall, HttpsError, onRequest } = require('firebase-functions/v2/https')
 const admin = require('firebase-admin');
 const crypto = require('crypto');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+const { matchesStatus } = require('./statusMatch');
+const { parseAllowedIps, isAllowedSource, callbackSourceIp } = require('./webhookSource');
 
 const COLLECTION = 'api_webhooks';
 const PROVIDERS = 'api_providers';
@@ -16,6 +18,7 @@ const PROJECT_ID = 'satulink-solutions';
 const REGION = 'us-central1';
 
 function clean(v, max = 500) { return typeof v === 'string' ? v.trim().slice(0, max) : ''; }
+
 function assertSuperadmin(db, request) {
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
   return db.doc('users/' + request.auth.uid).get().then((snap) => {
@@ -64,10 +67,19 @@ function validateConfig(data) {
   const processingStatus = clean(data.processingStatus, 100) || 'Processing';
   const cancelStatus = clean(data.cancelStatus, 100) || 'Cancel';
   const enabled = data.enabled !== false;
+  // parseAllowedIps throws a plain Error; the form needs an HttpsError so the
+  // message reaches the operator instead of becoming "internal".
+  let allowedIps;
+  try { allowedIps = parseAllowedIps(data.allowedIps); }
+  catch (error) { throw new HttpsError('invalid-argument', String(error?.message || 'Invalid webhook source address.')); }
   if (!/^[A-Za-z0-9_-]{1,100}$/.test(providerId)) throw new HttpsError('invalid-argument', 'Invalid provider id.');
   if (!/^[!#$%&'*+.^_|~0-9A-Za-z-]{1,100}$/.test(authHeader)) throw new HttpsError('invalid-argument', 'Invalid webhook header name.');
-  if (enabled && !webhookToken) throw new HttpsError('invalid-argument', 'Webhook token is required when webhook is enabled.');
-  return { providerId, enabled, authHeader, webhookToken, transactionIdPath, statusPath, messagePath, successStatus, processingStatus, cancelStatus };
+  // One or the other, never neither: an enabled endpoint with no token and no
+  // allowlist would apply any status change anyone posted to it.
+  if (enabled && !webhookToken && !allowedIps.length) {
+    throw new HttpsError('invalid-argument', 'An enabled webhook needs a token, or a list of source IP addresses for providers that send no token.');
+  }
+  return { providerId, enabled, authHeader, webhookToken, allowedIps, transactionIdPath, statusPath, messagePath, successStatus, processingStatus, cancelStatus };
 }
 
 exports.listApiWebhooks = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
@@ -95,6 +107,7 @@ exports.listApiWebhooks = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (
         successStatus: x.successStatus || 'Success',
         processingStatus: x.processingStatus || 'Processing',
         cancelStatus: x.cancelStatus || 'Cancel',
+        allowedIps: Array.isArray(x.allowedIps) ? x.allowedIps : [],
         hasWebhookToken: Boolean(x.webhookToken),
         webhookToken: '',
         webhookUrl: endpointUrl(providerId),
@@ -123,6 +136,11 @@ exports.saveApiWebhook = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (r
     const incoming = { ...(request.data || {}) };
     const current = currentSnap.exists ? (currentSnap.data() || {}) : {};
     if (!incoming.webhookToken || incoming.webhookToken === '••••••••') incoming.webhookToken = current.webhookToken || '';
+    // Same reason the token is carried forward: this document is written with
+    // merge:false, so a form that posts without the field clears it. An
+    // explicit [] is still a deliberate clear - only an absent field is
+    // treated as "unchanged".
+    if (incoming.allowedIps === undefined) incoming.allowedIps = Array.isArray(current.allowedIps) ? current.allowedIps : [];
     const data = validateConfig(incoming);
     tx.set(webhookRef, { ...data, updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: request.auth.uid }, { merge: false });
   });
@@ -205,10 +223,22 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
   const config = configSnap.data() || {};
   if (config.enabled === false) return res.status(404).send('Webhook disabled');
 
-  const supplied = String(req.get(config.authHeader || 'x-webhook-token') || '');
   const expected = String(config.webhookToken || '');
-  if (!expected || supplied.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(expected))) {
-    return res.status(401).send('Invalid webhook token');
+  const allowedIps = Array.isArray(config.allowedIps) ? config.allowedIps : [];
+  if (expected) {
+    const supplied = String(req.get(config.authHeader || 'x-webhook-token') || '');
+    if (supplied.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(expected))) {
+      return res.status(401).send('Invalid webhook token');
+    }
+  } else if (allowedIps.length) {
+    if (!isAllowedSource(req, allowedIps)) {
+      console.warn('apiWebhook rejected source', providerId, callbackSourceIp(req) || 'unknown');
+      return res.status(401).send('Webhook source not allowed');
+    }
+  } else {
+    // A config that predates the allowlist and lost its token, or was written
+    // around validateConfig. Open by default is not an option.
+    return res.status(401).send('Webhook has no configured authentication');
   }
 
   if (req.rawBody && req.rawBody.length > 1024 * 1024) return res.status(413).send('Webhook payload too large');
@@ -260,7 +290,12 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
       return;
     }
 
-    if (status === config.cancelStatus) {
+    // Each of the three settings accepts a comma-separated list, because one
+    // provider outcome can have more than one name. iimmpact reverses a
+    // transaction with `Refund` and fails one with `Failed`, and both owe the
+    // customer a refund; with only one name configurable the other fell to the
+    // do-nothing branch below and the customer stayed charged.
+    if (matchesStatus(status, config.cancelStatus)) {
       if (order.apiRefunded !== true) {
         const customerId = String(order.customerId || '');
         const refund = Number(order.pointsCharged ?? order.cost);
@@ -275,7 +310,7 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
       } else {
         tx.update(txRef, { apiExecution, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
       }
-    } else if (status === config.successStatus) {
+    } else if (matchesStatus(status, config.successStatus)) {
       // Never resurrect a transaction that has already been refunded/failed.
       // Provider callbacks can arrive out of order, so a late Success after
       // Cancel must not undo the refund or mark the order completed again.
@@ -284,7 +319,7 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
       } else {
         tx.update(txRef, { status: 'completed', apiExecution, completedAt: order.completedAt || admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
       }
-    } else if (status === config.processingStatus) {
+    } else if (matchesStatus(status, config.processingStatus)) {
       if (order.apiRefunded !== true && order.status !== 'failed' && order.status !== 'completed') tx.update(txRef, { status: 'processing', apiExecution, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
       else tx.update(txRef, { apiExecution, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
     } else {

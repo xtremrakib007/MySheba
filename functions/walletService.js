@@ -32,10 +32,14 @@ const REQUEST_ID_RE=/^[A-Za-z0-9_-]{16,128}$/;
 // not.
 const TRANSACTION_RAW_FIELDS = {
   recharge: new Set(['phone', 'country', 'amount', 'operator']),
-  internet: new Set(['phone', 'country', 'amount', 'provider', 'operator', 'operatorCode', 'packageId', 'package', 'packageCostAmount']),
+  internet: new Set(['phone', 'country', 'amount', 'provider', 'operator', 'operatorCode', 'packageId', 'package', 'packageCostAmount', 'subproductCode']),
   offerpacks: new Set(['phone', 'country', 'amount', 'provider', 'operator', 'operatorCode', 'packageId', 'package', 'packageCostAmount']),
   entertainment: new Set(['country', 'amount', 'gameKey', 'game', 'packageId', 'package', 'playerId', 'serverId']),
-  billpayment: new Set(['phone', 'country', 'amount', 'provider', 'category', 'accountNumber', 'billNumber', 'mobileNumber', 'monthName', 'note']),
+  // billerCode/ref2/icNumber are JomPAY's own three fields and subproductCode
+  // is what iimmpact calls a chosen plan. Without them here the screen collects
+  // an IC the provider never sees, and JomPAY refuses the payment for the
+  // AMLA reason - visible only as a rejection from the provider.
+  billpayment: new Set(['phone', 'country', 'amount', 'provider', 'category', 'accountNumber', 'billNumber', 'mobileNumber', 'monthName', 'note', 'billerCode', 'ref2', 'icNumber', 'subproductCode']),
   mobilebanking: new Set(['phone', 'country', 'amount', 'provider', 'category', 'accountNumber']),
   remittance: new Set([
     'phone', 'senderName', 'senderPhone', 'senderCompany', 'senderPassportNo', 'senderPassportExpiry',
