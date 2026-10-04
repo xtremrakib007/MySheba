@@ -412,6 +412,66 @@ test('every message fits the cap the callable truncates at', () => {
   }
 });
 
+console.log('\nA refused order says why');
+
+const providerSource = () => require('fs').readFileSync(
+  require('path').join(__dirname, '..', 'functions/apiProviderService.js'), 'utf8');
+
+test('the provider\u2019s own reason reaches the message', () => {
+  // A real PUBG order came back as "Provider HTTP 400 [400]" - a number,
+  // twice, and nothing to act on - while the parsed body sat right there in
+  // `data` saying what was actually wrong.
+  const { getPath } = require('../functions/apiProviderService')._test;
+  assert.strictEqual(getPath({ error: { message: 'Invalid product' } }, 'error.message'), 'Invalid product');
+  assert.strictEqual(getPath({ message: 'Insufficient balance' }, 'message'), 'Insufficient balance');
+  const source = providerSource();
+  assert.ok(/getPath\(data,'error\.message'\)\|\|getPath\(data,'message'\)/.test(source),
+    'both shapes iimmpact uses must be read');
+  assert.ok(/Provider HTTP \$\{response\.status\}: \$\{reason\}/.test(source),
+    'and the reason must reach the message');
+});
+
+test('a 4xx is still definitive, so a refused order is refunded not left unknown', () => {
+  // This is the money. `definitive` decides between status 'failed' (refund is
+  // safe, the provider replied and refused) and 'unknown' (the customer stays
+  // charged pending reconciliation). It used to be decided by matching the
+  // message against /^Provider HTTP 4\d{2}$/ - which a reason appended to it
+  // no longer matches. If the flag had not been set in its place, every
+  // refusal that now carries a reason would have been filed as uncertain.
+  const source = providerSource();
+  assert.ok(/failure\.providerRejected=true;/.test(source), 'the flag must be set');
+  assert.ok(/const definitive=requestSent===false\|\|e\?\.providerRejected===true/.test(source),
+    'and definitive must still read it');
+
+  // The regex the flag replaced genuinely cannot see the new message.
+  assert.ok(/^Provider HTTP 4\d{2}$/.test('Provider HTTP 400'));
+  assert.ok(!/^Provider HTTP 4\d{2}$/.test('Provider HTTP 400: Invalid product'),
+    'which is precisely why the flag carries it now');
+  // The backstop still has to work for a refusal that carries no reason - and
+  // it has to be IN the definitive test, not merely somewhere in the file.
+  // Searching the whole source matched the comment above describing it, so
+  // deleting the real one changed nothing.
+  const definitiveExpr = /const definitive=[^;]+;/.exec(source);
+  assert.ok(definitiveExpr, 'the definitive test must be findable');
+  assert.ok(definitiveExpr[0].includes(String.raw`/^Provider HTTP 4\d{2}$/`),
+    'the backstop must remain in the definitive test itself');
+});
+
+test('a 5xx is NOT marked refused', () => {
+  // A 5xx may have processed the top-up before failing. Marking it definitive
+  // would refund an order the customer actually received.
+  const source = providerSource();
+  const bounds = /if\(response\.status>=(\d+)&&response\.status<(\d+)\) failure\.providerRejected=true;/.exec(source);
+  assert.ok(bounds, 'the refused range must be stated explicitly');
+  const [lo, hi] = [Number(bounds[1]), Number(bounds[2])];
+  for (const status of [400, 401, 403, 404, 422, 429, 499]) {
+    assert.ok(status >= lo && status < hi, status + ' must count as refused');
+  }
+  for (const status of [500, 502, 503, 504, 200, 302]) {
+    assert.ok(!(status >= lo && status < hi), status + ' must NOT count as refused');
+  }
+});
+
 console.log('\nWe say who we are');
 
 test('every provider call carries a User-Agent', () => {

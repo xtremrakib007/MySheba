@@ -1192,7 +1192,22 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     const responseText=await response.text();
     if(Buffer.byteLength(responseText,'utf8')>1000000) throw new Error('Provider response is too large.');
     let data={}; try { data=responseText?JSON.parse(responseText):{}; } catch { data={raw:responseText.slice(0,5000)}; }
-    if(!response.ok) throw new Error(`Provider HTTP ${response.status}`);
+    if(!response.ok){
+      // The body is already parsed here and usually says exactly what is
+      // wrong - "Invalid product", "Insufficient balance". Throwing only the
+      // status discarded it, which is how a real order came back as
+      // "Provider HTTP 400 [400]": a number, twice, and nothing to act on.
+      const reason=String(getPath(data,'error.message')||getPath(data,'message')||'').trim().slice(0,300);
+      const failure=new Error(reason?`Provider HTTP ${response.status}: ${reason}`:`Provider HTTP ${response.status}`);
+      // A 4xx is the provider replying and refusing, so no top-up can have
+      // happened and the charge is safe to refund. That used to be decided by
+      // matching the message against /^Provider HTTP 4\d{2}$/, which a reason
+      // appended to it no longer matches - so the flag carries it instead,
+      // which is what the flag is for. Get this wrong and a refused order is
+      // filed as 'unknown' and the customer stays charged.
+      if(response.status>=400&&response.status<500) failure.providerRejected=true;
+      throw failure;
+    }
     const outcome = classifyResponse(provider, data);
     const isProcessing = outcome === 'processing';
     if(outcome === 'rejected') {
