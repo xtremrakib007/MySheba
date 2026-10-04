@@ -77,6 +77,11 @@ export const operatorBrand = {
   // its own logo so each brand shows correctly.
   'Smart Axiata': { logo: require('../../assets/operators/smartaxiata.png'), color: '#00A651', initials: 'SA' },
   Cellcard: { logo: require('../../assets/operators/cellcard.png'), color: '#F99D1C', initials: 'CE' },
+  // A wallet rather than a telco: it appears in the Recharge PIN picker, where
+  // it is sold as a voucher. No logo file for it, so it gets a badge - three
+  // letters because "TO", what the two-character fallback would cut
+  // "Touch 'n Go eWallet" down to, reads as nothing at all.
+  "Touch 'n Go eWallet": { logo: null, color: '#1A4A9C', initials: 'TNG' },
 };
 
 /** Looks up an operator's brand info; falls back to a neutral badge for anything not listed above. */

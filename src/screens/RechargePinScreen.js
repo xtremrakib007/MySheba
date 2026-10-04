@@ -6,12 +6,14 @@ import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import HeaderDecor from '../components/HeaderDecor';
 import { showAlert } from '../utils/appAlert';
-import { rechargeOperators } from '../data/countries';
+import { rechargePinBrands } from '../data/countries';
 import { getOperatorBrand } from '../data/operatorBrand';
 import { purchaseRechargePin } from '../firebase/rechargePinService';
 import { radius } from '../theme/theme';
 
-const MALAYSIA_OPERATORS = rechargeOperators.MY || ['Celcom', 'CelcomDigi', 'U Mobile', 'Hotlink', 'XOX', 'Tunetalk', 'Unifi', 'Yes'];
+// Telcos plus the wallets sold as vouchers - see rechargePinBrands for why
+// this is not just rechargeOperators.MY.
+const MALAYSIA_OPERATORS = rechargePinBrands.MY || ['Celcom', 'CelcomDigi', 'U Mobile', 'Hotlink', 'XOX', 'Tunetalk', 'Unifi', 'Yes', "Touch 'n Go eWallet"];
 const AMOUNTS = [10, 20, 30, 50, 100];
 
 export default function RechargePinScreen() {

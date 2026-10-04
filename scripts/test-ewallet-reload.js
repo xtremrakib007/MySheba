@@ -100,4 +100,42 @@ assert(/isGridActive\(gridManagement, service, gridViewer\)/.test(ctx),
 assert(/setCurrentStep\(Number\.isInteger\(startStep\) && startStep > 0 \? startStep : 0\)/.test(ctx),
   'a nonsense start step falls back to the beginning rather than skipping questions');
 
+// The second way to buy it: a PIN voucher.
+//
+// Touch 'n Go sells both pinless and as a PIN, and they are different products
+// with different provider codes. The pinless reload credits the wallet behind a
+// mobile number and is the Bill Payment above; the PIN returns a code the
+// customer redeems themselves and is a Recharge PIN. Only the first existed.
+const countries = read('src/data/countries.js');
+const pinScreen = read('src/screens/RechargePinScreen.js');
+const brands = read('src/data/operatorBrand.js');
+
+assert(/export const rechargePinBrands/.test(countries),
+  'the PIN picker needs a list of its own');
+assert(/rechargePinBrands = \{[\s\S]*?"Touch 'n Go eWallet"/.test(countries),
+  'Touch \u2019n Go must be buyable as a PIN');
+
+// The two lists must stay separate. Putting a wallet into rechargeOperators
+// would add it to the airtime and internet operator grids, where there is no
+// such thing as a data pack for an e-wallet.
+const rechargeBlock = /export const rechargeOperators = \{[\s\S]*?\n\};/.exec(countries);
+assert(rechargeBlock, 'rechargeOperators must still be findable');
+assert(!/Touch 'n Go/.test(rechargeBlock[0]),
+  'a wallet must not leak into the airtime/internet operator list');
+
+assert(/rechargePinBrands\.MY/.test(pinScreen),
+  'the PIN screen must read the PIN list, not the recharge one');
+// The import, not any mention of the name: the screen's own comment explains
+// why it is NOT rechargeOperators, and a bare search matched that comment.
+assert(!/import \{[^}]*rechargeOperators[^}]*\} from '\.\.\/data\/countries'/.test(pinScreen),
+  'and must no longer import rechargeOperators');
+
+// The brand badge: the two-letter fallback would render "Touch 'n Go eWallet"
+// as "TO".
+assert(/"Touch 'n Go eWallet": \{[^}]*initials: 'TNG'/.test(brands),
+  'the wallet needs a legible badge');
+assert(!/^operatorBrand\[/m.test(brands),
+  'added to the map itself, not bolted on after it');
+
 console.log('\nA wallet reload, sold down the path that already handles money.');
+console.log('Sold the other way too, as a voucher, from a picker of its own.');

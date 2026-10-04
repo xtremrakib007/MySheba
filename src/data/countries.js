@@ -36,6 +36,22 @@ export const rechargeOperators = {
   KH: ['Cellcard', 'Smart Axiata'],
 };
 
+// Who can be bought as a PIN voucher, which is not the same list as who can be
+// topped up directly.
+//
+// Touch 'n Go sells both ways and the two are different products: the pinless
+// reload is a Bill Payment that credits the wallet behind a mobile number, and
+// the PIN is a voucher whose code the customer redeems themselves. They carry
+// different product codes at the provider, which is why the same brand appears
+// in two maps rather than one.
+//
+// Kept separate from rechargeOperators deliberately. Adding a wallet there
+// would put it in the airtime and internet operator grids too, where nobody can
+// buy a data pack for an e-wallet.
+export const rechargePinBrands = {
+  MY: [...(rechargeOperators.MY || []), "Touch 'n Go eWallet"],
+};
+
 export const internetPackages = [
   { name: '1GB Daily', data: '1 GB', valid: '1 Day', price: 10 },
   { name: '3GB Weekly', data: '3 GB', valid: '7 Days', price: 25 },

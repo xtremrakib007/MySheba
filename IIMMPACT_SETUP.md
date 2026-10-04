@@ -141,6 +141,18 @@ them, and provider selection prefers a provider that names a country over one
 that serves `ALL`. So a Bangladeshi order cannot reach IIMMPACT even if both
 providers carry the same service.
 
+Touch 'n Go is sold both ways and they are two different products:
+
+- **Pinless** - Bill Payment, category *E-Wallet Reload*, biller
+  *Touch 'n Go eWallet*. Credits the wallet behind a mobile number. Its code
+  goes in **Biller product codes**.
+- **PIN** - the Recharge PIN screen, where *Touch 'n Go eWallet* now appears
+  beside the telcos. Returns a voucher code the customer redeems. Its code goes
+  in **PIN product codes**.
+
+Same brand, two maps, two codes. Read both from **Product list from the
+provider**; nothing is built in, because a wrong code sells the wrong product.
+
 Recharge PIN needs **Response PIN Path** set to `data.pin` - the field
 IIMMPACT's `/v2/topup` returns a voucher PIN in. The preset fills it. A provider
 that lists Recharge PIN will not save without it.
