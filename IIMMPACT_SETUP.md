@@ -124,6 +124,25 @@ A GET callback means the full URL, parameters and all, is replayable by anyone
 who sees it. That is IIMMPACT's protocol, not a MySheba choice; the duplicate
 check below is what makes a replay harmless.
 
+### When the credential test fails
+
+The **Test** button names the HTTP status iimmpact answered with. The `[503]`
+in the dialog's title is MySheba's own callable code, not theirs - read the
+status in the message text.
+
+| What it says | What it means |
+| --- | --- |
+| `refused the credentials: "API key not found"` | The key is not known on the host being called. A staging key does not work on production. Check the Base URL. |
+| `refused the credentials: "Signature mismatch"` | The key is known and the HMAC did not verify. Re-copy the secret, whole, from the dashboard. |
+| `rejected the request (HTTP 403): "Forbidden"` | Their gateway refused the call before the credentials were weighed. Usually the key is not enabled on this host; otherwise ask iimmpact whether the key is attached to a usage plan, or whether the account restricts caller IP addresses. |
+| `rejected the request (HTTP 404)` | The path, not the credentials. The Base URL should have no trailing path. |
+
+A 403 that is caused by an IP restriction cannot be fixed by sending iimmpact
+an address to allowlist. Cloud Functions call out from a wide Google range that
+changes, so an allowlist would need a static egress address (Cloud NAT) set up
+first. Confirm with iimmpact that they actually restrict by IP before building
+that.
+
 ### Callback safety checks
 
 MySheba does not trust a callback merely because it reaches the public URL. Before changing a transaction it:

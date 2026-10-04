@@ -162,11 +162,19 @@ function pinnedLookup(pinnedAddress) {
   };
 }
 
+// Node's https.request sends no User-Agent at all. A request without one is
+// what a WAF or API gateway in front of a provider most often refuses outright,
+// with a bare "Forbidden" and nothing else to go on. Identifying ourselves also
+// gives a provider something to search their logs for when we ask them why a
+// call was refused.
+const USER_AGENT = 'MySheba/1.0';
+
 function requestHttpsPinned(url, options, pinnedAddress) {
   return new Promise((resolve, reject) => {
     const request = https.request(url, {
       method: options.method,
-      headers: options.headers,
+      // Ours first, so an explicit header from a caller still wins.
+      headers: { 'user-agent': USER_AGENT, ...options.headers },
       signal: options.signal,
       // Pin the already-validated DNS result for this request. TLS still uses
       // the original hostname, so certificate/SNI validation is preserved.
@@ -1223,7 +1231,10 @@ exports.testApiProvider = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (
         const reason = String(getPath(data, 'error.message') || getPath(data, 'message') || `HTTP ${response.status}`);
         throw new Error(response.status === 401
           ? `iimmpact refused the credentials: "${reason}". ${iimmpactAuthHint(reason, provider.baseUrl)}`
-          : `iimmpact rejected the request: ${reason}`);
+          // The HTTP status belongs in the message. Without it the only number
+          // the screen shows is our own callable's 503, which reads as though
+          // iimmpact answered 503 when they never did.
+          : `iimmpact rejected the request (HTTP ${response.status}): "${reason}". ${iimmpactRejectionHint(response.status, provider.baseUrl)}`);
       }
       const balance = getPath(data, 'data.balance');
       if (balance == null) throw new Error('iimmpact answered without a balance; the credentials may not be for this environment.');
@@ -1305,6 +1316,36 @@ function iimmpactAuthHint(reason, baseUrl) {
   return 'The key is recognised but the signature did not verify, so check that the HMAC secret is the base64 value from the dashboard, copied whole.';
 }
 exports._test_iimmpactAuthHint = iimmpactAuthHint;
+
+/**
+ * What a refusal that is NOT a 401 most likely means.
+ *
+ * `{"message":"Forbidden"}` with a 403 is the signature of an API gateway
+ * turning the call away before iimmpact's own application ever sees it, which
+ * is a different problem from a 401: the credentials were not even weighed.
+ * The three causes worth naming are a key that is not enabled on the
+ * environment being called, a key not attached to a usage plan, and a caller
+ * address the account does not permit - the last one matters because Cloud
+ * Functions egress from a wide Google range that cannot be allowlisted as a
+ * fixed address.
+ *
+ * Anything else gets no invented explanation, only the status.
+ */
+function iimmpactRejectionHint(status, baseUrl) {
+  const host = (() => { try { return new URL(String(baseUrl || '')).host; } catch { return ''; } })();
+  const onStaging = /staging/i.test(host);
+  const other = onStaging ? 'https://api.iimmpact.com' : 'https://staging.iimmpact.com';
+  if (status === 403) {
+    return `A 403 is their gateway refusing the call before the credentials are weighed, so this is not the secret. Check first that the key was issued for ${host || 'this host'}: a key from the staging dashboard does not work on production, and this provider points at ${host || 'its base URL'}, so try ${other}. If the key is right for this host, ask iimmpact whether it is attached to a usage plan and whether the account restricts caller IP addresses - Cloud Functions call from a wide Google range, so an allowlist of fixed addresses cannot work without a static egress address.`;
+  }
+  if (status === 404) {
+    return `A 404 is the path, not the credentials: check the Base URL has no trailing path and that this endpoint exists on ${host || 'this host'}.`;
+  }
+  if (status === 429) return 'That is rate limiting; retry more slowly.';
+  if (status >= 500) return 'That is a fault on their side, not a configuration problem here; retry, and tell iimmpact if it persists.';
+  return 'Their message above is the whole of what they said.';
+}
+exports._test_iimmpactRejectionHint = iimmpactRejectionHint;
 
 /**
  * A phone number in the national form a provider expects: digits, leading zero,

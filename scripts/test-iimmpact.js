@@ -335,4 +335,63 @@ test('the signature is not emitted as a static header', () => {
   assert.deepStrictEqual(providerService._test.providerAuth({ authType: 'iimmpactHmac', apiKey: 'k', secretKey: SECRET }), {});
 });
 
+console.log('\nWhat a refusal that is not a 401 means');
+
+test('a 403 is not sent to the secret, because the secret was never weighed', () => {
+  // "iimmpact rejected the request: Forbidden" said nothing about what to do.
+  // A 403 with {"message":"Forbidden"} is a gateway turning the call away
+  // before the credentials are read, so advice about the HMAC secret is wrong.
+  const hint = require('../functions/apiProviderService')._test_iimmpactRejectionHint;
+  const out = hint(403, 'https://api.iimmpact.com');
+  assert.ok(!/base64/.test(out), 'must not send them to the secret: ' + out);
+  assert.ok(/not the secret/.test(out), out);
+});
+
+test('a 403 names the environment mismatch first', () => {
+  // It is still the likeliest cause: the keys page is on dashboard-staging
+  // and the provider preset points at production.
+  const hint = require('../functions/apiProviderService')._test_iimmpactRejectionHint;
+  assert.ok(/staging\.iimmpact\.com/.test(hint(403, 'https://api.iimmpact.com')));
+  assert.ok(/api\.iimmpact\.com/.test(hint(403, 'https://staging.iimmpact.com')));
+});
+
+test('a 403 warns that an IP allowlist cannot work from Cloud Functions', () => {
+  // Worth saying before they ask iimmpact to allowlist an address that
+  // changes under them.
+  const hint = require('../functions/apiProviderService')._test_iimmpactRejectionHint;
+  assert.ok(/wide Google range|static egress/.test(hint(403, 'https://api.iimmpact.com')));
+});
+
+test('each status gets its own cause, and none invents one', () => {
+  const hint = require('../functions/apiProviderService')._test_iimmpactRejectionHint;
+  assert.ok(/path, not the credentials/.test(hint(404, 'https://api.iimmpact.com')));
+  assert.ok(/rate limiting/.test(hint(429, 'https://api.iimmpact.com')));
+  assert.ok(/fault on their side/.test(hint(503, 'https://api.iimmpact.com')));
+  // A status we have no account of must not borrow another one's explanation.
+  const unknown = hint(418, 'https://api.iimmpact.com');
+  assert.ok(/whole of what they said/.test(unknown), unknown);
+  assert.ok(!/gateway|path|rate limiting|fault on their side/.test(unknown), unknown);
+});
+
+test('the status reaches the message, so our 503 is not read as theirs', () => {
+  // The screen showed "[503]" - our callable's unavailable code - next to a
+  // message that never said what iimmpact actually answered.
+  const source = require('fs').readFileSync(require('path').join(__dirname, '..', 'functions/apiProviderService.js'), 'utf8');
+  assert.ok(/iimmpact rejected the request \(HTTP \$\{response\.status\}\)/.test(source), source.includes('iimmpact rejected the request') ? 'the status is still missing' : 'the message is gone');
+  assert.ok(/iimmpactRejectionHint\(response\.status, provider\.baseUrl\)/.test(source), 'and the hint must be used');
+});
+
+console.log('\nWe say who we are');
+
+test('every provider call carries a User-Agent', () => {
+  // Node sends none, and a missing User-Agent is a common reason for a WAF to
+  // answer a bare "Forbidden". It is set in requestHttpsPinned so that the
+  // credential test, the dispatch and every catalogue read all get it.
+  const source = require('fs').readFileSync(require('path').join(__dirname, '..', 'functions/apiProviderService.js'), 'utf8');
+  assert.ok(/const USER_AGENT = '[^']+';/.test(source));
+  assert.ok(/headers: \{ 'user-agent': USER_AGENT, \.\.\.options\.headers \}/.test(source),
+    'ours must come first so an explicit header still wins');
+  assert.ok(!/headers: options\.headers,/.test(source), 'the bare pass-through must be gone');
+});
+
 console.log(`\n${passed} checks passed.\n`);
