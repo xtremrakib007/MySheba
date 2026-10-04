@@ -238,6 +238,9 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
   if (!configSnap.exists) return res.status(404).send('Webhook not configured');
   const config = configSnap.data() || {};
   if (config.enabled === false) return res.status(404).send('Webhook disabled');
+  const providerSnap = await db.collection(PROVIDERS).doc(providerId).get();
+  if (!providerSnap.exists) return res.status(404).send('API provider not found');
+  const provider = providerSnap.data() || {};
 
   const expected = String(config.webhookToken || '');
   const allowedIps = Array.isArray(config.allowedIps) ? config.allowedIps : [];
@@ -283,12 +286,31 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
 
   let duplicate = false;
   let providerMismatch = false;
+  let callbackMismatch = false;
   await db.runTransaction(async (tx) => {
     const eventSnap = await tx.get(eventRef);
     const orderSnap = await tx.get(txRef);
     if (eventSnap.exists) { duplicate = true; return; }
     if (!orderSnap.exists) throw new Error('Transaction disappeared.');
     const order = orderSnap.data() || {};
+    const requestCheck = order.apiExecution?.requestCheck;
+    if (provider.authType === 'iimmpactHmac' && requestCheck && typeof requestCheck === 'object') {
+      const callbackData = pathGet(body, 'data') || {};
+      const callbackProduct = safeText(callbackData.product, 100);
+      const callbackAccount = safeText(callbackData.account, 200);
+      const callbackAmount = Number(callbackData.amount);
+      const expectedProduct = safeText(requestCheck.product, 100);
+      const expectedAccount = safeText(requestCheck.account, 200);
+      const expectedAmount = Number(requestCheck.amount);
+      const amountMatches = Number.isFinite(callbackAmount) && Number.isFinite(expectedAmount)
+        && Math.round(callbackAmount * 100) === Math.round(expectedAmount * 100);
+      if ((expectedProduct && callbackProduct !== expectedProduct)
+        || (expectedAccount && callbackAccount !== expectedAccount)
+        || !amountMatches) {
+        callbackMismatch = true;
+        return;
+      }
+    }
     const apiExecution = {
       ...(order.apiExecution || {}),
       providerId,
@@ -348,7 +370,7 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
     });
   });
 
-  if (providerMismatch) {
+  if (providerMismatch || callbackMismatch) {
     await recordDelivery(db, providerId, {
       mismatchedCount: admin.firestore.FieldValue.increment(1),
       lastTransactionId: transactionId, lastStatus: status, lastMatched: false,
