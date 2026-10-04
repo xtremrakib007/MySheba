@@ -66,19 +66,19 @@ const IIMMPACT = {
   service: 'Internet',
   country: 'MY',
   baseUrl: 'https://api.iimmpact.com',
-  catalogPreset: 'iimmpact-subproducts',
+  catalogPreset: 'iimmpact-options',
   authType: 'iimmpactHmac',
   apiKey: 'pk',
   secretKey: Buffer.from('0123456789abcdef0123456789abcdef').toString('base64'),
 };
 
 // What a subproducts reply looks like, in iimmpact's documented vocabulary.
-const planReply = (plans) => ({ data: plans });
+const planReply = (plans) => ({ product_code: 'HI', field_id: 'plan', items: plans });
 const PLAN = {
-  code: 'Unlimited data with hotspot and calls 30-days (3Mbps) H',
-  description: 'Unlimited 30 days',
-  denomination: '40.00',
-  cost: '38.10',
+  code: 'PLAN-HI-30',
+  label: 'Unlimited 30 days',
+  denomination: 40,
+  cost: { amount: '38.10', currency: 'MYR' },
   validity: '30 days',
 };
 
@@ -138,7 +138,8 @@ function recorder(reply = planReply([PLAN])) {
   await catalog.fetchCatalog(IIMMPACT, { operator: 'HI', account: '0178855286' }, { request: r.request });
   assert.strictEqual(r.calls.length, 1);
   const { url } = r.calls[0];
-  assert.strictEqual(url.pathname, '/v2/subproducts');
+  assert.strictEqual(url.pathname, '/v2/options');
+  assert.strictEqual(url.searchParams.get('field_id'), 'plan');
   assert.strictEqual(url.searchParams.get('product_code'), 'HI');
   assert.strictEqual(url.searchParams.get('account_number'), '0178855286');
 }));
@@ -187,7 +188,7 @@ console.log('\nThe reply');
 (atest('a plan is read out of iimmpact’s own field names', async () => {
   const r = recorder();
   const [plan] = await catalog.fetchCatalog(IIMMPACT, { operator: 'HI', account: '0178855286' }, { request: r.request });
-  assert.strictEqual(plan.id, PLAN.code, 'the subproduct code is the id, verbatim - it is a sentence, not a short code');
+  assert.strictEqual(plan.id, PLAN.code, 'the Options API code is the stable plan id');
   assert.strictEqual(plan.name, 'Unlimited 30 days');
   assert.strictEqual(plan.valid, '30 days');
 }));
