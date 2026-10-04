@@ -213,12 +213,43 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
       setShowCatalog(Boolean(provider.catalogPath || provider.catalogPreset || provider.catalogPerAccount || provider.billerProductCodes || provider.operatorProductCodes || provider.pinProductCodes || provider.gameProductCodes));
       return;
     }
-    setForm({
-      country: 'ALL', countries: ['ALL'], service: presetService || API_SERVICES[0], authType: 'none', method: 'POST',
-      active: true, priority: 0, timeoutMs: 15000, endpointPath: '/',
+    const baseForm = {
+      country: 'ALL', countries: ['ALL'], service: presetService && presetService !== 'iimmpact' ? presetService : API_SERVICES[0],
+      authType: 'none', method: 'POST', active: true, priority: 0, timeoutMs: 15000, endpointPath: '/',
       headers: '{}', queryTemplate: '{}', requestTemplate: '{}',
-    });
-    setShowCatalog(false);
+    };
+    if (presetService === 'iimmpact') {
+      const service = 'Recharge';
+      const catalogue = {
+        catalogPreset: 'iimmpact-options',
+        catalogPath: '/v2/options',
+        catalogMethod: 'GET',
+        catalogFieldId: 'plan',
+        catalogPerAccount: 'true',
+        catalogQueryTemplate: JSON.stringify({
+          product_code: '{{operator}}',
+          field_id: '{{fieldId}}',
+          account_number: '{{account}}',
+          limit: '25000'
+        }),
+        catalogListPath: 'items'
+      };
+      setForm({
+        ...baseForm,
+        ...IIMMPACT_DEFAULTS,
+        ...catalogue,
+        services: ['Recharge', 'Internet', 'Bill Payment', 'Entertainment'],
+        service,
+        countries: ['MY', 'SG', 'ID', 'IN', 'PH', 'NP', 'PK', 'MM', 'KH'],
+        country: 'MY',
+        name: IIMMPACT_DEFAULTS.name,
+        requestTemplate: JSON.stringify(IIMMPACT_BODIES[service] || IIMMPACT_BODIES.Recharge),
+      });
+      setShowCatalog(true);
+    } else {
+      setForm(baseForm);
+      setShowCatalog(false);
+    }
   }, [visible, provider, successTopUp, presetService]);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
