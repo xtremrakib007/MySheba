@@ -121,7 +121,15 @@ export default function ApiProviderManagementScreen() {
   // across seven countries there was no way to see what served what, so the
   // system looked like it could only do Success TopUp - when a separate
   // provider per feature per country is exactly what it has always supported.
-  const countryLabel=(c)=>c==='BD'?'🇧🇩 Bangladesh':c==='MY'?'🇲🇾 Malaysia':c==='SG'?'🇸🇬 Singapore':c==='ID'?'🇮🇩 Indonesia':c==='IN'?'🇮🇳 India':c==='PH'?'🇵🇭 Philippines':'🌍 All countries';
+  // Every country in SCOPE_COUNTRIES needs a name here, and the fallback is the
+  // reason: a code with no entry rendered as "All countries", so a provider
+  // scoped to Nepal, Pakistan, Myanmar and Cambodia read as serving every
+  // country on earth - the opposite of what it does. Four codes were missing
+  // and nothing said so, because the fallback is a plausible-looking label
+  // rather than a blank. scripts/test-api-countries.js fails the build now if
+  // a scope country has no name.
+  const COUNTRY_LABELS={BD:'🇧🇩 Bangladesh',MY:'🇲🇾 Malaysia',SG:'🇸🇬 Singapore',ID:'🇮🇩 Indonesia',IN:'🇮🇳 India',PH:'🇵🇭 Philippines',NP:'🇳🇵 Nepal',PK:'🇵🇰 Pakistan',MM:'🇲🇲 Myanmar',KH:'🇰🇭 Cambodia',ALL:'🌍 All countries'};
+  const countryLabel=(c)=>COUNTRY_LABELS[c]||String(c||'');
   // A provider can serve several features now, so it appears under each one it
   // was given rather than only under its primary. `services` is projected with
   // the primary already in it, and falls back to `service` for a document

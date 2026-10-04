@@ -274,6 +274,41 @@ test('the allowlist is bounded', () => {
   assert.throws(() => source.parseAllowedIps(many), /At most/);
 });
 
+console.log('\nWhat a 401 actually means');
+
+test('"API key not found" is not a signing problem, and does not say it is', () => {
+  // A blanket "check the HMAC secret" sent somebody to re-paste a secret that
+  // was fine. The provider's own words distinguish the two causes.
+  const hint = require('../functions/apiProviderService')._test_iimmpactAuthHint;
+  const onProduction = hint('API key not found', 'https://api.iimmpact.com');
+  assert.ok(/secret is probably fine/.test(onProduction), onProduction);
+  assert.ok(/staging\.iimmpact\.com/.test(onProduction), 'and names the other environment to try');
+  assert.ok(!/base64/.test(onProduction), 'without sending them to the secret');
+});
+
+test('it points at the OTHER environment, whichever one is configured', () => {
+  // The keys page is on dashboard-staging and the preset points at
+  // production, so this mismatch is the likeliest first-run failure.
+  const hint = require('../functions/apiProviderService')._test_iimmpactAuthHint;
+  assert.ok(/api\.iimmpact\.com/.test(hint('API key not found', 'https://staging.iimmpact.com')));
+  assert.ok(/staging\.iimmpact\.com/.test(hint('API key not found', 'https://api.iimmpact.com')));
+});
+
+test('a real signature failure still sends them to the secret', () => {
+  const hint = require('../functions/apiProviderService')._test_iimmpactAuthHint;
+  for (const reason of ['Signature mismatch', 'Invalid signature', 'Unauthorized']) {
+    const out = hint(reason, 'https://api.iimmpact.com');
+    assert.ok(/base64 value from the dashboard/.test(out), reason);
+    assert.ok(!/probably fine/.test(out), reason);
+  }
+});
+
+test('the provider\u2019s own words are shown, not paraphrased away', () => {
+  const source = require('fs').readFileSync(require('path').join(__dirname, '..', 'functions/apiProviderService.js'), 'utf8');
+  assert.ok(/iimmpact refused the credentials: "\$\{reason\}"/.test(source),
+    '"rejected the signature" was our wording for a message that said something else entirely');
+});
+
 console.log('\nProvider configuration');
 
 const providerService = require('../functions/apiProviderService');

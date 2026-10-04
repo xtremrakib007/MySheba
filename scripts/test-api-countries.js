@@ -63,4 +63,16 @@ for (const [name, list] of [['ALLOWED_COUNTRIES', allowed], ['SCOPE_COUNTRIES', 
   assert.strictEqual(new Set(list).size, list.length, `${name} lists a country twice`);
 }
 
+console.log('Every country the screen shows has a name');
+// The label map's fallback used to be "All countries", which is a plausible
+// label rather than a blank - so four countries with no entry rendered as
+// serving everywhere, and a provider scoped to Nepal, Pakistan, Myanmar and
+// Cambodia read as the global fallback. Exactly backwards, and silent.
+const screen = read('src/screens/ApiProviderManagementScreen.js');
+const labelled = [...screen.slice(screen.indexOf('const COUNTRY_LABELS={')).matchAll(/([A-Z]{2,3}):'/g)].map((m) => m[1]);
+assert(labelled.length >= scope.length, 'the label map must parse');
+for (const code of [...scope, 'ALL']) {
+  assert(labelled.includes(code), `${code} is offered on the screen but has no name, so it would render as something else`);
+}
+
 console.log('\nEverything chargeable is configurable, from both ends.');

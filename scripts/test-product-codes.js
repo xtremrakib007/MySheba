@@ -332,7 +332,10 @@ test('an unreadable list is an error, not an empty form', () => {
   // can reach reads exactly like a working guard.
   assert.ok(/if \(!products\.length\) \{/.test(callable), 'an empty list must be refused, not returned');
   assert.ok(/no product codes could be read/i.test(callable));
-  assert.ok(/rejected the signature/i.test(callable), 'and a 401 says which half to check');
+  // A 401 must say which half to check, and it cannot do that from the status
+  // alone - "API key not found" and a signature mismatch are different jobs.
+  assert.ok(/iimmpactAuthHint\(reason, provider\.baseUrl\)/.test(callable),
+    'a 401 must name the actual cause, not blame the signature by default');
 });
 
 test('reading the list is superadmin-only and charges nothing', () => {

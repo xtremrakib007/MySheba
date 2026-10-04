@@ -1220,10 +1220,8 @@ exports.testApiProvider = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (
     if (isIimmpact) {
       if (!response.ok) {
         const reason = String(getPath(data, 'error.message') || getPath(data, 'message') || `HTTP ${response.status}`);
-        // 401 here is the one answer worth naming, because it has two causes
-        // and the provider cannot tell them apart for us.
         throw new Error(response.status === 401
-          ? `iimmpact rejected the signature (${reason}). Check the API key and that the HMAC secret is the base64 value from the dashboard.`
+          ? `iimmpact refused the credentials: "${reason}". ${iimmpactAuthHint(reason, provider.baseUrl)}`
           : `iimmpact rejected the request: ${reason}`);
       }
       const balance = getPath(data, 'data.balance');
@@ -1280,6 +1278,32 @@ exports.listSuccessTopUpDrives = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, 
     throw new HttpsError('unavailable', String(e?.message || 'Unable to load Success TopUp packages.').slice(0, 500));
   }
 });
+
+/**
+ * What to actually go and check after a 401, given what the provider said.
+ *
+ * A 401 has three causes and they send you to three different places, so one
+ * blanket "check the HMAC secret" is worse than nothing: it sent somebody to
+ * re-paste a secret that was fine.
+ *
+ *   "API key not found"  the key is not recognised AT ALL, which is almost
+ *                        never a signing problem. The usual cause is a staging
+ *                        key against the production host or the reverse - the
+ *                        keys page is on dashboard-staging, and the preset
+ *                        points at api.iimmpact.com.
+ *   anything else        the key is known and the signature did not verify, so
+ *                        the secret is the thing to look at.
+ */
+function iimmpactAuthHint(reason, baseUrl) {
+  const host = (() => { try { return new URL(String(baseUrl || '')).host; } catch { return ''; } })();
+  const onStaging = /staging/i.test(host);
+  const other = onStaging ? 'https://api.iimmpact.com' : 'https://staging.iimmpact.com';
+  if (/key\s*not\s*found|unknown\s*(api\s*)?key|invalid\s*api\s*key/i.test(String(reason || ''))) {
+    return `That is the key itself being unrecognised rather than the signature failing, so the secret is probably fine. A key issued for one environment does not work on the other: this provider points at ${host || 'its base URL'}, so try ${other} instead, or get a key for ${host || 'this host'}.`;
+  }
+  return 'The key is recognised but the signature did not verify, so check that the HMAC secret is the base64 value from the dashboard, copied whole.';
+}
+exports._test_iimmpactAuthHint = iimmpactAuthHint;
 
 /**
  * A phone number in the national form a provider expects: digits, leading zero,
@@ -1649,8 +1673,9 @@ exports.listProviderProductCodes = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }
   try {
     const { ok, status, json } = await signedProviderRequest(url, { method: 'GET', headers: { accept: 'application/json' } }, provider);
     if (!ok) {
+      const reason = String(getPath(json, 'error.message') || getPath(json, 'message') || `HTTP ${status}`);
       throw new HttpsError('unavailable', status === 401
-        ? 'The provider rejected the signature. Check the API key and that the HMAC secret is the base64 value from the dashboard.'
+        ? `The provider refused the credentials: "${reason}". ${iimmpactAuthHint(reason, provider.baseUrl)}`
         : `The provider answered HTTP ${status}.`);
     }
     const products = readProductList(json);
