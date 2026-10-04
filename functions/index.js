@@ -116,6 +116,7 @@ exports.listSuccessTopUpDrives = require('./apiProviderService').listSuccessTopU
 exports.listProviderDataPlans = require('./apiProviderService').listProviderDataPlans;
 exports.getBillPresentment = require('./apiProviderService').getBillPresentment;
 exports.getNetworkStatus = require('./apiProviderService').getNetworkStatus;
+exports.listProviderProductCodes = require('./apiProviderService').listProviderProductCodes;
 exports.listSuccessTopUpCatalogForAdmin = require('./apiProviderService').listSuccessTopUpCatalogForAdmin;
 exports.getSuccessTopUpBalance = require('./apiProviderService').getSuccessTopUpBalance;
 exports.listApiWebhooks = require('./apiWebhookService').listApiWebhooks;

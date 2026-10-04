@@ -32,6 +32,7 @@ const DEFAULT_LIMITS = {
   // Cached for a minute per product before it ever reaches this, so the limit
   // only catches somebody working around the cache.
   getNetworkStatus: { max: 60, windowMinutes: 10 },
+  listProviderProductCodes: { max: 20, windowMinutes: 60 },
   deleteApiProvider: { max: 10, windowMinutes: 60 },
 };
 

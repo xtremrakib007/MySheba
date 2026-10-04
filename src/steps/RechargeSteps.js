@@ -8,6 +8,8 @@ import { FormLabel, FormInput, SummaryCard } from '../components/ui';
 import CountrySelectCard from '../components/CountrySelectCard';
 import { radius } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
+import ServiceInterruptionNotice from '../components/ServiceInterruptionNotice';
+import { useNetworkStatus } from '../components/useNetworkStatus';
 
 // Recharge flow: country -> operator -> mobile number -> amount.
 // Customer-facing wallet values are always displayed as MYR. The legacy
@@ -36,6 +38,14 @@ export default function RechargeStep({ step }) {
   });
   const { colors, isDark } = useTheme();
   const styles = createStyles(colors, isDark);
+  // Advisory only, and never consulted by validateStep: an interruption is
+  // "this might be slow", not "you may not pay".
+  const interruption = useNetworkStatus({
+    service: 'Recharge',
+    country: serviceData.country,
+    operator: serviceData.operator,
+    active: step === 3,
+  });
 
   if (step === 0) {
     return (<View><FormLabel>Select Country</FormLabel><View style={styles.grid3}>{countries.map((c) => (<CountrySelectCard key={c.code} code={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr }); nextStep(); }} />))}</View></View>);
@@ -52,7 +62,7 @@ export default function RechargeStep({ step }) {
     const isForeign = serviceData.country && serviceData.country !== 'MY';
     const walletDeductionMyr = isForeign ? amountToPoints(serviceData.amount || 0, serviceData.country, rates) : (serviceData.amount || 0);
     const amounts = cur === 'MYR' ? [10, 20, 30, 50, 100] : cur === 'BDT' ? [50, 100, 200, 500, 1000] : [50, 100, 200, 500];
-    return (<View><FormLabel>Select Amount ({cur})</FormLabel><View style={styles.grid3}>{amounts.map((a) => <RechargeAmountButton key={a} label={`${cur} ${a}`} selected={serviceData.amount === a} onPress={() => updateServiceData({ amount: a })} styles={styles} />)}</View><FormInput placeholder="Custom amount" keyboardType="numeric" style={styles.phoneInput} value={serviceData.amount != null ? String(serviceData.amount) : ''} onChangeText={(v) => updateServiceData({ amount: parseFloat(v) || 0 })} />{!!(isForeign && serviceData.amount > 0) && <SummaryCard rows={[{ label: 'Amount', value: `${cur} ${Number(serviceData.amount).toFixed(2)}` }]} totalLabel="Wallet deduction" totalValue={`${walletDeductionMyr.toFixed(2)} MYR`} />}</View>);
+    return (<View><ServiceInterruptionNotice notice={interruption} /><FormLabel>Select Amount ({cur})</FormLabel><View style={styles.grid3}>{amounts.map((a) => <RechargeAmountButton key={a} label={`${cur} ${a}`} selected={serviceData.amount === a} onPress={() => updateServiceData({ amount: a })} styles={styles} />)}</View><FormInput placeholder="Custom amount" keyboardType="numeric" style={styles.phoneInput} value={serviceData.amount != null ? String(serviceData.amount) : ''} onChangeText={(v) => updateServiceData({ amount: parseFloat(v) || 0 })} />{!!(isForeign && serviceData.amount > 0) && <SummaryCard rows={[{ label: 'Amount', value: `${cur} ${Number(serviceData.amount).toFixed(2)}` }]} totalLabel="Wallet deduction" totalValue={`${walletDeductionMyr.toFixed(2)} MYR`} />}</View>);
   }
   return null;
 }

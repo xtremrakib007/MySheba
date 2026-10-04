@@ -10,6 +10,7 @@ const drivesFn = httpsCallable(functions, 'listSuccessTopUpDrives');
 const dataPlansFn = httpsCallable(functions, 'listProviderDataPlans');
 const presentmentFn = httpsCallable(functions, 'getBillPresentment');
 const networkStatusFn = httpsCallable(functions, 'getNetworkStatus');
+const productCodesFn = httpsCallable(functions, 'listProviderProductCodes');
 const testFn = httpsCallable(functions, 'testApiProvider');
 const adminCatalogFn = httpsCallable(functions, 'listSuccessTopUpCatalogForAdmin');
 const balanceFn = httpsCallable(functions, 'getSuccessTopUpBalance');
@@ -73,6 +74,14 @@ export async function listProviderDataPlans({ service = 'Internet', country, ope
  * treated the same way for the same reason, so a caller never has to decide
  * whether a network error is a reason not to pay a bill.
  */
+/**
+ * Superadmin only: the provider's own product list, for filling in the code
+ * maps. Nothing can be guessed here, so this is where the codes come from.
+ */
+export async function listProviderProductCodes(id) {
+  return (await productCodesFn({ id })).data?.products || [];
+}
+
 /**
  * Whether the biller or operator is having problems right now.
  *

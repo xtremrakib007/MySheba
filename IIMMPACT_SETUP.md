@@ -254,7 +254,56 @@ through an allowlist of likely keys (`customer_name`, `outstanding_amount`,
 screen. If a biller returns a field under a name not in that list it simply
 will not show — tell me the name and it takes one line.
 
-## 8. Network status
+## 8. Operator product codes (recharge)
+
+A top-up needs the provider's code for the operator, and **nothing is built in**
+— not one code. There are 37 non-Bangladesh operators across the countries the
+app sells recharge for, iimmpact's documentation names a code for none of them,
+and a guessed code is a real top-up sent to the wrong product with a customer's
+money.
+
+So instead of guessing, open the Recharge provider record, expand **Package
+catalogue**, and tap **Product list from the provider**. That reads
+`GET /v2/product-list` with the stored credentials and lists every code with its
+name. Copy them into **Operator product codes**:
+
+```json
+{ "Hotlink": "H", "U Mobile": "U", "Celcom": "CEL" }
+```
+
+The names on the left are exactly as the Recharge screen shows them — `Celcom`,
+`CelcomDigi`, `U Mobile`, `Hotlink`, `XOX`, `Tunetalk`, `Unifi`, `Yes` for
+Malaysia, and the equivalent list per country.
+
+**An operator left out has its top-ups refused**, with a message naming the
+operator and this field — it does not fall back to sending the display name.
+That is deliberate: "Hotlink" is not a product code, and the two outcomes of
+sending one are a failed charge or a top-up against whatever the provider
+decides that string meant. The refusal happens before the request leaves, so the
+customer's money comes straight back.
+
+A provider record with **no** map at all is unaffected and keeps working exactly
+as before — this only applies where you have said codes are needed.
+
+Three separate maps exist and they hold three different code sets for the same
+names, which is why they are not one field:
+
+| Field | For | Shape |
+| --- | --- | --- |
+| Operator product codes | charging a top-up | one code per operator (`Hotlink` → `H`) |
+| Operator product codes *(catalogue)* | browsing per-number internet plans | one or more per operator (`CelcomDigi` → `CEL`, `DI`) |
+| Biller product codes | bills and their presentment | one code per biller (`TNB` → `TNB`) |
+
+iimmpact sells Hotlink airtime and Hotlink internet as different products under
+different codes (`H` and `HI`), so reading one map for the other would charge
+the wrong thing.
+
+The code is resolved **on the server** from this map. It is deliberately not
+something the app can send: it decides which product real money buys. Where the
+server has already worked one out — an internet order carries the product its
+plan was actually found under — that one wins.
+
+## 9. Network status
 
 When a biller or operator is having problems, a line appears on the step:
 
@@ -275,6 +324,9 @@ healthy, not as a warning containing the word.
 
 ### Which product it asks about
 
+* **Recharge** — the operator's code from **Operator product codes**, so the
+  warning is about the product that would actually be charged. An unmapped
+  operator is not asked about.
 * **Bill Pay** — the biller's own product code, from the same **Biller product
   codes** map as presentment. A biller with no code is not asked about.
 * **Internet** — the operator's code where that is unambiguous. **CelcomDigi is

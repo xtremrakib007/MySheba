@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useTheme } from '../theme/ThemeContext';
 import { Modal, View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { API_SERVICES } from '../firebase/apiProviderService';
+import * as apiProviderService from '../firebase/apiProviderService';
 
 const COUNTRIES = [
   { code: 'ALL', label: 'All countries' }, { code: 'MY', label: 'Malaysia' }, { code: 'BD', label: 'Bangladesh' },
@@ -84,6 +85,7 @@ const SECTIONS = [
       { key: 'catalogQueryTemplate', label: 'Catalogue query (JSON)', placeholder: '{"product_code":"{{operator}}","account_number":"{{account}}"}', hint: 'For a catalogue fetched with GET. {{account}} is the customer\u2019s own number.' },
       { key: 'catalogPerAccount', label: 'Priced per phone number?', placeholder: 'true or false', hint: 'true when the provider personalises plans to the number. The number then becomes required, and no answer is ever reused for another number.' },
       { key: 'catalogOperatorCodes', label: 'Operator product codes (JSON)', placeholder: '{"Hotlink":"HI","CelcomDigi":["CEL","DI"]}', hint: 'Which product code each operator\u2019s plans come from. A list where one operator could be more than one product - every code is asked and the plan keeps the one that answered. An operator left out keeps its built-in package list.' },
+      { key: 'operatorProductCodes', label: 'Operator product codes (JSON)', placeholder: '{"Hotlink":"H","U Mobile":"U"}', hint: 'The provider\u2019s code for each operator, for a top-up. Nothing is built in: tap Product list above to read the real codes from the provider. An operator left out has its top-ups refused rather than sent under its display name.' },
       { key: 'billerProductCodes', label: 'Biller product codes (JSON)', placeholder: '{"TNB":"TNB","JomPAY":"JOMPAY","Air Selangor":"AIRSEL"}', hint: 'Which product code each biller on the Bill Pay screen is, for reading a bill before paying it. TNB and JomPAY are built in; everything else comes from the provider\u2019s product list. A biller left out simply gets no bill details - it is never a reason a payment fails.' },
       { key: 'billPresentmentPath', label: 'Bill presentment path', placeholder: '/v2/bill-presentment', hint: 'Leave blank for the default.' },
     ],
@@ -130,12 +132,16 @@ const IIMMPACT_DEFAULTS = {
 // country and operator, so it is left as a placeholder the operator fills in
 // from /v2/product-list rather than guessed here.
 const IIMMPACT_BODIES = {
-  Recharge: { refid: '{{requestId}}', product: '{{operator}}', account: '{{phone}}', amount: '{{amount}}' },
+  // operatorCode, not operator: {{operator}} is the name the customer picked
+  // ('Hotlink'), and a name is not a product. The server resolves the code from
+  // Operator product codes below and refuses the charge if there is none,
+  // rather than sending a display name and letting the provider guess.
+  Recharge: { refid: '{{requestId}}', product: '{{operatorCode}}', account: '{{phone}}', amount: '{{amount}}' },
   // operatorCode, not operator: for a per-number plan the server resolves which
   // product the plan was actually found under, and {{operator}} is the display
   // name the customer picked ('CelcomDigi'), not a product code.
   Internet: { refid: '{{requestId}}', product: '{{operatorCode}}', account: '{{phone}}', amount: '{{amount}}', extras: { subproduct_code: '{{packageId}}' } },
-  'Recharge PIN': { refid: '{{requestId}}', product: '{{operator}}', account: '{{phone}}', amount: '{{amount}}' },
+  'Recharge PIN': { refid: '{{requestId}}', product: '{{operatorCode}}', account: '{{phone}}', amount: '{{amount}}' },
   'Bill Payment': { refid: '{{requestId}}', product: '{{provider}}', account: '{{accountNumber}}', amount: '{{amount}}' },
 };
 
@@ -169,19 +175,23 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [form, setForm] = useState({});
   const [showCatalog, setShowCatalog] = useState(false);
+  const [products, setProducts] = useState([]);
+  const [productsBusy, setProductsBusy] = useState(false);
+  const [productsError, setProductsError] = useState('');
 
   useEffect(() => {
     if (!visible) return;
+    setProducts([]); setProductsError(''); setProductsBusy(false);
     if (successTopUp) {
       setForm({ ...(provider || {}), ...SUCCESS_TOPUP_DEFAULTS });
       return;
     }
     if (provider) {
       const next = { ...provider };
-      for (const key of ['catalogTypes', 'catalogItemMap', 'catalogWindow', 'catalogQueryTemplate', 'catalogOperatorCodes', 'catalogPerAccount', 'billerProductCodes']) next[key] = toText(provider[key]);
+      for (const key of ['catalogTypes', 'catalogItemMap', 'catalogWindow', 'catalogQueryTemplate', 'catalogOperatorCodes', 'catalogPerAccount', 'billerProductCodes', 'operatorProductCodes']) next[key] = toText(provider[key]);
       setForm(next);
       // Open the catalogue section straight away when there is something in it.
-      setShowCatalog(Boolean(provider.catalogPath || provider.catalogPreset || provider.catalogPerAccount || provider.billerProductCodes));
+      setShowCatalog(Boolean(provider.catalogPath || provider.catalogPreset || provider.catalogPerAccount || provider.billerProductCodes || provider.operatorProductCodes));
       return;
     }
     setForm({
@@ -193,6 +203,20 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
   }, [visible, provider, successTopUp, presetService]);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  // Only for a provider that already exists: the call signs with its stored
+  // credentials, so there is nothing to read from an unsaved form.
+  const loadProductCodes = async () => {
+    if (productsBusy || !provider?.id) return;
+    setProductsBusy(true); setProductsError(''); setProducts([]);
+    try {
+      setProducts(await apiProviderService.listProviderProductCodes(provider.id));
+    } catch (error) {
+      setProductsError(String(error?.message || 'Could not read the product list.'));
+    } finally {
+      setProductsBusy(false);
+    }
+  };
 
   // The preset keeps whatever is already typed - name, country, credentials,
   // the chosen feature - and only fills the wiring. Re-tapping it after
@@ -342,6 +366,24 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
                         {showCatalog ? (
                           <>
                             <Text style={styles.fieldHint}>{section.note}</Text>
+                            {provider?.id ? (
+                              <>
+                                <TouchableOpacity onPress={loadProductCodes} disabled={productsBusy} style={styles.preset}>
+                                  <Text style={styles.presetText}>{productsBusy ? 'Reading\u2026' : 'Product list from the provider'}</Text>
+                                </TouchableOpacity>
+                                <Text style={styles.fieldHint}>
+                                  The codes for the maps below. Nothing is built in, so this reads them from the
+                                  provider itself rather than anybody guessing: a wrong code is a real top-up
+                                  sent to the wrong product.
+                                </Text>
+                                {!!productsError && <Text style={styles.fieldHint}>{productsError}</Text>}
+                                {products.map((p) => (
+                                  <Text key={p.code} selectable style={styles.productRow}>
+                                    {p.code}{p.name ? `  \u2014  ${p.name}` : ''}{p.category ? `  (${p.category})` : ''}
+                                  </Text>
+                                ))}
+                              </>
+                            ) : null}
                             {section.fields.map(renderField)}
                           </>
                         ) : null}
@@ -428,6 +470,7 @@ function createStyles(colors) {
     chipOnText: { color: colors.onPrimary, fontWeight: '700' },
     preset: { alignSelf: 'flex-start', paddingVertical: 9, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1.5, borderColor: colors.primary, marginBottom: 8 },
     presetText: { color: colors.primary, fontWeight: '800', fontSize: 12.5 },
+    productRow: { fontSize: 11.5, lineHeight: 17, color: colors.text, fontFamily: 'monospace' },
     toggle: { marginTop: 16, paddingVertical: 10 },
     toggleText: { color: colors.primary, fontWeight: '700' },
     row: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12, gap: 10 },

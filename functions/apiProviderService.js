@@ -16,6 +16,7 @@ const { signIimmpactRequest, decodeSecret: decodeIimmpactSecret } = require('./i
 const { matchesStatus } = require('./statusMatch');
 const billPresentment = require('./billPresentment');
 const networkStatus = require('./networkStatus');
+const productCodes = require('./productCodes');
 
 const COLLECTION = 'api_providers';
 const SETTINGS = 'api_settings/service_modes';
@@ -280,19 +281,20 @@ function validateCatalog(data) {
   // screen is. Named by OUR biller name, because that is what the screen has;
   // a biller with no entry simply gets no bill presentment, which is one of
   // the provider's own documented non-blocking answers anyway.
-  if (data.billerProductCodes !== undefined && data.billerProductCodes !== null && data.billerProductCodes !== ''
-      && Object.keys(asObject(data.billerProductCodes)).length > 0) {
-    const map = validateTemplate(data.billerProductCodes, 'Biller product codes', 4000);
+  for (const [field, label] of [['billerProductCodes', 'Biller product code'], ['operatorProductCodes', 'Operator product code']]) {
+    if (data[field] === undefined || data[field] === null || data[field] === ''
+        || Object.keys(asObject(data[field])).length === 0) continue;
+    const map = validateTemplate(data[field], label + 's', 4000);
     const cleaned = {};
-    for (const [biller, code] of Object.entries(map)) {
+    for (const [name, code] of Object.entries(map)) {
       const value = cleanString(Array.isArray(code) ? code[0] : code, 40);
-      if (!value) throw new HttpsError('invalid-argument', `Biller product code for "${biller}" is empty.`);
-      if (!/^[A-Za-z0-9_.-]+$/.test(value)) throw new HttpsError('invalid-argument', `Biller product code for "${biller}" must be a plain product code.`);
-      cleaned[biller] = value;
+      if (!value) throw new HttpsError('invalid-argument', `${label} for "${name}" is empty.`);
+      if (!/^[A-Za-z0-9_.-]+$/.test(value)) throw new HttpsError('invalid-argument', `${label} for "${name}" must be a plain product code.`);
+      cleaned[name] = value;
     }
-    out.billerProductCodes = cleaned;
+    out[field] = cleaned;
   }
-  for (const field of ['billPresentmentPath', 'networkStatusPath']) {
+  for (const field of ['billPresentmentPath', 'networkStatusPath', 'productListPath']) {
     if (data[field] === undefined || data[field] === null) continue;
     const path = cleanString(data[field], 300);
     if (path && (path.includes('?') || path.includes('#') || /^https?:\/\//i.test(path))) {
@@ -845,6 +847,13 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   const packageId = raw.packageId || raw.package_id || '';
   const mobileBillOperator = SUCCESS_TOPUP_POSTPAID_BILL_OPERATORS[String(raw.provider || '').trim()] || '';
   const rechargeOperator = resolveSuccessTopUpOperator(raw.operator);
+  // The provider's own code for the operator the customer picked, resolved
+  // HERE rather than taken from the client: it decides which product a real
+  // top-up buys, and the screen has no business naming it. raw.operatorCode
+  // still wins where the server already put one there - an internet order
+  // carries the product its plan was actually found under.
+  const mappedOperatorCode = productCodes.operatorProductCode(provider, raw.operator);
+  const providerOperatorCode = raw.operatorCode || mappedOperatorCode;
   const monthName = raw.monthName || new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
   if (isSuccessTopUpBill && String(raw.country || '').toUpperCase() === 'BD') {
     const category = String(raw.category || '').toLowerCase();
@@ -888,7 +897,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   // `phone` is the one value that genuinely comes from raw - it is the number
   // being topped up, not the customer's own - so it says so explicitly rather
   // than relying on the spread to win.
-  const vars = { ...Object.fromEntries(Object.entries(raw).filter(([k,v]) => !['requestId'].includes(k) && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')).slice(0,100)), requestId, uid:customer?.uid||'', phone:raw.phone||customer?.phone||'', amount:providerAmount, total:payload?.total??raw.total??'', service, country:raw.country||'', operator:(String(provider.name || '').trim().toLowerCase() === 'success topup' && String(raw.country || '').toUpperCase() === 'BD' ? rechargeOperator : (raw.operator || '')), internetOperator, packageId, billOperator, billNumber:raw.billNumber||raw.accountNumber||'', mobileNumber:raw.mobileNumber||'', monthName, note:raw.note||'', packageCode:raw.packageCode||'', details:payload?.details||'', apiKey:provider.apiKey||'', secretKey:provider.secretKey||'' };
+  const vars = { ...Object.fromEntries(Object.entries(raw).filter(([k,v]) => !['requestId'].includes(k) && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')).slice(0,100)), requestId, uid:customer?.uid||'', phone:raw.phone||customer?.phone||'', amount:providerAmount, total:payload?.total??raw.total??'', service, country:raw.country||'', operator:(String(provider.name || '').trim().toLowerCase() === 'success topup' && String(raw.country || '').toUpperCase() === 'BD' ? rechargeOperator : (raw.operator || '')), internetOperator, packageId, billOperator, billNumber:raw.billNumber||raw.accountNumber||'', mobileNumber:raw.mobileNumber||'', monthName, note:raw.note||'', operatorCode:providerOperatorCode, packageCode:raw.packageCode||'', details:payload?.details||'', apiKey:provider.apiKey||'', secretKey:provider.secretKey||'' };
   try {
     let base; try { base = new URL(provider.baseUrl); } catch { throw new Error('Provider URL is invalid.'); }
     if (base.protocol !== 'https:') throw new Error('Provider URL is not allowed.');
@@ -944,6 +953,19 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
       // Plain recharge had no equivalent guard, so an operator the map does not
       // know reached the provider as a display name and was rejected there.
       if (isSuccessTopUpRecharge && !rechargeOperator) throw new Error(`Success TopUp does not support the Bangladesh operator "${String(raw.operator || '').slice(0, 40)}".`);
+      // A provider that declares an operator code map is saying it needs codes.
+      // Sending the display name instead is not a near miss - "Hotlink" is not
+      // a product - so an operator missing from the map is refused here, before
+      // the request leaves, where the charge is still cleanly refundable and
+      // the message can say which operator to add.
+      //
+      // Only for an order that NAMES an operator. A bill payment or a
+      // remittance has none, and the same provider record can serve those too -
+      // guarding on the map alone would refuse every bill the moment somebody
+      // filled in recharge codes.
+      if (productCodes.declaresOperatorCodes(provider) && String(raw.operator || '').trim() && !providerOperatorCode) {
+        throw new Error(`${provider.name || 'This provider'} has no product code configured for "${String(raw.operator || '').slice(0, 40)}". Add it under Operator product codes.`);
+      }
       if (isSuccessTopUpInternet && !vars.packageId) throw new Error('Success TopUp package ID is required for an internet/data-pack purchase.');
       if (isSuccessTopUpPackage && !(Number.isFinite(packageCost) && packageCost > 0)) throw new Error('The package cost price was not resolved on the server; refusing to send a customer-facing price to Success TopUp.');
       if (service === 'Bill Payment' && String(provider.name || '').trim().toLowerCase() === 'success topup' && !billOperator && !isBangladeshMobileBill) throw new Error('Success TopUp does not have a supported bill operator mapping for this biller.');
@@ -1373,6 +1395,10 @@ exports._test_networkStatusCache = { cachedNetworkStatus, rememberNetworkStatus,
  */
 function statusProductCodeFor(provider, { service, billerName, operatorName, productCode }) {
   if (service === 'Bill Payment') return billerProductCodeFor(provider, billerName);
+  // A recharge is charged against exactly one product, named by the same map
+  // the charge itself uses - so there is nothing ambiguous and nothing for the
+  // client to name.
+  if (service === 'Recharge') return productCodes.operatorProductCode(provider, operatorName);
   const codes = providerCatalog.productCodesFor(provider, operatorName);
   const named = String(productCode || '').trim();
   if (named) return codes.includes(named) ? named : '';
@@ -1439,6 +1465,86 @@ exports.getNetworkStatus = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async 
   // a blip for a minute after the provider came back.
   if (result.status !== 'unknown') rememberNetworkStatus(cacheKey, answer, now);
   return answer;
+});
+
+/**
+ * Superadmin-only: the provider's own product list, so the code maps can be
+ * filled in from the horse's mouth.
+ *
+ * This exists because nothing else could honestly supply those codes. There are
+ * 37 non-Bangladesh operators across the countries the app sells recharge for,
+ * iimmpact's documentation names a code for none of them, and a guessed code is
+ * a real top-up sent to the wrong product. Reading the list from the provider
+ * turns "we do not know the codes" from a blocker into a form to fill in.
+ *
+ * Read-only, and it charges nothing.
+ */
+const PRODUCT_LIST_KEYS = {
+  code: ['code', 'product_code', 'productCode', 'product', 'id'],
+  name: ['name', 'product_name', 'productName', 'description', 'title'],
+  category: ['category', 'product_group', 'productGroup', 'group', 'type'],
+};
+function readProductList(json) {
+  const body = json && typeof json === 'object' ? json : {};
+  const list = Array.isArray(body) ? body
+    : Array.isArray(body.data) ? body.data
+      : Array.isArray(body.products) ? body.products
+        : Array.isArray(body.data?.products) ? body.data.products : [];
+  const out = [];
+  for (const item of list.slice(0, 1000)) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const pick = (keys) => {
+      for (const key of keys) {
+        const value = item[key];
+        if (value === undefined || value === null || value === '' || typeof value === 'object') continue;
+        return String(value).slice(0, 120);
+      }
+      return '';
+    };
+    const code = pick(PRODUCT_LIST_KEYS.code);
+    if (!code) continue;
+    out.push({ code, name: pick(PRODUCT_LIST_KEYS.name), category: pick(PRODUCT_LIST_KEYS.category) });
+  }
+  // By name, because that is what somebody filling in "Hotlink" is scanning
+  // for; the code is what they copy once they have found it.
+  return out.sort((a, b) => (a.name || a.code).localeCompare(b.name || b.code));
+}
+exports._test_readProductList = readProductList;
+
+exports.listProviderProductCodes = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  const db = admin.firestore();
+  await assertSuperadmin(db, request);
+  await checkVelocity(db, request.auth.uid, 'listProviderProductCodes', { ip: getClientIp(request) });
+  const id = cleanString(request.data?.id, 100);
+  if (!id) throw new HttpsError('invalid-argument', 'Provider id is required.');
+  const snap = await db.collection(COLLECTION).doc(id).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'API provider not found.');
+  const provider = { id, ...(snap.data() || {}) };
+  Object.assign(provider, await providerSecretService.getCredentials(provider));
+  if (!provider.apiKey || !provider.secretKey) throw new HttpsError('failed-precondition', 'This provider has no credentials configured.');
+
+  let url;
+  try {
+    url = new URL(cleanString(provider.productListPath, 300) || '/v2/product-list', provider.baseUrl);
+    if (url.protocol !== 'https:') throw new Error('not https');
+  } catch { throw new HttpsError('failed-precondition', 'This provider has no usable base URL.'); }
+
+  try {
+    const { ok, status, json } = await signedProviderRequest(url, { method: 'GET', headers: { accept: 'application/json' } }, provider);
+    if (!ok) {
+      throw new HttpsError('unavailable', status === 401
+        ? 'The provider rejected the signature. Check the API key and that the HMAC secret is the base64 value from the dashboard.'
+        : `The provider answered HTTP ${status}.`);
+    }
+    const products = readProductList(json);
+    if (!products.length) {
+      throw new HttpsError('unavailable', 'The provider answered, but no product codes could be read from it.');
+    }
+    return { products };
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError('unavailable', String(error?.message || 'Unable to read the product list.').slice(0, 300));
+  }
 });
 
 /**
@@ -1533,8 +1639,10 @@ exports.listApiProviders = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async 
       catalogPerAccount: x.catalogPerAccount === true,
       catalogOperatorCodes: x.catalogOperatorCodes || null,
       billerProductCodes: x.billerProductCodes || null,
+      operatorProductCodes: x.operatorProductCodes || null,
       billPresentmentPath: x.billPresentmentPath || '',
       networkStatusPath: x.networkStatusPath || '',
+      productListPath: x.productListPath || '',
       catalogWindow: x.catalogWindow || null,
       hasCatalogRequestTemplate: Boolean(x.catalogRequestTemplate && Object.keys(x.catalogRequestTemplate).length),
     };
