@@ -38,7 +38,7 @@ export default function CustomerHomeScreen() {
 
   return (
     <View style={styles.screen}>
-      <AppHeader unreadCount={hasUnreadNotifications ? 1 : 0} onPressMenu={openSidebar} />
+      <AppHeader unreadCount={hasUnreadNotifications ? 1 : 0} onPressMenu={openSidebar} hero />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <WalletCard

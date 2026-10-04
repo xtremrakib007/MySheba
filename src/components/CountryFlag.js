@@ -51,6 +51,18 @@ const FLAGS = {
   ),
 
   // Bottle green, red disc set slightly toward the hoist.
+  // Kuwait: three bands with a black trapezoid at the hoist. The trapezoid is
+  // the flag's whole distinguishing feature - a plain black rectangle there
+  // reads as Sudan or Palestine, so it is drawn as the polygon it is.
+  KW: () => (
+    <>
+      <Rect x="0" y="0" width="60" height="13.33" fill="#007A3D" />
+      <Rect x="0" y="13.33" width="60" height="13.34" fill="#FFFFFF" />
+      <Rect x="0" y="26.67" width="60" height="13.33" fill="#CE1126" />
+      <Polygon points="0,0 18,13.33 18,26.67 0,40" fill="#000000" />
+    </>
+  ),
+
   BD: () => (
     <>
       <Rect x="0" y="0" width="60" height="40" fill="#006A4E" />
