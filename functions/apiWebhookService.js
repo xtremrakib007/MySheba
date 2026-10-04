@@ -135,12 +135,28 @@ exports.saveApiWebhook = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (r
     if (!providerSnap.exists) throw new HttpsError('not-found', 'API provider not found.');
     const incoming = { ...(request.data || {}) };
     const current = currentSnap.exists ? (currentSnap.data() || {}) : {};
+    const provider = providerSnap.data() || {};
+    const isIimmpact = provider.authType === 'iimmpactHmac';
     if (!incoming.webhookToken || incoming.webhookToken === '••••••••') incoming.webhookToken = current.webhookToken || '';
-    // Same reason the token is carried forward: this document is written with
-    // merge:false, so a form that posts without the field clears it. An
-    // explicit [] is still a deliberate clear - only an absent field is
-    // treated as "unchanged".
-    if (incoming.allowedIps === undefined) incoming.allowedIps = Array.isArray(current.allowedIps) ? current.allowedIps : [];
+    // Preserve an existing allowlist when the form omits the field. For
+    // IIMMPACT transaction callbacks, however, an empty/new configuration is
+    // automatically secured with IIMMPACT's current production callback IPs.
+    // This avoids the dangerous "save succeeded but the provider can never
+    // authenticate" setup error, while still allowing an explicitly supplied
+    // list to be retained for staging or future provider changes.
+    if (incoming.allowedIps === undefined || (isIimmpact && String(incoming.allowedIps || '').trim() === '')) {
+      incoming.allowedIps = Array.isArray(current.allowedIps) && current.allowedIps.length
+        ? current.allowedIps
+        : (isIimmpact ? ['18.140.170.98', '13.215.6.214'] : []);
+    }
+    if (isIimmpact && !currentSnap.exists) {
+      incoming.transactionIdPath = incoming.transactionIdPath || 'data.refid';
+      incoming.statusPath = incoming.statusPath || 'data.status';
+      incoming.messagePath = incoming.messagePath || 'data.remarks';
+      incoming.successStatus = incoming.successStatus || 'Succesful, Successful';
+      incoming.processingStatus = incoming.processingStatus || 'Processing, Accepted';
+      incoming.cancelStatus = incoming.cancelStatus || 'Failed, Refund';
+    }
     const data = validateConfig(incoming);
     tx.set(webhookRef, { ...data, updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: request.auth.uid }, { merge: false });
   });
@@ -222,6 +238,9 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
   if (!configSnap.exists) return res.status(404).send('Webhook not configured');
   const config = configSnap.data() || {};
   if (config.enabled === false) return res.status(404).send('Webhook disabled');
+  const providerSnap = await db.collection(PROVIDERS).doc(providerId).get();
+  if (!providerSnap.exists) return res.status(404).send('API provider not found');
+  const provider = providerSnap.data() || {};
 
   const expected = String(config.webhookToken || '');
   const allowedIps = Array.isArray(config.allowedIps) ? config.allowedIps : [];
@@ -267,12 +286,31 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
 
   let duplicate = false;
   let providerMismatch = false;
+  let callbackMismatch = false;
   await db.runTransaction(async (tx) => {
     const eventSnap = await tx.get(eventRef);
     const orderSnap = await tx.get(txRef);
     if (eventSnap.exists) { duplicate = true; return; }
     if (!orderSnap.exists) throw new Error('Transaction disappeared.');
     const order = orderSnap.data() || {};
+    const requestCheck = order.apiExecution?.requestCheck;
+    if (provider.authType === 'iimmpactHmac' && requestCheck && typeof requestCheck === 'object') {
+      const callbackData = pathGet(body, 'data') || {};
+      const callbackProduct = safeText(callbackData.product, 100);
+      const callbackAccount = safeText(callbackData.account, 200);
+      const callbackAmount = Number(callbackData.amount);
+      const expectedProduct = safeText(requestCheck.product, 100);
+      const expectedAccount = safeText(requestCheck.account, 200);
+      const expectedAmount = Number(requestCheck.amount);
+      const amountMatches = Number.isFinite(callbackAmount) && Number.isFinite(expectedAmount)
+        && Math.round(callbackAmount * 100) === Math.round(expectedAmount * 100);
+      if ((expectedProduct && callbackProduct !== expectedProduct)
+        || (expectedAccount && callbackAccount !== expectedAccount)
+        || !amountMatches) {
+        callbackMismatch = true;
+        return;
+      }
+    }
     const apiExecution = {
       ...(order.apiExecution || {}),
       providerId,
@@ -332,7 +370,7 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
     });
   });
 
-  if (providerMismatch) {
+  if (providerMismatch || callbackMismatch) {
     await recordDelivery(db, providerId, {
       mismatchedCount: admin.firestore.FieldValue.increment(1),
       lastTransactionId: transactionId, lastStatus: status, lastMatched: false,

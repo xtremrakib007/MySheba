@@ -8,8 +8,8 @@ import { useTheme } from '../theme/ThemeContext';
 const WEBHOOK_FIELDS = [
   { key: 'webhookToken', label: 'Webhook token', placeholder: 'Shared secret the provider sends back',
     hint: 'Leave blank to keep the stored token. Providers that send no token at all need the IP list below instead.' },
-  { key: 'allowedIps', label: 'Allowed source IP addresses', placeholder: 'e.g. 18.140.170.98',
-    hint: 'Comma separated. Only for a provider whose callback carries no token - iimmpact is one. A callback from any other address is refused. Get the addresses from the provider, not from a callback you received.' },
+  { key: 'allowedIps', label: 'Allowed source IP addresses', placeholder: 'e.g. 18.140.170.98, 13.215.6.214',
+    hint: 'Comma separated. IIMMPACT transaction callbacks currently use source-IP authentication. MySheba defaults to IIMMPACT production callback IPs; only change them when IIMMPACT gives you an updated list.' },
   { key: 'authHeader', label: 'Token header name', placeholder: 'x-webhook-token',
     hint: 'The header the provider puts the token in.' },
   { key: 'transactionIdPath', label: 'Our reference, in their callback', placeholder: 'transactionId',
@@ -28,6 +28,7 @@ export default function ApiWebhookFormModal({ visible, provider, config, onClose
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const special = provider?.name === 'Success TopUp';
+  const iimmpact = provider?.authType === 'iimmpactHmac';
   const [form, setForm] = useState({});
   const [token, setToken] = useState('');
   const [unmatched, setUnmatched] = useState(null);
@@ -48,14 +49,14 @@ export default function ApiWebhookFormModal({ visible, provider, config, onClose
     enabled: config?.enabled !== false,
     authHeader: config?.authHeader || 'x-webhook-token',
     webhookToken: '',
-    transactionIdPath: config?.transactionIdPath || 'transactionId',
-    statusPath: config?.statusPath || 'status',
-    messagePath: config?.messagePath || 'message',
-    successStatus: config?.successStatus || 'Success',
-    processingStatus: config?.processingStatus || 'Processing',
-    cancelStatus: config?.cancelStatus || 'Cancel',
-    allowedIps: (config?.allowedIps || []).join(', '),
-  }), [provider, config, visible]);
+    transactionIdPath: (iimmpact && (!config?.transactionIdPath || config.transactionIdPath === 'transactionId')) ? 'data.refid' : (config?.transactionIdPath || 'transactionId'),
+    statusPath: (iimmpact && (!config?.statusPath || config.statusPath === 'status')) ? 'data.status' : (config?.statusPath || 'status'),
+    messagePath: (iimmpact && (!config?.messagePath || config.messagePath === 'message')) ? 'data.remarks' : (config?.messagePath || 'message'),
+    successStatus: (iimmpact && (!config?.successStatus || config.successStatus === 'Success')) ? 'Succesful, Successful' : (config?.successStatus || 'Success'),
+    processingStatus: (iimmpact && (!config?.processingStatus || config.processingStatus === 'Processing')) ? 'Processing, Accepted' : (config?.processingStatus || 'Processing'),
+    cancelStatus: (iimmpact && (!config?.cancelStatus || config.cancelStatus === 'Cancel')) ? 'Failed, Refund' : (config?.cancelStatus || 'Cancel'),
+    allowedIps: (config?.allowedIps || (iimmpact ? ['18.140.170.98', '13.215.6.214'] : [])).join(', '),
+  }), [provider, config, visible, iimmpact]);
 
   return <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
     <View style={styles.backdrop}><View style={styles.card}>
@@ -102,6 +103,19 @@ export default function ApiWebhookFormModal({ visible, provider, config, onClose
           </View>
         </> : <>
           <Text style={styles.help}>Give this URL to the provider. Webhooks are received by MySheba server-side; the mobile app does not receive provider callbacks.</Text>
+          {iimmpact
+            ? <View style={styles.fixedBox}>
+                <Text style={styles.fixedTitle}>IIMMPACT transaction webhook security</Text>
+                <Text style={styles.fixedLine}>Authentication: source IP allowlist</Text>
+                <Text style={styles.fixedLine}>Production IPs: 18.140.170.98, 13.215.6.214</Text>
+                <Text style={styles.fixedLine}>Reference: data.refid</Text>
+                <Text style={styles.fixedLine}>Status: data.status</Text>
+                <Text style={styles.fixedLine}>DONE: Succesful, Successful</Text>
+                <Text style={styles.fixedLine}>NOT FINISHED: Processing, Accepted</Text>
+                <Text style={styles.fixedLine}>REFUND: Failed, Refund</Text>
+                <Text style={styles.help}>IIMMPACT's current transaction-webhook documentation says these callbacks do not carry a cryptographic signature. MySheba therefore does not require the payment-webhook signature here and will reject callbacks outside the allowlist.</Text>
+              </View>
+            : null}
           {WEBHOOK_FIELDS.map((f) => <View key={f.key}>
             <Text style={styles.label}>{f.label}</Text>
             <Text style={styles.help}>{f.hint}</Text>

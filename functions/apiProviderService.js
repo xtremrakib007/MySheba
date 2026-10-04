@@ -1125,6 +1125,16 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     const safeResponseId = responseId == null ? null : (typeof responseId === 'string' || typeof responseId === 'number' || typeof responseId === 'boolean' ? String(responseId).slice(0, 200) : null);
     const safeResponseMessage = responseMessage == null ? null : (typeof responseMessage === 'string' || typeof responseMessage === 'number' || typeof responseMessage === 'boolean' ? String(responseMessage).slice(0, 500) : null);
     const result={providerId:provider.id,providerName:provider.name,responseId:safeResponseId,message:safeResponseMessage,status:isProcessing?'processing':'completed'};
+    if (provider.authType === 'iimmpactHmac') {
+      // IIMMPACT explicitly recommends matching product, account and amount
+      // in addition to refid before accepting a callback. Keep only the
+      // non-secret request values needed for that server-side comparison.
+      result.requestCheck = {
+        product: String(providerOperatorCode || '').slice(0, 100),
+        account: String(raw.accountNumber || raw.billNumber || raw.phone || raw.mobileNumber || raw.playerId || '').slice(0, 200),
+        amount: Number(providerAmount),
+      };
+    }
     const secretPath = options.extractPath || (service === 'Recharge PIN' ? provider.responsePinPath : '');
     if (secretPath) { const secret = getPath(data, secretPath); if (typeof secret !== 'string' || !secret.trim() || secret.length > 500) throw new Error('Provider did not return a valid recharge PIN.'); result.secret = secret.trim(); }
     const { secret: _secret, ...safeResult } = result;
