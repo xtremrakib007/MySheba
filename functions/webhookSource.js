@@ -3,15 +3,16 @@
 // Who a provider callback actually came from, and which addresses are allowed.
 //
 // Most providers authenticate their callback with a shared secret in a header.
-// Some do not: iimmpact's transaction callback carries no credential at all,
-// only a fixed source address. Requiring a token would reject every one of
-// their deliveries - so a webhook may instead name the addresses it will accept
-// a callback FROM.
+// IIMMPACT's current transaction callbacks are different: the provider
+// documents source-IP allowlisting as the authentication mechanism and says
+// cryptographic transaction-webhook signatures are planned, not currently sent.
+// Keep this helper generic so signed/token callbacks and source-IP callbacks
+// can coexist without weakening the default.
 //
-// An allowlist is weaker than a signature. It is a deliberate trade, taken
-// because it is the strongest check the provider offers, and it only holds if
-// the address being checked is the real one - which is the whole difficulty
-// here.
+// An allowlist is weaker than a signature. It is therefore only appropriate
+// where the provider explicitly documents stable callback source addresses. The
+// real peer address must be checked rather than blindly trusting user-supplied
+// forwarding headers.
 
 const MAX_ALLOWED_IPS = 20;
 const IPV4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
