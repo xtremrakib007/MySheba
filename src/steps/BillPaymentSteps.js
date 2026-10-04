@@ -9,6 +9,8 @@ import ServiceArt from '../components/ServiceArt';
 import { useTheme } from '../theme/ThemeContext';
 import { presentmentRequest, presentmentKey } from '../utils/billPresentmentInputs';
 import * as apiProviderService from '../firebase/apiProviderService';
+import ServiceInterruptionNotice from '../components/ServiceInterruptionNotice';
+import { useNetworkStatus } from '../components/useNetworkStatus';
 
 // An entry is a name, or { name, amount } when the denomination IS the
 // product. Prepaid electricity tokens are sold that way - you buy a 50,000
@@ -208,6 +210,14 @@ export default function BillPaymentStep({ step }) {
   const storedBlock = String(serviceData.billPresentmentBlock || '');
   const fixedAmount = fixedAmountFor(serviceData);
   const typedAmount = Number(serviceData.amount);
+  // Advisory only, and it is not wired into validateStep by design: an
+  // interruption must not stop somebody paying a bill they owe.
+  const interruption = useNetworkStatus({
+    service: 'Bill Payment',
+    country: serviceData.country,
+    provider: serviceData.provider,
+    active: onBillSteps,
+  });
   useEffect(() => {
     let alive = true;
     if (!onBillSteps || !requestKey) {
@@ -276,10 +286,11 @@ export default function BillPaymentStep({ step }) {
         <FormInput placeholder='Leave empty if not shown' autoCapitalize='characters' value={serviceData.ref2 || ''} onChangeText={(v) => updateServiceData({ ref2: v })} />
         <FormLabel>IC / Passport Number of the payer</FormLabel>
         <FormInput placeholder='e.g. 941123045001' autoCapitalize='characters' value={serviceData.icNumber || ''} onChangeText={(v) => updateServiceData({ icNumber: v.replace(/[^A-Za-z0-9]/g, '').slice(0, 20) })} />
+        <ServiceInterruptionNotice notice={interruption} />
         <BillDetails bill={bill} loading={billLoading} />
       </View>;
     }
-    return <View><FormLabel>{serviceData.category === 'ewallet' ? 'Mobile number registered to the wallet' : 'Enter Bill / Account Number'}</FormLabel><FormInput placeholder={serviceData.category === 'ewallet' ? 'e.g. 0123456789' : 'Bill / account number'} keyboardType={serviceData.category === 'ewallet' ? 'phone-pad' : 'default'} autoCapitalize={serviceData.category === 'ewallet' ? 'none' : 'characters'} value={serviceData.accountNumber || ''} onChangeText={(v) => updateServiceData({ accountNumber: v })} />{serviceData.country === 'BD' && <><FormLabel>Bangladesh Mobile Number</FormLabel><FormInput placeholder='01XXXXXXXXX' keyboardType='phone-pad' value={serviceData.mobileNumber || ''} onChangeText={(v) => updateServiceData({ mobileNumber: v.replace(/\D/g, '').slice(0, 11) })} /></>}<BillDetails bill={bill} loading={billLoading} /></View>;
+    return <View><FormLabel>{serviceData.category === 'ewallet' ? 'Mobile number registered to the wallet' : 'Enter Bill / Account Number'}</FormLabel><FormInput placeholder={serviceData.category === 'ewallet' ? 'e.g. 0123456789' : 'Bill / account number'} keyboardType={serviceData.category === 'ewallet' ? 'phone-pad' : 'default'} autoCapitalize={serviceData.category === 'ewallet' ? 'none' : 'characters'} value={serviceData.accountNumber || ''} onChangeText={(v) => updateServiceData({ accountNumber: v })} />{serviceData.country === 'BD' && <><FormLabel>Bangladesh Mobile Number</FormLabel><FormInput placeholder='01XXXXXXXXX' keyboardType='phone-pad' value={serviceData.mobileNumber || ''} onChangeText={(v) => updateServiceData({ mobileNumber: v.replace(/\D/g, '').slice(0, 11) })} /></>}<ServiceInterruptionNotice notice={interruption} /><BillDetails bill={bill} loading={billLoading} /></View>;
   }
   if (step === 4) {
     const fixed = fixedAmountFor(serviceData);
@@ -288,6 +299,7 @@ export default function BillPaymentStep({ step }) {
       {fixed != null
         ? <><FormLabel>Amount</FormLabel><Text style={noneStyles.fixed}>{cur} {Number(fixed).toFixed(2)} - set by the voucher you chose</Text></>
         : <><FormLabel>Enter Amount ({cur})</FormLabel><FormInput placeholder='Amount' keyboardType='decimal-pad' value={serviceData.amount != null ? String(serviceData.amount) : ''} onChangeText={(v) => updateServiceData({ amount: parseFloat(v) || 0 })} /></>}
+      <ServiceInterruptionNotice notice={interruption} />
       <BillDetails bill={bill} loading={billLoading} />
       <SummaryCard rows={serviceData.category === 'jompay'
         ? [

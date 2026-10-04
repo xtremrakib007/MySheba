@@ -15,6 +15,7 @@ const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 const { signIimmpactRequest, decodeSecret: decodeIimmpactSecret } = require('./iimmpactSigning');
 const { matchesStatus } = require('./statusMatch');
 const billPresentment = require('./billPresentment');
+const networkStatus = require('./networkStatus');
 
 const COLLECTION = 'api_providers';
 const SETTINGS = 'api_settings/service_modes';
@@ -291,12 +292,13 @@ function validateCatalog(data) {
     }
     out.billerProductCodes = cleaned;
   }
-  if (data.billPresentmentPath !== undefined && data.billPresentmentPath !== null) {
-    const path = cleanString(data.billPresentmentPath, 300);
+  for (const field of ['billPresentmentPath', 'networkStatusPath']) {
+    if (data[field] === undefined || data[field] === null) continue;
+    const path = cleanString(data[field], 300);
     if (path && (path.includes('?') || path.includes('#') || /^https?:\/\//i.test(path))) {
-      throw new HttpsError('invalid-argument', 'Bill presentment path must be relative and carry no query string.');
+      throw new HttpsError('invalid-argument', `${field} must be relative and carry no query string.`);
     }
-    out.billPresentmentPath = path;
+    out[field] = path;
   }
   if (data.catalogQueryTemplate !== undefined && data.catalogQueryTemplate !== null && data.catalogQueryTemplate !== '') {
     out.catalogQueryTemplate = validateTemplate(data.catalogQueryTemplate, 'Catalogue query template');
@@ -1326,6 +1328,119 @@ exports.getBillPresentment = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asyn
   }
 });
 
+// A status is the same answer for everybody, so asking the provider again for
+// each customer who opens the step is waste - and a screen somebody can walk
+// back into repeatedly turns that into a lot of waste. Kept in the instance
+// rather than in Firestore because it is worth nothing once it is a minute old
+// and is not worth a document write.
+//
+// A stale ok for up to a minute is the cost, and it is the right way round:
+// this only ever decides whether to show a sentence, and under-warning for a
+// minute is better than the write amplification.
+const NETWORK_STATUS_TTL_MS = 60 * 1000;
+const NETWORK_STATUS_MAX = 200;
+const networkStatusCache = new Map();
+function cachedNetworkStatus(key, now) {
+  const hit = networkStatusCache.get(key);
+  if (!hit || now - hit.at > NETWORK_STATUS_TTL_MS) return null;
+  return hit.value;
+}
+function rememberNetworkStatus(key, value, now) {
+  // Bounded, oldest first: an unbounded Map in a long-lived instance is a leak,
+  // and the keys are provider product codes so there is no sensible upper limit
+  // to rely on.
+  if (networkStatusCache.size >= NETWORK_STATUS_MAX) {
+    const oldest = networkStatusCache.keys().next();
+    if (!oldest.done) networkStatusCache.delete(oldest.value);
+  }
+  networkStatusCache.set(key, { at: now, value });
+}
+exports._test_networkStatusCache = { cachedNetworkStatus, rememberNetworkStatus, cache: networkStatusCache, TTL: NETWORK_STATUS_TTL_MS, MAX: NETWORK_STATUS_MAX };
+
+/**
+ * Which product code to ask the status of, for one screen's selection.
+ *
+ * Returns '' when there is nothing unambiguous to ask about, and that is a real
+ * answer rather than a gap. CelcomDigi maps to BOTH Celcom and Digi, and the
+ * customer's number is on one of them: warning because the other is down would
+ * be a false alarm, and talking somebody out of a payment that would have
+ * worked is the damage this whole feature can do. So before a plan is chosen
+ * an ambiguous operator is simply not asked about, and afterwards the chosen
+ * plan says exactly which product it is on.
+ *
+ * A product code named by the client is honoured only if it is one the operator
+ * could legitimately be, so the screen cannot be used to probe arbitrary codes.
+ */
+function statusProductCodeFor(provider, { service, billerName, operatorName, productCode }) {
+  if (service === 'Bill Payment') return billerProductCodeFor(provider, billerName);
+  const codes = providerCatalog.productCodesFor(provider, operatorName);
+  const named = String(productCode || '').trim();
+  if (named) return codes.includes(named) ? named : '';
+  return codes.length === 1 ? codes[0] : '';
+}
+exports._test_statusProductCodeFor = statusProductCodeFor;
+
+/**
+ * Whether the biller or operator behind this selection is having problems.
+ *
+ * Advisory only, and it has no way to say otherwise: the reply carries a status
+ * and nothing that could stop a payment. iimmpact's guide is explicit that an
+ * interruption must not block the flow, and the damage this can do is the
+ * opposite of bill presentment's - a warning shown on a healthy product talks
+ * somebody out of paying for no reason. So anything short of an explicit
+ * interruption, including an unreachable provider, is silence.
+ */
+exports.getNetworkStatus = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  const db = admin.firestore();
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
+  const silent = { status: 'unknown', notice: '' };
+
+  const service = String(request.data?.service || '').trim();
+  if (!ALLOWED_SERVICES.includes(service)) return silent;
+  const country = String(request.data?.country || '').trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(country)) return silent;
+
+  const provider = await providerCatalog.readProvider(db, service, { country, strictCountry: true });
+  if (!provider || !provider.apiKey || !provider.secretKey) return silent;
+  const code = statusProductCodeFor(provider, {
+    service,
+    billerName: cleanString(request.data?.provider, 100),
+    operatorName: cleanString(request.data?.operator, 100),
+    productCode: cleanString(request.data?.productCode, 40),
+  });
+  if (!code) return silent;
+
+  const now = Date.now();
+  const cacheKey = `${provider.id}|${code}`;
+  const cached = cachedNetworkStatus(cacheKey, now);
+  if (cached) return cached;
+
+  await checkVelocity(db, request.auth.uid, 'getNetworkStatus', { ip: getClientIp(request) });
+
+  let url;
+  try {
+    url = new URL(cleanString(provider.networkStatusPath, 300) || '/v2/networkstatus', provider.baseUrl);
+    if (url.protocol !== 'https:') return silent;
+  } catch { return silent; }
+  url.searchParams.set('product', code);
+
+  let result;
+  try {
+    const { json } = await signedProviderRequest(url, { method: 'GET', headers: { accept: 'application/json' } }, provider);
+    const body = (json && typeof json.data === 'object' && json.data !== null) ? json.data : json;
+    result = networkStatus.readNetworkStatus(body === null ? {} : body, { reachable: json !== null });
+  } catch (error) {
+    console.warn('Network status unavailable', String(error?.message || error).slice(0, 200));
+    result = networkStatus.readNetworkStatus({}, { reachable: false });
+  }
+
+  const answer = { status: result.status, notice: networkStatus.interruptionNotice(result) };
+  // Only a definite answer is worth remembering. Caching "unknown" would hold
+  // a blip for a minute after the provider came back.
+  if (result.status !== 'unknown') rememberNetworkStatus(cacheKey, answer, now);
+  return answer;
+});
+
 /**
  * Superadmin-only: the catalogue WITH its cost price, so a price can be set
  * against something. Customers get listSuccessTopUpDrives, which never
@@ -1419,6 +1534,7 @@ exports.listApiProviders = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async 
       catalogOperatorCodes: x.catalogOperatorCodes || null,
       billerProductCodes: x.billerProductCodes || null,
       billPresentmentPath: x.billPresentmentPath || '',
+      networkStatusPath: x.networkStatusPath || '',
       catalogWindow: x.catalogWindow || null,
       hasCatalogRequestTemplate: Boolean(x.catalogRequestTemplate && Object.keys(x.catalogRequestTemplate).length),
     };

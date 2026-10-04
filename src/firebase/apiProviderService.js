@@ -9,6 +9,7 @@ const saveModesFn = httpsCallable(functions, 'saveServiceApiSettings');
 const drivesFn = httpsCallable(functions, 'listSuccessTopUpDrives');
 const dataPlansFn = httpsCallable(functions, 'listProviderDataPlans');
 const presentmentFn = httpsCallable(functions, 'getBillPresentment');
+const networkStatusFn = httpsCallable(functions, 'getNetworkStatus');
 const testFn = httpsCallable(functions, 'testApiProvider');
 const adminCatalogFn = httpsCallable(functions, 'listSuccessTopUpCatalogForAdmin');
 const balanceFn = httpsCallable(functions, 'getSuccessTopUpBalance');
@@ -72,6 +73,23 @@ export async function listProviderDataPlans({ service = 'Internet', country, ope
  * treated the same way for the same reason, so a caller never has to decide
  * whether a network error is a reason not to pay a bill.
  */
+/**
+ * Whether the biller or operator is having problems right now.
+ *
+ * Advisory and nothing else - there is no field here that could stop a payment,
+ * deliberately. A failure is silence rather than a warning: a scary sentence on
+ * a healthy product talks somebody out of paying for no reason, which is the
+ * only harm this feature is capable of.
+ */
+export async function getNetworkStatus(input) {
+  try {
+    const { data } = await networkStatusFn(input);
+    return { status: data?.status || 'unknown', notice: data?.notice || '' };
+  } catch {
+    return { status: 'unknown', notice: '' };
+  }
+}
+
 export async function getBillPresentment(input) {
   const blank = { status: 'unavailable', blocking: false, message: '', fields: [], outstanding: null };
   try {

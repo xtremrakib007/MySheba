@@ -10,6 +10,8 @@ import { FormLabel, Grid3, OperatorCard, FormInput, SummaryCard } from '../compo
 import PackagePicker from '../components/PackagePicker';
 import CountrySelectCard from '../components/CountrySelectCard';
 import * as apiProviderService from '../firebase/apiProviderService';
+import ServiceInterruptionNotice from '../components/ServiceInterruptionNotice';
+import { useNetworkStatus } from '../components/useNetworkStatus';
 
 // Internet flow: country -> operator -> phone -> package.
 // Customer-facing wallet values are always displayed as MYR. The legacy
@@ -84,6 +86,20 @@ export default function InternetStep({ step }) {
     return () => { alive = false; };
   }, [serviceData.country, operator, phone, step]);
 
+  // Advisory only, never wired into validateStep. The product code comes from
+  // the plan once one is chosen, because an operator can map to more than one
+  // product (CelcomDigi is Celcom AND Digi) and warning about the half the
+  // customer is not on would talk them out of a payment that would have
+  // worked. Before a plan is picked the server answers only for an operator
+  // that is unambiguous.
+  const interruption = useNetworkStatus({
+    service: 'Internet',
+    country: serviceData.country,
+    operator,
+    productCode: serviceData.operatorCode,
+    active: step === 3,
+  });
+
   if (step === 0) {
     return <View><FormLabel>Select Country</FormLabel><Grid3>{countries.map((c) => <CountrySelectCard key={c.code} code={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr, operator: null, package: null, amount: null }); nextStep(); }} />)}</Grid3></View>;
   }
@@ -119,6 +135,7 @@ export default function InternetStep({ step }) {
     const selectedPackage = packages.find((p) => p.name === serviceData.package);
     return (
       <View>
+        <ServiceInterruptionNotice notice={interruption} />
         {!!packageLoading && <FormLabel>Loading Success TopUp packages…</FormLabel>}
         {!!plansLoading && <FormLabel>Checking which plans this number can buy…</FormLabel>}
         {!!packageError && <FormLabel>{packageError}</FormLabel>}

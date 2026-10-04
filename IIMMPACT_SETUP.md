@@ -254,7 +254,49 @@ through an allowlist of likely keys (`customer_name`, `outstanding_amount`,
 screen. If a biller returns a field under a name not in that list it simply
 will not show — tell me the name and it takes one line.
 
-## Still to do
+## 8. Network status
 
-* **Network status.** `GET /v2/networkstatus?product=…` would warn the customer
-  about a provider interruption without blocking the payment. Not wired up.
+When a biller or operator is having problems, a line appears on the step:
+
+> This service is having problems right now. Your payment might be slow or
+> might not go through — you can still continue.
+
+**It never blocks anything**, which is iimmpact's own rule for this endpoint and
+is enforced structurally rather than by discipline: the reply carries no field
+that could stop a payment, the hook hands the screen a sentence and nothing
+else, and `validateStep` on both steps never looks at it.
+
+The risk here is the opposite of bill presentment's. There, the danger is a
+payment wrongly refused; here it is a warning wrongly **shown** — "it might not
+go through" on a healthy product talks somebody out of paying for no reason. So
+only an explicit interruption warns. An unrecognised reply, an unreachable
+provider, a product with no status: silence. "No interruption" is read as
+healthy, not as a warning containing the word.
+
+### Which product it asks about
+
+* **Bill Pay** — the biller's own product code, from the same **Biller product
+  codes** map as presentment. A biller with no code is not asked about.
+* **Internet** — the operator's code where that is unambiguous. **CelcomDigi is
+  not asked about until a plan is chosen**, because it maps to both `CEL` and
+  `DI` and the customer's number is on one of them; warning because the other
+  half is down would be a false alarm. Once a plan is picked it carries its own
+  product code and the answer is exact.
+
+A product code named by the client is only honoured when it is one that operator
+could legitimately be, so the screen cannot be used to ask about arbitrary
+products.
+
+Answers are cached for a minute per product in the function instance, so a
+customer walking back and forth through the steps does not re-ask. An `unknown`
+is deliberately not cached — that would keep a provider looking down for a
+minute after it came back.
+
+Set **Network status path** only if it is ever anything but `/v2/networkstatus`.
+
+### Testing it
+
+On staging, product code `FP` always reports an interruption. Point a biller at
+it in **Biller product codes** for a moment and the warning appears on the Bill
+Pay step — then check the Continue button still works, which is the half worth
+checking.
