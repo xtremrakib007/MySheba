@@ -49,12 +49,12 @@ export default function ApiWebhookFormModal({ visible, provider, config, onClose
     enabled: config?.enabled !== false,
     authHeader: config?.authHeader || 'x-webhook-token',
     webhookToken: '',
-    transactionIdPath: config?.transactionIdPath || 'transactionId',
-    statusPath: config?.statusPath || 'status',
-    messagePath: config?.messagePath || 'message',
-    successStatus: config?.successStatus || 'Success',
-    processingStatus: config?.processingStatus || 'Processing',
-    cancelStatus: config?.cancelStatus || 'Cancel',
+    transactionIdPath: config?.transactionIdPath || (iimmpact ? 'data.refid' : 'transactionId'),
+    statusPath: config?.statusPath || (iimmpact ? 'data.status' : 'status'),
+    messagePath: config?.messagePath || (iimmpact ? 'data.remarks' : 'message'),
+    successStatus: config?.successStatus || (iimmpact ? 'Succesful, Successful' : 'Success'),
+    processingStatus: config?.processingStatus || (iimmpact ? 'Processing, Accepted' : 'Processing'),
+    cancelStatus: config?.cancelStatus || (iimmpact ? 'Failed, Refund' : 'Cancel'),
     allowedIps: (config?.allowedIps || (iimmpact ? ['18.140.170.98', '13.215.6.214'] : [])).join(', '),
   }), [provider, config, visible, iimmpact]);
 
