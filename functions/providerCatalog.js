@@ -100,21 +100,21 @@ const PRESETS = {
   //
   // It is also a GET with query parameters rather than a POST with a body,
   // which is why fetchCatalog grew a query template.
-  'iimmpact-subproducts': {
-    path: '/v2/subproducts',
+  'iimmpact-options': {
+    path: '/v2/options',
     method: 'GET',
     perAccount: true,
+    fieldId: 'plan',
     queryTemplate: {
       product_code: '{{operator}}',
+      field_id: '{{fieldId}}',
       account_number: '{{account}}',
+      limit: '25000',
     },
-    // Their v2 envelope is `data` on every endpoint documented so far
-    // (data.balance, data.refid, data.status), so the list is assumed to be
-    // there. It is configuration rather than code precisely because this one
-    // is inferred: if the real response nests it further, catalogListPath on
-    // the provider record corrects it without a deploy, and a wrong guess
-    // reports the field names that did arrive rather than "no packages".
-    listPath: 'data',
+    // Options API returns selectable package items in `items`.
+    // It replaces the deprecated /v2/subproducts endpoint and uses the
+    // catalog-defined field id (`plan` for personalised Internet plans).
+    listPath: 'items',
     itemMap: {
       // The subproduct code is what goes back as extras.subproduct_code, and
       // iimmpact's own example shows it can be a whole sentence
@@ -198,8 +198,10 @@ function catalogConfigFor(provider) {
   if (!provider) return null;
   const preset = PRESETS[presetKeyFor(provider)] || null;
 
-  const path = String(provider.catalogPath || (preset && preset.path) || '').trim();
+  let path = String(provider.catalogPath || (preset && preset.path) || '').trim();
   if (!path) return null;
+  const legacyIimmpact = provider.authType === 'iimmpactHmac' && path === '/v2/subproducts';
+  if (legacyIimmpact) path = '/v2/options';
 
   const baseUrl = String(provider.catalogBaseUrl || provider.baseUrl || (preset && preset.baseUrl) || '').trim();
   if (!baseUrl) return null;
@@ -215,12 +217,13 @@ function catalogConfigFor(provider) {
     path,
     method: String(provider.catalogMethod || (preset && preset.method) || 'POST').toUpperCase(),
     requestTemplate: asObject(provider.catalogRequestTemplate) || (preset && preset.requestTemplate) || {},
-    queryTemplate: asObject(provider.catalogQueryTemplate) || (preset && preset.queryTemplate) || {},
+    queryTemplate: legacyIimmpact ? { product_code: '{{operator}}', field_id: '{{fieldId}}', account_number: '{{account}}', limit: '25000' } : (asObject(provider.catalogQueryTemplate) || (preset && preset.queryTemplate) || {}),
     // A per-account catalogue is personalised to one phone number: it may not
     // be fetched without one, and its answer is never reusable for another.
     perAccount: provider.catalogPerAccount !== undefined
       ? provider.catalogPerAccount === true
       : Boolean(preset && preset.perAccount),
+    fieldId: String(provider.catalogFieldId || (preset && preset.fieldId) || (legacyIimmpact ? 'plan' : '')).trim(),
     operatorCodes: asObject(provider.catalogOperatorCodes) || (preset && preset.operatorCodes) || null,
     successPath: provider.catalogSuccessPath !== undefined
       ? String(provider.catalogSuccessPath || '')
@@ -228,7 +231,7 @@ function catalogConfigFor(provider) {
     successValue: provider.catalogSuccessValue !== undefined
       ? provider.catalogSuccessValue
       : (preset ? preset.successValue : undefined),
-    listPath: String(provider.catalogListPath || (preset && preset.listPath) || '').trim(),
+    listPath: legacyIimmpact ? 'items' : String(provider.catalogListPath || (preset && preset.listPath) || '').trim(),
     itemMap: asObject(provider.catalogItemMap) || (preset && preset.itemMap) || DEFAULT_ITEM_MAP,
     types,
     window: windowSpec,
@@ -429,6 +432,7 @@ async function fetchCatalog(provider, { operator, type, account } = {}, { reques
     operator: String(operator || 'ALL'),
     type: safeType,
     account: accountNumber,
+    fieldId: config.fieldId || 'plan',
     apiKey: provider.apiKey || '',
     secretKey: provider.secretKey || '',
   };
