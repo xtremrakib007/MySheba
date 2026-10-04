@@ -242,6 +242,17 @@ export default function ApiProviderManagementScreen() {
             </TouchableOpacity>)}
         </View>
         <Text style={styles.scopeHint}>{scope==='DEFAULT'?'The fallback every country inherits when it has no setting of its own.':`Settings for ${scope}. Anything left untouched follows Default.`}</Text>
+        <View style={styles.builtInProvider}>
+          <View style={{flex:1}}>
+            <Text style={styles.builtInTitle}>IIMMPACT</Text>
+            <Text style={styles.builtInSub}>Recharge • Internet • Bill Payment • Entertainment</Text>
+            <Text style={styles.builtInMeta}>MY, SG, ID, IN, PH, NP, PK, MM, KH • Bangladesh excluded</Text>
+            <Text style={styles.builtInHint}>Production: api.iimmpact.com • HMAC • only API Key + HMAC Secret required</Text>
+          </View>
+          <TouchableOpacity style={styles.configureIimmpact} onPress={()=>{setEditing(null);setSuccessTopUpSetup(false);setPresetService('Recharge');setShow(true);}}>
+            <Text style={styles.configureIimmpactText}>Configure</Text>
+          </TouchableOpacity>
+        </View>
         <TouchableOpacity style={styles.add} onPress={()=>{setEditing(null);setPresetService('');setSuccessTopUpSetup(true);setShow(true);}}><Text style={styles.addText}>+ Configure Success TopUp (Recharge + BD Internet + BD Bills)</Text></TouchableOpacity>
       </View>}
       ListFooterComponent={<TouchableOpacity disabled={savingModes} style={styles.saveModes} onPress={async()=>{
@@ -291,6 +302,13 @@ function createStyles(colors) {
     modeText: { color: colors.text, fontSize: 12, fontWeight: '600' },
     saveModes: { marginTop: 8, backgroundColor: colors.primary, padding: 11, borderRadius: 9, alignItems: 'center' },
     saveModesText: { color: colors.onPrimary, fontWeight: '800' },
+    builtInProvider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.card },
+    builtInTitle: { fontSize: 17, fontWeight: '900', color: colors.text },
+    builtInSub: { fontSize: 12, fontWeight: '700', marginTop: 2, color: colors.text },
+    builtInMeta: { fontSize: 11, marginTop: 4, color: colors.textSecondary },
+    builtInHint: { fontSize: 10, marginTop: 3, color: colors.textSecondary },
+    configureIimmpact: { backgroundColor: colors.primary, borderRadius: 9, paddingVertical: 9, paddingHorizontal: 12 },
+    configureIimmpactText: { color: colors.onPrimary, fontWeight: '800', fontSize: 12 },
     add: { marginTop: 14, backgroundColor: colors.primary, padding: 12, borderRadius: 9, alignItems: 'center' },
     addText: { color: colors.onPrimary, fontWeight: '800' },
     item: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, marginBottom: 10, flexDirection: 'row', gap: 12 },
