@@ -135,12 +135,28 @@ exports.saveApiWebhook = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (r
     if (!providerSnap.exists) throw new HttpsError('not-found', 'API provider not found.');
     const incoming = { ...(request.data || {}) };
     const current = currentSnap.exists ? (currentSnap.data() || {}) : {};
+    const provider = providerSnap.data() || {};
+    const isIimmpact = provider.authType === 'iimmpactHmac';
     if (!incoming.webhookToken || incoming.webhookToken === '••••••••') incoming.webhookToken = current.webhookToken || '';
-    // Same reason the token is carried forward: this document is written with
-    // merge:false, so a form that posts without the field clears it. An
-    // explicit [] is still a deliberate clear - only an absent field is
-    // treated as "unchanged".
-    if (incoming.allowedIps === undefined) incoming.allowedIps = Array.isArray(current.allowedIps) ? current.allowedIps : [];
+    // Preserve an existing allowlist when the form omits the field. For
+    // IIMMPACT transaction callbacks, however, an empty/new configuration is
+    // automatically secured with IIMMPACT's current production callback IPs.
+    // This avoids the dangerous "save succeeded but the provider can never
+    // authenticate" setup error, while still allowing an explicitly supplied
+    // list to be retained for staging or future provider changes.
+    if (incoming.allowedIps === undefined) {
+      incoming.allowedIps = Array.isArray(current.allowedIps) && current.allowedIps.length
+        ? current.allowedIps
+        : (isIimmpact ? ['18.140.170.98', '13.215.6.214'] : []);
+    }
+    if (isIimmpact && !currentSnap.exists) {
+      incoming.transactionIdPath = incoming.transactionIdPath || 'data.refid';
+      incoming.statusPath = incoming.statusPath || 'data.status';
+      incoming.messagePath = incoming.messagePath || 'data.remarks';
+      incoming.successStatus = incoming.successStatus || 'Succesful, Successful';
+      incoming.processingStatus = incoming.processingStatus || 'Processing, Accepted';
+      incoming.cancelStatus = incoming.cancelStatus || 'Failed, Refund';
+    }
     const data = validateConfig(incoming);
     tx.set(webhookRef, { ...data, updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: request.auth.uid }, { merge: false });
   });
