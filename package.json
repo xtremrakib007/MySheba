@@ -48,6 +48,7 @@
     "test:productcodes": "node scripts/test-product-codes.js",
     "test:nonapi": "node scripts/test-non-api-services.js",
     "test:reach": "node scripts/test-provider-reach.js",
+    "test:callbackmatch": "node scripts/test-callback-match.js",
     "audit:tiles": "node scripts/audit-tile-destinations.js",
     "test:auth": "node scripts/test-profile-gate.js",
     "publish:ota": "node scripts/publish-ota.js",

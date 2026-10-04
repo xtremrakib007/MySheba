@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 const { matchesStatus } = require('./statusMatch');
 const { parseAllowedIps, isAllowedSource, callbackSourceIp } = require('./webhookSource');
+const { matchesCallbackRequest } = require('./callbackMatch');
 
 const COLLECTION = 'api_webhooks';
 const PROVIDERS = 'api_providers';
@@ -287,6 +288,7 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
   let duplicate = false;
   let providerMismatch = false;
   let callbackMismatch = false;
+  let mismatchedField = '';
   await db.runTransaction(async (tx) => {
     const eventSnap = await tx.get(eventRef);
     const orderSnap = await tx.get(txRef);
@@ -294,19 +296,10 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
     if (!orderSnap.exists) throw new Error('Transaction disappeared.');
     const order = orderSnap.data() || {};
     const requestCheck = order.apiExecution?.requestCheck;
-    if (provider.authType === 'iimmpactHmac' && requestCheck && typeof requestCheck === 'object') {
-      const callbackData = pathGet(body, 'data') || {};
-      const callbackProduct = safeText(callbackData.product, 100);
-      const callbackAccount = safeText(callbackData.account, 200);
-      const callbackAmount = Number(callbackData.amount);
-      const expectedProduct = safeText(requestCheck.product, 100);
-      const expectedAccount = safeText(requestCheck.account, 200);
-      const expectedAmount = Number(requestCheck.amount);
-      const amountMatches = Number.isFinite(callbackAmount) && Number.isFinite(expectedAmount)
-        && Math.round(callbackAmount * 100) === Math.round(expectedAmount * 100);
-      if ((expectedProduct && callbackProduct !== expectedProduct)
-        || (expectedAccount && callbackAccount !== expectedAccount)
-        || !amountMatches) {
+    if (provider.authType === 'iimmpactHmac') {
+      const match = matchesCallbackRequest(pathGet(body, 'data'), requestCheck);
+      if (!match.ok) {
+        mismatchedField = match.field;
         callbackMismatch = true;
         return;
       }
@@ -371,8 +364,12 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
   });
 
   if (providerMismatch || callbackMismatch) {
+    // Named, because a refused callback leaves the order at `processing` with
+    // nothing else to go on - and nothing re-queries an iimmpact order.
+    if (callbackMismatch) console.warn('apiWebhook callback did not match the dispatched request', providerId, transactionId, mismatchedField);
     await recordDelivery(db, providerId, {
       mismatchedCount: admin.firestore.FieldValue.increment(1),
+      lastMismatchedField: mismatchedField || null,
       lastTransactionId: transactionId, lastStatus: status, lastMatched: false,
     });
     return res.status(202).json({ ok: true, matched: false });
