@@ -35,6 +35,10 @@ export default function ApiProviderManagementScreen() {
   // nothing; it is not a country, which is why it is not in COUNTRIES.
   const [countryModes,setCountryModes]=useState({});
   const [scope,setScope]=useState('BD');
+  // Which features can never be API, from the server rather than a second copy
+  // of the list here: the two would drift and the screen would offer a toggle
+  // the backend refuses.
+  const [nonApiServices,setNonApiServices]=useState([]);
   const [savingModes,setSavingModes]=useState(false);
   const [successTopUpSetup,setSuccessTopUpSetup]=useState(false);
   const [presetService,setPresetService]=useState('');
@@ -50,6 +54,7 @@ export default function ApiProviderManagementScreen() {
       setItems(providers);
       setModes(settings.modes||{});
       setCountryModes(settings.countryModes||{});
+      setNonApiServices(settings.nonApiServices||[]);
       setWebhooks(Object.fromEntries((hookList||[]).map((x)=>[x.providerId,x])));
     }catch(e){
       Alert.alert('API settings',e.message||'Unable to load APIs');
@@ -160,17 +165,26 @@ export default function ApiProviderManagementScreen() {
     const mine=providersFor(service);
     const mode=modeFor(service);
     const serving=mine.filter(servesScope);
+    // Shown rather than hidden: a missing row reads as something broken, and
+    // the reason is worth saying once in the place somebody would look for it.
+    const fixedManual=nonApiServices.includes(service);
     return <View style={styles.feature}>
       <View style={styles.featureHead}>
         <View style={{flex:1}}>
           <Text style={styles.featureName}>{service}</Text>
           <Text style={styles.featureSub}>{serving.length?`${serving.length} provider${serving.length>1?'s':''}`:'No provider'} • {mode==='api'?'API mode':'Manual order'}{inherited(service)?' • inherited':''}</Text>
         </View>
-        <TouchableOpacity style={[styles.modeBtn,mode==='legacy'&&styles.modeOn]} onPress={()=>setMode(service,'legacy')}><Text style={styles.modeBtnText}>Manual</Text></TouchableOpacity>
-        <TouchableOpacity style={[styles.modeBtn,mode==='api'&&styles.modeOn]} onPress={()=>setMode(service,'api')}><Text style={styles.modeBtnText}>API</Text></TouchableOpacity>
+        {fixedManual
+          ? <Text style={styles.featureSub}>Manual only</Text>
+          : <>
+            <TouchableOpacity style={[styles.modeBtn,mode==='legacy'&&styles.modeOn]} onPress={()=>setMode(service,'legacy')}><Text style={styles.modeBtnText}>Manual</Text></TouchableOpacity>
+            <TouchableOpacity style={[styles.modeBtn,mode==='api'&&styles.modeOn]} onPress={()=>setMode(service,'api')}><Text style={styles.modeBtnText}>API</Text></TouchableOpacity>
+          </>}
       </View>
 
-      {mode==='api'&&!serving.length?<Text style={styles.warn}>{scope==='DEFAULT'?'API mode is on but no provider is configured — this feature will fail until one is added.':`No provider serves ${scope}, so ${scope} orders go to a dealer as a manual request regardless of this setting.`}</Text>:null}
+      {fixedManual?<Text style={styles.featureSub}>A payout, not a product purchase - the customer pays here and somebody abroad receives their own currency. No top-up provider does that, so this always goes to a dealer.</Text>:null}
+
+      {!fixedManual&&mode==='api'&&!serving.length?<Text style={styles.warn}>{scope==='DEFAULT'?'API mode is on but no provider is configured — this feature will fail until one is added.':`No provider serves ${scope}, so ${scope} orders go to a dealer as a manual request regardless of this setting.`}</Text>:null}
 
       {mine.map((item)=>{
         const hook=webhooks[item.id];

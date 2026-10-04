@@ -388,7 +388,24 @@ something the app can send: it decides which product real money buys. Where the
 server has already worked one out — an internet order carries the product its
 plan was actually found under — that one wins.
 
-## 9. Network status
+## 9. What iimmpact cannot do
+
+**Mobile Banking and Remittance are never dispatched to a provider**, and this
+is now enforced rather than assumed. Both move money: the customer pays MYR here
+and somebody abroad receives their own currency — bKash, Nagad or Rocket in
+Bangladesh, a bank or a cash counter in seven other countries. No top-up API
+does that. It is a licensed activity, and every provider wired into this app
+sells airtime, data, vouchers and bills.
+
+The matrix still lists both, with the reason, but no API toggle. Saving a
+provider for either is refused, a stored `api` mode for one is ignored and not
+reported back, and the dispatch itself refuses before it reads a provider.
+
+It was reachable before. Mobile Banking carries no country at all, so the
+"does any provider serve this country?" test matched a provider scoped to `ALL`
+— one toggle would have sent a Bangladeshi payout to whichever provider existed.
+
+## 10. Network status
 
 When a biller or operator is having problems, a line appears on the step:
 

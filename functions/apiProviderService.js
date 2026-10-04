@@ -37,6 +37,28 @@ const ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH'];
 // scripts/test-api-countries.js keeps this in step with RECHARGE_RATE_KEYS and
 // with the admin screen's own copy.
 const ALLOWED_COUNTRIES = ['ALL', 'BD', 'MY', 'SG', 'ID', 'IN', 'PH', 'NP', 'PK', 'MM', 'KH'];
+// Services that are never dispatched to a provider, whatever the matrix says.
+//
+// Both move MONEY rather than buy a product. Mobile Banking pays out to a
+// Bangladeshi wallet - bKash, Nagad, Rocket - and Remittance to seven
+// countries' banks and cash counters; the customer pays MYR and somebody
+// abroad receives their own currency. No top-up API does that. It is a
+// licensed activity and the providers here sell airtime, data, vouchers and
+// bills.
+//
+// It matters because Mobile Banking carries no country at all, so
+// resolveExecutionMode's reach test ("this provider serves ALL countries")
+// matched it, and a single matrix toggle would have sent a payout to Bangladesh
+// at whatever provider happened to be configured. The toggle is gone, and this
+// list is checked at every layer that could still route one: the mode, the
+// stored settings, saving a provider, and the dispatch itself.
+const NON_API_SERVICES = ['Mobile Banking', 'Remittance'];
+function isNonApiService(service) {
+  return NON_API_SERVICES.includes(String(service || '').trim());
+}
+exports.NON_API_SERVICES = NON_API_SERVICES;
+exports.isNonApiService = isNonApiService;
+
 const DEFAULT_MODES = Object.fromEntries(ALLOWED_SERVICES.map((service) => [service, 'legacy']));
 // 'ALL' is a provider's reach, not a place an order comes from, so it is not a
 // row in the country matrix - the service-wide default already plays that part.
@@ -62,6 +84,9 @@ const COUNTRY_CODES = ALLOWED_COUNTRIES.filter((c) => c !== 'ALL');
  * Returning 'legacy' is always safe: it creates the ordinary manual order.
  */
 function resolveExecutionMode({ country, service, settings, providers }) {
+  // Before anything else, and not reachable by configuration: a payout is not
+  // a product purchase and no provider here can make one.
+  if (isNonApiService(service)) return 'legacy';
   const code = String(country || '').trim().toUpperCase();
   const perCountry = settings?.countryModes?.[code]?.[service];
   const intent = (perCountry === 'api' || perCountry === 'legacy')
@@ -447,6 +472,11 @@ function validate(data) {
 
   if (endpointPath.includes('?') || endpointPath.includes('#')) throw new HttpsError('invalid-argument', 'Endpoint path must not contain a query string or fragment; use Query Template instead.');
   if (!ALLOWED_SERVICES.includes(service)) throw new HttpsError('invalid-argument', 'Invalid service.');
+  for (const entry of [service, ...(Array.isArray(data.services) ? data.services : [])]) {
+    if (isNonApiService(entry)) {
+      throw new HttpsError('invalid-argument', `${entry} is a payout, not a product purchase, so it cannot be given an API provider. It stays a manual order to a dealer.`);
+    }
+  }
   // One provider, several features. Bangladesh recharge and Bangladesh
   // internet are the same Success TopUp account; so are most bus, train and
   // flight aggregators. Before this, each needed its own row with the same
@@ -808,6 +838,13 @@ async function providersForService(db, service) {
 exports._providersForService = providersForService;
 
 async function executeConfiguredApi(service, payload, customer, requestId, options = {}) {
+  // The last line of defence, and the one that would do the damage. Everything
+  // above this refuses a payout earlier - the mode, the stored settings, the
+  // provider form - but this is the function that actually sends somebody's
+  // money somewhere, so it does not take any of that on trust.
+  if (isNonApiService(service)) {
+    throw new HttpsError('failed-precondition', `${service} is a payout, not a product purchase. It is never dispatched to an API provider.`);
+  }
   const db = admin.firestore();
   const allProvidersRaw = await providersForService(db, service);
   const requestedCountry = String(payload?.raw?.country || '').trim().toUpperCase() || 'ALL';
@@ -1987,6 +2024,7 @@ function readCountryModes(raw) {
     if (!row || typeof row !== 'object') continue;
     const clean = {};
     for (const service of ALLOWED_SERVICES) {
+      if (isNonApiService(service)) continue;
       if (row[service] === 'api' || row[service] === 'legacy') clean[service] = row[service];
     }
     if (Object.keys(clean).length) out[code] = clean;
@@ -1999,11 +2037,16 @@ exports.getServiceApiSettings = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, a
   await assertSuperadmin(db, request);
   const snap = await db.doc(SETTINGS).get();
   const stored = snap.exists ? (snap.data() || {}) : {};
+  const modes = { ...DEFAULT_MODES, ...(stored.modes || {}) };
+  // A document written before these were fixed could still say 'api'. The
+  // charge path ignores it either way; showing it would be a lie.
+  for (const service of NON_API_SERVICES) modes[service] = 'legacy';
   return {
-    modes: { ...DEFAULT_MODES, ...(stored.modes || {}) },
+    modes,
     countryModes: readCountryModes(stored.countryModes),
     countries: COUNTRY_CODES,
     services: ALLOWED_SERVICES,
+    nonApiServices: NON_API_SERVICES,
   };
 });
 exports.saveServiceApiSettings = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
@@ -2012,6 +2055,7 @@ exports.saveServiceApiSettings = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, 
   const incoming = request.data?.modes || {};
   const modes = { ...DEFAULT_MODES };
   for (const service of ALLOWED_SERVICES) {
+    if (isNonApiService(service)) continue;
     const mode = incoming[service];
     if (mode === 'api' || mode === 'legacy') modes[service] = mode;
   }
