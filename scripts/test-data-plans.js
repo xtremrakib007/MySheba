@@ -453,6 +453,49 @@ test('the screen actually uses that rule', () => {
   assert.ok(!/perNumberPlans \|\| getMergedPackages/.test(screen), 'the old silent fallback must be gone');
 });
 
+console.log('\nOffer packs, which were Bangladesh-only');
+
+const offerSource = () => require('fs').readFileSync(require('path').join(__dirname, '..', 'src/steps/OfferPacksSteps.js'), 'utf8');
+
+test('offer packs ask the same per-number question internet does', () => {
+  // There is no separate "offer pack code" to configure: the pack a customer
+  // picks already carries the provider's own product code as its id, so the
+  // catalogue IS the product list.
+  const source = offerSource();
+  assert.ok(/listProviderDataPlans\(\{ service: 'Offer Packs'/.test(source));
+  assert.ok(/resolvePackageSource\(\{/.test(source), 'and share the rule about what to show');
+  assert.ok(/const shown = source\.packages;/.test(source), 'and actually render what that rule returns');
+  assert.ok(/!source\.blocked/.test(source), 'refusing to show a list when the rule blocks one');
+  assert.ok(/operatorCode: p\.productCode \|\| ''/.test(source), 'carrying the product the pack came from');
+});
+
+test('"Bangladesh only" is no longer baked into the screen', () => {
+  const source = offerSource();
+  assert.ok(!/available for Bangladesh only/.test(source),
+    'that was a statement about what is configured, not a rule');
+  assert.ok(/not available for this country yet/.test(source), 'but it is still said when nothing is offered');
+});
+
+test('the drive window stops refusing orders it has nothing to do with', () => {
+  // The drive window is Success TopUp's selling hours in Dhaka. Unscoped, it
+  // refused a Malaysian offer pack at nine in the evening - which it did the
+  // moment packs stopped being Bangladesh-only.
+  const source = offerSource();
+  const validate = source.slice(source.indexOf('export function validateStep'));
+  assert.ok(/step === 3 && serviceData\.country === 'BD' && !isDriveWindowOpen\(\)/.test(validate));
+});
+
+test('a closed-window message does not follow the customer to another country', () => {
+  const source = offerSource();
+  // Sliced to the early-return block itself, because a lazy match would
+  // happily find the setWindowClosed below it and pass either way.
+  const start = source.indexOf("if (serviceData.country !== 'BD' || step !== 3) {");
+  const end = source.indexOf('if (!isDriveWindowOpen())', start);
+  assert.ok(start > 0 && end > start);
+  assert.ok(/setWindowClosed\(false\);/.test(source.slice(start, end)),
+    'leaving the country must clear the verdict about it');
+});
+
 console.log('\nWhat gets sent to the provider');
 
 test('the provider is told the catalogue figure, never the customer\u2019s price', () => {

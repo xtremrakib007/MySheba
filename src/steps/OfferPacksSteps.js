@@ -4,6 +4,9 @@ import { View } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { countries, rechargeOperators } from '../data/countries';
 import { getOperatorBrand } from '../data/operatorBrand';
+import { resolvePackageSource } from '../utils/packageSource';
+import ServiceInterruptionNotice from '../components/ServiceInterruptionNotice';
+import { useNetworkStatus } from '../components/useNetworkStatus';
 import { FormLabel, Grid3, OperatorCard, FormInput, SummaryCard } from '../components/ui';
 import PackagePicker from '../components/PackagePicker';
 import CountrySelectCard from '../components/CountrySelectCard';
@@ -60,7 +63,12 @@ export default function OfferPacksStep({ step }) {
 
   useEffect(() => {
     let alive = true;
-    if (serviceData.country !== 'BD' || step !== 3) return () => { alive = false; };
+    if (serviceData.country !== 'BD' || step !== 3) {
+      // Cleared, not just skipped: a closed-window message left over from
+      // Bangladesh would otherwise follow the customer to another country.
+      setWindowClosed(false);
+      return () => { alive = false; };
+    }
     if (!isDriveWindowOpen()) {
       setWindowClosed(true); setPackages([]); setLoading(false); setError('');
       return () => { alive = false; };
@@ -73,6 +81,47 @@ export default function OfferPacksStep({ step }) {
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [serviceData.country, serviceData.operator, step]);
+
+  // Offer packs outside Bangladesh.
+  //
+  // They were Bangladesh-only because Success TopUp's `drive` catalogue was the
+  // only source there has ever been for them - not because another country
+  // could not have any. A provider that prices packs per phone number supplies
+  // them the same way it supplies internet plans, and the pack the customer
+  // picks already carries that provider's own product code as its id, so there
+  // is no separate code map for this: the catalogue IS the list of products.
+  //
+  // null means "not offered here", which is still the answer for every country
+  // with no such provider, and keeps the honest message below.
+  const [perNumberPlans, setPerNumberPlans] = useState(null);
+  const [plansLoading, setPlansLoading] = useState(false);
+  const [plansError, setPlansError] = useState('');
+  const phone = String(serviceData.phone || '').trim();
+  const operator = serviceData.operator || '';
+  useEffect(() => {
+    let alive = true;
+    if (step !== 3 || serviceData.country === 'BD' || !serviceData.country || !operator || !phone) {
+      setPerNumberPlans(null);
+      return () => { alive = false; };
+    }
+    setPlansLoading(true); setPlansError('');
+    apiProviderService.listProviderDataPlans({ service: 'Offer Packs', country: serviceData.country, operator, phone })
+      .then(({ plans, supported }) => { if (alive) setPerNumberPlans(supported ? plans : null); })
+      // A failure must not fall through to showing nothing as though none were
+      // offered: the server would refuse an order against a list this number
+      // was not quoted from anyway.
+      .catch((e) => { if (alive) { setPerNumberPlans(null); setPlansError(e?.message || 'Unable to load the packs for this number.'); } })
+      .finally(() => { if (alive) setPlansLoading(false); });
+    return () => { alive = false; };
+  }, [serviceData.country, operator, phone, step]);
+
+  const interruption = useNetworkStatus({
+    service: 'Offer Packs',
+    country: serviceData.country,
+    operator,
+    productCode: serviceData.operatorCode,
+    active: step === 3,
+  });
 
   if (step === 0) {
     return <View><FormLabel>Select Country</FormLabel><Grid3>{countries.map((c) => <CountrySelectCard key={c.code} code={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr, operator: null, package: null, packageId: null, amount: null }); nextStep(); }} />)}</Grid3></View>;
@@ -98,23 +147,42 @@ export default function OfferPacksStep({ step }) {
     // quote, which beats showing nothing.
     const shownPrice = (p) => (p.walletPrice != null ? p.walletPrice : p.price);
     const shownCurrency = (p) => (p.walletPrice != null ? p.walletCurrency : cur);
-    const selected = packages.find((p) => p.name === serviceData.package);
+    const source = resolvePackageSource({
+      country: serviceData.country,
+      perNumber: perNumberPlans,
+      perNumberError: plansError,
+      successTopUp: packages,
+      builtIn: [],
+    });
+    const shown = source.packages;
+    // Still the truth for every country with no per-number provider, which is
+    // all of them until one is configured - but it is now a statement about
+    // what is set up rather than a rule baked into the screen.
+    const notOfferedHere = serviceData.country !== 'BD' && !source.perNumber && !plansLoading && !plansError;
+    const selected = shown.find((p) => p.name === serviceData.package);
     return (
       <View>
-        {serviceData.country !== 'BD' && <FormLabel>Offer packs are available for Bangladesh only.</FormLabel>}
+        <ServiceInterruptionNotice notice={interruption} />
+        {!!notOfferedHere && <FormLabel>Offer packs are not available for this country yet.</FormLabel>}
         {!!windowClosed && <FormLabel>{driveWindowClosedMessage()} Please come back during those hours.</FormLabel>}
         {!!loading && <FormLabel>Loading offer packs…</FormLabel>}
+        {!!plansLoading && <FormLabel>Checking which packs this number can buy…</FormLabel>}
         {!!error && <FormLabel>{error}</FormLabel>}
-        {!loading && !error && !windowClosed && serviceData.country === 'BD' && packages.length === 0 && <FormLabel>No offer packs are available for this operator right now. Try another operator, or use Internet or Recharge.</FormLabel>}
-        {!loading && !error && (
-          <PackagePicker
-            packages={packages}
-            label="Select Offer Pack"
-            selectedName={serviceData.package}
-            priceOf={shownPrice}
-            currencyOf={shownCurrency}
-            onSelect={(p) => updateServiceData({ package: p.name, packageId: p.id, amount: p.price })}
-          />
+        {!!plansError && <FormLabel>{plansError}</FormLabel>}
+        {!loading && !error && !windowClosed && serviceData.country === 'BD' && shown.length === 0 && <FormLabel>No offer packs are available for this operator right now. Try another operator, or use Internet or Recharge.</FormLabel>}
+        {!plansLoading && !!source.emptyForNumber && <FormLabel>This number has no offer packs available right now. Try Internet or Recharge.</FormLabel>}
+        {!loading && !error && !plansLoading && !source.blocked && (
+          <>
+            {!!source.perNumber && shown.length > 0 && <FormLabel>Packs available on {phone}</FormLabel>}
+            <PackagePicker
+              packages={shown}
+              label="Select Offer Pack"
+              selectedName={serviceData.package}
+              priceOf={shownPrice}
+              currencyOf={shownCurrency}
+              onSelect={(p) => updateServiceData({ package: p.name, packageId: p.id, amount: p.price, operatorCode: p.productCode || '' })}
+            />
+          </>
         )}
         {!!selected && <SummaryCard totalLabel="Wallet deduction" totalValue={`${shownCurrency(selected)} ${Number(shownPrice(selected)).toFixed(2)}`} />}
       </View>
@@ -130,7 +198,11 @@ export function validateStep(step, serviceData) {
   if (step === 1 && !(serviceData.phone || '').trim()) return 'Please enter a mobile number.';
   // The server will refuse a drive order outside the window anyway; saying so
   // here saves the customer filling in a form that cannot be submitted.
-  if (step === 3 && !isDriveWindowOpen()) return driveWindowClosedMessage();
+  // Scoped to Bangladesh, which is whose window it is: the drive window is
+  // Success TopUp's selling hours, 10:00-22:00 Dhaka. Unscoped it would refuse
+  // a Malaysian offer pack at nine in the evening for a reason that has nothing
+  // to do with it - which it did the moment packs stopped being BD-only.
+  if (step === 3 && serviceData.country === 'BD' && !isDriveWindowOpen()) return driveWindowClosedMessage();
   if (step === 3 && !serviceData.packageId) return 'Please select an offer pack.';
   return null;
 }

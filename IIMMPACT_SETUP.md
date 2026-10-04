@@ -346,6 +346,26 @@ documents `extras` for `subproduct_code`, `ic_number`, `biller_code` and `ref2`
 only — `server_id` is my guess at the key Mobile Legends needs. Confirm it with
 their product list or support; games without a zone ignore the field.
 
+### Offer packs need no code map of their own
+
+There is no "offer pack product code" field, and that is not an omission. An
+offer pack is bought from a catalogue, and the pack the customer picks already
+carries the provider's own product code as its id — the catalogue **is** the
+product list. What names the products is **Operator product codes
+*(catalogue)*** on the Offer Packs provider, exactly as for internet plans.
+
+Offer packs used to be Bangladesh-only. That was a statement about what was
+configured — Success TopUp's `drive` catalogue was the only source there had
+ever been — rather than a rule, so it is no longer baked into the screen. Set up
+an Offer Packs provider with a per-number catalogue for a country and its packs
+appear there, under **Packs available on 01…**; with none configured the screen
+says so, which is still what every country sees today.
+
+Two things that only mattered once packs left Bangladesh, both now fixed: the
+Success TopUp **drive window** (10:00–22:00 Dhaka) no longer refuses a
+non-Bangladeshi pack at nine in the evening, and a closed-window message no
+longer follows the customer when they switch country.
+
 ### Five maps, not one
 
 | Field | For | Keyed by |

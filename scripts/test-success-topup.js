@@ -544,7 +544,13 @@ check('both package screens explain an empty catalogue', () => {
     if (!src) return `${rel} unreadable`;
     // Skitto is in the operator picker with no packages in either catalogue,
     // and Teletalk has no drive packs, so a blank step is reachable.
-    if (!/packages\.length === 0/.test(code(src))) {
+    //
+    // Matched on the empty-list TEST and on something being said about it,
+    // rather than on the variable holding the list: that was `packages` until
+    // offer packs gained a second source and it became `shown`, which failed
+    // this check while the behaviour was unchanged.
+    const body = code(src);
+    if (!/\.length === 0/.test(body) || !/No (internet packages|offer packs) are available/.test(body)) {
       return `${rel} renders nothing when the catalogue is empty, so those operators show a blank step.`;
     }
   }
