@@ -6,9 +6,17 @@ import { providerCountries, toggleCountry } from '../utils/providerReach';
 import * as apiProviderService from '../firebase/apiProviderService';
 
 const COUNTRIES = [
-  { code: 'ALL', label: 'All countries' }, { code: 'MY', label: 'Malaysia' }, { code: 'BD', label: 'Bangladesh' },
-  { code: 'SG', label: 'Singapore' }, { code: 'ID', label: 'Indonesia' }, { code: 'IN', label: 'India' },
+  { code: 'ALL', label: 'All countries' },
+  { code: 'MY', label: 'Malaysia' },
+  { code: 'BD', label: 'Bangladesh' },
+  { code: 'SG', label: 'Singapore' },
+  { code: 'ID', label: 'Indonesia' },
+  { code: 'IN', label: 'India' },
   { code: 'PH', label: 'Philippines' },
+  { code: 'NP', label: 'Nepal' },
+  { code: 'PK', label: 'Pakistan' },
+  { code: 'MM', label: 'Myanmar' },
+  { code: 'KH', label: 'Cambodia' },
 ];
 
 const HELP_TEXT =
