@@ -47,7 +47,12 @@ function gridCanvas(gridStyle, colors, isDark) {
 function photoArtFor(it) {
   if (!it) return '';
   if (hasPhotoTileIcon(it.art)) return it.art;
-  if (it.art || it.emoji) return '';
+  // `art: ''` is what applyTileLabels writes beside a chosen emoji, so that is
+  // a choice and it wins. A WebView page's title icon arrives as an emoji with
+  // no art at all, and treating that as a choice hid the picture on every
+  // WebView tile - see ServiceGrid for the same rule.
+  if (it.art) return '';
+  if (it.emoji && it.art === '') return '';
   return photoIconFor(it.key);
 }
 
@@ -156,7 +161,7 @@ function createStyles(colors) {
     gridCanvas: { marginHorizontal: 4, borderRadius: radius.xl, paddingVertical: 8, overflow: 'hidden' },
     gridCanvasMinimal: { paddingVertical: 0 },
     grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: GRID_PADDING, gap: COLUMN_GAP },
-    item: { minHeight: 106, borderRadius: radius.lg, paddingVertical: 10, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+    item: { minHeight: 94, borderRadius: radius.lg, paddingVertical: 10, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
     bordered: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
     classic: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}66` },
     soft: { backgroundColor: isLight(colors) ? '#F7FAFC' : '#101010' },
@@ -164,12 +169,12 @@ function createStyles(colors) {
     glass: { backgroundColor: isLight(colors) ? '#FFFFFFD9' : '#FFFFFF12', borderWidth: 1, borderColor: isLight(colors) ? '#FFFFFF' : '#FFFFFF30', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 3 },
     threeD: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}55`, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 0, shadowOffset: { width: 0, height: 4 }, elevation: 5, transform: [{ translateY: -1 }] },
     neon: { backgroundColor: isLight(colors) ? '#10151A' : '#080A0C', borderWidth: 1, borderColor: `${colors.primary}99`, shadowColor: colors.primary, shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 4 },
-    bento: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}55`, minHeight: 122, paddingHorizontal: 8 },
+    bento: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}55`, minHeight: 110, paddingHorizontal: 8 },
     adaptive: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}44` },
     itemAdaptive: { shadowColor: colors.primary, shadowOpacity: 0.18, shadowRadius: 7, shadowOffset: { width: 0, height: 2 }, elevation: 4 },
     classicBar: { position: 'absolute', top: 0, left: 0, right: 0, height: 4 },
     adaptiveBar: { position: 'absolute', top: 0, left: 0, right: 0, height: 3 },
-    gradientFill: { flex: 1, width: '100%', minHeight: 106, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 4 },
+    gradientFill: { flex: 1, width: '100%', minHeight: 94, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 4 },
     iconWrap: { width: tileIcon.wrap, height: tileIcon.wrap, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
     iconWrapBright: { borderWidth: 1, borderColor: '#FFFFFF30' },
     iconText: { fontSize: 27 },

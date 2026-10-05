@@ -36,7 +36,16 @@ export function Tile({ s, onPress, disabled }) {
   // is text to print; a superadmin setting either in Tile Labels must see it,
   // and both used to lose to whatever drawing this tile's KEY happened to have.
   const chosenEmoji = asSafeText(s?.emoji, '');
-  const artKey = asSafeText(s?.art, '') || (chosenEmoji ? '' : asSafeText(s?.key, icon));
+  // An emoji only beats this tile's own artwork when somebody CHOSE it.
+  //
+  // applyTileLabels writes `art: ''` alongside the emoji it was given, so an
+  // empty-string art is the mark of a deliberate choice. withWebviewConfig
+  // writes no art at all - it just carries the page's title icon across - and
+  // reading that as a choice blanked the artwork on every WebView tile: Visa,
+  // FOMEMA, Arrival Card, Passport and Train all drew their default emoji and
+  // none of them reached the picture sitting in assets/tiles under their key.
+  const emojiWasChosen = !!chosenEmoji && s?.art === '';
+  const artKey = asSafeText(s?.art, '') || (emojiWasChosen ? '' : asSafeText(s?.key, icon));
   // Supplied artwork for this tile, either chosen by name in Tile Labels or
   // found from the tile's own key. Checked before the drawings: a tile with a
   // picture of its own should show it rather than the generic vector.
@@ -166,4 +175,4 @@ const styles = StyleSheet.create({ sectionSpacer: { marginTop: 14 }, catLabel: {
 // tiles drew one against the left margin and one against the right with a
 // canyon between them. Packing left with a fixed gap means a row of two looks
 // like the first two of a row of four, which is what it is.
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', columnGap: 8 }, item: { width: '31.3%', minHeight: 106, marginBottom: 10, paddingHorizontal: 2, paddingVertical: 10, borderWidth: 1.5, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 1 }, itemDisabled: { opacity: 0.45 }, emoji: { fontSize: tileIcon.emoji, lineHeight: tileIcon.wrap, marginBottom: 6, textAlign: 'center' }, logoWrap: { height: tileIcon.wrap, marginBottom: 6, alignItems: 'center', justifyContent: 'center' }, iconText: { fontSize: 28 }, name: { fontSize: 11.5, lineHeight: 14, fontWeight: '700', textAlign: 'center' } });
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', columnGap: 8 }, item: { width: '31.3%', minHeight: 94, marginBottom: 10, paddingHorizontal: 2, paddingVertical: 10, borderWidth: 1.5, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 1 }, itemDisabled: { opacity: 0.45 }, emoji: { fontSize: tileIcon.emoji, lineHeight: tileIcon.wrap, marginBottom: 6, textAlign: 'center' }, logoWrap: { height: tileIcon.wrap, marginBottom: 6, alignItems: 'center', justifyContent: 'center' }, iconText: { fontSize: 28 }, name: { fontSize: 11.5, lineHeight: 14, fontWeight: '700', textAlign: 'center' } });

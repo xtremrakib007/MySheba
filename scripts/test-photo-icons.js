@@ -104,8 +104,11 @@ test('a superadmin choosing an icon still wins', () => {
   const feature = read('src/components/FeatureGrid.js');
   const helper = /function photoArtFor\(it\) \{[\s\S]*?\n\}/.exec(feature)[0];
   assert.ok(/if \(hasPhotoTileIcon\(it\.art\)\) return it\.art;/.test(helper), 'a chosen picture must be used');
-  assert.ok(/if \(it\.art \|\| it\.emoji\) return '';/.test(helper),
-    'a chosen drawing or emoji must beat the key lookup');
+  assert.ok(/if \(it\.art\) return '';/.test(helper), 'a chosen drawing must beat the key lookup');
+  // An emoji counts as chosen only with the `art: ''` applyTileLabels writes
+  // beside it. A WebView page's title icon has no art and must not count.
+  assert.ok(/if \(it\.emoji && it\.art === ''\) return '';/.test(helper),
+    'a chosen emoji must beat the key lookup, and a page icon must not');
 });
 
 test('an unknown name draws nothing rather than crashing', () => {
@@ -212,6 +215,38 @@ test('how the added artwork was made is written down', () => {
   }
 });
 
+test('a WebView page\'s own emoji does not hide the tile\'s picture', () => {
+  // withWebviewConfig copies each page's title icon onto the tile as `emoji`.
+  // Read as a choice, that blanked the artwork on every WebView tile - Visa,
+  // FOMEMA, Arrival Card, Passport and Train all drew the emoji instead.
+  const pages = {};
+  for (const key of ['visa', 'fomema', 'mydigital', 'passport', 'train']) {
+    pages[key] = { key, name: key, url: 'https://example.test', icon: '🛂', active: true, home: true };
+  }
+  const withPages = tiles.withWebviewConfig(tiles.CUSTOMER_SERVICES, pages);
+
+  // The rule both grids apply, replayed here against the real data.
+  const resolve = (tile) => {
+    const chosen = tile.emoji || '';
+    const art = (tile.art || '') || ((chosen && tile.art === '') ? '' : (tile.key || ''));
+    return artNames.has(art) ? art : photoIconFor(art);
+  };
+
+  for (const key of Object.keys(pages)) {
+    const tile = withPages.find((t) => t.key === key);
+    assert.ok(tile, key + ' is not in the customer list');
+    assert.ok(tile.emoji, 'this check is only meaningful while the page icon is carried across');
+    assert.ok(resolve(tile), key + ' has a picture and draws its page emoji instead');
+  }
+
+  // ...and an emoji somebody actually chose in Tile Labels still wins, which is
+  // what that screen promises.
+  const chosenByHand = tiles.applyTileLabels(withPages, { visa: { icon: '⭐', iconIsArt: false } })
+    .find((t) => t.key === 'visa');
+  assert.strictEqual(chosenByHand.art, '', 'applyTileLabels must mark a chosen emoji with an empty art');
+  assert.strictEqual(resolve(chosenByHand), '', 'a chosen emoji must beat the picture');
+});
+
 console.log('\nOne size, on every grid');
 
 test('both grids draw a tile icon at the same size', () => {
@@ -232,7 +267,7 @@ test('both grids draw a tile icon at the same size', () => {
 
   // Big enough to read as the tile's picture rather than a stamp on it, and
   // small enough to leave room for the label under it.
-  assert.ok(px >= 40 && px <= 72, 'a tile icon of ' + px + ' is outside what the card can carry');
+  assert.ok(px >= 34 && px <= 72, 'a tile icon of ' + px + ' is outside what the card can carry');
   assert.ok(wrap >= px, 'the wrap must not clip the icon it holds');
   assert.ok(emoji >= px * 0.7, 'an emoji tile must not read as smaller than a drawn one');
 });

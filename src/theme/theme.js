@@ -51,9 +51,19 @@ export const roleThemes = {
   // straight hue shift left white header text at 4.40:1 on that gradient stop
   // - under the 4.5 this file holds itself to, and the same trap the note
   // above describes for the original greens.
+  // The gradient now travels the way the logo does. The mark is not one teal:
+  // it sweeps from a green-teal (hue 168) to a blue-teal (hue 189), and a
+  // header built from three stops of a single hue read as a different colour
+  // beside it however close that hue was.
+  //
+  // The logo's own swatches are 2.0-3.3:1 against white text, so they cannot
+  // be used as a header directly - that is the trap the note above describes.
+  // The SWEEP is what is taken, at the lightness each stop needs to clear the
+  // 4.5:1 this file holds itself to. Dark keeps each swatch's own lightness and
+  // saturation and moves only its hue, which is the same move again.
   customer: { label: 'Customer',
-    light: { primary: '#0E7A79', primaryDark: '#0A5C5B', secondary: '#0F8483', gold: '#2DBEBC' },
-    dark:  { primary: '#3FD9D7', primaryDark: '#1E9A99', secondary: '#57E0DE', gold: '#7CEFEE' } },
+    light: { primary: '#087F7F', primaryDark: '#065462', secondary: '#08846B', gold: '#2DBEBC' },
+    dark:  { primary: '#3FD9CF', primaryDark: '#1E879A', secondary: '#57E0C5', gold: '#7CEFEE' } },
   admin: { label: 'Admin',
     light: { primary: '#1257B0', primaryDark: '#0C3F84', secondary: '#1A73E8', gold: '#4A9DFF' },
     dark:  { primary: '#6BB0FF', primaryDark: '#2F7FD6', secondary: '#8CC4FF', gold: '#B6DCFF' } },
@@ -115,11 +125,11 @@ export const radius = { sm: 8, md: 12, lg: 16, xl: 22, tile: 18, card: 22, sheet
  * corner of it. The wrap is a few points taller so a drawing and a picture sit
  * on the same baseline whatever their own proportions are.
  *
- * Came down from 52 after seeing it on a phone: at 52 a nine-tile grid was
- * almost all artwork and the labels had to fight for the row under it. Still
- * well above the 32 it was before any of this.
+ * Came down from 52, then from 44, each time after seeing it on a phone: a
+ * grid of nine is mostly artwork long before the icon looks big on its own.
+ * Still above the 32 it was before any of this.
  */
-export const tileIcon = { size: 44, wrap: 48, emoji: 38 };
+export const tileIcon = { size: 38, wrap: 42, emoji: 33 };
 
 // Soft, colour-tinted elevation rather than a neutral black shadow, which
 // on the tinted surfaces here reads as grime. Used by the cards the home

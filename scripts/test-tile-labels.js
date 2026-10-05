@@ -41,7 +41,13 @@ assert.strictEqual(asEmoji[0].emoji, '\u{1F680}', 'text is set as an emoji');
 // kept drawing it, so a chosen emoji never appeared.
 assert.strictEqual(asEmoji[0].art, '', 'and clears the art, so the key drawing cannot win');
 const grid = read('src/components/ServiceGrid.js');
-assert(/const artKey = asSafeText\(s\?\.art, ''\) \|\| \(chosenEmoji \? '' : asSafeText\(s\?\.key, icon\)\)/.test(grid),
+// A chosen emoji still beats the key's own artwork - but the test for "chosen"
+// is the `art: ''` the line above writes, not merely "an emoji is present". A
+// WebView page carries its title icon across as an emoji with no art, and
+// reading THAT as a choice hid the picture on every WebView tile.
+assert(/const emojiWasChosen = !!chosenEmoji && s\?\.art === '';/.test(grid),
+  'only an emoji somebody chose may beat the tile artwork');
+assert(/const artKey = asSafeText\(s\?\.art, ''\) \|\| \(emojiWasChosen \? '' : asSafeText\(s\?\.key, icon\)\)/.test(grid),
   'the tile must prefer a chosen icon over the one its key implies');
 const feature = read('src/components/FeatureGrid.js');
 assert(/hasServiceArt\(it\.art \|\| \(it\.emoji \? '' : it\.key\)\)/.test(feature),

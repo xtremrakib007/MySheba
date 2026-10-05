@@ -276,4 +276,40 @@ for (const role of ['admin', 'superadmin', 'dealer']) {
   assert(/const keys = new Set\(declared\.map/.test(body), 'and so must the excluded keys');
 }
 
+// The customer header is the logo's colour, not a near-miss of it.
+{
+  const theme = read('src/theme/theme.js');
+  const light = /customer: \{ label: 'Customer',\s*\n\s*light: \{ primary: '(#[0-9A-F]{6})', primaryDark: '(#[0-9A-F]{6})', secondary: '(#[0-9A-F]{6})'/.exec(theme);
+  assert(light, 'the customer light palette must be findable');
+  const [, primary, primaryDark, secondary] = light;
+
+  const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const lin = (c) => (c / 255 <= 0.04045 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4);
+  const onWhite = (h) => {
+    const [r, g, b] = rgb(h).map(lin);
+    return 1.05 / (0.2126 * r + 0.7152 * g + 0.0722 * b + 0.05);
+  };
+  const hue = (h) => {
+    const [r, g, b] = rgb(h).map((v) => v / 255);
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+    if (!d) return 0;
+    const t = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return (t * 60 + 360) % 360;
+  };
+
+  // The logo is not one teal: it runs from a green-teal to a blue-teal, and the
+  // header is the gradient [secondary, primary, primaryDark]. A gradient of one
+  // hue is what read as a different colour beside the mark.
+  const sweep = [secondary, primary, primaryDark].map(hue);
+  assert(sweep[0] >= 160 && sweep[0] <= 174, `the gradient must start green-teal like the logo, saw ${sweep[0].toFixed(0)}`);
+  assert(sweep[2] >= 183 && sweep[2] <= 196, `and end blue-teal like the logo, saw ${sweep[2].toFixed(0)}`);
+  assert(sweep[2] - sweep[0] >= 12, 'the gradient must travel, not sit on one hue');
+
+  // The logo's own swatches are 2.0-3.3:1 against white, so they cannot be the
+  // header. Every stop still has to carry white text.
+  for (const [name, value] of [['secondary', secondary], ['primary', primary], ['primaryDark', primaryDark]]) {
+    assert(onWhite(value) >= 4.5, `${name} ${value} is ${onWhite(value).toFixed(2)}:1 against white text`);
+  }
+}
+
 console.log('\nCategories on the home screen, everything else one tap away.');

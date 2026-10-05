@@ -289,6 +289,17 @@ def passport(pen):            # an appointment for one
     pen.line([(32, 62), (46, 76), (70, 48)], 11, v=OFF)
 
 
+def bus(pen):                 # a bus
+    # The supplied bus.png was an identity card with a tick on it.
+    pen.rect(8, 6, 84, 70, r=12)
+    pen.rect(18, 20, 64, 24, r=5, v=OFF)
+    pen.rect(46, 20, 8, 24, v=OFF)
+    pen.circle(26, 60, 8, v=OFF)
+    pen.circle(74, 60, 8, v=OFF)
+    pen.rect(14, 78, 20, 16, r=6)
+    pen.rect(66, 78, 20, 16, r=6)
+
+
 def adminFeatures(pen):       # settings
     teeth = 8
     for i in range(teeth):
@@ -328,6 +339,7 @@ ICONS = [
     ('walletFunding', TEAL, walletFunding),
     ('mydigital', PURPLE, mydigital),
     ('passport', RED, passport),
+    ('bus', AMBER, bus),
 ]
 
 if __name__ == '__main__':
