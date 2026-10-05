@@ -42,6 +42,10 @@ const CONSENT_PURPOSES = {
     version: 1,
     text: 'I agree that MySheba may store the documents and personal details I upload here, and that I am entitled to share them.',
   },
+  travel: {
+    version: 1,
+    text: 'I agree that MySheba may collect and process the travel details and contact information I provide here so that an agent can contact me and arrange this booking.',
+  },
   remittance: {
     version: 1,
     text: 'I agree that MySheba may collect and process the sender and recipient details I provide, including identity and address information, to carry out this transfer and to meet its legal obligations.',

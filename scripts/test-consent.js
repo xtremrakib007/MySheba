@@ -127,6 +127,31 @@ test('documents are refused by the rules, because nothing else can refuse them',
   assert.ok(/'consentPurpose','consentVersion'/.test(line), 'and allow the fields through hasOnly');
 });
 
+test('travel inquiries are refused by the rules, for the same reason', () => {
+  // Flight, bus and train all write client -> Firestore through the same
+  // inquiry. A name, a phone number and an email, with no callable in between.
+  const rules = read('firestore.rules');
+  const line = rules.split('\n').find((l) => l.includes('match /inquiries/{id}'));
+  assert.ok(line, 'the rule must exist');
+  assert.ok(/'consentPurpose','consentVersion'/.test(line), 'the fields must pass hasOnly');
+  assert.ok(/consentPurpose', ''\) == 'travel'/.test(line), 'and be required');
+  assert.ok(/consentVersion', 0\) >= 1/.test(line));
+  // One checkbox covers all three: they share TravelInquirySteps.
+  const steps = read('src/steps/TravelInquirySteps.js');
+  assert.ok(/<ConsentCheckbox purpose="travel"/.test(steps));
+  assert.ok(/serviceData\.consentAccepted !== true\) return 'Please tick the box/.test(steps),
+    'the step must not advance without it');
+  for (const file of ['src/steps/FlightSteps.js', 'src/steps/BusSteps.js', 'src/steps/TrainSteps.js']) {
+    assert.ok(/TravelInquirySteps/.test(read(file)), file + ' no longer shares the gated step');
+  }
+  // Computing the payload is not writing it. Dropping the two field lines left
+  // the call in place, unused, and this passed.
+  const inquiry = read('src/firebase/inquiryService.js');
+  assert.ok(/consentPayload\('travel'\)/.test(inquiry), 'the acceptance must be computed');
+  assert.ok(/consentPurpose: consent\.purpose/.test(inquiry), 'and written');
+  assert.ok(/consentVersion: consent\.version/.test(inquiry), 'with its version');
+});
+
 test('the client sends what each gate expects', () => {
   assert.ok(/consentPayload\('kyc'\)/.test(read('src/firebase/verificationService.js')));
   assert.ok(/consentPayload\('documents'\)/.test(read('src/firebase/documentService.js')));

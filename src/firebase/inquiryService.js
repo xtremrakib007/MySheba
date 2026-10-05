@@ -16,6 +16,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './config';
+import { consentPayload } from '../utils/consentPolicy';
 
 const COLLECTION = 'inquiries';
 
@@ -24,8 +25,14 @@ const COLLECTION = 'inquiries';
  * payload: { from, to, date, time?, passengers?, name, phone, email?, notes? }
  */
 export async function createInquiry(type, payload, customer) {
+  // firestore.rules refuses an inquiry without these. This write goes
+  // client -> Firestore with no callable in between, so the rule is the only
+  // place the tick can be required - same as myDocuments.
+  const consent = consentPayload('travel');
   const docRef = await addDoc(collection(db, COLLECTION), {
     type,
+    consentPurpose: consent.purpose,
+    consentVersion: consent.version,
     from: payload.from || '',
     to: payload.to || '',
     date: payload.date || '',

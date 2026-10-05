@@ -7,6 +7,7 @@ import { airports } from '../data/airports';
 import { radius } from '../theme/theme';
 
 import { useTheme } from "../theme/ThemeContext";
+import ConsentCheckbox from '../components/ConsentCheckbox';
 
 // Shared by FlightSteps / BusSteps / TrainSteps. All three are simple
 // "send an inquiry to Admin" forms - no live inventory or pricing, since a
@@ -136,6 +137,10 @@ export default function TravelInquirySteps({ step, hasTime, icon, routeLabel }) 
     return (
       <View>
         <SummaryCard title={`${icon} Inquiry Summary`} rows={rows} />
+        {/* A name, a phone number and an email are about to be written to
+            Firestore. The rule refuses the inquiry without this. */}
+        <ConsentCheckbox purpose="travel" value={!!serviceData.consentAccepted}
+          onChange={(v) => updateServiceData({ consentAccepted: v })} />
         <Text style={styles.footNote}>
           Tap Submit to send this inquiry to our admin team. They will call or message you to confirm price and availability.
         </Text>
@@ -157,6 +162,7 @@ export function validateStep(step, serviceData) {
   if (step === 1) {
     if (!(serviceData.pName || '').trim()) return 'Please enter your full name.';
     if (!(serviceData.pPhone || '').trim()) return 'Please enter your mobile number.';
+    if (serviceData.consentAccepted !== true) return 'Please tick the box to continue.';
   }
   return null;
 }
