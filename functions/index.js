@@ -20,6 +20,10 @@ exports.manageUser = userManagement.manageUser;
 exports.refreshWalletExchangeRates = require('./walletExchangeRateService').refreshWalletExchangeRates;
 exports.setRoleDefaults = require('./accessControl').setRoleDefaults;
 exports.setUserAccessOverride = require('./accessControl').setUserAccessOverride;
+exports.createInvoice = require('./invoiceService').createInvoice;
+exports.approveInvoice = require('./invoiceService').approveInvoice;
+exports.rejectInvoice = require('./invoiceService').rejectInvoice;
+exports.listInvoices = require('./invoiceService').listInvoices;
 // The handler was renamed to registerWithDealerCode; this line still asked
 // for the old name and so exported undefined. The app calls
 // 'registerCustomer' from three places (sign-up and both email-OTP

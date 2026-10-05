@@ -106,6 +106,13 @@ service cloud.firestore {
     // only the requested voucher after App Check/auth/session controls.
     match /rechargePins/{id} { allow read, create, update, delete: if false; }
     match /transactionQueue/{id} { allow read: if activeProfile() && (can('orders') || (isDealerTier() && resource.data.operatorRole == 'dealer' && resource.data['service'] == 'Mobile Banking' && (resource.data.get('dealerId', null) == null || resource.data.dealerId == request.auth.uid) && (resource.data.status == 'pending' || resource.data.get('claimedBy', null) == request.auth.uid)) || (isReseller() && resource.data.operatorRole == 'reseller' && resource.data['service'] in ['Recharge', 'Internet', 'Bill Payment', 'Remittance'] && (resource.data.get('resellerId', null) == null || resource.data.resellerId == request.auth.uid) && (resource.data.status == 'pending' || resource.data.get('claimedBy', null) == request.auth.uid))); allow create, update, delete: if false; }
+    // Invoices: raised and decided only by the callables, which enforce the
+    // capability, allocate the number and refuse self-approval. A client that
+    // could write here could approve its own invoice, which is the one thing
+    // this record exists to prevent. Read is wider than write on purpose -
+    // 'reports' looks back at what was paid out without being able to pay.
+    match /invoices/{id} { allow create, update, delete: if false; allow read: if activeProfile() && (can('finance') || can('reports')); }
+    match /counters/{id} { allow read, write: if false; }
     match /topups/{id} { allow create, update, delete: if false; allow read: if activeProfile() && (resource.data.userId == request.auth.uid || can('finance')); }
     match /selfTopups/{id} { allow read: if activeProfile() && resource.data.userId == request.auth.uid; allow create, update, delete: if false; }
     // Funding requests are written only by the callables, which do the
