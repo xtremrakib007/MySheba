@@ -11,6 +11,7 @@ const createFn = httpsCallable(functions, 'createInvoice');
 const approveFn = httpsCallable(functions, 'approveInvoice');
 const rejectFn = httpsCallable(functions, 'rejectInvoice');
 const listFn = httpsCallable(functions, 'listInvoices');
+const documentFn = httpsCallable(functions, 'getInvoiceDocument');
 
 export const INVOICE_KINDS = [
   { key: 'investment', label: 'Investment' },
@@ -42,4 +43,18 @@ export async function rejectInvoice(invoiceId, note) {
 export async function listInvoices({ kind, limit } = {}) {
   const { data } = await listFn({ kind: kind || '', limit: limit || 50 });
   return data?.invoices || [];
+}
+
+/**
+ * The invoice as a printable sheet.
+ *
+ * The HTML is built on the server from the stored record
+ * (functions/invoiceDocument.js), so the sheet printed from a phone and the
+ * one printed from the admin site are the same document.
+ */
+export async function getInvoiceDocument(invoiceId) {
+  if (!invoiceId) throw new Error('That invoice is no longer available.');
+  const { data } = await documentFn({ invoiceId });
+  if (!data?.html) throw new Error('That invoice could not be prepared.');
+  return data;
 }

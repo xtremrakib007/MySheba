@@ -9,7 +9,9 @@ import HeaderDecor from '../components/HeaderDecor';
 import { showAlert } from '../utils/appAlert';
 import {
   INVOICE_KINDS, invoiceKindLabel, createInvoice, approveInvoice, rejectInvoice, listInvoices,
+  getInvoiceDocument,
 } from '../firebase/invoiceService';
+import { printHtml } from '../utils/printService';
 
 /**
  * Invoices for money put into the business and money paid out to providers.
@@ -57,6 +59,7 @@ export default function InvoicesScreen() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ kind: 'providerPayment', party: '', amount: '', currency: 'MYR', reference: '', notes: '' });
   const [saving, setSaving] = useState(false);
+  const [printingId, setPrintingId] = useState('');
 
   // Raising and deciding both need finance; reports can read the history.
   const mayDecide = typeof can === 'function' ? can('finance') : false;
@@ -83,6 +86,21 @@ export default function InvoicesScreen() {
       // The server's own words: it names the field that is wrong.
       showAlert('Invoices', error?.message || 'Could not raise the invoice.');
     } finally { setSaving(false); }
+  };
+
+  const printInvoice = async (invoice) => {
+    if (printingId) return;
+    setPrintingId(invoice.id);
+    try {
+      const doc = await getInvoiceDocument(invoice.id);
+      // Android's print dialog offers "Save as PDF" alongside the printers,
+      // so one action covers both printing and downloading.
+      await printHtml(doc.html);
+    } catch (error) {
+      showAlert('Invoice', error?.message || 'Could not prepare that invoice.');
+    } finally {
+      setPrintingId('');
+    }
   };
 
   const decide = async (invoice, approved) => {
@@ -137,6 +155,18 @@ export default function InvoicesScreen() {
               : 'nobody yet'}
           </Text>
           {!!item.decisionNote && <Text style={styles.trailNote}>{item.decisionNote}</Text>}
+        </View>
+
+        {/* Every invoice, not only approved ones. An unapproved one prints
+            with a notice across the top saying it is not payable. */}
+        <View style={styles.actions}>
+          <TouchableOpacity
+            disabled={!!printingId}
+            style={[styles.btn, styles.print]}
+            onPress={() => printInvoice(item)}
+          >
+            <Text style={styles.printText}>{printingId === item.id ? 'Preparing…' : 'Print / Save PDF'}</Text>
+          </TouchableOpacity>
         </View>
 
         {pending && mayDecide && (mine ? (
@@ -268,6 +298,8 @@ const createStyles = (colors) => StyleSheet.create({
   approve: { backgroundColor: '#059669' },
   approveText: { color: '#fff', fontWeight: '700' },
   reject: { borderWidth: 1, borderColor: '#DC2626' },
+  print: { borderWidth: 1, borderColor: colors.border },
+  printText: { color: colors.text, fontWeight: '600' },
   rejectText: { color: '#DC2626', fontWeight: '700' },
   loader: { marginTop: 30 },
   empty: { color: colors.textSecondary, textAlign: 'center', marginTop: 40 },

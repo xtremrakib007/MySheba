@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   INVOICE_KINDS, invoiceKindLabel, createInvoice, approveInvoice, rejectInvoice, listInvoices,
+  openInvoiceDocument,
   type Invoice, type InvoiceKind, type NewInvoice,
 } from '../services/invoiceService';
 
@@ -74,6 +75,15 @@ export default function InvoicesPage() {
       // The server's own words: it names the field that is wrong.
       setError(err instanceof Error ? err.message : 'Could not raise the invoice.');
     } finally { setSaving(false); }
+  };
+
+  const print = async (invoice: Invoice) => {
+    setError(null);
+    try {
+      await openInvoiceDocument(invoice.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not prepare that invoice.');
+    }
   };
 
   const decide = async (invoice: Invoice, approved: boolean) => {
@@ -241,6 +251,19 @@ export default function InvoicesPage() {
                       : 'nobody yet'}
                   </p>
                   {invoice.decisionNote && <p className="mt-1 italic text-[var(--color-ink-soft)]">{invoice.decisionNote}</p>}
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {/* Every invoice, not only approved ones. An unapproved one
+                      prints with a notice across the top saying it is not
+                      payable - see functions/invoiceDocument.js. */}
+                  <button
+                    type="button"
+                    onClick={() => void print(invoice)}
+                    className="rounded-lg border border-[var(--color-line)] px-4 py-1.5 text-sm font-medium"
+                  >
+                    Print / Download
+                  </button>
                 </div>
 
                 {pending && mayDecide && (mine ? (

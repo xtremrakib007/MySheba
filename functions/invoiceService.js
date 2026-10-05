@@ -4,6 +4,7 @@ const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 const { hasCapability } = require('./accessControl');
 const { logAudit } = require('./logService');
 const { readInvoice, approvalDecision, invoiceNumber, INVOICE_KINDS } = require('./invoiceRules');
+const { renderInvoiceHtml } = require('./invoiceDocument');
 
 const COLLECTION = 'invoices';
 const COUNTER = 'counters/invoiceNumbers';
@@ -180,5 +181,41 @@ exports.listInvoices = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (req
       };
     }),
     viewerRole: actor.role,
+  };
+});
+
+/**
+ * One invoice as a printable document.
+ *
+ * Rendered here rather than on the screen that asked, so the sheet somebody
+ * files or sends says what the stored record says - not what a browser tab had
+ * in state. Same capability as the list: 'finance' raises and decides,
+ * 'reports' can look back at what was paid.
+ */
+exports.getInvoiceDocument = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  const db = admin.firestore();
+  try { await actorOf(db, request, 'finance'); }
+  catch (error) {
+    if (error?.code !== 'permission-denied') throw error;
+    await actorOf(db, request, 'reports');
+  }
+
+  const id = String(request.data?.invoiceId || '').trim().slice(0, 100);
+  if (!/^[A-Za-z0-9_-]{1,100}$/.test(id)) throw new HttpsError('invalid-argument', 'An invoice id is required.');
+
+  const snap = await db.collection(COLLECTION).doc(id).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'That invoice no longer exists.');
+  const d = snap.data() || {};
+  const millis = (value) => (value && typeof value.toMillis === 'function' ? value.toMillis() : null);
+
+  return {
+    number: String(d.number || ''),
+    html: renderInvoiceHtml({
+      number: d.number, kind: d.kind, party: d.party, amount: d.amount, currency: d.currency,
+      reference: d.reference, notes: d.notes, status: d.status,
+      createdByName: d.createdByName, createdByRole: d.createdByRole, createdAt: millis(d.createdAt),
+      approvedByName: d.approvedByName, approvedByRole: d.approvedByRole, approvedAt: millis(d.approvedAt),
+      decisionNote: d.decisionNote,
+    }),
   };
 });

@@ -47,6 +47,7 @@ const createFn = httpsCallable(functions, 'createInvoice');
 const approveFn = httpsCallable(functions, 'approveInvoice');
 const rejectFn = httpsCallable(functions, 'rejectInvoice');
 const listFn = httpsCallable(functions, 'listInvoices');
+const documentFn = httpsCallable(functions, 'getInvoiceDocument');
 
 export interface NewInvoice {
   kind: InvoiceKind;
@@ -75,4 +76,33 @@ export async function rejectInvoice(invoiceId: string, note: string): Promise<vo
 export async function listInvoices(kind = '', limit = 50): Promise<Invoice[]> {
   const { data } = await listFn({ kind, limit });
   return ((data as { invoices?: Invoice[] })?.invoices) ?? [];
+}
+
+/**
+ * Open one invoice as a printable sheet.
+ *
+ * The HTML comes from the server, built from the stored record - see
+ * functions/invoiceDocument.js. The browser's own print dialog is what turns
+ * it into paper or a PDF, which is also why there is no PDF library here:
+ * "Save as PDF" is a destination in that dialog on every desktop browser.
+ */
+export async function openInvoiceDocument(invoiceId: string): Promise<void> {
+  if (!invoiceId) throw new Error('That invoice is no longer available.');
+  // Opened before the await. A window.open() that happens after one is not
+  // tied to the click any more, and pop-up blockers refuse it.
+  const win = window.open('', '_blank');
+  if (!win) throw new Error('Allow pop-ups for this site to print an invoice.');
+  try {
+    const { data } = await documentFn({ invoiceId });
+    const html = (data as { html?: string })?.html;
+    if (!html) throw new Error('That invoice could not be prepared.');
+    win.document.write(html);
+    win.document.close();
+    // Let the sheet lay out before the dialog covers it, so what they see
+    // behind the preview is the invoice and not a blank page.
+    win.setTimeout(() => win.print(), 250);
+  } catch (err) {
+    win.close();
+    throw err;
+  }
 }

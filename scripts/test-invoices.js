@@ -346,4 +346,117 @@ test('the rules deploy sends the indexes too', () => {
     'and must refuse a checkout that is stale in either file');
 });
 
+
+// ---------------------------------------------------------------------------
+// The printable sheet. This is the artefact a payment is justified with months
+// later, so the two names and the status have to survive the trip to paper.
+// ---------------------------------------------------------------------------
+const { renderInvoiceHtml } = require('../functions/invoiceDocument');
+
+const SAMPLE = {
+  number: 'MSI-2026-00003', kind: 'providerPayment', party: 'Server Payment',
+  amount: 40, currency: 'MYR', reference: 'INV-88', notes: 'Monthly server bill',
+  status: 'approved',
+  createdByName: 'Raisa', createdByRole: 'superadmin', createdAt: Date.UTC(2026, 9, 5, 14, 35),
+  approvedByName: 'Karim', approvedByRole: 'finance', approvedAt: Date.UTC(2026, 9, 5, 15, 32),
+};
+
+console.log('\nThe printed sheet says what the record says');
+
+test('both names and both moments are on the paper', () => {
+  const html = renderInvoiceHtml(SAMPLE);
+  for (const text of ['MSI-2026-00003', 'Server Payment', 'MYR 40.00', 'INV-88', 'Monthly server bill',
+    'Raisa (superadmin)', 'Karim (finance)']) {
+    assert.ok(html.includes(text), 'the sheet omits ' + text);
+  }
+  // The time, not just the date - the whole reason these are kept. Written out
+  // in full rather than as a shape, so a timezone slip shows up here.
+  assert.ok(html.includes('05 Oct 2026 at 14:35 UTC'), 'the raised moment is wrong or missing');
+  assert.ok(html.includes('05 Oct 2026 at 15:32 UTC'), 'the approved moment is wrong or missing');
+});
+
+test('an unapproved invoice cannot be mistaken for an approved one', () => {
+  // A pending invoice that printed looking approved is the worst thing this
+  // document could do, so it says so in words, not only in a colour.
+  const pending = renderInvoiceHtml({ ...SAMPLE, status: 'pending', approvedByName: '', approvedByRole: '', approvedAt: null });
+  assert.ok(/NOT YET APPROVED/.test(pending));
+  assert.ok(/not payable/.test(pending));
+  const rejected = renderInvoiceHtml({ ...SAMPLE, status: 'rejected' });
+  assert.ok(/REJECTED/.test(rejected) && /not payable/.test(rejected));
+  assert.ok(/Rejected by/.test(rejected), 'a rejection must not print as an approval');
+  // And the approved one carries no such notice.
+  assert.ok(!/not payable/.test(renderInvoiceHtml(SAMPLE)));
+});
+
+test('the direction of the money is named correctly', () => {
+  assert.ok(/Paid to/.test(renderInvoiceHtml(SAMPLE)));
+  assert.ok(/Received from/.test(renderInvoiceHtml({ ...SAMPLE, kind: 'investment' })),
+    'an investment is money coming in, and must not read as a payment out');
+});
+
+test('a name cannot smuggle markup onto the sheet', () => {
+  const html = renderInvoiceHtml({ ...SAMPLE, party: '<script>alert(1)</script>', notes: 'a & b < c' });
+  assert.ok(!/<script>alert/.test(html), 'party is not escaped');
+  assert.ok(html.includes('&lt;script&gt;'), 'it must be escaped, not stripped');
+  assert.ok(html.includes('a &amp; b &lt; c'));
+});
+
+test('a half-filled invoice still prints', () => {
+  // Rendering is the last step before somebody needs the document. It must not
+  // be the thing that fails.
+  for (const input of [null, undefined, {}, { number: 'X' }, { amount: 'nonsense', createdAt: 'yesterday' }]) {
+    const html = renderInvoiceHtml(input);
+    assert.ok(typeof html === 'string' && html.startsWith('<!DOCTYPE html>'), 'failed on ' + JSON.stringify(input));
+  }
+  // A missing approver prints as missing, not as an empty "Approved by".
+  assert.ok(!/Approved by/.test(renderInvoiceHtml({ ...SAMPLE, status: 'pending', approvedByName: '', approvedByRole: '' })));
+  // An unreadable time prints as nothing rather than as 1970.
+  assert.ok(!/1970/.test(renderInvoiceHtml({ ...SAMPLE, createdAt: 'yesterday', approvedAt: 0 })));
+});
+
+console.log('\nAnd both clients can get it');
+
+test('the document is built on the server, from the stored record', () => {
+  // Not in a browser tab from whatever it had in state: this sheet has to say
+  // what the record says.
+  const service = read('functions/invoiceService.js');
+  assert.ok(/exports\.getInvoiceDocument = onCall/.test(service));
+  assert.ok(/renderInvoiceHtml\(\{/.test(service), 'it must render from the document it just read');
+  assert.ok(/const snap = await db\.collection\(COLLECTION\)\.doc\(id\)\.get\(\)/.test(service));
+  assert.ok(/exports\.getInvoiceDocument = require\('\.\/invoiceService'\)/.test(read('functions/index.js')),
+    'and must be deployable');
+});
+
+test('reading a document needs the same capability as reading the list', () => {
+  const service = read('functions/invoiceService.js');
+  const body = /exports\.getInvoiceDocument = onCall[\s\S]*$/.exec(service)[0];
+  assert.ok(/actorOf\(db, request, 'finance'\)/.test(body), 'finance must be checked');
+  assert.ok(/actorOf\(db, request, 'reports'\)/.test(body), 'and reports must be able to look back');
+  assert.ok(/invalid-argument/.test(body), 'an invoice id is still required');
+});
+
+test('both clients ask for it and print it', () => {
+  const web = read('admin-web/src/services/invoiceService.ts');
+  const webPage = read('admin-web/src/pages/InvoicesPage.tsx');
+  const app = read('src/firebase/invoiceService.js');
+  const appScreen = read('src/screens/InvoicesScreen.js');
+
+  for (const src of [web, app]) assert.ok(/'getInvoiceDocument'/.test(src), 'a client does not call the callable');
+  assert.ok(/win\.print\(\)/.test(web), 'the browser must open its print dialog');
+  // Opened on the click, not after the await, or a pop-up blocker refuses it.
+  assert.ok(web.indexOf("window.open('', '_blank')") < web.indexOf('await documentFn('),
+    'the window must be opened before the call, or pop-up blockers refuse it');
+  assert.ok(/printHtml\(doc\.html\)/.test(appScreen), 'the app must print what the server built');
+  assert.ok(/Print \/ Download/.test(webPage) && /Print \/ Save PDF/.test(appScreen), 'both need a button');
+});
+
+test('every invoice can be printed, not only approved ones', () => {
+  // The notice on an unapproved sheet is only worth writing if an unapproved
+  // sheet can be printed.
+  const webPage = read('admin-web/src/pages/InvoicesPage.tsx');
+  const printBlock = /\{\/\* Every invoice[\s\S]*?<\/button>/.exec(webPage);
+  assert.ok(printBlock, 'the print button must be findable');
+  assert.ok(!/pending|mayDecide|status ===/.test(printBlock[0]), 'the button must not be gated on status');
+});
+
 console.log('\n' + passed + ' checks passed.\n');
