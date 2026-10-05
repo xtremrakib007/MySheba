@@ -8,6 +8,7 @@ import {
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import { subscribeMyCapabilities, type Capability } from '../services/accessControlService';
+import { signInEmails } from '../utils/signInIdentifier';
 import {
   isDeviceCheckUnreachable,
   maskEmail,
@@ -37,7 +38,7 @@ interface AuthContextValue {
   /** Role + capabilities together, the shape navConfig's canAccess takes. */
   access: { role: AdminRole | undefined; capabilities: Capability[] };
   accessDenied: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (identifier: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   deviceVerificationRequired: boolean;
   /** Masked inbox the challenge went to, or null while it is being sent. */
@@ -208,10 +209,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, []);
 
-  const signIn = async (email: string, password: string) => {
+  /**
+   * Sign in with whatever the person actually knows: their email, or the mobile
+   * number they use in the app.
+   *
+   * Staff accounts created through the app are registered under a synthetic
+   * address derived from the phone number, which nobody is ever told. The
+   * credentials were always the same account; only the identifier differed.
+   *
+   * More than one address can be worth trying for one phone number - see
+   * signInEmails - and the FIRST failure is the one reported. The later
+   * attempts are a legacy fallback, so their error describes an address the
+   * person never typed and would send them looking for the wrong thing.
+   */
+  const signIn = async (identifier: string, password: string) => {
     setAccessDenied(false);
     setProfile(null);
-    await signInWithEmailAndPassword(auth, email.trim(), password);
+    const candidates = signInEmails(identifier);
+    if (!candidates.length) {
+      throw new Error('Enter your email address or the mobile number you use in the app.');
+    }
+    let firstError: unknown = null;
+    for (const candidate of candidates) {
+      try {
+        await signInWithEmailAndPassword(auth, candidate, password);
+        return;
+      } catch (err) {
+        if (firstError === null) firstError = err;
+      }
+    }
+    throw firstError;
   };
 
   const signOut = async () => {

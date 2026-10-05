@@ -47,7 +47,7 @@ export default function LoginPage() {
           <h1 className="font-[var(--font-display)] text-xl font-bold text-white">
             MySheba Admin
           </h1>
-          <p className="mt-1 text-sm text-white/60">Sign in with your admin email and password</p>
+          <p className="mt-1 text-sm text-white/60">Sign in with the same credentials you use in the app</p>
         </div>
 
         <form
@@ -66,15 +66,19 @@ export default function LoginPage() {
           )}
 
           <label className="mb-1 block text-xs font-medium text-[var(--color-ink-soft)]">
-            Email
+            Email or mobile number
           </label>
+          {/* type="text", not "email": the browser's own validation rejects a
+              phone number before the form is ever submitted, which is the whole
+              thing this field is here to accept. */}
           <input
-            type="email"
+            type="text"
             required
+            autoComplete="username"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="mb-4 w-full rounded-lg border border-[var(--color-line)] px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]"
-            placeholder="you@satulink.com"
+            placeholder="you@satulink.com or 012-345 6789"
           />
 
           <label className="mb-1 block text-xs font-medium text-[var(--color-ink-soft)]">
