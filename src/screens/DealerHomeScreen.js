@@ -16,6 +16,7 @@ import * as mediaUpload from '../firebase/mediaUpload';
 import HeaderDecor from '../components/HeaderDecor';
 import * as transactionService from '../firebase/transactionService';
 import { PIN_MAX, PIN_PROMPT_TITLE, PIN_PROMPT_PLACEHOLDER, PIN_INVALID_MESSAGE, isValidCollectionPin } from '../utils/collectionPin';
+import { statusBadge, statusLabel } from '../theme/statusBadges';
 
 const FEATURES = [
   { key: 'pending', icon: '⏳', bg: '#FFF8E1', name: 'Pending' },
@@ -31,11 +32,6 @@ const FEATURES = [
 // reached via the "Dealer Features" tile appended onto that same
 // ServiceGrid below, instead of two separate inline grids.
 
-const BADGE_COLORS = {
-  pending: { bg: '#FFF8E1', text: '#F57F17' },
-  processing: { bg: '#E3F2FD', text: '#1565C0' },
-  completed: { bg: '#E8F5E9', text: '#2E7D32' },
-};
 
 // Dealer dashboard: stats row, tabs, tx list with Accept/Reject/Complete
 // actions. Every action writes straight to Firestore (transactionService) -
@@ -223,13 +219,13 @@ export default function DealerHomeScreen() {
           <Text style={styles.empty}>No {dealerTab} orders</Text>
         ) : (
           visibleTxs.map((tx) => {
-            const badge = BADGE_COLORS[tx.status];
+            const badge = statusBadge(tx.status);
             return (
               <TouchableOpacity key={tx.id} style={styles.txCard} activeOpacity={0.7} onPress={() => setDetailTx(tx)}>
                 <View style={styles.txHeader}>
                   <Text style={styles.txService}>{tx.service}</Text>
                   <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-                    <Text style={[styles.badgeText, { color: badge.text }]}>{tx.status.toUpperCase()}</Text>
+                    <Text style={[styles.badgeText, { color: badge.text }]}>{statusLabel(tx.status)}</Text>
                   </View>
                 </View>
                 <Text style={styles.txDetail}>👤 {tx.customerPhone || 'Unknown'}</Text>

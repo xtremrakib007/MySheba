@@ -105,7 +105,7 @@ const createStyles = (colors) => StyleSheet.create({
   sheetTitle: { color: colors.text, fontSize: 16, fontWeight: '800', marginBottom: 10 },
   sheetScroll: { marginBottom: 14 },
   sheetSummary: { color: colors.text, fontSize: 13, lineHeight: 19, fontWeight: '600', marginBottom: 12 },
-  sheetBody: { color: colors.textLight, fontSize: 13, lineHeight: 20 },
+  sheetBody: { color: colors.textSecondary, fontSize: 13, lineHeight: 20 },
   sheetActions: { flexDirection: 'row', gap: 10 },
   close: { flex: 1, padding: 13, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
   closeText: { color: colors.text, fontWeight: '700' },

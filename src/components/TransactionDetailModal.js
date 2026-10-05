@@ -11,20 +11,8 @@ import * as supportTicketService from '../firebase/supportTicketService';
 import { useApp } from '../context/AppContext';
 import { buildReceiptHtml } from './RemittanceReceipt';
 import { receiptDocument, receiptRows, imageBlock, highlightBlock } from '../utils/receiptHtml';
+import { statusBadge } from '../theme/statusBadges';
 
-const BADGE_COLORS = {
-  pending: { bg: '#FFF8E1', text: '#F57F17' },
-  processing: { bg: '#E3F2FD', text: '#1565C0' },
-  completed: { bg: '#E8F5E9', text: '#2E7D32' },
-  new: { bg: '#FFF8E1', text: '#F57F17' },
-  contacted: { bg: '#E3F2FD', text: '#1565C0' },
-  closed: { bg: '#E8F5E9', text: '#2E7D32' },
-  approved: { bg: '#E8F5E9', text: '#2E7D32' },
-  rejected: { bg: '#FDECEA', text: '#C62828' },
-  open: { bg: '#FFF8E1', text: '#F57F17' },
-  in_progress: { bg: '#E3F2FD', text: '#1565C0' },
-  resolved: { bg: '#E8F5E9', text: '#2E7D32' },
-};
 
 const TYPE_ICON = { flight: '✈️', bus: '🚌', train: '🚂' };
 const ZERO_DECIMAL_CURRENCIES = new Set(['IDR', 'KHR', 'MMK']);
@@ -392,7 +380,7 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
     : `📋 ${item.service || 'Transaction'}`;
 
   const status = type === 'inquiry' ? (item.status || 'new') : type === 'supportTicket' ? (item.status || 'open') : (item.status || 'pending');
-  const badge = BADGE_COLORS[item.rejected ? 'rejected' : status] || BADGE_COLORS.pending;
+  const badge = statusBadge(item.rejected ? 'rejected' : status);
   const statusLabel = type === 'supportTicket' ? (supportTicketService.STATUS_LABELS[status] || status) : (item.rejected ? 'rejected' : status).toUpperCase();
   const copyValue = type === 'inquiry' ? formatInquiryCopy(item)
     : type === 'topup' ? formatTopupCopy(item)

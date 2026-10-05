@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Activity
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
+import { statusLabel } from '../theme/statusBadges';
 import { useTheme } from '../theme/ThemeContext';
 import HeaderDecor from '../components/HeaderDecor';
 import { showAlert } from '../utils/appAlert';
@@ -111,7 +112,7 @@ export default function InvoicesScreen() {
       <View style={styles.card}>
         <View style={styles.cardTop}>
           <Text style={styles.number}>{item.number}</Text>
-          <Text style={[styles.status, { color: STATUS_COLOURS[item.status] || colors.text }]}>{item.status.toUpperCase()}</Text>
+          <Text style={[styles.status, { color: STATUS_COLOURS[item.status] || colors.text }]}>{statusLabel(item.status)}</Text>
         </View>
         <Text style={styles.party}>{item.party}</Text>
         <Text style={styles.kind}>{invoiceKindLabel(item.kind)}{item.reference ? '  ·  ' + item.reference : ''}</Text>
@@ -188,14 +189,14 @@ export default function InvoicesScreen() {
             ))}
           </View>
           <Text style={styles.label}>{form.kind === 'investment' ? 'Investor' : 'Paid to'}</Text>
-          <TextInput style={styles.input} value={form.party} onChangeText={(v) => setForm((f) => ({ ...f, party: v }))} placeholder={form.kind === 'investment' ? 'Who put the money in' : 'e.g. iimmpact'} placeholderTextColor={colors.textLight} />
+          <TextInput style={styles.input} value={form.party} onChangeText={(v) => setForm((f) => ({ ...f, party: v }))} placeholder={form.kind === 'investment' ? 'Who put the money in' : 'e.g. iimmpact'} placeholderTextColor={colors.textSecondary} />
           <Text style={styles.label}>Amount</Text>
           <View style={styles.amountRow}>
             <TextInput style={[styles.input, styles.currency]} value={form.currency} autoCapitalize="characters" maxLength={3} onChangeText={(v) => setForm((f) => ({ ...f, currency: v }))} />
-            <TextInput style={[styles.input, styles.amountInput]} value={form.amount} keyboardType="decimal-pad" onChangeText={(v) => setForm((f) => ({ ...f, amount: v }))} placeholder="0.00" placeholderTextColor={colors.textLight} />
+            <TextInput style={[styles.input, styles.amountInput]} value={form.amount} keyboardType="decimal-pad" onChangeText={(v) => setForm((f) => ({ ...f, amount: v }))} placeholder="0.00" placeholderTextColor={colors.textSecondary} />
           </View>
           <Text style={styles.label}>Reference (optional)</Text>
-          <TextInput style={styles.input} value={form.reference} onChangeText={(v) => setForm((f) => ({ ...f, reference: v }))} placeholder="Their invoice or receipt number" placeholderTextColor={colors.textLight} />
+          <TextInput style={styles.input} value={form.reference} onChangeText={(v) => setForm((f) => ({ ...f, reference: v }))} placeholder="Their invoice or receipt number" placeholderTextColor={colors.textSecondary} />
           <Text style={styles.label}>Notes (optional)</Text>
           <TextInput style={[styles.input, styles.notesInput]} value={form.notes} multiline onChangeText={(v) => setForm((f) => ({ ...f, notes: v }))} />
           <TouchableOpacity style={styles.save} disabled={saving} onPress={submit}>
@@ -221,7 +222,7 @@ export default function InvoicesScreen() {
 }
 
 const createStyles = (colors) => StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background },
+  screen: { flex: 1, backgroundColor: colors.bg },
   header: { paddingTop: 44, paddingBottom: 16, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12, overflow: 'hidden' },
   backBtn: { padding: 4 },
   backText: { color: '#fff', fontSize: 24 },
@@ -239,29 +240,29 @@ const createStyles = (colors) => StyleSheet.create({
   kindBtnOn: { backgroundColor: colors.primary, borderColor: colors.primary },
   kindBtnText: { color: colors.text, fontSize: 13 },
   kindBtnTextOn: { color: '#fff', fontWeight: '700' },
-  label: { color: colors.textLight, fontSize: 12, marginBottom: 4, marginTop: 6 },
-  input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: 10, color: colors.text, backgroundColor: colors.background },
+  label: { color: colors.textSecondary, fontSize: 12, marginBottom: 4, marginTop: 6 },
+  input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: 10, color: colors.text, backgroundColor: colors.inputBg },
   amountRow: { flexDirection: 'row', gap: 8 },
   currency: { width: 80, textAlign: 'center' },
   amountInput: { flex: 1 },
   notesInput: { minHeight: 70, textAlignVertical: 'top' },
   save: { marginTop: 12, padding: 13, borderRadius: radius.md, backgroundColor: colors.primary, alignItems: 'center' },
   saveText: { color: '#fff', fontWeight: '700' },
-  formNote: { color: colors.textLight, fontSize: 11, marginTop: 8, marginBottom: 4 },
+  formNote: { color: colors.textSecondary, fontSize: 11, marginTop: 8, marginBottom: 4 },
   list: { padding: 12, paddingTop: 0, gap: 10 },
   card: { backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: 14 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   number: { color: colors.text, fontWeight: '700', fontSize: 15 },
   status: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
   party: { color: colors.text, fontSize: 16, marginTop: 6 },
-  kind: { color: colors.textLight, fontSize: 12, marginTop: 2 },
+  kind: { color: colors.textSecondary, fontSize: 12, marginTop: 2 },
   amount: { color: colors.text, fontSize: 20, fontWeight: '700', marginTop: 8 },
-  notes: { color: colors.textLight, fontSize: 12, marginTop: 6 },
+  notes: { color: colors.textSecondary, fontSize: 12, marginTop: 6 },
   trail: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border, gap: 3 },
   trailLine: { color: colors.text, fontSize: 12 },
-  trailLabel: { color: colors.textLight },
-  trailNote: { color: colors.textLight, fontSize: 12, fontStyle: 'italic', marginTop: 2 },
-  selfNote: { color: colors.textLight, fontSize: 12, marginTop: 10, fontStyle: 'italic' },
+  trailLabel: { color: colors.textSecondary },
+  trailNote: { color: colors.textSecondary, fontSize: 12, fontStyle: 'italic', marginTop: 2 },
+  selfNote: { color: colors.textSecondary, fontSize: 12, marginTop: 10, fontStyle: 'italic' },
   actions: { flexDirection: 'row', gap: 8, marginTop: 12 },
   btn: { flex: 1, padding: 11, borderRadius: radius.sm, alignItems: 'center' },
   approve: { backgroundColor: '#059669' },
@@ -269,5 +270,5 @@ const createStyles = (colors) => StyleSheet.create({
   reject: { borderWidth: 1, borderColor: '#DC2626' },
   rejectText: { color: '#DC2626', fontWeight: '700' },
   loader: { marginTop: 30 },
-  empty: { color: colors.textLight, textAlign: 'center', marginTop: 40 },
+  empty: { color: colors.textSecondary, textAlign: 'center', marginTop: 40 },
 });

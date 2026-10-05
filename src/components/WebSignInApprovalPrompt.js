@@ -81,7 +81,7 @@ const createStyles = (colors) => StyleSheet.create({
   card: { width: '100%', backgroundColor: colors.card, borderRadius: radius.lg || 16, padding: 20 },
   title: { color: colors.text, fontSize: 18, fontWeight: '800', marginBottom: 8 },
   body: { color: colors.text, fontSize: 14, lineHeight: 20 },
-  detail: { color: colors.textLight, fontSize: 13, marginTop: 6 },
+  detail: { color: colors.textSecondary, fontSize: 13, marginTop: 6 },
   warn: { color: '#B45309', fontSize: 12, lineHeight: 17, marginTop: 12 },
   actions: { flexDirection: 'row', gap: 10, marginTop: 18 },
   btn: { flex: 1, padding: 13, borderRadius: radius.md || 10, alignItems: 'center', justifyContent: 'center', minHeight: 46 },
@@ -89,5 +89,5 @@ const createStyles = (colors) => StyleSheet.create({
   approveText: { color: '#fff', fontWeight: '700' },
   reject: { borderWidth: 1, borderColor: '#DC2626' },
   rejectText: { color: '#DC2626', fontWeight: '700' },
-  later: { color: colors.textLight, fontSize: 12, textAlign: 'center', marginTop: 14 },
+  later: { color: colors.textSecondary, fontSize: 12, textAlign: 'center', marginTop: 14 },
 });

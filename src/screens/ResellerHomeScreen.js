@@ -17,6 +17,7 @@ import * as transactionService from '../firebase/transactionService';
 import * as mediaUpload from '../firebase/mediaUpload';
 import * as inquiryService from '../firebase/inquiryService';
 import { PIN_MAX, PIN_PROMPT_TITLE, PIN_PROMPT_PLACEHOLDER, PIN_INVALID_MESSAGE, isValidCollectionPin } from '../utils/collectionPin';
+import { statusBadge, statusLabel } from '../theme/statusBadges';
 
 const FEATURES = [
   { key: 'pending', icon: '⏳', bg: '#FFF8E1', name: 'Pending' },
@@ -25,14 +26,6 @@ const FEATURES = [
   { key: 'inquiries', icon: '✈️', bg: '#E8EAF6', name: 'Flight Inquiries' },
 ];
 
-const BADGE_COLORS = {
-  pending: { bg: '#FFF8E1', text: '#F57F17' },
-  processing: { bg: '#E3F2FD', text: '#1565C0' },
-  completed: { bg: '#E8F5E9', text: '#2E7D32' },
-  new: { bg: '#E8EAF6', text: '#5E35B1' },
-  contacted: { bg: '#E3F2FD', text: '#1565C0' },
-  closed: { bg: '#E8F5E9', text: '#2E7D32' },
-};
 
 function formatInquiryCopy(inq) {
   const lines = [
@@ -282,13 +275,13 @@ export default function ResellerHomeScreen() {
             <Text style={styles.empty}>No flight inquiries yet</Text>
           ) : (
             inquiries.map((inq) => {
-              const badge = BADGE_COLORS[inq.status] || BADGE_COLORS.new;
+              const badge = statusBadge(inq.status);
               return (
                 <TouchableOpacity key={inq.id} style={styles.txCard} activeOpacity={0.7}>
                   <View style={styles.txHeader}>
                     <Text style={styles.txService}>✈️ {inq.type}</Text>
                     <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-                      <Text style={[styles.badgeText, { color: badge.text }]}>{(inq.status || 'new').toUpperCase()}</Text>
+                      <Text style={[styles.badgeText, { color: badge.text }]}>{statusLabel(inq.status, 'NEW')}</Text>
                     </View>
                   </View>
                   <Text style={styles.txDetail}>🗺️ {inq.from} → {inq.to} · {inq.date}{inq.time ? ` · ${inq.time}` : ''}</Text>
@@ -327,13 +320,13 @@ export default function ResellerHomeScreen() {
           <Text style={styles.empty}>No {activeFeature ? activeFeature.name.toLowerCase() : ''} orders</Text>
         ) : (
           visibleTxs.map((tx) => {
-            const badge = BADGE_COLORS[tx.status] || BADGE_COLORS.pending;
+            const badge = statusBadge(tx.status);
             return (
               <TouchableOpacity key={tx.id} style={styles.txCard} activeOpacity={0.7} onPress={() => setDetailTx(tx)}>
                 <View style={styles.txHeader}>
                   <Text style={styles.txService}>{tx.service}</Text>
                   <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-                    <Text style={[styles.badgeText, { color: badge.text }]}>{(tx.status || '').toUpperCase()}</Text>
+                    <Text style={[styles.badgeText, { color: badge.text }]}>{statusLabel(tx.status)}</Text>
                   </View>
                 </View>
                 <Text style={styles.txDetail}>👤 {tx.customerPhone || 'Unknown'}</Text>
