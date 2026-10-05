@@ -16,6 +16,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const approval = require('../functions/webSignInApproval');
+const { APPROVAL_TTL_MS, approvalDecision } = approval;
 
 const ROOT = path.join(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
@@ -265,6 +266,77 @@ test('the answer is sent as a boolean', () => {
   // approval on the server, where the gate is a strict comparison.
   assert.ok(/approve: approve === true/.test(client));
   assert.ok(/if \(!approvalId\) throw new Error/.test(client), 'and never sent without an id');
+});
+
+
+// ---------------------------------------------------------------------------
+// Waiting. Nothing pushes the phone's answer back to the browser, so the
+// browser asks - which is only workable if asking is cheap and does not
+// re-notify the phone every few seconds.
+// ---------------------------------------------------------------------------
+
+const authContext = read('admin-web/src/contexts/AuthContext.tsx');
+const deviceAuth = read('admin-web/src/services/deviceAuthService.ts');
+const loginPage = read('admin-web/src/pages/LoginPage.tsx');
+
+test('asking again does not buzz the phone again', () => {
+  // Every poll used to mean a new approvalId, a new push and a new prompt on
+  // a phone the person is already looking at.
+  const helper = /async function requestAppApproval\([\s\S]*?\n\}/.exec(service)[0];
+  const reuse = /if \(approvalDecision\(profile && profile\.pendingWebApproval, \{ deviceId, nowMs: Date\.now\(\) \}\)\.retryable\) \{\s*return true;/.test(helper);
+  assert.ok(reuse, 'a live unanswered request for this browser must be left alone');
+  // And it must come before the request is built, or the reuse is pointless.
+  assert.ok(helper.indexOf('.retryable') < helper.indexOf('newRequest('),
+    'the check must happen before a new request is raised');
+});
+
+test('only a live request for THIS browser is reused', () => {
+  // retryable is the existing predicate for exactly that, so reuse cannot
+  // drift away from what counts as a usable request.
+  const now = 1000;
+  const live = { approvalId: 'a', deviceId: 'browser-1', status: 'pending', expiresAt: now + 1000 };
+  assert.strictEqual(approvalDecision(live, { deviceId: 'browser-1', nowMs: now }).retryable, true);
+  // Another browser's request, an expired one and a rejected one must each
+  // raise a fresh request rather than silently reusing this.
+  assert.strictEqual(approvalDecision(live, { deviceId: 'browser-2', nowMs: now }).retryable, false);
+  assert.strictEqual(approvalDecision({ ...live, expiresAt: now }, { deviceId: 'browser-1', nowMs: now }).retryable, false);
+  assert.strictEqual(approvalDecision({ ...live, status: 'rejected' }, { deviceId: 'browser-1', nowMs: now }).retryable, false);
+});
+
+test('the browser waits for the tap instead of needing a code typed', () => {
+  assert.ok(/export function pollDeviceSession\(\)/.test(deviceAuth), 'there must be a way to ask');
+  assert.ok(/const result = await pollDeviceSession\(\);/.test(authContext), 'and the screen must use it');
+  // Signed in the moment the answer lands, with no further action.
+  assert.ok(/if \(stopped \|\| result\.requiresOtp === true \|\| !result\.sessionId\) return;/.test(authContext));
+  assert.ok(/setDeviceVerificationRequired\(false\);[\s\S]{0,200}pendingProfileRef\.current = null;/.test(authContext));
+});
+
+test('polling stops, and only runs while somebody is waiting', () => {
+  const effect = /useEffect\(\(\) => \{\s*if \(!deviceVerificationRequired \|\| !appApprovalSent\)[\s\S]*?\}, \[deviceVerificationRequired, appApprovalSent\]\);/.exec(authContext);
+  assert.ok(effect, 'the poll must be gated on a request actually being out');
+  // A browser left on this screen must not call for ever.
+  assert.ok(/Date\.now\(\) - startedAt > APPROVAL_POLL_LIMIT_MS/.test(effect[0]), 'it must give up');
+  assert.ok(/return \(\) => \{ stopped = true; clearInterval\(timer\); \};/.test(effect[0]), 'and clean up');
+  // A failed poll is not a failed sign-in.
+  assert.ok(/\} catch \{/.test(effect[0]) && !/setAccessDenied/.test(effect[0]),
+    'a failed poll must not sign anybody out');
+});
+
+test('the poll is slower than the thing it waits for is long', () => {
+  const every = Number(/const APPROVAL_POLL_MS = (\d+);/.exec(authContext)[1]);
+  const limit = Number(/const APPROVAL_POLL_LIMIT_MS = ([^;]+);/.exec(authContext)[1].replace(/[^\d*]/g, '').split('*').reduce((a, b) => a * Number(b), 1));
+  assert.ok(every >= 2000, 'polling faster than every two seconds is a stream of calls');
+  assert.ok(limit >= APPROVAL_TTL_MS, 'giving up before the request expires would strand a late tap');
+  assert.ok(limit <= 15 * 60 * 1000, 'and it must give up eventually');
+});
+
+test('the screen says to look at the phone, but only when it was asked', () => {
+  // An older deployed server does not report this. Telling somebody to check a
+  // phone that was never asked sends them looking for nothing.
+  assert.ok(/setAppApprovalSent\(result\.appApprovalSent === true\)/.test(authContext));
+  assert.ok(/setAppApprovalSent\(session\.appApprovalSent === true\)/.test(authContext));
+  assert.ok(/\{appApprovalSent && \(/.test(loginPage), 'the line must be conditional');
+  assert.ok(/tap Approve in the MySheba app/.test(loginPage));
 });
 
 console.log('\n' + passed + ' checks passed.\n');

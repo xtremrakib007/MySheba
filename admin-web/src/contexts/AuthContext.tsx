@@ -14,6 +14,7 @@ import {
   maskEmail,
   resendEmailChallenge,
   startDeviceSession,
+  pollDeviceSession,
   verifyEmailChallenge,
 } from '../services/deviceAuthService';
 
@@ -45,6 +46,7 @@ interface AuthContextValue {
   otpDestination: string | null;
   /** False when the server did not confirm it sent a code, so the UI offers one. */
   otpSent: boolean;
+  appApprovalSent: boolean;
   otpError: string | null;
   otpSubmitting: boolean;
   resendOtp: () => Promise<void>;
@@ -57,6 +59,13 @@ interface AuthContextValue {
    */
   deviceCheckDeferred: boolean;
 }
+
+// Often enough to feel immediate after the tap, rare enough that a browser
+// left open on this screen is not a stream of calls.
+const APPROVAL_POLL_MS = 3000;
+// The server's own window for an approval is five minutes; a little past it
+// covers a slow clock without polling for ever.
+const APPROVAL_POLL_LIMIT_MS = 6 * 60 * 1000;
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 const ADMIN_ROLES: AdminRole[] = ['admin', 'superadmin', 'support', 'finance'];
@@ -75,6 +84,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [deviceVerificationRequired, setDeviceVerificationRequired] = useState(false);
   const [otpDestination, setOtpDestination] = useState<string | null>(null);
   const [otpSent, setOtpSent] = useState(false);
+  // Whether the phone was asked too, so the screen can say to look at it.
+  const [appApprovalSent, setAppApprovalSent] = useState(false);
   const [deviceCheckDeferred, setDeviceCheckDeferred] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
   const [otpSubmitting, setOtpSubmitting] = useState(false);
@@ -195,6 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // An older deployed copy of checkDeviceSession does not report this, so
         // only an explicit false means "ask the person to request one".
         setOtpSent(session.emailChallengeSent !== false);
+        setAppApprovalSent(session.appApprovalSent === true);
         setDeviceVerificationRequired(true);
       } catch (err) {
         console.error('Failed to load admin profile:', err);
@@ -256,12 +268,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await resendEmailChallenge();
       setOtpDestination(maskEmail(result.email) ?? otpDestination);
       setOtpSent(result.emailChallengeSent !== false);
+      setAppApprovalSent(result.appApprovalSent === true);
     } catch (err) {
       setOtpError(err instanceof Error ? err.message : 'Could not send a verification code.');
     } finally {
       setOtpSubmitting(false);
     }
   };
+
+  // Waiting for the tap on the phone.
+  //
+  // Nothing pushes the answer back to the browser, so it asks - but only while
+  // somebody is actually waiting, and only for as long as the request can live.
+  // The server reuses the pending request rather than raising a new one, so
+  // this costs a read and does not re-notify the phone.
+  useEffect(() => {
+    if (!deviceVerificationRequired || !appApprovalSent) return undefined;
+    let stopped = false;
+    const startedAt = Date.now();
+    const timer = setInterval(async () => {
+      // The approval expires after five minutes on the server; polling past
+      // that asks a question whose answer can no longer change.
+      if (stopped || Date.now() - startedAt > APPROVAL_POLL_LIMIT_MS) { clearInterval(timer); return; }
+      try {
+        const result = await pollDeviceSession();
+        if (stopped || result.requiresOtp === true || !result.sessionId) return;
+        clearInterval(timer);
+        if (pendingProfileRef.current) setProfile(pendingProfileRef.current);
+        setDeviceVerificationRequired(false);
+        setOtpDestination(null);
+        setAppApprovalSent(false);
+        pendingProfileRef.current = null;
+      } catch {
+        // A failed poll is not a failed sign-in. The code in the email still
+        // works, and the next poll may succeed.
+      }
+    }, APPROVAL_POLL_MS);
+    return () => { stopped = true; clearInterval(timer); };
+  }, [deviceVerificationRequired, appApprovalSent]);
 
   const verifyOtp = async (code: string) => {
     if (!pendingProfileRef.current) return;
@@ -305,6 +349,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         deviceVerificationRequired,
         otpDestination,
         otpSent,
+        appApprovalSent,
         otpError,
         otpSubmitting,
         resendOtp,

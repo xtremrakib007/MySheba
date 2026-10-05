@@ -12,6 +12,7 @@ const { checkIpAnomaly } = require('./anomalyService');
 const mailerService = require('./mailerService');
 // A phone and a browser each get their own session slot; two phones share one.
 const { platformOf, signInUpdate } = require('./sessionSlots');
+const { webTrustDecision, WEB_TRUST_DAYS } = require('./deviceTrust');
 const { approvalDecision, responseDecision, newRequest } = require('./webSignInApproval');
 const { sendExpoPush } = require('./expoPush');
 
@@ -75,6 +76,15 @@ const isStaffRole = (role) => ['admin', 'superadmin', 'dealer', 'reseller'].incl
  */
 async function requestAppApproval({ db, ref, uid, profile, deviceId, label, ip }) {
   try {
+    // A request already on this phone, for this browser, still unanswered and
+    // still inside its window, is the one to leave alone. The browser polls
+    // while it waits, and without this every poll would overwrite the request
+    // the person is looking at and buzz the phone again - the same reason
+    // ensureEmailChallenge leaves a live code in the inbox alone.
+    if (approvalDecision(profile && profile.pendingWebApproval, { deviceId, nowMs: Date.now() }).retryable) {
+      return true;
+    }
+
     const request = newRequest({
       deviceId,
       label,
@@ -152,7 +162,7 @@ async function resolveUidForVerification(request, db) {
   return requestedUid;
 }
 
-function trustedMap(current, id, ip, label) {
+function trustedMap(current, id, ip, label, { verified = false } = {}) {
   const now = Timestamp.now();
   const old = current?.[id] || {};
   const next = {
@@ -163,6 +173,10 @@ function trustedMap(current, id, ip, label) {
       lastIp: ip || old.lastIp || null,
       trustedAt: old.trustedAt || now,
       lastSeenAt: now,
+      // Moved only by a real second factor. lastSeenAt moves whenever the
+      // device is used, so a window measured from it would renew itself for
+      // whoever is holding the browser - including somebody who should not be.
+      verifiedAt: verified ? now : (old.verifiedAt || null),
     },
   };
   const ids = Object.keys(next);
@@ -333,12 +347,24 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: false }, async (request) 
     // handle and is never what is written to the profile, so a code sent here
     // reaches a person for every role.
     //
-    // trustedDevices is still maintained, for the Trusted Devices list and so
-    // the cap evicts genuinely stale entries - it just no longer decides
-    // whether a code is required.
+    // ...with one exception, and only in a browser. trustedDevices stopped
+    // deciding whether a code was required; for web it decides again, inside a
+    // window: a browser verified in the last WEB_TRUST_DAYS is remembered and
+    // not asked again. A phone still cannot skip, whatever it has stored - see
+    // deviceTrust.js, where the rule is a pure function and the reason is
+    // written down.
+    const webTrust = webTrustDecision(profile, { deviceId, platform, nowMs: Date.now() });
+
     let verifiedNewStaffDevice = false;
     let verificationMethod = null;
-    {
+    if (webTrust.ok) {
+      verifiedNewStaffDevice = true;
+      verificationMethod = 'remembered_browser';
+      // lastSeenAt moves; verifiedAt does not, so being here does not extend
+      // the window - at the end of it a code is asked for again.
+      await ref.update({ trustedDevices: trustedMap(profile.trustedDevices, deviceId, ip, label) });
+      await logAudit({ action: 'login_remembered_browser', targetUid: uid, performedBy: uid, performedByRole: profile.role, details: { deviceId, ip, expiresAt: webTrust.expiresAtMs } });
+    } else {
       const email = normalizeEmail(profile.email);
       const phone = normalizePhone(profile.phone);
       if (!email && !phone) throw new HttpsError('failed-precondition', 'This account has no email or phone for sign-in verification. Please contact support.');
@@ -392,7 +418,7 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: false }, async (request) 
       }
 
       if (verifiedNewStaffDevice) {
-        const trustedDevices = trustedMap(profile.trustedDevices, deviceId, ip, label);
+        const trustedDevices = trustedMap(profile.trustedDevices, deviceId, ip, label, { verified: true });
         await ref.update({ trustedDevices, pendingAdminEmailChallenge: FieldValue.delete() });
         await logAudit({ action: 'device_verified', targetUid: uid, performedBy: uid, performedByRole: profile.role, details: { deviceId, ip, verificationMethod } });
       }
@@ -555,7 +581,7 @@ exports.confirmDeviceSwitch = onCall({ enforceAppCheck: false }, async (request)
       ...signInUpdate(profile, platform, { sessionId: id, deviceId }),
       pendingDeviceApproval: null,
       pendingAdminEmailChallenge: FieldValue.delete(),
-      trustedDevices: trustedMap(profile.trustedDevices, deviceId, ip, null),
+      trustedDevices: trustedMap(profile.trustedDevices, deviceId, ip, null, { verified: true }),
       lastLoginAt: FieldValue.serverTimestamp(),
     });
     // Same reason as checkDeviceSession above: revoking here would kill the

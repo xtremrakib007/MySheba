@@ -30,6 +30,12 @@ export interface DeviceSessionResult {
    * why an absent value must not be read as "no code was sent".
    */
   emailChallengeSent?: boolean;
+  /**
+   * Whether the phone was asked to approve this sign-in. Same caveat as
+   * emailChallengeSent: an older deployed copy does not report it, and an
+   * absent value must not be shown as "check your phone" when nothing was sent.
+   */
+  appApprovalSent?: boolean;
   sessionId?: string;
 }
 
@@ -70,6 +76,17 @@ async function callCheckDeviceSession(data: Record<string, unknown> = {}): Promi
  * destination of the challenge it just sent.
  */
 export function startDeviceSession(): Promise<DeviceSessionResult> {
+  return callCheckDeviceSession();
+}
+
+/**
+ * Ask whether the phone has approved yet.
+ *
+ * The same call as startDeviceSession - the server decides, and a live request
+ * is reused rather than re-sent, so asking repeatedly does not buzz the phone
+ * again (functions/deviceSessionService.js, requestAppApproval).
+ */
+export function pollDeviceSession(): Promise<DeviceSessionResult> {
   return callCheckDeviceSession();
 }
 

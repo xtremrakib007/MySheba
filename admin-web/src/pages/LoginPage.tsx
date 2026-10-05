@@ -112,7 +112,7 @@ export default function LoginPage() {
 // time this renders, so this just collects the code and offers
 // resend / switch-channel / cancel.
 function OtpStep() {
-  const { otpDestination, otpSent, otpError, otpSubmitting, resendOtp, verifyOtp, cancelDeviceVerification } =
+  const { otpDestination, otpSent, appApprovalSent, otpError, otpSubmitting, resendOtp, verifyOtp, cancelDeviceVerification } =
     useAuth();
   const [code, setCode] = useState('');
 
@@ -139,6 +139,14 @@ function OtpStep() {
                 ? `We sent a code to ${otpDestination}`
                 : 'We sent a verification code to your admin email'}
           </p>
+          {/* The faster way in, when the phone actually got the push. Shown
+              only when the server says it sent one - telling somebody to check
+              a phone that was never asked sends them looking for nothing. */}
+          {appApprovalSent && (
+            <p className="mt-2 text-sm text-white/80">
+              Or just tap Approve in the MySheba app — we sent it to your phone.
+            </p>
+          )}
         </div>
 
         <form
