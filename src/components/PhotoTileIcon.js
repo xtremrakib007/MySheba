@@ -51,6 +51,11 @@ const PHOTO_ICONS = {
   photoAdminSupport: require('../../assets/tiles/adminSupport.png'),
 };
 
+/** Every supplied picture's name, for a picker to offer. */
+export function photoTileIconNames() {
+  return Object.keys(PHOTO_ICONS);
+}
+
 export function hasPhotoTileIcon(artName) {
   return Object.prototype.hasOwnProperty.call(PHOTO_ICONS, artName);
 }

@@ -470,6 +470,11 @@ const ALIASES = {
   home: 'adminHome',
 };
 
+/** Every drawing's name, for a picker to offer. */
+export function serviceArtNames() {
+  return Object.keys(ART);
+}
+
 export function hasServiceArt(key) {
   const k = ALIASES[key] || key;
   return !!ART[k];

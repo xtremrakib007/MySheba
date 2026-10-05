@@ -21,6 +21,11 @@ import { db } from './config';
 const DOC = doc(db, 'settings', 'tileLabels');
 
 const MAX_NAME = 40;
+// Long enough for the longest name the app ships - photoVerificationManagement
+// is 27 characters. It was 12, which cut every picture name down to something
+// that matched no artwork, so a chosen icon was stored as text and the tile
+// printed "photoVerific" where its picture should have been.
+const MAX_ICON = 40;
 
 /**
  * What an override is allowed to be.
@@ -35,7 +40,7 @@ export function cleanOverride({ name, icon } = {}, { isArtName } = {}) {
   const out = {};
   const trimmedName = String(name || '').trim().slice(0, MAX_NAME);
   if (trimmedName) out.name = trimmedName;
-  const trimmedIcon = String(icon || '').trim().slice(0, 12);
+  const trimmedIcon = String(icon || '').trim().slice(0, MAX_ICON);
   if (trimmedIcon) {
     // A drawing is referenced by name; anything else is treated as text to
     // print, which is what an emoji is.

@@ -76,4 +76,52 @@ assert(/hasOnly\(\['tiles','updatedAt'\]\)/.test(rules), 'and nothing but labels
 const ctx = read('src/context/AppContext.js');
 assert(/tileLabels: \['superadmin'\]/.test(ctx), 'the route is gated too, so the screen cannot be opened by anyone else');
 
+
+console.log('Every icon the app has can be chosen, not only the ones you can spell');
+
+const screen = read('src/screens/TileLabelsScreen.js');
+const service = read('src/firebase/tileLabelService.js');
+
+// A picture and a drawing are the same kind of thing to somebody choosing one.
+// If the save classified only drawings as art, a chosen picture would be stored
+// as text and the tile would print its own art name.
+assert(/const isIconArtName = \(value\) => hasPhotoTileIcon\(value\) \|\| hasServiceArt\(value\)/.test(screen),
+  'both kinds of artwork must count as artwork');
+assert(/saveTileLabel\(editing\.key, \{ name, icon \}, \{ isArtName: isIconArtName \}\)/.test(screen),
+  'and the save must use that, not the drawings alone');
+
+// photoVerificationManagement is 27 characters. The cap was 12, which cut every
+// picture name down to something matching no artwork.
+const cap = Number(/const MAX_ICON = (\d+);/.exec(service)[1]);
+const longest = Math.max(...[...read('src/components/PhotoTileIcon.js')
+  .matchAll(/^  (photo[A-Za-z0-9]+): require/gm)].map((m) => m[1].length));
+assert(longest > 12, 'this check is only meaningful while a name is longer than the old cap');
+assert(cap >= longest, `a name of ${longest} characters cannot be stored under a cap of ${cap}`);
+// Scoped to the ICON field: the Name field above it is also maxLength 40, so a
+// bare search for that number passes with the icon field still capped at 12.
+const iconField = /placeholder="Or paste an emoji"[\s\S]*?maxLength=\{(\d+)\}/.exec(screen);
+assert(iconField, 'the icon field must be findable');
+assert(Number(iconField[1]) >= longest, `the icon field holds ${iconField[1]} characters, too few for a ${longest}-character name`);
+
+// Tapped rather than typed. Nobody guesses "photoVerificationManagement".
+assert(/const PICTURE_CHOICES = photoTileIconNames\(\)/.test(screen));
+assert(/const DRAWING_CHOICES = serviceArtNames\(\)/.test(screen));
+for (const list of ['PICTURE_CHOICES', 'DRAWING_CHOICES']) {
+  assert(new RegExp(list + '\\.map\\(\\(art\\) => \\(').test(screen), list + ' must be offered in the picker');
+}
+// Both pickers, not just the first one found - they are two separate lists and
+// a mutation to either leaves that half with no way back to the default.
+const clears = screen.match(/onPress=\{\(\) => setIcon\(icon === art \? '' : art\)\}/g) || [];
+assert.strictEqual(clears.length, 2,
+  `tapping the chosen icon again must clear it in both pickers, saw ${clears.length}`);
+// Every drawing, not a hand-kept shortlist that drifts from the real set.
+assert(/export function serviceArtNames\(\)/.test(read('src/components/ServiceArt.js')));
+assert(/export function photoTileIconNames\(\)/.test(read('src/components/PhotoTileIcon.js')));
+
+// The row and the sheet must show a chosen picture as a picture.
+assert(/if \(hasPhotoTileIcon\(name\)\) return <PhotoTileIcon art=\{name\} size=\{size\} \/>;/.test(screen),
+  'a chosen picture must preview as itself');
+assert(/const photo = hasPhotoTileIcon\(own\) \? own : photoIconFor\(own\)/.test(screen),
+  'and a tile not yet overridden must show the picture it ships with');
+
 console.log('\nA tile can be renamed without a release, and renamed is all it can be.');
