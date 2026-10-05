@@ -311,6 +311,37 @@ def adminFeatures(pen):       # settings
     pen.circle(50, 50, 13, v=OFF)
 
 
+# --- brand marks -----------------------------------------------------------
+#
+# A company's own logo, not a drawing of what the tile does. JomPAY is printed
+# on the bill in somebody's hand and Touch 'n Go is on the card in their wallet,
+# so the mark is the thing they are looking for - the same reason the bus
+# operators keep theirs. Fitted to the plate rather than redrawn, so they sit in
+# the grid at the same size and corner radius as everything else.
+BRANDS = [
+    ('jompay', 'assets/billers/jompay.png'),
+    ('tngewallet', 'assets/billers/tngewallet-source.jpg'),
+]
+
+
+def brand(source):
+    """The supplied mark, trimmed of its margin and fitted to the plate."""
+    im = Image.open(source).convert('RGB')
+    # Trim whatever white border the source came with, so two marks with
+    # different margins still fill the same square.
+    bbox = im.point(lambda v: 255 if v < 244 else 0).convert('L').getbbox()
+    if bbox:
+        im = im.crop(bbox)
+    w = SIZE * S
+    img = Image.new('RGB', (w, w), WHITE)
+    mark = im.resize((BOX * S, BOX * S), Image.LANCZOS)
+    mask = Image.new('L', (BOX * S, BOX * S), 0)
+    ImageDraw.Draw(mask).rounded_rectangle(
+        [0, 0, BOX * S - 1, BOX * S - 1], radius=RADIUS * S, fill=255)
+    img.paste(mark, (INSET * S, INSET * S), mask)
+    return img
+
+
 ICONS = [
     ('salary', GREEN, salary),
     ('myAccount', BLUE, myAccount),
@@ -345,10 +376,14 @@ ICONS = [
 if __name__ == '__main__':
     import sys
     out = sys.argv[1]
+    import os
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
     for name, palette, draw in ICONS:
         img = plate(*palette)
         pen = Pen()
         draw(pen)
         img.paste(Image.new('RGB', img.size, WHITE), (0, 0), pen.mask)
         img.resize((SIZE, SIZE), Image.LANCZOS).save(f'{out}/{name}.png')
-    print(f'{len(ICONS)} icons written to {out}')
+    for name, source in BRANDS:
+        brand(os.path.join(root, source)).resize((SIZE, SIZE), Image.LANCZOS).save(f'{out}/{name}.png')
+    print(f'{len(ICONS)} drawn and {len(BRANDS)} brand marks written to {out}')

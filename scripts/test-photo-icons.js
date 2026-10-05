@@ -247,6 +247,25 @@ test('a WebView page\'s own emoji does not hide the tile\'s picture', () => {
   assert.strictEqual(resolve(chosenByHand), '', 'a chosen emoji must beat the picture');
 });
 
+test('the two brand tiles carry the real mark', () => {
+  // JomPAY is printed on the bill in somebody's hand and Touch 'n Go is on the
+  // card in their wallet. A drawing of a shopping cart or a wallet is not what
+  // they are looking for, which is why these two are fitted rather than drawn.
+  const maker = read('scripts/make-tile-icons.py');
+  const brands = [...maker.matchAll(/^    \('([A-Za-z]+)', '([^']+)'\),$/gm)].map(([, name, src]) => ({ name, src }));
+  assert.ok(brands.length >= 2, 'expected the brand marks, saw ' + brands.length);
+  for (const { name, src } of brands) {
+    assert.ok(fs.existsSync(path.join(ROOT, src)), name + ' names a source that is not in the repo');
+    assert.ok(fs.existsSync(path.join(ROOT, 'assets/tiles', name + '.png')), name + ' has no tile file');
+    // Fitted to the same plate, so it sits in the grid like everything else.
+    const bytes = fs.readFileSync(path.join(ROOT, 'assets/tiles', name + '.png'));
+    assert.strictEqual(bytes.readUInt32BE(16), 175, name + ' is not the set size');
+  }
+  for (const key of ['jompay', 'tngewallet']) {
+    assert.ok(brands.some((b) => b.name === key), key + ' must use its own mark, not a drawing');
+  }
+});
+
 console.log('\nOne size, on every grid');
 
 test('both grids draw a tile icon at the same size', () => {
