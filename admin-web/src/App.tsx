@@ -28,6 +28,7 @@ import RatesPricingPage from './pages/RatesPricingPage';
 import WalletExchangeRatesPage from './pages/WalletExchangeRatesPage';
 import PricingPage from './pages/PricingPage';
 import TransactionsPage from './pages/TransactionsPage';
+import InvoicesPage from './pages/InvoicesPage';
 import FinancialControlPage from './pages/FinancialControlPage';
 import InquiriesPage from './pages/InquiriesPage';
 import AnnouncementsPage from './pages/AnnouncementsPage';
@@ -64,6 +65,7 @@ function AdminRoutes() {
         <Route path="/verification" element={<IdentityVerificationPage />} />
         <Route path="/kyc-operations" element={<KycOperationsPage />} />
         <Route path="/transactions" element={<TransactionsPage />} />
+        <Route path="/invoices" element={<InvoicesPage />} />
         <Route path="/financial" element={<FinancialControlPage />} />
         <Route path="/wallet-settlement" element={<WalletSettlementPage />} />
         <Route path="/fraud-risk" element={<FraudRiskPage />} />

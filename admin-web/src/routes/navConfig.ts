@@ -58,6 +58,10 @@ export const PATH_ACCESS: Record<string, Requirement> = {
 
   // Orders and money. Transactions serve both: order handling and finance.
   '/transactions': ['orders', 'finance'],
+  // 'reports' too: what was paid to a provider is a reporting question, and
+  // reading grants nothing - raising and deciding are gated on finance in the
+  // callables.
+  '/invoices': ['finance', 'reports'],
   '/service-operations': ['orders'],
   '/financial': ['finance'],
   '/wallet-settlement': ['finance'],
@@ -164,6 +168,7 @@ export const navGroups: NavGroup[] = [
   ] },
   { label: 'Operations', accent: 'secondary', items: [
     { label: 'Transactions', path: '/transactions', icon: Receipt, enabled: true },
+    { label: 'Invoices', path: '/invoices', icon: Receipt, enabled: true },
     { label: 'User Operations', path: '/users', icon: Users, enabled: true },
     { label: 'KYC Operations', path: '/kyc-operations', icon: ClipboardList, enabled: true },
     { label: 'Support Operations', path: '/support-operations', icon: Headphones, allowedRoles: ['admin','superadmin','support'], enabled: true },

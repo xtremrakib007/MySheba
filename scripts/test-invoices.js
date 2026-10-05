@@ -242,4 +242,49 @@ test('the screen does not offer self-approval', () => {
   assert.ok(/somebody else in finance has to approve it/.test(screen), 'and say why');
 });
 
+console.log('\nThe admin site reaches it too');
+
+test('the page is routed and gated like the app tile', () => {
+  const app = read('admin-web/src/App.tsx');
+  assert.ok(/import InvoicesPage from '\.\/pages\/InvoicesPage'/.test(app), 'the page must be imported');
+  assert.ok(/<Route path="\/invoices" element=\{<InvoicesPage \/>\} \/>/.test(app), 'and routed');
+  const nav = read('admin-web/src/routes/navConfig.ts');
+  assert.ok(/'\/invoices': \['finance', 'reports'\]/.test(nav), 'and open to finance and reports');
+  assert.ok(/path: '\/invoices'/.test(nav), 'and listed in the navigation');
+});
+
+test('the web page shows both names and both times as well', () => {
+  // Same reason as the app screen: a row that only said "approved" answers
+  // nothing anybody asks of a payment later.
+  const page = read('admin-web/src/pages/InvoicesPage.tsx');
+  for (const field of ['createdByName', 'createdAt', 'approvedByName', 'approvedAt']) {
+    assert.ok(page.includes(field), 'the web page omits ' + field);
+  }
+  assert.ok(/hour: '2-digit', minute: '2-digit'/.test(page), 'the time matters, not just the date');
+  assert.ok(/nobody yet/.test(page), 'an unapproved invoice must say so');
+  assert.ok(/invoice\.approvedByName \|\| invoice\.approvedBy\s*\?/.test(page),
+    'and that line must be conditioned on there being an approver');
+});
+
+test('the web page does not offer self-approval either', () => {
+  const page = read('admin-web/src/pages/InvoicesPage.tsx');
+  assert.ok(/mine \? \(/.test(page), 'an invoice you raised must take the other branch');
+  assert.ok(/somebody else in finance has to approve it/.test(page), 'and say why');
+});
+
+test('both clients call the same callables rather than copying the rules', () => {
+  // The rules live in functions/invoiceRules.js and are enforced in the
+  // transaction. Two clients reimplementing them is two chances to disagree
+  // with the server about who may approve what.
+  const web = read('admin-web/src/services/invoiceService.ts');
+  const appSvc = read('src/firebase/invoiceService.js');
+  for (const fn of ['createInvoice', 'approveInvoice', 'rejectInvoice', 'listInvoices']) {
+    assert.ok(new RegExp("'" + fn + "'").test(web), 'the web service does not call ' + fn);
+    assert.ok(new RegExp("'" + fn + "'").test(appSvc), 'the app service does not call ' + fn);
+  }
+  for (const src of [web, appSvc]) {
+    assert.ok(!/createdBy ===/.test(src), 'a client must not decide self-approval for itself');
+  }
+});
+
 console.log('\n' + passed + ' checks passed.\n');
