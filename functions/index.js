@@ -20,6 +20,7 @@ exports.manageUser = userManagement.manageUser;
 exports.refreshWalletExchangeRates = require('./walletExchangeRateService').refreshWalletExchangeRates;
 exports.setRoleDefaults = require('./accessControl').setRoleDefaults;
 exports.setUserAccessOverride = require('./accessControl').setUserAccessOverride;
+exports.respondToWebSignIn = require('./deviceSessionService').respondToWebSignIn;
 exports.createInvoice = require('./invoiceService').createInvoice;
 exports.approveInvoice = require('./invoiceService').approveInvoice;
 exports.rejectInvoice = require('./invoiceService').rejectInvoice;

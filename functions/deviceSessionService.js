@@ -12,6 +12,8 @@ const { checkIpAnomaly } = require('./anomalyService');
 const mailerService = require('./mailerService');
 // A phone and a browser each get their own session slot; two phones share one.
 const { platformOf, signInUpdate } = require('./sessionSlots');
+const { approvalDecision, responseDecision, newRequest } = require('./webSignInApproval');
+const { sendExpoPush } = require('./expoPush');
 
 const MAX_DEVICE_ID_LENGTH = 100;
 const MAX_DEVICE_LABEL_LENGTH = 80;
@@ -63,6 +65,44 @@ const isStaffRole = (role) => ['admin', 'superadmin', 'dealer', 'reseller'].incl
  *
  * Pure, and exported, so the decision can be tested without a transaction.
  */
+/**
+ * Put the question on the account owner's phone.
+ *
+ * Best effort by design: if there is no push token, or Expo refuses it, the
+ * emailed code is still waiting and sign-in is not blocked. Returning whether
+ * it went lets the browser say "check your phone" only when something was
+ * actually sent.
+ */
+async function requestAppApproval({ db, ref, uid, profile, deviceId, label, ip }) {
+  try {
+    const request = newRequest({
+      deviceId,
+      label,
+      ip,
+      approvalId: crypto.randomBytes(16).toString('hex'),
+      nowMs: Date.now(),
+    });
+    await ref.update({ pendingWebApproval: request });
+
+    const token = profile && profile.pushToken;
+    if (!token || profile?.notifPrefs?.pushEnabled === false) return false;
+    const where = [request.label, request.ip].filter(Boolean).join(' \u00b7 ');
+    const push = await sendExpoPush([{
+      to: token,
+      title: 'Approve web sign-in?',
+      body: where ? ('Someone is signing in to the admin site: ' + where) : 'Someone is signing in to the admin site.',
+      // The app opens the prompt from this, and the id is what it answers with.
+      data: { type: 'web_signin_approval', approvalId: request.approvalId, label: request.label, ip: request.ip },
+    }]);
+    return push.accepted > 0;
+  } catch (error) {
+    // Never block a sign-in on this. The emailed code is the path that must
+    // always work.
+    console.error('Could not ask the phone to approve a web sign-in', error);
+    return false;
+  }
+}
+
 const staffNeedsDeviceChallenge = (profile, deviceId) => (
   isStaffRole(profile && profile.role)
   && (profile && profile.activeDeviceId) !== deviceId
@@ -313,6 +353,13 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: false }, async (request) 
         } else if (data.emailOtp) {
           verifyStaffEmailOtp(profile.pendingAdminEmailChallenge, data.emailOtp, deviceId, email);
           verifiedNewStaffDevice = true; verificationMethod = 'email_otp';
+        } else if (approvalDecision(profile.pendingWebApproval, { deviceId, nowMs: Date.now() }).ok) {
+          // Somebody tapped Approve on the phone. The same second factor as the
+          // emailed code - proof of something the account owner holds - and the
+          // decision that it counts lives in webSignInApproval.js, tied to this
+          // exact browser and to a five-minute window.
+          verifiedNewStaffDevice = true; verificationMethod = 'app_approval';
+          await ref.update({ pendingWebApproval: FieldValue.delete() });
         } else {
           // Send the code on the FIRST challenge, not only on a resend.
           //
@@ -335,8 +382,12 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: false }, async (request) 
             pending: profile.pendingAdminEmailChallenge,
             force: Boolean(data.resendEmailChallenge),
           });
-          await logAudit({ action: 'login_mfa_challenge', targetUid: uid, performedBy: uid, performedByRole: profile.role, details: { deviceId, ip, emailChallengeSent } });
-          return { requiresOtp: true, reason: 'login_verification', email, phone, availableMfaMethods: [phone && 'sms', email && 'email'].filter(Boolean), emailChallengeSent };
+          // And ask the phone. A live request there is both a faster way in and a
+          // warning, in the one place the account owner will see it, that
+          // somebody is signing in as them right now.
+          const askedApp = await requestAppApproval({ db, ref, uid, profile, deviceId, label, ip });
+          await logAudit({ action: 'login_mfa_challenge', targetUid: uid, performedBy: uid, performedByRole: profile.role, details: { deviceId, ip, emailChallengeSent, askedApp } });
+          return { requiresOtp: true, reason: 'login_verification', email, phone, availableMfaMethods: [phone && 'sms', email && 'email'].filter(Boolean), emailChallengeSent, appApprovalSent: askedApp };
         }
       }
 
@@ -795,4 +846,57 @@ exports.adminForceLogout = onCall({ enforceAppCheck: false }, async (request) =>
     await logServerError('adminForceLogout', error, { targetUid, performedBy: callerUid });
     throw new HttpsError('internal', 'Could not force logout this account. Please try again.');
   }
+});
+
+/**
+ * The phone's answer: Approve or Reject.
+ *
+ * Deliberately NOT guarded by the session proof every money callable requires.
+ * The person answering is signed in on their phone, and the thing they are
+ * approving is a sign-in elsewhere - requiring an unexpired session here would
+ * mean the one device that can answer is sometimes the one that cannot.
+ *
+ * Rejecting is recorded rather than just discarded. "Somebody tried to sign in
+ * as me and I said no" is the single most useful thing in an audit log, and it
+ * is the reason this prompt is worth showing at all.
+ */
+// enforceAppCheck: false, like every other callable in this file. App Check
+// enforcement here once locked every user out for ten days, and this is a
+// sign-in path: availability wins, and auth plus the one-time approval id is
+// what actually guards it.
+exports.respondToWebSignIn = onCall({ enforceAppCheck: false }, async (request) => {
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+  const uid = request.auth.uid;
+  const approvalId = String(request.data?.approvalId || '').trim().slice(0, 64);
+  const approve = request.data?.approve === true;
+  const db = admin.firestore();
+  const ref = db.collection('users').doc(uid);
+
+  const snap = await ref.get();
+  const profile = snap.exists ? snap.data() : null;
+  if (!profile || !isActiveAccount(profile)) throw new HttpsError('permission-denied', 'This account is not active.');
+
+  const allowed = responseDecision(profile.pendingWebApproval, { approvalId, nowMs: Date.now() });
+  if (!allowed.ok) throw new HttpsError('failed-precondition', allowed.reason);
+
+  // Only the status changes. Rewriting the whole request would let a second
+  // answer move the device or the deadline it was agreed against.
+  await ref.update({
+    'pendingWebApproval.status': approve ? 'approved' : 'rejected',
+    'pendingWebApproval.answeredAt': FieldValue.serverTimestamp(),
+  });
+
+  await logAudit({
+    action: approve ? 'web_signin_approved' : 'web_signin_rejected',
+    targetUid: uid,
+    performedBy: uid,
+    performedByRole: profile.role || '',
+    details: {
+      deviceId: String(profile.pendingWebApproval?.deviceId || ''),
+      label: String(profile.pendingWebApproval?.label || ''),
+      ip: String(profile.pendingWebApproval?.ip || ''),
+    },
+  });
+
+  return { ok: true, approved: approve };
 });

@@ -74,6 +74,7 @@
     "test:pushdelivery": "node scripts/test-push-delivery.js",
     "test:sessionslots": "node scripts/test-session-slots.js",
     "test:consent": "node scripts/test-consent.js",
+    "test:websignin": "node scripts/test-web-signin-approval.js",
     "test:funding": "node scripts/test-wallet-funding.js",
     "test:operator": "node scripts/test-operator-detect.js",
     "test:deploytargets": "node scripts/test-deploy-targets.js",

@@ -57,6 +57,7 @@ import * as announcementService from "../firebase/announcementService";
 import * as topupService from "../firebase/topupService";
 import {
   registerForPushNotificationsAsync,
+  addNotificationReceivedListener,
   addNotificationResponseListener,
   getLastNotificationResponseAsync,
   getFcmToken,
@@ -1136,6 +1137,11 @@ export function AppProvider({ children }) {
   // ---- admin push announcement history ----
   const [announcements, setAnnouncements] = useState([]);
 
+  // ---- a web sign-in waiting for this phone to approve it ----
+  const [webSignInRequest, setWebSignInRequest] = useState(null);
+  const clearWebSignInRequest = useCallback(() => setWebSignInRequest(null), []);
+
+
   // ---- notification bell: every signed-in user's own view of past
   // announcements addressed to 'all' or their role, plus whether there's
   // anything newer than their last visit to the Notifications screen. ----
@@ -1828,10 +1834,24 @@ export function AppProvider({ children }) {
   useEffect(() => {
     if (!authUser) return undefined;
 
+    const isWebSignInApproval = (data) =>
+      data.type === "web_signin_approval" && !!data.approvalId;
+
+    // Not a screen: the answer is two buttons, and the person is being asked
+    // about a sign-in happening right now, wherever they happen to be.
+    const showWebSignInApproval = (data) =>
+      setWebSignInRequest({
+        approvalId: String(data.approvalId),
+        label: String(data.label || ""),
+        ip: String(data.ip || ""),
+      });
+
     const handleResponse = async (response) => {
       const data = response?.notification?.request?.content?.data || {};
       try {
-        if (data.type === "chat" && data.chatId) {
+        if (isWebSignInApproval(data)) {
+          showWebSignInApproval(data);
+        } else if (data.type === "chat" && data.chatId) {
           openChat(data.chatId, "Support");
         } else if (data.type === "topup") {
           // Admin/superadmin get notified of a new request to review; the
@@ -1861,7 +1881,18 @@ export function AppProvider({ children }) {
       if (response) handleResponse(response);
     });
     const sub = addNotificationResponseListener(handleResponse);
-    return () => sub.remove();
+    // The approval expires in five minutes, so when the app is already open
+    // the prompt comes up on arrival rather than waiting for a tap on a
+    // banner the person may never look at. Only this one type - every other
+    // notification still routes on tap, as before.
+    const received = addNotificationReceivedListener((notification) => {
+      const data = notification?.request?.content?.data || {};
+      if (isWebSignInApproval(data)) showWebSignInApproval(data);
+    });
+    return () => {
+      sub.remove();
+      received.remove();
+    };
   }, [authUser, profile, openChat, setAdminTab, setScreen, can]);
 
   const openResult = useCallback((kind, txId, svc, extra) => {
@@ -2858,6 +2889,8 @@ export function AppProvider({ children }) {
     adCampaignsById,
     homepageConfig,
     announcements,
+    webSignInRequest,
+    clearWebSignInRequest,
     myNotifications,
     hasUnreadNotifications,
     markNotificationsSeen,
