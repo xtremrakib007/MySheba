@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { radius } from '../theme/theme';
+import { radius, tileIcon } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import { iconFor, iconRenderFor } from '../theme/iconSets';
 import { serviceColor } from '../theme/serviceColors';
@@ -118,10 +118,10 @@ export default function FeatureGrid({ title, items, activeKey, onPress, numColum
                       service grid: a tile with a picture of its own should
                       show it rather than the generic drawing. */}
                   {photoArtFor(it)
-                    ? <PhotoTileIcon art={photoArtFor(it)} size={28 * iconRender.scale} />
+                    ? <PhotoTileIcon art={photoArtFor(it)} size={tileIcon.size * iconRender.scale} />
                     : hasServiceArt(it.art || (it.emoji ? '' : it.key))
-                    ? <ServiceArt name={it.art || it.key} size={28 * iconRender.scale} color={tileTint || iconColor} />
-                    : <Text style={[styles.iconText, { color: tileTint || iconColor, fontSize: 27 * iconRender.scale, fontWeight: iconRender.weight }]}>{it.emoji || iconFor(it.key, iconStyle, it.icon)}</Text>}
+                    ? <ServiceArt name={it.art || it.key} size={tileIcon.size * iconRender.scale} color={tileTint || iconColor} />
+                    : <Text style={[styles.iconText, { color: tileTint || iconColor, fontSize: tileIcon.emoji * iconRender.scale, fontWeight: iconRender.weight }]}>{it.emoji || iconFor(it.key, iconStyle, it.icon)}</Text>}
                 </View>
                 <Text style={labelStyle} numberOfLines={2}>{String(it.name || '')}</Text>
               </>
@@ -156,7 +156,7 @@ function createStyles(colors) {
     gridCanvas: { marginHorizontal: 4, borderRadius: radius.xl, paddingVertical: 8, overflow: 'hidden' },
     gridCanvasMinimal: { paddingVertical: 0 },
     grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: GRID_PADDING, gap: COLUMN_GAP },
-    item: { minHeight: 92, borderRadius: radius.lg, paddingVertical: 10, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+    item: { minHeight: 118, borderRadius: radius.lg, paddingVertical: 10, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
     bordered: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
     classic: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}66` },
     soft: { backgroundColor: isLight(colors) ? '#F7FAFC' : '#101010' },
@@ -164,13 +164,13 @@ function createStyles(colors) {
     glass: { backgroundColor: isLight(colors) ? '#FFFFFFD9' : '#FFFFFF12', borderWidth: 1, borderColor: isLight(colors) ? '#FFFFFF' : '#FFFFFF30', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 3 },
     threeD: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}55`, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 0, shadowOffset: { width: 0, height: 4 }, elevation: 5, transform: [{ translateY: -1 }] },
     neon: { backgroundColor: isLight(colors) ? '#10151A' : '#080A0C', borderWidth: 1, borderColor: `${colors.primary}99`, shadowColor: colors.primary, shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 4 },
-    bento: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}55`, minHeight: 108, paddingHorizontal: 8 },
+    bento: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}55`, minHeight: 134, paddingHorizontal: 8 },
     adaptive: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}44` },
     itemAdaptive: { shadowColor: colors.primary, shadowOpacity: 0.18, shadowRadius: 7, shadowOffset: { width: 0, height: 2 }, elevation: 4 },
     classicBar: { position: 'absolute', top: 0, left: 0, right: 0, height: 4 },
     adaptiveBar: { position: 'absolute', top: 0, left: 0, right: 0, height: 3 },
-    gradientFill: { flex: 1, width: '100%', minHeight: 92, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 4 },
-    iconWrap: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+    gradientFill: { flex: 1, width: '100%', minHeight: 118, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 4 },
+    iconWrap: { width: tileIcon.wrap, height: tileIcon.wrap, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
     iconWrapBright: { borderWidth: 1, borderColor: '#FFFFFF30' },
     iconText: { fontSize: 27 },
     name: { fontSize: 11, fontWeight: '700', textAlign: 'center', color: colors.text, lineHeight: 15, flexShrink: 1 },

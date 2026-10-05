@@ -123,4 +123,50 @@ test('the pack does not bloat the bundle', () => {
   assert.ok(bytes < 3 * 1024 * 1024, 'the pack is ' + Math.round(bytes / 1024) + 'KB, which is too much to ship');
 });
 
+
+console.log('\nOne size, on every grid');
+
+test('both grids draw a tile icon at the same size', () => {
+  // It was 32 in one grid and 28 in the other, so the same tile was a
+  // different size depending on which screen you reached it from.
+  const theme = read('src/theme/theme.js');
+  const size = /export const tileIcon = \{ size: (\d+), wrap: (\d+), emoji: (\d+) \};/.exec(theme);
+  assert.ok(size, 'the size must live in one place');
+  const [, px, wrap, emoji] = size.map(Number);
+
+  for (const file of ['src/components/ServiceGrid.js', 'src/components/FeatureGrid.js']) {
+    const source = read(file);
+    assert.ok(/tileIcon/.test(source), file + ' must use the shared size');
+    // No stragglers: one hard-coded size left behind is the drift coming back.
+    const hardCoded = source.match(/<(?:PhotoTileIcon|ServiceArt|BrandTileLogo|BusOperatorLogo)[^>]*size=\{\d+/g) || [];
+    assert.deepStrictEqual(hardCoded, [], file + ' still sizes an icon by hand');
+  }
+
+  // Big enough to read as the tile's picture rather than a stamp on it, and
+  // small enough to leave room for the label under it.
+  assert.ok(px >= 44 && px <= 72, 'a tile icon of ' + px + ' is outside what the card can carry');
+  assert.ok(wrap >= px, 'the wrap must not clip the icon it holds');
+  assert.ok(emoji >= px * 0.7, 'an emoji tile must not read as smaller than a drawn one');
+});
+
+test('the cards grew with the icon', () => {
+  // A taller icon in a card sized for the old one is a clipped icon, and
+  // FeatureGrid's cards hide their overflow.
+  const service = read('src/components/ServiceGrid.js');
+  const feature = read('src/components/FeatureGrid.js');
+  const wrap = Number(/export const tileIcon = \{ size: \d+, wrap: (\d+)/.exec(read('src/theme/theme.js'))[1]);
+
+  const serviceMin = Number(/item: \{ width: '31\.3%', minHeight: (\d+)/.exec(service)[1]);
+  assert.ok(serviceMin >= wrap + 40, 'the service card has no room for the icon and its label');
+  for (const [name, re] of [
+    ['item', /item: \{ minHeight: (\d+)/],
+    ['gradientFill', /gradientFill: \{ flex: 1, width: '100%', minHeight: (\d+)/],
+  ]) {
+    const found = Number(re.exec(feature)[1]);
+    assert.ok(found >= wrap + 40, 'the feature grid ' + name + ' has no room for the icon and its label');
+  }
+  assert.ok(/iconWrap: \{ width: tileIcon\.wrap, height: tileIcon\.wrap/.test(feature),
+    'the feature grid icon box must follow the size, or it clips');
+});
+
 console.log('\n' + passed + ' checks passed.\n');

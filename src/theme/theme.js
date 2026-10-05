@@ -102,6 +102,21 @@ export function getPalette(mode, role) {
 export const spacing = { xs: 4, sm: 8, md: 14, lg: 20, xl: 28 };
 export const radius = { sm: 8, md: 12, lg: 16, xl: 22, tile: 18, card: 22, sheet: 24, pill: 999 };
 
+/**
+ * How big a tile's icon is drawn, everywhere a tile is drawn.
+ *
+ * One number rather than one per grid. It was 32 in the service grid and 28 in
+ * the feature grid, which is the shape of thing that drifts: the same tile was
+ * a different size depending on which screen you reached it from, and nothing
+ * said so.
+ *
+ * Sized against the tile rather than picked - the cards are a little over 110dp
+ * wide, and the artwork is meant to be the tile rather than a stamp in the
+ * corner of it. The wrap is a few points taller so a drawing and a picture sit
+ * on the same baseline whatever their own proportions are.
+ */
+export const tileIcon = { size: 52, wrap: 56, emoji: 44 };
+
 // Soft, colour-tinted elevation rather than a neutral black shadow, which
 // on the tinted surfaces here reads as grime. Used by the cards the home
 // surfaces are built from.

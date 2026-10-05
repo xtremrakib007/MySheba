@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
+import { tileIcon } from '../theme/theme';
 import { useLanguage } from '../i18n/LanguageContext';
 import * as gridManagementService from '../firebase/gridManagementService';
 import { serviceEmoji } from './serviceEmoji';
@@ -42,13 +43,13 @@ export function Tile({ s, onPress, disabled }) {
   const photoKey = hasPhotoTileIcon(artKey) ? artKey : photoIconFor(artKey);
   return <TouchableOpacity style={[styles.item, { borderColor: `${colors.primary}66`, backgroundColor: colors.card }, disabled && styles.itemDisabled]} activeOpacity={0.82} disabled={!!disabled} onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
     {photoKey
-      ? <View style={styles.logoWrap}><PhotoTileIcon art={photoKey} size={32} /></View>
+      ? <View style={styles.logoWrap}><PhotoTileIcon art={photoKey} size={tileIcon.size} /></View>
       : hasBrandTileLogo(artKey)
-      ? <View style={styles.logoWrap}><BrandTileLogo art={artKey} size={32} /></View>
+      ? <View style={styles.logoWrap}><BrandTileLogo art={artKey} size={tileIcon.size} /></View>
       : hasBusLogo(artKey)
-      ? <View style={styles.logoWrap}><BusOperatorLogo operatorKey={artKey} size={32} /></View>
+      ? <View style={styles.logoWrap}><BusOperatorLogo operatorKey={artKey} size={tileIcon.size} /></View>
       : hasServiceArt(artKey)
-        ? <View style={styles.logoWrap}><ServiceArt name={artKey} size={32} color={colors.primary} /></View>
+        ? <View style={styles.logoWrap}><ServiceArt name={artKey} size={tileIcon.size} color={colors.primary} /></View>
         : <Text style={styles.emoji} numberOfLines={1}>{chosenEmoji || serviceEmoji(asSafeText(s?.key, icon))}</Text>}
     <Text style={[styles.name, { color: colors.text || '#222' }]} numberOfLines={2}>{label}</Text>
   </TouchableOpacity>;
@@ -165,4 +166,4 @@ const styles = StyleSheet.create({ sectionSpacer: { marginTop: 14 }, catLabel: {
 // tiles drew one against the left margin and one against the right with a
 // canyon between them. Packing left with a fixed gap means a row of two looks
 // like the first two of a row of four, which is what it is.
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', columnGap: 8 }, item: { width: '31.3%', minHeight: 94, marginBottom: 10, paddingHorizontal: 2, paddingVertical: 10, borderWidth: 1.5, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 1 }, itemDisabled: { opacity: 0.45 }, emoji: { fontSize: 30, lineHeight: 36, marginBottom: 6, textAlign: 'center' }, logoWrap: { height: 36, marginBottom: 6, alignItems: 'center', justifyContent: 'center' }, iconText: { fontSize: 28 }, name: { fontSize: 11.5, lineHeight: 14, fontWeight: '700', textAlign: 'center' } });
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', columnGap: 8 }, item: { width: '31.3%', minHeight: 118, marginBottom: 10, paddingHorizontal: 2, paddingVertical: 10, borderWidth: 1.5, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 1 }, itemDisabled: { opacity: 0.45 }, emoji: { fontSize: tileIcon.emoji, lineHeight: tileIcon.wrap, marginBottom: 6, textAlign: 'center' }, logoWrap: { height: tileIcon.wrap, marginBottom: 6, alignItems: 'center', justifyContent: 'center' }, iconText: { fontSize: 28 }, name: { fontSize: 11.5, lineHeight: 14, fontWeight: '700', textAlign: 'center' } });
