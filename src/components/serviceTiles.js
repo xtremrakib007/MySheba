@@ -143,6 +143,7 @@ const STAFF_SERVICES = {
     { key: 'topup', icon: '💰', name: 'Top-Ups', kind: 'adminTopup', cat: 'manage', home: true },
     { key: 'history', icon: '📋', name: 'Transactions', kind: 'history', cat: 'manage', home: true },
     { key: 'support', icon: '🎧', name: 'Support', kind: 'support', cat: 'manage', home: true },
+    { key: 'invoices', icon: '🧾', name: 'Invoices', kind: 'staffInvoices', cat: 'manage', home: true },
     { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount', cat: 'personal' },
     { key: 'profile', icon: '🪪', name: 'Profile', kind: 'profile', cat: 'personal' },
   ],
@@ -164,12 +165,16 @@ const STAFF_CAPABILITY_TILES = [
   { key: 'reports', icon: '📊', name: 'Reports', kind: 'staffReports', needs: ['reports'], cat: 'manage', home: true },
   { key: 'ledger', icon: '📒', name: 'Ledger', kind: 'staffLedger', needs: ['reports'], cat: 'manage', home: true },
   { key: 'walletFunding', icon: '🤝', name: 'Wallet Funding', kind: 'staffFunding', needs: ['finance'], cat: 'manage', home: true },
+  // 'reports' as well as 'finance': the history of what was paid to a provider
+  // is a reporting question, and reading it grants nothing - raising and
+  // approving are both gated on 'finance' in the callables.
+  { key: 'invoices', icon: '🧾', name: 'Invoices', kind: 'staffInvoices', needs: ['finance', 'reports'], cat: 'manage', home: true },
   { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount', cat: 'personal' },
   { key: 'profile', icon: '🪪', name: 'Profile', kind: 'profile', cat: 'personal' },
 ];
 
 // Admin keeps its hub; the money tiles appear only with finance/orders.
-const ADMIN_TILE_NEEDS = { topup: ['finance'], history: ['orders', 'finance', 'review'], ledger: ['reports'], walletFunding: ['finance'] };
+const ADMIN_TILE_NEEDS = { topup: ['finance'], history: ['orders', 'finance', 'review'], ledger: ['reports'], walletFunding: ['finance'], invoices: ['finance', 'reports'] };
 
 export { CUSTOMER_SERVICES, SHARED_SERVICES, STAFF_SERVICES, STAFF_CAPABILITY_TILES, ADMIN_TILE_NEEDS };
 

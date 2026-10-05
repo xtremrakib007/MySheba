@@ -11,6 +11,7 @@
 export const SERVICE_EMOJI = {
   // exactly as the reference draws them
   recharge: '📱',
+  invoices: '🧾',
   mobilebanking: '🏦',
   internet: '📡',
   remittance: '💸',

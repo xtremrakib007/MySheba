@@ -461,6 +461,7 @@ const ALIASES = {
   staffLedger: 'reports',
   ledger: 'reports',
   staffFunding: 'topup',
+  staffInvoices: 'reports',
   walletFunding: 'topup',
   staffInquiries: 'inquiries',
   operations: 'adminFeatures',

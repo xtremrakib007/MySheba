@@ -199,4 +199,47 @@ test('the callables are actually registered', () => {
   }
 });
 
+console.log('\nThe screen reaches it');
+
+test('the tile exists for finance and for reports', () => {
+  const tiles = read('src/components/serviceTiles.js');
+  assert.ok(/key: 'invoices'[^}]*kind: 'staffInvoices'[^}]*needs: \['finance', 'reports'\]/.test(tiles),
+    'the capability tile must open for finance and reports');
+  assert.ok(/invoices: \['finance', 'reports'\]/.test(tiles), 'and for an admin holding either');
+});
+
+test('the tile leads somewhere', () => {
+  // A tile whose kind nothing routes does nothing when tapped.
+  assert.ok(/s\.kind === 'staffInvoices'\) return setScreen\('invoices'\)/.test(read('src/components/ServiceGrid.js')));
+  const app = read('App.js');
+  assert.ok(/import InvoicesScreen from/.test(app), 'the screen must be imported');
+  assert.ok(/renderedScreen === 'invoices' && <InvoicesScreen \/>/.test(app), 'and rendered');
+  assert.ok(/staffInvoices: /.test(read('src/components/ServiceArt.js')), 'and have artwork');
+});
+
+test('the screen shows both names and both times on every invoice', () => {
+  // The reason the record exists. A row that only said "approved" answers
+  // nothing anybody asks of a payment later.
+  const screen = read('src/screens/InvoicesScreen.js');
+  for (const field of ['createdByName', 'createdAt', 'approvedByName', 'approvedAt']) {
+    assert.ok(screen.includes(field), 'the screen omits ' + field);
+  }
+  // Whether the approver's name is shown must depend on the approver's name.
+  // Checking only that the field is mentioned somewhere passed when the
+  // condition was replaced by a constant - the name still appeared, in the
+  // branch that had become unreachable.
+  assert.ok(/\{item\.approvedByName \|\| item\.approvedBy\s*\?/.test(screen),
+    'the approved-by line must be conditioned on there being an approver');
+  assert.ok(/nobody yet/.test(screen), 'an unapproved invoice must say so, not just omit a line');
+  assert.ok(/hour: '2-digit', minute: '2-digit'/.test(screen), 'the time matters, not just the date');
+});
+
+test('the screen does not offer self-approval', () => {
+  // The server refuses it inside the transaction either way; a button that
+  // exists only to produce an error is worse than no button.
+  const screen = read('src/screens/InvoicesScreen.js');
+  assert.ok(/mine \? \(/.test(screen), 'an invoice you raised must take the other branch');
+  assert.ok(/somebody else in finance has to approve it/.test(screen), 'and say why');
+});
+
 console.log('\n' + passed + ' checks passed.\n');
