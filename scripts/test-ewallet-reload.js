@@ -54,9 +54,14 @@ const tiles = require('./lib/load-tiles.js');
 const home = tiles.visibleTiles({ role: 'customer', can: () => true, homeOnly: true });
 const byKey = Object.fromEntries(home.map((t) => [t.key, t]));
 
+// Touch 'n Go is sold two ways, so its tile asks which before it routes;
+// JomPAY has one. Neither is a service of its own - what they must not do is
+// fall through to startService(key), which would open a wizard that does not
+// exist for either of them.
+const SHORTCUT_KINDS = { jompay: 'billShortcut', tngewallet: 'tngShortcut' };
 for (const key of ['jompay', 'tngewallet']) {
   assert(byKey[key], `${key} must be on the home grid`);
-  assert.strictEqual(byKey[key].kind, 'billShortcut', `${key} opens the bill flow, it is not a service of its own`);
+  assert.strictEqual(byKey[key].kind, SHORTCUT_KINDS[key], `${key} opens the bill flow, it is not a service of its own`);
   assert.strictEqual(byKey[key].seed.country, 'MY', `${key} is Malaysian`);
 }
 // The seed is the whole point: land on the step that still needs answering,

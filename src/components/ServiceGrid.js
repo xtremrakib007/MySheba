@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useApp } from '../context/AppContext';
+import { showAlert } from '../utils/appAlert';
 import { useTheme } from '../theme/ThemeContext';
 import { tileIcon, tileGrid } from '../theme/theme';
 import { useLanguage } from '../i18n/LanguageContext';
@@ -100,6 +101,16 @@ export function useServiceAction() {
     if (s.kind === 'staffInvoices') return setScreen('invoices');
     // A tile that is a service with some steps already answered.
     if (s.kind === 'billShortcut') return startService('billpayment', s.seed, s.startStep);
+    // Touch 'n Go is sold two ways, and used to be two tiles in two places: a
+    // reload buried in Bill Payment and a voucher buried in PIN Generate. One
+    // tile, and the choice is the first thing it asks.
+    if (s.kind === 'tngShortcut') {
+      return showAlert("Touch 'n Go eWallet", 'Reload the wallet directly, or buy a PIN voucher to top it up later?', [
+        { text: 'Reload wallet', onPress: () => startService('billpayment', s.seed, s.startStep) },
+        { text: 'Buy PIN voucher', onPress: () => setScreen('rechargePin') },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    }
     return startService(s.key);
   };
 }

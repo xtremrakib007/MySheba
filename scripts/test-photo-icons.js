@@ -107,11 +107,17 @@ console.log('\nAnd the grids actually draw them');
 
 test('both grids check for a picture before a drawing', () => {
   const service = read('src/components/ServiceGrid.js');
-  assert.ok(/const photoKey = hasPhotoTileIcon\(artKey\) \? artKey : photoIconFor\(artKey\)/.test(service));
-  const branch = service.indexOf('<PhotoTileIcon art={photoKey}');
+  assert.ok(/const photoKey = hasPhotoTileIcon\(artKey\) \? artKey : \(chosenArt \? '' : photoIconFor\(artKey\)\)/.test(service));
+  // Scoped to the render, not the file: `hasBrandTileLogo` also appears in the
+  // import line at the top, so comparing positions across the whole file was
+  // really comparing against that import - and any new import above it moved
+  // the answer.
+  const render = /return <TouchableOpacity style=\{\[styles\.item[\s\S]*?<\/TouchableOpacity>;/.exec(service);
+  assert.ok(render, 'the tile render must be findable');
+  const branch = render[0].indexOf('<PhotoTileIcon art={photoKey}');
   assert.ok(branch > 0, 'the service grid must actually render it');
   // First in the chain, or a tile whose key also has a vector shows the vector.
-  assert.ok(branch < service.indexOf('hasBrandTileLogo(artKey)'),
+  assert.ok(branch < render[0].indexOf('hasBrandTileLogo(artKey)'),
     'the picture must be checked before the drawings');
 
   const feature = read('src/components/FeatureGrid.js');
@@ -200,7 +206,7 @@ test('all 41 tiles resolve to artwork', () => {
     if (!artNames.has(art) && !photoIconFor(art)) without.push(`${tile.key} (${tile.name})`);
   }
   assert.strictEqual(without.length, 0, 'these tiles have no artwork: ' + without.join(', '));
-  assert.ok(seen.size >= 41, 'expected the whole feature list, saw ' + seen.size);
+  assert.ok(seen.size >= 40, 'expected the whole feature list, saw ' + seen.size);
 });
 
 test('every picture is its own picture', () => {

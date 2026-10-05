@@ -87,6 +87,30 @@ export function friendlyMessage(error, fallback) {
   return looksOffline(error) ? OFFLINE.message : fallback;
 }
 
+/**
+ * The server's own words, when it wrote any.
+ *
+ * friendlyMessage above replaces EVERY failure with one sentence, which is
+ * right for sign-in - "wrong password" and "no such account" must not be told
+ * apart by a stranger. It is wrong for registration, where the callable says
+ * things like "This phone number is already registered to another account"
+ * and the screen was printing "Could not complete phone verification. Please
+ * try again." over the top of it. The person then retried an SMS code that
+ * had already worked and could never work again.
+ *
+ * Only messages the callable wrote are shown. A raw Firebase code is noise to
+ * the person reading it, so those fall back to the screen's own sentence.
+ */
+const SERVER_CODES = ['invalid-argument', 'already-exists', 'failed-precondition', 'resource-exhausted', 'permission-denied', 'not-found'];
+
+export function serverMessage(error, fallback) {
+  if (looksOffline(error)) return OFFLINE.message;
+  const code = String(error?.code || '').replace(/^functions\//, '');
+  const message = String(error?.message || '').trim();
+  if (SERVER_CODES.includes(code) && message && !/^\[/.test(message)) return message;
+  return fallback;
+}
+
 // For rendering AppContext's `authError`, which stores raw `err.message`.
 export function authErrorMessage(error, fallback) {
   if (!error) return '';

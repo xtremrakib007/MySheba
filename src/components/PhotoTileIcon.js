@@ -66,7 +66,6 @@ const PHOTO_ICONS = {
   photoSupport: require('../../assets/tiles/support.png'),
   photoSalary: require('../../assets/tiles/salary.png'),
   photoMyDocuments: require('../../assets/tiles/myDocuments.png'),
-  photoDocuments: require('../../assets/tiles/documents.png'),
   photoMoreFeaturesTile: require('../../assets/tiles/moreFeaturesTile.png'),
 
   // ---- the Bill Payment category picker ----

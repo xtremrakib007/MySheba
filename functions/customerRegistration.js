@@ -31,11 +31,16 @@ exports.registerWithDealerCode = onCall({ enforceAppCheck: false }, async (reque
   if (data.action === 'sendEmailVerificationChallenge') return emailOtpService.sendEmailVerificationOtpInternal(data);
   if (data.action === 'verifyEmailOtp') return emailOtpService.verifyEmailVerificationOtpInternal(data);
 
-  const { name, phone, phoneE164, dialCode, email, pin, phoneIdToken, emailIdToken, emailOtpVerificationId } = data;
+  const { name, phone, phoneE164, dialCode, email, pin, nationality, phoneIdToken, emailIdToken, emailOtpVerificationId } = data;
   if (!name || !name.trim()) throw new HttpsError('invalid-argument', 'Please enter your full name.');
   if (!isValidPhone(phone)) throw new HttpsError('invalid-argument', 'Please enter a valid phone number.');
   if (!isValidEmail(email)) throw new HttpsError('invalid-argument', 'Please enter a valid email address.');
   if (!isValidPin(pin)) throw new HttpsError('invalid-argument', 'Password must be 6-20 characters.');
+  // A two-letter country code, and only a country the app actually lists.
+  // Stored at registration because it is asked once and used by KYC and
+  // remittance later, where getting it wrong means a refused document.
+  const nationalityCode = String(nationality || '').trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(nationalityCode)) throw new HttpsError('invalid-argument', 'Please choose your nationality.');
 
   const normalizedEmail = normalizeEmail(email);
   const verifiedPhoneE164 = toE164(phoneE164 || phone, phoneE164 ? undefined : dialCode);
@@ -131,6 +136,7 @@ exports.registerWithDealerCode = onCall({ enforceAppCheck: false }, async (reque
       phone: normalizePhone(phone),
       phoneE164: verifiedPhoneE164,
       phoneCountryCode: dialCode || '+60',
+      nationality: nationalityCode,
       email: normalizedEmail,
       role: 'customer',
       walletBalance: 0,

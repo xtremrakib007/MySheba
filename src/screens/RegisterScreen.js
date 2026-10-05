@@ -3,7 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator,
 import { LinearGradient } from 'expo-linear-gradient';
 import { httpsCallable } from 'firebase/functions';
 import { useApp } from '../context/AppContext';
-import { friendlyMessage, authErrorMessage } from '../utils/signInErrorCopy';
+import { friendlyMessage, serverMessage, authErrorMessage } from '../utils/signInErrorCopy';
 
 // AppContext stores the raw err.message in authError; this is what is
 // shown in its place, so a callable's UNAUTHENTICATED never reaches the screen.
@@ -30,6 +30,12 @@ export default function RegisterScreen() {
   const [phone, setPhone] = useState('');
   const [phoneCountry, setPhoneCountry] = useState(DEFAULT_PHONE_COUNTRY);
   const [countryPicker, setCountryPicker] = useState(false);
+  // Nationality, not the dialling country: somebody on a Malaysian number may
+  // hold any passport, and KYC and remittance both ask which later. Seeded
+  // from the dialling country because that is right more often than not, and
+  // changing it is one tap.
+  const [nationality, setNationality] = useState(DEFAULT_PHONE_COUNTRY);
+  const [nationalityPicker, setNationalityPicker] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -44,6 +50,9 @@ export default function RegisterScreen() {
   const registrationFinishedRef = useRef(false);
   const emailVerificationCompletedRef = useRef(false);
   const phoneVerificationCompletedRef = useRef(false);
+  // Kept so a failed REGISTRATION does not cost a fresh SMS: the code that
+  // produced this token is spent, but the token itself is still good.
+  const verifiedPhoneToken = useRef('');
 
   useEffect(() => {
     let mounted = true;
@@ -71,6 +80,7 @@ export default function RegisterScreen() {
     if (!EMAIL_RE.test(String(email).trim())) return t('register.errBadEmail');
     if (String(password).length < 6 || String(password).length > 20) return t('register.errBadPassword');
     if (password !== confirmPassword) return t('register.errPasswordMismatch');
+    if (!/^[A-Za-z]{2}$/.test(String(nationality?.code || ''))) return 'Please choose your nationality.';
     return '';
   };
 
@@ -124,6 +134,7 @@ export default function RegisterScreen() {
         dialCode: phoneCountry.dial,
         email: email.trim(),
         pin: password,
+        nationality: nationality?.code,
         phoneIdToken: phoneToken || undefined,
         emailIdToken: emailToken || undefined,
         emailOtpVerificationId: emailProof || undefined,
@@ -136,18 +147,48 @@ export default function RegisterScreen() {
   };
 
   const onVerifyPhone = async () => {
-    if (verificationInProgressRef.current || phoneVerificationCompletedRef.current || registrationFinishedRef.current) return;
+    if (verificationInProgressRef.current || registrationFinishedRef.current) return;
+    // Already proved, and the code that proved it is spent. Go straight back
+    // to creating the account rather than asking for it again.
+    if (phoneVerificationCompletedRef.current && verifiedPhoneToken.current) {
+      verificationInProgressRef.current = true;
+      setLocalError(''); setOtpBusy(true);
+      try { await finishRegistration({ phoneToken: verifiedPhoneToken.current }); }
+      catch (e) { setLocalError(serverMessage(e, 'Could not create your account. Please try again.')); }
+      finally { verificationInProgressRef.current = false; setOtpBusy(false); }
+      return;
+    }
     if (!/^\d{6}$/.test(phoneCode.trim())) { setLocalError('Enter the 6-digit SMS verification code.'); return; }
     if (!phoneConfirmation) { setLocalError('This SMS verification session expired. Please resend.'); return; }
     verificationInProgressRef.current = true;
     setLocalError(''); setOtpBusy(true);
+
+    // Two steps, two failures, and they were sharing one catch.
+    //
+    // Checking the code and creating the account are different things that go
+    // wrong for different reasons, and the account one has the better message:
+    // "This phone number is already registered to another account" was being
+    // replaced with "Could not complete phone verification. Please try again."
+    // The person then retried an SMS code that HAD worked - a Firebase
+    // confirmation is single use, so the retry could only ever fail, and the
+    // screen blamed the code again.
+    let idToken;
     try {
-      const { idToken } = await phoneVerification.confirmPhoneOtp(phoneConfirmation, phoneCode.trim());
-      phoneVerificationCompletedRef.current = true;
+      ({ idToken } = await phoneVerification.confirmPhoneOtp(phoneConfirmation, phoneCode.trim()));
+    } catch (e) {
+      setLocalError(friendlyMessage(e, 'That SMS code did not work. Check the digits, or tap Resend for a new one.'));
+      verificationInProgressRef.current = false; setOtpBusy(false);
+      return;
+    }
+
+    // The phone IS verified from here on, whatever happens next. Remembering
+    // the token is what lets Verify be pressed again without a new code.
+    phoneVerificationCompletedRef.current = true;
+    verifiedPhoneToken.current = idToken;
+    try {
       await finishRegistration({ phoneToken: idToken });
     } catch (e) {
-      phoneVerificationCompletedRef.current = false;
-      setLocalError(friendlyMessage(e, 'Could not complete phone verification. Please try again.'));
+      setLocalError(serverMessage(e, 'Your phone is verified, but the account could not be created. Please try again.'));
     } finally { verificationInProgressRef.current = false; setOtpBusy(false); }
   };
 
@@ -205,6 +246,12 @@ export default function RegisterScreen() {
               <TextInput style={styles.phoneInput} placeholder={t('register.phoneNumber')} placeholderTextColor={styles.placeholderColor} keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
             </View>
           </View>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Nationality</Text>
+            <TouchableOpacity onPress={() => setNationalityPicker(true)} style={styles.countryButton} accessibilityRole="button" accessibilityLabel="Choose your nationality">
+              <Text style={styles.countryFlag}>{nationality.flag}</Text><Text style={styles.countryName} numberOfLines={1}>{nationality.name}</Text><Text style={styles.countryChevron}>▾</Text>
+            </TouchableOpacity>
+          </View>
           <Field label={t('register.emailAddress')} value={email} setValue={setEmail} placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" styles={styles} />
           <Field label={t('register.password')} value={password} setValue={setPassword} placeholder={t('register.passwordPlaceholder')} secureTextEntry maxLength={20} styles={styles} />
           <Field label={t('register.confirmPassword')} value={confirmPassword} setValue={setConfirmPassword} placeholder={t('register.confirmPasswordPlaceholder')} secureTextEntry maxLength={20} styles={styles} />
@@ -232,6 +279,9 @@ export default function RegisterScreen() {
         </>}
       </ScrollView>
       <PhoneCountryPicker visible={countryPicker} value={phoneCountry} onSelect={(c) => { setPhoneCountry(c); setCountryPicker(false); }} onClose={() => setCountryPicker(false)} />
+      {/* The same picker: one list of countries, so the two fields cannot
+          offer different ones. */}
+      <PhoneCountryPicker visible={nationalityPicker} value={nationality} onSelect={(c) => { setNationality(c); setNationalityPicker(false); }} onClose={() => setNationalityPicker(false)} />
     </KeyboardAvoidingView>
   );
 }

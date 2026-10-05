@@ -493,7 +493,6 @@ ICONS = [
     ('profile', PURPLE, profile),
     ('walletTransfer', TEAL, walletTransfer),
     ('myDocuments', AMBER, myDocuments),
-    ('documents', SLATE, documents),
     ('adminFeatures', SLATE, adminFeatures),
     # Four the supplied pack shipped as duplicates of each other.
     ('fomema', RED, fomema),
