@@ -352,24 +352,53 @@ test('both grids draw a tile icon at the same size', () => {
   assert.ok(emoji >= px * 0.7, 'an emoji tile must not read as smaller than a drawn one');
 });
 
-test('the cards grew with the icon', () => {
-  // A taller icon in a card sized for the old one is a clipped icon, and
-  // FeatureGrid's cards hide their overflow.
+test('every tile is square, on every grid, for every role', () => {
+  // Three across and four across, neither of them square: the same feature was
+  // a different size and a different shape depending on the screen it was
+  // reached from, and four across could not carry a two-line label at all.
+  const theme = read('src/theme/theme.js');
+  const grid = /export const tileGrid = \{ columns: (\d+), gap: (\d+), width: '([\d.]+)%' \};/.exec(theme);
+  assert.ok(grid, 'the grid shape must live in one place');
+  const [columns, gap, width] = [grid[1], grid[2], grid[3]].map(Number);
+
   const service = read('src/components/ServiceGrid.js');
   const feature = read('src/components/FeatureGrid.js');
-  const wrap = Number(/export const tileIcon = \{ size: \d+, wrap: (\d+)/.exec(read('src/theme/theme.js'))[1]);
 
-  const serviceMin = Number(/item: \{ width: '31\.3%', minHeight: (\d+)/.exec(service)[1]);
-  assert.ok(serviceMin >= wrap + 40, 'the service card has no room for the icon and its label');
-  for (const [name, re] of [
-    ['item', /item: \{ minHeight: (\d+)/],
-    ['gradientFill', /gradientFill: \{ flex: 1, width: '100%', minHeight: (\d+)/],
-  ]) {
-    const found = Number(re.exec(feature)[1]);
-    assert.ok(found >= wrap + 40, 'the feature grid ' + name + ' has no room for the icon and its label');
+  // Square: the artwork is square, and a picture in a short wide box either
+  // leaves air down both sides or gets cropped.
+  assert.ok(/item: \{ width: tileGrid\.width, aspectRatio: 1,/.test(service),
+    'the service tile must be square');
+  assert.ok(/\{ width: bento \? width \* 2 \+ COLUMN_GAP : width, height: width \}/.test(feature),
+    'the feature tile must be square');
+
+  // ...and nothing may set its own height underneath that.
+  for (const [name, src] of [['ServiceGrid', service], ['FeatureGrid', feature]]) {
+    assert.deepStrictEqual(src.match(/minHeight: \d+/g) || [], [],
+      name + ' still fixes a tile height, which fights the square');
   }
-  assert.ok(/iconWrap: \{ width: tileIcon\.wrap, height: tileIcon\.wrap/.test(feature),
-    'the feature grid icon box must follow the size, or it clips');
+
+  // One column count for both, or "the same size" holds on one screen only.
+  assert.ok(/numColumns = tileGrid\.columns/.test(feature), 'the feature grid must take the shared count');
+  assert.ok(/const COLUMN_GAP = tileGrid\.gap;/.test(feature), 'and the shared gap');
+  assert.ok(/columnGap: tileGrid\.gap/.test(service), 'as must the service grid');
+
+  // The row has to hold them: three at 31.3% plus two gaps must still fit.
+  assert.ok(width * columns < 100, `${columns} tiles at ${width}% overflow the row`);
+  assert.ok(columns >= 3 && columns <= 4, 'a row of ' + columns + ' is not a grid anybody can read');
+  assert.ok(gap > 0);
+});
+
+test('a square tile still has room for its icon and its label', () => {
+  // The narrowest phone this ships to is about 320dp wide. A tile is that,
+  // less the page padding, over the column count - and the icon and two lines
+  // of label have to fit inside a box that tall.
+  const theme = read('src/theme/theme.js');
+  const columns = Number(/export const tileGrid = \{ columns: (\d+)/.exec(theme)[1]);
+  const wrap = Number(/export const tileIcon = \{ size: \d+, wrap: (\d+)/.exec(theme)[1]);
+  const tile = (320 - 32) / columns;
+  const label = 2 * 14;
+  assert.ok(tile >= wrap + label + 16,
+    `a ${tile.toFixed(0)}dp square cannot hold a ${wrap}dp icon and two lines of label`);
 });
 
 console.log('\n' + passed + ' checks passed.\n');

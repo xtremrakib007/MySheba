@@ -104,8 +104,12 @@ const more = read('src/screens/MoreFeaturesScreen.js');
 assert(/const manage = services\.filter\(\(t\) => t\.cat === 'manage'\)/.test(grid), 'management is its own block');
 assert(/const rest = services\.filter\(\(t\) => t\.cat !== 'manage'\)/.test(grid), 'and the services are the other');
 assert(/blocks\.length > 1 &&/.test(grid), 'a customer has one block, so it needs no heading');
-// Three across, so a row of three is a full row.
-assert(/item: \{ width: '31\.3%'/.test(grid), 'tiles are three across');
+// Three across, so a row of three is a full row. The width lives in theme.js
+// now, with the column count and the gap, because the feature grid has to lay
+// out to the same shape - see tileGrid.
+assert(/item: \{ width: tileGrid\.width, aspectRatio: 1,/.test(grid), 'tiles are square and take the shared width');
+assert(/export const tileGrid = \{ columns: 3, gap: \d+, width: '31\.3%' \};/.test(read('src/theme/theme.js')),
+  'three across, so a row of three is a full row');
 assert(!/moreRow:/.test(grid), 'More Features is a tile in the grid, not a row below it');
 
 
@@ -214,7 +218,7 @@ console.log('Partial rows pack left instead of spreading');
 // a canyon between them, which read as a layout failure rather than a short row.
 for (const [rel, src] of [['src/components/ServiceGrid.js', grid], ['src/screens/MoreFeaturesScreen.js', more]]) {
   assert(!/grid: \{[^}]*space-between/.test(src), `${rel} must not spread a partial row`);
-  assert(/grid: \{[^}]*justifyContent: 'flex-start', columnGap: \d+/.test(src), `${rel} packs left with a fixed gap`);
+  assert(/grid: \{[^}]*justifyContent: 'flex-start', columnGap: (?:\d+|tileGrid\.gap)/.test(src), `${rel} packs left with a fixed gap`);
 }
 
 

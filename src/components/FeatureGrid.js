@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { radius, tileIcon } from '../theme/theme';
+import { radius, tileIcon, tileGrid } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import { iconFor, iconRenderFor } from '../theme/iconSets';
 import { serviceColor } from '../theme/serviceColors';
@@ -9,7 +9,7 @@ import ServiceArt, { hasServiceArt } from './ServiceArt';
 import PhotoTileIcon, { hasPhotoTileIcon, photoIconFor } from './PhotoTileIcon';
 
 const GRID_PADDING = 10;
-const COLUMN_GAP = 8;
+const COLUMN_GAP = tileGrid.gap;
 // Only a first guess, for the frame before onLayout reports the real width.
 // It used to be the actual number, measured off the window - which ignored
 // every inset between the window and the row. On the admin landing that is
@@ -56,7 +56,7 @@ function photoArtFor(it) {
   return photoIconFor(it.key);
 }
 
-export default function FeatureGrid({ title, items, activeKey, onPress, numColumns = 4 }) {
+export default function FeatureGrid({ title, items, activeKey, onPress, numColumns = tileGrid.columns }) {
   const { colors, isDark, gridStyle, iconStyle } = useTheme();
   const styles = createStyles(colors);
   const [rowWidth, setRowWidth] = useState(0);
@@ -85,7 +85,9 @@ export default function FeatureGrid({ title, items, activeKey, onPress, numColum
             const adaptive = gridStyle === 'adaptive' && index < 4;
             const itemStyle = [
               styles.item,
-              { width: bento ? width * 2 + COLUMN_GAP : width },
+              // Square, and a double-wide bento tile keeps a single tile's
+              // height so the row it sits in still lines up.
+              { width: bento ? width * 2 + COLUMN_GAP : width, height: width },
               gridStyle === 'bordered' && styles.bordered,
               gridStyle === 'classic' && styles.classic,
               gridStyle === 'soft' && styles.soft,
@@ -161,7 +163,7 @@ function createStyles(colors) {
     gridCanvas: { marginHorizontal: 4, borderRadius: radius.xl, paddingVertical: 8, overflow: 'hidden' },
     gridCanvasMinimal: { paddingVertical: 0 },
     grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: GRID_PADDING, gap: COLUMN_GAP },
-    item: { minHeight: 94, borderRadius: radius.lg, paddingVertical: 10, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+    item: { borderRadius: radius.lg, paddingVertical: 10, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
     bordered: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
     classic: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}66` },
     soft: { backgroundColor: isLight(colors) ? '#F7FAFC' : '#101010' },
@@ -169,12 +171,12 @@ function createStyles(colors) {
     glass: { backgroundColor: isLight(colors) ? '#FFFFFFD9' : '#FFFFFF12', borderWidth: 1, borderColor: isLight(colors) ? '#FFFFFF' : '#FFFFFF30', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 3 },
     threeD: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}55`, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 0, shadowOffset: { width: 0, height: 4 }, elevation: 5, transform: [{ translateY: -1 }] },
     neon: { backgroundColor: isLight(colors) ? '#10151A' : '#080A0C', borderWidth: 1, borderColor: `${colors.primary}99`, shadowColor: colors.primary, shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 4 },
-    bento: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}55`, minHeight: 110, paddingHorizontal: 8 },
+    bento: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}55`, paddingHorizontal: 8 },
     adaptive: { backgroundColor: colors.card, borderWidth: 1, borderColor: `${colors.primary}44` },
     itemAdaptive: { shadowColor: colors.primary, shadowOpacity: 0.18, shadowRadius: 7, shadowOffset: { width: 0, height: 2 }, elevation: 4 },
     classicBar: { position: 'absolute', top: 0, left: 0, right: 0, height: 4 },
     adaptiveBar: { position: 'absolute', top: 0, left: 0, right: 0, height: 3 },
-    gradientFill: { flex: 1, width: '100%', minHeight: 94, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 4 },
+    gradientFill: { flex: 1, width: '100%', borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 4 },
     iconWrap: { width: tileIcon.wrap, height: tileIcon.wrap, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
     iconWrapBright: { borderWidth: 1, borderColor: '#FFFFFF30' },
     iconText: { fontSize: 27 },

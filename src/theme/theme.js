@@ -131,6 +131,20 @@ export const radius = { sm: 8, md: 12, lg: 16, xl: 22, tile: 18, card: 22, sheet
  */
 export const tileIcon = { size: 38, wrap: 42, emoji: 33 };
 
+/**
+ * One shape for every tile, on every grid, for every role.
+ *
+ * The service grid laid out three across and the feature grid four, and
+ * neither was square - so the same feature was a different size and a
+ * different shape depending on which screen you reached it from, and an admin
+ * grid of 75dp tiles could not carry a two-line label at all.
+ *
+ * Square because the artwork is square: a picture in a short wide box either
+ * leaves air down both sides or gets cropped, and a grid of them reads as
+ * uneven even when every box is identical.
+ */
+export const tileGrid = { columns: 3, gap: 8, width: '31.3%' };
+
 // Soft, colour-tinted elevation rather than a neutral black shadow, which
 // on the tinted surfaces here reads as grime. Used by the cards the home
 // surfaces are built from.
