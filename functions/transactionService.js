@@ -3,6 +3,9 @@ const admin = require('firebase-admin');
 const { hasCapability } = require('./accessControl');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+// One session per platform: a phone and a browser can both be signed in,
+// two phones cannot. See functions/sessionSlots.js.
+const { sessionMatches } = require('./sessionSlots');
 
 const DEALER_SERVICES = ['Mobile Banking'];
 const RESELLER_SERVICES = ['Recharge', 'Internet', 'Bill Payment', 'Remittance'];
@@ -204,7 +207,7 @@ exports.reconcileUnknownTransaction = onCall({ enforceAppCheck: ENFORCE_APP_CHEC
       typeof deviceId !== 'string' || !DEVICE_ID_RE.test(deviceId)) {
     throw new HttpsError('failed-precondition', 'Your secure admin session is missing. Please sign in again.');
   }
-  if (actorProfile.activeSessionId !== sessionId || actorProfile.activeDeviceId !== deviceId) {
+  if (!sessionMatches(actorProfile, { sessionId, deviceId })) {
     throw new HttpsError('permission-denied', 'This admin device session is no longer active. Please sign in again.');
   }
   await checkVelocity(db, uid, 'reconcileTransaction', { ip: getClientIp(request) });
@@ -214,7 +217,7 @@ exports.reconcileUnknownTransaction = onCall({ enforceAppCheck: ENFORCE_APP_CHEC
     // Settling an uncertain transaction refunds or confirms a charge, which is
     // finance work. Superadmin-only actions below keep their own narrower list.
     const currentActor = await assertActorStillActive(tx, uid, RECONCILE_ROLES);
-    if (currentActor.activeSessionId !== sessionId || currentActor.activeDeviceId !== deviceId) {
+    if (!sessionMatches(currentActor, { sessionId, deviceId })) {
       throw new HttpsError('permission-denied', 'This admin device session is no longer active. Please sign in again.');
     }
     const snap = await tx.get(ref);

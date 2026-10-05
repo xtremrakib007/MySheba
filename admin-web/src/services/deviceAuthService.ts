@@ -57,7 +57,10 @@ export function isDeviceCheckUnreachable(error: unknown): boolean {
 
 async function callCheckDeviceSession(data: Record<string, unknown> = {}): Promise<DeviceSessionResult> {
   const fn = httpsCallable<Record<string, unknown>, DeviceSessionResult>(functions, 'checkDeviceSession');
-  const result = await fn({ deviceId: getOrCreateDeviceId(), deviceLabel: getDeviceLabel(), ...data });
+  // platform: 'web' puts this session in the browser slot, so signing in here
+  // no longer ends the one on the phone. The app sends nothing and is treated
+  // as mobile - see functions/sessionSlots.js.
+  const result = await fn({ platform: 'web', deviceId: getOrCreateDeviceId(), deviceLabel: getDeviceLabel(), ...data });
   return result.data;
 }
 

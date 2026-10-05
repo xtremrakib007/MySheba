@@ -18,6 +18,9 @@ const { assertWalletUnfrozen } = require('./walletFreeze');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 const { inferWalletCurrency, money } = require('./walletCurrencyService');
 const { logAudit, logServerError } = require('./logService');
+// One session per platform: a phone and a browser can both be signed in,
+// two phones cannot. See functions/sessionSlots.js.
+const { sessionMatches } = require('./sessionSlots');
 
 const COLLECTION = 'walletFundingRequests';
 const MAX_AMOUNT = 1000000;
@@ -41,7 +44,7 @@ function requireSessionMatch(request, account) {
       || typeof deviceId !== 'string' || !DEVICE_ID_RE.test(deviceId)) {
     throw new HttpsError('failed-precondition', 'Your secure session is missing. Please sign in again.');
   }
-  if (account.activeSessionId !== sessionId || account.activeDeviceId !== deviceId) {
+  if (!sessionMatches(account, { sessionId, deviceId })) {
     throw new HttpsError('permission-denied', 'This device session is no longer active. Please sign in again.');
   }
 }

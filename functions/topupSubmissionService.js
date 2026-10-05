@@ -3,6 +3,9 @@ const admin = require('firebase-admin');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { inferWalletCurrency } = require('./walletCurrencyService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+// One session per platform: a phone and a browser can both be signed in,
+// two phones cannot. See functions/sessionSlots.js.
+const { sessionMatches } = require('./sessionSlots');
 
 const MAX_AMOUNT = 100000;
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
@@ -10,7 +13,7 @@ const MONEY_RE = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
 const ALLOWED_ROLES = ['customer', 'dealer', 'reseller'];
 const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const DEVICE_ID_RE = /^[A-Za-z0-9-]{16,100}$/;
-function requireSessionMatch(request, user) { const sessionId=request.data?.sessionId, deviceId=request.data?.deviceId; if(typeof sessionId!=='string'||!SESSION_ID_RE.test(sessionId)||typeof deviceId!=='string'||!DEVICE_ID_RE.test(deviceId)) throw new HttpsError('failed-precondition','Your secure session is missing. Please sign in again.'); if(user.activeSessionId!==sessionId||user.activeDeviceId!==deviceId) throw new HttpsError('permission-denied','This device session is no longer active. Please sign in again.'); }
+function requireSessionMatch(request, user) { const sessionId=request.data?.sessionId, deviceId=request.data?.deviceId; if(typeof sessionId!=='string'||!SESSION_ID_RE.test(sessionId)||typeof deviceId!=='string'||!DEVICE_ID_RE.test(deviceId)) throw new HttpsError('failed-precondition','Your secure session is missing. Please sign in again.'); if(!sessionMatches(user, { sessionId, deviceId })) throw new HttpsError('permission-denied','This device session is no longer active. Please sign in again.'); }
 
 
 async function validateReceiptUrl(url, uid) {

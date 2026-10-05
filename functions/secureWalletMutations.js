@@ -5,6 +5,9 @@ const { hasCapability } = require('./accessControl');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { logAudit, logServerError } = require('./logService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+// One session per platform: a phone and a browser can both be signed in,
+// two phones cannot. See functions/sessionSlots.js.
+const { sessionMatches } = require('./sessionSlots');
 
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 // Staff who may hold the 'finance' capability (functions/accessControl.js).
@@ -14,7 +17,7 @@ const DEVICE_ID_RE = /^[A-Za-z0-9-]{16,100}$/;
 function requireSessionMatch(request, user) {
   const sessionId=request.data?.sessionId, deviceId=request.data?.deviceId;
   if(typeof sessionId!=='string'||!SESSION_ID_RE.test(sessionId)||typeof deviceId!=='string'||!DEVICE_ID_RE.test(deviceId)) throw new HttpsError('failed-precondition','Your secure session is missing. Please sign in again.');
-  if(user.activeSessionId!==sessionId||user.activeDeviceId!==deviceId) throw new HttpsError('permission-denied','This device session is no longer active. Please sign in again.');
+  if(!sessionMatches(user, { sessionId, deviceId })) throw new HttpsError('permission-denied','This device session is no longer active. Please sign in again.');
 }
 const MAX_AMOUNT = 100000;
 

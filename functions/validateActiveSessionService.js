@@ -1,5 +1,8 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+// One session per platform: a phone and a browser can both be signed in,
+// two phones cannot. See functions/sessionSlots.js.
+const { sessionMatches } = require('./sessionSlots');
 const MAX_DEVICE_ID_LENGTH = 100;
 const MAX_SESSION_ID_LENGTH = 128;
 
@@ -34,7 +37,7 @@ exports.validateActiveSession = onCall({ enforceAppCheck: false }, async (reques
   if (!activeProfile(profile)) {
     throw new HttpsError('permission-denied', 'Your account is not active.');
   }
-  if (profile.activeSessionId !== sessionId || profile.activeDeviceId !== deviceId) {
+  if (!sessionMatches(profile, { sessionId, deviceId })) {
     throw new HttpsError('failed-precondition', 'This device session is no longer active. Please sign in again.');
   }
   return { valid: true };

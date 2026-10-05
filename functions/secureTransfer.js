@@ -6,6 +6,9 @@ const { logAudit, logServerError } = require('./logService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { checkIpAnomaly } = require('./anomalyService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+// One session per platform: a phone and a browser can both be signed in,
+// two phones cannot. See functions/sessionSlots.js.
+const { sessionMatches } = require('./sessionSlots');
 
 const KEY_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const MAX_TRANSFER = 100000;
@@ -19,7 +22,7 @@ const DEVICE_ID_RE = /^[A-Za-z0-9-]{16,100}$/;
 function requireSessionMatch(request, user) {
   const sessionId = request.data?.sessionId, deviceId = request.data?.deviceId;
   if (typeof sessionId !== 'string' || !SESSION_ID_RE.test(sessionId) || typeof deviceId !== 'string' || !DEVICE_ID_RE.test(deviceId)) throw new HttpsError('failed-precondition', 'Your secure session is missing. Please sign in again.');
-  if (user.activeSessionId !== sessionId || user.activeDeviceId !== deviceId) throw new HttpsError('permission-denied', 'This device session is no longer active. Please sign in again.');
+  if (!sessionMatches(user, { sessionId, deviceId })) throw new HttpsError('permission-denied', 'This device session is no longer active. Please sign in again.');
 }
 function hashPin(pin, salt) { return require('crypto').scryptSync(pin, salt, 64).toString('hex'); }
 

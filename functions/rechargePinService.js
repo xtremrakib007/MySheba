@@ -7,6 +7,9 @@ const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { executeConfiguredApi, resolveExecutionMode, providersForService } = require('./apiProviderService');
 const { getWalletCurrencyAndFx, baseToWallet } = require('./walletCurrencyService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+// One session per platform: a phone and a browser can both be signed in,
+// two phones cannot. See functions/sessionSlots.js.
+const { sessionMatches } = require('./sessionSlots');
 
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
@@ -43,7 +46,7 @@ function requireSessionMatch(request, user) {
   if (typeof sessionId !== 'string' || !SESSION_ID_RE.test(sessionId) || typeof deviceId !== 'string' || !DEVICE_ID_RE.test(deviceId)) {
     throw new HttpsError('failed-precondition', 'Your secure session is missing. Please sign in again.');
   }
-  if (user.activeSessionId !== sessionId || user.activeDeviceId !== deviceId) {
+  if (!sessionMatches(user, { sessionId, deviceId })) {
     throw new HttpsError('permission-denied', 'This device session is no longer active. Please sign in again.');
   }
 }

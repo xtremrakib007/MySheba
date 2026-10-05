@@ -17,6 +17,9 @@ const catalog = require('./successTopUpCatalog');
 // and look for a Malaysian plan in a Bangladeshi provider's catalogue.
 const providerCatalog = require('./providerCatalog');
 const { getWalletCurrencyAndFx, baseToWallet } = require('./walletCurrencyService');
+// One session per platform: a phone and a browser can both be signed in,
+// two phones cannot. See functions/sessionSlots.js.
+const { sessionMatches } = require('./sessionSlots');
 
 const DEFAULT_PRICING={dealerEarningPercent:1.5,webviewAccessCost:2,webviewSubmitCost:2,paymentSuccessCost:3,webviewAccessWindowHours:1,notepadCost:0,myDocumentsCost:0,salaryOtCost:0,moduleSubscriptionDays:30};
 const DEFAULT_RATES={mobileBanking:110.5,BD_ACC:30.26,BD_CASH:30.11,NP:37.65,PK:67.79,PH:15.05,LK:81.99,IN:23.5,ID:230,MM:966,remittanceFee:7,rechargeBD:30.26,rechargeIN:23.5,rechargeNP:37.65,rechargeID:230,rechargePK:67.79,rechargeMM:966,rechargePH:15.05,rechargeKH:900};
@@ -65,7 +68,7 @@ function sanitizeTransactionRaw(raw, service) {
   }
   return out;
 }
-function requireSessionMatch(request,user){const sessionId=request.data?.sessionId,deviceId=request.data?.deviceId;if(typeof sessionId!=='string'||!SESSION_ID_RE.test(sessionId)||typeof deviceId!=='string'||!DEVICE_ID_RE.test(deviceId))throw new HttpsError('failed-precondition','Your secure session is missing. Please sign in again.');if(user.activeSessionId!==sessionId||user.activeDeviceId!==deviceId)throw new HttpsError('permission-denied','This device session is no longer active. Please sign in again.');}
+function requireSessionMatch(request,user){const sessionId=request.data?.sessionId,deviceId=request.data?.deviceId;if(typeof sessionId!=='string'||!SESSION_ID_RE.test(sessionId)||typeof deviceId!=='string'||!DEVICE_ID_RE.test(deviceId))throw new HttpsError('failed-precondition','Your secure session is missing. Please sign in again.');if(!sessionMatches(user, { sessionId, deviceId }))throw new HttpsError('permission-denied','This device session is no longer active. Please sign in again.');}
 async function getPricing(db){const s=await db.collection('settings').doc('pricing').get();return{...DEFAULT_PRICING,...(s.exists?s.data():{})};}
 async function getRates(db){const s=await db.collection('rates').doc('current').get();return{...DEFAULT_RATES,...(s.exists?s.data():{})};}
 async function getProfile(db,uid){const s=await db.collection('users').doc(uid).get();return s.exists?{id:s.id,...s.data()}:null;}

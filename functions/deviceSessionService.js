@@ -10,10 +10,19 @@ const { logAudit, logServerError } = require('./logService');
 const { getClientIp } = require('./rateLimitService');
 const { checkIpAnomaly } = require('./anomalyService');
 const mailerService = require('./mailerService');
+// A phone and a browser each get their own session slot; two phones share one.
+const { platformOf, signInUpdate } = require('./sessionSlots');
 
 const MAX_DEVICE_ID_LENGTH = 100;
 const MAX_DEVICE_LABEL_LENGTH = 80;
-const MAX_TRUSTED_DEVICES = 5;
+// Five was too few once a person has a phone AND a browser, and a browser is
+// not one thing: a second browser profile, a private window that was allowed to
+// keep its storage, a laptop at home and one at work are each a separate id.
+// Reaching the cap evicts the least recently seen - which, for somebody who
+// lives in the web console, is their own phone, and the next app sign-in then
+// asks for a code. Ten costs nothing: the map is a handful of fields on one
+// document, and each entry still has to have passed the challenge to be there.
+const MAX_TRUSTED_DEVICES = 10;
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const EMAIL_CHALLENGE_TTL_MS = 10 * 60 * 1000;
 const EMAIL_CHALLENGE_RESEND_MS = 30 * 1000;
@@ -254,6 +263,10 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: false }, async (request) 
   const hasVerificationToken = Boolean(data.phoneIdToken || data.emailIdToken);
   const uid = hasVerificationToken ? await resolveUidForVerification(request, db) : requireAuth(request);
   const deviceId = requireDeviceId(request);
+  // Absent means mobile: every app build shipped before this sends no platform
+  // at all, and giving them a slot of their own would let any number of phones
+  // hold a session at once.
+  const platform = platformOf(request.data?.platform);
   const label = deviceLabel(request);
   const ip = getClientIp(request);
   const ref = userRef(db, uid);
@@ -342,7 +355,7 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: false }, async (request) 
 
       if (verifiedNewStaffDevice) {
         const id = sessionId();
-        tx.update(ref, { activeSessionId: id, activeDeviceId: deviceId, pendingDeviceApproval: null, lastLoginAt: FieldValue.serverTimestamp() });
+        tx.update(ref, { ...signInUpdate(current, platform, { sessionId: id, deviceId }), pendingDeviceApproval: null, lastLoginAt: FieldValue.serverTimestamp() });
         return { requiresOtp: false, sessionId: id, switchedDevice: Boolean(current.activeDeviceId && current.activeDeviceId !== deviceId) };
       }
 
@@ -382,7 +395,7 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: false }, async (request) 
       const deviceTrusted = Boolean(current.trustedDevices?.[deviceId]);
       if (!current.activeDeviceId || current.activeDeviceId === deviceId || deviceTrusted) {
         const id = sessionId();
-        const patch = { activeSessionId: id, activeDeviceId: deviceId, pendingDeviceApproval: null, lastLoginAt: FieldValue.serverTimestamp() };
+        const patch = { ...signInUpdate(current, platform, { sessionId: id, deviceId }), pendingDeviceApproval: null, lastLoginAt: FieldValue.serverTimestamp() };
         // Keep lastSeenAt current so the Trusted Devices list stays
         // meaningful and trustedMap evicts the genuinely stale entry at the
         // cap rather than an active one.
@@ -461,6 +474,10 @@ exports.confirmDeviceSwitch = onCall({ enforceAppCheck: false }, async (request)
   const hasVerificationToken = Boolean(data.phoneIdToken || data.emailIdToken);
   const uid = hasVerificationToken ? await resolveUidForVerification(request, db) : requireAuth(request);
   const deviceId = requireDeviceId(request);
+  // Absent means mobile: every app build shipped before this sends no platform
+  // at all, and giving them a slot of their own would let any number of phones
+  // hold a session at once.
+  const platform = platformOf(request.data?.platform);
   const ip = getClientIp(request);
   const { emailIdToken, emailOtp, phoneIdToken } = data;
   const ref = userRef(db, uid);
@@ -484,8 +501,7 @@ exports.confirmDeviceSwitch = onCall({ enforceAppCheck: false }, async (request)
 
     const id = sessionId();
     await ref.update({
-      activeSessionId: id,
-      activeDeviceId: deviceId,
+      ...signInUpdate(profile, platform, { sessionId: id, deviceId }),
       pendingDeviceApproval: null,
       pendingAdminEmailChallenge: FieldValue.delete(),
       trustedDevices: trustedMap(profile.trustedDevices, deviceId, ip, null),
@@ -508,6 +524,10 @@ exports.confirmDeviceSwitch = onCall({ enforceAppCheck: false }, async (request)
 exports.clearActiveSession = onCall({ enforceAppCheck: false }, async (request) => {
   const uid = requireAuth(request);
   const deviceId = requireDeviceId(request);
+  // Absent means mobile: every app build shipped before this sends no platform
+  // at all, and giving them a slot of their own would let any number of phones
+  // hold a session at once.
+  const platform = platformOf(request.data?.platform);
   const db = getFirestore();
   try {
     await db.runTransaction(async (tx) => {
@@ -553,6 +573,10 @@ exports.listTrustedDevices = onCall({ enforceAppCheck: false }, async (request) 
 exports.revokeTrustedDevice = onCall({ enforceAppCheck: false }, async (request) => {
   const uid = requireAuth(request);
   const deviceId = requireDeviceId(request);
+  // Absent means mobile: every app build shipped before this sends no platform
+  // at all, and giving them a slot of their own would let any number of phones
+  // hold a session at once.
+  const platform = platformOf(request.data?.platform);
   const db = getFirestore();
   try {
     let wasActive = false;
@@ -617,6 +641,10 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: false }, async (request) 
   const db = getFirestore();
   const uid = requireAuth(request);
   const deviceId = requireDeviceId(request);
+  // Absent means mobile: every app build shipped before this sends no platform
+  // at all, and giving them a slot of their own would let any number of phones
+  // hold a session at once.
+  const platform = platformOf(request.data?.platform);
   const ref = userRef(db, uid);
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
@@ -647,6 +675,10 @@ exports.confirmDeviceSwitch = onCall({ enforceAppCheck: false }, async (request)
   const db = getFirestore();
   const uid = requireAuth(request);
   const deviceId = requireDeviceId(request);
+  // Absent means mobile: every app build shipped before this sends no platform
+  // at all, and giving them a slot of their own would let any number of phones
+  // hold a session at once.
+  const platform = platformOf(request.data?.platform);
   const ref = userRef(db, uid);
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
@@ -676,6 +708,10 @@ exports.checkDeviceSession = onCall({ enforceAppCheck: false }, async (request) 
   if (result?.requiresOtp) return result;
   const data = request.data || {};
   const deviceId = requireDeviceId(request);
+  // Absent means mobile: every app build shipped before this sends no platform
+  // at all, and giving them a slot of their own would let any number of phones
+  // hold a session at once.
+  const platform = platformOf(request.data?.platform);
   const db = getFirestore();
   const uid = data.uid && !request.auth?.uid ? String(data.uid).trim() : requireAuth(request);
   const snap = await userRef(db, uid).get();

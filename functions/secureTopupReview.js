@@ -6,6 +6,9 @@ const { inferWalletCurrency } = require('./walletCurrencyService');
 const ZERO_DECIMAL_CURRENCIES = new Set(['IDR', 'KHR', 'MMK']);
 const { logAudit, logServerError } = require('./logService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+// One session per platform: a phone and a browser can both be signed in,
+// two phones cannot. See functions/sessionSlots.js.
+const { sessionMatches } = require('./sessionSlots');
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'support', 'finance'];
 const ALLOWED_RECIPIENT_ROLES = ['customer', 'dealer', 'reseller'];
@@ -20,7 +23,7 @@ function requireSessionMatch(request, profile) {
   if (typeof sessionId !== 'string' || !SESSION_ID_RE.test(sessionId) || typeof deviceId !== 'string' || !DEVICE_ID_RE.test(deviceId)) {
     throw new HttpsError('failed-precondition', 'Your secure session is missing. Please sign in again.');
   }
-  if (profile.activeSessionId !== sessionId || profile.activeDeviceId !== deviceId) {
+  if (!sessionMatches(profile, { sessionId, deviceId })) {
     throw new HttpsError('permission-denied', 'This device session is no longer active. Please sign in again.');
   }
 }
