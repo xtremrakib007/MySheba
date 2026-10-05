@@ -271,6 +271,13 @@ export function applyTileLabels(list, tileLabels) {
  * list stays the source of order and behaviour; only the label and icon are
  * overlaid, and anything added is appended.
  */
+/** Two addresses are the same address if only their scheme or slash differ. */
+function normaliseUrl(url) {
+  return String(url || '').trim().toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/\/+$/, '');
+}
+
 export function withWebviewConfig(list, webviewPages) {
   const pages = webviewPages || {};
   const overlaid = list
@@ -293,8 +300,21 @@ export function withWebviewConfig(list, webviewPages) {
         : item;
     })
     .filter((item) => item.kind !== 'webview' || !pages[item.key] || pages[item.key].active !== false);
+  // A custom page pointing where a built-in already points is the SAME tile
+  // under a second name: "Visa" and "Visa Status Inquiry", one page, two cards
+  // in the grid and nothing to tell them apart. The built-in keeps its place
+  // and the copy is dropped - it opens the same address either way.
+  //
+  // Matched on the address rather than the name, because the name is the half
+  // somebody renamed. A custom page going somewhere of its own is untouched.
+  const builtInUrls = new Set(
+    overlaid.filter((item) => item.kind === 'webview')
+      .map((item) => normaliseUrl(pages[item.key] && pages[item.key].url))
+      .filter(Boolean),
+  );
   const extra = Object.values(pages)
     .filter((p) => p.custom && p.active !== false)
+    .filter((p) => !builtInUrls.has(normaliseUrl(p.url)))
     .map((p) => ({ key: p.key, icon: p.icon || 'moreFeaturesTile', emoji: p.icon || '', name: p.name, kind: 'webview', home: p.home !== false }));
   return [...overlaid, ...extra];
 }

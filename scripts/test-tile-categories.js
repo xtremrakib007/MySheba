@@ -232,7 +232,12 @@ const EVERY_ROLE = ['customer', 'dealer', 'reseller', 'admin', 'superadmin', 'su
 for (const role of EVERY_ROLE) {
   const home = visibleTiles({ role, can: () => true, homeOnly: true });
   const { sections, account } = moreFeaturesSections({ role, can: () => true });
-  const everywhere = [...home, ...sections.flatMap((s) => s.items || []), ...account];
+  // `.tiles`, not `.items`. groupTilesByCategory returns groups keyed `tiles`,
+  // so reading `items` here silently checked nothing but home and the account
+  // rows - a de-duplication test that skipped the half of the screen where the
+  // duplicates actually show up.
+  const everywhere = [...home, ...sections.flatMap((s) => s.tiles || []), ...account];
+  assert(sections.every((s) => Array.isArray(s.tiles)), 'a section must carry its tiles');
   const counts = {};
   for (const tile of everywhere) counts[tile.key] = (counts[tile.key] || 0) + 1;
   const twice = Object.entries(counts).filter(([, n]) => n > 1).map(([key]) => key);
@@ -314,6 +319,43 @@ for (const role of ['admin', 'superadmin', 'dealer']) {
   for (const [name, value] of [['secondary', secondary], ['primary', primary], ['primaryDark', primaryDark]]) {
     assert(onWhite(value) >= 4.5, `${name} ${value} is ${onWhite(value).toFixed(2)}:1 against white text`);
   }
+}
+
+// Two tiles with different keys going to the SAME place is the duplicate
+// nobody can see by comparing keys: "Visa" and "Visa Status Inquiry" are two
+// cards and one page. For a WebView that means the same address under two
+// keys, so the addresses are what gets compared.
+{
+  const countries = read('src/data/countries.js');
+  const block = /export const webViewPages = \{([\s\S]*?)\n\};/.exec(countries)
+    || /const webViewPages = \{([\s\S]*?)\n\};/.exec(countries);
+  assert(block, 'the built-in WebView pages must be findable');
+  const byUrl = {};
+  for (const [, key, url] of block[1].matchAll(/^\s{2}([a-zA-Z][a-zA-Z0-9]*): \{ url: '([^']+)'/gm)) {
+    const address = url.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    (byUrl[address] = byUrl[address] || []).push(key);
+  }
+  assert(Object.keys(byUrl).length >= 5, 'expected the built-in pages, saw ' + Object.keys(byUrl).length);
+  const shared = Object.entries(byUrl).filter(([, keys]) => keys.length > 1)
+    .map(([address, keys]) => `${keys.join(' and ')} both open ${address}`);
+  assert.deepStrictEqual(shared, [], 'two built-in pages open one address: ' + shared.join('; '));
+}
+
+// A custom WebView page at a built-in's address is that built-in again.
+{
+  const url = 'https://eservices.imi.gov.my/myimms/VPAStsInq';
+  const pages = {
+    visa: { key: 'visa', name: 'Visa Status Inquiry', url, icon: '🛂', active: true, home: true, custom: false },
+    // Trailing slash and scheme differ, which is how the same page gets added
+    // twice without anybody noticing.
+    visaAgain: { key: 'visaAgain', name: 'Visa Check', url: url.replace('https://', 'http://') + '/', icon: '🛂', active: true, home: true, custom: true },
+    helpdesk: { key: 'helpdesk', name: 'Helpdesk', url: 'https://help.example.test', icon: '🆘', active: true, home: true, custom: true },
+  };
+  const webviews = tiles.withWebviewConfig(tiles.CUSTOMER_SERVICES, pages).filter((t) => t.kind === 'webview');
+  const keys = webviews.map((t) => t.key);
+  assert(keys.includes('visa'), 'the built-in keeps its place');
+  assert(!keys.includes('visaAgain'), 'a custom page at the same address must not become a second tile');
+  assert(keys.includes('helpdesk'), 'a custom page of its own must survive');
 }
 
 console.log('\nCategories on the home screen, everything else one tap away.');
