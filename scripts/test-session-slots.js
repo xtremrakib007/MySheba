@@ -190,4 +190,62 @@ test('the trusted-device cap leaves room for a phone and browsers', () => {
   assert.ok(Number(cap[1]) >= 10, 'the cap is still ' + cap[1]);
 });
 
+
+console.log('\nSigning in writes a slot, wherever the sign-in happened');
+
+test('every path that signs somebody in goes through signInUpdate', () => {
+  // confirmDeviceEmailOtp wrote activeSessionId and activeDeviceId straight
+  // onto the profile and left activeSessions alone. An account that signed in
+  // through it had NO mobile slot, so the phone matched only on the legacy
+  // pair - and the next web sign-in overwrote that pair and signed the phone
+  // out. The exact thing the slots were added to stop.
+  for (const file of ['functions/deviceSessionService.js', 'functions/deviceVerificationService.js']) {
+    const source = read(file);
+    const writes = source.match(/(?<!\.\.\.)\bactiveSessionId: (?!null)/g) || [];
+    assert.strictEqual(writes.length, 0,
+      file + ' writes activeSessionId directly instead of through signInUpdate');
+    assert.ok(/signInUpdate\(/.test(source), file + ' must use signInUpdate');
+  }
+});
+
+test('the verification path knows which platform it is', () => {
+  const source = read('functions/deviceVerificationService.js');
+  assert.ok(/const platform = platformOf\(request\.data\?\.platform\)/.test(source),
+    'it must read the platform rather than assuming one');
+  // Both exits - the one inside the transaction and the one after it.
+  const uses = source.match(/signInUpdate\(data, platform, \{/g) || [];
+  assert.strictEqual(uses.length, 2, 'both ways out of this callable must write a slot, saw ' + uses.length);
+});
+
+console.log('\nAnd signing somebody out ends every session, not one');
+
+test('clearing the legacy pair alone does not sign anybody out', () => {
+  // This is the half that was missed. With a slot still standing,
+  // sessionMatches keeps returning true and a force-logout does nothing.
+  const cleared = { activeSessions: { mobile: { sessionId: 's1', deviceId: 'd1' } }, activeSessionId: null, activeDeviceId: null };
+  assert.strictEqual(slots.sessionMatches(cleared, { sessionId: 's1', deviceId: 'd1' }), true,
+    'this is the bug being guarded against: the phone still matches');
+});
+
+test('signOutEverywhere ends both', () => {
+  const before = { activeSessions: { mobile: { sessionId: 's1', deviceId: 'd1' }, web: { sessionId: 's2', deviceId: 'd2' } }, activeSessionId: 's2', activeDeviceId: 'd2' };
+  const after = { ...before, ...slots.signOutEverywhere() };
+  assert.strictEqual(slots.sessionMatches(after, { sessionId: 's1', deviceId: 'd1' }), false, 'the phone must be out');
+  assert.strictEqual(slots.sessionMatches(after, { sessionId: 's2', deviceId: 'd2' }), false, 'and the browser too');
+  assert.deepStrictEqual(after.activeSessions, {}, 'the slots must be emptied, not left stale');
+  assert.strictEqual(after.activeSessionId, null);
+  assert.strictEqual(after.activeDeviceId, null);
+});
+
+test('every place that ends a session uses it', () => {
+  // A force-logout, a password reset and a suspension all mean "out of
+  // everything". All three nulled the pair and left the slots.
+  for (const file of ['functions/deviceSessionService.js', 'functions/passwordReset.js', 'functions/userManagement.js']) {
+    const source = read(file);
+    assert.ok(/signOutEverywhere\(\)/.test(source), file + ' must use signOutEverywhere');
+    assert.ok(!/activeSessionId: null/.test(source),
+      file + ' still nulls the legacy pair by hand, which leaves the slots standing');
+  }
+});
+
 console.log('\n' + passed + ' checks passed.\n');

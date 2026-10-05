@@ -17,13 +17,21 @@ export interface TransferResult {
   [key: string]: unknown;
 }
 
-export async function transferPoints(input: { toUid: string; amount: number; note?: string }): Promise<TransferResult> {
+/** The server's own rule, so a mistyped PIN is caught before it costs an attempt. */
+export const SECURITY_PIN_RE = /^\d{4,8}$/;
+
+export async function transferPoints(
+  input: { toUid: string; amount: number; note?: string; securityPin: string },
+): Promise<TransferResult> {
   if (!input.toUid) throw new Error('Missing recipient.');
   if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error('Enter a valid amount.');
+  // Five wrong PINs lock the account for an hour, so an obviously malformed
+  // one is stopped here rather than spent on the server.
+  if (!SECURITY_PIN_RE.test(input.securityPin)) throw new Error('Enter your 4-8 digit security PIN.');
   const requestId = createRequestId();
-  const fn = httpsCallable<{ requestId: string; toUid: string; amount: number; note: string }, TransferResult>(functions, 'transferPoints');
+  const fn = httpsCallable<{ requestId: string; toUid: string; amount: number; note: string; securityPin: string }, TransferResult>(functions, 'transferPoints');
   try {
-    const { data } = await fn({ requestId, toUid: input.toUid, amount: input.amount, note: input.note || '' });
+    const { data } = await fn({ requestId, toUid: input.toUid, amount: input.amount, note: input.note || '', securityPin: input.securityPin });
     return data;
   } catch (err) {
     throw new Error((err as Error).message || 'Could not complete the transfer.');

@@ -6,6 +6,7 @@ const { assertEmailVerified } = require('./emailVerification');
 const { assertPhoneVerified } = require('./phoneVerification');
 const mailerService = require('./mailerService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+const { platformOf, signInUpdate } = require('./sessionSlots');
 
 const TTL_MS = 10 * 60 * 1000;
 const RESEND_MS = 60 * 1000;
@@ -110,6 +111,9 @@ exports.confirmDeviceEmailOtp = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, a
   const uid = requireAuth(request);
   const deviceId = String(request.data?.deviceId || '').trim();
   const otp = String(request.data?.code || '').trim();
+  // Absent means mobile, same as everywhere else - and only the app calls
+  // this, so that is the honest default rather than a guess.
+  const platform = platformOf(request.data?.platform);
   const emailIdToken = typeof request.data?.emailIdToken === 'string' ? request.data.emailIdToken : '';
   const phoneIdToken = typeof request.data?.phoneIdToken === 'string' ? request.data.phoneIdToken : '';
   if (!deviceId || deviceId.length > 100) throw new HttpsError('invalid-argument', 'Missing or invalid device id.');
@@ -180,8 +184,12 @@ exports.confirmDeviceEmailOtp = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, a
 
       const newSessionId = crypto.randomBytes(24).toString('hex');
       tx.update(userRef, {
-        activeSessionId: newSessionId,
-        activeDeviceId: deviceId,
+        // Through signInUpdate, so this lands in THIS platform's slot and
+        // leaves the other one alone. Writing the legacy pair on its own left
+        // the account with no mobile slot at all, so the phone matched only on
+        // that pair - and the next web sign-in overwrote it and signed the
+        // phone out. Which is the whole thing the slots exist to prevent.
+        ...signInUpdate(data, platform, { sessionId: newSessionId, deviceId }),
         pendingDeviceApproval: null,
         pendingDeviceEmailChallenge: FieldValue.delete(),
         pendingDeviceEmailRate: FieldValue.delete(),
@@ -210,8 +218,8 @@ exports.confirmDeviceEmailOtp = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, a
   if (!sessionId) {
     sessionId = crypto.randomBytes(24).toString('hex');
     await userRef.update({
-      activeSessionId: sessionId,
-      activeDeviceId: deviceId,
+      // Same reason as above: the slot, not just the legacy pair.
+      ...signInUpdate(data, platform, { sessionId, deviceId }),
       pendingDeviceApproval: null,
       pendingDeviceEmailChallenge: FieldValue.delete(),
       pendingDeviceEmailRate: FieldValue.delete(),

@@ -11,7 +11,7 @@ const { getClientIp } = require('./rateLimitService');
 const { checkIpAnomaly } = require('./anomalyService');
 const mailerService = require('./mailerService');
 // A phone and a browser each get their own session slot; two phones share one.
-const { platformOf, signInUpdate } = require('./sessionSlots');
+const { platformOf, signInUpdate, signOutEverywhere } = require('./sessionSlots');
 const { webTrustDecision, WEB_TRUST_DAYS } = require('./deviceTrust');
 const { approvalDecision, responseDecision, newRequest } = require('./webSignInApproval');
 const { sendExpoPush } = require('./expoPush');
@@ -845,8 +845,9 @@ exports.adminForceLogout = onCall({ enforceAppCheck: false }, async (request) =>
       previousDeviceId = target.activeDeviceId || null;
       changed = Boolean(target.activeSessionId || target.activeDeviceId || target.pendingDeviceApproval);
       tx.update(targetRef, {
-        activeSessionId: null,
-        activeDeviceId: null,
+        // Every slot, not just the legacy pair - otherwise the phone or the
+        // browser keeps matching its own slot and is not logged out at all.
+        ...signOutEverywhere(),
         pendingDeviceApproval: null,
         pendingAdminEmailChallenge: FieldValue.delete(),
       });

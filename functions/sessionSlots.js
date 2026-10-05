@@ -112,7 +112,24 @@ function signInUpdate(profile, platform, candidate) {
   };
 }
 
+/**
+ * The fields to write when every session must end: a password reset, a
+ * suspension, an admin forcing somebody out.
+ *
+ * Needed as its own export because clearing the legacy pair stopped being
+ * enough the moment slots existed. Three places nulled activeSessionId and
+ * activeDeviceId and left `activeSessions` untouched - so sessionMatches still
+ * found a slot, and a force-logout signed nobody out of anything.
+ */
+function signOutEverywhere() {
+  return {
+    activeSessions: {},
+    activeSessionId: null,
+    activeDeviceId: null,
+  };
+}
+
 module.exports = {
   MOBILE, WEB, PLATFORMS,
-  platformOf, readSlots, legacyPair, sessionMatches, platformOfSession, signInUpdate,
+  platformOf, readSlots, legacyPair, sessionMatches, platformOfSession, signInUpdate, signOutEverywhere,
 };

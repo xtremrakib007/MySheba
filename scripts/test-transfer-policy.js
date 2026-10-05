@@ -95,5 +95,48 @@ expect('customer cannot send', client('customer', ME, { role: 'customer', dealer
 expect('support cannot send', client('support', ME, { role: 'dealer' }), false);
 expect('finance cannot send', client('finance', ME, { role: 'dealer' }), false);
 
+// ---------------------------------------------------------------------------
+// And every client that can start a transfer must collect the PIN.
+//
+// The admin site had no PIN field at all, so the server refused every transfer
+// with "Enter your 4-8 digit security PIN." and there was nowhere to enter it.
+// A page that cannot complete the only thing it does.
+// ---------------------------------------------------------------------------
+const readFile = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+
+function check(name, condition) {
+  if (condition) { console.log('  ok  ' + name); return; }
+  console.error('  FAIL  ' + name);
+  failed += 1;
+}
+
+console.log('\nBoth clients send the PIN the server demands');
+
+const transferSource = readFile('functions/secureTransfer.js');
+check('the server still requires it', /SECURITY_PIN_RE\.test\(securityPin\)/.test(transferSource));
+
+const webService = readFile('admin-web/src/services/pointTransferService.ts');
+const webPage = readFile('admin-web/src/pages/TransferPointsPage.tsx');
+
+check('the web service sends it', /securityPin: input\.securityPin/.test(webService));
+check('and will not call without one', /if \(!SECURITY_PIN_RE\.test\(input\.securityPin\)\) throw new Error/.test(webService));
+// The server's own rule, copied. Five wrong PINs lock the account for an hour,
+// so a malformed one must not reach it.
+check('the web rule is the same rule', /SECURITY_PIN_RE = \/\^\\d\{4,8\}\$\//.test(webService));
+check('the server rule is still 4-8 digits', /\/\^\\d\{4,8\}\$\//.test(transferSource + readFile('functions/walletTransferService.js')));
+
+check('the page has a field to type it in', /value=\{securityPin\}/.test(webPage));
+check('and hides it while typing', /type="password"/.test(webPage));
+check('the send button waits for it', /!securityPin\}/.test(webPage));
+check('the page passes it to the service', /transferPoints\(\{ toUid: selected\.id, amount: amt, note, securityPin \}\)/.test(webPage));
+// A wrong PIN left in the box and re-sent on a second click spends another of
+// the five attempts before the account is locked.
+check('the PIN is cleared after a failure', /setError\(\(err as Error\)\.message\);\s*setSecurityPin\(''\);/.test(webPage));
+check('and after a success', /setSearch\(''\);[\s\S]{0,300}setSecurityPin\(''\);/.test(webPage));
+
+// The app already did this; it is checked so the two cannot drift apart again.
+const appScreen = readFile('src/screens/TransferPointsScreen.js');
+check('the app sends it too', /securityPin: pinToSend/.test(appScreen));
+
 console.log(failed ? `\n${failed} failure(s).` : '\nTransfer policy: the app matches the server.');
 process.exit(failed ? 1 : 0);

@@ -4,6 +4,7 @@ import {
   subscribeAllTransfers,
   subscribeTransferRecipients,
   transferPoints,
+  SECURITY_PIN_RE,
   type PointTransfer,
   type RecipientOption,
 } from '../services/pointTransferService';
@@ -17,6 +18,10 @@ export default function TransferPointsPage() {
   const [selected, setSelected] = useState<RecipientOption | null>(null);
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
+  // The server will not move money without it. There was no field here at all,
+  // so every transfer from the admin site was refused for a PIN nobody could
+  // type - the same PIN set in the app, checked server-side either way.
+  const [securityPin, setSecurityPin] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
@@ -45,18 +50,26 @@ export default function TransferPointsPage() {
       setError('Enter a valid amount.');
       return;
     }
+    if (!SECURITY_PIN_RE.test(securityPin)) {
+      setError('Enter your 4-8 digit security PIN.');
+      return;
+    }
     setSending(true);
     setError(null);
     setResult(null);
     try {
-      await transferPoints({ toUid: selected.id, amount: amt, note });
+      await transferPoints({ toUid: selected.id, amount: amt, note, securityPin });
       setResult(`Sent ${amt} wallet funds to ${selected.name || selected.phone}.`);
       setSelected(null);
       setAmount('');
       setNote('');
       setSearch('');
+      // Never left in the field after a transfer, and never after a failed one
+      // either - a wrong PIN re-sent on a second click spends another attempt.
+      setSecurityPin('');
     } catch (err) {
       setError((err as Error).message);
+      setSecurityPin('');
     } finally {
       setSending(false);
     }
@@ -122,6 +135,21 @@ export default function TransferPointsPage() {
               placeholder="Note (optional)"
               className="w-full rounded-lg border border-[var(--color-line)] px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]"
             />
+            <input
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={8}
+              value={securityPin}
+              // Digits only: the server compares digits, so a stray letter can
+              // only ever cost one of the five attempts before a lockout.
+              onChange={(e) => setSecurityPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
+              placeholder="Security PIN"
+              className="w-full rounded-lg border border-[var(--color-line)] px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]"
+            />
+            <p className="text-xs text-[var(--color-ink-soft)]">
+              The same 4-8 digit PIN you use in the app. Set or change it there.
+            </p>
           </div>
         )}
 
@@ -129,7 +157,7 @@ export default function TransferPointsPage() {
         {result && <p className="mt-3 text-sm text-[var(--color-success)]">{result}</p>}
 
         <button
-          disabled={sending || !selected || !amount}
+          disabled={sending || !selected || !amount || !securityPin}
           onClick={handleSend}
           className="mt-4 rounded-lg bg-[var(--color-primary)] px-5 py-2 text-sm font-semibold text-white disabled:opacity-40"
         >

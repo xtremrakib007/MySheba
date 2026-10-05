@@ -6,6 +6,7 @@ const { assertPhoneVerified } = require('./phoneVerification');
 const { assertEmailVerified } = require('./emailVerification');
 const { logAudit, logServerError } = require('./logService');
 const { checkAnonymousVelocity, getClientIp } = require('./rateLimitService');
+const { signOutEverywhere } = require('./sessionSlots');
 
 function normalizePhone(phone) {
   return String(phone || '').replace(/[^0-9]/g, '');
@@ -183,7 +184,7 @@ exports.resetPassword = onCall({ enforceAppCheck: false }, async (request) => {
   }
 
   await admin.auth().revokeRefreshTokens(realUid).catch(() => {});
-  await userDoc.ref.update({ activeSessionId: null, activeDeviceId: null, pendingDeviceApproval: null }).catch(() => {});
+  await userDoc.ref.update({ ...signOutEverywhere(), pendingDeviceApproval: null }).catch(() => {});
 
   await logAudit({
     action: 'password_reset',

@@ -4,6 +4,7 @@ const { hasCapability } = require('./accessControl');
 const { assignUniqueUserId } = require('./userId');
 const { logAudit, logServerError } = require('./logService');
 const { inferWalletCurrency } = require('./walletCurrencyService');
+const { signOutEverywhere } = require('./sessionSlots');
 
 const APP_EMAIL_DOMAIN = 'mysheba.app';
 function normalizePhone(phone) { return String(phone || '').replace(/[^0-9]/g, ''); }
@@ -233,7 +234,7 @@ exports.manageUser = onCall({ enforceAppCheck: false }, async (request) => {
     catch (err) { await logServerError('manageUser.suspend', err, { userId: callerUid, targetUid }); throw new HttpsError('internal', 'Could not update the account.'); }
     try {
       await targetRef.update(suspended
-        ? { suspended: true, suspendedAt: admin.firestore.FieldValue.serverTimestamp(), suspendedBy: callerUid, activeSessionId: null, activeDeviceId: null }
+        ? { suspended: true, suspendedAt: admin.firestore.FieldValue.serverTimestamp(), suspendedBy: callerUid, ...signOutEverywhere() }
         : { suspended: false, suspendedAt: admin.firestore.FieldValue.delete(), suspendedBy: admin.firestore.FieldValue.delete() });
     } catch (err) {
       if (authUpdated) {
