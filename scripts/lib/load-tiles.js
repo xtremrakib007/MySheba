@@ -19,7 +19,7 @@ module.exports = {
   TILE_CATEGORIES, groupTilesByCategory, categoryMeta,
   CUSTOMER_SERVICES, STAFF_SERVICES, STAFF_CAPABILITY_TILES, STAFF_ROLES,
   servicesForRole, visibleTiles, overflowTiles, moreFeaturesSections, withWebviewConfig, gridKeyFor,
-  PERSONAL_FEATURES, STAFF_FEATURES, applyTileLabels, editableTiles, ADMIN_HOME,
+  PERSONAL_FEATURES, STAFF_FEATURES, applyTileLabels, editableTiles, ADMIN_HOME, adminLandingTiles,
 };`)(mod, {});
 
 module.exports = mod.exports;

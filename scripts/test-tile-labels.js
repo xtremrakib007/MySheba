@@ -47,8 +47,15 @@ const grid = read('src/components/ServiceGrid.js');
 // reading THAT as a choice hid the picture on every WebView tile.
 assert(/const emojiWasChosen = !!chosenEmoji && s\?\.art === '';/.test(grid),
   'only an emoji somebody chose may beat the tile artwork');
-assert(/const artKey = asSafeText\(s\?\.art, ''\) \|\| \(emojiWasChosen \? '' : asSafeText\(s\?\.key, icon\)\)/.test(grid),
+assert(/const chosenArt = asSafeText\(s\?\.art, ''\);/.test(grid),
+  'a chosen art name must be told apart from one the key implies');
+assert(/const artKey = chosenArt \|\| \(emojiWasChosen \? '' : asSafeText\(s\?\.key, icon\)\)/.test(grid),
   'the tile must prefer a chosen icon over the one its key implies');
+// ...and a chosen DRAWING must stay a drawing. Looking a picture up from a
+// chosen name turned an override saved before the icon pack existed into a
+// silent veto over everything the pack ships.
+assert(/\(chosenArt \? '' : photoIconFor\(artKey\)\)/.test(grid),
+  'a picture may only be found from the key when nothing was chosen');
 const feature = read('src/components/FeatureGrid.js');
 assert(/hasServiceArt\(it\.art \|\| \(it\.emoji \? '' : it\.key\)\)/.test(feature),
   'and so must the admin landing grid');

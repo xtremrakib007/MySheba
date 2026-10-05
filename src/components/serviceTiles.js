@@ -101,8 +101,7 @@ const CUSTOMER_SERVICES = [
   { key: 'entertainment', icon: 'entertainment', name: 'Entertainment', kind: 'service', cat: 'recharge' },
   { key: 'visa', icon: 'visa', name: 'Visa', kind: 'webview', cat: 'immigration' },
   { key: 'fomema', icon: 'fomema', name: 'FOMEMA', kind: 'webview', cat: 'immigration' },
-  { key: 'salary', icon: 'salary', name: 'Salary & Payslip', kind: 'salary', cat: 'personal' },
-  { key: 'documents', icon: 'passport', name: 'Documents', kind: 'documents', cat: 'personal' },
+  { key: 'salary', icon: 'salary', name: 'Salary & OT', kind: 'salary', cat: 'personal' },
 ];
 
 // The services every role can actually use. A dealer still sells a top-up
@@ -278,6 +277,22 @@ function normaliseUrl(url) {
     .replace(/\/+$/, '');
 }
 
+/**
+ * The custom pages that are not a built-in under another name.
+ *
+ * Shared, because there are TWO places that turn stored pages into tiles - the
+ * service grids and the superadmin landing - and fixing one of them left the
+ * duplicate standing on the other. Which is exactly what happened.
+ */
+function customPagesBeyond(pages, builtInKeys) {
+  const taken = new Set(
+    builtInKeys.map((key) => normaliseUrl(pages[key] && pages[key].url)).filter(Boolean),
+  );
+  return Object.values(pages)
+    .filter((p) => p.custom && p.active !== false)
+    .filter((p) => !taken.has(normaliseUrl(p.url)));
+}
+
 export function withWebviewConfig(list, webviewPages) {
   const pages = webviewPages || {};
   const overlaid = list
@@ -307,14 +322,7 @@ export function withWebviewConfig(list, webviewPages) {
   //
   // Matched on the address rather than the name, because the name is the half
   // somebody renamed. A custom page going somewhere of its own is untouched.
-  const builtInUrls = new Set(
-    overlaid.filter((item) => item.kind === 'webview')
-      .map((item) => normaliseUrl(pages[item.key] && pages[item.key].url))
-      .filter(Boolean),
-  );
-  const extra = Object.values(pages)
-    .filter((p) => p.custom && p.active !== false)
-    .filter((p) => !builtInUrls.has(normaliseUrl(p.url)))
+  const extra = customPagesBeyond(pages, overlaid.filter((item) => item.kind === 'webview').map((item) => item.key))
     .map((p) => ({ key: p.key, icon: p.icon || 'moreFeaturesTile', emoji: p.icon || '', name: p.name, kind: 'webview', home: p.home !== false }));
   return [...overlaid, ...extra];
 }
@@ -355,8 +363,7 @@ export const ADMIN_HOME = [
   { key: 'passport', icon: '\uD83D\uDCD9', name: 'Passport', service: { key: 'passport', kind: 'webview' } },
   { key: 'fomema', icon: '\uD83E\uDE7A', name: 'FOMEMA', service: { key: 'fomema', kind: 'webview' } },
 
-  { key: 'salary', icon: '\uD83D\uDCB5', name: 'Salary & Payslip', service: { key: 'salary', kind: 'salary' } },
-  { key: 'documents', icon: '\uD83D\uDCC4', name: 'Documents', service: { key: 'documents', kind: 'documents' } },
+  { key: 'salary', icon: '\uD83D\uDCB5', name: 'Salary & OT', service: { key: 'salary', kind: 'salary' } },
   { key: 'moreFeaturesTile', icon: '\u2728', name: 'More Features', screen: 'moreFeatures' },
 ];
 
@@ -383,7 +390,10 @@ export function adminLandingTiles(webviewPages, hasArt = () => false, tileLabels
   const overlaid = ADMIN_HOME
     .filter((item) => !(item.service && item.service.kind === 'webview' && pages[item.key] && pages[item.key].active === false))
     .map((item) => (item.service && item.service.kind === 'webview' && pages[item.key] ? { ...item, ...tileFor(pages[item.key]) } : item));
-  const extra = Object.values(pages).filter((p) => p.custom && p.active !== false).map(tileFor);
+  const extra = customPagesBeyond(
+    pages,
+    ADMIN_HOME.filter((item) => item.service && item.service.kind === 'webview').map((item) => item.key),
+  ).map(tileFor);
   return applyTileLabels([...overlaid, ...extra], tileLabels);
 }
 

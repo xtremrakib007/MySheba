@@ -121,6 +121,34 @@ test('both grids check for a picture before a drawing', () => {
     'the admin grid must check it first too');
 });
 
+test('a chosen drawing stays a drawing', () => {
+  // Looking a picture up from a CHOSEN name turned an explicit choice of the
+  // `walletTransfer` drawing into the `photoWalletTransfer` picture. So a Tile
+  // Labels override saved before the pack existed quietly beat the pack, and
+  // that tile kept its old artwork no matter what shipped - which looks
+  // exactly like an update that never arrived.
+  const service = read('src/components/ServiceGrid.js');
+  assert.ok(/const chosenArt = asSafeText\(s\?\.art, ''\);/.test(service),
+    'a chosen art name must be told apart from one found from the key');
+  assert.ok(/hasPhotoTileIcon\(artKey\) \? artKey : \(chosenArt \? '' : photoIconFor\(artKey\)\)/.test(service),
+    'a picture may only be FOUND from the key when nothing was chosen');
+
+  // The rule, replayed on the three cases that matter.
+  const resolve = (tile) => {
+    const chosenEmoji = tile.emoji || '';
+    const emojiWasChosen = !!chosenEmoji && tile.art === '';
+    const chosenArt = tile.art || '';
+    const artKey = chosenArt || (emojiWasChosen ? '' : (tile.key || ''));
+    return artNames.has(artKey) ? artKey : (chosenArt ? '' : photoIconFor(artKey));
+  };
+  assert.strictEqual(resolve({ key: 'tngewallet', art: 'photoTngewallet' }), 'photoTngewallet',
+    'a picture named outright is used');
+  assert.strictEqual(resolve({ key: 'tngewallet' }), 'photoTngewallet',
+    'and is found from the key when nothing was chosen');
+  assert.strictEqual(resolve({ key: 'tngewallet', art: 'walletTransfer' }), '',
+    'a chosen DRAWING must not be swapped for the picture that shares its name');
+});
+
 test('a superadmin choosing an icon still wins', () => {
   // Tile Labels works by setting `art` or `emoji`. If the key lookup ignored
   // those, that screen would silently do nothing on every tile in this pack.

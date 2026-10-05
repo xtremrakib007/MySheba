@@ -45,11 +45,18 @@ export function Tile({ s, onPress, disabled }) {
   // FOMEMA, Arrival Card, Passport and Train all drew their default emoji and
   // none of them reached the picture sitting in assets/tiles under their key.
   const emojiWasChosen = !!chosenEmoji && s?.art === '';
-  const artKey = asSafeText(s?.art, '') || (emojiWasChosen ? '' : asSafeText(s?.key, icon));
-  // Supplied artwork for this tile, either chosen by name in Tile Labels or
-  // found from the tile's own key. Checked before the drawings: a tile with a
+  const chosenArt = asSafeText(s?.art, '');
+  const artKey = chosenArt || (emojiWasChosen ? '' : asSafeText(s?.key, icon));
+  // Supplied artwork for this tile: a picture named outright, or one found from
+  // the tile's own key. Checked before the drawings, because a tile with a
   // picture of its own should show it rather than the generic vector.
-  const photoKey = hasPhotoTileIcon(artKey) ? artKey : photoIconFor(artKey);
+  //
+  // A picture is only FOUND from the key when nothing was chosen. Looking one
+  // up from a chosen name turned an explicit choice of the `walletTransfer`
+  // DRAWING into the `photoWalletTransfer` picture - so a Tile Labels override
+  // saved before the pack existed quietly overrode the pack, and the tile kept
+  // showing the old artwork no matter what shipped.
+  const photoKey = hasPhotoTileIcon(artKey) ? artKey : (chosenArt ? '' : photoIconFor(artKey));
   return <TouchableOpacity style={[styles.item, { borderColor: `${colors.primary}66`, backgroundColor: colors.card }, disabled && styles.itemDisabled]} activeOpacity={0.82} disabled={!!disabled} onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
     {photoKey
       ? <View style={styles.logoWrap}><PhotoTileIcon art={photoKey} size={tileIcon.size} /></View>

@@ -341,6 +341,72 @@ for (const role of ['admin', 'superadmin', 'dealer']) {
   assert.deepStrictEqual(shared, [], 'two built-in pages open one address: ' + shared.join('; '));
 }
 
+// A kind that is not a service IS the destination: `documents` and
+// `myDocuments` are different keys for one screen, and comparing keys could
+// never see it. Checked across everything a superadmin reaches, because the
+// landing grid is a third list and the first version of this check only knew
+// about two.
+{
+  // Every role, not just the one that has the most lists: a tile renamed in
+  // the customer catalogue is the same confusion for a customer.
+  const landing = tiles.adminLandingTiles({}, () => false, {})
+    .map((t) => ({ ...t, kind: (t.service && t.service.kind) || t.kind }));
+  const everything = [...landing];
+  for (const role of EVERY_ROLE) {
+    const { sections, account } = moreFeaturesSections({ role, can: () => true });
+    everything.push(
+      ...visibleTiles({ role, can: () => true, homeOnly: true }),
+      ...sections.flatMap((s) => s.tiles || []),
+      ...account,
+    );
+  }
+  everything.push(...tiles.CUSTOMER_SERVICES);
+
+  const SCREEN_KINDS = ['documents', 'salary', 'history', 'myaccount', 'kyc', 'profile', 'support'];
+  const byScreen = {};
+  const namesFor = {};
+  for (const tile of everything) {
+    if (!SCREEN_KINDS.includes(tile.kind)) continue;
+    (byScreen[tile.kind] = byScreen[tile.kind] || new Set()).add(tile.key);
+    (namesFor[tile.key] = namesFor[tile.key] || new Set()).add(tile.name);
+  }
+  const twice = Object.entries(byScreen).filter(([, keys]) => keys.size > 1)
+    .map(([kind, keys]) => `${kind} <- ${[...keys].join(' and ')}`);
+  assert.deepStrictEqual(twice, [], 'one screen reached by two tiles: ' + twice.join('; '));
+  assert(Object.keys(namesFor).length > 3, 'this check must actually be seeing tiles');
+
+  // One key under two names is the same confusion a step earlier: somebody
+  // reads "Salary & OT" in one place and "Salary & Payslip" in another and
+  // reasonably expects two different things.
+  const renamed = Object.entries(namesFor).filter(([, names]) => names.size > 1)
+    .map(([key, names]) => `${key} is called ${[...names].join(' and ')}`);
+  assert.deepStrictEqual(renamed, [], 'one tile under two names: ' + renamed.join('; '));
+}
+
+// A custom WebView page at a built-in's address is that built-in again - on
+// BOTH lists that build webview tiles. Fixing only the customer one left the
+// duplicate standing on the superadmin landing, which is where it was seen.
+{
+  const url = 'https://eservices.imi.gov.my/myimms/VPAStsInq';
+  const pages = {
+    visa: { key: 'visa', name: 'Visa Status Inquiry', url, icon: '\uD83D\uDEC2', active: true, home: true, custom: false },
+    // Trailing slash and scheme differ, which is how the same page gets added
+    // twice without anybody noticing.
+    visaAgain: { key: 'visaAgain', name: 'Visa', url: url.replace('https://', 'http://') + '/', icon: '\uD83D\uDEC2', active: true, home: true, custom: true },
+    helpdesk: { key: 'helpdesk', name: 'Helpdesk', url: 'https://help.example.test', icon: '\uD83C\uDD98', active: true, home: true, custom: true },
+  };
+  const customerKeys = tiles.withWebviewConfig(tiles.CUSTOMER_SERVICES, pages)
+    .filter((t) => t.kind === 'webview').map((t) => t.key);
+  const landingKeys = tiles.adminLandingTiles(pages, () => false, {})
+    .filter((t) => t.service && t.service.kind === 'webview').map((t) => t.key);
+
+  for (const [where, keys] of [['the service grid', customerKeys], ['the superadmin landing', landingKeys]]) {
+    assert(keys.includes('visa'), `the built-in keeps its place on ${where}`);
+    assert(!keys.includes('visaAgain'), `a custom page at the same address must not be a second tile on ${where}`);
+    assert(keys.includes('helpdesk'), `a custom page of its own must survive on ${where}`);
+  }
+}
+
 // A custom WebView page at a built-in's address is that built-in again.
 {
   const url = 'https://eservices.imi.gov.my/myimms/VPAStsInq';
