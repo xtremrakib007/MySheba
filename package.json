@@ -71,6 +71,7 @@
     "test:capabilities": "node scripts/test-capabilities.js",
     "test:invoices": "node scripts/test-invoices.js",
     "test:weblogin": "node scripts/test-web-login.js",
+    "test:pushdelivery": "node scripts/test-push-delivery.js",
     "test:funding": "node scripts/test-wallet-funding.js",
     "test:operator": "node scripts/test-operator-detect.js",
     "test:deploytargets": "node scripts/test-deploy-targets.js",

@@ -4,13 +4,15 @@ const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 const admin = require('firebase-admin');
 const { hasCapability } = require('./accessControl');
 const { logAudit, logServerError } = require('./logService');
+// One sender for every push path, and the only one that reads Expo's per-message
+// tickets. The copy that used to live here reported the number of messages it
+// composed as if that were the number delivered.
+const { sendExpoPush, describePush } = require('./expoPush');
 // Staff who may hold the 'support' capability (functions/accessControl.js).
 const ADMIN_ROLES=['admin','superadmin','support','finance'];
 const AUDIENCES=['all','customer','dealer','reseller','support','finance','admin','superadmin'];
-const EXPO_PUSH_URL='https://exp.host/--/api/v2/push/send';
-function chunk(arr,size){const out=[];for(let i=0;i<arr.length;i+=size)out.push(arr.slice(i,i+size));return out;}
 function clean(v,max){return typeof v==='string'?v.trim().slice(0,max):'';}
-async function sendExpoPush(messages){const valid=messages.filter(m=>m&&m.to);for(const batch of chunk(valid,100)){try{const res=await fetch(EXPO_PUSH_URL,{method:'POST',headers:{'content-type':'application/json',accept:'application/json'},body:JSON.stringify(batch.map(m=>({sound:'default',...m})))});if(!res.ok)console.error('Expo push HTTP error',res.status,await res.text());}catch(e){console.error('Expo push send failed',e);}}}
+
 exports.sendAnnouncement=onCall({enforceAppCheck: ENFORCE_APP_CHECK},async(request)=>{
  if(!request.auth)throw new HttpsError('unauthenticated','You must be signed in.');
  const db=admin.firestore(),callerUid=request.auth.uid,callerSnap=await db.collection('users').doc(callerUid).get(),callerProfile=callerSnap.exists?callerSnap.data():null;
@@ -23,6 +25,10 @@ exports.sendAnnouncement=onCall({enforceAppCheck: ENFORCE_APP_CHECK},async(reque
  if(!safeTitle)throw new HttpsError('invalid-argument','A title is required.');if(!safeBody)throw new HttpsError('invalid-argument','A message is required.');if(!AUDIENCES.includes(audience))throw new HttpsError('invalid-argument','Choose a valid audience.');
  try{const usersQuery=audience==='all'?db.collection('users'):db.collection('users').where('role','==',audience);const usersSnap=await usersQuery.get();const messages=[];let matched=0;usersSnap.forEach(doc=>{matched++;const u=doc.data();if(u.suspended===true||u.inactive===true||u.disabled===true||u.active===false||u.mergedInto)return;if(!u.pushToken||u.notifPrefs?.pushEnabled===false)return;messages.push({to:u.pushToken,title:safeTitle,body:safeBody,data:{type:'announcement'}});});const finalCallerSnap=await db.collection('users').doc(callerUid).get();const finalCaller=finalCallerSnap.exists?finalCallerSnap.data():null;
  if(!finalCaller||!ADMIN_ROLES.includes(finalCaller.role)||finalCaller.suspended===true||finalCaller.inactive===true||finalCaller.disabled===true||finalCaller.active===false||finalCaller.mergedInto)throw new HttpsError('permission-denied','Your account is no longer authorized to send announcements.');
- await sendExpoPush(messages);const logRef=await db.collection('announcements').add({title:safeTitle,body:safeBody,audience,matchedCount:matched,sentCount:messages.length,sentBy:callerUid,sentByName:clean(finalCaller.name,200),createdAt:admin.firestore.FieldValue.serverTimestamp()});await logAudit({action:'announcement_sent',targetUid:null,performedBy:callerUid,performedByRole:finalCaller.role,details:{audience,matchedCount:matched,sentCount:messages.length}});return{id:logRef.id,audience,matchedCount:matched,sentCount:messages.length};}
+ const push=await sendExpoPush(messages);
+ // Stop sending to installs Expo says are gone. Without this the same dead
+ // tokens fail on every future broadcast and the failure count never drops.
+ if(push.unregistered.length){const stale=push.unregistered.slice(0,400);await Promise.all(stale.map(async(token)=>{try{const owners=await db.collection('users').where('pushToken','==',token).limit(5).get();await Promise.all(owners.docs.map(d=>d.ref.update({pushToken:admin.firestore.FieldValue.delete(),pushTokenClearedAt:admin.firestore.FieldValue.serverTimestamp(),pushTokenClearedReason:'DeviceNotRegistered'})));}catch(e){console.error('Could not clear a dead push token',e);}}));}
+ const logRef=await db.collection('announcements').add({title:safeTitle,body:safeBody,audience,matchedCount:matched,sentCount:messages.length,deliveredCount:push.accepted,failedCount:push.failed,pushErrors:push.errors,sentBy:callerUid,sentByName:clean(finalCaller.name,200),createdAt:admin.firestore.FieldValue.serverTimestamp()});await logAudit({action:'announcement_sent',targetUid:null,performedBy:callerUid,performedByRole:finalCaller.role,details:{audience,matchedCount:matched,sentCount:messages.length}});return{id:logRef.id,audience,matchedCount:matched,sentCount:messages.length,deliveredCount:push.accepted,failedCount:push.failed,pushErrors:push.errors,delivery:describePush(push)};}
  catch(err){if(err instanceof HttpsError)throw err;await logServerError('sendAnnouncement',err,{userId:callerUid});throw new HttpsError('internal','Could not send the announcement.');}
 });

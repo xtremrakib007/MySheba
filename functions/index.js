@@ -151,10 +151,11 @@ exports.rejectTransaction = require('./rejectionService').rejectTransaction;
 exports.assignDealer = require('./transactionService').assignDealer;
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
-const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const ADMIN_ROLES = ['admin', 'superadmin'];
-function chunk(arr, size) { const out = []; for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size)); return out; }
-async function sendExpoPush(messages) { const valid = messages.filter(m => m && m.to); for (const batch of chunk(valid, 100)) { try { const res = await fetch(EXPO_PUSH_URL, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify(batch.map(m => ({ sound: 'default', ...m }))) }); if (!res.ok) console.error('Expo push HTTP error', res.status, await res.text()); } catch (e) { console.error('Expo push send failed', e); } } }
+// Imported rather than defined here: this was the second copy, and it had the
+// same blind spot - Expo answers HTTP 200 with per-message error tickets, so
+// checking only res.ok reports a failed push as a sent one.
+const { sendExpoPush } = require('./expoPush');
 async function getUserPushTarget(uid) { if (!uid) return null; const snap = await db.collection('users').doc(uid).get(); if (!snap.exists) return null; const d = snap.data(); if (!d.pushToken || (d.notifPrefs && d.notifPrefs.pushEnabled === false)) return null; if (d.suspended === true || d.inactive === true || d.disabled === true || d.active === false || d.mergedInto) return null; return d.pushToken; }
 async function notifyUser(uid, title, body, data, extra) { const token = await getUserPushTarget(uid); if (token) await sendExpoPush([{ to: token, title, body, data: data || {}, ...(extra || {}) }]); }
 async function notifyRoles(roles, title, body, data) { const snap = await db.collection('users').where('role', 'in', roles).get(); const messages = []; snap.forEach(doc => { const u = doc.data(); if (u.suspended === true || u.inactive === true || u.disabled === true || u.active === false || u.mergedInto) return; if (u.pushToken && !(u.notifPrefs && u.notifPrefs.pushEnabled === false)) messages.push({ to: u.pushToken, title, body, data: data || {} }); }); await sendExpoPush(messages); }
