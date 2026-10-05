@@ -9,6 +9,7 @@ import { useTheme } from '../theme/ThemeContext';
 import HeaderDecor from './HeaderDecor';
 import VerifiedBadge from './VerifiedBadge';
 import Constants from 'expo-constants';
+import * as Updates from 'expo-updates';
 import { showAlert } from '../utils/appAlert';
 import { useAppSync } from './useAppSync';
 import ServiceIcon from './ServiceIcon';
@@ -19,6 +20,33 @@ import ServiceIcon from './ServiceIcon';
 import ServiceArt from './ServiceArt';
 
 const APP_VERSION = (Constants.expoConfig?.version || '1.0.0').split('.').slice(0, 3).join('.');
+
+/**
+ * Which bundle this app is actually running.
+ *
+ * The version number cannot answer that: an OTA changes the JavaScript and
+ * leaves the version alone, so a phone on last week's bundle and a phone on
+ * today's both read v5.4.1. The only way to tell them apart was to look for a
+ * change and guess - which is how "that fix did not arrive" and "that fix was
+ * never published" became the same sentence.
+ *
+ * Updates.createdAt is when the running bundle was published; it is null on a
+ * build running its own bundled JavaScript, which is itself worth saying.
+ */
+function bundleLabel() {
+  try {
+    const published = Updates.createdAt;
+    if (!published) return 'built in';
+    const d = new Date(published);
+    if (Number.isNaN(d.getTime())) return '';
+    const pad = (v) => String(v).padStart(2, '0');
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  } catch (e) {
+    // expo-updates is not available in every environment. A missing line is
+    // better than a sidebar that will not open.
+    return '';
+  }
+}
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DRAWER_WIDTH = Math.min(360, SCREEN_WIDTH * 0.9);
 const ROLE_LABEL = { customer: 'Customer', dealer: 'Dealer', reseller: 'Reseller', admin: 'Admin', superadmin: 'Super Admin' };
@@ -277,7 +305,9 @@ export default function Sidebar() {
               <Image source={require('../../assets/icon-transparent.png')} style={styles.brandLogo} resizeMode="contain" />
               <View><View style={styles.brandRow}><Text style={styles.brandDark}>My</Text><Text style={styles.brandTeal}>Sheba</Text></View><Text style={styles.brandCompany}>SatuLink Solutions Sdn Bhd</Text></View>
             </View>
-            <Text style={styles.brandVersion}>v{APP_VERSION}</Text>
+            <Text style={styles.brandVersion}>
+              v{APP_VERSION}{bundleLabel() ? `  ·  ${bundleLabel()}` : ''}
+            </Text>
           </View>
           <View style={[styles.footer, { paddingBottom: insets.bottom + 17 }]}><TouchableOpacity style={styles.syncRow} onPress={onSync} activeOpacity={0.8} disabled={syncing} accessibilityRole="button" accessibilityLabel="Refresh and check for updates"><View style={styles.logoutIcon}><Text style={[styles.syncIcon, { color: colors.primary }]}>↻</Text></View><Text style={[styles.syncLabel, { color: colors.text }]}>{syncing ? 'Refreshing…' : 'Refresh & check for updates'}</Text></TouchableOpacity><TouchableOpacity style={styles.logoutRow} onPress={onLogout} activeOpacity={0.8}><View style={styles.logoutIcon}><ServiceIcon name="profile" size={18} color={colors.danger || '#B00020'} /></View><Text style={styles.logoutLabel}>Logout</Text><Text style={styles.logoutArrow}>→</Text></TouchableOpacity></View>
         </Animated.View>

@@ -89,4 +89,31 @@ assert(/if \(build\.status !== 0\)/.test(web), 'a failed build must stop the dep
 assert(web.indexOf('requireCurrentCheckout(') < web.indexOf("spawnSync('npm'"),
   'the checkout is checked before anything is built');
 
+// ---------------------------------------------------------------------------
+// An OTA changes the JavaScript and leaves the version number alone, so two
+// phones on different bundles both read the same version. Without something
+// that says WHICH bundle is running, "that fix did not arrive" and "that fix
+// was never published" are the same sentence.
+// ---------------------------------------------------------------------------
+const sidebar = readFile('src/components/Sidebar.js');
+assert(/import \* as Updates from 'expo-updates';/.test(sidebar), 'the sidebar must be able to ask');
+assert(/const published = Updates\.createdAt;/.test(sidebar),
+  'it must read when the RUNNING bundle was published, not the version');
+assert(/if \(!published\) return 'built in';/.test(sidebar),
+  'a build running its own bundle must say so rather than look like an update');
+assert(/\$\{bundleLabel\(\)\}/.test(sidebar), 'and it must be on screen');
+// A sidebar that cannot open is worse than a missing line.
+assert(/\} catch \(e\) \{[\s\S]*?return '';/.test(sidebar), 'it must survive expo-updates being unavailable');
+
+// The update settings this relies on: the app waits briefly on launch for a
+// new bundle, so one cold start is enough. Lose that and an update needs two.
+const base = JSON.parse(readFile('app.base.json')).expo;
+assert.strictEqual(base.updates.checkAutomatically, 'ON_LOAD', 'the app must look for an update on launch');
+assert(base.updates.fallbackToCacheTimeout > 0,
+  'with a 0 timeout the new bundle only applies on the SECOND cold start');
+// Tied to the SDK, not the app version - a version bump must not strand every
+// installed app on its old bundle.
+assert.strictEqual(base.runtimeVersion.policy, 'sdkVersion',
+  'a runtimeVersion tied to the app version would silently refuse every OTA after a bump');
+
 console.log(`deploy targets: PASS (${group.length} of ${exported.size} functions carry the API code)`);
