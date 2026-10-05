@@ -315,4 +315,35 @@ test('both clients call the same callables rather than copying the rules', () =>
   }
 });
 
+
+console.log('\nAnd the filter works once there are invoices to filter');
+
+test('the kind filter has the index its query needs', () => {
+  // listInvoices filters by kind and orders by createdAt, which Firestore
+  // cannot answer without a composite index. Without it the chips do not
+  // return a narrower list - they fail, and only once somebody uses them.
+  const service = read('functions/invoiceService.js');
+  assert.ok(/where\('kind', '==', kind\)\.orderBy\('createdAt', 'desc'\)/.test(service),
+    'the query this index exists for must still be the query that runs');
+
+  const defined = JSON.parse(read('firestore.indexes.json')).indexes
+    .find((index) => index.collectionGroup === 'invoices');
+  assert.ok(defined, 'invoices has no index defined');
+  assert.deepStrictEqual(
+    defined.fields.map((f) => f.fieldPath + ' ' + f.order),
+    ['kind ASCENDING', 'createdAt DESCENDING'],
+    'the index must match the query: equality first, then the sort',
+  );
+});
+
+test('the rules deploy sends the indexes too', () => {
+  // An index that only exists in this repo is the same failure as a rule that
+  // only exists in this repo, and it looks the same to the person using it.
+  const deploy = read('scripts/deploy-rules.js');
+  assert.ok(/'--only', 'firestore:rules,firestore:indexes'/.test(deploy),
+    'deploy:rules must send the indexes alongside the rules');
+  assert.ok(/shipPaths: \['firestore\.rules', 'firestore\.indexes\.json'\]/.test(deploy),
+    'and must refuse a checkout that is stale in either file');
+});
+
 console.log('\n' + passed + ' checks passed.\n');
