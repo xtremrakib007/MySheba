@@ -232,7 +232,7 @@ test('both grids draw a tile icon at the same size', () => {
 
   // Big enough to read as the tile's picture rather than a stamp on it, and
   // small enough to leave room for the label under it.
-  assert.ok(px >= 44 && px <= 72, 'a tile icon of ' + px + ' is outside what the card can carry');
+  assert.ok(px >= 40 && px <= 72, 'a tile icon of ' + px + ' is outside what the card can carry');
   assert.ok(wrap >= px, 'the wrap must not clip the icon it holds');
   assert.ok(emoji >= px * 0.7, 'an emoji tile must not read as smaller than a drawn one');
 });

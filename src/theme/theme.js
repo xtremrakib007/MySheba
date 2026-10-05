@@ -114,8 +114,12 @@ export const radius = { sm: 8, md: 12, lg: 16, xl: 22, tile: 18, card: 22, sheet
  * wide, and the artwork is meant to be the tile rather than a stamp in the
  * corner of it. The wrap is a few points taller so a drawing and a picture sit
  * on the same baseline whatever their own proportions are.
+ *
+ * Came down from 52 after seeing it on a phone: at 52 a nine-tile grid was
+ * almost all artwork and the labels had to fight for the row under it. Still
+ * well above the 32 it was before any of this.
  */
-export const tileIcon = { size: 52, wrap: 56, emoji: 44 };
+export const tileIcon = { size: 44, wrap: 48, emoji: 38 };
 
 // Soft, colour-tinted elevation rather than a neutral black shadow, which
 // on the tinted surfaces here reads as grime. Used by the cards the home
