@@ -201,6 +201,34 @@ test('the callables are actually registered', () => {
 
 console.log('\nThe screen reaches it');
 
+test('every staff grid that should have it, has it', () => {
+  // The capability tile covers support and finance. Admin and superadmin read
+  // their own arrays instead, and the superadmin one was missed - the feature
+  // was built, deployed and invisible to the person who owns the system.
+  const tiles = read('src/components/serviceTiles.js');
+  for (const role of ['admin', 'superadmin']) {
+    const block = new RegExp('\\n  ' + role + ': \\[([\\s\\S]*?)\\n  \\],').exec(tiles);
+    assert.ok(block, role + ' grid must be findable');
+    assert.ok(/kind: 'staffInvoices'/.test(block[1]), role + ' has no Invoices tile');
+  }
+  // And not where it does not belong: these roles hold no finance capability.
+  for (const role of ['dealer', 'reseller']) {
+    const block = new RegExp('\\n  ' + role + ': \\[([\\s\\S]*?)\\n  \\],').exec(tiles);
+    if (block) assert.ok(!/staffInvoices/.test(block[1]), role + ' must not see Invoices');
+  }
+});
+
+test('the Admin Features hub lists it, gates it, and routes it', () => {
+  // Three separate lists in one file, and a tile added to only the first is a
+  // tile that renders and does nothing when tapped.
+  const hub = read('src/screens/AdminFeaturesScreen.js');
+  assert.ok(/key: 'invoices'[^}]*name: 'Invoices'/.test(hub), 'no hub tile');
+  assert.ok(/invoices: \['finance', 'reports'\]/.test(hub), 'no capability gate');
+  const routes = /const SCREEN_FEATURES = \[([^\]]*)\]/.exec(hub);
+  assert.ok(routes, 'SCREEN_FEATURES must be findable');
+  assert.ok(/'invoices'/.test(routes[1]), 'the hub tile leads nowhere');
+});
+
 test('the tile exists for finance and for reports', () => {
   const tiles = read('src/components/serviceTiles.js');
   assert.ok(/key: 'invoices'[^}]*kind: 'staffInvoices'[^}]*needs: \['finance', 'reports'\]/.test(tiles),

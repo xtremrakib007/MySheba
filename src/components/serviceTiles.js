@@ -152,6 +152,7 @@ const STAFF_SERVICES = {
     { key: 'topup', icon: '💰', name: 'Top-Ups', kind: 'adminTopup', cat: 'manage', home: true },
     { key: 'history', icon: '📋', name: 'Transactions', kind: 'history', cat: 'manage', home: true },
     { key: 'support', icon: '🎧', name: 'Support', kind: 'support', cat: 'manage', home: true },
+    { key: 'invoices', icon: '🧾', name: 'Invoices', kind: 'staffInvoices', cat: 'manage', home: true },
     { key: 'myAccount', icon: '👤', name: 'My Account', kind: 'myaccount', cat: 'personal' },
     { key: 'profile', icon: '🪪', name: 'Profile', kind: 'profile', cat: 'personal' },
   ],

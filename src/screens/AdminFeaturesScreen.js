@@ -42,6 +42,7 @@ const FINANCE = [
   { key: 'pricing', icon: '🏷️', bg: '#FFF3E0', name: 'Pricing' },
   { key: 'payments', icon: '💳', bg: '#E1F5FE', name: 'Payments' },
   { key: 'transferPoints', icon: '↔️', bg: '#E8F5E9', name: 'Transfers' },
+  { key: 'invoices', icon: '🧾', bg: '#FFF8E1', name: 'Invoices' },
 ];
 const USERS = [
   { key: 'userManagement', icon: '👥', bg: '#E3F2FD', name: 'Users' },
@@ -66,6 +67,10 @@ const CAPABILITY_FOR = {
   support: ['support'], adminAnalytics: ['reports'],
   rates: ['settings'], pricing: ['settings'], payments: ['settings'], categories: ['settings'], banners: ['settings'],
   transferPoints: ['finance'],
+  // 'reports' as well, matching the callable: reading what was paid out is a
+  // reporting question, and reading grants nothing - raising and approving are
+  // both gated on 'finance' server-side.
+  invoices: ['finance', 'reports'],
   userManagement: ['users'], verificationManagement: ['users'],
   announcements: ['support'],
 };
@@ -104,7 +109,7 @@ const RECHARGE_RATE_FIELDS = [
 // a tab that does not exist. gridManagement and apiManagement were already
 // special-cased by hand in openItem; folding them in gives one path, so the
 // navigation audit reads a single list instead of chasing special cases.
-const SCREEN_FEATURES = ['adminAnalytics', 'transferPoints', 'userManagement', 'verificationManagement', 'featureAccess', 'gridManagement', 'webviewManagement', 'apiManagement'];
+const SCREEN_FEATURES = ['adminAnalytics', 'transferPoints', 'invoices', 'userManagement', 'verificationManagement', 'featureAccess', 'gridManagement', 'webviewManagement', 'apiManagement'];
 // Where the tile key and the screen name differ.
 const SCREEN_FOR = { apiManagement: 'apiProviderManagement' };
 
