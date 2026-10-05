@@ -49,6 +49,25 @@ const PHOTO_ICONS = {
   photoUserManagement: require('../../assets/tiles/userManagement.png'),
   photoVerificationManagement: require('../../assets/tiles/verificationManagement.png'),
   photoAdminSupport: require('../../assets/tiles/adminSupport.png'),
+  photoAdminFeatures: require('../../assets/tiles/adminFeatures.png'),
+  photoDealerFeatures: require('../../assets/tiles/dealerFeatures.png'),
+  photoResellerFeatures: require('../../assets/tiles/resellerFeatures.png'),
+  photoReports: require('../../assets/tiles/reports.png'),
+  photoInquiries: require('../../assets/tiles/inquiries.png'),
+  photoHistory: require('../../assets/tiles/history.png'),
+  photoTopup: require('../../assets/tiles/topup.png'),
+  photoInvoices: require('../../assets/tiles/invoices.png'),
+  photoWalletTransfer: require('../../assets/tiles/walletTransfer.png'),
+
+  // ---- a person's own account ----
+  photoMyAccount: require('../../assets/tiles/myAccount.png'),
+  photoProfile: require('../../assets/tiles/profile.png'),
+  photoKyc: require('../../assets/tiles/kyc.png'),
+  photoSupport: require('../../assets/tiles/support.png'),
+  photoSalary: require('../../assets/tiles/salary.png'),
+  photoMyDocuments: require('../../assets/tiles/myDocuments.png'),
+  photoDocuments: require('../../assets/tiles/documents.png'),
+  photoMoreFeaturesTile: require('../../assets/tiles/moreFeaturesTile.png'),
 };
 
 /** Every supplied picture's name, for a picker to offer. */
