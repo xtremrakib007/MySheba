@@ -52,6 +52,15 @@ test('the map and the folder hold the same icons', () => {
   }
 });
 
+/** The superadmin hub, which draws from the same map by key or by art. */
+function adminHubArt() {
+  const src = read('src/screens/AdminFeaturesScreen.js');
+  const found = [...src.matchAll(/\{ key: '([A-Za-z]+)',(?: icon: '[^']*',)?(?: art: '([A-Za-z]+)',)? bg: '[^']*', name: '([^']+)' \}/g)]
+    .map(([, key, art, name]) => ({ art: art || key, name }));
+  assert.ok(found.length >= 20, 'expected the hub tiles, saw ' + found.length);
+  return found;
+}
+
 /** The Bill Payment category picker: the other place a picture is drawn. */
 function billCategoryArt() {
   const src = read('src/steps/BillPaymentSteps.js');
@@ -75,9 +84,9 @@ test('every entry reaches a real tile', () => {
     const found = artNames.has(art) ? art : photoIconFor(art);
     if (found) reached.add(found);
   }
-  // The bill categories draw from the same map, so an entry they use is not
-  // orphaned even though no grid tile names it.
-  for (const art of billCategoryArt()) {
+  // The bill categories and the superadmin hub draw from the same map, so an
+  // entry they use is not orphaned even though no grid tile names it.
+  for (const art of [...billCategoryArt(), ...adminHubArt().map((t) => t.art)]) {
     const found = artNames.has(art) ? art : photoIconFor(art);
     if (found) reached.add(found);
   }
@@ -297,6 +306,25 @@ test('every bill category has a picture too', () => {
   // JomPAY's own mark, on the category called JomPAY Bill.
   assert.ok(/\{ key: 'jompay', label: 'JomPAY Bill', art: 'jompay' \}/.test(step),
     'the JomPAY category must carry the JomPAY mark');
+});
+
+test('every superadmin tile has a picture', () => {
+  // The hub was still all emoji while every grid a customer sees had artwork.
+  const missing = adminHubArt()
+    .filter(({ art }) => !artNames.has(art) && !photoIconFor(art))
+    .map(({ name }) => name);
+  assert.deepStrictEqual(missing, [], 'these superadmin tiles have no picture: ' + missing.join(', '));
+
+  // Four of them go where a tile with a picture already goes. Naming that
+  // picture beats drawing a second one that means the same thing - and a
+  // second drawing is how two tiles for one destination start to look
+  // like two destinations.
+  const src = read('src/screens/AdminFeaturesScreen.js');
+  for (const [key, art] of [['all', 'photoHistory'], ['topups', 'photoTopup'],
+    ['transferPoints', 'photoWalletTransfer'], ['users', 'photoUserManagement']]) {
+    assert.ok(new RegExp(`key: '${key}',[^}]*art: '${art}'`).test(src),
+      `${key} must reuse ${art} rather than carry its own copy`);
+  }
 });
 
 console.log('\nOne size, on every grid');

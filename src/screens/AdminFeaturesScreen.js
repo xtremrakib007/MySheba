@@ -17,7 +17,7 @@ import { adminLandingTiles } from '../components/serviceTiles';
 const CATEGORIES = [
   { key: 'operations', icon: '⚙️', bg: '#E3F2FD', name: 'Operations' },
   { key: 'finance', icon: '💰', bg: '#E8F5E9', name: 'Finance' },
-  { key: 'users', icon: '👥', bg: '#E0F7FA', name: 'Users & KYC' },
+  { key: 'users', icon: '👥', art: 'photoUserManagement', bg: '#E0F7FA', name: 'Users & KYC' },
   { key: 'system', icon: '🛡️', bg: '#EDE7F6', name: 'System Control' },
 ];
 
@@ -30,10 +30,10 @@ const CATEGORIES = [
 // action the customer grid runs, through useServiceAction.
 
 const OPERATIONS = [
-  { key: 'all', icon: '📋', bg: '#E3F2FD', name: 'Transactions' },
+  { key: 'all', icon: '📋', art: 'photoHistory', bg: '#E3F2FD', name: 'Transactions' },
   { key: 'pending', icon: '⏳', bg: '#FFF8E1', name: 'Pending' },
   { key: 'inquiries', icon: '📝', bg: '#E8EAF6', name: 'Inquiries' },
-  { key: 'topups', icon: '💳', bg: '#E8F5E9', name: 'Top-Ups' },
+  { key: 'topups', icon: '💳', art: 'photoTopup', bg: '#E8F5E9', name: 'Top-Ups' },
   { key: 'support', icon: '🎧', bg: '#E0F2F1', name: 'Support' },
   { key: 'adminAnalytics', icon: '📊', bg: '#FFF3E0', name: 'Analytics' },
 ];
@@ -41,7 +41,7 @@ const FINANCE = [
   { key: 'rates', icon: '💱', bg: '#F3E5F5', name: 'Rates' },
   { key: 'pricing', icon: '🏷️', bg: '#FFF3E0', name: 'Pricing' },
   { key: 'payments', icon: '💳', bg: '#E1F5FE', name: 'Payments' },
-  { key: 'transferPoints', icon: '↔️', bg: '#E8F5E9', name: 'Transfers' },
+  { key: 'transferPoints', icon: '↔️', art: 'photoWalletTransfer', bg: '#E8F5E9', name: 'Transfers' },
   { key: 'invoices', icon: '🧾', bg: '#FFF8E1', name: 'Invoices' },
 ];
 const USERS = [

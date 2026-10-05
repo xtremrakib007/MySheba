@@ -81,6 +81,20 @@ const PHOTO_ICONS = {
   photoBillTv: require('../../assets/tiles/billTv.png'),
   photoBillMobile: require('../../assets/tiles/billMobile.png'),
   photoBillUtilities: require('../../assets/tiles/billUtilities.png'),
+
+  // ---- the superadmin hub ----
+  photoOperations: require('../../assets/tiles/operations.png'),
+  photoSystem: require('../../assets/tiles/system.png'),
+  photoPending: require('../../assets/tiles/pending.png'),
+  photoRates: require('../../assets/tiles/rates.png'),
+  photoPricing: require('../../assets/tiles/pricing.png'),
+  photoPayments: require('../../assets/tiles/payments.png'),
+  photoFeatureAccess: require('../../assets/tiles/featureAccess.png'),
+  photoGridManagement: require('../../assets/tiles/gridManagement.png'),
+  photoWebviewManagement: require('../../assets/tiles/webviewManagement.png'),
+  photoBanners: require('../../assets/tiles/banners.png'),
+  photoAnnouncements: require('../../assets/tiles/announcements.png'),
+  photoApiManagement: require('../../assets/tiles/apiManagement.png'),
 };
 
 /** Every supplied picture's name, for a picker to offer. */

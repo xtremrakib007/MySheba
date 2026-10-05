@@ -311,6 +311,96 @@ def adminFeatures(pen):       # settings
     pen.circle(50, 50, 13, v=OFF)
 
 
+def operations(pen):          # the day's running
+    pen.rect(0, 10, 100, 14, r=7)
+    pen.circle(72, 17, 13, v=OFF)
+    pen.circle(72, 17, 6)
+    pen.rect(0, 43, 100, 14, r=7)
+    pen.circle(30, 50, 13, v=OFF)
+    pen.circle(30, 50, 6)
+    pen.rect(0, 76, 100, 14, r=7)
+    pen.circle(62, 83, 13, v=OFF)
+    pen.circle(62, 83, 6)
+
+
+def system(pen):              # what the whole thing runs on
+    for y in (2, 38, 74):
+        pen.rect(2, y, 96, 24, r=7)
+        pen.circle(18, y + 12, 5, v=OFF)
+        pen.rect(56, y + 8, 30, 8, r=4, v=OFF)
+
+
+def pending(pen):             # waiting
+    pen.rect(14, 0, 72, 12, r=5)
+    pen.rect(14, 88, 72, 12, r=5)
+    pen.poly([(24, 12), (76, 12), (54, 50), (76, 88), (24, 88), (46, 50)])
+    pen.poly([(38, 24), (62, 24), (50, 42)], v=OFF)
+
+
+def rates(pen):               # one currency against another
+    pen.arc(50, 50, 40, 150, 30, 11)
+    pen.poly([(74, 2), (94, 18), (70, 30)])
+    pen.arc(50, 50, 40, 330, 210, 11)
+    pen.poly([(26, 98), (6, 82), (30, 70)])
+
+
+def pricing(pen):             # what it costs
+    pen.circle(50, 50, 48)
+    pen.circle(32, 32, 11, v=OFF)
+    pen.circle(68, 68, 11, v=OFF)
+    pen.line([(26, 76), (74, 24)], 9, v=OFF)
+
+
+def payments(pen):            # a card
+    pen.rect(0, 16, 100, 68, r=11)
+    pen.rect(0, 30, 100, 14, v=OFF)
+    pen.rect(12, 60, 30, 10, r=5, v=OFF)
+
+
+def featureAccess(pen):       # who may open what
+    pen.rect(10, 42, 80, 58, r=12)
+    pen.arc(50, 42, 26, 180, 360, 11)
+    pen.circle(50, 66, 9, v=OFF)
+    pen.rect(45, 66, 10, 18, r=4, v=OFF)
+
+
+def gridManagement(pen):      # which tiles show
+    pen.rect(2, 2, 44, 44, r=10)
+    pen.rect(54, 2, 44, 44, r=10)
+    pen.rect(2, 54, 44, 44, r=10)
+    pen.rect(54, 54, 44, 44, r=10)
+    pen.rect(62, 62, 28, 28, r=6, v=OFF)
+
+
+def webviewManagement(pen):   # a page
+    pen.rect(0, 10, 100, 80, r=11)
+    pen.rect(0, 10, 100, 20, r=11, v=OFF)
+    pen.rect(0, 24, 100, 8, v=OFF)
+    for cx in (12, 26, 40):
+        pen.circle(cx, 20, 5)
+
+
+def banners(pen):             # a picture
+    pen.rect(0, 14, 100, 72, r=11)
+    pen.circle(28, 36, 9, v=OFF)
+    pen.poly([(8, 78), (40, 44), (64, 78)], v=OFF)
+    pen.poly([(52, 78), (74, 54), (94, 78)], v=OFF)
+
+
+def announcements(pen):       # something said to everybody
+    pen.poly([(8, 36), (44, 36), (84, 8), (84, 92), (44, 64), (8, 64)])
+    pen.rect(16, 64, 22, 30, r=6)
+    pen.arc(84, 50, 22, 300, 60, 9)
+
+
+def apiManagement(pen):       # one system plugged into another
+    pen.rect(30, 0, 12, 26, r=4)
+    pen.rect(58, 0, 12, 26, r=4)
+    pen.rect(16, 26, 68, 34, r=10)
+    pen.rect(42, 60, 16, 24)
+    pen.arc(50, 60, 26, 0, 180, 11)
+
+
 def billElectricity(pen):     # a bolt
     pen.poly([(58, 0), (18, 56), (44, 56), (36, 100), (80, 40), (52, 40)])
 
@@ -425,6 +515,19 @@ ICONS = [
     ('billTv', PURPLE, billTv),
     ('billMobile', TEAL, billMobile),
     ('billUtilities', SLATE, billUtilities),
+    # The superadmin hub, which was still all emoji.
+    ('operations', BLUE, operations),
+    ('system', SLATE, system),
+    ('pending', AMBER, pending),
+    ('rates', PURPLE, rates),
+    ('pricing', AMBER, pricing),
+    ('payments', BLUE, payments),
+    ('featureAccess', PURPLE, featureAccess),
+    ('gridManagement', TEAL, gridManagement),
+    ('webviewManagement', GREEN, webviewManagement),
+    ('banners', PINK, banners),
+    ('announcements', RED, announcements),
+    ('apiManagement', INDIGO, apiManagement),
 ]
 
 if __name__ == '__main__':
