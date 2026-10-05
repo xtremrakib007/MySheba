@@ -60,4 +60,33 @@ assert(group.length < exported.size / 2, `the group should be a subset, saw ${gr
 // will reject in full.
 assert.deepStrictEqual(unknownNames(group), [], 'every derived name must be exported from index.js');
 
+// ---------------------------------------------------------------------------
+// Every way this project ships must refuse a stale checkout. The admin site
+// was the one that did not, and it shipped a bundle a commit behind without
+// saying so - the exact failure the guard was written for, through the one
+// door it was not on.
+// ---------------------------------------------------------------------------
+const fs = require('fs');
+const path = require('path');
+const readFile = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
+
+const scripts = JSON.parse(readFile('package.json')).scripts;
+for (const name of ['deploy:functions', 'deploy:rules', 'deploy:web', 'publish:ota']) {
+  assert(scripts[name], `${name} must exist - a shipping path without a script is one nobody guards`);
+  const source = readFile(scripts[name].replace(/^node /, ''));
+  assert(/requireCurrentCheckout\(/.test(source), `${name} must refuse a checkout that is not origin/main`);
+}
+
+const web = readFile('scripts/deploy-web.js');
+// Named target, from the repo root. A bare `--only hosting` run from inside
+// admin-web/ picks up that directory's own config, where the site is
+// untargeted - so what it deploys depends on which directory you are in.
+assert(/'--only', 'hosting:admin-web'/.test(web), 'the admin deploy must name its target');
+assert(/cwd: ROOT/.test(web), 'and run from the root, where .firebaserc defines that target');
+// A failed build leaves the previous dist/ in place, so deploying anyway
+// uploads a stale bundle and reports success.
+assert(/if \(build\.status !== 0\)/.test(web), 'a failed build must stop the deploy');
+assert(web.indexOf('requireCurrentCheckout(') < web.indexOf("spawnSync('npm'"),
+  'the checkout is checked before anything is built');
+
 console.log(`deploy targets: PASS (${group.length} of ${exported.size} functions carry the API code)`);

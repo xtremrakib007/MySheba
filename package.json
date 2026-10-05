@@ -101,7 +101,8 @@
     "test:topupproguard": "node scripts/test-topup-proguard.js",
     "test:webviews": "node scripts/test-webview-config.js",
     "deploy:rules": "node scripts/deploy-rules.js",
-    "test:devicetrust": "node scripts/test-device-trust.js"
+    "test:devicetrust": "node scripts/test-device-trust.js",
+    "deploy:web": "node scripts/deploy-web.js"
   },
   "dependencies": {
     "@notifee/react-native": "^9.1.8",
