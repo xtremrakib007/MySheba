@@ -28,6 +28,10 @@ export default function WebViewScreen() {
   const page = (webviewPages && webviewPages[webViewKey]) || webViewPages[webViewKey] || webViewPages.fomema;
   const webviewRef = useRef(null);
   const [loading, setLoading] = useState(true);
+  // How far the page has got, 0 to 1. Used to take the cover off early: a
+  // government status page is readable long before its last tracking pixel
+  // finishes, and onLoadEnd waits for all of it.
+  const [progress, setProgress] = useState(0);
   const [failed, setFailed] = useState(false);
   // While waiting out a retry backoff (or mid-reload) after a failed load
   // on a bus ticket partner webview only - see handleLoadFailure below.
@@ -234,7 +238,7 @@ export default function WebViewScreen() {
         {!!isFomema && (
           <TouchableOpacity
             style={styles.clinicToggle}
-            onPress={() => { setShowClinicFinder((v) => !v); setLoading(true); setFailed(false); setCanGoBack(false); }}
+            onPress={() => { setShowClinicFinder((v) => !v); setLoading(true); setProgress(0); setFailed(false); setCanGoBack(false); }}
           >
             <Text style={styles.clinicToggleText}>
               {showClinicFinder ? '🏥 Back to Status Check' : '📍 Find Nearest Clinic'}
@@ -245,7 +249,19 @@ export default function WebViewScreen() {
 
       {!failed ? (
         <View style={{ flex: 1 }}>
-          {(!!(loading || retrying)) && (
+          {/* A thin bar rather than a blank screen. It is the only thing on
+              top of the page once the page has started drawing, so people
+              watch it fill instead of watching nothing. */}
+          {!!loading && (
+            <View style={styles.progressTrack} pointerEvents="none">
+              <View style={[styles.progressFill, { width: `${Math.max(4, Math.round(progress * 100))}%` }]} />
+            </View>
+          )}
+          {/* The opaque cover is for the moments when there is genuinely
+              nothing underneath it. It used to stay until onLoadEnd - which
+              is the LAST sub-resource, not the first paint - so a page that
+              was readable in a second looked like it took four. */}
+          {(!!((loading && progress < 0.6) || retrying)) && (
             <View style={styles.loadingOverlay}>
               <ActivityIndicator size="large" color={colors.primary} />
               {!!retrying && <Text style={styles.retryingText}>Reconnecting…</Text>}
@@ -257,12 +273,17 @@ export default function WebViewScreen() {
             </View>
           )}
           <WebView
-            key={activeUrl}
+            // No `key`. Keying on the url tore the whole native WebView down
+            // and built a new one on every change - a new renderer process, a
+            // cold in-memory cache and a lost session, to do what changing
+            // `source` does anyway. Navigating an existing WebView is both
+            // correct and much faster; reloads go through webviewRef.reload().
             ref={webviewRef}
             source={{ uri: activeUrl }}
-            onLoadStart={() => setLoading(true)}
+            onLoadStart={() => { setLoading(true); setProgress(0); }}
+            onLoadProgress={(e) => setProgress(e?.nativeEvent?.progress || 0)}
             onLoad={() => { retryCountRef.current = 0; setRetryAttempts(0); setRetrying(false); }}
-            onLoadEnd={() => setLoading(false)}
+            onLoadEnd={() => { setLoading(false); setProgress(1); }}
             onError={handleWebViewError}
             onHttpError={(e) => {
               // A hard 4xx/5xx from the server itself (vs. a network/SSL
@@ -294,6 +315,11 @@ export default function WebViewScreen() {
             thirdPartyCookiesEnabled
             sharedCookiesEnabled
             cacheEnabled
+            // Ordinary HTTP caching: a revisit reuses what has not expired
+            // instead of fetching it again. Not LOAD_CACHE_ELSE_NETWORK -
+            // these are status pages, and a stale FOMEMA result is worse than
+            // a slow one.
+            cacheMode="LOAD_DEFAULT"
             mixedContentMode="always"
             // Let window.open-based navigations (e.g. a payment-gateway
             // step) fire onOpenWindow below instead of being silently
@@ -302,6 +328,14 @@ export default function WebViewScreen() {
             // this ever sees them, so only real in-flow popups arrive.
             setSupportMultipleWindows
             onOpenWindow={isBusPartner ? handleOpenWindow : undefined}
+            // Composited on the GPU. The default on Android is a software
+            // layer, which is what makes a long page feel like it is dragging
+            // the whole screen behind it while it scrolls.
+            androidLayerType="hardware"
+            // No blue glow at the ends of a page that does not scroll, and the
+            // platform's own scroll physics rather than the WebView's default.
+            overScrollMode="never"
+            decelerationRate="normal"
             style={{ flex: 1 }}
           />
         </View>
@@ -562,6 +596,8 @@ function createStyles(colors) {
     clinicToggle: { marginLeft: 'auto', backgroundColor: colors.primary, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 14 },
     clinicToggleText: { color: 'white', fontSize: 12, fontWeight: '700' },
     urlText: { flex: 1, fontSize: 10, color: '#999' },
+    progressTrack: { position: 'absolute', top: 0, left: 0, right: 0, height: 3, backgroundColor: 'transparent', zIndex: 2 },
+    progressFill: { height: 3, backgroundColor: colors.primary, borderTopRightRadius: 2, borderBottomRightRadius: 2 },
     loadingOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: 'white', zIndex: 1, gap: 10 },
     retryingText: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
     retryEscapeText: { fontSize: 12, color: colors.primary, fontWeight: '600', textDecorationLine: 'underline', marginTop: 4 },

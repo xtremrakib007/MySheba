@@ -106,7 +106,8 @@
     "audit:themekeys": "node scripts/audit-theme-keys.js",
     "test:statusbadges": "node scripts/test-status-badges.js",
     "test:photoicons": "node scripts/test-photo-icons.js",
-    "test:registration": "node scripts/test-registration.js"
+    "test:registration": "node scripts/test-registration.js",
+    "test:webviewspeed": "node scripts/test-webview-speed.js"
   },
   "dependencies": {
     "@notifee/react-native": "^9.1.8",
