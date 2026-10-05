@@ -84,7 +84,10 @@ test('every purpose has identical text and version on both sides', () => {
   // wording nobody was shown.
   const client = read('src/utils/consentPolicy.js');
   for (const [purpose, def] of Object.entries(policy.CONSENT_PURPOSES)) {
-    const block = new RegExp(purpose + ':\\s*\\{\\s*version:\\s*(\\d+),\\s*text:\\s*\'([^\']+)\'').exec(client);
+    // Tolerant of other fields between version and text - `details` was added
+    // between them and this stopped matching, which read as "missing from the
+    // app copy" rather than "the regex is too strict".
+    const block = new RegExp(purpose + ':\\s*\\{\\s*version:\\s*(\\d+),[\\s\\S]*?text:\\s*\'([^\']+)\'').exec(client);
     assert.ok(block, purpose + ' is missing from the app copy');
     assert.strictEqual(Number(block[1]), def.version, purpose + ' version differs');
     assert.strictEqual(block[2], def.text, purpose + ' wording differs');
@@ -139,8 +142,20 @@ test('travel inquiries are refused by the rules, for the same reason', () => {
   // One checkbox covers all three: they share TravelInquirySteps.
   const steps = read('src/steps/TravelInquirySteps.js');
   assert.ok(/<ConsentCheckbox purpose="travel"/.test(steps));
-  assert.ok(/serviceData\.consentAccepted !== true\) return 'Please tick the box/.test(steps),
-    'the step must not advance without it');
+  // The gate must be on the step that RENDERS the box. It was on step 1 while
+  // the box was on step 2, so the wizard refused to advance and the box the
+  // message asked for was not on screen yet - no way forward at all.
+  // The LAST step header before the checkbox, not the first. A lazy match from
+  // the top of the file spans every step and reports step 0 whatever is true.
+  const at = steps.indexOf('<ConsentCheckbox purpose="travel"');
+  assert.ok(at > 0, 'the checkbox must be in the travel steps');
+  const before = (steps.slice(0, at).match(/if \(step === (\d)\) \{/g) || []).pop();
+  assert.ok(before, 'the checkbox must render inside a numbered step');
+  const renderStep = [null, /(\d)/.exec(before)[1]];
+  const gate = /if \(step === (\d)\) \{\s*\n\s*if \(serviceData\.consentAccepted !== true\)/.exec(steps);
+  assert.ok(gate, 'the gate must live in a numbered step');
+  assert.strictEqual(gate[1], renderStep[1],
+    'the gate is on step ' + gate[1] + ' but the box is on step ' + renderStep[1]);
   for (const file of ['src/steps/FlightSteps.js', 'src/steps/BusSteps.js', 'src/steps/TrainSteps.js']) {
     assert.ok(/TravelInquirySteps/.test(read(file)), file + ' no longer shares the gated step');
   }
@@ -195,6 +210,48 @@ test('the KYC screen no longer claims agreement nobody gave', () => {
   const src = read('src/screens/VerifyIdentityScreen.js');
   assert.ok(!/By submitting, you confirm that the information and documents are accurate/.test(src),
     'the unacknowledged sentence must be gone');
+});
+
+console.log('\nPeople can read what they are agreeing to');
+
+test('every purpose explains itself, on both sides', () => {
+  const client = read('src/utils/consentPolicy.js');
+  for (const [purpose, def] of Object.entries(policy.CONSENT_PURPOSES)) {
+    assert.ok(typeof def.details === 'string' && def.details.length > 150,
+      purpose + ' has no real explanation');
+    // What somebody actually wants to know before agreeing.
+    for (const heading of ['What we collect', 'Why', 'How long']) {
+      assert.ok(def.details.includes(heading), purpose + ' does not say: ' + heading);
+    }
+    const block = new RegExp(purpose + ':[\\s\\S]*?details: \'([^\']+)\'').exec(client);
+    assert.ok(block, purpose + ' has no explanation in the app copy');
+    // The source text still has literal \n escapes where the evaluated string
+    // has real newlines - comparing them raw differs by exactly two characters
+    // per paragraph break and reads as a content mismatch.
+    assert.strictEqual(block[1].replace(/\\n/g, '\n'), def.details,
+      purpose + ' explanation differs between app and server');
+  }
+});
+
+test('the box offers to show it, before it is ticked', () => {
+  // Buried in a policy page afterwards is not the same as reachable first.
+  const component = read('src/components/ConsentCheckbox.js');
+  // The visible link, not the accessibility label - the phrase appears twice,
+  // so a bare search still matched after the link text was changed.
+  assert.ok(/<Text style=\{styles\.readMore\}>Read the full terms<\/Text>/.test(component),
+    'there must be a visible way in');
+  assert.ok(/accessibilityLabel="Read the full terms"/.test(component),
+    'and a screen reader must find it too');
+  assert.ok(/consentDetails\(purpose\)/.test(component), 'showing this purpose\u2019s own detail');
+  assert.ok(/<Modal/.test(component), 'and actually opening something');
+});
+
+test('closing the terms is not agreeing to them', () => {
+  // A sheet whose only exit accepts is a sheet that forces agreement.
+  const component = read('src/components/ConsentCheckbox.js');
+  assert.ok(/onPress=\{\(\) => setShowDetails\(false\)\}/.test(component), 'Close must only close');
+  assert.ok(/onChange\(true\); setShowDetails\(false\);/.test(component),
+    'and agreeing is a separate, explicit button');
 });
 
 console.log('\nThe record is the server’s, not the client’s');

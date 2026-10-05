@@ -162,6 +162,12 @@ export function validateStep(step, serviceData) {
   if (step === 1) {
     if (!(serviceData.pName || '').trim()) return 'Please enter your full name.';
     if (!(serviceData.pPhone || '').trim()) return 'Please enter your mobile number.';
+  }
+  // Step 2, not step 1: the box is rendered on the summary step, and gating the
+  // step before it left somebody told to tick a box that was not on the screen
+  // yet - with no way forward. ServiceScreen validates the CURRENT step before
+  // submitting, and step 2 is the last, so this still guards the submit.
+  if (step === 2) {
     if (serviceData.consentAccepted !== true) return 'Please tick the box to continue.';
   }
   return null;
