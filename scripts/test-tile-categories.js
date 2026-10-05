@@ -130,9 +130,16 @@ console.log('Nothing is drawn twice, and nothing is dropped');
 // test could de-duplicate, which nobody doubted.
 for (const role of ROLES) {
   const { sections, account } = moreFeaturesSections({ role, can: allCaps });
-  const expected = (role === 'customer') ? PERSONAL_FEATURES : STAFF_FEATURES;
+  // The declared list, minus whatever this role already has on its home grid.
+  // Staff declare Transactions and Support in both places, and showing a
+  // feature twice on one screen is worse than showing it once in the wrong
+  // half - so the home grid keeps it and the row goes.
+  const onHome = new Set(visibleTiles({ role, can: allCaps, homeOnly: true }).map((t) => t.key));
+  const expected = ((role === 'customer') ? PERSONAL_FEATURES : STAFF_FEATURES)
+    .filter((f) => !onHome.has(f.key));
   assert.deepStrictEqual(account.map((f) => f.key), expected.map((f) => f.key),
     `a ${role} must get the right account list`);
+  assert(expected.length, `a ${role} must still have account rows`);
 
   const accountKinds = new Set(account.map((f) => f.kind));
   const accountKeys = new Set(account.map((f) => f.key));
@@ -208,6 +215,65 @@ console.log('Partial rows pack left instead of spreading');
 for (const [rel, src] of [['src/components/ServiceGrid.js', grid], ['src/screens/MoreFeaturesScreen.js', more]]) {
   assert(!/grid: \{[^}]*space-between/.test(src), `${rel} must not spread a partial row`);
   assert(/grid: \{[^}]*justifyContent: 'flex-start', columnGap: \d+/.test(src), `${rel} packs left with a fixed gap`);
+}
+
+
+// ---------------------------------------------------------------------------
+// One feature, one tile. Staff saw Transactions and Support twice: once on the
+// home grid and again as a row at the bottom of All Services, with nothing to
+// tell the two apart.
+// ---------------------------------------------------------------------------
+const EVERY_ROLE = ['customer', 'dealer', 'reseller', 'admin', 'superadmin', 'support', 'finance'];
+
+for (const role of EVERY_ROLE) {
+  const home = visibleTiles({ role, can: () => true, homeOnly: true });
+  const { sections, account } = moreFeaturesSections({ role, can: () => true });
+  const everywhere = [...home, ...sections.flatMap((s) => s.items || []), ...account];
+  const counts = {};
+  for (const tile of everywhere) counts[tile.key] = (counts[tile.key] || 0) + 1;
+  const twice = Object.entries(counts).filter(([, n]) => n > 1).map(([key]) => key);
+  assert.deepStrictEqual(twice, [], `a ${role} is shown these tiles twice: ${twice.join(', ')}`);
+  assert(home.length, `a ${role} must have a home screen`);
+}
+
+// The home grid is the one that keeps it: that is where somebody looks first.
+for (const role of ['admin', 'superadmin', 'dealer']) {
+  const home = visibleTiles({ role, can: () => true, homeOnly: true }).map((t) => t.key);
+  const { account } = moreFeaturesSections({ role, can: () => true });
+  assert(home.includes('history'), `${role} must keep Transactions on the home grid`);
+  assert(!account.some((r) => r.key === 'history'), `${role} must not also carry it as an account row`);
+}
+
+// ...and a tile switched OFF for the home screen keeps its row, or removing a
+// duplicate would take the feature away entirely. This is the rule the whole
+// screen exists for: on the home screen or here, never nowhere.
+{
+  const off = new Set(['history', 'support']);
+  const isActive = (key) => !off.has(key);
+  const home = visibleTiles({ role: 'admin', can: () => true, isActive, homeOnly: true }).map((t) => t.key);
+  const { account } = moreFeaturesSections({ role: 'admin', can: () => true, isActive });
+  for (const key of off) {
+    assert(!home.includes(key), `${key} was switched off and must not be on the home grid`);
+    assert(account.some((r) => r.key === key), `${key} is off the home grid and must still be reachable here`);
+  }
+}
+
+// Customers never had the clash, and must not acquire one.
+{
+  const { account } = moreFeaturesSections({ role: 'customer', can: () => true });
+  for (const key of ['history', 'support', 'myAccount', 'kyc']) {
+    assert(account.some((r) => r.key === key), `a customer must still reach ${key} from All Services`);
+  }
+}
+
+// The overflow is filtered on what was DECLARED, not on what survived the
+// de-duplication: dropping a row for being on the home screen must not let its
+// twin reappear in the sections above it.
+{
+  const src = read('src/components/serviceTiles.js');
+  const body = src.slice(src.indexOf('export function moreFeaturesSections('));
+  assert(/const kinds = new Set\(declared\.map/.test(body), 'the excluded kinds must come from the declared list');
+  assert(/const keys = new Set\(declared\.map/.test(body), 'and so must the excluded keys');
 }
 
 console.log('\nCategories on the home screen, everything else one tap away.');

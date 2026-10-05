@@ -474,9 +474,27 @@ export const STAFF_FEATURES = [
  * duplicate even when no tile is repeated.
  */
 export function moreFeaturesSections({ role = 'customer', can, webviewPages, tileLabels, isActive = () => true }) {
-  const account = applyTileLabels((!role || role === 'customer') ? PERSONAL_FEATURES : STAFF_FEATURES, tileLabels);
-  const kinds = new Set(account.map((f) => f.kind));
-  const keys = new Set(account.map((f) => f.key));
+  const declared = applyTileLabels((!role || role === 'customer') ? PERSONAL_FEATURES : STAFF_FEATURES, tileLabels);
+
+  // An account row for something already on this role's home screen is the
+  // same destination twice. Staff saw Transactions and Support as a tile on
+  // their home grid AND as a row at the bottom of this screen - two tiles, one
+  // place to land, and nothing to tell them apart.
+  //
+  // The home grid keeps it, because that is where somebody looks first. A tile
+  // a superadmin has switched OFF for home is not on that grid, so its row
+  // survives here - which is the rule this screen exists for: a finished
+  // feature lands on the home screen or here, never nowhere.
+  const onHome = new Set(
+    visibleTiles({ role, can, webviewPages, tileLabels, isActive, homeOnly: true }).map((tile) => tile.key),
+  );
+  const account = declared.filter((row) => !onHome.has(row.key));
+
+  // Built from what was DECLARED, not from what survived the filter above: a
+  // row dropped for being on the home screen must still keep its twin out of
+  // the overflow, or removing one duplicate just moves it.
+  const kinds = new Set(declared.map((f) => f.kind));
+  const keys = new Set(declared.map((f) => f.key));
   const overflow = overflowTiles({ role, can, webviewPages, tileLabels, isActive, excludeKinds: kinds })
     .filter((tile) => tile.cat !== 'personal' && !keys.has(tile.key));
   return { sections: groupTilesByCategory(overflow), account };
