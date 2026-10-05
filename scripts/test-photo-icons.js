@@ -52,6 +52,14 @@ test('the map and the folder hold the same icons', () => {
   }
 });
 
+/** The Bill Payment category picker: the other place a picture is drawn. */
+function billCategoryArt() {
+  const src = read('src/steps/BillPaymentSteps.js');
+  const found = [...src.matchAll(/\{ key: '[a-z]+', label: '[^']+', art: '([A-Za-z]+)' \}/g)].map((m) => m[1]);
+  assert.ok(found.length >= 8, 'expected the bill categories, saw ' + found.length);
+  return found;
+}
+
 test('every entry reaches a real tile', () => {
   // The whole point of naming each file after its tile. An entry no tile can
   // reach is artwork nobody will ever see.
@@ -64,6 +72,12 @@ test('every entry reaches a real tile', () => {
   const reached = new Set();
   for (const tile of all) {
     const art = tile.art || tile.key;
+    const found = artNames.has(art) ? art : photoIconFor(art);
+    if (found) reached.add(found);
+  }
+  // The bill categories draw from the same map, so an entry they use is not
+  // orphaned even though no grid tile names it.
+  for (const art of billCategoryArt()) {
     const found = artNames.has(art) ? art : photoIconFor(art);
     if (found) reached.add(found);
   }
@@ -264,6 +278,25 @@ test('the two brand tiles carry the real mark', () => {
   for (const key of ['jompay', 'tngewallet']) {
     assert.ok(brands.some((b) => b.name === key), key + ' must use its own mark, not a drawing');
   }
+});
+
+test('every bill category has a picture too', () => {
+  // The step-2 picker drew one-colour vectors while every grid around it had
+  // pictures, which read as a screen somebody forgot.
+  const missing = billCategoryArt()
+    .filter((art) => !artNames.has(art) && !photoIconFor(art));
+  assert.deepStrictEqual(missing, [], 'these bill categories have no picture: ' + missing.join(', '));
+
+  const step = read('src/steps/BillPaymentSteps.js');
+  assert.ok(/<PhotoTileIcon art=\{hasPhotoTileIcon\(item\.art\) \? item\.art : photoIconFor\(item\.art\)\}/.test(step),
+    'the picker must draw the picture');
+  // The drawing stays behind it, so a category added without artwork shows
+  // something rather than an empty card.
+  assert.ok(/: hasServiceArt\(item\.art\)\n\s*\? <ServiceArt name=\{item\.art\}/.test(step),
+    'and must fall back to the drawing');
+  // JomPAY's own mark, on the category called JomPAY Bill.
+  assert.ok(/\{ key: 'jompay', label: 'JomPAY Bill', art: 'jompay' \}/.test(step),
+    'the JomPAY category must carry the JomPAY mark');
 });
 
 console.log('\nOne size, on every grid');

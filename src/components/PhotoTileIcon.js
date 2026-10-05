@@ -68,6 +68,19 @@ const PHOTO_ICONS = {
   photoMyDocuments: require('../../assets/tiles/myDocuments.png'),
   photoDocuments: require('../../assets/tiles/documents.png'),
   photoMoreFeaturesTile: require('../../assets/tiles/moreFeaturesTile.png'),
+
+  // ---- the Bill Payment category picker ----
+  //
+  // Not tiles on a grid, but the same choice drawn the same way: these are
+  // named after the `art` each category already declared, so the picker gets
+  // its pictures without renaming anything.
+  photoBillElectricity: require('../../assets/tiles/billElectricity.png'),
+  photoBillWater: require('../../assets/tiles/billWater.png'),
+  photoBillGas: require('../../assets/tiles/billGas.png'),
+  photoBillInternet: require('../../assets/tiles/billInternet.png'),
+  photoBillTv: require('../../assets/tiles/billTv.png'),
+  photoBillMobile: require('../../assets/tiles/billMobile.png'),
+  photoBillUtilities: require('../../assets/tiles/billUtilities.png'),
 };
 
 /** Every supplied picture's name, for a picker to offer. */

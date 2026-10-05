@@ -5,7 +5,8 @@ import { countries } from '../data/countries';
 import CountrySelectCard from '../components/CountrySelectCard';
 import { FormLabel, FormInput, Grid3, OperatorCard, SummaryCard } from '../components/ui';
 import { getBillerBrand } from '../data/billerBrand';
-import ServiceArt from '../components/ServiceArt';
+import ServiceArt, { hasServiceArt } from '../components/ServiceArt';
+import PhotoTileIcon, { hasPhotoTileIcon, photoIconFor } from '../components/PhotoTileIcon';
 import { useTheme } from '../theme/ThemeContext';
 import { presentmentRequest, presentmentKey } from '../utils/billPresentmentInputs';
 import * as apiProviderService from '../firebase/apiProviderService';
@@ -111,7 +112,7 @@ const CATEGORIES = [
   // somebody entering their TnG number - an ordinary 012 mobile - would be sent
   // to Hotlink and never offered the choice.
   { key: 'ewallet', label: 'E-Wallet Reload', art: 'walletTransfer' },
-  { key: 'jompay', label: 'JomPAY Bill', art: 'billpayment' },
+  { key: 'jompay', label: 'JomPAY Bill', art: 'jompay' },
 ];
 
 // Only the categories the chosen country actually bills for. Malaysia has no
@@ -133,7 +134,14 @@ function CategoryCard({ item, selected, onPress }) {
       accessibilityRole="button"
       accessibilityLabel={item.label}
     >
-      <ServiceArt name={item.art} size={38} color={colors.primary} />
+      {/* The picture this category has, if it has one, and the drawing
+          otherwise - the same order the grids use, so one category added
+          without artwork still shows something rather than nothing. */}
+      {(hasPhotoTileIcon(item.art) ? item.art : photoIconFor(item.art))
+        ? <PhotoTileIcon art={hasPhotoTileIcon(item.art) ? item.art : photoIconFor(item.art)} size={38} />
+        : hasServiceArt(item.art)
+          ? <ServiceArt name={item.art} size={38} color={colors.primary} />
+          : null}
       <Text style={[cardStyles.label, { color: colors.text }]} numberOfLines={2}>{item.label}</Text>
     </TouchableOpacity>
   );

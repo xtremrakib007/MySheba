@@ -311,6 +311,51 @@ def adminFeatures(pen):       # settings
     pen.circle(50, 50, 13, v=OFF)
 
 
+def billElectricity(pen):     # a bolt
+    pen.poly([(58, 0), (18, 56), (44, 56), (36, 100), (80, 40), (52, 40)])
+
+
+def billWater(pen):           # a drop
+    pen.poly([(50, 0), (84, 48), (16, 48)])
+    pen.circle(50, 58, 34)
+
+
+def billGas(pen):             # a cylinder
+    # Not a flame: the flame drawn small enough to fit was a blob with a spike,
+    # and at the size this renders it read as the water drop beside it.
+    pen.rect(40, 0, 20, 16, r=4)
+    pen.rect(32, 10, 36, 10, r=4)
+    pen.rect(16, 18, 68, 82, r=16)
+    pen.rect(28, 42, 44, 10, r=5, v=OFF)
+
+
+def billInternet(pen):        # a connection
+    for rad in (22, 46, 70):
+        pen.arc(50, 90, rad, 215, 325, 12)
+    pen.circle(50, 88, 10)
+
+
+def billTv(pen):              # a screen
+    pen.rect(2, 10, 96, 68, r=10)
+    pen.rect(14, 22, 72, 44, r=4, v=OFF)
+    pen.rect(42, 78, 16, 12)
+    pen.rect(24, 90, 52, 10, r=5)
+
+
+def billMobile(pen):          # a handset
+    pen.rect(22, 0, 56, 100, r=12)
+    pen.rect(30, 12, 40, 68, r=4, v=OFF)
+    pen.circle(50, 90, 6, v=OFF)
+
+
+def billUtilities(pen):       # everything else that arrives monthly
+    for row in range(2):
+        for col in range(2):
+            pen.rect(6 + col * 50, 6 + row * 50, 38, 38, r=10)
+    pen.rect(16, 16, 18, 18, r=5, v=OFF)
+    pen.rect(66, 66, 18, 18, r=5, v=OFF)
+
+
 # --- brand marks -----------------------------------------------------------
 #
 # A company's own logo, not a drawing of what the tile does. JomPAY is printed
@@ -371,6 +416,15 @@ ICONS = [
     ('mydigital', PURPLE, mydigital),
     ('passport', RED, passport),
     ('bus', AMBER, bus),
+    # The Bill Payment category picker, which drew one-colour vectors while
+    # every grid around it had pictures.
+    ('billElectricity', AMBER, billElectricity),
+    ('billWater', BLUE, billWater),
+    ('billGas', RED, billGas),
+    ('billInternet', INDIGO, billInternet),
+    ('billTv', PURPLE, billTv),
+    ('billMobile', TEAL, billMobile),
+    ('billUtilities', SLATE, billUtilities),
 ]
 
 if __name__ == '__main__':
