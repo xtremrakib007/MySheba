@@ -104,7 +104,8 @@
     "test:devicetrust": "node scripts/test-device-trust.js",
     "deploy:web": "node scripts/deploy-web.js",
     "audit:themekeys": "node scripts/audit-theme-keys.js",
-    "test:statusbadges": "node scripts/test-status-badges.js"
+    "test:statusbadges": "node scripts/test-status-badges.js",
+    "test:photoicons": "node scripts/test-photo-icons.js"
   },
   "dependencies": {
     "@notifee/react-native": "^9.1.8",

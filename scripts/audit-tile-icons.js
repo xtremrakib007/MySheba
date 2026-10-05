@@ -60,6 +60,11 @@ const brand = new Set(
   [...fs.readFileSync(path.join(root, 'src/components/BrandTileLogo.js'), 'utf8')
     .matchAll(/^  ([a-zA-Z]+): require\(/gm)].map((m) => m[1]),
 );
+// The supplied photo icon pack is a third source of artwork, keyed the same
+// way. Without it here, a tile pointed at a real picture reads as pointing at
+// nothing.
+for (const m of fs.readFileSync(path.join(root, 'src/components/PhotoTileIcon.js'), 'utf8')
+  .matchAll(/^  ([a-zA-Z0-9]+): require\(/gm)) brand.add(m[1]);
 const unresolvedArt = [];
 for (const file of SOURCES) {
   const src = fs.readFileSync(path.join(root, file), 'utf8');
@@ -71,7 +76,7 @@ for (const file of SOURCES) {
 if (unresolvedArt.length) {
   console.error(`\nTile icon audit: ${unresolvedArt.length} tile(s) name artwork that does not exist:\n`);
   for (const [key, artName, file] of unresolvedArt) console.error(`  ${key}  art: '${artName}'  (${file})`);
-  console.error('\nDraw it in ServiceArt, add it to BrandTileLogo, or remove the art: line.\n');
+  console.error('\nDraw it in ServiceArt, add it to BrandTileLogo or PhotoTileIcon, or remove the art: line.\n');
   process.exit(1);
 }
 

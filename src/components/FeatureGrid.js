@@ -6,6 +6,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { iconFor, iconRenderFor } from '../theme/iconSets';
 import { serviceColor } from '../theme/serviceColors';
 import ServiceArt, { hasServiceArt } from './ServiceArt';
+import PhotoTileIcon, { hasPhotoTileIcon, photoIconFor } from './PhotoTileIcon';
 
 const GRID_PADDING = 10;
 const COLUMN_GAP = 8;
@@ -39,6 +40,15 @@ function gridCanvas(gridStyle, colors, isDark) {
     threeD: '#EEF1F5', gradient: '#F0ECFF', neon: '#EEF2F5', bento: '#F4F0FF', adaptive: '#ECF9F3'
   };
   return dark[gridStyle] || colors.bg;
+}
+
+// An explicit choice beats the tile's key, and an explicitly chosen emoji
+// means the person wanted text rather than any picture at all.
+function photoArtFor(it) {
+  if (!it) return '';
+  if (hasPhotoTileIcon(it.art)) return it.art;
+  if (it.art || it.emoji) return '';
+  return photoIconFor(it.key);
 }
 
 export default function FeatureGrid({ title, items, activeKey, onPress, numColumns = 4 }) {
@@ -104,7 +114,12 @@ export default function FeatureGrid({ title, items, activeKey, onPress, numColum
                   {/* A chosen emoji beats the drawing this tile's key implies,
                       or a superadmin picking one in Tile Labels would see no
                       change on any tile whose key happens to have art. */}
-                  {hasServiceArt(it.art || (it.emoji ? '' : it.key))
+                  {/* Supplied artwork first, for the same reason as the
+                      service grid: a tile with a picture of its own should
+                      show it rather than the generic drawing. */}
+                  {photoArtFor(it)
+                    ? <PhotoTileIcon art={photoArtFor(it)} size={28 * iconRender.scale} />
+                    : hasServiceArt(it.art || (it.emoji ? '' : it.key))
                     ? <ServiceArt name={it.art || it.key} size={28 * iconRender.scale} color={tileTint || iconColor} />
                     : <Text style={[styles.iconText, { color: tileTint || iconColor, fontSize: 27 * iconRender.scale, fontWeight: iconRender.weight }]}>{it.emoji || iconFor(it.key, iconStyle, it.icon)}</Text>}
                 </View>
