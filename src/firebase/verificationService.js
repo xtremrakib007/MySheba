@@ -3,6 +3,7 @@
 import { doc, onSnapshot, collection, query, where, orderBy, limit } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './config';
+import { consentPayload } from '../utils/consentPolicy';
 
 const REQUESTS = 'verificationRequests';
 
@@ -24,6 +25,9 @@ export async function submitVerificationRequest(uid, { name }, documentUrl, kycD
   const fn = httpsCallable(functions, 'createDiditKycSession');
   const result = await fn({
     mode: 'submit',
+    // The callable refuses a submission without this. Identity documents and a
+    // selfie are what it is for.
+    consent: consentPayload('kyc'),
     kycData: {
       uid,
       name: name || '',

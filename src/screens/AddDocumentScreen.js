@@ -12,6 +12,7 @@ import { DOCUMENT_TYPE_LABELS, MULTI_PAGE_TYPES, DEFAULT_REMINDER_OFFSETS } from
 import { createDocument, updateDocument, listDocuments } from '../firebase/documentService';
 import { uploadMultipleFiles } from '../firebase/documentStorageService';
 import { rescheduleReminders } from '../firebase/documentReminderService';
+import ConsentCheckbox from '../components/ConsentCheckbox';
 
 /**
  * Handles both "add new" and "edit details" - editDocumentId (from
@@ -40,6 +41,7 @@ export default function AddDocumentScreen() {
   const [notes, setNotes] = useState('');
   const [pickedFiles, setPickedFiles] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [consentGiven, setConsentGiven] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
   useEffect(() => {
@@ -173,7 +175,11 @@ export default function AddDocumentScreen() {
           </View>
         )}
 
-        <TouchableOpacity style={[styles.saveButton, saving && { opacity: 0.7 }]} onPress={handleSave} disabled={saving}>
+        {/* A passport or an IC is about to be stored. firestore.rules refuses
+            the write without the acceptance this records, so the box is not
+            decoration - it is where the consent comes from. */}
+        <ConsentCheckbox purpose="documents" value={consentGiven} onChange={setConsentGiven} />
+        <TouchableOpacity style={[styles.saveButton, (saving || !consentGiven) && { opacity: 0.7 }]} onPress={handleSave} disabled={saving || !consentGiven}>
           <Text style={styles.saveButtonText}>{saving ? 'Saving…' : 'Save'}</Text>
         </TouchableOpacity>
       </ScrollView>

@@ -5,6 +5,7 @@ import * as Crypto from 'expo-crypto';
 import { db, functions, auth } from './config';
 import { logActivity } from './logService';
 import { getSessionProof, callWithSessionProof } from './deviceSessionService';
+import { consentPayload } from '../utils/consentPolicy';
 
 const COLLECTION = 'transactions';
 const QUEUE_COLLECTION = 'transactionQueue';
@@ -26,7 +27,12 @@ export async function createTransaction(payload, customer) {
   const requestId = payload.requestId || createRequestId(); payload.requestId = requestId;
   const session = await getSessionProof();
   const fn = httpsCallable(functions, chargeFnName);
-  try { const { data } = await fn({ payload, customer, requestId, ...session }); logActivity('transaction_submitted', { service: payload.service, amount: payload.amount || 0, cost: data.cost }); return data.id; }
+  // Sent only when the box was actually ticked. Sending it unconditionally
+  // would record an acceptance from somebody who never gave one, which is the
+  // failure the whole consent record exists to avoid.
+  const consent = payload.service === 'Remittance' && payload.raw?.consentAccepted === true
+    ? consentPayload('remittance') : undefined;
+  try { const { data } = await fn({ payload, customer, requestId, ...session, ...(consent ? { consent } : {}) }); logActivity('transaction_submitted', { service: payload.service, amount: payload.amount || 0, cost: data.cost }); return data.id; }
   catch (err) { throw new Error(err.message || 'Could not submit this order right now.'); }
 }
 

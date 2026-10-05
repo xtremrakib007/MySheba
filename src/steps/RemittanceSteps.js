@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { countries } from '../data/countries';
 import { FormLabel, Grid3, SelectCard, FormInput, SearchPicker, MethodCard, TxOptionCard, SummaryCard } from '../components/ui';
 import RemittanceReceiverStep from './RemittanceReceiverStep';
+import ConsentCheckbox from '../components/ConsentCheckbox';
 
 const DEFAULT_FEE = 7.0;
 const RECEIVING_METHODS = [
@@ -46,7 +47,13 @@ export default function RemittanceStep({ step }) {
   if (step === 3) { const rate = serviceData.receivingRate || 30.26; const fee = serviceData.transferFee != null ? serviceData.transferFee : (rates.remittanceFee != null ? rates.remittanceFee : DEFAULT_FEE); const sendAmt = Number(serviceData.sendAmt || 0); const total = sendAmt + fee; const recAmt = sendAmt * rate; return <View><FormLabel>Transfer Amount</FormLabel><Text style={{ color:'#6B7280', fontSize:12, marginBottom:8 }}>Enter the amount you want to send in MYR.</Text><FormInput keyboardType="numeric" placeholder="0.00 MYR" value={serviceData.sendAmt != null ? String(serviceData.sendAmt) : ''} onChangeText={(v) => updateServiceData({ sendAmt:parseFloat(v) || 0 })}/><SummaryCard title="Transfer Summary" rows={[{label:'You Send',value:`${sendAmt.toFixed(2)} MYR`},{label:'Exchange Rate',value:`1.00 MYR = ${rate} ${curr}`},{label:'Transfer Fee',value:`${fee.toFixed(2)} MYR`},{label:'Total Charged',value:`${total.toFixed(2)} MYR`}]} totalLabel="Recipient Gets" totalValue={`${recAmt.toFixed(2)} ${curr}`} /></View>; }
 
   if (step === 4) return <RemittanceReceiverStep serviceData={serviceData} updateServiceData={updateServiceData} authUser={authUser} profile={profile}/>;
-  if (step === 5) return <SenderDetails serviceData={serviceData} updateServiceData={updateServiceData} profile={profile} authUser={authUser}/>;
+  if (step === 5) return (<>
+    <SenderDetails serviceData={serviceData} updateServiceData={updateServiceData} profile={profile} authUser={authUser}/>
+    {/* The last step before a transfer carrying both parties' passport and
+        address details is sent. The charge refuses it without this. */}
+    <ConsentCheckbox purpose="remittance" value={!!serviceData.consentAccepted}
+      onChange={(v) => updateServiceData({ consentAccepted: v })} />
+  </>);
   if (step === 6) return <FinalReview serviceData={serviceData} profile={profile} curr={curr}/>;
   return null;
 }
@@ -106,6 +113,6 @@ export function validateStep(step, serviceData) {
     if (serviceData.method==='cash') { if (!(serviceData.receiverPickupNetwork||'').trim()) return 'Please select a cash pickup network.'; if (!(serviceData.receiverPickupCity||'').trim()) return 'Please enter the pickup city.'; }
     if (serviceData.method==='ewallet') { if (!(serviceData.receiverWalletProvider||'').trim()) return 'Please select an eWallet provider.'; if (!(serviceData.receiverWalletNumber||'').trim()) return "Please enter the receiver's wallet number."; }
   }
-  if (step===5) { if (!(serviceData.senderName||'').trim()) return 'Your verified sender name is missing. Please update your profile first.'; if (!(serviceData.senderPhone||'').trim()) return 'Your verified phone number is missing. Please verify your phone first.'; if (!(serviceData.purpose||'').trim()) return 'Please select the purpose of the remittance.'; }
+  if (step===5) { if (!(serviceData.senderName||'').trim()) return 'Your verified sender name is missing. Please update your profile first.'; if (!(serviceData.senderPhone||'').trim()) return 'Your verified phone number is missing. Please verify your phone first.'; if (!(serviceData.purpose||'').trim()) return 'Please select the purpose of the remittance.'; if (serviceData.consentAccepted !== true) return 'Please tick the box to continue.'; }
   return null;
 }

@@ -23,6 +23,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './config';
 import { DEFAULT_REMINDER_OFFSETS, DOCUMENT_STATUS } from '../data/documentConstants';
+import { consentPayload } from '../utils/consentPolicy';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -90,12 +91,19 @@ export function subscribeToDocuments(userId, onChange, onError) {
 
 export async function createDocument(userId, draft, files) {
   if (!userId) throw new Error('Not authenticated');
+  // firestore.rules refuses a document without these, because this write goes
+  // client -> Firestore with no callable in between: the rule is the only place
+  // the tick can be required. consentPayload throws for an unknown purpose, so
+  // a typo here fails loudly rather than writing an unenforceable record.
+  const consent = consentPayload('documents');
   const status = computeStatus(draft.expiryDate);
   const ref = await addDoc(documentsCollection(), {
     userId,
     documentType: draft.documentType,
     documentName: draft.documentName,
     documentNumber: draft.documentNumber ?? null,
+    consentPurpose: consent.purpose,
+    consentVersion: consent.version,
     issueDate: draft.issueDate ?? null,
     expiryDate: draft.expiryDate ?? null,
     notes: draft.notes ?? '',

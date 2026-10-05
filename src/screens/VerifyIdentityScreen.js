@@ -12,6 +12,7 @@ import * as verificationService from '../firebase/verificationService';
 import { uploadVerificationDocument } from '../firebase/mediaUpload';
 import { countries } from '../data/countries';
 import { radius } from '../theme/theme';
+import ConsentCheckbox from '../components/ConsentCheckbox';
 
 const DOCUMENT_TYPES = ['Passport', 'MyKad / National ID', 'Work Permit / ID', "Driver's License"];
 const GENDERS = ['Male', 'Female', 'Other'];
@@ -105,6 +106,7 @@ export default function VerifyIdentityScreen() {
   const [request, setRequest] = useState(undefined);
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
+  const [consentGiven, setConsentGiven] = useState(false);
   const [showLiveFace, setShowLiveFace] = useState(false);
   const [files, setFiles] = useState({ front: null, back: null, selfie: null });
   const [mimes, setMimes] = useState({ front: null, back: null, selfie: null });
@@ -346,9 +348,12 @@ export default function VerifyIdentityScreen() {
           {files.back ? <Image source={{ uri: files.back }} style={styles.reviewImage} /> : null}
           {files.selfie ? <Image source={{ uri: files.selfie }} style={styles.reviewImage} /> : null}
         </View>
+        {/* This said the same thing as a sentence nobody had to acknowledge and
+            which was stored nowhere. Ticking it is now required, and the
+            acceptance is recorded server-side with its version. */}
         <View style={styles.consentCard}>
           <Text style={styles.consentTitle}>Ready to submit?</Text>
-          <Text style={styles.consentText}>By submitting, you confirm that the information and documents are accurate and belong to you.</Text>
+          <ConsentCheckbox purpose="kyc" value={consentGiven} onChange={setConsentGiven} />
         </View>
       </>
     );
@@ -395,7 +400,7 @@ export default function VerifyIdentityScreen() {
                 {step < 4 ? (
                   <PrimaryButton label="Next" onPress={next} />
                 ) : (
-                  <PrimaryButton label={submitting ? 'Submitting…' : (request?.status === 'rejected' ? 'Resubmit KYC' : 'Submit KYC')} onPress={submit} disabled={submitting} />
+                  <PrimaryButton label={submitting ? 'Submitting…' : (request?.status === 'rejected' ? 'Resubmit KYC' : 'Submit KYC')} onPress={submit} disabled={submitting || !consentGiven} />
                 )}
               </View>
             </View>
