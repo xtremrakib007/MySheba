@@ -159,7 +159,7 @@ const STAFF_SERVICES = {
 const STAFF_CAPABILITY_TILES = [
   { key: 'adminSupport', icon: '🎧', name: 'Support Inbox', kind: 'staffSupport', needs: ['support'], cat: 'manage', home: true },
   { key: 'inquiries', icon: '🗺️', name: 'Inquiries', kind: 'staffInquiries', needs: ['support'], cat: 'manage', home: true },
-  { key: 'history', icon: '📋', name: 'Transactions', kind: 'history', needs: ['orders', 'finance'], cat: 'manage', home: true },
+  { key: 'history', icon: '📋', name: 'Transactions', kind: 'history', needs: ['orders', 'finance', 'review'], cat: 'manage', home: true },
   { key: 'topup', icon: '💰', name: 'Top-Ups', kind: 'adminTopup', needs: ['finance'], cat: 'manage', home: true },
   { key: 'reports', icon: '📊', name: 'Reports', kind: 'staffReports', needs: ['reports'], cat: 'manage', home: true },
   { key: 'ledger', icon: '📒', name: 'Ledger', kind: 'staffLedger', needs: ['reports'], cat: 'manage', home: true },
@@ -169,7 +169,7 @@ const STAFF_CAPABILITY_TILES = [
 ];
 
 // Admin keeps its hub; the money tiles appear only with finance/orders.
-const ADMIN_TILE_NEEDS = { topup: ['finance'], history: ['orders', 'finance'], ledger: ['reports'], walletFunding: ['finance'] };
+const ADMIN_TILE_NEEDS = { topup: ['finance'], history: ['orders', 'finance', 'review'], ledger: ['reports'], walletFunding: ['finance'] };
 
 export { CUSTOMER_SERVICES, SHARED_SERVICES, STAFF_SERVICES, STAFF_CAPABILITY_TILES, ADMIN_TILE_NEEDS };
 

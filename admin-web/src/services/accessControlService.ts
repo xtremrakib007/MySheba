@@ -9,12 +9,13 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../firebase/config';
 import type { AdminRole } from '../contexts/AuthContext';
 
-export const CAPABILITIES = ['support', 'orders', 'finance', 'users', 'settings', 'reports'] as const;
+export const CAPABILITIES = ['support', 'orders', 'review', 'finance', 'users', 'settings', 'reports'] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
 export const CAPABILITY_INFO: Record<Capability, { label: string; description: string }> = {
   support: { label: 'Support', description: 'Tickets, contact messages, inquiries, chat reports and announcements.' },
   orders: { label: 'Order management', description: 'Approve, reject and route service orders; issue recharge PINs.' },
+  review: { label: 'Order review (read only)', description: 'Open and investigate any customer order. Grants no power to approve, reject, complete or refund.' },
   finance: { label: 'Finance', description: 'Transactions, top-up review, point top-ups, settlement and risk.' },
   users: { label: 'User management', description: 'Accounts, KYC review, business profiles and customer feature access.' },
   settings: { label: 'Settings', description: 'Rates, pricing, banners, billers and other platform configuration.' },
@@ -26,9 +27,9 @@ export const CONFIGURABLE_ROLES: ConfigurableRole[] = ['admin', 'support', 'fina
 
 // Built-in defaults. A superadmin can change them in Access Control.
 export const BUILT_IN_DEFAULTS: Record<ConfigurableRole, Capability[]> = {
-  admin: ['support', 'orders', 'finance', 'users', 'settings', 'reports'],
-  support: ['support'],
-  finance: ['finance', 'reports'],
+  admin: ['support', 'orders', 'review', 'finance', 'users', 'settings', 'reports'],
+  support: ['support', 'review', 'reports'],
+  finance: ['finance', 'orders', 'reports'],
 };
 
 export type RoleDefaults = Record<ConfigurableRole, Capability[]>;

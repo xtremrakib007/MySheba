@@ -18,7 +18,11 @@ service cloud.firestore {
     // with functions/accessControl.js and both accessControlService files.
     function accessDoc() { return /databases/$(database)/documents/settings/accessControl; }
     function overrideDoc() { return /databases/$(database)/documents/accessOverrides/$(request.auth.uid); }
-    function builtInCaps(r) { return r == 'admin' ? ['support', 'orders', 'finance', 'users', 'settings', 'reports'] : r == 'support' ? ['support'] : r == 'finance' ? ['finance', 'reports'] : []; }
+    // 'review' READS orders and nothing else, so a support agent can investigate
+    // one without being handed 'orders' (approve/reject/complete) or 'finance'
+    // (top-ups, wallet funding). It appears in exactly one read rule below and
+    // must never appear in a write rule.
+    function builtInCaps(r) { return r == 'admin' ? ['support', 'orders', 'review', 'finance', 'users', 'settings', 'reports'] : r == 'support' ? ['support', 'review', 'reports'] : r == 'finance' ? ['finance', 'orders', 'reports'] : []; }
     function roleCapsFrom(defaults, r) { return defaults.get(r, null) != null ? defaults[r] : builtInCaps(r); }
     function roleCaps(r) { return exists(accessDoc()) ? roleCapsFrom(get(accessDoc()).data.get('roleDefaults', {}), r) : builtInCaps(r); }
     function overrideAllows(o, cap, r) { return !(cap in o.get('revoke', [])) && (cap in roleCaps(r) || cap in o.get('grant', [])); }
@@ -96,7 +100,7 @@ service cloud.firestore {
     match /userAuditLog/{id} { allow read: if activeProfile() && isSuperadmin(); allow write: if false; }
     match /errorLog/{id} { allow create: if activeProfile() && request.resource.data.source == 'client' && request.resource.data.userId == request.auth.uid; allow read: if activeProfile() && isSuperadmin(); allow update: if activeProfile() && isSuperadmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resolved','resolvedBy','resolvedAt']); allow delete: if false; }
     match /inquiries/{id} { allow create: if activeProfile() && request.resource.data.customerId == request.auth.uid && request.resource.data.status == 'new' && request.resource.data.type in ['flight','bus','train'] && request.resource.data.keys().hasOnly(['customerId','type','from','to','date','time','passengers','name','phone','email','notes','status','createdAt','updatedAt']); allow read: if activeProfile() && (resource.data.customerId == request.auth.uid || can('support')); allow update: if activeProfile() && can('support') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','ticketUrl','updatedAt']) && request.resource.data.status in ['new','contacted','closed']; allow delete: if false; }
-    match /transactions/{id} { allow create, update, delete: if false; allow read: if activeProfile() && (resource.data.customerId == request.auth.uid || (can('orders') || can('finance'))); }
+    match /transactions/{id} { allow create, update, delete: if false; allow read: if activeProfile() && (resource.data.customerId == request.auth.uid || (can('orders') || can('finance') || can('review'))); }
     // Recharge PIN documents contain the real telco voucher secret. Never expose them through
     // direct Firestore reads; the callable getRechargePin enforces ownership and returns
     // only the requested voucher after App Check/auth/session controls.

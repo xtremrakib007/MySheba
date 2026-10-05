@@ -68,6 +68,7 @@
     "test:ledger": "node scripts/test-ledger.js",
     "test:reasons": "node scripts/test-reject-reasons.js",
     "test:userroles": "node scripts/test-user-roles.js",
+    "test:capabilities": "node scripts/test-capabilities.js",
     "test:funding": "node scripts/test-wallet-funding.js",
     "test:operator": "node scripts/test-operator-detect.js",
     "test:deploytargets": "node scripts/test-deploy-targets.js",

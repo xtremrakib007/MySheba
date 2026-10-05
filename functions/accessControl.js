@@ -26,15 +26,26 @@ const admin = require('firebase-admin');
 const { logAudit } = require('./logService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
-const CAPABILITIES = ['support', 'orders', 'finance', 'users', 'settings', 'reports'];
+// 'review' reads orders and nothing else. It exists because investigating a
+// customer's order used to require 'orders' or 'finance', and both of those
+// carry money authority: 'orders' approves, rejects and completes, 'finance'
+// runs top-ups and wallet funding. A support agent answering "what happened to
+// my recharge?" needed neither, and had no way to look without being given one.
+// It must never appear in a write rule.
+const CAPABILITIES = ['support', 'orders', 'review', 'finance', 'users', 'settings', 'reports'];
 
 // Built on the role sheet. Admin runs every staff area by default; a
-// superadmin can narrow that per role or per person. Support works support;
-// finance works money.
+// superadmin can narrow that per role or per person.
+//
+// Finance holds 'orders' because the customer order queue is gated on it
+// (firestore.rules), so without it finance could read a transaction's history
+// but never see the orders waiting to be worked - which is most of the job.
+// Support holds 'review' and 'reports': enough to investigate an order and
+// read the numbers, and nothing that moves money.
 const BUILT_IN_DEFAULTS = {
-  admin: ['support', 'orders', 'finance', 'users', 'settings', 'reports'],
-  support: ['support'],
-  finance: ['finance', 'reports'],
+  admin: ['support', 'orders', 'review', 'finance', 'users', 'settings', 'reports'],
+  support: ['support', 'review', 'reports'],
+  finance: ['finance', 'orders', 'reports'],
 };
 
 const CONFIGURABLE_ROLES = Object.keys(BUILT_IN_DEFAULTS);

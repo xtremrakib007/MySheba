@@ -6,13 +6,15 @@
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from './config';
 
-export const CAPABILITIES = ['support', 'orders', 'finance', 'users', 'settings', 'reports'];
+// 'review' reads orders and nothing else - see functions/accessControl.js for
+// why it exists. It must never appear in a write rule.
+export const CAPABILITIES = ['support', 'orders', 'review', 'finance', 'users', 'settings', 'reports'];
 
 // Built-in defaults; a superadmin can change them in Access Control.
 export const BUILT_IN_DEFAULTS = {
-  admin: ['support', 'orders', 'finance', 'users', 'settings', 'reports'],
-  support: ['support'],
-  finance: ['finance', 'reports'],
+  admin: ['support', 'orders', 'review', 'finance', 'users', 'settings', 'reports'],
+  support: ['support', 'review', 'reports'],
+  finance: ['finance', 'orders', 'reports'],
 };
 
 const CONFIGURABLE_ROLES = Object.keys(BUILT_IN_DEFAULTS);

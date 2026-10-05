@@ -58,7 +58,11 @@ const CAPABILITY_FOR = {
   // for. Either capability opens the hub, because Rates, Pricing and Payments
   // want 'settings' while Transfers wants 'finance'.
   finance: ['settings', 'finance'],
-  all: ['orders', 'finance'], pending: ['orders'], inquiries: ['support'], topups: ['finance'],
+  // `all` is the order history, which is where an order is investigated, so
+  // read-only 'review' opens it. `pending` is the work queue - accepting and
+  // rejecting - and deliberately stays on 'orders': showing somebody buttons
+  // the server will refuse is worse than not showing the screen.
+  all: ['orders', 'finance', 'review'], pending: ['orders'], inquiries: ['support'], topups: ['finance'],
   support: ['support'], adminAnalytics: ['reports'],
   rates: ['settings'], pricing: ['settings'], payments: ['settings'], categories: ['settings'], banners: ['settings'],
   transferPoints: ['finance'],
