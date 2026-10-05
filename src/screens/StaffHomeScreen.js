@@ -6,6 +6,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { radius, shadows } from '../theme/theme';
 import BannerSlider from '../components/BannerSlider';
 import ServiceGrid from '../components/ServiceGrid';
+import WalletCard from '../components/WalletCard';
 import HeaderDecor from '../components/HeaderDecor';
 
 // Home for the staff roles that work a queue rather than a wallet: Support
@@ -27,11 +28,15 @@ const ROLE_COPY = {
 
 export default function StaffHomeScreen() {
   const { colors, brandGradient } = useTheme();
-  const { openSidebar, setScreen, hasUnreadNotifications, profile } = useApp();
+  const { openSidebar, setScreen, hasUnreadNotifications, profile, can } = useApp();
   const styles = createStyles(colors);
   const role = profile?.role || 'support';
   const copy = ROLE_COPY[role] || ROLE_COPY.support;
   const name = profile?.displayName || profile?.name || copy.title;
+  // Same expression AdminFeaturesScreen uses. The field has three spellings
+  // across the roles and reading only one of them showed finance a zero
+  // balance on an account that had money in it.
+  const balance = profile?.balance ?? profile?.walletBalance ?? profile?.wallet?.balance ?? 0;
 
   return (
     <View style={styles.screen}>
@@ -56,6 +61,21 @@ export default function StaffHomeScreen() {
           <Text style={styles.roleHint}>{copy.hint}</Text>
         </View>
 
+        {/* Finance moves money and had no way to see or send it from here -
+            the card was only on the Control Center, which is an admin screen.
+            Gated on the capability, not the role: both roles that land here
+            are staff, and only the one holding 'finance' may transfer. The two
+            actions go to the same routes as this role's own grid tiles
+            (walletFunding needs:['finance'], transferPoints -> walletTransfer),
+            so the card is a shortcut and not a second way in. */}
+        {!!can('finance') && (
+          <WalletCard
+            balance={balance}
+            variant="surface"
+            onAddMoney={() => setScreen('walletFunding')}
+            onTransfer={() => setScreen('transferPoints')}
+          />
+        )}
         <BannerSlider />
         <ServiceGrid />
       </ScrollView>

@@ -397,6 +397,57 @@ export function adminLandingTiles(webviewPages, hasArt = () => false, tileLabels
   return applyTileLabels([...overlaid, ...extra], tileLabels);
 }
 
+/**
+ * Every tile whose home-screen placement a superadmin can set, for one role.
+ *
+ * Which list a role's home screen is drawn from is not uniform, and a screen
+ * that guessed would offer toggles that control nothing: admin and superadmin
+ * land on the Control Center, which draws ADMIN_HOME, and every other role
+ * lands on ServiceGrid, which draws servicesForRole. So the answer comes from
+ * here, next to both lists, rather than from the editing screen.
+ *
+ * `declaredDefault` travels with the list because ADMIN_HOME flags nothing for
+ * home - every tile is on that grid - while the service lists flag each tile
+ * individually. The editing screen needs it to show what "default" means for
+ * the role in front of it, and tileOnHome needs it to agree with the grid.
+ *
+ * `can` is deliberately permissive: the point is to configure a role's home
+ * screen from a superadmin's account, so the list must be that ROLE's tiles,
+ * not the ones the person editing happens to hold capabilities for. A tile the
+ * role cannot actually reach is still filtered out at render time by the grid
+ * itself, where the real capability check lives.
+ */
+export function placeableTiles({ role, webviewPages, tileLabels, hasArt } = {}) {
+  if (role === 'admin' || role === 'superadmin') {
+    return { tiles: adminLandingTiles(webviewPages, hasArt, tileLabels), declaredDefault: true };
+  }
+  const tiles = applyTileLabels(
+    withWebviewConfig(servicesForRole(role || 'customer', () => true), webviewPages),
+    tileLabels,
+  );
+  return { tiles, declaredDefault: false };
+}
+
+/**
+ * The admin/superadmin landing tiles a superadmin has taken OFF the home grid.
+ *
+ * The counterpart of adminLandingTiles, and the reason this exists at all:
+ * admin and superadmin do not land on ServiceGrid, they land on the Control
+ * Center, which draws ADMIN_HOME. Nothing in ADMIN_HOME is flagged for home,
+ * so every tile was on that grid and More Features showed the same
+ * destinations over again. Taking one off the grid has to put it somewhere,
+ * and this is where More Features reads it from.
+ *
+ * `isOnGrid` is the Control Center's own filter (capability, section and Grid
+ * Access), passed in so the two lists cannot disagree about which tiles the
+ * role has at all - only about where they sit.
+ */
+export function adminOverflowTiles({ webviewPages, tileLabels, hasArt, placement, isOnGrid = () => true }) {
+  return adminLandingTiles(webviewPages, hasArt, tileLabels)
+    .filter((item) => isOnGrid(item))
+    .filter((item) => !tileOnHome(item, placement, true));
+}
+
 /** The Grid Management key a tile is gated by - not always its own key. */
 export function gridKeyFor(service) {
   return ({
@@ -421,7 +472,31 @@ export function gridKeyFor(service) {
  * Firestore. `homeOnly` is the customer home screen; a staff list carries no
  * home flags, so it falls back to the whole set rather than rendering nothing.
  */
-export function visibleTiles({ role, can, webviewPages, tileLabels, isActive = () => true, homeOnly = false }) {
+/**
+ * Whether one tile belongs on the home screen.
+ *
+ * THE one place that decides it. `placement` is a superadmin's overrides for
+ * this role ({ [tileKey]: boolean }, from settings/tilePlacement); the tile's
+ * own declared `home` flag is the default.
+ *
+ * It lives here, and only here, because the home screen and More Features are
+ * two filters on the same answer: if they each worked it out for themselves
+ * they would eventually disagree, and a tile that is on neither list is a
+ * finished feature nobody can reach. overflowTiles is literally the negation
+ * of this function, so there is nothing for them to disagree about.
+ */
+export function tileOnHome(tile, placement, declaredDefault = false) {
+  const override = placement && typeof placement === 'object' ? placement[tile && tile.key] : undefined;
+  if (typeof override === 'boolean') return override;
+  // The service lists flag home per tile. ADMIN_HOME does not flag anything -
+  // every tile an admin or superadmin can reach is on their landing grid - so
+  // that list passes a default of true and keeps behaving as it always has
+  // until a superadmin takes something off it.
+  if (tile && typeof tile.home === 'boolean') return tile.home;
+  return !!declaredDefault;
+}
+
+export function visibleTiles({ role, can, webviewPages, tileLabels, isActive = () => true, homeOnly = false, placement }) {
   const all = applyTileLabels(withWebviewConfig(servicesForRole(role, can), webviewPages), tileLabels);
   const active = all.filter((service) => isActive(gridKeyFor(service)));
   if (!homeOnly) return active;
@@ -432,8 +507,13 @@ export function visibleTiles({ role, can, webviewPages, tileLabels, isActive = (
   // The fallback stays, for a different reason than before: a list where
   // nothing is flagged would otherwise render as a single More Services tile
   // and nothing else, which looks like the app failed to load.
-  const flagged = active.filter((service) => service.home);
-  if (flagged.length === 0) return active;
+  const flagged = active.filter((service) => tileOnHome(service, placement));
+  // A superadmin who takes every tile off a role's home screen means it, and
+  // the grid shows the single More Services tile - that is the "replace what
+  // is on the home screen" case working, not a failure to load. The fallback
+  // below is for a DECLARED list with no flags in it at all, which is a
+  // mistake in the code rather than a choice somebody made.
+  if (flagged.length === 0 && !placementTouches(active, placement)) return active;
   // More Features is flagged for home like everything else now, so appending it
   // unconditionally drew it twice - once in its declared place at the end of the
   // last row, once again on a row of its own below.
@@ -503,7 +583,7 @@ export const STAFF_FEATURES = [
  * the personal section, and two headings describing the same thing read as a
  * duplicate even when no tile is repeated.
  */
-export function moreFeaturesSections({ role = 'customer', can, webviewPages, tileLabels, isActive = () => true }) {
+export function moreFeaturesSections({ role = 'customer', can, webviewPages, tileLabels, isActive = () => true, placement }) {
   const declared = applyTileLabels((!role || role === 'customer') ? PERSONAL_FEATURES : STAFF_FEATURES, tileLabels);
 
   // An account row for something already on this role's home screen is the
@@ -516,7 +596,7 @@ export function moreFeaturesSections({ role = 'customer', can, webviewPages, til
   // survives here - which is the rule this screen exists for: a finished
   // feature lands on the home screen or here, never nowhere.
   const onHome = new Set(
-    visibleTiles({ role, can, webviewPages, tileLabels, isActive, homeOnly: true }).map((tile) => tile.key),
+    visibleTiles({ role, can, webviewPages, tileLabels, isActive, homeOnly: true, placement }).map((tile) => tile.key),
   );
   const account = declared.filter((row) => !onHome.has(row.key));
 
@@ -525,14 +605,24 @@ export function moreFeaturesSections({ role = 'customer', can, webviewPages, til
   // the overflow, or removing one duplicate just moves it.
   const kinds = new Set(declared.map((f) => f.kind));
   const keys = new Set(declared.map((f) => f.key));
-  const overflow = overflowTiles({ role, can, webviewPages, tileLabels, isActive, excludeKinds: kinds })
+  const overflow = overflowTiles({ role, can, webviewPages, tileLabels, isActive, excludeKinds: kinds, placement })
     .filter((tile) => tile.cat !== 'personal' && !keys.has(tile.key));
   return { sections: groupTilesByCategory(overflow), account };
 }
 
-export function overflowTiles({ role = 'customer', can, webviewPages, tileLabels, isActive = () => true, excludeKinds = [] }) {
+export function overflowTiles({ role = 'customer', can, webviewPages, tileLabels, isActive = () => true, excludeKinds = [], placement }) {
   const exclude = new Set(excludeKinds);
   return applyTileLabels(withWebviewConfig(servicesForRole(role, can), webviewPages), tileLabels)
     .filter((tile) => isActive(gridKeyFor(tile)))
-    .filter((tile) => !tile.home && tile.kind !== 'moreFeaturesLink' && !exclude.has(tile.kind));
+    // The negation of tileOnHome, so a tile taken off the home screen lands
+    // here. This is what made the superadmin's More Features page empty:
+    // every tile a superadmin has declares home: true, so this filter removed
+    // all of them and there was nowhere to move anything to.
+    .filter((tile) => !tileOnHome(tile, placement) && tile.kind !== 'moreFeaturesLink' && !exclude.has(tile.kind));
+}
+
+/** Whether any override in `placement` actually names a tile in this list. */
+function placementTouches(tiles, placement) {
+  if (!placement || typeof placement !== 'object') return false;
+  return tiles.some((tile) => typeof placement[tile.key] === 'boolean');
 }

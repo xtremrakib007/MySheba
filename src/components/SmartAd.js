@@ -9,6 +9,7 @@ import * as adTargetingService from '../firebase/adTargetingService';
 import * as adRotationService from '../firebase/adRotationService';
 import * as adTrackingService from '../firebase/adTrackingService';
 import { AD_TYPES, CLICK_ACTION_TYPES } from '../constants/adEnums';
+import { opensInApp } from '../utils/externalLink';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SLIDE_WIDTH = Math.min(SCREEN_WIDTH, 480);
@@ -74,7 +75,7 @@ const ROTATE_MS = 4000;
 // state targetCountries/etc. were in before this phase for every
 // dimension.
 export default function SmartAd({ placement, feature, adType = AD_TYPES.BANNER, height = 120, style }) {
-  const { adSettings, adFeatureControls, adCampaignsById, profile } = useApp();
+  const { adSettings, adFeatureControls, adCampaignsById, profile, openExternalUrl } = useApp();
   const { language } = useLanguage();
   const featureControl = adFeatureControls?.[feature];
   const userType = profile?.role;
@@ -207,7 +208,7 @@ export default function SmartAd({ placement, feature, adType = AD_TYPES.BANNER, 
   // now. The host screen never knows or cares which. ----
   if (!interstitialAllowed || displayAds.length === 0) return null;
 
-  return <AdRotator ads={displayAds} placementId={placement} feature={feature} adType={adType} height={height} style={style} />;
+  return <AdRotator ads={displayAds} placementId={placement} feature={feature} adType={adType} height={height} style={style} openExternalUrl={openExternalUrl} />;
 }
 
 // Renders one ad, or - when a placement has more than one eligible ad -
@@ -217,7 +218,7 @@ export default function SmartAd({ placement, feature, adType = AD_TYPES.BANNER, 
 // SmartAd placement and the older Home banner slider behave consistently
 // to the person using the app, even though they're two separate systems
 // (see adService.js's header comment on that separation).
-function AdRotator({ ads, placementId, feature, adType, height, style }) {
+function AdRotator({ ads, placementId, feature, adType, height, style, openExternalUrl }) {
   const [index, setIndex] = useState(0);
   const scrollRef = useRef(null);
   const pausedRef = useRef(false);
@@ -278,7 +279,7 @@ function AdRotator({ ads, placementId, feature, adType, height, style }) {
         clickAction: ad.clickAction,
       });
     });
-    performClickAction(ad.clickAction);
+    performClickAction(ad.clickAction, openExternalUrl);
   };
 
   const pressableFor = (ad) => (
@@ -325,10 +326,18 @@ function AdRotator({ ads, placementId, feature, adType, height, style }) {
 // Best-effort only, mirrors adTrackingService's own "never throw into the
 // UI" trust model - a bad/unsupported click action should disappear
 // quietly, not break the tap.
-function performClickAction(clickAction) {
+function performClickAction(clickAction, openExternalUrl) {
   if (!clickAction || clickAction.type === CLICK_ACTION_TYPES.NONE || !clickAction.value) return;
   try {
     if (clickAction.type === CLICK_ACTION_TYPES.URL) {
+      // In the app's own WebView, not the system browser. Linking.openURL
+      // threw the person out into Chrome, where the back button comes back to
+      // the launcher rather than to MySheba - a tapped ad was a one-way door
+      // out of the app. openExternalUrl checks the scheme before any of it
+      // reaches a WebView (see utils/externalLink.js) and returns false if it
+      // will not navigate, which is the only case left for the browser.
+      if (openExternalUrl && openExternalUrl(clickAction.value)) return;
+      if (!opensInApp(clickAction.value)) return;
       Linking.openURL(clickAction.value).catch(() => {});
     } else if (clickAction.type === CLICK_ACTION_TYPES.PHONE) {
       Linking.openURL(`tel:${clickAction.value}`).catch(() => {});

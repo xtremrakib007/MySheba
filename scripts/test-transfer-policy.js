@@ -138,5 +138,41 @@ check('and after a success', /setSearch\(''\);[\s\S]{0,300}setSecurityPin\(''\);
 const appScreen = readFile('src/screens/TransferPointsScreen.js');
 check('the app sends it too', /securityPin: pinToSend/.test(appScreen));
 
+// ---- Who can actually REACH a transfer ----
+//
+// The rule above is only worth anything to somebody who has a way to start
+// one. Finance moves money for a living and had no wallet on their home
+// screen at all: the card with Add Money and Transfer was on the Control
+// Center, which is an admin screen, and utils/homeScreen sends finance to
+// staffHome instead. So the policy allowed a transfer the UI never offered.
+console.log('\nA role that may transfer has somewhere to start one');
+const staffHome = readFile('src/screens/StaffHomeScreen.js');
+check('the staff home renders the wallet card',
+  /<WalletCard/.test(staffHome) && /import WalletCard from '\.\.\/components\/WalletCard'/.test(staffHome));
+check('with a Transfer action that goes to the transfer screen',
+  /onTransfer=\{\(\) => setScreen\('transferPoints'\)\}/.test(staffHome));
+check('and an Add Money action that goes where this role may actually go',
+  // Not superAdminTopup: AppContext's route guard restricts that one to
+  // superadmin, so a finance agent tapping it would be bounced.
+  /onAddMoney=\{\(\) => setScreen\('walletFunding'\)\}/.test(staffHome)
+    && !/superAdminTopup/.test(staffHome));
+check('gated on the capability the server checks, not on the role name',
+  // functions/secureTransfer.js asks hasCapability(..., 'finance') for every
+  // non-dealer caller. Gating on role would offer a support agent a button
+  // that fails server-side.
+  /\{!!can\('finance'\) && \(/.test(staffHome) && /can \} = useApp\(\)/.test(staffHome));
+check('the balance is read the same way the admin screen reads it',
+  // Three spellings exist across the roles; reading one showed finance a zero
+  // balance on an account with money in it.
+  /profile\?\.balance \?\? profile\?\.walletBalance \?\? profile\?\.wallet\?\.balance/.test(staffHome)
+    && /profile\?\.balance \?\? profile\?\.walletBalance \?\? profile\?\.wallet\?\.balance/.test(readFile('src/screens/AdminFeaturesScreen.js')));
+check('and admin still has its own',
+  // [^>]* does not work here: the arrow in `() =>` is a '>'.
+  /<WalletCard balance=\{balance\}[\s\S]*?onTransfer=\{\(\) => setScreen\('transferPoints'\)\}/.test(readFile('src/screens/AdminFeaturesScreen.js')));
+check('every role that lands on the staff home is one the server may let transfer',
+  // staffHome is support and finance. Support holding 'finance' is a grant a
+  // superadmin made on purpose; support without it sees no card at all.
+  /STAFF_HOME_ROLES = \['support', 'finance'\]/.test(readFile('src/utils/homeScreen.js')));
+
 console.log(failed ? `\n${failed} failure(s).` : '\nTransfer policy: the app matches the server.');
 process.exit(failed ? 1 : 0);

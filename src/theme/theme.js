@@ -125,11 +125,12 @@ export const radius = { sm: 8, md: 12, lg: 16, xl: 22, tile: 18, card: 22, sheet
  * corner of it. The wrap is a few points taller so a drawing and a picture sit
  * on the same baseline whatever their own proportions are.
  *
- * Came down from 52, then from 44, each time after seeing it on a phone: a
- * grid of nine is mostly artwork long before the icon looks big on its own.
- * Still above the 32 it was before any of this.
+ * Came down from 52, then 44, then 38, each time after seeing it on a phone:
+ * a grid of nine is mostly artwork long before the icon looks big on its own.
+ * 34 is the floor the tile-size test holds - below it the picture stops
+ * reading as the tile's subject and starts reading as a stamp on a label.
  */
-export const tileIcon = { size: 38, wrap: 42, emoji: 33 };
+export const tileIcon = { size: 34, wrap: 38, emoji: 30 };
 
 /**
  * One shape for every tile, on every grid, for every role.
@@ -142,8 +143,19 @@ export const tileIcon = { size: 38, wrap: 42, emoji: 33 };
  * Square because the artwork is square: a picture in a short wide box either
  * leaves air down both sides or gets cropped, and a grid of them reads as
  * uneven even when every box is identical.
+ *
+ * The tile gets smaller by widening the gap, not by adding a column: three
+ * across is what carries a two-line label on a 320dp phone, and a fourth
+ * column cannot. So the row keeps three and each one takes less of it.
+ *
+ * The width has to leave room for the two gaps in real pixels, not just in
+ * percent: on the narrowest phone the service grid lays out in 288dp, where
+ * 3 * 29.5% is 255dp and the two 12dp gaps are 24 - 279 of 288. The slack is
+ * deliberate. Fill the row exactly and any inset nobody counted (a border, a
+ * scrollbar, a parent's padding) wraps the third tile onto its own line and
+ * leaves a hole, which is how four across failed before.
  */
-export const tileGrid = { columns: 3, gap: 8, width: '31.3%' };
+export const tileGrid = { columns: 3, gap: 12, width: '29.5%' };
 
 // Soft, colour-tinted elevation rather than a neutral black shadow, which
 // on the tinted surfaces here reads as grime. Used by the cards the home

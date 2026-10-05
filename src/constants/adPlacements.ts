@@ -16,6 +16,11 @@ export const PLACEMENT_IDS = {
   HOME_TOP: 'HOME_TOP',
   HOME_MIDDLE: 'HOME_MIDDLE',
   HOME_BOTTOM: 'HOME_BOTTOM',
+  // The strip that sits directly above the bottom nav bar. Not HOME_BOTTOM:
+  // that one scrolls with the home page and belongs to it, this one is
+  // pinned to the chrome and stays put on every tabbed screen, so enabling
+  // one must not enable the other.
+  APP_BOTTOM_BAR: 'APP_BOTTOM_BAR',
 
   // FEATURE_IDS.MOBILE_RECHARGE
   RECHARGE_TOP: 'RECHARGE_TOP',
@@ -56,6 +61,7 @@ export const PLACEMENT_LABELS: Record<PlacementId, string> = {
   [PLACEMENT_IDS.HOME_TOP]: 'Home - Top',
   [PLACEMENT_IDS.HOME_MIDDLE]: 'Home - Middle',
   [PLACEMENT_IDS.HOME_BOTTOM]: 'Home - Bottom',
+  [PLACEMENT_IDS.APP_BOTTOM_BAR]: 'App - Above Bottom Nav (all tabs)',
 
   [PLACEMENT_IDS.RECHARGE_TOP]: 'Mobile Recharge - Top',
   [PLACEMENT_IDS.RECHARGE_BOTTOM]: 'Mobile Recharge - Bottom',
@@ -92,7 +98,7 @@ export const PLACEMENT_LABELS: Record<PlacementId, string> = {
  * placement from a different feature would otherwise be silently invalid).
  */
 export const PLACEMENTS_BY_FEATURE: Record<FeatureId, PlacementId[]> = {
-  [FEATURE_IDS.HOME]: [PLACEMENT_IDS.HOME_TOP, PLACEMENT_IDS.HOME_MIDDLE, PLACEMENT_IDS.HOME_BOTTOM],
+  [FEATURE_IDS.HOME]: [PLACEMENT_IDS.HOME_TOP, PLACEMENT_IDS.HOME_MIDDLE, PLACEMENT_IDS.HOME_BOTTOM, PLACEMENT_IDS.APP_BOTTOM_BAR],
   [FEATURE_IDS.MOBILE_RECHARGE]: [PLACEMENT_IDS.RECHARGE_TOP, PLACEMENT_IDS.RECHARGE_BOTTOM],
   [FEATURE_IDS.INTERNET_PACKAGE]: [PLACEMENT_IDS.INTERNET_TOP, PLACEMENT_IDS.INTERNET_BOTTOM],
   [FEATURE_IDS.MOBILE_BANKING]: [PLACEMENT_IDS.MOBILE_BANKING_TOP, PLACEMENT_IDS.MOBILE_BANKING_BOTTOM],

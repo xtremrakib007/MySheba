@@ -301,7 +301,10 @@ yes('an added page kept off home is there too',
 yes('a page switched off is in neither',
   !tiles.overflowTiles({ webviewPages: OFF }).some((t) => t.key === 'fomema'));
 yes('the WebView screen prefers the live page', /webviewPages && webviewPages\[webViewKey\]/.test(screen));
-yes('but still falls back to the built-in', /webViewPages\[webViewKey\] \|\| webViewPages\.fomema/.test(screen));
+// Whitespace-tolerant: the lookup is a multi-line chain now that an ad's
+// one-off page is tried first, and the fallback this check is about is the
+// same fallback either way.
+yes('but still falls back to the built-in', /webViewPages\[webViewKey\]\s*\|\|\s*webViewPages\.fomema/.test(screen));
 yes('and only a superadmin may write the document',
   /match \/settings\/webviews \{[^}]*isSuperadmin\(\)/.test(read('firestore.rules')));
 

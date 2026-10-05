@@ -248,4 +248,91 @@ test('every place that ends a session uses it', () => {
   }
 });
 
+
+console.log('\nAnd the APP agrees with the server about who is still signed in');
+
+const { shouldEndSessionForDevice } = require('../src/utils/profileGate.js');
+
+test('a web sign-in does not sign the phone out', () => {
+  // This is the whole bug. The server grew a slot per platform so a phone and
+  // a browser could both be in, and it honoured that - but the function that
+  // actually ends the app's session read nothing except the legacy pair, which
+  // signInUpdate moves to whichever sign-in happened last. A web login moved
+  // it to the browser and the phone read that as somebody taking over.
+  const afterWebSignIn = slots.signInUpdate(
+    { activeSessions: { mobile: { sessionId: 's-phone', deviceId: 'phone' } } },
+    'web',
+    { sessionId: 's-web', deviceId: 'browser' },
+  );
+  assert.strictEqual(
+    shouldEndSessionForDevice({
+      initialRouteDone: true, deviceCheckDeferred: false,
+      localSessionId: 's-phone', deviceId: 'phone',
+      activeSessions: afterWebSignIn.activeSessions,
+      activeSessionId: afterWebSignIn.activeSessionId,
+      activeDeviceId: afterWebSignIn.activeDeviceId,
+    }),
+    false,
+    'the phone still holds the mobile slot and must stay signed in',
+  );
+  // ...and the server says the same thing about that session.
+  assert.strictEqual(slots.sessionMatches(afterWebSignIn, { sessionId: 's-phone', deviceId: 'phone' }), true);
+});
+
+test('another phone still takes the session', () => {
+  // The rule that was always wanted: two phones share one slot.
+  const afterOtherPhone = slots.signInUpdate(
+    { activeSessions: { mobile: { sessionId: 's-phone', deviceId: 'phone' } } },
+    'mobile',
+    { sessionId: 's-other', deviceId: 'phone2' },
+  );
+  assert.strictEqual(
+    shouldEndSessionForDevice({
+      initialRouteDone: true, deviceCheckDeferred: false,
+      localSessionId: 's-phone', deviceId: 'phone',
+      activeSessions: afterOtherPhone.activeSessions,
+      activeSessionId: afterOtherPhone.activeSessionId,
+      activeDeviceId: afterOtherPhone.activeDeviceId,
+    }),
+    true,
+    'the mobile slot is somebody else now',
+  );
+  assert.strictEqual(slots.sessionMatches(afterOtherPhone, { sessionId: 's-phone', deviceId: 'phone' }), false);
+});
+
+test('the app and the server never disagree about a session', () => {
+  // The two rules live in different bundles and cannot import each other, so
+  // the only thing keeping them together is this: for every shape, staying
+  // signed in must mean the same thing on both sides.
+  const cases = [
+    { activeSessions: { mobile: { sessionId: 's1', deviceId: 'd1' } } },
+    { activeSessions: { mobile: { sessionId: 's1', deviceId: 'd1' }, web: { sessionId: 's2', deviceId: 'd2' } } },
+    { activeSessions: { web: { sessionId: 's2', deviceId: 'd2' } } },
+    // Both halves present but crossed between slots - one whole session out of
+    // two half-valid ones, which neither side may accept.
+    { activeSessions: { mobile: { sessionId: 's1', deviceId: 'd2' }, web: { sessionId: 's2', deviceId: 'd1' } } },
+    { activeSessions: {} },
+  ];
+  for (const shape of cases) {
+    const profile = { ...shape, activeSessionId: 'sX', activeDeviceId: 'dX' };
+    const serverKeepsIt = slots.sessionMatches(profile, { sessionId: 's1', deviceId: 'd1' });
+    const appKeepsIt = !shouldEndSessionForDevice({
+      initialRouteDone: true, deviceCheckDeferred: false,
+      localSessionId: 's1', deviceId: 'd1',
+      activeSessions: profile.activeSessions,
+      activeSessionId: profile.activeSessionId,
+      activeDeviceId: profile.activeDeviceId,
+    });
+    assert.strictEqual(appKeepsIt, serverKeepsIt,
+      'the two disagree about ' + JSON.stringify(shape));
+  }
+});
+
+test('the slots are actually handed to the check', () => {
+  // A perfect rule reading an undefined argument is the old behaviour again.
+  const context = read('src/context/AppContext.js');
+  assert.ok(/activeSessions: p\.activeSessions,/.test(context),
+    'AppContext must pass the slots, or the check falls back to the legacy pair');
+});
+
 console.log('\n' + passed + ' checks passed.\n');

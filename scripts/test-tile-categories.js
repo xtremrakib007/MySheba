@@ -108,7 +108,12 @@ assert(/blocks\.length > 1 &&/.test(grid), 'a customer has one block, so it need
 // now, with the column count and the gap, because the feature grid has to lay
 // out to the same shape - see tileGrid.
 assert(/item: \{ width: tileGrid\.width, aspectRatio: 1,/.test(grid), 'tiles are square and take the shared width');
-assert(/export const tileGrid = \{ columns: 3, gap: \d+, width: '31\.3%' \};/.test(read('src/theme/theme.js')),
+// Three across is the claim this test makes, so that is what it checks. It
+// used to pin the exact width too, which meant every time the tiles were made
+// a little smaller this test failed for a reason that had nothing to do with
+// the layout being wrong. Whether the width and the gaps still FIT in a row is
+// checked where the arithmetic is - see test-photo-icons.
+assert(/export const tileGrid = \{ columns: 3, gap: \d+, width: '[\d.]+%' \};/.test(read('src/theme/theme.js')),
   'three across, so a row of three is a full row');
 assert(!/moreRow:/.test(grid), 'More Features is a tile in the grid, not a row below it');
 

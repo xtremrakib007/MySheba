@@ -44,6 +44,7 @@ import * as settingsService from "../firebase/settingsService";
 import * as featureAccessService from "../firebase/featureAccessService";
 import * as webviewConfigService from '../firebase/webviewConfigService';
 import * as tileLabelService from '../firebase/tileLabelService';
+import * as tilePlacementService from "../firebase/tilePlacementService";
 import * as gridManagementService from "../firebase/gridManagementService";
 import * as accessControlService from "../firebase/accessControlService";
 import * as adControlsService from "../firebase/adControlsService";
@@ -68,6 +69,7 @@ import {
   chargeWebviewSubmission,
 } from "../firebase/webviewAccessService";
 import { ensureModuleSubscription } from "../firebase/moduleSubscriptionService";
+import { safeExternalUrl, linkTitle, AD_HOC_WEBVIEW_KEY } from "../utils/externalLink";
 import {
   checkPaymentEntryAccess,
   chargePaymentSuccess,
@@ -821,6 +823,27 @@ export function AppProvider({ children }) {
     );
   }, [authUser, profile]);
 
+  // Which tiles a superadmin has put on, or taken off, each role's home
+  // screen. Empty is the normal state and means every tile sits where it is
+  // declared - so the grids are right before the first snapshot, and stay
+  // right if the document never exists.
+  const [tilePlacement, setTilePlacement] = useState({});
+  useEffect(() => {
+    if (!authUser || !profile) return undefined;
+    return tilePlacementService.subscribeTilePlacement(
+      setTilePlacement,
+      logListenerError('tilePlacement'),
+    );
+  }, [authUser, profile]);
+
+  // This viewer's own overrides, resolved once here rather than in each grid.
+  // Every consumer must resolve it for the SAME role, or the home screen and
+  // More Features would be filtering against different maps.
+  const tilePlacementForMe = useMemo(
+    () => tilePlacementService.placementFor(tilePlacement, profile?.role),
+    [tilePlacement, profile?.role],
+  );
+
   // Central navigation boundary. UI hiding is not a security boundary:
   // every internal setScreen() call (notifications, deep links, callbacks,
   // and manually triggered handlers) must pass role + live grid checks here.
@@ -868,6 +891,10 @@ export function AppProvider({ children }) {
     gridManagement: ['superadmin'],
     // Renaming a tile changes what every role sees, so it is superadmin's alone.
     tileLabels: ['superadmin'],
+    // Moving a tile between a role's home screen and More Features changes
+    // what that whole role sees, so it is superadmin's alone - same as
+    // renaming one.
+    tilePlacement: ['superadmin'],
     adFeatureControls: ['superadmin'],
     adAnalytics: ['superadmin'],
     advertiserManagement: ['superadmin'],
@@ -1150,6 +1177,12 @@ export function AppProvider({ children }) {
   // ---- webview ----
   const [webViewKey, setWebViewKey] = useState("fomema");
   const [webViewBusy, setWebViewBusy] = useState(false);
+  // A one-off page the WebView screen shows instead of one of the configured
+  // ones. openWebView takes a KEY, which is right for the government and
+  // partner pages a superadmin maintains - an ad's destination is a plain URL
+  // and has no key, so it travels here. Cleared by openWebView so a keyed
+  // page can never inherit the last ad's URL.
+  const [webViewAdHoc, setWebViewAdHoc] = useState(null);
 
   // ---- rate popup / result modal (mirrors #ratePopup / #resultModal) ----
   const [ratePopupVisible, setRatePopupVisible] = useState(false);
@@ -1326,6 +1359,10 @@ export function AppProvider({ children }) {
                   localSessionId,
                   activeSessionId: p.activeSessionId,
                   activeDeviceId: p.activeDeviceId,
+                  // The per-platform slots. Without these the check below sees
+                  // only the legacy pair, which every sign-in moves - so a web
+                  // login looked exactly like somebody taking the phone over.
+                  activeSessions: p.activeSessions,
                   deviceId: await deviceSessionService.getDeviceId(),
                   initialRouteDone,
                   deviceCheckDeferred,
@@ -2542,6 +2579,7 @@ export function AppProvider({ children }) {
   const [webViewPaymentCharged, setWebViewPaymentCharged] = useState(false);
   const openWebView = useCallback(
     async (key) => {
+      setWebViewAdHoc(null);
       if (!gridManagementService.isGridActive(gridManagement, key, gridViewer)) {
         showAlert('MySheba', 'This feature is currently unavailable.');
         return;
@@ -2612,6 +2650,32 @@ export function AppProvider({ children }) {
     },
     [authUser, webViewBusy, profile, pointCosts, gridManagement, gridViewer],
   );
+
+  // Open an arbitrary web address inside the app's own WebView instead of
+  // handing it to the system browser. This is how a tapped ad travels: its
+  // destination is a URL typed into the advertiser console, so there is no
+  // page key for openWebView to take, and Linking.openURL - what the ad
+  // component did before - throws the person out of the app into Chrome,
+  // where the back button does not come back.
+  //
+  // The URL is whatever is in the ad document, so it is checked before it
+  // reaches a WebView; safeExternalUrl is the only thing standing between an
+  // advertiser-authored string and javascript: running in the WebView. A
+  // rejected URL opens nothing at all and says nothing - an ad must never be
+  // able to put an error in front of the person using the app.
+  //
+  // Returns whether it navigated, so a caller can fall back.
+  const openExternalUrl = useCallback((url, title) => {
+    const safe = safeExternalUrl(url);
+    if (!safe) return false;
+    // Shaped like a configured page, because the WebView screen reads
+    // page.url, page.title and page.icon off whatever it is handed.
+    setWebViewAdHoc({ url: safe, title: linkTitle(safe) || title || 'Sponsored', icon: '\u{1F517}' });
+    setWebViewKey(AD_HOC_WEBVIEW_KEY);
+    setWebViewPaymentCharged(false);
+    setScreen('webview');
+    return true;
+  }, [setScreen]);
 
   // Shows the Bus screen's 3-option grid (redBus / Bus Online Ticket /  // Easybook) instead of opening a WebView directly - each card then
   // calls openWebView with its own key ('bus-redbus' |
@@ -2880,6 +2944,8 @@ export function AppProvider({ children }) {
     gridViewer,
     webviewPages,
     tileLabels,
+    tilePlacement,
+    tilePlacementForMe,
     supportContact,
 
     paymentSettings,
@@ -2898,6 +2964,8 @@ export function AppProvider({ children }) {
     webViewKey,
     setWebViewKey,
     openWebView,
+    openExternalUrl,
+    webViewAdHoc,
     webViewBusy,
     submitWebviewApplication,
     webViewSubmitBusy,

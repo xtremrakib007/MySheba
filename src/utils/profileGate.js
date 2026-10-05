@@ -70,10 +70,27 @@ export function classifyProfileSnapshot(profile, meta) {
  *     the session on that alone is how a device signed itself out. The rule
  *     is "someone else signed in", so it is the DEVICE that has to differ.
  */
+/**
+ * Does this device still hold a session slot of its own?
+ *
+ * The same rule as sessionMatches in functions/sessionSlots.js, and it has to
+ * stay the same rule: both halves must match in ONE slot, or a session id from
+ * the mobile slot would pass with a device id from the web one.
+ */
+function holdsOwnSlot(activeSessions, localSessionId, deviceId) {
+  if (!activeSessions || typeof activeSessions !== 'object') return false;
+  if (!localSessionId || !deviceId) return false;
+  for (const slot of Object.values(activeSessions)) {
+    if (slot && slot.sessionId === localSessionId && slot.deviceId === deviceId) return true;
+  }
+  return false;
+}
+
 export function shouldEndSessionForDevice({
   localSessionId,
   activeSessionId,
   activeDeviceId,
+  activeSessions,
   deviceId,
   initialRouteDone,
   deviceCheckDeferred,
@@ -82,6 +99,19 @@ export function shouldEndSessionForDevice({
   if (deviceCheckDeferred) return false;
   if (!localSessionId || !activeSessionId) return false;
   if (localSessionId === activeSessionId) return false;
+
+  // This phone still has its own slot, so whoever moved the legacy pair was
+  // signing in somewhere else - a browser, which is allowed to be signed in at
+  // the same time.
+  //
+  // This is what was signing the app out every time somebody opened the admin
+  // site. The server grew a slot per platform so a phone and a browser could
+  // both be in; the SERVER honoured it, and this function - which is what
+  // actually ends the session - still read nothing but the single legacy pair.
+  // signInUpdate mirrors that pair to the most recent sign-in, so a web login
+  // moved it to the browser and the phone read it as somebody taking over.
+  if (holdsOwnSlot(activeSessions, localSessionId, deviceId)) return false;
+
   // Nothing to compare, or the active device is still us: stay signed in.
   // Erring towards staying in is deliberate - the cost of being wrong here
   // is someone signed out for no reason they can see.

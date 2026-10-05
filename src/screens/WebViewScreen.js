@@ -20,12 +20,19 @@ export default function WebViewScreen() {
   const {
     webViewKey, goHome, goBackOrHome, profile, submitWebviewApplication, webViewSubmitBusy, confirmWebviewAccess, webViewBusy,
     confirmPaymentSuccess, webViewPaymentBusy, webViewPaymentCharged, pointCosts, setWebViewBackInterceptor,
-    webviewPages,
+    webviewPages, webViewAdHoc,
   } = useApp();
   // The live page a superadmin can edit, falling back to the built-in literal
   // so this screen still opens before the first snapshot and on a project with
   // no settings/webviews document.
-  const page = (webviewPages && webviewPages[webViewKey]) || webViewPages[webViewKey] || webViewPages.fomema;
+  //
+  // webViewAdHoc wins, and has to: it carries a one-off URL (a tapped ad) that
+  // is in neither list, and the lookup below ends in `|| webViewPages.fomema`,
+  // so without this an ad would have opened the FOMEMA status page.
+  const page = webViewAdHoc
+    || (webviewPages && webviewPages[webViewKey])
+    || webViewPages[webViewKey]
+    || webViewPages.fomema;
   const webviewRef = useRef(null);
   const [loading, setLoading] = useState(true);
   // How far the page has got, 0 to 1. Used to take the cover off early: a
@@ -75,6 +82,8 @@ export default function WebViewScreen() {
   // "back" button landing somewhere unexpected). See
   // FOMEMA_CLINIC_FINDER_URL in data/countries.js.
   const isFomema = webViewKey === 'fomema';
+  // A one-off ad destination rather than one of the maintained pages.
+  const isAdHocPage = !!webViewAdHoc;
   const [showClinicFinder, setShowClinicFinder] = useState(false);
   const activeUrl = isFomema && showClinicFinder ? FOMEMA_CLINIC_FINDER_URL : page.url;
   const activeTitle = isFomema && showClinicFinder ? '📍 Nearest FOMEMA Clinic' : page.title;
@@ -162,8 +171,15 @@ export default function WebViewScreen() {
   // external app, not only the ones we've already seen. Every other
   // webview's navigation is left alone.
   const handleShouldStartLoad = (request) => {
-    if (!isBusPartner) return true;
     const url = (request?.url || '').toLowerCase();
+    // An ad's destination is a third-party site nobody here vetted, so it is
+    // held to plain web navigation: a tel:, mailto:, intent: or market: link
+    // on it would otherwise leave the app, or open the dialer, from a page
+    // the person only tapped a banner to reach. The configured government
+    // and partner pages keep their existing behaviour - they are maintained
+    // by a superadmin, and some of them do link out on purpose.
+    if (isAdHocPage) return url.startsWith('http://') || url.startsWith('https://');
+    if (!isBusPartner) return true;
     if (!url.startsWith('http://') && !url.startsWith('https://')) return false;
     const isInstallPrompt = INSTALL_POPUP_URL_MARKERS.some((marker) => url.includes(marker));
     return !isInstallPrompt;

@@ -18,8 +18,8 @@ new Function('module', 'exports', `${src}
 module.exports = {
   TILE_CATEGORIES, groupTilesByCategory, categoryMeta,
   CUSTOMER_SERVICES, STAFF_SERVICES, STAFF_CAPABILITY_TILES, STAFF_ROLES,
-  servicesForRole, visibleTiles, overflowTiles, moreFeaturesSections, withWebviewConfig, gridKeyFor,
-  PERSONAL_FEATURES, STAFF_FEATURES, applyTileLabels, editableTiles, ADMIN_HOME, adminLandingTiles,
+  servicesForRole, visibleTiles, overflowTiles, moreFeaturesSections, withWebviewConfig, gridKeyFor, tileOnHome,
+  PERSONAL_FEATURES, STAFF_FEATURES, applyTileLabels, editableTiles, ADMIN_HOME, adminLandingTiles, adminOverflowTiles, placeableTiles,
 };`)(mod, {});
 
 module.exports = mod.exports;

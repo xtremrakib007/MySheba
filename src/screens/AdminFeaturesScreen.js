@@ -12,7 +12,7 @@ import PromptModal from '../components/PromptModal';
 import * as ratesService from '../firebase/ratesService';
 import * as gridManagementService from '../firebase/gridManagementService';
 import { hasServiceArt } from '../components/ServiceArt';
-import { adminLandingTiles } from '../components/serviceTiles';
+import { adminLandingTiles, tileOnHome } from '../components/serviceTiles';
 
 const CATEGORIES = [
   { key: 'operations', icon: '⚙️', bg: '#E3F2FD', name: 'Operations' },
@@ -116,7 +116,7 @@ const SCREEN_FOR = { apiManagement: 'apiProviderManagement' };
 export default function AdminFeaturesScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { profile, goBackOrHome, setScreen, openSidebar, dealerTxs, inquiries, topups, setAdminTab, setAdminViewingSection, setHomeBackInterceptor, rates, gridManagement, gridViewer, webviewPages, can, tileLabels } = useApp();
+  const { profile, goBackOrHome, setScreen, openSidebar, dealerTxs, inquiries, topups, setAdminTab, setAdminViewingSection, setHomeBackInterceptor, rates, gridManagement, gridViewer, webviewPages, can, tileLabels, tilePlacementForMe } = useApp();
   const [section, setSection] = useState(null);
   const [rateView, setRateView] = useState(false);
   const [editRateKey, setEditRateKey] = useState(null);
@@ -242,14 +242,31 @@ export default function AdminFeaturesScreen() {
   // configuration has to be applied to this list too - see serviceTiles.
   const adminHomeList = adminLandingTiles(webviewPages, hasServiceArt, tileLabels);
 
-  const homeItems = adminHomeList.filter((item) => {
+  // Which tiles this role has at all: capability, section and Grid Access.
+  // Separate from WHERE they sit, below, so the two questions cannot get
+  // tangled - a tile moved off the grid must still be a tile this role has.
+  const onGrid = (item) => {
     if (item.section === 'system' && !isSuperadmin) return false;
     if (!gridManagementService.isGridActive(gridManagement, item.key, gridViewer)) return false;
     const need = CAPABILITY_FOR[item.key];
     // A service tile is not a management capability - every role may use it.
     if (!need) return !item.section || isSuperadmin || item.service || item.screen;
     return need.some((cap) => can(cap));
-  });
+  };
+
+  const allowed = adminHomeList.filter(onGrid);
+  // Nothing in ADMIN_HOME declares a home flag, so the default is true and
+  // this grid carries everything - exactly as it always has - until a
+  // superadmin takes something off it in Home Screen Tiles.
+  const homeItems = allowed.filter((item) => tileOnHome(item, tilePlacementForMe, true));
+  // ...and what was taken off lands here, on the same screen, routed by the
+  // same openHomeItem. It cannot go to the More Features screen: these tiles
+  // are opened by section/screen/service, which that screen's tile handler
+  // does not know how to route - a tile sent there would have done nothing
+  // when tapped. This section is why the superadmin's More Features looked
+  // empty and redundant: every tile was on the grid, so there was never
+  // anything for it to hold.
+  const movedOff = allowed.filter((item) => !tileOnHome(item, tilePlacementForMe, true));
 
   return <View style={styles.screen}>
     <AppHeader onPressMenu={openSidebar} />
@@ -260,6 +277,9 @@ export default function AdminFeaturesScreen() {
         items={homeItems}
         onPress={openHomeItem}
       />
+      {movedOff.length > 0 && (
+        <FeatureGrid title="More Features" items={movedOff} onPress={openHomeItem} />
+      )}
     </ScrollView>
   </View>;
 }

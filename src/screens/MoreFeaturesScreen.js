@@ -28,7 +28,7 @@ function Section({ title, subtitle, items, onPress }) {
 }
 
 export default function MoreFeaturesScreen() {
-  const { goBackOrHome, profile, gridManagement, gridViewer, webviewPages, can, tileLabels } = useApp();
+  const { goBackOrHome, profile, gridManagement, gridViewer, webviewPages, can, tileLabels, tilePlacementForMe } = useApp();
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
   // This screen's rule: a finished tile lands on the home screen or here, never
@@ -43,6 +43,10 @@ export default function MoreFeaturesScreen() {
     webviewPages,
     tileLabels,
     isActive: (key) => gridManagementService.isGridActive(gridManagement, key, gridViewer),
+    // The same overrides the home grid filtered on, so a tile a superadmin
+    // took off the home screen turns up here - which is the only reason this
+    // screen can keep its promise that a tile is never on neither.
+    placement: tilePlacementForMe,
   });
   const handlePress = useServiceAction();
   const visible = (items) => items.filter((item) => gridManagementService.isGridActive(gridManagement, item.key, gridViewer));

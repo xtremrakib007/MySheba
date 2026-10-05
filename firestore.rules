@@ -65,6 +65,14 @@ service cloud.firestore {
     // because every grid draws from it, only a superadmin writes it, and the
     // key allowlist stops anything but labels being smuggled into the document.
     match /settings/tileLabels { allow read: if activeProfile(); allow create, update: if isSuperadmin() && request.resource.data.keys().hasOnly(['tiles','updatedAt']); allow delete: if false; }
+    // Which tiles sit on each role's home screen: { roles: { <role>: { <tileKey>: bool } } }.
+    // Read by every signed-in app because every grid filters on it; written by
+    // a superadmin only, with the same key allowlist the two documents above
+    // use so nothing but placement can be smuggled in. It cannot hide a tile
+    // or move where one goes - a tile taken off a home screen appears in More
+    // Features instead - so the blast radius of a bad write is a rearranged
+    // home screen, not a lost or impersonated feature.
+    match /settings/tilePlacement { allow read: if activeProfile(); allow create, update: if isSuperadmin() && request.resource.data.keys().hasOnly(['roles','updatedAt']); allow delete: if false; }
     match /settings/gridManagement { allow read: if activeProfile(); allow create: if isSuperadmin() && request.resource.data.keys().hasOnly(['recharge','rechargePin','mobilebanking','internet','offerpacks','billpayment','remittance','bus','train','flight','entertainment','topup','history','support','myAccount','profile','dealerFeatures','resellerFeatures','adminFeatures','moreFeaturesTile','walletTransfer','myDocuments','salary','kyc','fomema','visa','mydigital','passport','adminAnalytics','inquiries','pending','topups','rates','pricing','payments','transferPoints','apiManagement','userManagement','verificationManagement','featureAccess','banners','announcements','byRole','byCountry','byUser','updatedAt']); allow update: if isSuperadmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['recharge','rechargePin','mobilebanking','internet','offerpacks','billpayment','remittance','bus','train','flight','entertainment','topup','history','support','myAccount','profile','dealerFeatures','resellerFeatures','adminFeatures','moreFeaturesTile','walletTransfer','myDocuments','salary','kyc','fomema','visa','mydigital','passport','adminAnalytics','inquiries','pending','topups','rates','pricing','payments','transferPoints','apiManagement','userManagement','verificationManagement','featureAccess','banners','announcements','byRole','byCountry','byUser','updatedAt']); allow delete: if false; }
     // Role defaults are written only by the setRoleDefaults callable (audit-logged).
     match /settings/accessControl { allow read: if activeProfile() && myRole() in ['admin', 'support', 'finance', 'superadmin']; allow write: if false; }

@@ -441,8 +441,22 @@ test('every tile is square, on every grid, for every role', () => {
   assert.ok(/const COLUMN_GAP = tileGrid\.gap;/.test(feature), 'and the shared gap');
   assert.ok(/columnGap: tileGrid\.gap/.test(service), 'as must the service grid');
 
-  // The row has to hold them: three at 31.3% plus two gaps must still fit.
-  assert.ok(width * columns < 100, `${columns} tiles at ${width}% overflow the row`);
+  // The row has to hold them, IN PIXELS. `width * columns < 100` was the old
+  // check and it is not the question: the gaps are in dp, not percent, so
+  // three tiles at 30% plus two 14dp gaps passed that check and still came to
+  // 287 of the 288dp a 320dp phone leaves - which fits only until an inset
+  // nobody counted pushes the third tile onto a line of its own.
+  //
+  // 288dp is the service grid's own content box on the narrowest phone this
+  // ships to: 320 less its 16dp of padding each side.
+  const row = 320 - 32;
+  const used = (row * width / 100) * columns + gap * (columns - 1);
+  assert.ok(used <= row,
+    `${columns} tiles at ${width}% plus ${columns - 1} gaps of ${gap} need ${used.toFixed(0)}dp of ${row}`);
+  // ...with room to spare, because that is the whole failure mode: a row that
+  // fits exactly wraps the moment a parent adds a border or a scrollbar.
+  assert.ok(row - used >= 4,
+    `only ${(row - used).toFixed(1)}dp of slack in the row - one unexpected inset wraps the last tile`);
   assert.ok(columns >= 3 && columns <= 4, 'a row of ' + columns + ' is not a grid anybody can read');
   assert.ok(gap > 0);
 });
