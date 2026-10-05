@@ -355,6 +355,31 @@ test('every superadmin tile has a picture', () => {
   }
 });
 
+test('every game and the wallet wear their own mark', () => {
+  // A brand somebody is looking for: the Touch 'n Go logo is on the card in
+  // their wallet and the game logo is on their home screen. Initials in a
+  // coloured square are a fallback, not a picture of the thing.
+  const games = read('src/data/gameTopUps.js');
+  const keys = [...games.matchAll(/^    key: '([a-z]+)', name: '([^']+)'/gm)].map(([, key, name]) => ({ key, name }));
+  assert.ok(keys.length >= 6, 'expected the games, saw ' + keys.length);
+  for (const { key, name } of keys) {
+    assert.ok(new RegExp(`key: '${key}',[\\s\\S]{0,160}?logo: require\\('\\.\\./\\.\\./assets/games/([a-z]+)\\.png'\\)`).test(games),
+      name + ' has no logo');
+  }
+  for (const file of [...games.matchAll(/assets\/games\/([a-z]+)\.png/g)].map((m) => m[1])) {
+    assert.ok(fs.existsSync(path.join(ROOT, 'assets/games', file + '.png')), file + '.png is referenced and missing');
+  }
+  // The card draws the logo when it has one, and the emoji is what is left.
+  assert.ok(/logo=\{g\.logo\}/.test(read('src/steps/EntertainmentSteps.js')), 'the picker must pass the logo');
+  assert.ok(/initials=\{g\.emoji\}/.test(read('src/steps/EntertainmentSteps.js')), 'and keep the emoji as the fallback');
+
+  const brands = read('src/data/operatorBrand.js');
+  assert.ok(/"Touch 'n Go eWallet": \{ logo: require\('\.\.\/\.\.\/assets\/operators\/tngewallet\.png'\)/.test(brands),
+    "Touch 'n Go must carry its own logo, not initials");
+  assert.ok(fs.existsSync(path.join(ROOT, 'assets/operators/tngewallet.png')));
+  assert.ok(/initials: 'TNG'/.test(brands), 'the initials stay as the fallback');
+});
+
 console.log('\nOne size, on every grid');
 
 test('both grids draw a tile icon at the same size', () => {

@@ -16,7 +16,7 @@ import { adminLandingTiles } from '../components/serviceTiles';
 
 const CATEGORIES = [
   { key: 'operations', icon: '⚙️', bg: '#E3F2FD', name: 'Operations' },
-  { key: 'finance', icon: '💰', bg: '#E8F5E9', name: 'Finance' },
+  { key: 'finance', icon: '💰', bg: '#E8F5E9', name: 'Financial Management' },
   { key: 'users', icon: '👥', art: 'photoUserManagement', bg: '#E0F7FA', name: 'Users & KYC' },
   { key: 'system', icon: '🛡️', bg: '#EDE7F6', name: 'System Control' },
 ];
@@ -35,7 +35,7 @@ const OPERATIONS = [
   { key: 'inquiries', icon: '📝', bg: '#E8EAF6', name: 'Inquiries' },
   { key: 'topups', icon: '💳', art: 'photoTopup', bg: '#E8F5E9', name: 'Top-Ups' },
   { key: 'support', icon: '🎧', bg: '#E0F2F1', name: 'Support' },
-  { key: 'adminAnalytics', icon: '📊', bg: '#FFF3E0', name: 'Analytics' },
+  { key: 'adminAnalytics', icon: '📊', bg: '#FFF3E0', name: 'Reports & Analytics' },
 ];
 const FINANCE = [
   { key: 'rates', icon: '💱', bg: '#F3E5F5', name: 'Rates' },
@@ -45,8 +45,8 @@ const FINANCE = [
   { key: 'invoices', icon: '🧾', bg: '#FFF8E1', name: 'Invoices' },
 ];
 const USERS = [
-  { key: 'userManagement', icon: '👥', bg: '#E3F2FD', name: 'Users' },
-  { key: 'verificationManagement', icon: '🪪', bg: '#E0F7FA', name: 'KYC Verification' },
+  { key: 'userManagement', icon: '👥', bg: '#E3F2FD', name: 'User Management' },
+  { key: 'verificationManagement', icon: '🪪', bg: '#E0F7FA', name: 'KYC Management' },
 ];
 // Which capability opens each hub item (any one is enough). Staff access is
 // role defaults + per-user overrides (accessControlService); a superadmin

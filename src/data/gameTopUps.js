@@ -22,9 +22,13 @@
 // Legends account is a user ID AND a zone, and one without the other is not
 // deliverable.
 
+// The emoji stays beside the logo on purpose: it is the fallback the card
+// draws if an image ever fails to load, and it is what a text-only list (a
+// receipt, a copied order) prints.
 export const GAME_TOP_UPS = [
   {
     key: 'pubg', name: 'PUBG Mobile', emoji: '🎯',
+    logo: require('../../assets/games/pubg.png'),
     playerIdLabel: 'PUBG Player ID', playerIdHint: 'Numeric ID from your in-game profile',
     packs: [
       { id: 'pubg-60', name: '60 UC', price: 4.5 },
@@ -37,6 +41,7 @@ export const GAME_TOP_UPS = [
   },
   {
     key: 'freefire', name: 'Free Fire', emoji: '🔥',
+    logo: require('../../assets/games/freefire.png'),
     playerIdLabel: 'Free Fire Player ID', playerIdHint: 'Numeric UID from your profile',
     packs: [
       { id: 'ff-100', name: '100 Diamonds', price: 4.5 },
@@ -50,6 +55,7 @@ export const GAME_TOP_UPS = [
   },
   {
     key: 'mlbb', name: 'Mobile Legends', emoji: '⚔️',
+    logo: require('../../assets/games/mlbb.png'),
     playerIdLabel: 'Mobile Legends User ID', playerIdHint: 'The number before the brackets',
     // A user ID without its zone cannot be topped up at all.
     needsServer: true, serverLabel: 'Zone ID', serverHint: 'The number inside the brackets',
@@ -64,6 +70,7 @@ export const GAME_TOP_UPS = [
   },
   {
     key: 'codm', name: 'Call of Duty Mobile', emoji: '🪖',
+    logo: require('../../assets/games/codm.png'),
     playerIdLabel: 'Player ID', playerIdHint: 'Open Settings, then Account, to find it',
     packs: [
       { id: 'codm-80', name: '80 CP', price: 5 },
@@ -74,6 +81,7 @@ export const GAME_TOP_UPS = [
   },
   {
     key: 'freefiremax', name: 'Free Fire MAX', emoji: '💎',
+    logo: require('../../assets/games/freefiremax.png'),
     playerIdLabel: 'Free Fire MAX Player ID', playerIdHint: 'Numeric UID from your profile',
     packs: [
       { id: 'ffm-100', name: '100 Diamonds', price: 4.5 },
@@ -83,6 +91,7 @@ export const GAME_TOP_UPS = [
   },
   {
     key: 'genshin', name: 'Genshin Impact', emoji: '🌟',
+    logo: require('../../assets/games/genshin.png'),
     playerIdLabel: 'UID', playerIdHint: 'Nine-digit UID, bottom-right in game',
     needsServer: true, serverLabel: 'Server', serverHint: 'Asia, Europe, America or TW/HK/MO',
     packs: [

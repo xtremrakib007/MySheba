@@ -32,6 +32,7 @@ export default function EntertainmentStep({ step }) {
             <OperatorCard
               key={g.key}
               name={g.name}
+              logo={g.logo}
               initials={g.emoji}
               selected={serviceData.gameKey === g.key}
               onPress={() => {

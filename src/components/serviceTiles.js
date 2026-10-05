@@ -163,7 +163,7 @@ const STAFF_CAPABILITY_TILES = [
   { key: 'history', icon: '📋', name: 'Transactions', kind: 'history', needs: ['orders', 'finance', 'review'], cat: 'manage', home: true },
   { key: 'topup', icon: '💰', name: 'Top-Ups', kind: 'adminTopup', needs: ['finance'], cat: 'manage', home: true },
   { key: 'reports', icon: '📊', name: 'Reports', kind: 'staffReports', needs: ['reports'], cat: 'manage', home: true },
-  { key: 'ledger', icon: '📒', name: 'Ledger', kind: 'staffLedger', needs: ['reports'], cat: 'manage', home: true },
+  { key: 'ledger', icon: '📒', name: 'Transaction Ledger', kind: 'staffLedger', needs: ['reports'], cat: 'manage', home: true },
   { key: 'walletFunding', icon: '🤝', name: 'Wallet Funding', kind: 'staffFunding', needs: ['finance'], cat: 'manage', home: true },
   // 'reports' as well as 'finance': the history of what was paid to a provider
   // is a reporting question, and reading it grants nothing - raising and
@@ -341,12 +341,12 @@ export const ADMIN_HOME = [
   { key: 'verificationManagement', icon: '\uD83E\uDEAA', name: 'KYC Management', screen: 'verificationManagement' },
 
   { key: 'adminSupport', icon: '\uD83C\uDFA7', name: 'Support Inbox', screen: 'adminSupport' },
-  { key: 'recharge', icon: '\uD83D\uDCF1', name: 'Recharge', service: { key: 'recharge', kind: 'service' } },
+  { key: 'recharge', icon: '\uD83D\uDCF1', name: 'Mobile Recharge', service: { key: 'recharge', kind: 'service' } },
   { key: 'remittance', icon: '\uD83D\uDCB8', name: 'Remittance', service: { key: 'remittance', kind: 'service' } },
   { key: 'mobilebanking', icon: '\uD83C\uDFE6', name: 'Mobile Banking', service: { key: 'mobilebanking', kind: 'service' } },
 
   { key: 'internet', icon: '\uD83D\uDCE1', name: 'Internet', service: { key: 'internet', kind: 'service' } },
-  { key: 'billpayment', icon: '\uD83E\uDDFE', name: 'Bill Payment', service: { key: 'billpayment', kind: 'service' } },
+  { key: 'billpayment', icon: '\uD83E\uDDFE', name: 'Bill Pay', service: { key: 'billpayment', kind: 'service' } },
   { key: 'jompay', icon: '\uD83C\uDDF2\uD83C\uDDFE', name: 'JomPAY', service: { key: 'jompay', kind: 'billShortcut', seed: { country: 'MY', category: 'jompay', provider: 'JomPAY' }, startStep: 3 } },
   { key: 'tngewallet', icon: '\uD83D\uDC5B', name: 'TnG eWallet', service: { key: 'tngewallet', kind: 'billShortcut', seed: { country: 'MY', category: 'ewallet', provider: "Touch 'n Go eWallet" }, startStep: 3 } },
   { key: 'rechargePin', icon: '\uD83D\uDD22', name: 'PIN Generate', service: { key: 'rechargePin', kind: 'rechargePin' } },
@@ -354,13 +354,13 @@ export const ADMIN_HOME = [
   // emoji is what renders rather than a fallback nobody sees.
   { key: 'offerpacks', icon: '\uD83C\uDF81', name: 'Offer Packs', service: { key: 'offerpacks', kind: 'service' } },
   { key: 'entertainment', icon: '\uD83C\uDFAC', name: 'Entertainment', service: { key: 'entertainment', kind: 'service' } },
-  { key: 'flight', icon: '\u2708\uFE0F', name: 'Flight', service: { key: 'flight', kind: 'service' } },
-  { key: 'bus', icon: '\uD83D\uDE8C', name: 'Bus', service: { key: 'bus', kind: 'buspicker' } },
-  { key: 'train', icon: '\uD83D\uDE82', name: 'Train', service: { key: 'train', kind: 'webview' } },
+  { key: 'flight', icon: '\u2708\uFE0F', name: 'Flight Ticket', service: { key: 'flight', kind: 'service' } },
+  { key: 'bus', icon: '\uD83D\uDE8C', name: 'Bus Ticket', service: { key: 'bus', kind: 'buspicker' } },
+  { key: 'train', icon: '\uD83D\uDE82', name: 'Train Ticket', service: { key: 'train', kind: 'webview' } },
 
   { key: 'visa', icon: '\uD83D\uDEC2', name: 'Visa', service: { key: 'visa', kind: 'webview' } },
   { key: 'mydigital', icon: '\uD83D\uDCBB', name: 'Malaysia Arrival Card', service: { key: 'mydigital', kind: 'webview' } },
-  { key: 'passport', icon: '\uD83D\uDCD9', name: 'Passport', service: { key: 'passport', kind: 'webview' } },
+  { key: 'passport', icon: '\uD83D\uDCD9', name: 'Passport Appointment', service: { key: 'passport', kind: 'webview' } },
   { key: 'fomema', icon: '\uD83E\uDE7A', name: 'FOMEMA', service: { key: 'fomema', kind: 'webview' } },
 
   { key: 'salary', icon: '\uD83D\uDCB5', name: 'Salary & OT', service: { key: 'salary', kind: 'salary' } },

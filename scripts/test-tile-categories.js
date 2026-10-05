@@ -351,7 +351,14 @@ for (const role of ['admin', 'superadmin', 'dealer']) {
   // the customer catalogue is the same confusion for a customer.
   const landing = tiles.adminLandingTiles({}, () => false, {})
     .map((t) => ({ ...t, kind: (t.service && t.service.kind) || t.kind }));
-  const everything = [...landing];
+  // The Control Center's own sections, read from the screen that declares
+  // them. Every mismatched name this check found was between these and the
+  // lists below, so leaving them out would have been checking the easy half.
+  const hub = [...read('src/screens/AdminFeaturesScreen.js')
+    .matchAll(/\{ key: '([A-Za-z]+)',(?: icon: '[^']*',)?(?: art: '[A-Za-z]+',)? bg: '[^']*', name: '([^']+)' \}/g)]
+    .map(([, key, name]) => ({ key, name, kind: 'hub' }));
+  assert(hub.length >= 20, 'the Control Center tiles must be findable, saw ' + hub.length);
+  const everything = [...landing, ...hub, ...tiles.CUSTOMER_SERVICES];
   for (const role of EVERY_ROLE) {
     const { sections, account } = moreFeaturesSections({ role, can: () => true });
     everything.push(
@@ -360,25 +367,35 @@ for (const role of ['admin', 'superadmin', 'dealer']) {
       ...account,
     );
   }
-  everything.push(...tiles.CUSTOMER_SERVICES);
 
   const SCREEN_KINDS = ['documents', 'salary', 'history', 'myaccount', 'kyc', 'profile', 'support'];
   const byScreen = {};
   const namesFor = {};
   for (const tile of everything) {
+    // Names are collected for EVERY tile. Collecting them inside the
+    // screen-kind filter below meant the check only ever saw seven kinds, and
+    // every renamed service - Flight Ticket, Mobile Recharge, Bill Pay - sailed
+    // past it.
+    if (tile.name) (namesFor[tile.key] = namesFor[tile.key] || new Set()).add(tile.name);
     if (!SCREEN_KINDS.includes(tile.kind)) continue;
     (byScreen[tile.kind] = byScreen[tile.kind] || new Set()).add(tile.key);
-    (namesFor[tile.key] = namesFor[tile.key] || new Set()).add(tile.name);
   }
+  assert(Object.keys(namesFor).length > 25, 'the name check must be seeing the whole catalogue, saw ' + Object.keys(namesFor).length);
   const twice = Object.entries(byScreen).filter(([, keys]) => keys.size > 1)
     .map(([kind, keys]) => `${kind} <- ${[...keys].join(' and ')}`);
   assert.deepStrictEqual(twice, [], 'one screen reached by two tiles: ' + twice.join('; '));
-  assert(Object.keys(namesFor).length > 3, 'this check must actually be seeing tiles');
 
   // One key under two names is the same confusion a step earlier: somebody
-  // reads "Salary & OT" in one place and "Salary & Payslip" in another and
-  // reasonably expects two different things.
-  const renamed = Object.entries(namesFor).filter(([, names]) => names.size > 1)
+  // reads "Flight Ticket" on one grid and "Flight" on another and reasonably
+  // expects two different things.
+  //
+  // Two keys are allowed to differ, and both are deliberate: `topup` is a
+  // customer asking for one and a staff member reviewing the queue of them,
+  // and `adminFeatures` is named for the role whose hub it opens. Neither is
+  // one destination under two labels.
+  const NAMED_BY_CONTEXT = new Set(['topup', 'adminFeatures']);
+  const renamed = Object.entries(namesFor)
+    .filter(([key, names]) => names.size > 1 && !NAMED_BY_CONTEXT.has(key))
     .map(([key, names]) => `${key} is called ${[...names].join(' and ')}`);
   assert.deepStrictEqual(renamed, [], 'one tile under two names: ' + renamed.join('; '));
 }
