@@ -289,12 +289,28 @@ function customPagesBeyond(pages, builtInKeys) {
     builtInKeys.map((key) => normaliseUrl(pages[key] && pages[key].url)).filter(Boolean),
   );
   return Object.values(pages)
-    .filter((p) => p.custom && p.active !== false)
+     .filter((p) => p.custom && allowed(p))
     .filter((p) => !taken.has(normaliseUrl(p.url)));
 }
 
-export function withWebviewConfig(list, webviewPages) {
+export function withWebviewConfig(list, webviewPages, viewer) {
   const pages = webviewPages || {};
+  const allowed = (page) => {
+    if (!page || page.active === false) return false;
+    const v = viewer || {};
+    if (Array.isArray(page.roles) && page.roles.length && !page.roles.includes(v.role)) return false;
+    if (Array.isArray(page.countries) && page.countries.length && !page.countries.includes(v.country)) return false;
+    if (Array.isArray(page.users) && page.users.length && !page.users.includes(v.uid)) return false;
+    return true;
+  };
+  const allowed = (page) => {
+    if (!page || page.active === false) return false;
+    const v = viewer || {};
+    if (Array.isArray(page.roles) && page.roles.length && !page.roles.includes(v.role)) return false;
+    if (Array.isArray(page.countries) && page.countries.length && !page.countries.includes(v.country)) return false;
+    if (Array.isArray(page.users) && page.users.length && !page.users.includes(v.uid)) return false;
+    return true;
+  };
   const overlaid = list
     .map((item) => {
       const page = item.kind === 'webview' ? pages[item.key] : null;
@@ -314,7 +330,7 @@ export function withWebviewConfig(list, webviewPages) {
         ? { ...item, name: page.name || item.name, emoji: page.icon || '', home: item.home === true && page.home !== false }
         : item;
     })
-    .filter((item) => item.kind !== 'webview' || !pages[item.key] || pages[item.key].active !== false);
+    .filter((item) => item.kind !== 'webview' || !pages[item.key] || allowed(pages[item.key]));
   // A custom page pointing where a built-in already points is the SAME tile
   // under a second name: "Visa" and "Visa Status Inquiry", one page, two cards
   // in the grid and nothing to tell them apart. The built-in keeps its place
@@ -379,7 +395,7 @@ export const ADMIN_HOME = [
  * and an added page's key is a generated wv_ one that names no drawing, so a
  * chosen art icon has to travel as `art` or it prints as the word.
  */
-export function adminLandingTiles(webviewPages, hasArt = () => false, tileLabels) {
+export function adminLandingTiles(webviewPages, hasArt = () => false, tileLabels, viewer) {
   const pages = webviewPages || {};
   const tileFor = (page) => ({
     key: page.key,
@@ -388,7 +404,7 @@ export function adminLandingTiles(webviewPages, hasArt = () => false, tileLabels
     service: { key: page.key, kind: 'webview' },
   });
   const overlaid = ADMIN_HOME
-    .filter((item) => !(item.service && item.service.kind === 'webview' && pages[item.key] && pages[item.key].active === false))
+    .filter((item) => !(item.service && item.service.kind === 'webview' && pages[item.key] && !allowed(pages[item.key])))
     .map((item) => (item.service && item.service.kind === 'webview' && pages[item.key] ? { ...item, ...tileFor(pages[item.key]) } : item));
   const extra = customPagesBeyond(
     pages,
@@ -421,8 +437,8 @@ export function gridKeyFor(service) {
  * Firestore. `homeOnly` is the customer home screen; a staff list carries no
  * home flags, so it falls back to the whole set rather than rendering nothing.
  */
-export function visibleTiles({ role, can, webviewPages, tileLabels, isActive = () => true, homeOnly = false }) {
-  const all = applyTileLabels(withWebviewConfig(servicesForRole(role, can), webviewPages), tileLabels);
+export function visibleTiles({ role, can, webviewPages, tileLabels, viewer, isActive = () => true, homeOnly = false }) {
+  const all = applyTileLabels(withWebviewConfig(servicesForRole(role, can), webviewPages, viewer), tileLabels);
   const active = all.filter((service) => isActive(gridKeyFor(service)));
   if (!homeOnly) return active;
   // Staff used to be exempt: their grids showed the whole catalogue, which made
