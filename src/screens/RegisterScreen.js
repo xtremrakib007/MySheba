@@ -37,6 +37,7 @@ export default function RegisterScreen() {
   const [nationality, setNationality] = useState(DEFAULT_PHONE_COUNTRY);
   const [nationalityPicker, setNationalityPicker] = useState(false);
   const [email, setEmail] = useState('');
+  const [referralCode, setReferralCode] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [phoneCode, setPhoneCode] = useState('');
@@ -135,6 +136,7 @@ export default function RegisterScreen() {
         email: email.trim(),
         pin: password,
         nationality: nationality?.code,
+        referralCode: referralCode.trim().toUpperCase() || undefined,
         phoneIdToken: phoneToken || undefined,
         emailIdToken: emailToken || undefined,
         emailOtpVerificationId: emailProof || undefined,
@@ -253,6 +255,7 @@ export default function RegisterScreen() {
             </TouchableOpacity>
           </View>
           <Field label={t('register.emailAddress')} value={email} setValue={setEmail} placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" styles={styles} />
+          <Field label="Referral code (optional)" value={referralCode} setValue={setReferralCode} placeholder="e.g. MS12AB34CD" autoCapitalize="characters" maxLength={10} styles={styles} />
           <Field label={t('register.password')} value={password} setValue={setPassword} placeholder={t('register.passwordPlaceholder')} secureTextEntry maxLength={20} styles={styles} />
           <Field label={t('register.confirmPassword')} value={confirmPassword} setValue={setConfirmPassword} placeholder={t('register.confirmPasswordPlaceholder')} secureTextEntry maxLength={20} styles={styles} />
           <Text style={styles.verifyTitle}>Choose verification method</Text>
