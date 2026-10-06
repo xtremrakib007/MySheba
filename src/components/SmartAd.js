@@ -74,7 +74,7 @@ const ROTATE_MS = 4000;
 // the data side, but the matching logic is already correct and ready"
 // state targetCountries/etc. were in before this phase for every
 // dimension.
-export default function SmartAd({ placement, feature, adType = AD_TYPES.BANNER, height = 120, style }) {
+export default function SmartAd({ placement, feature, adType = AD_TYPES.BANNER, height = 120, style, fallback = null }) {
   const { adSettings, adFeatureControls, adCampaignsById, profile, openExternalUrl } = useApp();
   const { language } = useLanguage();
   const featureControl = adFeatureControls?.[feature];
@@ -206,7 +206,11 @@ export default function SmartAd({ placement, feature, adType = AD_TYPES.BANNER, 
   // feature/format is off, this placement is disabled, the interstitial
   // hourly cap is hit, or there's simply no eligible/uncapped ad right
   // now. The host screen never knows or cares which. ----
-  if (!interstitialAllowed || displayAds.length === 0) return null;
+  // `fallback` is what goes here instead of nothing - an AdMob banner, for a
+  // slot no advertiser has booked. It renders ONLY in this branch, which is
+  // what makes a paid direct booking win: AdMob can never appear beside one,
+  // because by the time this line runs there is no direct ad to appear beside.
+  if (!interstitialAllowed || displayAds.length === 0) return fallback;
 
   return <AdRotator ads={displayAds} placementId={placement} feature={feature} adType={adType} height={height} style={style} openExternalUrl={openExternalUrl} />;
 }

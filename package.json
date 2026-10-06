@@ -109,7 +109,8 @@
     "test:registration": "node scripts/test-registration.js",
     "test:webviewspeed": "node scripts/test-webview-speed.js",
     "test:tileplacement": "node scripts/test-tile-placement.js",
-    "test:adsinapp": "node scripts/test-ads-in-app.js"
+    "test:adsinapp": "node scripts/test-ads-in-app.js",
+    "test:admob": "node scripts/test-admob.js"
   },
   "dependencies": {
     "@notifee/react-native": "^9.1.8",
@@ -147,6 +148,7 @@
     "firebase": "^12.4.0",
     "react": "19.0.0",
     "react-native": "0.79.6",
+    "react-native-google-mobile-ads": "^17.0.0",
     "react-native-qrcode-svg": "^6.3.2",
     "react-native-safe-area-context": "5.4.0",
     "react-native-share": "~12.0.9",

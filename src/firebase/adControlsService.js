@@ -52,7 +52,50 @@ export const DEFAULT_AD_SETTINGS = {
   // hour" (see adFrequencyRules.js's isUnderInterstitialHourlyCap). 0 =
   // unlimited, same convention as the two fields above.
   maxInterstitialsPerUserPerHour: 3,
+  // ---- AdMob (the network that fills a slot nobody has booked) ----
+  //
+  // Off by default, and off is the honest default: AdMob cannot work until
+  // somebody pastes a banner unit id below, and a switch that says "on" while
+  // nothing can render is worse than one that says what is true.
+  admobEnabled: false,
+  // The AdMob banner ad unit id. Deliberately NOT in the native build config:
+  // the AdMob APP id is baked into AndroidManifest and needs a new build to
+  // change, this one does not, so it can be set or corrected from the app.
+  admobBannerUnitId: '',
 };
+
+/**
+ * What an AdMob banner ad unit id looks like.
+ *
+ * MUST stay identical to AD_UNIT_ID_PATTERN in functions/adControlsService.js,
+ * which is the authority - this copy only exists so the superadmin screen can
+ * say "that is not a unit id" before making a round trip. The two are separate
+ * bundles with nothing linking them, so a test compares them: see
+ * scripts/test-admob.js.
+ */
+export const AD_UNIT_ID_PATTERN = /^ca-app-pub-\d{16}\/\d{10}$/;
+
+/**
+ * Can an AdMob banner actually render right now?
+ *
+ * Every condition, in one place, because there are four of them and a slot
+ * that checks three is a slot that renders an empty band. Global Ads and the
+ * banner format are the same switches a direct banner answers to - AdMob is
+ * another way to fill a banner slot, not a way around the controls.
+ */
+export function isAdMobBannerReady(adSettings) {
+  const settings = adSettings || DEFAULT_AD_SETTINGS;
+  if (settings.adsEnabled === false) return false;
+  if (settings.bannerAdsEnabled === false) return false;
+  if (settings.admobEnabled !== true) return false;
+  return AD_UNIT_ID_PATTERN.test(String(settings.admobBannerUnitId || '').trim());
+}
+
+/** The unit id to request, or '' when nothing should be requested at all. */
+export function admobBannerUnitId(adSettings) {
+  if (!isAdMobBannerReady(adSettings)) return '';
+  return String((adSettings || DEFAULT_AD_SETTINGS).admobBannerUnitId || '').trim();
+}
 
 function defaultFeatureControl(featureId) {
   return {

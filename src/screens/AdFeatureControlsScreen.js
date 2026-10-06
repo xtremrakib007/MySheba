@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Switch, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Switch, StyleSheet, Platform, TextInput } from 'react-native';
 import { showAlert } from '../utils/appAlert';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
@@ -29,6 +29,10 @@ const GLOBAL_TOGGLES = [
   { key: 'bannerAdsEnabled', label: 'Banner Ads', sub: 'Banner-format ads, across every feature.' },
   { key: 'nativeAdsEnabled', label: 'Native Ads', sub: 'Native-format ads, across every feature.' },
   { key: 'interstitialAdsEnabled', label: 'Interstitial Ads', sub: 'Full-screen interstitial ads, across every feature.' },
+  // AdMob only ever FILLS a slot no advertiser has booked (see
+  // components/BottomAdSlot), so this switch cannot take revenue away from a
+  // direct booking - it can only decide whether an empty slot earns anything.
+  { key: 'admobEnabled', label: 'AdMob Fill', sub: 'Let AdMob fill a slot when no MySheba advertiser has booked it. Needs the banner ad unit id below.' },
 ];
 
 const FEATURE_COLUMNS = [
@@ -88,6 +92,30 @@ export default function AdFeatureControlsScreen() {
     const unsub = adControlsService.subscribeAdFeatureControls(setFeatureControls, () => {});
     return unsub;
   }, [isSuperadmin]);
+
+  // Held locally while it is being typed, and re-seeded whenever the stored
+  // value changes - otherwise a save from another device would be overwritten
+  // by whatever is still in this box.
+  const storedUnitId = String(adSettings?.admobBannerUnitId || '');
+  const [unitId, setUnitId] = useState(storedUnitId);
+  const [unitBusy, setUnitBusy] = useState(false);
+  useEffect(() => { setUnitId(storedUnitId); }, [storedUnitId]);
+  const trimmedUnitId = unitId.trim();
+  // Empty is valid - it is how AdMob fill is turned off.
+  const unitIdLooksWrong = !!trimmedUnitId && !adControlsService.AD_UNIT_ID_PATTERN.test(trimmedUnitId);
+  const unitUnchanged = trimmedUnitId === storedUnitId.trim();
+
+  const saveUnitId = async () => {
+    if (unitBusy || unitIdLooksWrong || unitUnchanged) return;
+    setUnitBusy(true);
+    try {
+      await adControlsService.updateAdSettings({ admobBannerUnitId: trimmedUnitId });
+    } catch (e) {
+      showAlert('MySheba', e.message || 'Could not save the AdMob banner unit id.');
+    } finally {
+      setUnitBusy(false);
+    }
+  };
 
   const toggleGlobal = async (key, currentlyEnabled) => {
     if (busyGlobalKey) return;
@@ -178,6 +206,43 @@ export default function AdFeatureControlsScreen() {
             ))}
           </View>
 
+          <Text style={styles.sectionTitle}>AdMob Banner Unit</Text>
+          <View style={styles.card}>
+            <Text style={styles.hint}>
+              The banner ad unit id from your AdMob console (Ad units &rarr; Add ad unit &rarr; Banner).
+              It looks like ca-app-pub-0000000000000000/0000000000 &mdash; with a slash. An id with a
+              &quot;~&quot; in it is the app id, which is set in the app build, not here. Leave it empty
+              to turn AdMob fill off.
+            </Text>
+            <TextInput
+              style={[styles.unitInput, unitIdLooksWrong && styles.unitInputBad]}
+              value={unitId}
+              onChangeText={setUnitId}
+              placeholder="ca-app-pub-0000000000000000/0000000000"
+              placeholderTextColor={colors.placeholder}
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!unitBusy}
+            />
+            {/* Said here rather than only after a round trip: the two ids are
+                copied off the same console page and differ by one character. */}
+            {!!unitIdLooksWrong && (
+              <Text style={styles.unitError}>
+                {unitId.includes('~')
+                  ? 'That is the AdMob app id, not a banner ad unit id. The unit id has a slash in it.'
+                  : 'That is not a banner ad unit id yet.'}
+              </Text>
+            )}
+            <TouchableOpacity
+              style={[styles.bulkBtn, styles.bulkBtnEnable, styles.unitSave, (unitBusy || unitIdLooksWrong || unitUnchanged) && styles.unitSaveOff]}
+              activeOpacity={0.7}
+              disabled={unitBusy || unitIdLooksWrong || unitUnchanged}
+              onPress={saveUnitId}
+            >
+              <Text style={styles.bulkBtnEnableText}>{unitBusy ? 'Saving...' : 'Save unit id'}</Text>
+            </TouchableOpacity>
+          </View>
+
           <View style={styles.sectionHeadRow}>
             <Text style={styles.sectionTitle}>Feature Controls</Text>
             <View style={styles.bulkBtnRow}>
@@ -266,7 +331,12 @@ function createStyles(colors) {
     headerTitle: { color: 'white', fontWeight: '600', fontSize: 16, marginLeft: 10 },
     deniedWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
     deniedText: { color: colors.textSecondary, fontSize: 13, textAlign: 'center' },
-    hint: { fontSize: 12, color: colors.textSecondary, marginBottom: spacing.lg, lineHeight: 17 },
+    unitInput: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: colors.text, backgroundColor: colors.bg, marginTop: 10 },
+  unitInputBad: { borderColor: '#D9534F' },
+  unitError: { fontSize: 11.5, color: '#D9534F', marginTop: 6, lineHeight: 16 },
+  unitSave: { marginTop: 12, alignSelf: 'flex-start' },
+  unitSaveOff: { opacity: 0.45 },
+  hint: { fontSize: 12, color: colors.textSecondary, marginBottom: spacing.lg, lineHeight: 17 },
     sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
     sectionHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.lg, marginBottom: spacing.sm },
     card: {

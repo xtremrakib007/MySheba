@@ -229,15 +229,21 @@ test('it has a placement of its own, separate from the home page', () => {
   assert.ok(!/placement="HOME_BOTTOM"/.test(slot),
     'the slot shares the home page’s placement, so one switch runs both');
 });
-test('it says what AdMob still needs rather than implying it is wired', () => {
-  // There is no AdMob package and no ad unit id in this repo, and inventing
-  // either is worse than saying so.
-  assert.ok(/ADMOB:/.test(slot), 'the slot must say where AdMob fits');
-  const pkg = JSON.parse(read('package.json'));
-  const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-  const hasAdmob = Object.keys(deps).some((d) => /mobile-ads|admob/i.test(d));
-  assert.strictEqual(hasAdmob, false,
-    'an AdMob package is installed now, so the slot’s comment is out of date');
+test('AdMob fills it, through the one guarded component', () => {
+  // This check used to assert the OPPOSITE - that no AdMob package existed and
+  // the slot only said where one would go. It is kept, pointed at what is true
+  // now, rather than deleted: the thing worth holding is that the slot has
+  // exactly one route to AdMob, so there is one place where "does this fill"
+  // gets decided. The AdMob rules themselves are scripts/test-admob.js.
+  assert.ok(/ADMOB/.test(slot), 'the slot must say how AdMob relates to it');
+  assert.ok(/fallback=\{<AdMobBanner \/>\}/.test(slot),
+    'AdMob must reach the slot as SmartAd\'s fallback, so a booked banner wins');
+  // JSX USES, not raw occurrences: counting the string matched the import
+  // path and this file's own comment about AdMob, which made the number
+  // meaningless. Exactly one place renders it, so there is exactly one place
+  // where "does this slot fill" gets decided.
+  assert.strictEqual((slot.match(/<AdMobBanner\b/g) || []).length, 1,
+    'more than one render of AdMobBanner is a second route to the same decision');
 });
 
 console.log(failed ? `\n${failed} check(s) failed.\n` : `\n${passed} checks passed.\n`);

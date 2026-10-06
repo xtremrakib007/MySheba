@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 import SmartAd from './SmartAd';
+import AdMobBanner from './AdMobBanner';
 
 // The ad strip pinned directly above the bottom nav bar.
 //
@@ -19,21 +20,27 @@ import SmartAd from './SmartAd';
 // screen space until something is booked into it - which is the whole point
 // of it being here before there is anything to put in it.
 //
-// ADMOB: the slot is the part that had to exist in the app. Filling it from
-// AdMob rather than from a booked banner needs three things this repo cannot
-// supply on its own - the react-native-google-mobile-ads package, a native
-// build to include it (it has no Expo Go support), and the AdMob app id plus
-// a banner ad unit id from the AdMob console. With those, the AdMob <BannerAd>
-// goes inside this same wrapper, beside the SmartAd, and everything around it
-// - where it sits, that it collapses when empty, that the nav bar is still
-// clear of it - already holds.
+// ADMOB fills the slot when nothing is booked - see AdMobBanner, which
+// renders nothing at all unless Global Ads, the banner format and AdMob are
+// all on AND a well-formed banner unit id is stored in ad_settings. The AdMob
+// APP id is in the native build config (app.base.json); the unit id is not,
+// so it can be set or changed without another build.
 const AD_HEIGHT = 56;
 
 export default function BottomAdSlot() {
   const { colors } = useTheme();
   return (
     <View style={[styles.slot, { backgroundColor: colors.bg }]}>
-      <SmartAd placement="APP_BOTTOM_BAR" feature="home" height={AD_HEIGHT} />
+      {/* A booked MySheba banner first; AdMob only fills the slot when no
+          advertiser has one running, because a direct booking is paid for and
+          an AdMob impression is not. SmartAd renders the fallback in place of
+          its own "nothing to show", so the two can never appear together. */}
+      <SmartAd
+        placement="APP_BOTTOM_BAR"
+        feature="home"
+        height={AD_HEIGHT}
+        fallback={<AdMobBanner />}
+      />
     </View>
   );
 }
