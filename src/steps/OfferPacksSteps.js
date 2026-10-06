@@ -3,6 +3,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { View } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { countries, rechargeOperators } from '../data/countries';
+import { serviceCountries, operatorsForCountry } from '../utils/catalogue';
 import { getOperatorBrand } from '../data/operatorBrand';
 import { resolvePackageSource } from '../utils/packageSource';
 import ServiceInterruptionNotice from '../components/ServiceInterruptionNotice';
@@ -35,8 +36,9 @@ const OPERATOR_CODES = {
 };
 
 export default function OfferPacksStep({ step }) {
-  const { serviceData, updateServiceData, nextStep } = useApp();
-  const OPERATOR_LIST = rechargeOperators[serviceData.country] || [];
+  const { serviceData, updateServiceData, nextStep, catalogue } = useApp();
+  const COUNTRY_LIST = serviceCountries(countries, catalogue);
+  const OPERATOR_LIST = operatorsForCountry(rechargeOperators, catalogue, serviceData.country);
 
   // The number is collected first so the operator can be read off it. A
   // detected operator is selected and its step skipped, as asked. Prefixes are
@@ -124,7 +126,7 @@ export default function OfferPacksStep({ step }) {
   });
 
   if (step === 0) {
-    return <View><FormLabel>Select Country</FormLabel><Grid3>{countries.map((c) => <CountrySelectCard key={c.code} code={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr, operator: null, package: null, packageId: null, amount: null }); nextStep(); }} />)}</Grid3></View>;
+    return <View><FormLabel>Select Country</FormLabel><Grid3>{COUNTRY_LIST.map((c) => <CountrySelectCard key={c.code} code={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr, operator: null, package: null, packageId: null, amount: null }); nextStep(); }} />)}</Grid3></View>;
   }
 
   if (step === 1) {
@@ -132,7 +134,7 @@ export default function OfferPacksStep({ step }) {
   }
 
   if (step === 2) {
-    const list = rechargeOperators[serviceData.country] || [];
+    const list = OPERATOR_LIST;
     return <View><FormLabel>Select Operator</FormLabel><Grid3>{list.map((o) => { const brand = getOperatorBrand(o); return <OperatorCard key={o} name={o} logo={brand.logo} color={brand.color} initials={brand.initials} selected={serviceData.operator === o} onPress={() => { updateServiceData({ operator: o, package: null, packageId: null, amount: null }); nextStep(); }} />; })}</Grid3></View>;
   }
 

@@ -120,6 +120,18 @@ await check('not even a superadmin may add a key to it', 'deny', () => setDoc(do
 await check('and it cannot be deleted', 'deny', () => deleteDoc(doc(as('super1'), 'settings/tilePlacement')));
 await check('a signed-out visitor cannot read it', 'deny', () => getDoc(doc(env.unauthenticatedContext().firestore(), 'settings/tilePlacement')));
 
+// settings/catalogue: which countries and operators the pickers offer. Read by
+// everyone signed in because the service steps filter on it; written by a
+// superadmin only, with an exact key allowlist.
+await check('superadmin closes a market', 'allow', () => setDoc(doc(as('super1'), 'settings/catalogue'), { countries: { disabled: ['IN'], added: [] }, updatedAt: serverTimestamp() }, { merge: true }));
+await check('superadmin opens a new market', 'allow', () => setDoc(doc(as('super1'), 'settings/catalogue'), { countries: { disabled: [], added: [{ code: 'LK', name: 'Sri Lanka', flag: '\u{1F1F1}\u{1F1F0}', dial: '+94', curr: 'LKR' }] }, updatedAt: serverTimestamp() }, { merge: true }));
+await check('superadmin adds an operator', 'allow', () => setDoc(doc(as('super1'), 'settings/catalogue'), { operators: { disabled: { MY: ['XOX'] }, added: { MY: ['New Telco'] } }, updatedAt: serverTimestamp() }, { merge: true }));
+await check('a customer reads the catalogue', 'allow', () => getDoc(doc(as('customer1'), 'settings/catalogue')));
+await check('admin CANNOT change what the app sells', 'deny', () => setDoc(doc(as('admin1'), 'settings/catalogue'), { countries: { disabled: ['MY'], added: [] } }, { merge: true }));
+await check('a customer CANNOT reopen a market for themselves', 'deny', () => setDoc(doc(as('customer1'), 'settings/catalogue'), { countries: { disabled: [], added: [] } }, { merge: true }));
+await check('not even a superadmin may add a key to it', 'deny', () => setDoc(doc(as('super1'), 'settings/catalogue'), { packages: { added: {} } }, { merge: true }));
+await check('and the catalogue cannot be deleted', 'deny', () => deleteDoc(doc(as('super1'), 'settings/catalogue')));
+
 // settings/webviews: the customer grid is built from it, so everyone signed in
 // has to read it, and a wrong address here opens inside the app.
 await check('superadmin adds a WebView page', 'allow', () => setDoc(doc(as('super1'), 'settings/webviews'), { pages: { wv_abcd1234: { name: 'EPF', url: 'https://epf.gov.my/x', title: 'EPF', icon: '🏦', active: true } }, updatedAt: serverTimestamp() }, { merge: true }));

@@ -43,7 +43,7 @@ export const FEATURE_GROUPS = {
   admin: [
     'adminFeatures', 'dealerFeatures', 'resellerFeatures', 'moreFeatures',
     'userManagement', 'reports', 'ledger', 'walletFunding', 'adminAnalytics', 'verificationManagement',
-    'featureAccess', 'gridManagement', 'tileLabels', 'tilePlacement', 'tierPromotions', 'apiProviderManagement',
+    'featureAccess', 'gridManagement', 'tileLabels', 'tilePlacement', 'catalogue', 'tierPromotions', 'apiProviderManagement',
   ],
 
   ads: [

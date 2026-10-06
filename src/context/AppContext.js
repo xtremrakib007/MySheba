@@ -45,6 +45,7 @@ import * as featureAccessService from "../firebase/featureAccessService";
 import * as webviewConfigService from '../firebase/webviewConfigService';
 import * as tileLabelService from '../firebase/tileLabelService';
 import * as tilePlacementService from "../firebase/tilePlacementService";
+import * as catalogueService from "../firebase/catalogueService";
 import * as gridManagementService from "../firebase/gridManagementService";
 import * as accessControlService from "../firebase/accessControlService";
 import * as adControlsService from "../firebase/adControlsService";
@@ -850,6 +851,19 @@ export function AppProvider({ children }) {
     [tilePlacement, profile?.role],
   );
 
+  // A superadmin's edits to the service catalogue: which countries, operators
+  // and data packages the pickers offer. Empty is the normal state and means
+  // the shipped lists stand, so the pickers are right before the first
+  // snapshot and stay right if the document never exists.
+  const [catalogue, setCatalogue] = useState(catalogueService.EMPTY_CATALOGUE);
+  useEffect(() => {
+    if (!authUser || !profile) return undefined;
+    return catalogueService.subscribeCatalogue(
+      setCatalogue,
+      logListenerError('catalogue'),
+    );
+  }, [authUser, profile]);
+
   // Central navigation boundary. UI hiding is not a security boundary:
   // every internal setScreen() call (notifications, deep links, callbacks,
   // and manually triggered handlers) must pass role + live grid checks here.
@@ -901,6 +915,8 @@ export function AppProvider({ children }) {
     // what that whole role sees, so it is superadmin's alone - same as
     // renaming one.
     tilePlacement: ['superadmin'],
+    // Editing the catalogue changes what every customer can buy.
+    catalogue: ['superadmin'],
     adFeatureControls: ['superadmin'],
     adAnalytics: ['superadmin'],
     advertiserManagement: ['superadmin'],
@@ -2953,6 +2969,7 @@ export function AppProvider({ children }) {
     tilePlacement,
     tilePlacementForMe,
     tileOrderForMe,
+    catalogue,
     supportContact,
 
     paymentSettings,

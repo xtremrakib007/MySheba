@@ -126,6 +126,7 @@ const SUPERADMIN_GROUPS = [
     { key: 'webviewManagement', icon: 'apiManagement', label: 'WebView Pages' },
     { key: 'tileLabels', icon: 'gridManagement', label: 'Tile Names & Icons' },
     { key: 'tilePlacement', icon: 'gridManagement', label: 'Home Screen Tiles' },
+    { key: 'catalogue', icon: 'apiManagement', label: 'Service Catalogue' },
   ] },
   { title: 'Advertising', icon: 'more', color: 'secondary', items: [
     { key: 'adAnalytics', icon: 'adAnalytics', label: 'Ad Analytics' },
@@ -198,7 +199,7 @@ export default function Sidebar() {
   if (!sidebarVisible) return null;
 
   const goTo = (key, asTab) => {
-    const always = ['adminHome','adminFeatures','gridManagement','webviewManagement','featureAccess','tileLabels','tilePlacement'];
+    const always = ['adminHome','adminFeatures','gridManagement','webviewManagement','featureAccess','tileLabels','tilePlacement','catalogue'];
     // Resolved for this person, not globally: a tile hidden from them in the
     // grid must not still be reachable from the sidebar.
     if (!always.includes(key) && !gridService.isGridActive(gridManagement, key, gridViewer)) { showAlert('MySheba', 'This feature is currently unavailable.'); return; }

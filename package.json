@@ -111,7 +111,8 @@
     "test:tileplacement": "node scripts/test-tile-placement.js",
     "test:adsinapp": "node scripts/test-ads-in-app.js",
     "test:admob": "node scripts/test-admob.js",
-    "test:rulesemu": "node scripts/test-rules-emulated.js"
+    "test:rulesemu": "node scripts/test-rules-emulated.js",
+    "test:catalogue": "node scripts/test-catalogue.js"
   },
   "dependencies": {
     "@notifee/react-native": "^9.1.8",

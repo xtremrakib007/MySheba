@@ -1,5 +1,5 @@
 import { TRANSACTION_REJECT_REASONS, TOPUP_REJECT_REASONS } from '../data/rejectionReasons';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Linking, Image, StyleSheet } from 'react-native';
 import { showAlert } from '../utils/appAlert';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -29,7 +29,8 @@ import * as bannerService from '../firebase/bannerService';
 import * as announcementService from '../firebase/announcementService';
 import * as topupService from '../firebase/topupService';
 import * as transactionService from '../firebase/transactionService';
-import { internetPackagesByOperator, countries } from '../data/countries';
+import { internetPackagesByOperator, countries, rechargeOperators } from '../data/countries';
+import { operatorsForCountry } from '../utils/catalogue';
 import CountryModal from '../components/CountryModal';
 import * as homepageConfigService from '../firebase/homepageConfigService';
 import { getHomepageModules } from '../firebase/homepageConfigService';
@@ -194,7 +195,11 @@ const SUPPORT_FIELDS = [
 // Every operator that has an editable internet package list (see
 // data/countries.js) - flattened + deduped across all countries, so the
 // Pricing tab's operator picker doesn't need to know about countries at all.
-const PRICING_OPERATORS = Object.keys(internetPackagesByOperator);
+// The operators the app SHIPS with. No longer the whole list: an operator a
+// superadmin adds in Catalogue has to be able to get packages here, or adding
+// one produces an operator customers can pick and nobody can price. See
+// pricingOperators below, which adds those in.
+const BUILT_IN_PRICING_OPERATORS = Object.keys(internetPackagesByOperator);
 
 const TYPE_ICON = { flight: '✈️', bus: '🚌', train: '🚂' };
 
@@ -265,6 +270,7 @@ export default function AdminHomeScreen() {
     // viewingSection, from the same deleted line.
     gridManagement,
     gridViewer,
+    catalogue,
     can,
   } = useApp();
   // Verifying a top-up is finance's step; releasing the money is an admin's.
@@ -298,7 +304,34 @@ export default function AdminHomeScreen() {
     updateHomepageModule(code, 'layout', current.layout);
   };
   const [bankAccountModal, setBankAccountModal] = useState({ visible: false, account: null });
-  const [pricingOperator, setPricingOperator] = useState(PRICING_OPERATORS[0]);
+  // Shipped operators plus every one the catalogue adds, across all countries,
+  // less any it disables - flattened and deduped, the same way the built-in
+  // list already was, so this card still does not need to know about countries.
+  const pricingOperators = useMemo(() => {
+    const out = [...BUILT_IN_PRICING_OPERATORS];
+    const codes = new Set([
+      ...Object.keys(rechargeOperators),
+      ...Object.keys((catalogue && catalogue.operators && catalogue.operators.added) || {}),
+    ]);
+    for (const code of codes) {
+      for (const name of operatorsForCountry(rechargeOperators, catalogue, code)) {
+        if (!out.includes(name)) out.push(name);
+      }
+    }
+    // A disabled operator is not sold, so it is not priced either.
+    const off = new Set(
+      Object.values((catalogue && catalogue.operators && catalogue.operators.disabled) || {}).flat(),
+    );
+    return out.filter((name) => !off.has(name));
+  }, [catalogue]);
+  const [pricingOperator, setPricingOperator] = useState(BUILT_IN_PRICING_OPERATORS[0]);
+  // An operator that leaves the list must not stay selected, or the card
+  // prices something the catalogue no longer offers.
+  useEffect(() => {
+    if (pricingOperators.length && !pricingOperators.includes(pricingOperator)) {
+      setPricingOperator(pricingOperators[0]);
+    }
+  }, [pricingOperators, pricingOperator]);
   // Internet Package Prices card: null when the add/edit modal is closed,
   // otherwise { mode: 'add' } or { mode: 'edit', pkg } where pkg is one of
   // the entries getMergedPackages() returns (carries id/baseIndex/isCustom
@@ -948,7 +981,7 @@ export default function AdminHomeScreen() {
             <View style={styles.card}>
               <Text style={styles.cardTitle}>📶 Internet Package Prices</Text>
               <View style={styles.chipRow}>
-                {PRICING_OPERATORS.map((op) => (
+                {pricingOperators.map((op) => (
                   <TouchableOpacity
                     key={op}
                     style={[styles.opChip, pricingOperator === op && styles.opChipActive]}

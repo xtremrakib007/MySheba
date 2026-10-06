@@ -3,6 +3,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { countries, rechargeOperators, amountToPoints } from '../data/countries';
+import { serviceCountries, operatorsForCountry } from '../utils/catalogue';
 import { getOperatorBrand } from '../data/operatorBrand';
 import { FormLabel, FormInput, SummaryCard } from '../components/ui';
 import CountrySelectCard from '../components/CountrySelectCard';
@@ -15,8 +16,11 @@ import { useNetworkStatus } from '../components/useNetworkStatus';
 // Customer-facing wallet values are always displayed as MYR. The legacy
 // conversion helper remains internal for settlement compatibility.
 export default function RechargeStep({ step }) {
-  const { serviceData, updateServiceData, nextStep, rates } = useApp();
-  const OPERATOR_LIST = rechargeOperators[serviceData.country] || [];
+  const { serviceData, updateServiceData, nextStep, rates, catalogue } = useApp();
+  // Through the catalogue, so a market or operator a superadmin turned off
+  // is not offered here. The shipped lists stay the default.
+  const COUNTRY_LIST = serviceCountries(countries, catalogue);
+  const OPERATOR_LIST = operatorsForCountry(rechargeOperators, catalogue, serviceData.country);
 
   // The number is collected first so the operator can be read off it. A
   // detected operator is selected and its step skipped, as asked. Prefixes are
@@ -48,13 +52,13 @@ export default function RechargeStep({ step }) {
   });
 
   if (step === 0) {
-    return (<View><FormLabel>Select Country</FormLabel><View style={styles.grid3}>{countries.map((c) => (<CountrySelectCard key={c.code} code={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr }); nextStep(); }} />))}</View></View>);
+    return (<View><FormLabel>Select Country</FormLabel><View style={styles.grid3}>{COUNTRY_LIST.map((c) => (<CountrySelectCard key={c.code} code={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr }); nextStep(); }} />))}</View></View>);
   }
   if (step === 1) {
     return (<View><FormLabel>Enter Mobile Number</FormLabel><FormInput placeholder="Enter number" placeholderTextColor={isDark ? '#9AA6BA' : '#777777'} keyboardType="phone-pad" value={serviceData.phone || ''} onChangeText={(v) => updateServiceData({ phone: v })} style={styles.phoneInput} /></View>);
   }
   if (step === 2) {
-    const list = rechargeOperators[serviceData.country] || ['Operator 1', 'Operator 2'];
+    const list = OPERATOR_LIST.length ? OPERATOR_LIST : ['Operator 1', 'Operator 2'];
     return (<View><FormLabel>Select Operator</FormLabel><View style={styles.grid3}>{list.map((o) => { const brand = getOperatorBrand(o); return <RechargeOperatorCard key={o} name={o} logo={brand.logo} color={brand.color} initials={brand.initials} selected={serviceData.operator === o} onPress={() => { updateServiceData({ operator: o }); nextStep(); }} styles={styles} primaryColor={colors.primary} />; })}</View></View>);
   }
   if (step === 3) {
