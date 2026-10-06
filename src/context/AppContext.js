@@ -10,6 +10,7 @@ import React, {
   useMemo,
 } from "react";
 import { Platform, BackHandler, ToastAndroid, AppState } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { showAlert } from "../utils/appAlert";
 import { crossesFeature } from "../utils/featureGroups";
 import {
@@ -388,8 +389,7 @@ export function AppProvider({ children }) {
     setScreen("advertiserDetail");
   }, []);
 
-  // Deep-link handling is intentionally inert; retired listing routes are no longer exposed.
-  const handleDeepLink = useCallback(() => {}, []);
+  // Marketing/referral links: preserve attribution until registration consumes it.\n  // Supported forms: mysheba://register?ref=MSXXXXXXXX and https://mysheba.top/register?ref=MSXXXXXXXX.\n  const handleDeepLink = useCallback((url) => {\n    try {\n      const raw = String(url || "");\n      if (!raw) return;\n      const parsed = new URL(raw);\n      const ref = String(parsed.searchParams.get("ref") || parsed.searchParams.get("referral") || "").trim().toUpperCase();\n      if (/^MS[A-F0-9]{8}$/.test(ref)) AsyncStorage.setItem("@mysheba/referralCode", ref).catch(() => {});\n    } catch (_) {}\n  }, []);
 
   // ---- Profile navigation state ----
   // These ids are navigation-only; the destination screens load the actual
