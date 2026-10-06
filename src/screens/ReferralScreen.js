@@ -17,7 +17,7 @@ export default function ReferralScreen() {
 
   const share = async () => {
     if (!info?.code) return;
-    const message = `Join me on MySheba. Use my referral code ${info.code} when you register and start using recharge, bills, remittance and more.`;
+    const inviteLink = `https://mysheba.top/register?ref=${info.code}`;\n    const message = `Join me on MySheba. Register with my invite link: ${inviteLink}\n\nUse code ${info.code} and start using recharge, bills, remittance and more.`;
     try { await Share.share({ message }); } catch (_) {}
   };
 
