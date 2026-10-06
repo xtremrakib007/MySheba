@@ -85,7 +85,7 @@ export function useServiceAction() {
       const screenMap = {
         moreFeatures: 'moreFeatures', history: 'history', topup: 'topup',
         profile: 'profile', myAccount: 'myAccount', transferPoints: 'transferPoints',
-        verifyIdentity: 'verifyIdentity', support: 'support',
+        verifyIdentity: 'verifyIdentity', support: 'support', referral: 'referral',
       };
       if (screenMap[s.screenKey]) return setScreen(screenMap[s.screenKey]);
       return showAlert('MySheba', 'This feature is not configured yet.');
