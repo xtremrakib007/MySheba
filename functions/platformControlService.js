@@ -18,6 +18,7 @@ const ROLES = ['customer','dealer','reseller','support','finance','admin','super
 const FEATURE_KINDS = ['webview','service','screen'];
 const SERVICE_KEYS = ['recharge','rechargePin','mobilebanking','internet','offerpacks','entertainment','billpayment','remittance','bus','train','flight','topup','history','support','myAccount','profile','walletTransfer','myDocuments','salary','kyc'];
 const SCREEN_KEYS = ['moreFeatures','history','topup','profile','myAccount','transferPoints','verifyIdentity','support'];
+const RESERVED_FEATURE_KEYS = new Set(['recharge','rechargePin','mobilebanking','internet','billpayment','remittance','bus','train','flight','offerpacks','entertainment','topup','history','support','myAccount','profile','dealerFeatures','resellerFeatures','adminFeatures','moreFeaturesTile','walletTransfer','myDocuments','salary','kyc','fomema','visa','mydigital','passport','adminAnalytics','inquiries','pending','topups','rates','pricing','payments','transferPoints','apiManagement','userManagement','verificationManagement','featureAccess','banners','announcements']);
 const ISO = /^[A-Z]{2}$/;
 const KEY = /^[a-z][a-z0-9_-]{1,47}$/;
 
@@ -40,7 +41,7 @@ function cleanFeature(data) {
   const key=str(data.key,48).toLowerCase();
   const name=str(data.name,60);
   const kind=str(data.kind,16);
-  if (!KEY.test(key)) throw new HttpsError('invalid-argument','Feature key must be 2-48 characters and use lowercase letters, numbers, _ or -.');
+  if (!KEY.test(key) || RESERVED_FEATURE_KEYS.has(key)) throw new HttpsError('invalid-argument','That key is reserved by a built-in MySheba feature. Use a new custom key.');
   if (!name) throw new HttpsError('invalid-argument','Feature name is required.');
   if (!FEATURE_KINDS.includes(kind)) throw new HttpsError('invalid-argument','Unsupported feature type.');
   if (kind === 'service' && !SERVICE_KEYS.includes(String(data.serviceKey||''))) throw new HttpsError('invalid-argument','Unsupported service target.');
