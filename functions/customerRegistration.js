@@ -31,7 +31,7 @@ exports.registerWithDealerCode = onCall({ enforceAppCheck: false }, async (reque
   if (data.action === 'sendEmailVerificationChallenge') return emailOtpService.sendEmailVerificationOtpInternal(data);
   if (data.action === 'verifyEmailOtp') return emailOtpService.verifyEmailVerificationOtpInternal(data);
 
-  const { name, phone, phoneE164, dialCode, email, pin, nationality, phoneIdToken, emailIdToken, emailOtpVerificationId } = data;
+  const { name, phone, phoneE164, dialCode, email, pin, nationality, referralCode, phoneIdToken, emailIdToken, emailOtpVerificationId } = data;
   if (!name || !name.trim()) throw new HttpsError('invalid-argument', 'Please enter your full name.');
   if (!isValidPhone(phone)) throw new HttpsError('invalid-argument', 'Please enter a valid phone number.');
   if (!isValidEmail(email)) throw new HttpsError('invalid-argument', 'Please enter a valid email address.');
@@ -94,7 +94,9 @@ exports.registerWithDealerCode = onCall({ enforceAppCheck: false }, async (reque
         throw new HttpsError('resource-exhausted', 'Registration is already being processed. Please wait a few seconds.');
       }
       const expiresAt = admin.firestore.Timestamp.fromMillis(now + REGISTRATION_LOCK_MS);
-      tx.set(emailLockRef, { type: 'email', createdAt: admin.firestore.FieldValue.serverTimestamp(), expiresAt });
+      tx.set(emailLockRef, { type: 'email', createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      referralCode: 'MS' + crypto.createHash('sha256').update(userRecord.uid).digest('hex').slice(0, 8).toUpperCase(),
+      ...(referral ? { referral } : {}), expiresAt });
       tx.set(phoneLockRef, { type: 'phone', createdAt: admin.firestore.FieldValue.serverTimestamp(), expiresAt });
     });
     locksAcquired = true;
@@ -127,6 +129,18 @@ exports.registerWithDealerCode = onCall({ enforceAppCheck: false }, async (reque
       if (err.code === 'auth/email-already-exists') throw new HttpsError('already-exists', 'An account with this phone number already exists.');
       await logServerError('registerWithDealerCode', err, { userId: null });
       throw new HttpsError('internal', 'Could not create the account.');
+    }
+
+    const cleanReferralCode = String(referralCode || '').trim().toUpperCase().slice(0, 32);
+    let referral = null;
+    if (cleanReferralCode) {
+      const referralSnap = await db.collection('users').where('referralCode', '==', cleanReferralCode).limit(1).get();
+      if (!referralSnap.empty && referralSnap.docs[0].id !== userRecord.uid) {
+        const referrer = referralSnap.docs[0].data() || {};
+        if (referrer.role === 'customer' && referrer.active !== false && referrer.disabled !== true && !referrer.mergedInto) {
+          referral = { referredBy: referralSnap.docs[0].id, referralCode: cleanReferralCode, status: 'registered' };
+        }
+      }
     }
 
     const profile = {
