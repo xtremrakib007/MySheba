@@ -1339,6 +1339,7 @@ export function AppProvider({ children }) {
                   localSessionId,
                   activeSessionId: p.activeSessionId,
                   activeDeviceId: p.activeDeviceId,
+                  activeSessions: p.activeSessions,
                   deviceId: await deviceSessionService.getDeviceId(),
                   initialRouteDone,
                   deviceCheckDeferred,
