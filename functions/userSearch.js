@@ -134,3 +134,125 @@ exports.getUserByUid = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (req
     },
   };
 });
+
+// Admin investigation search is deliberately separate from the public/contact
+// search above. It can return email and inactive accounts, but only to staff
+// roles that are allowed to use the Admin Investigation Center.
+const INVESTIGATION_ROLES = new Set(['admin', 'superadmin', 'support', 'finance']);
+const INVESTIGATION_MAX = 30;
+const INVESTIGATION_WINDOW_MS = 60 * 1000;
+
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function investigationPhoneCandidates(term) {
+  const digits = normalizeDigits(term);
+  if (!digits) return [];
+  const candidates = new Set([digits, '+' + digits]);
+  // Malaysia/local-format convenience: 012... can match 6012... / +6012...
+  if (digits.startsWith('0') && digits.length >= 8) {
+    const intl = '60' + digits.slice(1);
+    candidates.add(intl);
+    candidates.add('+' + intl);
+  }
+  return [...candidates];
+}
+
+async function requireInvestigationStaff(db, uid) {
+  const snap = await db.collection('users').doc(uid).get();
+  if (!snap.exists) throw new HttpsError('permission-denied', 'Staff profile not found.');
+  const profile = snap.data() || {};
+  const role = String(profile.role || '').trim().toLowerCase();
+  if (!INVESTIGATION_ROLES.has(role)) {
+    throw new HttpsError('permission-denied', 'You are not allowed to search customer accounts.');
+  }
+  if (profile.suspended === true || profile.inactive === true || profile.disabled === true || profile.active === false || profile.mergedInto) {
+    throw new HttpsError('permission-denied', 'Your staff account is not active.');
+  }
+  return profile;
+}
+
+exports.searchInvestigationUsers = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
+  const callerUid = request.auth.uid;
+  const term = String((request.data && request.data.query) || '').trim().slice(0, 150);
+  if (term.length < 2) return { results: [] };
+
+  const db = admin.firestore();
+  await requireInvestigationStaff(db, callerUid);
+  await rateLimit(db, callerUid, 'investigation', INVESTIGATION_MAX, INVESTIGATION_WINDOW_MS);
+
+  const lower = normalizeEmail(term);
+  const digits = normalizeDigits(term);
+  const phoneCandidates = investigationPhoneCandidates(term);
+  const resultDocs = new Map();
+
+  try {
+    const queries = [];
+    const namePrefixes = [...new Set([
+      term,
+      lower,
+      term.charAt(0).toUpperCase() + term.slice(1).toLowerCase(),
+      term.toUpperCase(),
+    ])].filter(Boolean).slice(0, 4);
+
+    for (const prefix of namePrefixes) {
+      queries.push(db.collection('users')
+        .where('name', '>=', prefix)
+        .where('name', '<', prefix + '\uf8ff')
+        .limit(20)
+        .get());
+    }
+
+    // Registration stores normalized lowercase email. Include exact and prefix
+    // lookup so a pasted address or the beginning of an address works.
+    if (term.includes('@')) {
+      queries.push(db.collection('users').where('email', '==', lower).limit(20).get());
+      queries.push(db.collection('users')
+        .where('email', '>=', lower)
+        .where('email', '<', lower + '\uf8ff')
+        .limit(20)
+        .get());
+    }
+
+    // Phone data exists in both legacy phone and normalized phoneE164.
+    if (digits.length >= 2) {
+      for (const candidate of phoneCandidates) {
+        queries.push(db.collection('users').where('phone', '==', candidate).limit(20).get());
+        queries.push(db.collection('users').where('phoneE164', '==', candidate).limit(20).get());
+      }
+      queries.push(db.collection('users').where('userId', '==', digits).limit(20).get());
+    }
+
+    // UID is the canonical fallback and does not require a Firestore query.
+    const uidSnap = await db.collection('users').doc(term).get();
+    if (uidSnap.exists) resultDocs.set(uidSnap.id, uidSnap);
+
+    const snapshots = await Promise.all(queries);
+    for (const snap of snapshots) {
+      for (const d of snap.docs) resultDocs.set(d.id, d);
+    }
+  } catch (err) {
+    await logServerError('searchInvestigationUsers', err, { userId: callerUid });
+    throw new HttpsError('internal', 'Could not search accounts right now.');
+  }
+
+  const results = [];
+  for (const d of resultDocs.values()) {
+    const u = d.data() || {};
+    results.push({
+      uid: d.id,
+      name: u.name || u.displayName || '',
+      email: u.email || '',
+      phone: u.phone || u.phoneNumber || u.phoneE164 || '',
+      phoneE164: u.phoneE164 || '',
+      role: u.role || 'customer',
+      userId: u.userId || '',
+      disabled: Boolean(u.disabled || u.suspended || u.inactive || u.active === false),
+    });
+  }
+
+  results.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  return { results: results.slice(0, 25) };
+});
