@@ -1,18 +1,37 @@
+import { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { canAccess, landingPathFor } from '../routes/navConfig';
 import AppShell from '../layouts/AppShell';
+import AccessRestrictedPage from '../pages/AccessRestrictedPage';
+import {
+  canAccessPortal,
+  getCurrentPortal,
+  isKnownProductionPortal,
+  landingPathForPortal,
+  portalAllowsPath,
+  portalEnforcementEnabled,
+} from '../services/portalConfig';
 
-// Every screen is gated by navConfig's PATH_ACCESS against the signed-in
-// person's effective capabilities (role defaults + their overrides), so
-// someone who opens a URL they may not use is sent to their own landing page
-// instead of a screen that would fail on permission-denied reads. Cloud
-// Functions and firestore.rules enforce the same model server-side.
 export default function ProtectedRoute() {
   const { profile, loading, access, accessLoading } = useAuth();
   const location = useLocation();
+  const portal = getCurrentPortal();
+  const enforcePortal = portalEnforcementEnabled();
+  const knownHost = isKnownProductionPortal();
+  const portalAllowed = knownHost && canAccessPortal(portal, access);
+  const pathAllowedInPortal = portalAllowsPath(portal, location.pathname);
 
-  // Wait for capabilities too, or a deep link would bounce before they load.
+  useEffect(() => {
+    if (!profile || enforcePortal || (knownHost && portalAllowed && pathAllowedInPortal)) return;
+    console.warn('Portal access mismatch (shadow mode)', {
+      portal,
+      path: location.pathname,
+      role: access.role,
+      knownHost,
+    });
+  }, [access.role, enforcePortal, knownHost, location.pathname, pathAllowedInPortal, portal, portalAllowed, profile]);
+
   if (loading || (profile && accessLoading)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--color-bg)]">
@@ -25,10 +44,18 @@ export default function ProtectedRoute() {
     return <Navigate to="/login" replace />;
   }
 
+  if (enforcePortal && (!portalAllowed || !pathAllowedInPortal)) {
+    return <AccessRestrictedPage access={access} portal={portal} />;
+  }
+
   if (!canAccess(location.pathname, access)) {
-    const landing = landingPathFor(access);
-    // Never redirect to the page we are already refusing.
-    return landing === location.pathname ? <AppShell /> : <Navigate to={landing} replace />;
+    const landing = enforcePortal ? landingPathForPortal(portal, access) : landingPathFor(access);
+    if (landing === location.pathname) {
+      return enforcePortal
+        ? <AccessRestrictedPage access={access} portal={portal} />
+        : <AppShell />;
+    }
+    return <Navigate to={landing} replace />;
   }
 
   return <AppShell />;
