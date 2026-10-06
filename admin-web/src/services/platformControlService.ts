@@ -8,6 +8,7 @@ async function call<T>(name:string,data:unknown={}):Promise<T>{
 export interface PlatformFeature { id:string; key:string; name:string; description?:string; icon?:string; kind:'webview'|'service'|'screen'; serviceKey?:string|null; screenKey?:string|null; webviewKey?:string|null; enabled:boolean; home:boolean; roles:string[]; countries:string[]; sortOrder:number; archived?:boolean; }
 export interface CountryRow { id:string; code:string; name:string; flag?:string; dial?:string; currency?:string; enabled:boolean; archived?:boolean; sortOrder:number; }
 export interface OperatorRow { id:string; name:string; country:string; logo?:string; enabled:boolean; recharge:boolean; internet:boolean; offerPacks:boolean; entertainment:boolean; sortOrder:number; archived?:boolean; }
+export interface UserLookup { uid:string; name:string; phone:string; role:string; userId:string; }
 export interface CatalogAdmin { features:PlatformFeature[]; countries:CountryRow[]; operators:OperatorRow[]; webviews:Array<Record<string,any>>; ads:Record<string,boolean>; }
 
 export const listCatalog=()=>call<CatalogAdmin>('listPlatformCatalogAdmin');
@@ -19,3 +20,8 @@ export const saveOperator=(data:Partial<OperatorRow>)=>call<{ok:boolean,id:strin
 export const deleteOperator=(id:string)=>call<{ok:boolean}>('deleteOperatorCatalog',{id});
 export const targetWebview=(data:{key:string;roles:string[];countries:string[];users?:string[]})=>call<{ok:boolean}>('updateWebviewTargeting',data);
 export const updateAds=(changes:Record<string,boolean>)=>call<{ok:boolean}>('updateGoogleAdsControls',{changes});
+
+export async function searchUsers(query:string):Promise<UserLookup[]>{
+  const result=await call<{results?:UserLookup[]}>('searchUsers',{query});
+  return Array.isArray(result.results) ? result.results : [];
+}
