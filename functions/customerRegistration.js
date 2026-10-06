@@ -156,6 +156,8 @@ exports.registerWithDealerCode = onCall({ enforceAppCheck: false }, async (reque
       walletBalance: 0,
       walletCurrency: require('./walletCurrencyService').CURRENCY_BY_DIAL[String(dialCode || '+60').replace(/[^0-9]/g, '')] || 'MYR',
       notifPrefs: { pushEnabled: true, emailEnabled: true, rateAlerts: false },
+      referralCode: 'MS' + crypto.createHash('sha256').update(userRecord.uid).digest('hex').slice(0, 8).toUpperCase(),
+      ...(referral ? { referral } : {}),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
