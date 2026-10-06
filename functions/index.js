@@ -42,6 +42,7 @@ exports.recordAdEvent = require('./adTrackingCallable').recordAdEvent;
 exports.listManagedUsers = require('./managedUserListService').listManagedUsers;
 exports.listUserDirectory = require('./userDirectoryService').listUserDirectory;
 exports.searchUsers = require('./userSearch').searchUsers;
+exports.searchInvestigationUsers = require('./userSearch').searchInvestigationUsers;
 exports.getUserByUid = require('./userSearch').getUserByUid;
 exports.matchContactsByPhone = require('./matchContactsByPhone').matchContactsByPhone;
 exports.registerWithDealerCode = require('./customerRegistration').registerWithDealerCode;
