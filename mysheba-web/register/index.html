@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Join MySheba and get access to mobile recharge, bill payment, remittance and more.">
+<title>Join MySheba</title><link rel="stylesheet" href="/assets/css/style.css">
+</head><body>
+<main class="container" style="max-width:720px;margin:0 auto;padding:64px 20px;text-align:center">
+<img src="/assets/images/logo-nav.png" alt="MySheba" width="72" height="72">
+<h1 style="margin-top:20px">Join MySheba</h1>
+<p>Recharge mobile phones, pay bills, send remittance and access everyday services from one app.</p>
+<div id="refBox" class="card" style="margin:28px 0;padding:24px"></div>
+<a class="btn btn-primary" href="https://play.google.com/store/apps/details?id=com.satulink.mysheba">Get MySheba on Google Play</a>
+<p style="margin-top:18px;font-size:14px">Already installed? This link should open the MySheba app automatically.</p>
+</main>
+<script>
+const p=new URLSearchParams(location.search), ref=(p.get('ref')||p.get('referral')||'').toUpperCase();
+const box=document.getElementById('refBox');
+if(/^MS[A-F0-9]{8}$/.test(ref)){box.innerHTML='<strong>Your referral code</strong><div style="font-size:30px;font-weight:900;letter-spacing:3px;margin:12px 0">'+ref+'</div><div>Enter this code during registration if it is not filled automatically.</div>';}
+else {box.innerHTML='<strong>Welcome to MySheba</strong><div style="margin-top:8px">Download the app and create your account.</div>';}
+</script>
+</body></html>
