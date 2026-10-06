@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Linking, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { httpsCallable } from 'firebase/functions';
 import { useApp } from '../context/AppContext';
@@ -54,6 +55,8 @@ export default function RegisterScreen() {
   // Kept so a failed REGISTRATION does not cost a fresh SMS: the code that
   // produced this token is spent, but the token itself is still good.
   const verifiedPhoneToken = useRef('');
+
+  useEffect(() => {\n    AsyncStorage.getItem('@mysheba/referralCode').then((code) => {\n      const value = String(code || '').trim().toUpperCase();\n      if (/^MS[A-F0-9]{8}$/.test(value)) setReferralCode((current) => current || value);\n    }).catch(() => {});\n  }, []);
 
   useEffect(() => {
     let mounted = true;
