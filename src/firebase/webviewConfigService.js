@@ -64,7 +64,7 @@ export function validatePage(page) {
   // `home` is what puts the tile on the home grid rather than only under More
   // Services. New pages default to on: someone adding a WebView is adding it
   // to the grid, and a tile that lands two taps away looks like it failed.
-  return { name, url, title: title || name, icon, active: page?.active !== false, home: page?.home !== false };
+  return { name, url, title: title || name, icon, active: page?.active !== false, home: page?.home !== false, roles: Array.isArray(page?.roles) ? [...new Set(page.roles.map(String).filter(Boolean))].slice(0,7) : [], countries: Array.isArray(page?.countries) ? [...new Set(page.countries.map(x => String(x).toUpperCase()).filter(Boolean))].slice(0,100) : [], users: Array.isArray(page?.users) ? [...new Set(page.users.map(String).filter(Boolean))].slice(0,1000) : [] };
 }
 
 function sanitizePages(raw) {

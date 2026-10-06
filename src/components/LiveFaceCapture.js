@@ -31,6 +31,7 @@ export default function LiveFaceCapture({ onCaptured, onCancel }) {
   const [verifying, setVerifying] = useState(false);
   // Bumped by "Try again" to restart the loop after it has stopped.
   const [attempt, setAttempt] = useState(0);
+  const [cameraError, setCameraError] = useState('');
 
   const failures = useRef(0);
 
@@ -153,11 +154,19 @@ export default function LiveFaceCapture({ onCaptured, onCancel }) {
     };
   }, [permission?.granted, ready, error, attempt, discard, onCaptured]);
 
+  const handleCameraMountError = useCallback((event) => {
+    const message = event?.message || 'The camera could not be started. Please try again.';
+    setReady(false);
+    setCameraError(message);
+  }, []);
+
   const retry = () => {
     failures.current = 0;
     setStatus(IDLE_MESSAGE);
     setVerifying(false);
     setError('');
+    setCameraError('');
+    setReady(false);
     setAttempt((n) => n + 1);
   };
 
@@ -199,11 +208,13 @@ export default function LiveFaceCapture({ onCaptured, onCancel }) {
   return (
     <View style={styles.container}>
       <CameraView
+        key={`kyc-camera-${attempt}`}
         ref={cameraRef}
         style={styles.camera}
         facing="front"
         mode="picture"
-        onCameraReady={() => setReady(true)}
+        onCameraReady={() => { setCameraError(''); setReady(true); }}
+        onMountError={handleCameraMountError}
       />
       <View style={styles.overlay} pointerEvents="box-none">
         <View style={styles.topBar}>
@@ -218,7 +229,7 @@ export default function LiveFaceCapture({ onCaptured, onCancel }) {
             <View style={styles.faceInner} />
           </View>
           <Text style={styles.instruction}>
-            {verifying ? 'Verifying your face…' : !ready ? 'Starting the camera…' : status}
+            {verifying ? 'Verifying your face…' : cameraError ? 'Camera could not start' : !ready ? 'Starting the camera…' : status}
           </Text>
           <Text style={styles.subInstruction}>
             Hold your face inside the oval in good light — the photo is taken automatically.
@@ -226,9 +237,10 @@ export default function LiveFaceCapture({ onCaptured, onCancel }) {
         </View>
 
         <View style={styles.bottom} pointerEvents="box-none">
+          {cameraError ? <Text style={styles.error}>{cameraError}</Text> : null}
           {error ? <Text style={styles.error}>{error}</Text> : null}
           {verifying ? <ActivityIndicator color="#fff" size="large" /> : null}
-          {error ? (
+          {(cameraError || error) ? (
             <TouchableOpacity style={styles.primary} onPress={retry}>
               <Text style={styles.primaryText}>Try again</Text>
             </TouchableOpacity>

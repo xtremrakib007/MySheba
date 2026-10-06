@@ -284,17 +284,26 @@ function normaliseUrl(url) {
  * service grids and the superadmin landing - and fixing one of them left the
  * duplicate standing on the other. Which is exactly what happened.
  */
-function customPagesBeyond(pages, builtInKeys) {
+function customPagesBeyond(pages, builtInKeys, isAllowed = () => true) {
   const taken = new Set(
     builtInKeys.map((key) => normaliseUrl(pages[key] && pages[key].url)).filter(Boolean),
   );
   return Object.values(pages)
-    .filter((p) => p.custom && p.active !== false)
+    .filter((p) => p.custom && isAllowed(p))
     .filter((p) => !taken.has(normaliseUrl(p.url)));
 }
 
-export function withWebviewConfig(list, webviewPages) {
+export function withWebviewConfig(list, webviewPages, viewer) {
   const pages = webviewPages || {};
+
+  const allowed = (page) => {
+    if (!page || page.active === false) return false;
+    const v = viewer || {};
+    if (Array.isArray(page.roles) && page.roles.length && !page.roles.includes(v.role)) return false;
+    if (Array.isArray(page.countries) && page.countries.length && !page.countries.includes(v.country)) return false;
+    if (Array.isArray(page.users) && page.users.length && !page.users.includes(v.uid)) return false;
+    return true;
+  };
   const overlaid = list
     .map((item) => {
       const page = item.kind === 'webview' ? pages[item.key] : null;
@@ -314,7 +323,7 @@ export function withWebviewConfig(list, webviewPages) {
         ? { ...item, name: page.name || item.name, emoji: page.icon || '', home: item.home === true && page.home !== false }
         : item;
     })
-    .filter((item) => item.kind !== 'webview' || !pages[item.key] || pages[item.key].active !== false);
+    .filter((item) => item.kind !== 'webview' || !pages[item.key] || allowed(pages[item.key]));
   // A custom page pointing where a built-in already points is the SAME tile
   // under a second name: "Visa" and "Visa Status Inquiry", one page, two cards
   // in the grid and nothing to tell them apart. The built-in keeps its place
@@ -322,7 +331,7 @@ export function withWebviewConfig(list, webviewPages) {
   //
   // Matched on the address rather than the name, because the name is the half
   // somebody renamed. A custom page going somewhere of its own is untouched.
-  const extra = customPagesBeyond(pages, overlaid.filter((item) => item.kind === 'webview').map((item) => item.key))
+  const extra = customPagesBeyond(pages, overlaid.filter((item) => item.kind === 'webview').map((item) => item.key), allowed)
     .map((p) => ({ key: p.key, icon: p.icon || 'moreFeaturesTile', emoji: p.icon || '', name: p.name, kind: 'webview', home: p.home !== false }));
   return [...overlaid, ...extra];
 }
@@ -379,8 +388,16 @@ export const ADMIN_HOME = [
  * and an added page's key is a generated wv_ one that names no drawing, so a
  * chosen art icon has to travel as `art` or it prints as the word.
  */
-export function adminLandingTiles(webviewPages, hasArt = () => false, tileLabels) {
+export function adminLandingTiles(webviewPages, hasArt = () => false, tileLabels, viewer) {
   const pages = webviewPages || {};
+  const allowed = (page) => {
+    if (!page || page.active === false) return false;
+    const v = viewer || {};
+    if (Array.isArray(page.roles) && page.roles.length && !page.roles.includes(v.role)) return false;
+    if (Array.isArray(page.countries) && page.countries.length && !page.countries.includes(v.country)) return false;
+    if (Array.isArray(page.users) && page.users.length && !page.users.includes(v.uid)) return false;
+    return true;
+  };
   const tileFor = (page) => ({
     key: page.key,
     ...(hasArt(page.icon) ? { art: page.icon, icon: '\uD83C\uDF10' } : { icon: page.icon || '\uD83C\uDF10' }),
@@ -388,11 +405,12 @@ export function adminLandingTiles(webviewPages, hasArt = () => false, tileLabels
     service: { key: page.key, kind: 'webview' },
   });
   const overlaid = ADMIN_HOME
-    .filter((item) => !(item.service && item.service.kind === 'webview' && pages[item.key] && pages[item.key].active === false))
+    .filter((item) => !(item.service && item.service.kind === 'webview' && pages[item.key] && !allowed(pages[item.key])))
     .map((item) => (item.service && item.service.kind === 'webview' && pages[item.key] ? { ...item, ...tileFor(pages[item.key]) } : item));
   const extra = customPagesBeyond(
     pages,
     ADMIN_HOME.filter((item) => item.service && item.service.kind === 'webview').map((item) => item.key),
+    allowed,
   ).map(tileFor);
   return applyTileLabels([...overlaid, ...extra], tileLabels);
 }
@@ -421,8 +439,15 @@ export function gridKeyFor(service) {
  * Firestore. `homeOnly` is the customer home screen; a staff list carries no
  * home flags, so it falls back to the whole set rather than rendering nothing.
  */
-export function visibleTiles({ role, can, webviewPages, tileLabels, isActive = () => true, homeOnly = false }) {
-  const all = applyTileLabels(withWebviewConfig(servicesForRole(role, can), webviewPages), tileLabels);
+export function visibleTiles({ role, can, webviewPages, tileLabels, viewer, dynamicFeatures = [], isActive = () => true, homeOnly = false }) {
+  const dynamic = (dynamicFeatures || []).filter((f) => f && f.enabled !== false && f.archived !== true).map((f) => ({
+    key: f.key, icon: f.icon || 'more', name: f.name, cat: f.category || 'other', home: f.home !== false,
+    kind: f.kind === 'webview' ? 'webview' : f.kind === 'screen' ? 'dynamicScreen' : 'dynamicService',
+    webviewKey: f.webviewKey || f.key, serviceKey: f.serviceKey || '', screenKey: f.screenKey || '',
+  }));
+  const base = withWebviewConfig(servicesForRole(role, can), webviewPages, viewer);
+  const existing = new Set(base.map((x) => x.key));
+  const all = applyTileLabels([...base, ...dynamic.filter((x) => !existing.has(x.key))], tileLabels);
   const active = all.filter((service) => isActive(gridKeyFor(service)));
   if (!homeOnly) return active;
   // Staff used to be exempt: their grids showed the whole catalogue, which made

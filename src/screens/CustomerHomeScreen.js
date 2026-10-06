@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import { radius } from '../theme/theme';
 import BannerSlider from '../components/BannerSlider';
+import GoogleAdMobBanner from '../components/GoogleAdMobBanner';
 import ServiceGrid from '../components/ServiceGrid';
 import AppHeader from '../components/AppHeader';
 import WalletCard from '../components/WalletCard';
@@ -65,6 +66,7 @@ export default function CustomerHomeScreen() {
           )}
         </View>
         <BannerSlider />
+        <GoogleAdMobBanner />
         <ServiceGrid homeOnly />
 
         <SectionCard style={styles.section}>
