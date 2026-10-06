@@ -186,7 +186,70 @@ async function getUserPushTarget(uid) { if (!uid) return null; const snap = awai
 async function notifyUser(uid, title, body, data, extra) { const token = await getUserPushTarget(uid); if (token) await sendExpoPush([{ to: token, title, body, data: data || {}, ...(extra || {}) }]); }
 async function notifyRoles(roles, title, body, data) { const snap = await db.collection('users').where('role', 'in', roles).get(); const messages = []; snap.forEach(doc => { const u = doc.data(); if (u.suspended === true || u.inactive === true || u.disabled === true || u.active === false || u.mergedInto) return; if (u.pushToken && !(u.notifPrefs && u.notifPrefs.pushEnabled === false)) messages.push({ to: u.pushToken, title, body, data: data || {} }); }); await sendExpoPush(messages); }
 exports.onTransactionCreated = onDocumentCreated('transactions/{id}', async event => { const tx = event.data.data(); const body = `${tx.service} - ${walletLabel(tx)}`; if (tx.resellerId) await notifyUser(tx.resellerId, '🆕 New order', body, { type: 'transaction', id: event.params.id }); else if (tx.dealerId) await notifyUser(tx.dealerId, '🆕 New order', body, { type: 'transaction', id: event.params.id }); else if (tx.service === 'Mobile Banking') await notifyRoles(['dealer'], '🆕 New order', body, { type: 'transaction', id: event.params.id }); else if (['Recharge', 'Internet', 'Bill Payment', 'Remittance'].includes(tx.service)) await notifyRoles(['reseller'], '🆕 New order', body, { type: 'transaction', id: event.params.id }); });
-exports.onTransactionUpdated = onDocumentUpdated('transactions/{id}', async event => { const b = event.data.before.data(), a = event.data.after.data(); if (!b.dealerId && a.dealerId) await notifyUser(a.dealerId, '🆕 New order', `${a.service} - ${walletLabel(a)}`, { type: 'transaction', id: event.params.id }); if (!b.resellerId && a.resellerId) await notifyUser(a.resellerId, '🆕 New order', `${a.service} - ${walletLabel(a)}`, { type: 'transaction', id: event.params.id }); if (b.status !== 'completed' && a.status === 'completed' && TIER_QUALIFYING_SERVICES.includes(a.service)) await progressionService.incrementTierPoints(a.customerId, `transaction:${event.id}`);\nif (b.status !== 'completed' && a.status === 'completed') await growthRewardsService.handleCompletedTransaction(event.params.id, a); if (b.status === a.status && b.rejected === a.rejected) return; let title = 'Order update', body = `${a.service} is now ${a.status}.`; if (a.rejected) { title = '❌ Order rejected'; body = `${a.service}: ${a.rejectReason || 'Rejected by dealer.'}`; } else if (a.status === 'processing') { title = '🔄 Order accepted'; body = `${a.service} is being processed.`; } else if (a.status === 'completed') { title = '✅ Order completed'; body = `${a.service} has been completed.`; } await notifyUser(a.customerId, title, body, { type: 'transaction', id: event.params.id }); });
+exports.onTransactionUpdated = onDocumentUpdated('transactions/{id}', async event => {
+  const b = event.data.before.data();
+  const a = event.data.after.data();
+
+  if (!b.dealerId && a.dealerId) {
+    await notifyUser(
+      a.dealerId,
+      '🆕 New order',
+      `${a.service} - ${walletLabel(a)}`,
+      { type: 'transaction', id: event.params.id }
+    );
+  }
+
+  if (!b.resellerId && a.resellerId) {
+    await notifyUser(
+      a.resellerId,
+      '🆕 New order',
+      `${a.service} - ${walletLabel(a)}`,
+      { type: 'transaction', id: event.params.id }
+    );
+  }
+
+  if (
+    b.status !== 'completed' &&
+    a.status === 'completed' &&
+    TIER_QUALIFYING_SERVICES.includes(a.service)
+  ) {
+    await progressionService.incrementTierPoints(
+      a.customerId,
+      `transaction:${event.id}`
+    );
+  }
+
+  if (b.status !== 'completed' && a.status === 'completed') {
+    await growthRewardsService.handleCompletedTransaction(
+      event.params.id,
+      a
+    );
+  }
+
+  if (b.status === a.status && b.rejected === a.rejected) return;
+
+  let title = 'Order update';
+  let body = `${a.service} is now ${a.status}.`;
+
+  if (a.rejected) {
+    title = '❌ Order rejected';
+    body = `${a.service}: ${a.rejectReason || 'Rejected by dealer.'}`;
+  } else if (a.status === 'processing') {
+    title = '🔄 Order accepted';
+    body = `${a.service} is being processed.`;
+  } else if (a.status === 'completed') {
+    title = '✅ Order completed';
+    body = `${a.service} has been completed.`;
+  }
+
+  await notifyUser(
+    a.customerId,
+    title,
+    body,
+    { type: 'transaction', id: event.params.id }
+  );
+});
+
 exports.onTopupCreated = onDocumentCreated('topups/{id}', async event => { const t = event.data.data(); await notifyRoles(ADMIN_ROLES, '💰 New top-up request', `${t.userName || 'A user'} requested ${walletLabel(t, 'amount')}`, { type: 'topup', id: event.params.id }); });
 exports.onTopupUpdated = onDocumentUpdated('topups/{id}', async event => { const b = event.data.before.data(), a = event.data.after.data(); if (b.status === a.status) return; if (a.status === 'approved') await notifyUser(a.userId, '✅ Top-up approved', `${walletLabel(a, 'amount')} has been credited to your wallet.`, { type: 'topup', id: event.params.id }); else if (a.status === 'rejected') await notifyUser(a.userId, '❌ Top-up rejected', a.rejectReason || 'Your top-up request was rejected.', { type: 'topup', id: event.params.id }); });
 exports.onSupportTicketCreated = onDocumentCreated('supportTickets/{id}', async event => { const t = event.data.data(); await notifyRoles(ADMIN_ROLES, '🎧 New support request', `${t.userName || 'A user'}: ${t.subject || 'Support request'}`, { type: 'supportTicket', id: event.params.id }); });
