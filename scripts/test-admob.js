@@ -225,6 +225,46 @@ test('nothing else imports it, so nothing else can be the one that throws', () =
   walk('src');
   assert.deepStrictEqual(offenders, [], 'imported outside the guarded component: ' + offenders.join(', '));
 });
+test('a missing native module throws at REQUIRE, which is why the guard works', () => {
+  // The guard is only sufficient because of this, and it is a fact about the
+  // installed package rather than about our code - so it is checked here.
+  //
+  // react-native-google-mobile-ads' index eagerly requires a spec whose top
+  // level calls TurboModuleRegistry.getEnforcing(), and getEnforcing THROWS
+  // when the native module is absent. That is what the try/catch catches, and
+  // it happens before any component exists to render.
+  //
+  // If a future version switched those to the lazy TurboModuleRegistry.get(),
+  // which returns null instead of throwing, the require would SUCCEED on a
+  // binary without AdMob - BannerAd would be a real component, and rendering
+  // it would hit an unregistered native view. In a slot that sits above the
+  // bottom nav on every tabbed screen, that breaks the whole app rather than
+  // just the ad. This check is the tripwire for that.
+  const pkgDir = path.join(ROOT, 'node_modules', 'react-native-google-mobile-ads', 'lib', 'commonjs');
+  if (!fs.existsSync(pkgDir)) {
+    throw new Error('react-native-google-mobile-ads is not installed, so the require guard cannot be reasoned about');
+  }
+  const index = fs.readFileSync(path.join(pkgDir, 'index.js'), 'utf8');
+  const eager = index.match(/require\("\.\/specs\/modules\/(Native\w+)\.js"\)/g) || [];
+  assert.ok(eager.length > 0, 'index.js no longer eagerly requires a native spec');
+  const throwsOnLoad = eager.some((line) => {
+    const name = /modules\/(Native\w+)\.js/.exec(line)[1];
+    const spec = fs.readFileSync(path.join(pkgDir, 'specs', 'modules', `${name}.js`), 'utf8');
+    return /TurboModuleRegistry\.getEnforcing\(/.test(spec);
+  });
+  assert.ok(throwsOnLoad,
+    'no eagerly-required spec uses getEnforcing any more - the require would now SUCCEED without the native module, and rendering BannerAd would hit an unregistered view');
+});
+test('and the component never reaches a native view in that case', () => {
+  // Belt and braces: even with AdMob switched on and a valid unit id stored,
+  // the BannerAd check comes FIRST, so an OTA to a build without the native
+  // module renders nothing rather than a missing component.
+  const banner = read('src/components/AdMobBanner.js');
+  const guard = /if \(!BannerAd \|\| !unitId \|\| failed\) return null;/.exec(banner);
+  assert.ok(guard, 'the null-render guard must test BannerAd before anything else');
+  assert.ok(banner.indexOf(guard[0]) < banner.indexOf('<BannerAd'),
+    'the guard must come before the only render of BannerAd');
+});
 test('it is initialised once per run, not once per mount', () => {
   const banner = read('src/components/AdMobBanner.js');
   assert.ok(/let initialised = false;/.test(banner) && /if \(initialised/.test(banner),
