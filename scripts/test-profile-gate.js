@@ -186,3 +186,16 @@ is('an unmount flushes it instead of dropping it',
 
 console.log(`\n${pass}/${pass + fail} passed`);
 process.exit(fail ? 1 : 0);
+
+is('web sign-in must not displace the mobile slot',
+   shouldEndSessionForDevice({
+     localSessionId: 'mobile-session', activeSessionId: 'web-session', activeDeviceId: 'web-device',
+     activeSessions: { mobile: { sessionId: 'mobile-session', deviceId: 'phone-1' }, web: { sessionId: 'web-session', deviceId: 'browser-1' } },
+     deviceId: 'phone-1', initialRouteDone: true, deviceCheckDeferred: false,
+   }), false);
+is('a second phone still displaces the mobile slot',
+   shouldEndSessionForDevice({
+     localSessionId: 'mobile-old', activeSessionId: 'web-session', activeDeviceId: 'web-device',
+     activeSessions: { mobile: { sessionId: 'mobile-new', deviceId: 'phone-2' }, web: { sessionId: 'web-session', deviceId: 'browser-1' } },
+     deviceId: 'phone-1', initialRouteDone: true, deviceCheckDeferred: false,
+   }), true);
