@@ -46,6 +46,9 @@ import * as webviewConfigService from '../firebase/webviewConfigService';
 import * as tileLabelService from '../firebase/tileLabelService';
 import * as tilePlacementService from "../firebase/tilePlacementService";
 import * as catalogueService from "../firebase/catalogueService";
+import * as customTileService from "../firebase/customTileService";
+import { cleanCustomTiles } from "../utils/customTiles";
+import { TILE_CATEGORIES } from "../components/serviceTiles";
 import * as gridManagementService from "../firebase/gridManagementService";
 import * as accessControlService from "../firebase/accessControlService";
 import * as adControlsService from "../firebase/adControlsService";
@@ -864,6 +867,23 @@ export function AppProvider({ children }) {
     );
   }, [authUser, profile]);
 
+  // Feature grid tiles a superadmin added. Stored raw and cleaned here, with
+  // the category list the tiles are allowed to sit in, so the grids and the
+  // editing screen agree about what a tile may be.
+  const [rawCustomTiles, setRawCustomTiles] = useState({});
+  useEffect(() => {
+    if (!authUser || !profile) return undefined;
+    return customTileService.subscribeCustomTiles(
+      setRawCustomTiles,
+      logListenerError('customTiles'),
+    );
+  }, [authUser, profile]);
+  const customTileCategories = useMemo(() => TILE_CATEGORIES.map((c) => c.key), []);
+  const customTiles = useMemo(
+    () => cleanCustomTiles({ tiles: rawCustomTiles }, customTileCategories),
+    [rawCustomTiles, customTileCategories],
+  );
+
   // Central navigation boundary. UI hiding is not a security boundary:
   // every internal setScreen() call (notifications, deep links, callbacks,
   // and manually triggered handlers) must pass role + live grid checks here.
@@ -917,6 +937,8 @@ export function AppProvider({ children }) {
     tilePlacement: ['superadmin'],
     // Editing the catalogue changes what every customer can buy.
     catalogue: ['superadmin'],
+    // Adding a tile changes what every role can reach from the grid.
+    customTileManagement: ['superadmin'],
     adFeatureControls: ['superadmin'],
     adAnalytics: ['superadmin'],
     advertiserManagement: ['superadmin'],
@@ -2970,6 +2992,8 @@ export function AppProvider({ children }) {
     tilePlacementForMe,
     tileOrderForMe,
     catalogue,
+    customTiles,
+    rawCustomTiles,
     supportContact,
 
     paymentSettings,

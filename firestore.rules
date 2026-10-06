@@ -80,6 +80,13 @@ service cloud.firestore {
     // Packs steps filter on it; written by a superadmin only. It cannot hide a
     // feature or move where one goes - at worst a market or operator is not
     // offered, and the shipped list is still there to turn back on.
+    // Feature grid tiles a superadmin added: { tiles: { ct_xxxx: {...} } }.
+    // Read by every signed-in app because the grids draw from it. A tile can
+    // only open a service flow that already exists - utils/customTiles checks
+    // that on the way in AND on the way out - so the worst a bad write can do
+    // is a tile that lands on the wrong step of a real service, never one that
+    // reaches a screen it was not allowed to.
+    match /settings/customTiles { allow read: if activeProfile(); allow create, update: if isSuperadmin() && request.resource.data.keys().hasOnly(['tiles','updatedAt']); allow delete: if false; }
     match /settings/catalogue { allow read: if activeProfile(); allow create, update: if isSuperadmin() && request.resource.data.keys().hasOnly(['countries','operators','updatedAt']); allow delete: if false; }
     match /settings/gridManagement { allow read: if activeProfile(); allow create: if isSuperadmin() && request.resource.data.keys().hasOnly(['recharge','rechargePin','mobilebanking','internet','offerpacks','billpayment','remittance','bus','train','flight','entertainment','topup','history','support','myAccount','profile','dealerFeatures','resellerFeatures','adminFeatures','moreFeaturesTile','walletTransfer','myDocuments','salary','kyc','fomema','visa','mydigital','passport','adminAnalytics','inquiries','pending','topups','rates','pricing','payments','transferPoints','apiManagement','userManagement','verificationManagement','featureAccess','banners','announcements','byRole','byCountry','byUser','updatedAt']); allow update: if isSuperadmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['recharge','rechargePin','mobilebanking','internet','offerpacks','billpayment','remittance','bus','train','flight','entertainment','topup','history','support','myAccount','profile','dealerFeatures','resellerFeatures','adminFeatures','moreFeaturesTile','walletTransfer','myDocuments','salary','kyc','fomema','visa','mydigital','passport','adminAnalytics','inquiries','pending','topups','rates','pricing','payments','transferPoints','apiManagement','userManagement','verificationManagement','featureAccess','banners','announcements','byRole','byCountry','byUser','updatedAt']); allow delete: if false; }
     // Role defaults are written only by the setRoleDefaults callable (audit-logged).

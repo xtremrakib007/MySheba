@@ -58,11 +58,13 @@ function loadService() {
     if (id === '../data/countries') return countriesData;
     throw new Error(`unexpected require: ${id}`);
   });
+  const customTiles = run('src/utils/customTiles.js', (id) => { throw new Error(`unexpected require: ${id}`); });
   return run('src/firebase/gridManagementService.js', (id) => {
     if (id === 'firebase/firestore') return firestoreStub;
     if (id === './config') return { db: {} };
     if (id === '../utils/phoneCountry') return phoneCountry;
     if (id === './webviewConfigService') return webviewConfig;
+    if (id === '../utils/customTiles') return customTiles;
     throw new Error(`unexpected require: ${id}`);
   });
 }

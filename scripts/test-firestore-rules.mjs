@@ -120,6 +120,14 @@ await check('not even a superadmin may add a key to it', 'deny', () => setDoc(do
 await check('and it cannot be deleted', 'deny', () => deleteDoc(doc(as('super1'), 'settings/tilePlacement')));
 await check('a signed-out visitor cannot read it', 'deny', () => getDoc(doc(env.unauthenticatedContext().firestore(), 'settings/tilePlacement')));
 
+// settings/customTiles: feature grid tiles a superadmin added.
+await check('superadmin adds a feature tile', 'allow', () => setDoc(doc(as('super1'), 'settings/customTiles'), { tiles: { ct_abcd1234: { name: 'Celcom Reload', service: 'recharge', seed: { country: 'MY', operator: 'Celcom' }, startStep: 2, cat: 'recharge', home: true, icon: '\u{1F4F6}', art: '' } }, updatedAt: serverTimestamp() }, { merge: true }));
+await check('every signed-in role reads the tiles', 'allow', () => getDoc(doc(as('customer1'), 'settings/customTiles')));
+await check('admin CANNOT add a tile', 'deny', () => setDoc(doc(as('admin1'), 'settings/customTiles'), { tiles: { ct_abcd1234: { name: 'X', service: 'recharge' } } }, { merge: true }));
+await check('a customer CANNOT add a tile', 'deny', () => setDoc(doc(as('customer1'), 'settings/customTiles'), { tiles: { ct_abcd1234: { name: 'X', service: 'recharge' } } }, { merge: true }));
+await check('not even a superadmin may add a key to it', 'deny', () => setDoc(doc(as('super1'), 'settings/customTiles'), { screens: { ct_abcd1234: 'adminHome' } }, { merge: true }));
+await check('and the tile document cannot be deleted', 'deny', () => deleteDoc(doc(as('super1'), 'settings/customTiles')));
+
 // settings/catalogue: which countries and operators the pickers offer. Read by
 // everyone signed in because the service steps filter on it; written by a
 // superadmin only, with an exact key allowlist.

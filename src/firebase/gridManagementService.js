@@ -5,6 +5,7 @@ import { countryCodeOf } from '../utils/phoneCountry';
 // Imported rather than restated: a second copy of the key pattern is how a
 // page becomes controllable in one place and not in another.
 import { BUILT_IN_KEYS as WEBVIEW_BUILT_IN_KEYS, isCustomKey } from './webviewConfigService';
+import { isCustomTileKey } from '../utils/customTiles';
 
 const DOC = doc(db, 'settings', 'gridManagement');
 
@@ -66,6 +67,10 @@ export function isScopableKey(key) {
   if (!id) return false;
   if (GRID_DEFS.some((g) => g.key === id)) return true;
   if (WEBVIEW_BUILT_IN_KEYS.includes(id)) return true;
+  // A tile a superadmin added is a tile, so it scopes like one. Left out, every
+  // override on it would be dropped on read - silently, which is exactly how
+  // the WebView pages came to have no access control at all.
+  if (isCustomTileKey(id)) return true;
   return isCustomKey(id);
 }
 

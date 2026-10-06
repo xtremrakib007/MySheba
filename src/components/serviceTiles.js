@@ -417,12 +417,12 @@ export function adminLandingTiles(webviewPages, hasArt = () => false, tileLabels
  * role cannot actually reach is still filtered out at render time by the grid
  * itself, where the real capability check lives.
  */
-export function placeableTiles({ role, webviewPages, tileLabels, hasArt } = {}) {
+export function placeableTiles({ role, webviewPages, tileLabels, hasArt, customTiles } = {}) {
   if (role === 'admin' || role === 'superadmin') {
     return { tiles: adminLandingTiles(webviewPages, hasArt, tileLabels), declaredDefault: true };
   }
   const tiles = applyTileLabels(
-    withWebviewConfig(servicesForRole(role || 'customer', () => true), webviewPages),
+    withCustomTiles(withWebviewConfig(servicesForRole(role || 'customer', () => true), webviewPages), customTiles),
     tileLabels,
   );
   return { tiles, declaredDefault: false };
@@ -446,6 +446,26 @@ export function adminOverflowTiles({ webviewPages, tileLabels, hasArt, placement
   return applyTileOrder(adminLandingTiles(webviewPages, hasArt, tileLabels), order)
     .filter((item) => isOnGrid(item))
     .filter((item) => !tileOnHome(item, placement, true));
+}
+
+/**
+ * Tiles a superadmin added, appended to a role's list.
+ *
+ * Appended rather than merged in anywhere clever: a new tile goes at the end
+ * of its category, the way an added WebView page does, so adding one does not
+ * reshuffle a grid people already know. Where it ends up on the home screen is
+ * Home Screen Tiles' business (see tileOnHome and applyTileOrder), and whether
+ * it shows at all is Grid Access's.
+ *
+ * `customTiles` is the already-cleaned list from utils/customTiles - this
+ * function does not validate, so there is one place that decides what a tile
+ * may be rather than two.
+ */
+export function withCustomTiles(list, customTiles) {
+  const base = Array.isArray(list) ? list : [];
+  if (!Array.isArray(customTiles) || customTiles.length === 0) return base;
+  const taken = new Set(base.map((t) => t.key));
+  return [...base, ...customTiles.filter((t) => t && t.key && !taken.has(t.key))];
 }
 
 /** The Grid Management key a tile is gated by - not always its own key. */
@@ -532,8 +552,8 @@ export function applyTileOrder(tiles, order) {
     .map((x) => x.tile);
 }
 
-export function visibleTiles({ role, can, webviewPages, tileLabels, isActive = () => true, homeOnly = false, placement, order }) {
-  const all = applyTileLabels(withWebviewConfig(servicesForRole(role, can), webviewPages), tileLabels);
+export function visibleTiles({ role, can, webviewPages, tileLabels, isActive = () => true, homeOnly = false, placement, order, customTiles }) {
+  const all = applyTileLabels(withCustomTiles(withWebviewConfig(servicesForRole(role, can), webviewPages), customTiles), tileLabels);
   const active = applyTileOrder(all.filter((service) => isActive(gridKeyFor(service))), order);
   if (!homeOnly) return active;
   // Staff used to be exempt: their grids showed the whole catalogue, which made
@@ -619,7 +639,7 @@ export const STAFF_FEATURES = [
  * the personal section, and two headings describing the same thing read as a
  * duplicate even when no tile is repeated.
  */
-export function moreFeaturesSections({ role = 'customer', can, webviewPages, tileLabels, isActive = () => true, placement, order }) {
+export function moreFeaturesSections({ role = 'customer', can, webviewPages, tileLabels, isActive = () => true, placement, order, customTiles }) {
   const declared = applyTileLabels((!role || role === 'customer') ? PERSONAL_FEATURES : STAFF_FEATURES, tileLabels);
 
   // An account row for something already on this role's home screen is the
@@ -632,7 +652,7 @@ export function moreFeaturesSections({ role = 'customer', can, webviewPages, til
   // survives here - which is the rule this screen exists for: a finished
   // feature lands on the home screen or here, never nowhere.
   const onHome = new Set(
-    visibleTiles({ role, can, webviewPages, tileLabels, isActive, homeOnly: true, placement, order }).map((tile) => tile.key),
+    visibleTiles({ role, can, webviewPages, tileLabels, isActive, homeOnly: true, placement, order, customTiles }).map((tile) => tile.key),
   );
   const account = declared.filter((row) => !onHome.has(row.key));
 
@@ -641,14 +661,14 @@ export function moreFeaturesSections({ role = 'customer', can, webviewPages, til
   // the overflow, or removing one duplicate just moves it.
   const kinds = new Set(declared.map((f) => f.kind));
   const keys = new Set(declared.map((f) => f.key));
-  const overflow = overflowTiles({ role, can, webviewPages, tileLabels, isActive, excludeKinds: kinds, placement, order })
+  const overflow = overflowTiles({ role, can, webviewPages, tileLabels, isActive, excludeKinds: kinds, placement, order, customTiles })
     .filter((tile) => tile.cat !== 'personal' && !keys.has(tile.key));
   return { sections: groupTilesByCategory(overflow), account };
 }
 
-export function overflowTiles({ role = 'customer', can, webviewPages, tileLabels, isActive = () => true, excludeKinds = [], placement, order }) {
+export function overflowTiles({ role = 'customer', can, webviewPages, tileLabels, isActive = () => true, excludeKinds = [], placement, order, customTiles }) {
   const exclude = new Set(excludeKinds);
-  return applyTileOrder(applyTileLabels(withWebviewConfig(servicesForRole(role, can), webviewPages), tileLabels), order)
+  return applyTileOrder(applyTileLabels(withCustomTiles(withWebviewConfig(servicesForRole(role, can), webviewPages), customTiles), tileLabels), order)
     .filter((tile) => isActive(gridKeyFor(tile)))
     // The negation of tileOnHome, so a tile taken off the home screen lands
     // here. This is what made the superadmin's More Features page empty:

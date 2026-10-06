@@ -101,6 +101,11 @@ export function useServiceAction() {
     if (s.kind === 'staffInvoices') return setScreen('invoices');
     // A tile that is a service with some steps already answered.
     if (s.kind === 'billShortcut') return startService('billpayment', s.seed, s.startStep);
+    // The same thing, for a tile a superadmin added. The service it opens was
+    // checked against the flows that exist when it was saved (see
+    // utils/customTiles), and startService re-checks Grid Access for that
+    // service - so a shortcut cannot reach a feature the person is denied.
+    if (s.kind === 'customShortcut') return startService(s.service, s.seed, s.startStep);
     // Touch 'n Go is sold two ways, and used to be two tiles in two places: a
     // reload buried in Bill Payment and a voucher buried in PIN Generate. One
     // tile, and the choice is the first thing it asks.
@@ -134,7 +139,7 @@ export const PRIMARY_SERVICES = CUSTOMER_SERVICES;
 // overflow section from this list, so dropping `home` moves a tile there
 // rather than deleting it from the app.
 export default function ServiceGrid({ homeOnly }) {
-  const { colors } = useTheme(); const { webViewBusy, profile, gridManagement, gridViewer, can, webviewPages, tileLabels, tilePlacementForMe, tileOrderForMe } = useApp();
+  const { colors } = useTheme(); const { webViewBusy, profile, gridManagement, gridViewer, can, webviewPages, tileLabels, tilePlacementForMe, tileOrderForMe, customTiles } = useApp();
   const handlePress = useServiceAction(); const role = profile?.role || 'customer';
   const isStaff = STAFF_ROLES.includes(role);
   // Both of these live in serviceTiles.js, so what a role sees - and that an
@@ -152,6 +157,7 @@ export default function ServiceGrid({ homeOnly }) {
     // Features cannot be filtering against two different maps.
     placement: tilePlacementForMe,
     order: tileOrderForMe,
+    customTiles,
   });
 
   // The home screen is one block of services, three across, in declaration

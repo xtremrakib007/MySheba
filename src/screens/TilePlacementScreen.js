@@ -50,7 +50,7 @@ function TileIcon({ tile, colors }) {
 }
 
 export default function TilePlacementScreen() {
-  const { goBackOrHome, profile, tilePlacement, webviewPages, tileLabels } = useApp();
+  const { goBackOrHome, profile, tilePlacement, webviewPages, tileLabels, customTiles } = useApp();
   const { colors, brandGradient } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [role, setRole] = useState('superadmin');
@@ -61,8 +61,8 @@ export default function TilePlacementScreen() {
   const allowed = profile?.role === 'superadmin';
 
   const { tiles: declared, declaredDefault } = useMemo(
-    () => placeableTiles({ role, webviewPages, tileLabels, hasArt: hasServiceArt }),
-    [role, webviewPages, tileLabels],
+    () => placeableTiles({ role, webviewPages, tileLabels, hasArt: hasServiceArt, customTiles }),
+    [role, webviewPages, tileLabels, customTiles],
   );
   const overrides = tilePlacementService.placementFor(tilePlacement, role);
   const storedOrder = tilePlacementService.orderFor(tilePlacement, role);
