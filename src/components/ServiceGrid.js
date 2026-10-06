@@ -145,6 +145,7 @@ export default function ServiceGrid({ homeOnly }) {
     can,
     webviewPages,
     tileLabels,
+    viewer: gridViewer,
     isActive: (key) => gridManagementService.isGridActive(gridManagement, key, gridViewer),
     homeOnly,
   });
