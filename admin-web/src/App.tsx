@@ -2,7 +2,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './routes/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage';
+import PortalDashboardPage from './pages/PortalDashboardPage';
 import ExecutiveDashboardPage from './pages/ExecutiveDashboardPage';
 import AlertIntelligencePage from './pages/AlertIntelligencePage';
 import AdminActivityCenterPage from './pages/AdminActivityCenterPage';
@@ -55,7 +55,7 @@ function AdminRoutes() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route element={<ProtectedRoute />}>
-        <Route index element={<DashboardPage />} />
+        <Route index element={<PortalDashboardPage />} />
         <Route path="/executive" element={<ExecutiveDashboardPage />} />
         <Route path="/alerts" element={<AlertIntelligencePage />} />
         <Route path="/investigation" element={<AdminInvestigationCenterPage />} />
