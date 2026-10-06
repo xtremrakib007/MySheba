@@ -76,7 +76,20 @@ export function useServiceAction() {
   const { startService, openWebView, openBusPicker, openSalary, openMyDocuments, setScreen, gridManagement, setAdminTab, setAdminViewingSection, gridViewer } = useApp();
   return (s) => {
     if (!s || !gridManagementService.isGridActive(gridManagement, s.key, gridViewer)) return;
-    if (s.kind === 'webview') return openWebView(s.key);
+    if (s.kind === 'webview') return openWebView(s.webviewKey || s.key);
+    if (s.kind === 'dynamicService') {
+      if (!s.serviceKey) return showAlert('MySheba', 'This feature is not configured yet.');
+      return startService(s.serviceKey);
+    }
+    if (s.kind === 'dynamicScreen') {
+      const screenMap = {
+        moreFeatures: 'moreFeatures', history: 'history', topup: 'topup',
+        profile: 'profile', myAccount: 'myAccount', transferPoints: 'transferPoints',
+        verifyIdentity: 'verifyIdentity', support: 'support',
+      };
+      if (screenMap[s.screenKey]) return setScreen(screenMap[s.screenKey]);
+      return showAlert('MySheba', 'This feature is not configured yet.');
+    }
     if (s.kind === 'buspicker') return openBusPicker();
     if (s.kind === 'salary') return openSalary();
     if (s.kind === 'documents') return openMyDocuments();
