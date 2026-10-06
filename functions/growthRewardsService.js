@@ -30,8 +30,9 @@ exports.handleCompletedTransaction = async (transactionId, tx) => {
   const charged = Number(tx.total ?? tx.amount ?? tx.pointsCharged ?? 0);
   if (!Number.isFinite(charged) || charged < minimum) return;
 
-  const previous = await db.collection('transactions').where('customerId','==',uid).where('status','==','completed').limit(2).get();
-  const isFirst = previous.size === 1 && previous.docs[0].id === transactionId;
+  const previous = await db.collection('transactions').where('customerId','==',uid).where('status','==','completed').limit(100).get();
+  const ordered = previous.docs.slice().sort((x, y) => { const a=x.data()?.completedAt?.toMillis?.() || x.data()?.createdAt?.toMillis?.() || 0; const b=y.data()?.completedAt?.toMillis?.() || y.data()?.createdAt?.toMillis?.() || 0; return a-b; });
+  const isFirst = ordered.length > 0 && ordered[0].id === transactionId;
 
   if (isFirst) {
     const firstReward = Math.max(0, Number(settings.firstTransactionReward) || 0);
@@ -52,18 +53,21 @@ exports.handleCompletedTransaction = async (transactionId, tx) => {
     const referrerUid = String(referral.referredBy || '').trim();
     const referralReward = Math.max(0, Number(settings.referralReward) || 0);
     if (settings.referralEnabled !== false && referrerUid && referral.status !== 'qualified') {
-      await db.runTransaction(async (t) => {
-        const live = await t.get(customerRef);
-        const liveReferral = live.exists ? (live.data()?.referral || {}) : {};
-        if (liveReferral.status === 'qualified') return;
-        t.update(customerRef, { referral: { ...liveReferral, status: 'qualified', qualifiedAt: admin.firestore.FieldValue.serverTimestamp(), qualifyingTransactionId: transactionId } });
-      });
+      // Create the idempotent reward record first. If the trigger retries after
+      // a transient write failure, an already-created ledger entry is harmless;
+      // the referral status can then still be marked qualified.
       if (referralReward > 0) {
         await createPending(db, `referral_${uid}`, {
           uid: referrerUid, referredUid: uid, kind: 'referral', amount: referralReward, currency: 'MYR',
           sourceTransactionId: transactionId, reason: 'Referred customer completed first qualifying transaction',
         });
       }
+      await db.runTransaction(async (t) => {
+        const live = await t.get(customerRef);
+        const liveReferral = live.exists ? (live.data()?.referral || {}) : {};
+        if (liveReferral.status === 'qualified') return;
+        t.update(customerRef, { referral: { ...liveReferral, status: 'qualified', qualifiedAt: admin.firestore.FieldValue.serverTimestamp(), qualifyingTransactionId: transactionId } });
+      });
     }
   }
 };
