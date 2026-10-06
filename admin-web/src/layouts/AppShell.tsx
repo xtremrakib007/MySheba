@@ -6,6 +6,7 @@ import { canAccess, navGroups, ROLE_LABELS, type NavGroup } from '../routes/navC
 import logo from '../assets/logo.png';
 import UniversalSearch from '../components/UniversalSearch';
 import NotificationCenter from '../components/NotificationCenter';
+import { getCurrentPortal, portalAllowsPath, portalEnforcementEnabled, portalLabel } from '../services/portalConfig';
 
 const ACCENT: Record<NavGroup['accent'], { bar: string; icon: string; activeBg: string; dot: string }> = {
   primary: { bar: 'from-[var(--color-primary)]/30 to-transparent', icon: 'text-[var(--color-primary)]', activeBg: 'bg-[var(--color-primary)]', dot: 'bg-[var(--color-primary)]' },
@@ -22,6 +23,8 @@ const GROUPS_KEY = 'mysheba-admin-sidebar-groups';
 export default function AppShell() {
   const { profile, signOut, access, deviceCheckDeferred } = useAuth();
   const location = useLocation();
+  const portal = getCurrentPortal();
+  const enforcePortal = portalEnforcementEnabled();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_KEY) === '1');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
@@ -32,8 +35,12 @@ export default function AppShell() {
   // the sidebar offers and what ProtectedRoute lets through.
   const visibleGroups = useMemo(() => navGroups.map((group) => ({
     ...group,
-    items: group.items.filter((item) => canAccess(item.path, access) && (!item.superadminOnly || access.role === 'superadmin')),
-  })).filter((group) => group.items.length > 0), [access]);
+    items: group.items.filter((item) =>
+      canAccess(item.path, access)
+      && (!item.superadminOnly || access.role === 'superadmin')
+      && (!enforcePortal || portalAllowsPath(portal, item.path))
+    ),
+  })).filter((group) => group.items.length > 0), [access, enforcePortal, portal]);
 
   useEffect(() => { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0'); }, [collapsed]);
   useEffect(() => { localStorage.setItem(GROUPS_KEY, JSON.stringify(openGroups)); }, [openGroups]);
@@ -51,7 +58,7 @@ export default function AppShell() {
     <aside className={`flex h-full shrink-0 flex-col bg-[var(--color-navy)] py-5 shadow-2xl transition-[width] duration-200 lg:shadow-none ${collapsed ? 'w-[68px]' : 'w-72'}`}>
       <div className={`mb-5 flex items-center gap-2.5 ${collapsed ? 'justify-center px-2' : 'px-4'}`}>
         <img src={logo} alt="MySheba" className="h-10 w-10 shrink-0 rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.35)]" />
-        {!collapsed && <div className="min-w-0 flex-1 overflow-hidden"><p className="truncate font-[var(--font-display)] text-sm font-bold text-white">MySheba</p><p className="truncate text-[11px] text-white/50">Admin Control Center</p></div>}
+        {!collapsed && <div className="min-w-0 flex-1 overflow-hidden"><p className="truncate font-[var(--font-display)] text-sm font-bold text-white">MySheba</p><p className="truncate text-[11px] text-white/50">{enforcePortal ? portalLabel(portal) : 'Admin Control Center'}</p></div>}
         <button onClick={() => setMobileOpen(false)} className="rounded-lg p-1.5 text-white/60 hover:bg-white/10 hover:text-white lg:hidden" aria-label="Close navigation"><X size={18} /></button>
       </div>
 
