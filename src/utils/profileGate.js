@@ -74,17 +74,25 @@ export function shouldEndSessionForDevice({
   localSessionId,
   activeSessionId,
   activeDeviceId,
+  activeSessions,
   deviceId,
   initialRouteDone,
   deviceCheckDeferred,
 } = {}) {
   if (!initialRouteDone) return false;
   if (deviceCheckDeferred) return false;
+  // New accounts use independent mobile/web slots. The legacy pair is still
+  // mirrored for old clients, but it points at whichever platform signed in
+  // last and therefore must NEVER be used by the mobile client to judge a
+  // web sign-in.
+  const mobile = activeSessions && typeof activeSessions === 'object' ? activeSessions.mobile : null;
+  if (mobile && typeof mobile === 'object') {
+    if (!localSessionId || !mobile.sessionId || !deviceId || !mobile.deviceId) return false;
+    return localSessionId !== mobile.sessionId && deviceId !== mobile.deviceId;
+  }
+
   if (!localSessionId || !activeSessionId) return false;
   if (localSessionId === activeSessionId) return false;
-  // Nothing to compare, or the active device is still us: stay signed in.
-  // Erring towards staying in is deliberate - the cost of being wrong here
-  // is someone signed out for no reason they can see.
   if (!activeDeviceId || !deviceId) return false;
   if (activeDeviceId === deviceId) return false;
   return true;
