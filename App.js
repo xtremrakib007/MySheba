@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import mobileAds from 'react-native-google-mobile-ads';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StyleSheet, View, Text, ActivityIndicator, TouchableOpacity, Platform, Linking } from 'react-native';
@@ -112,6 +113,9 @@ const NAV_SCREENS = [
 ];
 
 function Root() {
+  useEffect(() => {
+    mobileAds().initialize().catch(() => {});
+  }, []);
   const { screen, authLoading, handleDeepLink, profile, adminViewingSection, sessionRestoring, profileFatal, logout } = useApp();
   const { colors, isDark } = useTheme();
   const styles = createStyles(colors);
