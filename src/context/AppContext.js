@@ -45,6 +45,7 @@ import * as featureAccessService from "../firebase/featureAccessService";
 import * as webviewConfigService from '../firebase/webviewConfigService';
 import * as tileLabelService from '../firebase/tileLabelService';
 import * as gridManagementService from "../firebase/gridManagementService";
+import * as platformControlService from "../firebase/platformControlService";
 import * as accessControlService from "../firebase/accessControlService";
 import * as adControlsService from "../firebase/adControlsService";
 import * as homepageConfigService from "../firebase/homepageConfigService";
@@ -795,6 +796,18 @@ export function AppProvider({ children }) {
     featureAccessService.DEFAULT_FEATURE_ACCESS,
   );
   const [gridManagement, setGridManagement] = useState(gridManagementService.DEFAULT_GRID_MANAGEMENT);
+  const [dynamicPlatformFeatures, setDynamicPlatformFeatures] = useState([]);
+  useEffect(() => {
+    if (!authUser || !profile) return undefined;
+    let cancelled = false;
+    platformControlService.getPlatformCatalog().then((catalog) => {
+      if (!cancelled) setDynamicPlatformFeatures(Array.isArray(catalog?.features) ? catalog.features : []);
+    }).catch((err) => {
+      if (!cancelled) console.log('[platformCatalog] load skipped:', err?.code || err?.message || err);
+    });
+    return () => { cancelled = true; };
+  }, [authUser, profile]);
+
 
   // WebView pages: the built-ins from src/data/countries.js with whatever a
   // superadmin has changed on top (settings/webviews). Starts from the
@@ -2875,6 +2888,7 @@ export function AppProvider({ children }) {
     accessWindowHours,
     featureAccess,
     gridManagement,
+    dynamicPlatformFeatures,
     // Consumers resolve tiles against this rather than building their own
     // viewer, so a tile cannot be drawn by one rule and gated by another.
     gridViewer,
