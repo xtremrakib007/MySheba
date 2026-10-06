@@ -410,7 +410,8 @@ export function adminLandingTiles(webviewPages, hasArt = () => false, tileLabels
   const extra = customPagesBeyond(
     pages,
     ADMIN_HOME.filter((item) => item.service && item.service.kind === 'webview').map((item) => item.key),
-  , allowed).map(tileFor);
+    allowed,
+  ).map(tileFor);
   return applyTileLabels([...overlaid, ...extra], tileLabels);
 }
 
