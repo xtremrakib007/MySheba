@@ -390,6 +390,14 @@ export const ADMIN_HOME = [
  */
 export function adminLandingTiles(webviewPages, hasArt = () => false, tileLabels, viewer) {
   const pages = webviewPages || {};
+  const allowed = (page) => {
+    if (!page || page.active === false) return false;
+    const v = viewer || {};
+    if (Array.isArray(page.roles) && page.roles.length && !page.roles.includes(v.role)) return false;
+    if (Array.isArray(page.countries) && page.countries.length && !page.countries.includes(v.country)) return false;
+    if (Array.isArray(page.users) && page.users.length && !page.users.includes(v.uid)) return false;
+    return true;
+  };
   const tileFor = (page) => ({
     key: page.key,
     ...(hasArt(page.icon) ? { art: page.icon, icon: '\uD83C\uDF10' } : { icon: page.icon || '\uD83C\uDF10' }),
@@ -402,7 +410,7 @@ export function adminLandingTiles(webviewPages, hasArt = () => false, tileLabels
   const extra = customPagesBeyond(
     pages,
     ADMIN_HOME.filter((item) => item.service && item.service.kind === 'webview').map((item) => item.key),
-  ).map(tileFor);
+  , allowed).map(tileFor);
   return applyTileLabels([...overlaid, ...extra], tileLabels);
 }
 
