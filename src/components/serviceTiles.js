@@ -501,6 +501,7 @@ export const PERSONAL_FEATURES = [
   { key: 'myAccount', icon: '\uD83D\uDC64', name: 'My Account', kind: 'myaccount' },
   { key: 'kyc', icon: '\uD83E\uDEAA', name: 'Profile & KYC', kind: 'kyc' },
   { key: 'support', icon: '\uD83C\uDFA7', name: 'Support', kind: 'support' },
+  { key: 'referral', icon: '\uD83C\uDF81', name: 'Invite & Earn', kind: 'screen', screen: 'referral' },
 ];
 
 export const STAFF_FEATURES = [
