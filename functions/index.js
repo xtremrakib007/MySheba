@@ -138,6 +138,21 @@ exports.pollSuccessTopUpStatus = require('./successTopupPoller').pollSuccessTopU
 // nobody noticed - but it could no longer be updated from this repo, and the
 // next deploy would have offered to delete it as a function with no source.
 exports.cleanupExpiredVerificationArtifacts = require('./verificationCleanup').cleanupExpiredVerificationArtifacts;
+// Superadmin platform control plane: dynamic feature/country/operator catalog,
+// targeted WebViews and Google Ads controls. Existing business callables remain
+// unchanged; these are the server-owned configuration mutations/resolvers.
+const platformControl = require('./platformControlService');
+exports.getPlatformCatalog = platformControl.getPlatformCatalog;
+exports.listPlatformCatalogAdmin = platformControl.listPlatformCatalogAdmin;
+exports.savePlatformFeature = platformControl.savePlatformFeature;
+exports.deletePlatformFeature = platformControl.deletePlatformFeature;
+exports.saveCountryCatalog = platformControl.saveCountryCatalog;
+exports.deleteCountryCatalog = platformControl.deleteCountryCatalog;
+exports.saveOperatorCatalog = platformControl.saveOperatorCatalog;
+exports.deleteOperatorCatalog = platformControl.deleteOperatorCatalog;
+exports.updateWebviewTargeting = platformControl.updateWebviewTargeting;
+exports.updateGoogleAdsControls = platformControl.updateGoogleAdsControls;
+
 exports.purchaseRechargePin = require('./rechargePinService').purchaseRechargePin;
 exports.getRechargePin = require('./rechargePinService').getRechargePin;
 exports.createSupportTicket = supportTicketService.createSupportTicket;
