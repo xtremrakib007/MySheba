@@ -36,7 +36,7 @@ const SCOPES = [
 
 export default function GridManagementScreen() {
   const { colors, brandGradient } = useTheme();
-  const { profile, goBackOrHome, gridManagement } = useApp();
+  const { profile, goBackOrHome, gridManagement, webviewPages } = useApp();
   const [busy, setBusy] = useState(null);
   const [scope, setScope] = useState('global');
   const [who, setWho] = useState('');
@@ -85,9 +85,66 @@ export default function GridManagementScreen() {
   const found = search.trim() ? (users || []).filter(matches).slice(0, 8) : [];
   const chosenUser = (users || []).find((u) => u.id === who);
 
+  // WebView pages that GRID_DEFS does not list. The five that are in it
+  // (fomema, visa, mydigital, passport, train) already appear above, so these
+  // are the ones that had no access control at all: esim, the three bus
+  // partners, and every page a superadmin has added.
+  //
+  // Their global on/off is `active` on the page itself - set in WebView Pages,
+  // shown here read-only - because firestore.rules allowlists this document's
+  // top-level keys by name and cannot allowlist a wv_ pattern. Only the
+  // scoping lives here.
+  const webviewRows = useMemo(() => {
+    const pages = webviewPages || {};
+    return Object.keys(pages)
+      .filter((key) => !gridService.isGlobalKey(key) && gridService.isScopableKey(key))
+      .map((key) => ({ key, name: (pages[key] && pages[key].name) || key, active: pages[key]?.active !== false }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [webviewPages]);
+
   const whoLabel = scope === 'byRole' ? (ROLES.find((r) => r.key === who) || {}).label
     : scope === 'byCountry' ? (COUNTRIES.find((c) => c.key === who) || {}).label
       : chosenUser ? (chosenUser.name || chosenUser.phone || who) : '';
+
+  // One row, used by both lists. `isWebviewPage` only changes what the global
+  // column does: a WebView page's global state is `active` on the page and is
+  // not writable from here, so it is shown rather than offered as a button
+  // that would fail against the rules' key allowlist.
+  const renderRow = (g, isWebviewPage = false) => {
+    const globalActive = isWebviewPage ? g.active : gridService.isGridActive(gridManagement, g.key);
+    // Not globalActive: for a user, Default means their country's
+    // rule, then their role's, then the global one.
+    const inherited = gridService.inheritedActive(gridManagement, g.key, scope, who, {
+      role: chosenUser?.role || '',
+      country: countryCodeOf(chosenUser),
+    });
+    const override = Object.prototype.hasOwnProperty.call(overrides, g.key) ? overrides[g.key] : null;
+    return (
+      <View key={g.key} style={styles.row}>
+        <View style={styles.info}>
+          <Text style={styles.name}>{g.name}</Text>
+          <Text style={styles.key}>{g.key}{scoped && override === null ? ` · default ${inherited ? 'on' : 'off'}` : ''}</Text>
+        </View>
+        {busy === g.key ? <ActivityIndicator color={colors.primary} /> : scoped ? (
+          <View style={styles.tri}>
+            {[['inherit', 'Default', override === null], ['on', 'On', override === true], ['off', 'Off', override === false]].map(([action, label, on]) => (
+              <TouchableOpacity key={action} onPress={() => set(g.key, action)} style={[styles.triBtn, on && (action === 'off' ? styles.triOff : styles.triOn)]}>
+                <Text style={[styles.triText, on && styles.triTextOn]}>{label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : isWebviewPage ? (
+          <View style={[styles.toggle, styles.readOnly, globalActive ? styles.on : styles.off]}>
+            <Text style={styles.toggleText}>{globalActive ? 'ACTIVE' : 'OFF'}</Text>
+          </View>
+        ) : (
+          <TouchableOpacity onPress={() => set(g.key, globalActive ? 'off' : 'on')} style={[styles.toggle, globalActive ? styles.on : styles.off]}>
+            <Text style={styles.toggleText}>{globalActive ? 'ACTIVE' : 'OFF'}</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.bg }]}>
@@ -167,37 +224,22 @@ export default function GridManagementScreen() {
                   Overrides for {whoLabel || who}. &quot;Default&quot; means no override — it follows the rule below it.
                 </Text>
               ) : null}
-              {gridService.GRID_DEFS.map((g) => {
-                const globalActive = gridService.isGridActive(gridManagement, g.key);
-                // Not globalActive: for a user, Default means their country's
-                // rule, then their role's, then the global one.
-                const inherited = gridService.inheritedActive(gridManagement, g.key, scope, who, {
-                  role: chosenUser?.role || '',
-                  country: countryCodeOf(chosenUser),
-                });
-                const override = Object.prototype.hasOwnProperty.call(overrides, g.key) ? overrides[g.key] : null;
-                return (
-                  <View key={g.key} style={styles.row}>
-                    <View style={styles.info}>
-                      <Text style={styles.name}>{g.name}</Text>
-                      <Text style={styles.key}>{g.key}{scoped && override === null ? ` · default ${inherited ? 'on' : 'off'}` : ''}</Text>
-                    </View>
-                    {busy === g.key ? <ActivityIndicator color={colors.primary} /> : scoped ? (
-                      <View style={styles.tri}>
-                        {[['inherit', 'Default', override === null], ['on', 'On', override === true], ['off', 'Off', override === false]].map(([action, label, on]) => (
-                          <TouchableOpacity key={action} onPress={() => set(g.key, action)} style={[styles.triBtn, on && (action === 'off' ? styles.triOff : styles.triOn)]}>
-                            <Text style={[styles.triText, on && styles.triTextOn]}>{label}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    ) : (
-                      <TouchableOpacity onPress={() => set(g.key, globalActive ? 'off' : 'on')} style={[styles.toggle, globalActive ? styles.on : styles.off]}>
-                        <Text style={styles.toggleText}>{globalActive ? 'ACTIVE' : 'OFF'}</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                );
-              })}
+              {gridService.GRID_DEFS.map((g) => renderRow(g))}
+
+              {/* The WebView pages GRID_DEFS never listed. One row renderer
+                  for both lists, so a scoped override cannot behave one way
+                  here and another way above. */}
+              {webviewRows.length > 0 && (
+                <>
+                  <Text style={styles.sectionTitle}>WebView Pages</Text>
+                  <Text style={styles.sectionNote}>
+                    {scoped
+                      ? 'Overridden per role, country and person, the same as any other tile.'
+                      : 'Switch these on or off for everyone in WebView Pages. Here they can be overridden by role, country or person.'}
+                  </Text>
+                  {webviewRows.map((g) => renderRow(g, true))}
+                </>
+              )}
             </>
           )}
         </ScrollView>
@@ -229,6 +271,9 @@ function createStyles(colors) {
     chosen: { fontSize: 12, fontWeight: '700', color: colors.primary, marginTop: 4, marginBottom: 8 },
     pick: { fontSize: 12, color: colors.textSecondary, marginTop: 14, textAlign: 'center' },
     editing: { fontSize: 11, color: colors.textSecondary, marginBottom: 10, lineHeight: 16 },
+    sectionTitle: { fontSize: 12, fontWeight: '800', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.6, marginTop: 18, marginBottom: 2 },
+    sectionNote: { fontSize: 11.5, color: colors.textSecondary, lineHeight: 16, marginBottom: 8 },
+    readOnly: { opacity: 0.65 },
     row: { minHeight: 62, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 9, marginBottom: 8, flexDirection: 'row', alignItems: 'center' },
     info: { flex: 1 },
     name: { fontSize: 14, fontWeight: '800', color: colors.text },

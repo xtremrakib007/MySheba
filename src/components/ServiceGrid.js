@@ -134,7 +134,7 @@ export const PRIMARY_SERVICES = CUSTOMER_SERVICES;
 // overflow section from this list, so dropping `home` moves a tile there
 // rather than deleting it from the app.
 export default function ServiceGrid({ homeOnly }) {
-  const { colors } = useTheme(); const { webViewBusy, profile, gridManagement, gridViewer, can, webviewPages, tileLabels, tilePlacementForMe } = useApp();
+  const { colors } = useTheme(); const { webViewBusy, profile, gridManagement, gridViewer, can, webviewPages, tileLabels, tilePlacementForMe, tileOrderForMe } = useApp();
   const handlePress = useServiceAction(); const role = profile?.role || 'customer';
   const isStaff = STAFF_ROLES.includes(role);
   // Both of these live in serviceTiles.js, so what a role sees - and that an
@@ -151,6 +151,7 @@ export default function ServiceGrid({ homeOnly }) {
     // Resolved for the viewer's role in AppContext so this grid and More
     // Features cannot be filtering against two different maps.
     placement: tilePlacementForMe,
+    order: tileOrderForMe,
   });
 
   // The home screen is one block of services, three across, in declaration

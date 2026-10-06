@@ -442,8 +442,8 @@ export function placeableTiles({ role, webviewPages, tileLabels, hasArt } = {}) 
  * Access), passed in so the two lists cannot disagree about which tiles the
  * role has at all - only about where they sit.
  */
-export function adminOverflowTiles({ webviewPages, tileLabels, hasArt, placement, isOnGrid = () => true }) {
-  return adminLandingTiles(webviewPages, hasArt, tileLabels)
+export function adminOverflowTiles({ webviewPages, tileLabels, hasArt, placement, order, isOnGrid = () => true }) {
+  return applyTileOrder(adminLandingTiles(webviewPages, hasArt, tileLabels), order)
     .filter((item) => isOnGrid(item))
     .filter((item) => !tileOnHome(item, placement, true));
 }
@@ -496,9 +496,45 @@ export function tileOnHome(tile, placement, declaredDefault = false) {
   return !!declaredDefault;
 }
 
-export function visibleTiles({ role, can, webviewPages, tileLabels, isActive = () => true, homeOnly = false, placement }) {
+/**
+ * Put a role's tiles in the order a superadmin chose.
+ *
+ * `order` is a partial list of tile keys (from settings/tilePlacement). The
+ * keys it names lead, in that order; everything else follows in the order it
+ * is declared in, unmoved relative to each other.
+ *
+ * PARTIAL ON PURPOSE. The declared lists grow with every release, and an order
+ * that had to name every tile would mean either rewriting every role's order
+ * when a feature ships, or a new tile falling off the end of a grid nobody
+ * thought to re-sort. A stable sort over "named first, then declared" needs no
+ * maintenance at all.
+ *
+ * Returns a new array; the input is not touched, because the same declared
+ * lists are module-level constants shared by every caller.
+ */
+export function applyTileOrder(tiles, order) {
+  const list = Array.isArray(tiles) ? tiles : [];
+  if (!Array.isArray(order) || order.length === 0) return list.slice();
+  const rank = new Map();
+  order.forEach((key, i) => { if (!rank.has(key)) rank.set(key, i); });
+  // An unnamed tile ranks after every named one, by its declaration index.
+  //
+  // NOT Infinity, which is the version of this that was nearly shipped:
+  // Infinity - Infinity is NaN, so the comparator returned NaN for every pair
+  // of unnamed tiles - and a comparator that returns NaN has no defined
+  // behaviour. V8 happened to leave such pairs alone at these list lengths,
+  // which is exactly the kind of "works until it doesn't" that survives a
+  // test. A finite rank makes the result ordered by construction instead.
+  const after = order.length;
+  return list
+    .map((tile, i) => ({ tile, i, r: rank.has(tile && tile.key) ? rank.get(tile.key) : after + i }))
+    .sort((a, b) => (a.r - b.r) || (a.i - b.i))
+    .map((x) => x.tile);
+}
+
+export function visibleTiles({ role, can, webviewPages, tileLabels, isActive = () => true, homeOnly = false, placement, order }) {
   const all = applyTileLabels(withWebviewConfig(servicesForRole(role, can), webviewPages), tileLabels);
-  const active = all.filter((service) => isActive(gridKeyFor(service)));
+  const active = applyTileOrder(all.filter((service) => isActive(gridKeyFor(service))), order);
   if (!homeOnly) return active;
   // Staff used to be exempt: their grids showed the whole catalogue, which made
   // a staff home twenty-four tiles of equal weight. They are trimmed the same
@@ -583,7 +619,7 @@ export const STAFF_FEATURES = [
  * the personal section, and two headings describing the same thing read as a
  * duplicate even when no tile is repeated.
  */
-export function moreFeaturesSections({ role = 'customer', can, webviewPages, tileLabels, isActive = () => true, placement }) {
+export function moreFeaturesSections({ role = 'customer', can, webviewPages, tileLabels, isActive = () => true, placement, order }) {
   const declared = applyTileLabels((!role || role === 'customer') ? PERSONAL_FEATURES : STAFF_FEATURES, tileLabels);
 
   // An account row for something already on this role's home screen is the
@@ -596,7 +632,7 @@ export function moreFeaturesSections({ role = 'customer', can, webviewPages, til
   // survives here - which is the rule this screen exists for: a finished
   // feature lands on the home screen or here, never nowhere.
   const onHome = new Set(
-    visibleTiles({ role, can, webviewPages, tileLabels, isActive, homeOnly: true, placement }).map((tile) => tile.key),
+    visibleTiles({ role, can, webviewPages, tileLabels, isActive, homeOnly: true, placement, order }).map((tile) => tile.key),
   );
   const account = declared.filter((row) => !onHome.has(row.key));
 
@@ -605,14 +641,14 @@ export function moreFeaturesSections({ role = 'customer', can, webviewPages, til
   // the overflow, or removing one duplicate just moves it.
   const kinds = new Set(declared.map((f) => f.kind));
   const keys = new Set(declared.map((f) => f.key));
-  const overflow = overflowTiles({ role, can, webviewPages, tileLabels, isActive, excludeKinds: kinds, placement })
+  const overflow = overflowTiles({ role, can, webviewPages, tileLabels, isActive, excludeKinds: kinds, placement, order })
     .filter((tile) => tile.cat !== 'personal' && !keys.has(tile.key));
   return { sections: groupTilesByCategory(overflow), account };
 }
 
-export function overflowTiles({ role = 'customer', can, webviewPages, tileLabels, isActive = () => true, excludeKinds = [], placement }) {
+export function overflowTiles({ role = 'customer', can, webviewPages, tileLabels, isActive = () => true, excludeKinds = [], placement, order }) {
   const exclude = new Set(excludeKinds);
-  return applyTileLabels(withWebviewConfig(servicesForRole(role, can), webviewPages), tileLabels)
+  return applyTileOrder(applyTileLabels(withWebviewConfig(servicesForRole(role, can), webviewPages), tileLabels), order)
     .filter((tile) => isActive(gridKeyFor(tile)))
     // The negation of tileOnHome, so a tile taken off the home screen lands
     // here. This is what made the superadmin's More Features page empty:

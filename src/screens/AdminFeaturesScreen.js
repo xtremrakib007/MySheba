@@ -12,7 +12,7 @@ import PromptModal from '../components/PromptModal';
 import * as ratesService from '../firebase/ratesService';
 import * as gridManagementService from '../firebase/gridManagementService';
 import { hasServiceArt } from '../components/ServiceArt';
-import { adminLandingTiles, tileOnHome } from '../components/serviceTiles';
+import { adminLandingTiles, tileOnHome, applyTileOrder } from '../components/serviceTiles';
 
 const CATEGORIES = [
   { key: 'operations', icon: '⚙️', bg: '#E3F2FD', name: 'Operations' },
@@ -116,7 +116,7 @@ const SCREEN_FOR = { apiManagement: 'apiProviderManagement' };
 export default function AdminFeaturesScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { profile, goBackOrHome, setScreen, openSidebar, dealerTxs, inquiries, topups, setAdminTab, setAdminViewingSection, setHomeBackInterceptor, rates, gridManagement, gridViewer, webviewPages, can, tileLabels, tilePlacementForMe } = useApp();
+  const { profile, goBackOrHome, setScreen, openSidebar, dealerTxs, inquiries, topups, setAdminTab, setAdminViewingSection, setHomeBackInterceptor, rates, gridManagement, gridViewer, webviewPages, can, tileLabels, tilePlacementForMe, tileOrderForMe } = useApp();
   const [section, setSection] = useState(null);
   const [rateView, setRateView] = useState(false);
   const [editRateKey, setEditRateKey] = useState(null);
@@ -254,7 +254,9 @@ export default function AdminFeaturesScreen() {
     return need.some((cap) => can(cap));
   };
 
-  const allowed = adminHomeList.filter(onGrid);
+  // Ordered before it is split, so the chosen order holds on the grid and
+  // in the More Features section below it.
+  const allowed = applyTileOrder(adminHomeList, tileOrderForMe).filter(onGrid);
   // Nothing in ADMIN_HOME declares a home flag, so the default is true and
   // this grid carries everything - exactly as it always has - until a
   // superadmin takes something off it in Home Screen Tiles.

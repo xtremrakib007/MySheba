@@ -42,15 +42,27 @@ function loadService() {
     if (id === '../data/phoneCountries') return countries;
     throw new Error(`unexpected require: ${id}`);
   });
+  const firestoreStub = {
+    doc: () => ({}), getDoc: async () => ({}), setDoc: async () => {},
+    onSnapshot: () => () => {}, serverTimestamp: () => ({}), deleteField: () => ({}),
+  };
+  // Loaded for real, like phoneCountry above and for the same reason: which
+  // keys may carry a scoped override now depends on the WebView page keys and
+  // on the custom-key pattern. A stub would let either drift while this test
+  // kept passing - and a dropped override is silent, which is exactly the bug
+  // this file exists to catch.
+  const countriesData = run('src/data/countries.js', (id) => { throw new Error(`unexpected require: ${id}`); });
+  const webviewConfig = run('src/firebase/webviewConfigService.js', (id) => {
+    if (id === 'firebase/firestore') return firestoreStub;
+    if (id === './config') return { db: {} };
+    if (id === '../data/countries') return countriesData;
+    throw new Error(`unexpected require: ${id}`);
+  });
   return run('src/firebase/gridManagementService.js', (id) => {
-    if (id === 'firebase/firestore') {
-      return {
-        doc: () => ({}), getDoc: async () => ({}), setDoc: async () => {},
-        onSnapshot: () => () => {}, serverTimestamp: () => ({}), deleteField: () => ({}),
-      };
-    }
+    if (id === 'firebase/firestore') return firestoreStub;
     if (id === './config') return { db: {} };
     if (id === '../utils/phoneCountry') return phoneCountry;
+    if (id === './webviewConfigService') return webviewConfig;
     throw new Error(`unexpected require: ${id}`);
   });
 }
@@ -220,6 +232,50 @@ const unscoped = consumers.flatMap(callsWithoutViewer);
 const gating = consumers.filter((f) => fs.readFileSync(path.join(ROOT, f), 'utf8').includes('isGridActive('));
 yes(`all ${gating.length} gating files pass a viewer`, unscoped.length === 0);
 if (unscoped.length) console.error(`       ${unscoped.join('\n       ')}`);
+
+console.log('\nA WebView page is gated like any other tile');
+// It was not. GRID_DEFS lists five of the nine built-in WebView pages, and
+// sanitizeScope walked GRID_DEFS to decide what to keep - so an override on
+// esim, on any of the three bus partners, or on a page a superadmin added was
+// DROPPED ON READ. Silently: the screen wrote it, Firestore stored it, and the
+// resolver never saw it, so the page stayed on for everybody.
+check('a built-in page missing from GRID_DEFS can now be scoped',
+  grid._test.sanitizeScope({ BD: { esim: false } }), { BD: { esim: false } });
+check('so can a bus partner',
+  grid._test.sanitizeScope({ dealer: { 'bus-redbus': false } }), { dealer: { 'bus-redbus': false } });
+check('and a page a superadmin added',
+  grid._test.sanitizeScope({ BD: { wv_abcd1234: false } }), { BD: { wv_abcd1234: false } });
+check('...and the override actually decides the answer',
+  grid.isGridActive({ byCountry: { BD: { esim: false } } }, 'esim', viewer({ country: 'BD' })), false);
+check('...for the bus partner too',
+  grid.isGridActive({ byRole: { dealer: { 'bus-redbus': false } } }, 'bus-redbus', viewer({ role: 'dealer' })), false);
+check('...and for an added page',
+  grid.isGridActive({ byUser: { u1: { wv_abcd1234: false } } }, 'wv_abcd1234', viewer({ uid: 'u1' })), false);
+check('somebody else is unaffected',
+  grid.isGridActive({ byCountry: { BD: { esim: false } } }, 'esim', viewer({ country: 'MY' })), true);
+check('a page with no override is still on',
+  grid.isGridActive({}, 'esim', viewer({ country: 'BD' })), true);
+
+// Widened, not opened: a key that is neither a tile nor a WebView page is
+// still dropped, or a typo becomes an invisible override.
+check('a key that is neither is still dropped',
+  grid._test.sanitizeScope({ BD: { esim: false, ghostTile: false } }), { BD: { esim: false } });
+check('a wv_ key that does not match the pattern is dropped',
+  grid._test.sanitizeScope({ BD: { wv_AB: false, wv_: false, wv_ABCDEFGH: false } }), {});
+check('a non-boolean is still dropped for a WebView page too',
+  grid._test.sanitizeScope({ BD: { esim: 'off' } }), {});
+
+// The global default for a WebView page is `active` on the page itself, in
+// settings/webviews. It cannot live here: firestore.rules allowlists this
+// document's top-level keys BY NAME, and no rule can allowlist a wv_ pattern.
+yes('isScopableKey covers tiles, built-in pages and added pages',
+  grid.isScopableKey('rates') && grid.isScopableKey('esim') && grid.isScopableKey('bus-easybook')
+    && grid.isScopableKey('wv_abcd1234'));
+yes('isScopableKey refuses anything else',
+  !grid.isScopableKey('ghostTile') && !grid.isScopableKey('') && !grid.isScopableKey(null)
+    && !grid.isScopableKey('wv_AB'));
+yes('isGlobalKey is only the GRID_DEFS tiles',
+  grid.isGlobalKey('rates') && !grid.isGlobalKey('esim') && !grid.isGlobalKey('wv_abcd1234'));
 
 console.log('');
 if (failed) {

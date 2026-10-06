@@ -843,6 +843,12 @@ export function AppProvider({ children }) {
     () => tilePlacementService.placementFor(tilePlacement, profile?.role),
     [tilePlacement, profile?.role],
   );
+  // ...and the order, resolved for the same role from the same snapshot, so a
+  // grid can never draw this launch's placement against last launch's order.
+  const tileOrderForMe = useMemo(
+    () => tilePlacementService.orderFor(tilePlacement, profile?.role),
+    [tilePlacement, profile?.role],
+  );
 
   // Central navigation boundary. UI hiding is not a security boundary:
   // every internal setScreen() call (notifications, deep links, callbacks,
@@ -2946,6 +2952,7 @@ export function AppProvider({ children }) {
     tileLabels,
     tilePlacement,
     tilePlacementForMe,
+    tileOrderForMe,
     supportContact,
 
     paymentSettings,

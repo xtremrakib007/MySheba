@@ -9,7 +9,7 @@ import ServiceArt, { hasServiceArt } from '../components/ServiceArt';
 import PhotoTileIcon, { hasPhotoTileIcon, photoIconFor } from '../components/PhotoTileIcon';
 import { serviceEmoji } from '../components/serviceEmoji';
 import { showAlert } from '../utils/appAlert';
-import { placeableTiles, tileOnHome } from '../components/serviceTiles';
+import { placeableTiles, tileOnHome, applyTileOrder } from '../components/serviceTiles';
 import * as tilePlacementService from '../firebase/tilePlacementService';
 
 /**
@@ -60,11 +60,16 @@ export default function TilePlacementScreen() {
   // rules are - it just keeps the screen honest about who it is for.
   const allowed = profile?.role === 'superadmin';
 
-  const { tiles, declaredDefault } = useMemo(
+  const { tiles: declared, declaredDefault } = useMemo(
     () => placeableTiles({ role, webviewPages, tileLabels, hasArt: hasServiceArt }),
     [role, webviewPages, tileLabels],
   );
   const overrides = tilePlacementService.placementFor(tilePlacement, role);
+  const storedOrder = tilePlacementService.orderFor(tilePlacement, role);
+  // Shown in the order the grids will draw them, through the same function the
+  // grids use. A list sorted any other way here would be a screen that moves
+  // tiles somewhere other than where it shows them going.
+  const tiles = useMemo(() => applyTileOrder(declared, storedOrder), [declared, storedOrder]);
   const onHomeCount = tiles.filter((tile) => tileOnHome(tile, overrides, declaredDefault)).length;
 
   const toggle = async (tile, next) => {
@@ -85,6 +90,47 @@ export default function TilePlacementScreen() {
     } finally {
       setBusyKey('');
     }
+  };
+
+  // Up/down rather than drag-and-drop: a reorder has to survive a slow write
+  // and a re-render from the listener, and a dragged row that snaps back
+  // because the save lost a race is worse than two buttons.
+  const move = async (index, delta) => {
+    const next = index + delta;
+    if (busyKey || next < 0 || next >= tiles.length) return;
+    // Built from the FULL displayed list, not from the stored order: the
+    // stored one is partial, so swapping two entries in it would move tiles
+    // that are not next to each other on screen.
+    const keys = tiles.map((t) => t.key);
+    [keys[index], keys[next]] = [keys[next], keys[index]];
+    setBusyKey(tiles[index].key);
+    try {
+      await tilePlacementService.setTileOrder(role, keys);
+    } catch (e) {
+      showAlert('Could not reorder', e?.message || 'Please try again.');
+    } finally {
+      setBusyKey('');
+    }
+  };
+
+  const resetOrder = () => {
+    showAlert(
+      'Reset the order?',
+      `Tiles go back to the order ${ROLE_LABELS[role] || role} ships with. Which tiles are on the home screen does not change.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          onPress: async () => {
+            try {
+              await tilePlacementService.resetRoleOrder(role);
+            } catch (e) {
+              showAlert('Could not reset', e?.message || 'Please try again.');
+            }
+          },
+        },
+      ],
+    );
   };
 
   const resetRole = () => {
@@ -138,21 +184,49 @@ export default function TilePlacementScreen() {
             <Text style={styles.intro}>
               On means the tile is on this role&apos;s home screen. Off moves it to More Features -
               it is not hidden, and nothing changes about where it goes or what it is called.
+              The arrows set the order the tiles are drawn in.
             </Text>
             <View style={styles.summaryRow}>
               <Text style={styles.summary}>
                 {onHomeCount} of {tiles.length} on the home screen
               </Text>
-              <TouchableOpacity onPress={resetRole} accessibilityRole="button">
-                <Text style={styles.resetLink}>Reset role</Text>
-              </TouchableOpacity>
+              <View style={styles.resetRow}>
+                {storedOrder.length > 0 && (
+                  <TouchableOpacity onPress={resetOrder} accessibilityRole="button">
+                    <Text style={styles.resetLink}>Reset order</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity onPress={resetRole} accessibilityRole="button">
+                  <Text style={styles.resetLink}>Reset role</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
-            {tiles.map((tile) => {
+            {tiles.map((tile, index) => {
               const on = tileOnHome(tile, overrides, declaredDefault);
               const moved = typeof overrides[tile.key] === 'boolean';
               return (
                 <View key={tile.key} style={styles.row}>
+                  <View style={styles.arrows}>
+                    <TouchableOpacity
+                      onPress={() => move(index, -1)}
+                      disabled={index === 0 || !!busyKey}
+                      style={[styles.arrowBtn, (index === 0 || !!busyKey) && styles.arrowOff]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Move ${tile.name} up`}
+                    >
+                      <Text style={styles.arrowText}>↑</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => move(index, 1)}
+                      disabled={index === tiles.length - 1 || !!busyKey}
+                      style={[styles.arrowBtn, (index === tiles.length - 1 || !!busyKey) && styles.arrowOff]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Move ${tile.name} down`}
+                    >
+                      <Text style={styles.arrowText}>↓</Text>
+                    </TouchableOpacity>
+                  </View>
                   <View style={styles.iconBox}><TileIcon tile={tile} colors={colors} /></View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.rowName} numberOfLines={1}>{tile.name}</Text>
@@ -195,7 +269,12 @@ function createStyles(colors) {
     intro: { fontSize: 12, color: colors.textSecondary, lineHeight: 17, marginBottom: 12 },
     summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
     summary: { fontSize: 12, fontWeight: '700', color: colors.text },
+    resetRow: { flexDirection: 'row', gap: 14 },
     resetLink: { fontSize: 12, fontWeight: '700', color: colors.primary },
+    arrows: { justifyContent: 'center' },
+    arrowBtn: { paddingHorizontal: 4, paddingVertical: 1 },
+    arrowOff: { opacity: 0.3 },
+    arrowText: { fontSize: 15, fontWeight: '800', color: colors.primary, lineHeight: 17 },
     row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 10, marginBottom: 7, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
     iconBox: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: `${colors.primary}12` },
     rowName: { fontSize: 13.5, fontWeight: '700', color: colors.text },

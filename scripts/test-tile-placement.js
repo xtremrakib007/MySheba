@@ -24,7 +24,7 @@ const vm = require('vm');
 const ROOT = path.join(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 const tiles = require('./lib/load-tiles.js');
-const { tileOnHome, visibleTiles, overflowTiles, placeableTiles, adminLandingTiles, adminOverflowTiles, moreFeaturesSections } = tiles;
+const { tileOnHome, visibleTiles, overflowTiles, placeableTiles, adminLandingTiles, adminOverflowTiles, moreFeaturesSections, applyTileOrder } = tiles;
 
 // The placement service runs in a vm realm below, so the objects it returns
 // have that realm's Object prototype and deepStrictEqual rejects them on
@@ -48,7 +48,7 @@ function loadPlacementService() {
   const box = { module: { exports: {} }, doc: () => ({}), setDoc: async () => {}, onSnapshot: () => () => {}, serverTimestamp: () => 0, deleteField: () => '__delete__', db: {} };
   vm.createContext(box);
   vm.runInContext(`${src}
-module.exports = { cleanPlacement, placementFor, PLACEMENT_ROLES, setTileOnHome, clearTilePlacement, resetRolePlacement };`, box);
+module.exports = { cleanPlacement, cleanOrder, placementFor, orderFor, PLACEMENT_ROLES, setTileOnHome, clearTilePlacement, resetRolePlacement, setTileOrder, resetRoleOrder };`, box);
   return box.module.exports;
 }
 const svc = loadPlacementService();
@@ -93,6 +93,15 @@ testAsync('an unknown role cannot be written', async () => {
 testAsync('a write with no tile key is refused', async () => {
   await assert.rejects(() => svc.setTileOnHome('customer', '  ', false), /tile key/);
   await assert.rejects(() => svc.clearTilePlacement('customer', ''), /tile key/);
+});
+testAsync('an order can only be written for a known role, as a list', async () => {
+  await assert.rejects(() => svc.setTileOrder('hacker', ['a']), /Unknown role/);
+  await assert.rejects(() => svc.resetRoleOrder('hacker'), /Unknown role/);
+  await assert.rejects(() => svc.setTileOrder('customer', 'a'), /list of tile keys/);
+  // Cleaned on the way IN as well as out, so what is sent back is what will
+  // be read next.
+  assert.deepStrictEqual(plain(await svc.setTileOrder('customer', ['a', 'a', '', 'b'])), ['a', 'b']);
+  assert.strictEqual(await svc.resetRoleOrder('customer'), null);
 });
 testAsync('a known role and a real key is accepted', async () => {
   // Or the two checks above would pass on a function that refuses everything.
@@ -240,6 +249,153 @@ test('the screen drives both halves off the same rule and the same map', () => {
   assert.ok(/items=\{movedOff\}/.test(screen), 'and must actually render it');
 });
 
+console.log('\nA superadmin can set the order tiles are drawn in');
+test('a named key leads, and the rest keep the order they are declared in', () => {
+  const list = [{ key: 'a' }, { key: 'b' }, { key: 'c' }, { key: 'd' }];
+  assert.deepStrictEqual(applyTileOrder(list, ['c', 'a']).map((t) => t.key), ['c', 'a', 'b', 'd']);
+});
+test('a partial order is enough, which is the whole point', () => {
+  // The declared lists grow every release. An order that had to name every
+  // tile would mean rewriting every role's order when a feature ships, or a
+  // new tile falling off the end of a grid nobody thought to re-sort.
+  const list = [{ key: 'a' }, { key: 'b' }, { key: 'c' }];
+  assert.deepStrictEqual(applyTileOrder(list, ['c']).map((t) => t.key), ['c', 'a', 'b']);
+});
+test('no order, an empty order, or a key nobody has changes nothing', () => {
+  const list = [{ key: 'a' }, { key: 'b' }, { key: 'c' }];
+  const declared = ['a', 'b', 'c'];
+  for (const order of [undefined, null, [], ['nope'], 'a', 7]) {
+    assert.deepStrictEqual(applyTileOrder(list, order).map((t) => t.key), declared, 'order ' + JSON.stringify(order));
+  }
+});
+test('it never adds, drops or duplicates a tile', () => {
+  // The one thing a sort must not do. A tile lost here is a feature nobody
+  // can reach, from a screen whose whole job is moving tiles around.
+  const { tiles: all } = placeableTiles({ role: 'customer' });
+  const order = all.map((t) => t.key).reverse();
+  const sorted = applyTileOrder(all, order);
+  assert.strictEqual(sorted.length, all.length);
+  assert.deepStrictEqual([...sorted.map((t) => t.key)].sort(), [...all.map((t) => t.key)].sort());
+});
+test('it does not mutate the declared list, and never hands it back', () => {
+  // The declared lists are module-level constants shared by every caller, so
+  // an in-place sort would reorder them for the whole app - and handing the
+  // caller the same array lets them do it later, which is the same bug with a
+  // longer fuse. Checking only "the input is unchanged" missed that, because
+  // the test did not mutate what came back.
+  const list = [{ key: 'a' }, { key: 'b' }, { key: 'c' }];
+  const before = list.map((t) => t.key);
+  for (const order of [['c'], [], undefined]) {
+    const out = applyTileOrder(list, order);
+    assert.notStrictEqual(out, list, 'order ' + JSON.stringify(order) + ' returned the input array itself');
+    assert.deepStrictEqual(list.map((t) => t.key), before);
+  }
+});
+test('the comparator can never work out to NaN', () => {
+  // A SOURCE check, deliberately, because the behavioural one cannot settle
+  // this: V8 leaves a NaN-comparator sort alone even at 40 elements, so the
+  // Infinity version passes every test above on Node. The app runs on Hermes,
+  // where that is not a promise anybody made - a comparator returning NaN has
+  // no defined behaviour, and the failure would be a home screen in a random
+  // order on a device I cannot reproduce from here.
+  //
+  // So the invariant is checked where it lives: the rank of an unnamed tile is
+  // finite, and no arithmetic on it can produce NaN.
+  const src = read('src/components/serviceTiles.js');
+  const fn = /export function applyTileOrder\(tiles, order\) \{([\s\S]*?)\n\}/.exec(src);
+  assert.ok(fn, 'could not find applyTileOrder');
+  // CODE ONLY. The body explains why Infinity is wrong, and a check that read
+  // the comments matched that explanation and failed on the correct version -
+  // the same way round as a check that passes because it matched a comment
+  // instead of the code.
+  const code = fn[1].replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.ok(!/Infinity/.test(code),
+    'an Infinity rank makes the comparator return NaN for two unnamed tiles');
+  assert.ok(/const after = order\.length;/.test(code) && /after \+ i/.test(code),
+    'an unnamed tile must rank by a finite value derived from its position');
+});
+test('two unnamed tiles never swap, at a length past the sort\'s fast path', () => {
+  // The comparator used to work out to NaN for a pair of unnamed tiles
+  // (Infinity - Infinity), which has no defined behaviour. Short arrays hid
+  // it: V8 insertion-sorts those and leaves such pairs alone. 40 is well past
+  // that, so a NaN comparator shows up as a scrambled list.
+  const list = Array.from({ length: 40 }, (_, i) => ({ key: 'k' + i }));
+  const declared = list.map((t) => t.key);
+  assert.deepStrictEqual(applyTileOrder(list, ['k39']).map((t) => t.key),
+    ['k39', ...declared.filter((k) => k !== 'k39')]);
+  // And with one named tile in the middle, everything else holds its place.
+  assert.deepStrictEqual(applyTileOrder(list, ['k20']).map((t) => t.key),
+    ['k20', ...declared.filter((k) => k !== 'k20')]);
+});
+test('the order reaches the home grid and More Features alike', () => {
+  const can = () => true;
+  const home = visibleTiles({ role: 'customer', can, homeOnly: true });
+  const last = home[home.length - 1].key;
+  const moved = visibleTiles({ role: 'customer', can, homeOnly: true, order: [last] });
+  assert.strictEqual(moved[0].key, last, 'the home grid ignores the order');
+  const over = overflowTiles({ role: 'customer', can });
+  if (over.length > 1) {
+    const overLast = over[over.length - 1].key;
+    assert.strictEqual(overflowTiles({ role: 'customer', can, order: [overLast] })[0].key, overLast,
+      'More Features ignores the order');
+  }
+});
+test('the Control Center is ordered before it is split, not after', () => {
+  // Ordered after the split, a tile moved to the top of the grid would jump
+  // to the top of whichever of the two lists it landed in instead.
+  const screen = read('src/screens/AdminFeaturesScreen.js');
+  assert.ok(/const allowed = applyTileOrder\(adminHomeList, tileOrderForMe\)\.filter\(onGrid\);/.test(screen),
+    'AdminFeaturesScreen must order the whole list before filtering it');
+});
+test('a stored order keeps only distinct, sanely-sized keys for known roles', () => {
+  const out = svc.cleanOrder({ order: { superadmin: ['a', 'b', 'a', '', '  c  ', 7, null, 'x'.repeat(100)], nobody: ['a'] } });
+  assert.deepStrictEqual(plain(out), { superadmin: ['a', 'b', 'c'] });
+});
+test('a duplicate is dropped rather than kept', () => {
+  // A key appearing twice would sort one tile into two positions, and the
+  // second would silently win.
+  const out = svc.cleanOrder({ order: { customer: ['a', 'a', 'b'] } });
+  assert.deepStrictEqual(plain(out).customer, ['a', 'b']);
+});
+test('a missing or malformed order reads as no order', () => {
+  for (const bad of [null, {}, { order: null }, { order: [] }, { order: 'all' }, { order: { customer: 'a' } }]) {
+    assert.deepStrictEqual(plain(svc.cleanOrder(bad)), {});
+  }
+});
+test('the order is capped, like the placement map', () => {
+  const big = Array.from({ length: 400 }, (_, i) => 't' + i);
+  assert.strictEqual(svc.cleanOrder({ order: { customer: big } }).customer.length, 200);
+});
+test('orderFor hands back a list, never undefined', () => {
+  assert.deepStrictEqual(plain(svc.orderFor({ order: { customer: ['a'] } }, 'customer')), ['a']);
+  for (const bad of [null, undefined, {}, 'x', { order: { customer: 'a' } }]) {
+    assert.deepStrictEqual(plain(svc.orderFor(bad, 'customer')), []);
+  }
+});
+test('placement and order come from ONE snapshot', () => {
+  // Two listeners would let a grid draw this launch's placement against last
+  // launch's order.
+  const src = read('src/firebase/tilePlacementService.js');
+  assert.ok(/callback\(\{ tiles: cleanPlacement\(data\), order: cleanOrder\(data\) \}\)/.test(src),
+    'the subscription must deliver both halves together');
+  const ctx = read('src/context/AppContext.js');
+  assert.ok(/orderFor\(tilePlacement, profile\?\.role\)/.test(ctx),
+    'AppContext must resolve the order for the same role as the placement');
+});
+test('placementFor still reads a bare role map', () => {
+  // The snapshot shape changed; a caller holding the old one must not read
+  // undefined as "no overrides" and silently lose them.
+  assert.deepStrictEqual(plain(svc.placementFor({ customer: { a: false } }, 'customer')), { a: false });
+  assert.deepStrictEqual(plain(svc.placementFor({ tiles: { customer: { a: false } } }, 'customer')), { a: false });
+});
+test('the screen shows tiles in the order it will save them in', () => {
+  const screen = read('src/screens/TilePlacementScreen.js');
+  assert.ok(/applyTileOrder\(declared, storedOrder\)/.test(screen),
+    'the list must be sorted by the same function the grids use');
+  assert.ok(/const keys = tiles\.map\(\(t\) => t\.key\);/.test(screen),
+    'a swap must be built from the displayed list, not from the partial stored order');
+});
+
 console.log('\nThe editing screen can only reach what it is for');
 test('every role with a home screen is offered', () => {
   for (const role of ROLES) assert.ok(svc.PLACEMENT_ROLES.includes(role), role + ' cannot be configured');
@@ -271,7 +427,8 @@ test('only a superadmin may write the document', () => {
   const line = rules.split('\n').find((l) => l.includes('match /settings/tilePlacement'));
   assert.ok(line, 'settings/tilePlacement has no rule at all');
   assert.ok(/isSuperadmin\(\)/.test(line), 'anyone can write the placement document');
-  assert.ok(/hasOnly\(\['roles','updatedAt'\]\)/.test(line), 'the document has no key allowlist');
+  assert.ok(/hasOnly\(\[(?=[^\]]*'roles')(?=[^\]]*'order')(?=[^\]]*'updatedAt')[^\]]*\]\)/.test(line),
+    'the allowlist must name roles, order and updatedAt, and nothing else');
   assert.ok(/allow read: if activeProfile\(\)/.test(line), 'the grids cannot read it');
   assert.ok(/allow delete: if false/.test(line), 'the document can be deleted');
 });
@@ -299,8 +456,18 @@ test('the screen and the grids resolve the overrides for the same role', () => {
   assert.ok(/tileOnHome\(item, tilePlacementForMe, true\)/.test(read('src/screens/AdminFeaturesScreen.js')),
     'AdminFeaturesScreen does not apply the overrides');
   // And each one must take it from the context rather than build its own.
+  // Taken from the context, not rebuilt: matching "tilePlacementForMe }" was
+  // too literal - it broke the moment a second context field was destructured
+  // beside it, which says nothing about the thing being checked.
   for (const f of ['src/components/ServiceGrid.js', 'src/screens/MoreFeaturesScreen.js', 'src/screens/AdminFeaturesScreen.js']) {
-    assert.ok(/tilePlacementForMe \} = useApp\(\)/.test(read(f)), f + ' resolves placement its own way');
+    const src = read(f);
+    // EVERY destructure, not the first one: ServiceGrid calls useApp() twice,
+    // and exec() found the call that does not take it.
+    const destructures = [...src.matchAll(/\{([^}]*)\} = useApp\(\)/g)].map((m) => m[1]);
+    assert.ok(destructures.length > 0, f + ' does not use the app context at all');
+    assert.ok(destructures.some((d) => /\btilePlacementForMe\b/.test(d)),
+      f + ' does not take the placement from the context');
+    assert.ok(!/placementFor\(/.test(src), f + ' resolves placement its own way');
   }
 });
 

@@ -1,6 +1,10 @@
 import { doc, getDoc, setDoc, onSnapshot, serverTimestamp, deleteField } from 'firebase/firestore';
 import { db } from './config';
 import { countryCodeOf } from '../utils/phoneCountry';
+// The WebView page keys, and the rule for what a custom one looks like.
+// Imported rather than restated: a second copy of the key pattern is how a
+// page becomes controllable in one place and not in another.
+import { BUILT_IN_KEYS as WEBVIEW_BUILT_IN_KEYS, isCustomKey } from './webviewConfigService';
 
 const DOC = doc(db, 'settings', 'gridManagement');
 
@@ -40,15 +44,53 @@ export const DEFAULT_GRID_MANAGEMENT = Object.fromEntries(GRID_DEFS.map(({key}) 
 // changes nothing until someone sets something in it.
 export const GRID_SCOPES = ['byRole', 'byCountry', 'byUser'];
 
+/**
+ * Whether a key may carry a SCOPED override.
+ *
+ * Wider than GRID_DEFS, and it has to be. A WebView page is a tile like any
+ * other and gets switched off per role, country or person for the same
+ * reasons - but only five of the nine built-in pages were ever listed in
+ * GRID_DEFS, so `esim` and the three bus partners could not be turned off for
+ * anybody, and neither could a page a superadmin added. sanitizeScope dropped
+ * every override written against them, silently, on read.
+ *
+ * The GLOBAL on/off for a WebView page is deliberately NOT here - it already
+ * exists as `active` on the page itself in settings/webviews, and a flat
+ * gridManagement key for it could not be allowed anyway: firestore.rules
+ * allowlists that document's top-level keys by name, and a rule cannot
+ * allowlist a pattern like wv_xxxxxxxx. So global stays in WebView Pages and
+ * only the scoping is here, which is also the smaller blast radius.
+ */
+export function isScopableKey(key) {
+  const id = String(key || '');
+  if (!id) return false;
+  if (GRID_DEFS.some((g) => g.key === id)) return true;
+  if (WEBVIEW_BUILT_IN_KEYS.includes(id)) return true;
+  return isCustomKey(id);
+}
+
+/** Whether a key is one gridManagement may hold a GLOBAL default for. */
+export function isGlobalKey(key) {
+  return GRID_DEFS.some((g) => g.key === String(key || ''));
+}
+
 function sanitizeScope(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const out = {};
   for (const [who, tiles] of Object.entries(value)) {
     if (!tiles || typeof tiles !== 'object' || Array.isArray(tiles)) continue;
     const kept = {};
-    // Only known tiles, only booleans: a stale key from a removed feature must
-    // not resurrect itself as an override nobody can see in the UI.
-    for (const { key } of GRID_DEFS) if (typeof tiles[key] === 'boolean') kept[key] = tiles[key];
+    // Only keys this app can resolve, only booleans: a stale key from a
+    // removed feature must not resurrect itself as an override nobody can see
+    // in the UI. It iterates the STORED keys rather than GRID_DEFS now,
+    // because a WebView page key is not in GRID_DEFS and walking that list
+    // could never find one - which is why every override on esim, the bus
+    // partners or an added page was dropped on read.
+    for (const key of Object.keys(tiles)) {
+      if (typeof tiles[key] !== 'boolean') continue;
+      if (!isScopableKey(key)) continue;
+      kept[key] = tiles[key];
+    }
     if (Object.keys(kept).length) out[String(who)] = kept;
   }
   return out;
@@ -82,9 +124,13 @@ export async function ensureGridManagement() {
  *   is the role name, ISO country code, or uid.
  */
 export async function setGridActive(key, active, target = {}) {
-  if (!GRID_DEFS.some(g => g.key === key)) throw new Error('Unknown grid.');
+  if (!isScopableKey(key)) throw new Error('Unknown grid.');
   const { scope, who } = target;
   if (!scope) {
+    // A WebView page has no global default here - it has `active` on the page
+    // itself (see isScopableKey). Said plainly, because the alternative is a
+    // bare Firestore permission error from the rules' key allowlist.
+    if (!isGlobalKey(key)) throw new Error('Turn a WebView page on or off in WebView Pages. Here you can override it for a role, country or person.');
     await setDoc(DOC, { [key]: Boolean(active), updatedAt: serverTimestamp() }, { merge: true });
     return;
   }
@@ -96,6 +142,7 @@ export async function setGridActive(key, active, target = {}) {
 
 /** Drop one override so the tile falls back to the next scope down. */
 export async function clearGridOverride(key, scope, who) {
+  if (!isScopableKey(key)) throw new Error('Unknown grid.');
   if (!GRID_SCOPES.includes(scope)) throw new Error('Unknown grid scope.');
   const id = String(who || '').trim();
   if (!id) throw new Error('Choose who this applies to first.');
