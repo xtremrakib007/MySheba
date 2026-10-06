@@ -18,7 +18,8 @@ import {
   type QueryDocumentSnapshot,
   type QueryConstraint,
 } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '../firebase/config';
 import { ALL_ROLES, type AdminUserRow, type UserRole, type VerificationStatus } from './userManagementService';
 
 const MAX_ROWS = 50;
@@ -89,29 +90,37 @@ function mapUser(d: QueryDocumentSnapshot<DocumentData>): AdminUserRow {
 export async function searchInvestigationUsers(term: string): Promise<AdminUserRow[]> {
   const raw = term.trim();
   if (!raw) return [];
-  const lower = raw.toLowerCase();
-  const fields: [string, string][] = [['name', raw], ['email', lower], ['phone', raw.replace(/\s+/g, '')]];
 
-  const results = await Promise.all(
-    fields.map(([field, value]) =>
-      safeDocs('users', [orderBy(field), startAt(value), endAt(`${value}`), fbLimit(SEARCH_LIMIT)])
-    )
-  );
+  // Investigation search uses a privileged callable rather than direct
+  // collection queries. This fixes phone/email lookup across legacy formats,
+  // avoids client-side Firestore rule/index differences, and keeps email
+  // visible only to authorized staff.
+  const fn = httpsCallable<{ query: string }, {
+    results: Array<{
+      uid: string;
+      name?: string;
+      email?: string;
+      phone?: string;
+      phoneE164?: string;
+      role?: string;
+      userId?: string;
+      disabled?: boolean;
+    }>;
+  }>(functions, 'searchInvestigationUsers');
 
-  const byUid = new Map<string, AdminUserRow>();
-  for (const docs of results) {
-    for (const d of docs) if (!byUid.has(d.id)) byUid.set(d.id, mapUser(d));
-  }
-  // A pasted UID is the other thing investigators search with.
-  if (!byUid.size && raw.length >= 20) {
-    try {
-      const snap = await getDoc(doc(db, 'users', raw));
-      if (snap.exists()) byUid.set(snap.id, mapUser(snap as QueryDocumentSnapshot<DocumentData>));
-    } catch (err) {
-      console.warn('Investigation: could not read users by id:', err);
-    }
-  }
-  return [...byUid.values()];
+  const { data } = await fn({ query: raw.slice(0, 150) });
+  return (data.results || []).map((u) => ({
+    uid: u.uid,
+    name: u.name || '(no name)',
+    email: u.email || null,
+    phone: u.phone || u.phoneE164 || null,
+    role: normalizeRole(u.role),
+    disabled: Boolean(u.disabled),
+    verificationStatus: 'unknown' as VerificationStatus,
+    features: {
+      mobileBanking: true, recharge: true, remittance: true, travel: true, ticketReseller: true,
+    },
+  }));
 }
 
 export interface InvestigationTransaction {
