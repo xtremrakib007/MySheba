@@ -103,6 +103,23 @@ await check('a customer reads the grid, overrides and all', 'allow', () => getDo
 await check('a customer CANNOT un-hide themselves', 'deny', () => setDoc(doc(as('customer1'), 'settings/gridManagement'), { byUser: { customer1: { recharge: true } } }, { merge: true }));
 await check('not even a superadmin may invent a scope', 'deny', () => setDoc(doc(as('super1'), 'settings/gridManagement'), { byDevice: { abc: { recharge: false } } }, { merge: true }));
 
+// settings/tilePlacement: which tiles are on each role's home screen, and in
+// what order. Added with no coverage here, because this gate had never been
+// run - and its rule is an exact key allowlist, so a document the new screen
+// writes can be refused by a rule that compiles perfectly.
+await check('superadmin moves a tile off a role home screen', 'allow', () => setDoc(doc(as('super1'), 'settings/tilePlacement'), { roles: { superadmin: { ledger: false } }, updatedAt: serverTimestamp() }, { merge: true }));
+await check('superadmin sets the order for a role', 'allow', () => setDoc(doc(as('super1'), 'settings/tilePlacement'), { order: { customer: ['billpayment', 'recharge'] }, updatedAt: serverTimestamp() }, { merge: true }));
+await check('superadmin writes placement and order together', 'allow', () => setDoc(doc(as('super1'), 'settings/tilePlacement'), { roles: { customer: { bus: false } }, order: { customer: ['recharge'] }, updatedAt: serverTimestamp() }, { merge: true }));
+// Every grid filters on it, so every signed-in account has to read it - a
+// denial here is a home screen that silently ignores the arrangement.
+await check('a customer reads the placement', 'allow', () => getDoc(doc(as('customer1'), 'settings/tilePlacement')));
+await check('a support agent reads it too', 'allow', () => getDoc(doc(as('support1'), 'settings/tilePlacement')));
+await check('admin CANNOT rearrange a home screen', 'deny', () => setDoc(doc(as('admin1'), 'settings/tilePlacement'), { roles: { customer: { bus: false } }, updatedAt: serverTimestamp() }, { merge: true }));
+await check('a customer CANNOT put a tile back on their own home screen', 'deny', () => setDoc(doc(as('customer1'), 'settings/tilePlacement'), { roles: { customer: { bus: true } } }, { merge: true }));
+await check('not even a superadmin may add a key to it', 'deny', () => setDoc(doc(as('super1'), 'settings/tilePlacement'), { hidden: { customer: { bus: true } } }, { merge: true }));
+await check('and it cannot be deleted', 'deny', () => deleteDoc(doc(as('super1'), 'settings/tilePlacement')));
+await check('a signed-out visitor cannot read it', 'deny', () => getDoc(doc(env.unauthenticatedContext().firestore(), 'settings/tilePlacement')));
+
 // settings/webviews: the customer grid is built from it, so everyone signed in
 // has to read it, and a wrong address here opens inside the app.
 await check('superadmin adds a WebView page', 'allow', () => setDoc(doc(as('super1'), 'settings/webviews'), { pages: { wv_abcd1234: { name: 'EPF', url: 'https://epf.gov.my/x', title: 'EPF', icon: '🏦', active: true } }, updatedAt: serverTimestamp() }, { merge: true }));
@@ -134,7 +151,14 @@ await check('support reads inquiries', 'allow', () => getDoc(doc(as('support1'),
 await check('support updates inquiry status', 'allow', () => updateDoc(doc(as('support1'), 'inquiries/i1'), { status: 'contacted', updatedAt: new Date() }));
 await check('support reads announcements', 'allow', () => getDoc(doc(as('support1'), 'announcements/a1')));
 await check('support CANNOT read user records', 'deny', () => getDoc(doc(as('support1'), 'users/customer2')));
-await check('support CANNOT read transactions', 'deny', () => getDoc(doc(as('support1'), 'transactions/tx1')));
+// Support CAN read a transaction, and is meant to. The rule accepts
+// can('orders') || can('finance') || can('review'), and support holds 'review'
+// by design - functions/accessControl.js says so in as many words: "enough to
+// investigate an order and read the numbers, and nothing that moves money".
+// Reading a transaction record IS investigating an order. This expectation was
+// written as if 'finance' were the only key to the door.
+await check('support reads transactions to investigate an order', 'allow', () => getDoc(doc(as('support1'), 'transactions/tx1')));
+// What support must still not reach: anything that moves money or changes access.
 await check('support CANNOT read top-ups', 'deny', () => getDoc(doc(as('support1'), 'topups/tp1')));
 await check('support CANNOT write pricing', 'deny', () => setDoc(doc(as('support1'), 'settings/pricing'), { notepadCost: 9 }, { merge: true }));
 
@@ -160,12 +184,24 @@ await check('default admin reads point top-ups', 'allow', () => getDoc(doc(as('a
 // ---- per-user overrides ----
 await check('default admin reads the order queue', 'allow', () => getDoc(doc(as('admin1'), 'transactionQueue/q1')));
 await check('support CANNOT read the order queue', 'deny', () => getDoc(doc(as('support1'), 'transactionQueue/q1')));
-await check('finance CANNOT read the order queue', 'deny', () => getDoc(doc(as('finance1'), 'transactionQueue/q1')));
+// Finance CAN read the order queue, deliberately. accessControl.js: "Finance
+// holds 'orders' because the customer order queue is gated on it
+// (firestore.rules), so without it finance could read a transaction's history
+// but never see the orders waiting to be worked - which is most of the job."
+await check('finance reads the order queue', 'allow', () => getDoc(doc(as('finance1'), 'transactionQueue/q1')));
 await check('support granted orders reads the order queue', 'allow', () => getDoc(doc(as('support2'), 'transactionQueue/q1')));
 await check('admin granted finance reads top-ups', 'allow', () => getDoc(doc(as('admin2'), 'topups/tp1')));
 await check('admin with users + finance revoked CANNOT read users', 'deny', () => getDoc(doc(as('admin3'), 'users/customer1')));
 await check('admin with users + finance revoked still edits settings', 'allow', () => setDoc(doc(as('admin3'), 'settings/pricing'), { notepadCost: 4 }, { merge: true }));
-await check('finance with finance revoked CANNOT read transactions', 'deny', () => getDoc(doc(as('finance2'), 'transactions/tx1')));
+// Revoking ONE capability does not close every path to a collection. finance2
+// has 'finance' revoked but keeps 'orders' and 'reports' from the role
+// defaults, and the transactions rule accepts 'orders' too. The old
+// expectation treated a revoke as a blanket lockout, which is not what the
+// rule or the override model says.
+await check('finance with finance revoked still reads transactions via orders', 'allow', () => getDoc(doc(as('finance2'), 'transactions/tx1')));
+// A revoke does bite where that capability is the only key: top-ups are
+// gated on can('finance') alone.
+await check('finance with finance revoked CANNOT read top-ups', 'deny', () => getDoc(doc(as('finance2'), 'topups/tp1')));
 await check('superadmin cannot be restricted by an override', 'allow', () => getDoc(doc(as('super1'), 'transactions/tx1')));
 
 // ---- the access documents are unforgeable from a client ----
