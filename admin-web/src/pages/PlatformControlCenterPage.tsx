@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, ChevronDown, Globe2, Layers3, Megaphone, Plus, Save, Search, Smartphone, Trash2, Users, X } from 'lucide-react';
+import { Check, ChevronDown, Globe2, Layers3, Megaphone, Plus, Save, Search, Smartphone, Trash2, Users } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import * as service from '../services/platformControlService';
 
@@ -11,7 +11,6 @@ const ROLE_OPTIONS = [
   { value:'superadmin', label:'Superadmin' },
 ];
 function csv(v: string[] | undefined){ return (v||[]).join(', '); }
-function parseCsv(v: string){ return v.split(',').map(x=>x.trim()).filter(Boolean); }
 
 export default function PlatformControlCenterPage(){
   const { profile } = useAuth();
@@ -43,7 +42,20 @@ export default function PlatformControlCenterPage(){
     {tab==='features' && <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <h2 className="font-extrabold text-[#0b2447]">Dynamic Features & Grid Tiles</h2><p className="mt-1 text-xs text-slate-500">Create a new tile targeting an existing service, supported screen, or a Superadmin WebView. Built-in service code remains protected.</p>
       <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-        {(['key','name','description','icon','sortOrder'] as const).map(k=><input key={k} value={feature[k]??''} onChange={e=>setFeature({...feature,[k]:k==='sortOrder'?Number(e.target.value):e.target.value})} placeholder={k} className="rounded-xl border border-slate-200 px-3 py-2 text-sm"/>}
+        {(['key', 'name', 'description', 'icon', 'sortOrder'] as const).map(k => (
+          <input
+            key={k}
+            value={feature[k] ?? ''}
+            onChange={e =>
+              setFeature({
+                ...feature,
+                [k]: k === 'sortOrder' ? Number(e.target.value) : e.target.value,
+              })
+            }
+            placeholder={k}
+            className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+          />
+        ))}
         <select value={feature.kind} onChange={e=>setFeature({...feature,kind:e.target.value})} className="rounded-xl border border-slate-200 px-3 py-2 text-sm"><option value="webview">WebView</option><option value="service">Existing Service</option><option value="screen">Existing Screen</option></select>
         {feature.kind==='webview' && <input value={feature.webviewKey} onChange={e=>setFeature({...feature,webviewKey:e.target.value})} placeholder="WebView key" className="rounded-xl border border-slate-200 px-3 py-2 text-sm"/>}
         {feature.kind==='service' && <select value={feature.serviceKey} onChange={e=>setFeature({...feature,serviceKey:e.target.value})} className="rounded-xl border border-slate-200 px-3 py-2 text-sm">{SERVICE_KEYS.map(k=><option key={k}>{k}</option>)}</select>}

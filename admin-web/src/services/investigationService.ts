@@ -6,16 +6,13 @@
 import {
   collection,
   doc,
-  endAt,
   getDoc,
   getDocs,
   limit as fbLimit,
   orderBy,
   query,
-  startAt,
   where,
   type DocumentData,
-  type QueryDocumentSnapshot,
   type QueryConstraint,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -23,7 +20,6 @@ import { db, functions } from '../firebase/config';
 import { ALL_ROLES, type AdminUserRow, type UserRole, type VerificationStatus } from './userManagementService';
 
 const MAX_ROWS = 50;
-const SEARCH_LIMIT = 10;
 /** A single transaction at or above this value is worth a second look. */
 export const HIGH_VALUE_THRESHOLD = 10_000;
 
@@ -49,38 +45,21 @@ function normalizeRole(value: unknown): UserRole {
   return (ALL_ROLES as string[]).includes(role) ? (role as UserRole) : 'customer';
 }
 
-/** Runs a query and swallows a permission/index failure so one restricted
- * section cannot blank out the rest of the investigation. */
-async function safeDocs(collectionName: string, constraints: QueryConstraint[]) {
+/** Runs a query and safely returns an empty list when a restricted
+ * investigation section cannot be read. */
+async function safeDocs(
+  collectionName: string,
+  constraints: QueryConstraint[],
+) {
   try {
-    const snap = await getDocs(query(collection(db, collectionName), ...constraints));
+    const snap = await getDocs(
+      query(collection(db, collectionName), ...constraints),
+    );
     return snap.docs;
   } catch (err) {
     console.warn(`Investigation: could not read ${collectionName}:`, err);
-    return [] as QueryDocumentSnapshot<DocumentData>[];
+    return [];
   }
-}
-
-function mapUser(d: QueryDocumentSnapshot<DocumentData>): AdminUserRow {
-  const data = d.data();
-  const rawVerification = data.verificationStatus ?? (data.verified === true ? 'approved' : undefined);
-  return {
-    uid: d.id,
-    name: data.name ?? data.displayName ?? '(no name)',
-    email: data.email ?? null,
-    phone: data.phone ?? data.phoneNumber ?? null,
-    role: normalizeRole(data.role),
-    disabled: Boolean(data.disabled),
-    verificationStatus: (['pending', 'approved', 'rejected'].includes(rawVerification)
-      ? rawVerification
-      : 'unknown') as VerificationStatus,
-    dealerCode: data.dealerCode,
-    resellerCode: data.resellerCode,
-    features: {
-      mobileBanking: true, recharge: true, remittance: true, travel: true, ticketReseller: true,
-      ...(data.features ?? {}),
-    },
-  };
 }
 
 /** Prefix search over the fields an investigator actually types: name,

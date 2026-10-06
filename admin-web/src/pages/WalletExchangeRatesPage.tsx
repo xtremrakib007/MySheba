@@ -48,7 +48,7 @@ export default function WalletExchangeRatesPage() {
   useEffect(() => {
     fetchRates().then((rates) => {
       setRemitRates(rates);
-      setRemitMode(rates.remittanceRateMode === 'live' ? 'live' : 'manual');
+      setRemitMode(String(rates.remittanceRateMode) === 'live' ? 'live' : 'manual');
     }).catch(() => {});
   }, []);
 
@@ -150,7 +150,6 @@ export default function WalletExchangeRatesPage() {
               {REMITTANCE_FX_CURRENCIES.map(([currency, country]) => {
                 const live = Number(data.liveRates?.[currency]);
                 const keys = REMIT_KEYS[currency] || [];
-                const primary = keys[0];
                 return <tr key={currency} className="border-b border-[var(--color-line)] last:border-0">
                   <td className="px-3 py-3 font-semibold">{currency}<div className="text-xs font-normal text-[var(--color-ink-soft)]">{country} · 1 MYR</div></td>
                   <td className="px-3 py-3">{fmt(live)}</td>
