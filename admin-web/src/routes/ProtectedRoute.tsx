@@ -13,14 +13,24 @@ import {
   portalEnforcementEnabled,
 } from '../services/portalConfig';
 
-// Capability checks remain the first authorization layer. Portal checks add a
-// hostname/department boundary in the UI, but Cloud Functions and Firestore
-// rules remain authoritative for data and mutations.
 export default function ProtectedRoute() {
   const { profile, loading, access, accessLoading } = useAuth();
   const location = useLocation();
   const portal = getCurrentPortal();
   const enforcePortal = portalEnforcementEnabled();
+  const knownHost = isKnownProductionPortal();
+  const portalAllowed = knownHost && canAccessPortal(portal, access);
+  const pathAllowedInPortal = portalAllowsPath(portal, location.pathname);
+
+  useEffect(() => {
+    if (!profile || enforcePortal || (knownHost && portalAllowed && pathAllowedInPortal)) return;
+    console.warn('Portal access mismatch (shadow mode)', {
+      portal,
+      path: location.pathname,
+      role: access.role,
+      knownHost,
+    });
+  }, [access.role, enforcePortal, knownHost, location.pathname, pathAllowedInPortal, portal, portalAllowed, profile]);
 
   if (loading || (profile && accessLoading)) {
     return (
@@ -33,22 +43,6 @@ export default function ProtectedRoute() {
   if (!profile) {
     return <Navigate to="/login" replace />;
   }
-
-  const knownHost = isKnownProductionPortal();
-  const portalAllowed = knownHost && canAccessPortal(portal, access);
-  const pathAllowedInPortal = portalAllowsPath(portal, location.pathname);
-
-  // Shadow mode deliberately keeps existing behaviour, but records a minimal
-  // mismatch signal without customer data, tokens or permission internals.
-  useEffect(() => {
-    if (enforcePortal || (knownHost && portalAllowed && pathAllowedInPortal)) return;
-    console.warn('Portal access mismatch (shadow mode)', {
-      portal,
-      path: location.pathname,
-      role: access.role,
-      knownHost,
-    });
-  }, [access.role, enforcePortal, knownHost, location.pathname, pathAllowedInPortal, portal, portalAllowed]);
 
   if (enforcePortal && (!portalAllowed || !pathAllowedInPortal)) {
     return <AccessRestrictedPage access={access} portal={portal} />;
