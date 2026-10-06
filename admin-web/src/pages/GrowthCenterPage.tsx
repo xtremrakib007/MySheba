@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Gift, Megaphone, Users, TicketPercent, Save } from 'lucide-react';
+import { Gift, Megaphone, Users, TicketPercent, Save, type LucideIcon } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../firebase/config';
 
@@ -24,6 +24,12 @@ export default function GrowthCenterPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const cards: Array<{ icon: LucideIcon; title: string; text: string }> = [
+    { icon: Users, title: 'Referral Program', text: 'Every customer gets a shareable referral code. Registration attribution is recorded securely.' },
+    { icon: TicketPercent, title: 'Promo Engine', text: 'Use existing pricing, banners and announcements for service-specific promotions.' },
+    { icon: Gift, title: 'Rewards', text: 'Configure welcome, first-transaction and referral reward values before enabling financial automation.' },
+    { icon: Megaphone, title: 'Campaigns', text: 'Use banners and notifications to turn offers into repeat visits and re-engagement.' },
+  ];
 
   useEffect(() => {
     const fn = httpsCallable<void, GrowthConfig>(functions, 'getGrowthConfig');
@@ -56,14 +62,9 @@ export default function GrowthCenterPage() {
     {message && <div className="mt-4 rounded-xl border border-[var(--color-line)] bg-[var(--color-card)] p-3 text-sm">{message}</div>}
 
     <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      {[
-        [Users, 'Referral Program', 'Every customer gets a shareable referral code. Registration attribution is recorded securely.'],
-        [TicketPercent, 'Promo Engine', 'Use existing pricing, banners and announcements for service-specific promotions.'],
-        [Gift, 'Rewards', 'Configure welcome, first-transaction and referral reward values before enabling financial automation.'],
-        [Megaphone, 'Campaigns', 'Use banners and notifications to turn offers into repeat visits and re-engagement.'],
-      ].map(([Icon, title, text]) => <div key={title as string} className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-card)] p-5 shadow-sm">
+      {cards.map(({ icon: Icon, title, text }) => <div key={title} className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-card)] p-5 shadow-sm">
         <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--color-primary)]/10 text-[var(--color-primary)]"><Icon size={22}/></div>
-        <h2 className="mt-4 font-bold">{title as string}</h2><p className="mt-1 text-sm text-[var(--color-ink-soft)]">{text as string}</p>
+        <h2 className="mt-4 font-bold">{title}</h2><p className="mt-1 text-sm text-[var(--color-ink-soft)]">{text}</p>
       </div>)}
     </div>
 
