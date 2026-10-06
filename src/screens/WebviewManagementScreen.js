@@ -7,6 +7,7 @@ import { showAlert } from '../utils/appAlert';
 import HeaderDecor from '../components/HeaderDecor';
 import ServiceArt, { hasServiceArt } from '../components/ServiceArt';
 import * as webviewConfigService from '../firebase/webviewConfigService';
+import * as gridService from '../firebase/gridManagementService';
 
 // An icon is either the name of a drawing the app ships or a single emoji.
 // Offering the drawings by name is what keeps a new tile looking like the rest
@@ -20,7 +21,7 @@ function IconPreview({ icon, color }) {
 
 export default function WebviewManagementScreen() {
   const { colors, brandGradient } = useTheme();
-  const { profile, goBackOrHome, webviewPages } = useApp();
+  const { profile, goBackOrHome, webviewPages, gridManagement, setScreen } = useApp();
   const isSuperadmin = profile?.role === 'superadmin';
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -93,6 +94,14 @@ export default function WebviewManagementScreen() {
       </View>
     );
   }
+
+  // "All roles", or how many overrides narrow it. Counted by the grid service
+  // rather than here, so this row and Grid Access cannot disagree about
+  // whether a page is limited.
+  const accessLabel = (key) => {
+    const n = gridService.overrideSummaryFor(gridManagement, key).total;
+    return n === 0 ? 'All roles' : `Limited for ${n}`;
+  };
 
   return (
     <KeyboardAvoidingView style={[styles.screen, { backgroundColor: colors.bg }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -175,13 +184,24 @@ export default function WebviewManagementScreen() {
             <Text style={styles.addText}>+ Add a WebView page</Text>
           </TouchableOpacity>
 
+          {/* The switch on each row below is on or off for EVERYONE. WHO each
+              page is on for - per role, country or person - is Grid Access,
+              exactly as it is for any other tile. Said here because this is
+              where a page gets added, and a control on another screen that
+              nothing points at is a control nobody finds. */}
+          <TouchableOpacity style={styles.accessBtn} onPress={() => setScreen('gridManagement')} accessibilityRole="button">
+            <Text style={styles.accessText}>Limit a page to certain roles, countries or people →</Text>
+          </TouchableOpacity>
+
           {pages.map((page) => (
             <View key={page.key} style={styles.row}>
               <View style={styles.rowIcon}><IconPreview icon={page.icon} color={colors.primary} /></View>
               <TouchableOpacity style={styles.rowBody} onPress={() => setEditing({ ...page, isNew: false })}>
                 <Text style={styles.rowName} numberOfLines={1}>{page.name}</Text>
                 <Text style={styles.rowUrl} numberOfLines={1}>{page.url}</Text>
-                <Text style={styles.rowMeta}>{page.custom ? 'Added here' : 'Built in'} · {page.home === false ? 'More Services' : 'Home screen'}</Text>
+                <Text style={styles.rowMeta}>
+                  {page.custom ? 'Added here' : 'Built in'} · {page.home === false ? 'More Services' : 'Home screen'} · {accessLabel(page.key)}
+                </Text>
               </TouchableOpacity>
               {savingKey === page.key ? (
                 <ActivityIndicator color={colors.primary} style={styles.rowBusy} />
@@ -201,6 +221,8 @@ export default function WebviewManagementScreen() {
 function createStyles(colors) {
   return StyleSheet.create({
     screen: { flex: 1 },
+    accessBtn: { paddingVertical: 10, paddingHorizontal: 12, marginBottom: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
+    accessText: { fontSize: 12.5, fontWeight: '700', color: colors.primary },
     header: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10, overflow: 'hidden' },
     back: { padding: 4 }, backText: { color: 'white', fontSize: 22 },
     title: { color: 'white', fontWeight: '800', fontSize: 16 },

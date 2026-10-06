@@ -177,6 +177,34 @@ export function isGridActive(gridManagement, key, viewer) {
 }
 
 /**
+ * How many scoped overrides name this key, and where.
+ *
+ * For a screen that needs to say "this page is limited for somebody" without
+ * reproducing the resolver. Returns { total, byRole, byCountry, byUser } -
+ * counts, not the ids, because the summary is all a list row has space for and
+ * the ids are what Grid Access itself is for.
+ */
+export function overrideSummaryFor(gridManagement, key) {
+  const grid = gridManagement || {};
+  const id = String(key || '');
+  // No early return for an empty key: tiles[''] matches nothing, so the loop
+  // already answers 0. A guard a test cannot tell apart from its absence is
+  // dead weight pretending to be care.
+  const out = { total: 0, byRole: 0, byCountry: 0, byUser: 0 };
+  for (const scope of GRID_SCOPES) {
+    const map = grid[scope];
+    if (!map || typeof map !== 'object' || Array.isArray(map)) continue;
+    for (const tiles of Object.values(map)) {
+      if (tiles && typeof tiles === 'object' && typeof tiles[id] === 'boolean') {
+        out[scope] += 1;
+        out.total += 1;
+      }
+    }
+  }
+  return out;
+}
+
+/**
  * What "Default" means for one target.
  *
  * A scoped row offering Default / On / Off has to say what Default resolves to,

@@ -277,6 +277,43 @@ yes('isScopableKey refuses anything else',
 yes('isGlobalKey is only the GRID_DEFS tiles',
   grid.isGlobalKey('rates') && !grid.isGlobalKey('esim') && !grid.isGlobalKey('wv_abcd1234'));
 
+console.log('\nA page says whether it is limited, where it is added');
+// The switch on the WebView Pages screen is on/off for EVERYONE. Who a page is
+// on for is Grid Access - a different screen. A control nothing points at is a
+// control nobody finds, which is how "the access control was not added" is a
+// fair description of a feature that was in fact there.
+check('an untouched page counts as limited for nobody',
+  grid.overrideSummaryFor({}, 'wv_abcd1234'), { total: 0, byRole: 0, byCountry: 0, byUser: 0 });
+check('one role override counts once',
+  grid.overrideSummaryFor({ byRole: { dealer: { wv_abcd1234: false } } }, 'wv_abcd1234'),
+  { total: 1, byRole: 1, byCountry: 0, byUser: 0 });
+check('overrides across scopes are counted per scope and totalled',
+  grid.overrideSummaryFor({
+    byRole: { dealer: { wv_abcd1234: false }, reseller: { wv_abcd1234: false } },
+    byCountry: { BD: { wv_abcd1234: false } },
+    byUser: { u1: { wv_abcd1234: true } },
+  }, 'wv_abcd1234'),
+  { total: 4, byRole: 2, byCountry: 1, byUser: 1 });
+// An ON override still counts as "limited": somebody has singled this page out,
+// and a row saying "All roles" would be wrong about that.
+check('an override that turns a page ON still counts',
+  grid.overrideSummaryFor({ byUser: { u1: { wv_abcd1234: true } } }, 'wv_abcd1234').total, 1);
+check('another tile\u2019s overrides are not counted',
+  grid.overrideSummaryFor({ byRole: { dealer: { rates: false } } }, 'wv_abcd1234').total, 0);
+check('a malformed document does not throw',
+  grid.overrideSummaryFor({ byRole: 'nonsense', byCountry: [1], byUser: null }, 'wv_abcd1234').total, 0);
+check('no key is no count', grid.overrideSummaryFor({ byRole: { dealer: { wv_abcd1234: false } } }, '').total, 0);
+check('a non-boolean override is not counted',
+  grid.overrideSummaryFor({ byRole: { dealer: { wv_abcd1234: 'off' } } }, 'wv_abcd1234').total, 0);
+
+const wvScreen = fs.readFileSync(path.join(ROOT, 'src/screens/WebviewManagementScreen.js'), 'utf8');
+yes('the page list says whether each page is limited',
+  /\{accessLabel\(page\.key\)\}/.test(wvScreen));
+yes('...computed by the grid service, not by the screen',
+  /gridService\.overrideSummaryFor\(gridManagement, key\)/.test(wvScreen));
+yes('and it offers a way to Grid Access from where a page is added',
+  /onPress=\{\(\) => setScreen\('gridManagement'\)\}/.test(wvScreen));
+
 console.log('');
 if (failed) {
   console.error(`${failed} check(s) failed.`);
