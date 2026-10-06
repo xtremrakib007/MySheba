@@ -439,8 +439,15 @@ export function gridKeyFor(service) {
  * Firestore. `homeOnly` is the customer home screen; a staff list carries no
  * home flags, so it falls back to the whole set rather than rendering nothing.
  */
-export function visibleTiles({ role, can, webviewPages, tileLabels, viewer, isActive = () => true, homeOnly = false }) {
-  const all = applyTileLabels(withWebviewConfig(servicesForRole(role, can), webviewPages, viewer), tileLabels);
+export function visibleTiles({ role, can, webviewPages, tileLabels, viewer, dynamicFeatures = [], isActive = () => true, homeOnly = false }) {
+  const dynamic = (dynamicFeatures || []).filter((f) => f && f.enabled !== false && f.archived !== true).map((f) => ({
+    key: f.key, icon: f.icon || 'more', name: f.name, cat: f.category || 'other', home: f.home !== false,
+    kind: f.kind === 'webview' ? 'webview' : f.kind === 'screen' ? 'dynamicScreen' : 'dynamicService',
+    webviewKey: f.webviewKey || f.key, serviceKey: f.serviceKey || '', screenKey: f.screenKey || '',
+  }));
+  const base = withWebviewConfig(servicesForRole(role, can), webviewPages, viewer);
+  const existing = new Set(base.map((x) => x.key));
+  const all = applyTileLabels([...base, ...dynamic.filter((x) => !existing.has(x.key))], tileLabels);
   const active = all.filter((service) => isActive(gridKeyFor(service)));
   if (!homeOnly) return active;
   // Staff used to be exempt: their grids showed the whole catalogue, which made
