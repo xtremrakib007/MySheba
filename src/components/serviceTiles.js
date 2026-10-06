@@ -284,25 +284,18 @@ function normaliseUrl(url) {
  * service grids and the superadmin landing - and fixing one of them left the
  * duplicate standing on the other. Which is exactly what happened.
  */
-function customPagesBeyond(pages, builtInKeys) {
+function customPagesBeyond(pages, builtInKeys, isAllowed = () => true) {
   const taken = new Set(
     builtInKeys.map((key) => normaliseUrl(pages[key] && pages[key].url)).filter(Boolean),
   );
   return Object.values(pages)
-     .filter((p) => p.custom && allowed(p))
+    .filter((p) => p.custom && isAllowed(p))
     .filter((p) => !taken.has(normaliseUrl(p.url)));
 }
 
 export function withWebviewConfig(list, webviewPages, viewer) {
   const pages = webviewPages || {};
-  const allowed = (page) => {
-    if (!page || page.active === false) return false;
-    const v = viewer || {};
-    if (Array.isArray(page.roles) && page.roles.length && !page.roles.includes(v.role)) return false;
-    if (Array.isArray(page.countries) && page.countries.length && !page.countries.includes(v.country)) return false;
-    if (Array.isArray(page.users) && page.users.length && !page.users.includes(v.uid)) return false;
-    return true;
-  };
+
   const allowed = (page) => {
     if (!page || page.active === false) return false;
     const v = viewer || {};
@@ -338,7 +331,7 @@ export function withWebviewConfig(list, webviewPages, viewer) {
   //
   // Matched on the address rather than the name, because the name is the half
   // somebody renamed. A custom page going somewhere of its own is untouched.
-  const extra = customPagesBeyond(pages, overlaid.filter((item) => item.kind === 'webview').map((item) => item.key))
+  const extra = customPagesBeyond(pages, overlaid.filter((item) => item.kind === 'webview').map((item) => item.key), allowed)
     .map((p) => ({ key: p.key, icon: p.icon || 'moreFeaturesTile', emoji: p.icon || '', name: p.name, kind: 'webview', home: p.home !== false }));
   return [...overlaid, ...extra];
 }
