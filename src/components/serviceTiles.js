@@ -39,6 +39,8 @@ export const TILE_CATEGORIES = [
 const CATEGORY_ORDER = TILE_CATEGORIES.map((c) => c.key);
 
 /** The category a tile belongs to, as a row the renderer can read. */
+import { Platform } from 'react-native';
+
 export function categoryMeta(key) {
   return TILE_CATEGORIES.find((c) => c.key === key) || { key: 'other', label: 'Other', subtitle: '', home: false };
 }
