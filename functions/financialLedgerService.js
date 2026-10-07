@@ -27,8 +27,13 @@ async function recordCompletedTransaction(transactionId, txData) {
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   };
 
-  await ref.create(entry);
-  return { recorded: true, id: ref.id };
+  try {
+    await ref.create(entry);
+    return { recorded: true, id: ref.id };
+  } catch (error) {
+    if (error?.code === 6 || /already exists/i.test(String(error?.message || ''))) return { recorded: false, duplicate: true };
+    throw error;
+  }
 }
 
 module.exports = { recordCompletedTransaction };
