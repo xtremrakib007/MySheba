@@ -17,3 +17,12 @@ export async function rejectTransaction(id: string, reason: string, service: str
 export async function assignDealer(id: string, dealerId: string): Promise<void> { try { await httpsCallable(functions, 'assignDealer')({ transactionId: id, dealerId }); } catch (err) { throw new Error((err as Error).message || 'Could not assign this dealer.'); } }
 export interface DealerOption { id: string; name: string; phone: string; }
 export function subscribeDealerOptions(onUpdate: (dealers: DealerOption[]) => void, onError: (err: Error) => void) { const q = query(collection(db, 'users'), where('role', '==', 'dealer')); return onSnapshot(q, (snap) => { const list = snap.docs.map((d) => ({ id: d.id, name: (d.data().name as string) ?? '', phone: (d.data().phone as string) ?? '' })); list.sort((a, b) => a.name.localeCompare(b.name)); onUpdate(list); }, (err) => onError(err as Error)); }
+
+export async function archiveFinancialRecord(recordType: 'transaction' | 'invoice', recordId: string, reason: string): Promise<void> {
+  if (!recordId || !reason.trim()) throw new Error('A reason is required.');
+  try {
+    await httpsCallable(functions, 'archiveFinancialRecord')({ recordType, recordId, reason: reason.trim() });
+  } catch (err) {
+    throw new Error((err as Error).message || 'Could not archive this financial record.');
+  }
+}
