@@ -2260,6 +2260,7 @@ exports.listApiProviders = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async 
       catalogItemMap: x.catalogItemMap || null,
       catalogQueryTemplate: x.catalogQueryTemplate || null,
       catalogPerAccount: x.catalogPerAccount === true,
+      catalogDynamicProductDiscovery: x.catalogDynamicProductDiscovery === true,
       catalogOperatorCodes: x.catalogOperatorCodes || null,
       billerProductCodes: x.billerProductCodes || null,
       operatorProductCodes: x.operatorProductCodes || null,
