@@ -70,7 +70,7 @@ const ADMIN_EDITABLE_RATE_KEYS = new Set<string>([
 
 export const RECHARGE_RATE_KEYS = new Set<string>([
   'rechargeBD', 'rechargeIN', 'rechargeNP', 'rechargeID',
-  'rechargePK', 'rechargeMM', 'rechargePH', 'rechargeKH',
+  'rechargePK', 'rechargeMM', 'rechargePH', 'rechargeKH', 'rechargeTH',
 ]);
 
 export type Rates = Record<string, number>;
@@ -103,6 +103,7 @@ export const RECHARGE_RATE_FIELDS: RateField[] = [
   { key: 'rechargeMM', label: 'Recharge/Internet — MMK' },
   { key: 'rechargePH', label: 'Recharge/Internet — PHP' },
   { key: 'rechargeKH', label: 'Recharge/Internet — KHR' },
+  { key: 'rechargeTH', label: 'Recharge/Internet — THB' },
 ];
 
 /** Fills in defaults and mirrors legacy remittance fields onto their
