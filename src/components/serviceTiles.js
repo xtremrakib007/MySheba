@@ -392,7 +392,7 @@ export const ADMIN_HOME = [
  * and an added page's key is a generated wv_ one that names no drawing, so a
  * chosen art icon has to travel as `art` or it prints as the word.
  */
-export function adminLandingTiles(webviewPages, hasArt = () => false, tileLabels, viewer) {
+export function adminLandingTiles(webviewPages, hasArt = () => false, tileLabels, viewer, dynamicFeatures = []) {
   const pages = webviewPages || {};
   const allowed = (page) => {
     if (!page || page.active === false) return false;
@@ -416,7 +416,27 @@ export function adminLandingTiles(webviewPages, hasArt = () => false, tileLabels
     ADMIN_HOME.filter((item) => item.service && item.service.kind === 'webview').map((item) => item.key),
     allowed,
   ).map(tileFor);
-  return applyTileLabels([...overlaid, ...extra], tileLabels);
+  const dynamic = (dynamicFeatures || [])
+    .filter((feature) => feature && feature.enabled !== false && feature.archived !== true && feature.home !== false)
+    .map((feature) => {
+      const item = {
+        key: feature.key,
+        icon: feature.icon || '✨',
+        name: feature.name,
+        description: feature.description || '',
+      };
+      if (feature.kind === 'service') {
+        item.service = { key: feature.serviceKey || feature.key, kind: 'service' };
+      } else if (feature.kind === 'screen') {
+        item.screen = feature.screenKey || 'moreFeatures';
+      } else {
+        item.service = { key: feature.webviewKey || feature.key, kind: 'webview' };
+      }
+      return item;
+    })
+    .filter((item) => !ADMIN_HOME.some((base) => base.key === item.key) && !overlaid.some((base) => base.key === item.key) && !extra.some((base) => base.key === item.key));
+
+  return applyTileLabels([...overlaid, ...extra, ...dynamic], tileLabels);
 }
 
 /** The Grid Management key a tile is gated by - not always its own key. */
