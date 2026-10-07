@@ -235,7 +235,7 @@ function cleanAdPlacementControls(data) {
   if (typeof raw.webviewBannerEnabled === 'boolean') clean.webviewBannerEnabled = raw.webviewBannerEnabled;
   if (raw.admobInterstitialUnitId !== undefined) {
     const unit = String(raw.admobInterstitialUnitId || '').trim();
-    if (unit && !/^ca-app-pub-\\d{16}\\/\\d{10}$/.test(unit)) throw new HttpsError('invalid-argument','Invalid AdMob interstitial unit id.');
+    if (unit && !/^ca-app-pub-\d{16}\/\d{10}$/.test(unit)) throw new HttpsError('invalid-argument','Invalid AdMob interstitial unit id.');
     clean.admobInterstitialUnitId = unit;
   }
   if (typeof raw.webviewInterstitialEnabled === 'boolean') clean.webviewInterstitialEnabled = raw.webviewInterstitialEnabled;
