@@ -55,6 +55,7 @@ export const DEFAULT_AD_PLACEMENT_CONTROLS = {
   webviewInterstitialEnabled: true,
   webviewInterstitials: {},
   interstitialCooldownSeconds: 0,
+  admobInterstitialUnitId: '',
 };
 
 export const DEFAULT_AD_SETTINGS = {
