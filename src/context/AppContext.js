@@ -1169,6 +1169,7 @@ export function AppProvider({ children }) {
 
   // ---- a web sign-in waiting for this phone to approve it ----
   const [webSignInRequest, setWebSignInRequest] = useState(null);
+  const webApprovalSeenRef = useRef(new Set());
   const clearWebSignInRequest = useCallback(() => setWebSignInRequest(null), []);
 
 
@@ -1870,12 +1871,16 @@ export function AppProvider({ children }) {
 
     // Not a screen: the answer is two buttons, and the person is being asked
     // about a sign-in happening right now, wherever they happen to be.
-    const showWebSignInApproval = (data) =>
+    const showWebSignInApproval = (data) => {
+      const approvalId = String(data.approvalId || "");
+      if (!approvalId || webApprovalSeenRef.current.has(approvalId)) return;
+      webApprovalSeenRef.current.add(approvalId);
       setWebSignInRequest({
-        approvalId: String(data.approvalId),
+        approvalId,
         label: String(data.label || ""),
         ip: String(data.ip || ""),
       });
+    };
 
     const handleResponse = async (response) => {
       const data = response?.notification?.request?.content?.data || {};
