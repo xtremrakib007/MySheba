@@ -172,6 +172,8 @@ exports.getGridManagementAdmin = platformControl.getGridManagementAdmin;
 exports.updateGridManagement = platformControl.updateGridManagement;
 
 exports.purchaseRechargePin = require('./rechargePinService').purchaseRechargePin;
+exports.rechargePinStock = require('./rechargePinService').rechargePinStock;
+exports.uploadRechargePins = require('./rechargePinService').uploadRechargePins;
 exports.getRechargePin = require('./rechargePinService').getRechargePin;
 exports.createSupportTicket = supportTicketService.createSupportTicket;
 exports.assignSupportTicket = supportTicketService.assignSupportTicket;
