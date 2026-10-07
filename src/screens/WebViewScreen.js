@@ -7,6 +7,7 @@ import { useApp } from '../context/AppContext';
 import { webViewPages, FOMEMA_CLINIC_FINDER_URL, SUBMIT_CHARGED_WEBVIEWS, WEBVIEW_SUBMIT_TRIGGERS, ACCESS_CLICK_WEBVIEWS, WEBVIEW_ACCESS_CLICK_TRIGGERS, PAYMENT_CHARGED_WEBVIEWS, PAYMENT_SUCCESS_URL_MARKERS, BUS_TICKET_WEBVIEW_KEYS } from '../data/countries';
 import { useTheme } from "../theme/ThemeContext";
 import HeaderDecor from '../components/HeaderDecor';
+import GoogleAdMobBanner from '../components/GoogleAdMobBanner';
 
 // Mirrors #webViewScreen - the original was a static placeholder describing
 // what a real WebView would show; here it's an actual native WebView loading
@@ -116,6 +117,7 @@ export default function WebViewScreen() {
   // payment" button; PAYMENT_SUCCESS_URL_MARKERS needs to stay accurate
   // for each site so the auto-detect never misses.
   const isPaymentFlow = PAYMENT_CHARGED_WEBVIEWS.includes(webViewKey);
+  const isFreeWebView = Number(pointCosts?.[webViewKey] || 0) <= 0;
 
   // The bus ticket partner sites (redBus, Bus Online Ticket, Easybook -
   // see BUS_TICKET_WEBVIEW_KEYS) all show a "get our app" interstitial
@@ -254,6 +256,8 @@ export default function WebViewScreen() {
           </TouchableOpacity>
         )}
       </View>
+
+      {isFreeWebView && <GoogleAdMobBanner />}
 
       {!failed ? (
         <View style={{ flex: 1 }}>
