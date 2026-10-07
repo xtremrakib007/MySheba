@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   approveTransaction,
   assignDealer,
+  archiveFinancialRecord,
   rejectTransaction,
   subscribeDealerOptions,
   subscribeTransactions,
@@ -53,6 +54,7 @@ export default function TransactionsPage() {
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [assigningId, setAssigningId] = useState<string | null>(null);
+  const [archivingId, setArchivingId] = useState<string | null>(null);
 
   useEffect(() => subscribeTransactions(setTxs, (err) => setLoadError(err.message)), []);
   useEffect(() => subscribeDealerOptions(setDealers, () => {}), []);
@@ -131,6 +133,42 @@ export default function TransactionsPage() {
                 {tx.status === 'processing' && tx.approved && <div className="mt-4"><OperatorPendingNote tx={tx} /></div>}
                 {!!tx.receiptUrl && <p className="mt-2 text-xs"><a href={tx.receiptUrl} target="_blank" rel="noreferrer" className="font-semibold text-[var(--color-primary)] underline">View transfer receipt</a></p>}
                 {tx.status === 'completed' && tx.rejected && <p className="mt-2 text-xs text-[var(--color-danger)]">Rejected: {tx.rejectReason}</p>}
+
+                {archivingId === tx.id ? (
+                  <div className="mt-4 rounded-lg border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/5 p-3">
+                    <p className="text-xs font-semibold text-[var(--color-danger)]">Archive this financial record?</p>
+                    <p className="mt-1 text-xs text-[var(--color-ink-soft)]">The record will not be physically deleted. Its status and audit history remain protected.</p>
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        autoFocus
+                        id={`archive-reason-${tx.id}`}
+                        placeholder="Required reason…"
+                        className="flex-1 rounded-lg border border-[var(--color-line)] px-2 py-1.5 text-xs outline-none focus:border-[var(--color-primary)]"
+                      />
+                      <button
+                        disabled={busy}
+                        onClick={() => {
+                          const input = document.getElementById(`archive-reason-${tx.id}`) as HTMLInputElement | null;
+                          const reason = input?.value.trim() || '';
+                          if (!reason) { setLoadError('A reason is required to archive a transaction.'); return; }
+                          void run(tx.id, async () => {
+                            await archiveFinancialRecord('transaction', tx.id, reason);
+                            setArchivingId(null);
+                          });
+                        }}
+                        className="rounded-lg bg-[var(--color-danger)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+                      >Confirm Archive</button>
+                      <button type="button" onClick={() => setArchivingId(null)} className="rounded-lg border border-[var(--color-line)] px-3 py-1.5 text-xs">Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setArchivingId(tx.id)}
+                    className="mt-4 rounded-lg border border-[var(--color-danger)]/40 px-3 py-1.5 text-xs font-semibold text-[var(--color-danger)] disabled:opacity-40"
+                  >Delete / Archive</button>
+                )}
               </div>
             );
           })}
