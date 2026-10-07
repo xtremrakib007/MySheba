@@ -505,38 +505,35 @@ async function readPricingDoc(db, operatorName) {
  * rule the charge path uses.
  */
 async function readProvider(db, service, { name, country, strictCountry } = {}) {
-  let query = db.collection(PROVIDER_COLLECTION)
+  // A provider may advertise several services while retaining one primary
+  // service field for backward compatibility. Read both shapes so an
+  // IIMMPACT provider configured once for Recharge+Internet+Bill Payment is
+  // visible to every dynamic catalog flow.
+  const queries = [];
+  let primary = db.collection(PROVIDER_COLLECTION)
     .where('service', '==', service)
     .where('active', '==', true);
-  if (name) query = query.where('name', '==', name);
-  const snap = await query.limit(name ? 1 : 20).get();
-  if (snap.empty) return null;
-
-  const docs = snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) }));
+  if (name) primary = primary.where('name', '==', name);
+  queries.push(primary.limit(name ? 1 : 20).get());
+  if (!name) queries.push(db.collection(PROVIDER_COLLECTION).where('services', 'array-contains', service).where('active', '==', true).limit(20).get());
+  const snaps = await Promise.all(queries);
+  const byId = new Map();
+  for (const snap of snaps) for (const d of snap.docs) byId.set(d.id, { id: d.id, ...(d.data() || {}) });
+  if (!byId.size) return null;
+  const docs = [...byId.values()];
   const wanted = String(country || '').toUpperCase();
-  // A provider serves a LIST of countries now, so "is this one of them" is a
-  // shared question rather than a string compare repeated per call site.
   const matching = wanted ? docs.filter((p) => providerReach.isSpecificFor(p, wanted)) : [];
-  // Without a country match this falls back to every provider, which was
-  // harmless while the only catalogue was Bangladesh's: asking for BD found the
-  // BD provider. Asking for MY finds it too, and would price a Malaysian order
-  // against a Bangladeshi catalogue. strictCountry says "this country or a
-  // provider that serves all of them, or nothing" - and the pricing path, which
-  // is the one that would charge the wrong number, uses it.
   if (strictCountry) {
-    const global = docs.filter((p) => providerReach.isGlobal(p));
+    const global = docs.filter((p) => providerReach.isGlobal(p) && providerReach.servesCountry(p, wanted));
     const strict = matching.length ? matching : global;
     if (!strict.length) return null;
     const chosen = strict.sort((a, b) => Number(b.priority || 0) - Number(a.priority || 0))[0];
     Object.assign(chosen, await providerSecretService.getCredentials(chosen));
     return chosen;
   }
-  const pool = matching.length ? matching : docs;
-  // Same ordering as the charge path: a catalogue must come from the provider
-  // that will actually be billed.
+  const pool = matching.length ? matching : docs.filter((p) => !wanted || providerReach.servesCountry(p, wanted));
   const provider = pool.sort((a, b) => Number(b.priority || 0) - Number(a.priority || 0))[0];
   if (!provider) return null;
-
   Object.assign(provider, await providerSecretService.getCredentials(provider));
   return provider;
 }
