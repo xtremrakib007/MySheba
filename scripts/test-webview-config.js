@@ -98,7 +98,10 @@ console.log('\nEvery role actually gets the WebViews - computed, not read');
 // serviceTiles.js is plain data and a filter, so this runs the real selection
 // rather than grepping the render. Twice now a role has been reported as
 // covered on the strength of reading one line; this computes the answer.
-const tiles = run('src/components/serviceTiles.js', (id) => { throw new Error(id); });
+const tiles = run('src/components/serviceTiles.js', (id) => {
+  if (id === 'react-native') return { Platform: { OS: 'android' } };
+  throw new Error(id);
+});
 const CUSTOM = { wv_abcd1234: { key: 'wv_abcd1234', name: 'EPF', url: 'https://epf.gov.my/x', icon: '🏦', active: true, home: true, custom: true } };
 const allCaps = () => true;
 
