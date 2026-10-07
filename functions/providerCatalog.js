@@ -439,7 +439,25 @@ async function fetchCatalog(provider, { operator, type, account } = {}, { reques
     throw new Error(`${config.errorLabel} prices these plans per phone number, so a number is required.`);
   }
 
-  const url = new URL(config.path, config.baseUrl.endsWith('/') ? config.baseUrl : `${config.baseUrl}/`);
+  // IIMMPACT's catalog and options are separate endpoints. A per-account
+  // dynamic catalog request is an Options API request, while a normal catalog
+  // request remains /v2/catalog. This keeps the existing provider abstraction
+  // while following IIMMPACT's current API contract.
+  const useIimmpactOptions = config.dynamicProductDiscovery &&
+    config.perAccount &&
+    String(provider.authType || '') === 'iimmpactHmac';
+  const requestPath = useIimmpactOptions ? '/v2/options' : config.path;
+  const requestQueryTemplate = useIimmpactOptions
+    ? {
+        product_code: '{{operator}}',
+        field_id: '{{fieldId}}',
+        account_number: '{{account}}',
+        limit: '25000',
+      }
+    : config.queryTemplate;
+  const requestListPath = useIimmpactOptions ? 'items' : config.listPath;
+  const requestItemMap = useIimmpactOptions ? PRESETS['iimmpact-options'].itemMap : config.itemMap;
+  const url = new URL(requestPath, config.baseUrl.endsWith('/') ? config.baseUrl : `${config.baseUrl}/`);
   const values = {
     operator: String(operator || 'ALL'),
     type: safeType,
@@ -449,7 +467,7 @@ async function fetchCatalog(provider, { operator, type, account } = {}, { reques
     secretKey: provider.secretKey || '',
   };
 
-  for (const [key, value] of Object.entries(fillTemplate(config.queryTemplate, values))) {
+  for (const [key, value] of Object.entries(fillTemplate(requestQueryTemplate, values))) {
     if (value === '' || value === null || value === undefined) continue;
     url.searchParams.set(key, String(value));
   }
@@ -468,7 +486,10 @@ async function fetchCatalog(provider, { operator, type, account } = {}, { reques
   // Each item remembers which product code answered for it. With CelcomDigi
   // asking both CEL and DI, "which product is this plan on" is not something
   // the operator name can answer later.
-  return parseCatalogResponse(config, data).map((item) => ({ ...item, productCode: values.operator }));
+  const responseConfig = useIimmpactOptions
+    ? { ...config, listPath: requestListPath, itemMap: requestItemMap, successPath: '', successValue: undefined }
+    : config;
+  return parseCatalogResponse(responseConfig, data).map((item) => ({ ...item, productCode: values.operator }));
 }
 
 function pickOverride(pricingDoc, packageId) {
