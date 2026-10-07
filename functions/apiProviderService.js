@@ -1806,6 +1806,153 @@ function readProductList(json) {
 }
 exports._test_readProductList = readProductList;
 
+/**
+ * IIMMPACT Dynamic Catalog API.
+ *
+ * The catalog is the source of truth for product codes, fields and fulfillment.
+ * These callables keep IIMMPACT credentials on the server and never expose
+ * wholesale pricing to normal users.
+ */
+async function loadIimmpactProvider(db, id) {
+  const providerId = cleanString(id, 100);
+  if (!providerId) throw new HttpsError('invalid-argument', 'Provider id is required.');
+  const snap = await db.collection(COLLECTION).doc(providerId).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'API provider not found.');
+  const provider = { id: providerId, ...(snap.data() || {}) };
+  const isIimmpact =
+    provider.authType === 'iimmpactHmac' ||
+    String(provider.name || '').trim().toLowerCase() === 'iimmpact' ||
+    String(provider.baseUrl || '').trim().toLowerCase() === 'https://api.iimmpact.com';
+  if (!isIimmpact) throw new HttpsError('failed-precondition', 'The selected provider is not configured as an IIMMPACT provider.');
+  if (provider.active === false) throw new HttpsError('failed-precondition', 'The IIMMPACT provider is inactive.');
+  Object.assign(provider, await providerSecretService.getCredentials(provider));
+  if (!provider.apiKey || !provider.secretKey) {
+    throw new HttpsError('failed-precondition', 'IIMMPACT API key and HMAC secret are not configured.');
+  }
+  return provider;
+}
+
+function iimmpactUrl(provider, path) {
+  let base;
+  try { base = new URL(provider.baseUrl); } catch { throw new HttpsError('failed-precondition', 'IIMMPACT base URL is invalid.'); }
+  if (base.protocol !== 'https:') throw new HttpsError('failed-precondition', 'IIMMPACT base URL must use HTTPS.');
+  const cleanPath = String(path || '').trim();
+  if (!cleanPath.startsWith('/') || cleanPath.includes('?') || cleanPath.includes('#')) {
+    throw new HttpsError('invalid-argument', 'IIMMPACT API path is invalid.');
+  }
+  return new URL(cleanPath, base);
+}
+
+function publicIimmpactCatalog(catalog) {
+  const products = {};
+  for (const [code, product] of Object.entries(catalog?.products || {})) {
+    if (!product || typeof product !== 'object') continue;
+    const { pricing: _pricing, ...safeProduct } = product;
+    products[code] = safeProduct;
+  }
+  return { last_updated: catalog?.last_updated || null, tree: catalog?.tree || { groups: [] }, products };
+}
+
+function publicIimmpactOptions(data) {
+  const items = Array.isArray(data?.items) ? data.items.map((item) => {
+    if (!item || typeof item !== 'object') return item;
+    const { cost: _cost, has_loss_risk: _loss, ...safe } = item;
+    return safe;
+  }) : [];
+  return {
+    product_code: data?.product_code || '',
+    field_id: data?.field_id || '',
+    items,
+    meta: data?.meta || {},
+  };
+}
+
+exports.getIimmpactCatalog = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  const db = admin.firestore();
+  await assertSuperadmin(db, request);
+  await checkVelocity(db, request.auth.uid, 'getIimmpactCatalog', { ip: getClientIp(request) });
+  const provider = await loadIimmpactProvider(db, request.data?.id);
+  const url = iimmpactUrl(provider, '/v2/catalog');
+  const productCode = cleanString(request.data?.productCode, 100);
+  if (productCode) url.searchParams.set('product_code', productCode);
+  url.searchParams.set('is_active', request.data?.includeInactive === true ? 'false' : 'true');
+  if (request.data?.includeInactive === true) url.searchParams.set('include_inactive', 'true');
+
+  try {
+    const { ok, status, json } = await signedProviderRequest(url, {
+      method: 'GET',
+      headers: { accept: 'application/json' },
+    }, provider);
+    if (!ok || !json || typeof json !== 'object') {
+      const reason = String(getPath(json, 'message') || getPath(json, 'error.message') || `HTTP ${status}`);
+      throw new HttpsError('unavailable', `IIMMPACT catalog request failed: ${reason.slice(0, 300)}`);
+    }
+    return json;
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError('unavailable', String(error?.message || 'Unable to load the IIMMPACT catalog.').slice(0, 500));
+  }
+});
+
+exports.getIimmpactCatalogForUser = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  const db = admin.firestore();
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
+  await checkVelocity(db, request.auth.uid, 'getIimmpactCatalogForUser', { ip: getClientIp(request) });
+  const provider = await loadIimmpactProvider(db, request.data?.providerId);
+  const url = iimmpactUrl(provider, '/v2/catalog');
+  try {
+    const { ok, status, json } = await signedProviderRequest(url, {
+      method: 'GET',
+      headers: { accept: 'application/json' },
+    }, provider);
+    if (!ok || !json || typeof json !== 'object') {
+      const reason = String(getPath(json, 'message') || getPath(json, 'error.message') || `HTTP ${status}`);
+      throw new HttpsError('unavailable', `IIMMPACT catalog request failed: ${reason.slice(0, 300)}`);
+    }
+    return publicIimmpactCatalog(json);
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError('unavailable', String(error?.message || 'Unable to load the IIMMPACT catalog.').slice(0, 500));
+  }
+});
+
+exports.getIimmpactOptions = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  const db = admin.firestore();
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
+  await checkVelocity(db, request.auth.uid, 'getIimmpactOptions', { ip: getClientIp(request) });
+  const provider = await loadIimmpactProvider(db, request.data?.providerId);
+  const productCode = cleanString(request.data?.productCode, 100);
+  const fieldId = cleanString(request.data?.fieldId, 100);
+  if (!productCode || !fieldId) throw new HttpsError('invalid-argument', 'productCode and fieldId are required.');
+
+  const page = Math.max(1, Math.min(100000, Number(request.data?.page) || 1));
+  const limit = Math.max(1, Math.min(25000, Number(request.data?.limit) || 100));
+  const accountNumber = cleanString(request.data?.accountNumber, 200);
+  const billerCode = cleanString(request.data?.billerCode, 100);
+  const url = iimmpactUrl(provider, '/v2/options');
+  url.searchParams.set('product_code', productCode);
+  url.searchParams.set('field_id', fieldId);
+  url.searchParams.set('page', String(page));
+  url.searchParams.set('limit', String(limit));
+  if (accountNumber) url.searchParams.set('account_number', accountNumber);
+  if (billerCode) url.searchParams.set('biller_code', billerCode);
+
+  try {
+    const { ok, status, json } = await signedProviderRequest(url, {
+      method: 'GET',
+      headers: { accept: 'application/json' },
+    }, provider);
+    if (!ok || !json || typeof json !== 'object') {
+      const reason = String(getPath(json, 'message') || getPath(json, 'error.message') || `HTTP ${status}`);
+      throw new HttpsError('unavailable', `IIMMPACT options request failed: ${reason.slice(0, 300)}`);
+    }
+    return publicIimmpactOptions(json);
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError('unavailable', String(error?.message || 'Unable to load IIMMPACT options.').slice(0, 500));
+  }
+});
+
 exports.listProviderProductCodes = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
