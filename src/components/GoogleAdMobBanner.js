@@ -1,14 +1,29 @@
-import React, { memo } from 'react';
+import React, { memo, useEffect, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
-import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
+import mobileAds, { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
 import { useApp } from '../context/AppContext';
 import { ADMOB_AD_UNITS } from '../constants/adMobUnits';
 
+let sdkInitPromise;
+
+function ensureAdMobInitialized() {
+  if (!sdkInitPromise) sdkInitPromise = mobileAds().initialize().catch(() => null);
+  return sdkInitPromise;
+}
+
 function GoogleAdMobBanner() {
   const { adSettings } = useApp();
+  const [sdkReady, setSdkReady] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return undefined;
+    let mounted = true;
+    ensureAdMobInitialized().then(() => { if (mounted) setSdkReady(true); });
+    return () => { mounted = false; };
+  }, []);
 
   // Android-only restore: iOS is intentionally untouched.
-  if (Platform.OS !== 'android') return null;
+  if (Platform.OS !== 'android' || !sdkReady) return null;
 
   // Keep the existing Superadmin ad controls authoritative. Defaults are
   // enabled, so the banner remains visible until an admin explicitly turns
