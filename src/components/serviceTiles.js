@@ -298,6 +298,10 @@ export function withWebviewConfig(list, webviewPages, viewer) {
 
   const allowed = (page) => {
     if (!page || page.active === false) return false;
+    if (Platform.OS === 'web' ? page.desktop === false : page.mobile === false) return false;
+    // WebView visibility is platform-targeted. Native builds are the mobile
+    // surface; Expo web is the desktop/web surface. Missing flags default on.
+    if (Platform.OS === 'web' ? page.desktop === false : page.mobile === false) return false;
     const v = viewer || {};
     if (Array.isArray(page.roles) && page.roles.length && !page.roles.includes(v.role)) return false;
     if (Array.isArray(page.countries) && page.countries.length && !page.countries.includes(v.country)) return false;
