@@ -27,10 +27,7 @@ const ROOT = path.join(__dirname, '..');
  * These are real gaps, recorded rather than hidden so the check can gate new
  * drift. Removing one means either writing the function or deleting the call.
  */
-const KNOWN_MISSING = {
-  rechargePinStock: 'admin-web recharge PIN stock view. No backend function was ever written; the call can only 404.',
-  uploadRechargePins: 'admin-web recharge PIN upload. Same - no backend function exists for it.',
-};
+const KNOWN_MISSING = {};
 
 // Clients that call into the backend. Both are shipped to real people.
 const CLIENT_ROOTS = ['src', 'admin-web/src'];
