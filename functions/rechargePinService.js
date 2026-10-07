@@ -15,6 +15,28 @@ const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const DEVICE_ID_RE = /^[A-Za-z0-9-]{16,100}$/;
 const PIN_SERVICE = 'Recharge PIN';
+const PIN_STOCK_ADMIN_ROLES = new Set(['superadmin']);
+const MAX_PIN_UPLOAD = 5000;
+const PIN_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{3,127}$/;
+function requireSuperadmin(request) {
+  const uid = requireAuth(request);
+  return admin.firestore().collection('users').doc(uid).get().then(snap => {
+    const user = snap.exists ? (snap.data() || {}) : null;
+    if (!active(user) || !PIN_STOCK_ADMIN_ROLES.has(String(user.role || ''))) {
+      throw new HttpsError('permission-denied', 'Only an active superadmin can manage Recharge PIN stock.');
+    }
+    return uid;
+  });
+}
+function normalizeInventoryPin(entry) {
+  const pin = typeof entry?.pin === 'string' ? entry.pin.trim() : '';
+  const serial = typeof entry?.serial === 'string' ? entry.serial.trim().slice(0, 128) : '';
+  if (!PIN_RE.test(pin)) throw new HttpsError('invalid-argument', 'Each Recharge PIN must be 4-128 letters/numbers or ._- characters.');
+  return { pin, serial };
+}
+function inventoryDocId(pin) {
+  return 'inventory_' + crypto.createHash('sha256').update(pin).digest('hex');
+}
 // Mirrors rechargePinBrands.MY in src/data/countries.js, which is what the
 // picker renders. The two are separate files on separate sides of the wire and
 // cannot import each other, so a test asserts they stay equal - adding a brand
@@ -200,6 +222,79 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
     });
     throw e instanceof HttpsError ? e : new HttpsError('failed-precondition', 'Recharge PIN provider rejected the request.');
   }
+});
+
+exports.rechargePinStock = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  await requireSuperadmin(request);
+  const snap = await admin.firestore().collection('rechargePins').where('inventory', '==', true).get();
+  const now = Date.now();
+  const rows = new Map();
+  snap.forEach(doc => {
+    const d = doc.data() || {};
+    const country = String(d.country || 'MY').toUpperCase();
+    const operator = String(d.operator || '');
+    const denomination = Number(d.denomination || d.amount || 0);
+    const currency = String(d.currency || 'MYR').toUpperCase();
+    const key = [country, operator, denomination, currency].join('|');
+    const row = rows.get(key) || { country, operator, denomination, currency, available: 0, expired: 0 };
+    const expires = d.expiresAt?.toMillis ? d.expiresAt.toMillis() : (d.expiresAt ? Date.parse(d.expiresAt) : 0);
+    if (expires && expires <= now) row.expired += 1;
+    else if (d.status !== 'expired') row.available += 1;
+    rows.set(key, row);
+  });
+  return { rows: Array.from(rows.values()).sort((a,b) => (a.country + '|' + a.operator + '|' + a.denomination).localeCompare(b.country + '|' + b.operator + '|' + b.denomination)) };
+});
+
+exports.uploadRechargePins = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  const uid = await requireSuperadmin(request);
+  const input = request.data || {};
+  const country = String(input.country || '').trim().toUpperCase().slice(0, 2);
+  const operator = String(input.operator || '').trim().slice(0, 80);
+  const currency = String(input.currency || 'MYR').trim().toUpperCase().slice(0, 8);
+  const denomination = safeNumber(input.denomination, 'Recharge PIN denomination');
+  const expiresAtRaw = input.expiresAt == null || input.expiresAt === '' ? null : String(input.expiresAt).trim();
+  if (!/^[A-Z]{2}$/.test(country)) throw new HttpsError('invalid-argument', 'country must be a 2-letter ISO code.');
+  if (!operator) throw new HttpsError('invalid-argument', 'operator is required.');
+  if (!/^[A-Z]{3,8}$/.test(currency)) throw new HttpsError('invalid-argument', 'currency is invalid.');
+  let expiresAt = null;
+  if (expiresAtRaw) {
+    const ms = Date.parse(expiresAtRaw);
+    if (!Number.isFinite(ms) || ms <= Date.now()) throw new HttpsError('invalid-argument', 'expiresAt must be a valid future date.');
+    expiresAt = admin.firestore.Timestamp.fromMillis(ms);
+  }
+  if (!Array.isArray(input.pins) || input.pins.length < 1 || input.pins.length > MAX_PIN_UPLOAD) throw new HttpsError('invalid-argument', 'pins must contain 1-' + MAX_PIN_UPLOAD + ' entries.');
+  const entries = input.pins.map(normalizeInventoryPin);
+  const unique = new Map(entries.map(e => [e.pin, e]));
+  if (unique.size !== entries.length) throw new HttpsError('invalid-argument', 'The upload contains duplicate PINs.');
+  const db = admin.firestore();
+  const refs = entries.map(e => db.collection('rechargePins').doc(inventoryDocId(e.pin)));
+  const existing = new Set();
+  for (let i = 0; i < refs.length; i += 300) {
+    const snaps = await db.getAll(...refs.slice(i, i + 300));
+    snaps.forEach((s, j) => { if (s.exists) existing.add(i + j); });
+  }
+  const batchId = crypto.randomUUID();
+  let added = 0;
+  for (let i = 0; i < entries.length; i += 400) {
+    const batch = db.batch();
+    let batchAdds = 0;
+    for (let j = i; j < Math.min(i + 400, entries.length); j++) {
+      if (existing.has(j)) continue;
+      const e = entries[j];
+      batch.create(refs[j], {
+        inventory: true, batchId, uploadedBy: uid, country, operator, denomination, amount: denomination,
+        currency, pin: e.pin, serial: e.serial || null, status: 'available', expiresAt,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      added += 1; batchAdds += 1;
+    }
+    if (batchAdds) await batch.commit();
+  }
+  await db.collection('auditLogs').add({
+    action: 'recharge_pin_inventory_uploaded', performedBy: uid, batchId, country, operator, currency,
+    denomination, added, duplicates: existing.size, createdAt: admin.firestore.FieldValue.serverTimestamp()
+  });
+  return { added, duplicates: existing.size, batchId };
 });
 
 exports.getRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
