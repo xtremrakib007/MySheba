@@ -166,6 +166,7 @@ exports.updateWebviewTargeting = platformControl.updateWebviewTargeting;
 exports.saveWebviewPage = platformControl.saveWebviewPage;
 exports.deleteWebviewPage = platformControl.deleteWebviewPage;
 exports.updateGoogleAdsControls = platformControl.updateGoogleAdsControls;
+exports.purgeFlaggedTestTransactions = platformControl.purgeFlaggedTestTransactions;
 exports.getGridManagementAdmin = platformControl.getGridManagementAdmin;
 exports.updateGridManagement = platformControl.updateGridManagement;
 
