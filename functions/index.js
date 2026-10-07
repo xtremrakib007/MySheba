@@ -19,6 +19,7 @@ exports.manageUser = userManagement.manageUser;
 // client. Keep every client-facing callable reachable from the actual
 // functions entrypoint (secureIndexV2 -> index.js).
 exports.refreshWalletExchangeRates = require('./walletExchangeRateService').refreshWalletExchangeRates;
+exports.setRemittanceRateMode = require('./walletExchangeRateService').setRemittanceRateMode;
 exports.setRoleDefaults = require('./accessControl').setRoleDefaults;
 exports.setUserAccessOverride = require('./accessControl').setUserAccessOverride;
 exports.respondToWebSignIn = require('./deviceSessionService').respondToWebSignIn;
