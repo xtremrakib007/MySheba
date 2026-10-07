@@ -147,30 +147,6 @@ const EXEMPT = {
       'AdMob is re-enabled, a direct advisory is confirmed against 15.8.3, or a compatible non-downgrade ' +
       'security release becomes available.',
   },
-  compression: {
-    tree: 'app',
-    why:
-      'Compression is Expo CLI/dev-server tooling. It is not part of the shipped React Native runtime or APK. ' +
-      'A non-major patched version is pinned in package overrides; regenerate the lockfile after pulling.',
-    recheckIf:
-      'compression becomes runtime application code or the lockfile still resolves a vulnerable version after install.',
-  },
-  'shell-quote': {
-    tree: 'app',
-    why:
-      'shell-quote is build/dev tooling only and is not bundled into the Android runtime. The project pins a ' +
-      'non-vulnerable 1.12.0 floor; regenerate the lockfile after pulling.',
-    recheckIf:
-      'shell-quote becomes runtime code or the lockfile resolves below 1.12.0.',
-  },
-  'source-map-js': {
-    tree: 'app',
-    why:
-      'source-map-js is used by the build/source-map pipeline and is not shipped in the Android runtime. The ' +
-      'project pins a non-vulnerable 1.2.2 floor; regenerate the lockfile after pulling.',
-    recheckIf:
-      'source-map-js is used to process attacker-controlled source maps or the lockfile resolves below 1.2.2.',
-  },
 
   'node-forge': {
     tree: ['app', 'functions'],
