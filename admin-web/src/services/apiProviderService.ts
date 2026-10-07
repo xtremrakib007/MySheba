@@ -15,6 +15,8 @@ export type ApiProvider = Record<string, any> & {
   services?: string[];
   country?: string;
   countries?: string[];
+  excludedCountries?: string[];
+  catalogDynamicProductDiscovery?: boolean;
   baseUrl?: string;
   endpointPath?: string;
   method?: string;
@@ -40,9 +42,9 @@ export const API_SERVICES = [
 ];
 
 export const COUNTRIES = [
-  ['MY','Malaysia'], ['BD','Bangladesh'], ['SG','Singapore'], ['ID','Indonesia'],
+  ['ALL','All countries'],  ['MY','Malaysia'], ['BD','Bangladesh'], ['SG','Singapore'], ['ID','Indonesia'],
   ['IN','India'], ['PH','Philippines'], ['NP','Nepal'], ['PK','Pakistan'],
-  ['MM','Myanmar'], ['KH','Cambodia'],
+  ['MM','Myanmar'], ['KH','Cambodia'], ['TH','Thailand'],
 ] as const;
 
 export async function listApiProviders(): Promise<ApiProvider[]> {

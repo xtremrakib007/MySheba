@@ -7,6 +7,7 @@ import RemittanceReceiverStep from './RemittanceReceiverStep';
 import ConsentCheckbox from '../components/ConsentCheckbox';
 
 const DEFAULT_FEE = 7.0;
+const PROCESSING_TIME = '15 minutes – 3 days';
 const RECEIVING_METHODS = [
   { key:'deposit', icon:'🏦', bg:'#E3F2FD', name:'Bank Account', speed:'2-3 business days' },
   { key:'cash', icon:'💵', bg:'#E8F5E9', name:'Cash Pickup', speed:'Usually within minutes' },
@@ -40,7 +41,7 @@ export default function RemittanceStep({ step }) {
 
   if (step === 0) return <View><FormLabel>Select Destination Country</FormLabel><Grid3>{destinationCountries.map((c) => <SelectCard key={c.code} code={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country:c.code }); nextStep(); }} />)}</Grid3></View>;
 
-  if (step === 1) return <View><FormLabel>Select Receiving Method</FormLabel>{RECEIVING_METHODS.map((m) => { const rate = getRate(serviceData.country, m.key, rates); return <MethodCard key={m.key} icon={m.icon} bg={m.bg} name={m.name} detail={`${m.speed}  •  1.00 MYR = ${rate} ${curr}`} onPress={() => { updateServiceData({ method:m.key, receivingRate:rate, receivingSpeed:m.speed }); nextStep(); }} />; })}</View>;
+  if (step === 1) return <View><FormLabel>Select Receiving Method</FormLabel><Text style={{ color:'#6B7280', fontSize:12, marginBottom:10 }}>Processing time: {PROCESSING_TIME}</Text>{RECEIVING_METHODS.map((m) => { const rate = getRate(serviceData.country, m.key, rates); return <MethodCard key={m.key} icon={m.icon} bg={m.bg} name={m.name} detail={`${m.speed}  •  1.00 MYR = ${rate} ${curr}`} onPress={() => { updateServiceData({ method:m.key, receivingRate:rate, receivingSpeed:m.speed }); nextStep(); }} />; })}</View>;
 
   if (step === 2) { const fee = rates.remittanceFee != null ? rates.remittanceFee : DEFAULT_FEE; return <View><FormLabel>Select Payment Method</FormLabel>{PAYMENT_METHODS.map((p) => <TxOptionCard key={p.key} title={p.label} detail={`Transfer Fee: ${fee.toFixed(2)} MYR`} selected={serviceData.paymentMethod === p.key} onPress={() => { updateServiceData({ paymentMethod:p.key, transferFee:fee }); nextStep(); }} />)}</View>; }
 
@@ -82,7 +83,7 @@ function FinalReview({ serviceData, profile, curr }) {
   if (serviceData.method === 'deposit') rows.push({label:'Bank', value:serviceData.receiverBankName || ''},{label:'Account No.', value:serviceData.receiverAccountNumber || ''},{label:'Branch', value:serviceData.receiverBranch || ''});
   if (serviceData.method === 'cash') rows.push({label:'Pickup Network', value:serviceData.receiverPickupNetwork || ''},{label:'Pickup City', value:serviceData.receiverPickupCity || ''});
   if (serviceData.method === 'ewallet') rows.push({label:'Wallet Provider', value:serviceData.receiverWalletProvider || ''},{label:'Wallet Number', value:serviceData.receiverWalletNumber || ''});
-  rows.push({label:'Transfer Amount', value:`${sendAmt.toFixed(2)} MYR`},{label:'Service Charge', value:`${fee.toFixed(2)} MYR`},{label:'Exchange Rate', value:`1 MYR = ${rate} ${curr}`},{label:'Receive Amount', value:`${recAmt.toFixed(2)} ${curr}`});
+  rows.push({label:'Processing Time', value:PROCESSING_TIME},{label:'Transfer Amount', value:`${sendAmt.toFixed(2)} MYR`},{label:'Service Charge', value:`${fee.toFixed(2)} MYR`},{label:'Exchange Rate', value:`1 MYR = ${rate} ${curr}`},{label:'Receive Amount', value:`${recAmt.toFixed(2)} ${curr}`});
   return <View><SummaryCard title="Final Remittance Review" rows={rows} totalLabel="Collected Amount" totalValue={`${total.toFixed(2)} MYR`}/></View>;
 }
 

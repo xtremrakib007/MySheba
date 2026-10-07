@@ -6,6 +6,8 @@ import { radius } from '../theme/theme';
 import { providerBrand } from '../data/providerBrand';
 import { useTheme } from "../theme/ThemeContext";
 
+const PROCESSING_TIME = '10 minutes – 6 hours';
+
 const PROVIDERS = [
   { key: 'bKash' },
   { key: 'Nagad' },
@@ -67,6 +69,7 @@ export default function MobileBankingStep({ step }) {
     return (
       <View>
         <Text style={styles.sectionTitle}>Transfer Amount</Text>
+        <Text style={styles.processingTime}>Processing time: {PROCESSING_TIME}</Text>
         <View style={styles.rateBox}>
           <Text style={styles.rateBoxText}>💱 Rate: 1 MYR = BDT {rate}</Text>
         </View>
@@ -124,6 +127,7 @@ function createStyles(colors) {
   return StyleSheet.create({
     label: { color: colors.text, fontWeight: '700', marginBottom: 7 },
     sectionTitle: { color: colors.text, fontSize: 16, fontWeight: '700', marginBottom: 10 },
+    processingTime: { color: colors.muted || '#666', fontSize: 12, fontWeight: '600', marginBottom: 12 },
     visibleInput: { color: colors.text, backgroundColor: '#FFFFFF', borderColor: colors.border, fontSize: 16, fontWeight: '600' },
     helper: { color: colors.muted || '#666', fontSize: 12, lineHeight: 17, marginTop: -4, marginBottom: 8 },
     rateBox: { backgroundColor: '#E3F2FD', padding: 12, borderRadius: radius.md, marginBottom: 14, borderWidth: 1, borderColor: '#90CAF9' },

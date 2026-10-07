@@ -75,6 +75,7 @@ const PRESETS = {
       data: ['data', 'data_amount', 'volume'],
       valid: ['valid', 'validity', 'duration'],
       category: ['category', 'pack_type', 'packType', 'product_type', 'type'],
+      processingTime: ['processing_time', 'processingTime', 'processing-time'],
       price: ['price', 'amount'],
     },
     // `regular` first so it wins a duplicate id.
@@ -111,6 +112,7 @@ const PRESETS = {
     method: 'GET',
     perAccount: false,
     listPath: 'products',
+    dynamicProductDiscovery: true,
     errorLabel: 'iimmpact',
   },
 
@@ -139,6 +141,7 @@ const PRESETS = {
       data: ['data', 'volume', 'quota'],
       valid: ['validity', 'valid', 'duration', 'period'],
       category: ['category', 'type', 'product_group'],
+      processingTime: ['processing_time', 'processingTime', 'processing-time'],
       // denomination FIRST, and this is not a preference.
       //
       // It is the face value, and iimmpact's guide says to send the selected
@@ -150,28 +153,7 @@ const PRESETS = {
       price: ['denomination', 'price', 'amount'],
     },
     types: ['regular'],
-    // Which iimmpact product code each operator's plans come from.
-    //
-    // CelcomDigi is deliberately TWO codes. Celcom and Digi merged under one
-    // brand but iimmpact still sells CEL and DI separately, and our prefix
-    // table answers "CelcomDigi" for 010/011/013/016/019 without knowing
-    // which half a number is on. Guessing one would offer a Celcom customer
-    // Digi's plans. Instead both are asked, and because the catalogue is
-    // per-number the provider itself answers for only the one the number is
-    // on. Each plan carries the code it came from, so the order is placed
-    // against that product and not against a second guess.
-    //
-    // Unifi has no entry: iimmpact publishes no internet product for it, so
-    // it keeps the built-in package list.
-    operatorCodes: {
-      Celcom: ['CEL'],
-      CelcomDigi: ['CEL', 'DI'],
-      Hotlink: ['HI'],
-      'U Mobile': ['UMI'],
-      Tunetalk: ['TI'],
-      XOX: ['OXI'],
-      Yes: ['YESI'],
-    },
+    dynamicProductDiscovery: true,
     errorLabel: 'iimmpact',
   },
 };
@@ -183,6 +165,7 @@ const DEFAULT_ITEM_MAP = {
   data: ['data', 'volume', 'quantity'],
   valid: ['valid', 'validity', 'duration'],
   category: ['category', 'type'],
+  processingTime: ['processing_time', 'processingTime', 'processing-time'],
   price: ['price', 'amount', 'fare'],
 };
 
@@ -250,8 +233,11 @@ function catalogConfigFor(provider) {
     fieldId: String(provider.catalogFieldId || (preset && preset.fieldId) || (legacyIimmpact ? 'plan' : '')).trim(),
     operatorCodes:
       asObject(provider.catalogOperatorCodes) ||
-      (legacyIimmpact ? PRESETS['iimmpact-options'].operatorCodes : (preset && preset.operatorCodes)) ||
+      (legacyIimmpact ? null : (preset && preset.operatorCodes)) ||
       null,
+    dynamicProductDiscovery: provider.catalogDynamicProductDiscovery !== undefined
+      ? provider.catalogDynamicProductDiscovery === true
+      : Boolean(preset && preset.dynamicProductDiscovery),
     successPath: provider.catalogSuccessPath !== undefined
       ? String(provider.catalogSuccessPath || '')
       : (preset ? preset.successPath : ''),
@@ -292,7 +278,7 @@ function isPerAccountCatalog(provider) {
  */
 function productCodesFor(provider, operatorName) {
   const config = catalogConfigFor(provider);
-  if (!config || !config.operatorCodes) return [];
+  if (!config || config.dynamicProductDiscovery || !config.operatorCodes) return [];
   const entry = config.operatorCodes[String(operatorName || '').trim()];
   if (!entry) return [];
   const codes = (Array.isArray(entry) ? entry : [entry])
@@ -383,6 +369,7 @@ function normaliseItem(item, itemMap) {
     data: String(firstOf(item, map.data) ?? '').slice(0, 100),
     valid: String(firstOf(item, map.valid) ?? '').slice(0, 100),
     category: String(firstOf(item, map.category) ?? '').slice(0, 60),
+    processingTime: String(firstOf(item, map.processingTime || ['processing_time', 'processingTime', 'processing-time']) ?? '').slice(0, 100),
     price: toAmount(firstOf(item, map.price)),
   };
 }
@@ -456,7 +443,25 @@ async function fetchCatalog(provider, { operator, type, account } = {}, { reques
     throw new Error(`${config.errorLabel} prices these plans per phone number, so a number is required.`);
   }
 
-  const url = new URL(config.path, config.baseUrl.endsWith('/') ? config.baseUrl : `${config.baseUrl}/`);
+  // IIMMPACT's catalog and options are separate endpoints. A per-account
+  // dynamic catalog request is an Options API request, while a normal catalog
+  // request remains /v2/catalog. This keeps the existing provider abstraction
+  // while following IIMMPACT's current API contract.
+  const useIimmpactOptions = config.dynamicProductDiscovery &&
+    config.perAccount &&
+    String(provider.authType || '') === 'iimmpactHmac';
+  const requestPath = useIimmpactOptions ? '/v2/options' : config.path;
+  const requestQueryTemplate = useIimmpactOptions
+    ? {
+        product_code: '{{operator}}',
+        field_id: '{{fieldId}}',
+        account_number: '{{account}}',
+        limit: '25000',
+      }
+    : config.queryTemplate;
+  const requestListPath = useIimmpactOptions ? 'items' : config.listPath;
+  const requestItemMap = useIimmpactOptions ? PRESETS['iimmpact-options'].itemMap : config.itemMap;
+  const url = new URL(requestPath, config.baseUrl.endsWith('/') ? config.baseUrl : `${config.baseUrl}/`);
   const values = {
     operator: String(operator || 'ALL'),
     type: safeType,
@@ -466,7 +471,7 @@ async function fetchCatalog(provider, { operator, type, account } = {}, { reques
     secretKey: provider.secretKey || '',
   };
 
-  for (const [key, value] of Object.entries(fillTemplate(config.queryTemplate, values))) {
+  for (const [key, value] of Object.entries(fillTemplate(requestQueryTemplate, values))) {
     if (value === '' || value === null || value === undefined) continue;
     url.searchParams.set(key, String(value));
   }
@@ -485,7 +490,10 @@ async function fetchCatalog(provider, { operator, type, account } = {}, { reques
   // Each item remembers which product code answered for it. With CelcomDigi
   // asking both CEL and DI, "which product is this plan on" is not something
   // the operator name can answer later.
-  return parseCatalogResponse(config, data).map((item) => ({ ...item, productCode: values.operator }));
+  const responseConfig = useIimmpactOptions
+    ? { ...config, listPath: requestListPath, itemMap: requestItemMap, successPath: '', successValue: undefined }
+    : config;
+  return parseCatalogResponse(responseConfig, data).map((item) => ({ ...item, productCode: values.operator }));
 }
 
 function pickOverride(pricingDoc, packageId) {
@@ -522,38 +530,35 @@ async function readPricingDoc(db, operatorName) {
  * rule the charge path uses.
  */
 async function readProvider(db, service, { name, country, strictCountry } = {}) {
-  let query = db.collection(PROVIDER_COLLECTION)
+  // A provider may advertise several services while retaining one primary
+  // service field for backward compatibility. Read both shapes so an
+  // IIMMPACT provider configured once for Recharge+Internet+Bill Payment is
+  // visible to every dynamic catalog flow.
+  const queries = [];
+  let primary = db.collection(PROVIDER_COLLECTION)
     .where('service', '==', service)
     .where('active', '==', true);
-  if (name) query = query.where('name', '==', name);
-  const snap = await query.limit(name ? 1 : 20).get();
-  if (snap.empty) return null;
-
-  const docs = snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) }));
+  if (name) primary = primary.where('name', '==', name);
+  queries.push(primary.limit(name ? 1 : 20).get());
+  if (!name) queries.push(db.collection(PROVIDER_COLLECTION).where('services', 'array-contains', service).where('active', '==', true).limit(20).get());
+  const snaps = await Promise.all(queries);
+  const byId = new Map();
+  for (const snap of snaps) for (const d of snap.docs) byId.set(d.id, { id: d.id, ...(d.data() || {}) });
+  if (!byId.size) return null;
+  const docs = [...byId.values()];
   const wanted = String(country || '').toUpperCase();
-  // A provider serves a LIST of countries now, so "is this one of them" is a
-  // shared question rather than a string compare repeated per call site.
   const matching = wanted ? docs.filter((p) => providerReach.isSpecificFor(p, wanted)) : [];
-  // Without a country match this falls back to every provider, which was
-  // harmless while the only catalogue was Bangladesh's: asking for BD found the
-  // BD provider. Asking for MY finds it too, and would price a Malaysian order
-  // against a Bangladeshi catalogue. strictCountry says "this country or a
-  // provider that serves all of them, or nothing" - and the pricing path, which
-  // is the one that would charge the wrong number, uses it.
   if (strictCountry) {
-    const global = docs.filter((p) => providerReach.isGlobal(p));
+    const global = docs.filter((p) => providerReach.isGlobal(p) && providerReach.servesCountry(p, wanted));
     const strict = matching.length ? matching : global;
     if (!strict.length) return null;
     const chosen = strict.sort((a, b) => Number(b.priority || 0) - Number(a.priority || 0))[0];
     Object.assign(chosen, await providerSecretService.getCredentials(chosen));
     return chosen;
   }
-  const pool = matching.length ? matching : docs;
-  // Same ordering as the charge path: a catalogue must come from the provider
-  // that will actually be billed.
+  const pool = matching.length ? matching : docs.filter((p) => !wanted || providerReach.servesCountry(p, wanted));
   const provider = pool.sort((a, b) => Number(b.priority || 0) - Number(a.priority || 0))[0];
   if (!provider) return null;
-
   Object.assign(provider, await providerSecretService.getCredentials(provider));
   return provider;
 }
@@ -655,6 +660,7 @@ module.exports = {
   isPerAccountCatalog,
   productCodesFor,
   catalogTypesFor,
+  dynamicProductDiscoveryFor: (provider) => Boolean(catalogConfigFor(provider)?.dynamicProductDiscovery),
   windowFor,
   fetchCatalog,
   parseCatalogResponse,

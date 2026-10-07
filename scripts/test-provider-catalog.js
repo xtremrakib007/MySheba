@@ -48,6 +48,15 @@ async function main() {
 
   check('Success TopUp is recognised by name', pc.presetKeyFor(successTopUp) === 'success-topup');
   check('it sells a catalogue', pc.supportsCatalog(successTopUp) === true);
+  const dynamicIimmpact = {
+    name: 'iimmpact',
+    baseUrl: 'https://api.iimmpact.com',
+    authType: 'iimmpactHmac',
+    catalogPreset: 'iimmpact-catalog',
+    catalogPath: '/v2/catalog',
+  };
+  check('IIMMPACT uses live product discovery', pc.dynamicProductDiscoveryFor(dynamicIimmpact) === true);
+  check('IIMMPACT has no hardcoded operator map', pc.productCodesFor(dynamicIimmpact, 'Digi').length === 0);
   check('a plain recharge provider does not', pc.supportsCatalog(plainRecharge) === false);
   check('and asking for its types gives nothing', pc.catalogTypesFor(plainRecharge).length === 0);
   check(

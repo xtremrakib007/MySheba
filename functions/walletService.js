@@ -23,8 +23,8 @@ const { sessionMatches } = require('./sessionSlots');
 const { requireConsent } = require('./consentRecord');
 
 const DEFAULT_PRICING={dealerEarningPercent:1.5,webviewAccessCost:2,webviewSubmitCost:2,paymentSuccessCost:3,webviewAccessWindowHours:1,notepadCost:0,myDocumentsCost:0,salaryOtCost:0,moduleSubscriptionDays:30};
-const DEFAULT_RATES={mobileBanking:110.5,BD_ACC:30.26,BD_CASH:30.11,NP:37.65,PK:67.79,PH:15.05,LK:81.99,IN:23.5,ID:230,MM:966,remittanceFee:7,rechargeBD:30.26,rechargeIN:23.5,rechargeNP:37.65,rechargeID:230,rechargePK:67.79,rechargeMM:966,rechargePH:15.05,rechargeKH:900};
-const RECHARGE_RATE_KEYS={BD:'rechargeBD',IN:'rechargeIN',NP:'rechargeNP',ID:'rechargeID',PK:'rechargePK',MM:'rechargeMM',PH:'rechargePH',KH:'rechargeKH'};
+const DEFAULT_RATES={mobileBanking:110.5,BD_ACC:30.26,BD_CASH:30.11,NP:37.65,PK:67.79,PH:15.05,LK:81.99,IN:23.5,ID:230,MM:966,remittanceFee:7,rechargeBD:30.26,rechargeIN:23.5,rechargeNP:37.65,rechargeID:230,rechargePK:67.79,rechargeMM:966,rechargePH:15.05,rechargeKH:900,rechargeTH:0};
+const RECHARGE_RATE_KEYS={BD:'rechargeBD',IN:'rechargeIN',NP:'rechargeNP',ID:'rechargeID',PK:'rechargePK',MM:'rechargeMM',PH:'rechargePH',KH:'rechargeKH',TH:'rechargeTH'};
 const SESSION_ID_RE=/^[A-Za-z0-9_-]{16,128}$/;
 const DEVICE_ID_RE=/^[A-Za-z0-9-]{16,100}$/;
 const REQUEST_ID_RE=/^[A-Za-z0-9_-]{16,128}$/;
