@@ -881,6 +881,7 @@ async function signedProviderRequest(url, init, provider) {
   if (!pinned) throw new Error('Provider hostname resolved to an invalid address.');
   const headers = { ...(init && init.headers) };
   if (provider && provider.authType === 'iimmpactHmac') {
+    headers['X-API-Version'] = String(provider.iimmpactApiVersion || '2026-09-16');
     Object.assign(headers, signIimmpactRequest({
       apiKey: provider.apiKey,
       secretKey: provider.secretKey,
