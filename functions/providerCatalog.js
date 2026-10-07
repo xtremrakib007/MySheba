@@ -111,6 +111,7 @@ const PRESETS = {
     method: 'GET',
     perAccount: false,
     listPath: 'products',
+    dynamicProductDiscovery: true,
     errorLabel: 'iimmpact',
   },
 
@@ -150,28 +151,7 @@ const PRESETS = {
       price: ['denomination', 'price', 'amount'],
     },
     types: ['regular'],
-    // Which iimmpact product code each operator's plans come from.
-    //
-    // CelcomDigi is deliberately TWO codes. Celcom and Digi merged under one
-    // brand but iimmpact still sells CEL and DI separately, and our prefix
-    // table answers "CelcomDigi" for 010/011/013/016/019 without knowing
-    // which half a number is on. Guessing one would offer a Celcom customer
-    // Digi's plans. Instead both are asked, and because the catalogue is
-    // per-number the provider itself answers for only the one the number is
-    // on. Each plan carries the code it came from, so the order is placed
-    // against that product and not against a second guess.
-    //
-    // Unifi has no entry: iimmpact publishes no internet product for it, so
-    // it keeps the built-in package list.
-    operatorCodes: {
-      Celcom: ['CEL'],
-      CelcomDigi: ['CEL', 'DI'],
-      Hotlink: ['HI'],
-      'U Mobile': ['UMI'],
-      Tunetalk: ['TI'],
-      XOX: ['OXI'],
-      Yes: ['YESI'],
-    },
+    dynamicProductDiscovery: true,
     errorLabel: 'iimmpact',
   },
 };
@@ -250,8 +230,11 @@ function catalogConfigFor(provider) {
     fieldId: String(provider.catalogFieldId || (preset && preset.fieldId) || (legacyIimmpact ? 'plan' : '')).trim(),
     operatorCodes:
       asObject(provider.catalogOperatorCodes) ||
-      (legacyIimmpact ? PRESETS['iimmpact-options'].operatorCodes : (preset && preset.operatorCodes)) ||
+      (legacyIimmpact ? null : (preset && preset.operatorCodes)) ||
       null,
+    dynamicProductDiscovery: provider.catalogDynamicProductDiscovery !== undefined
+      ? provider.catalogDynamicProductDiscovery === true
+      : Boolean(preset && preset.dynamicProductDiscovery),
     successPath: provider.catalogSuccessPath !== undefined
       ? String(provider.catalogSuccessPath || '')
       : (preset ? preset.successPath : ''),
@@ -292,7 +275,7 @@ function isPerAccountCatalog(provider) {
  */
 function productCodesFor(provider, operatorName) {
   const config = catalogConfigFor(provider);
-  if (!config || !config.operatorCodes) return [];
+  if (!config || config.dynamicProductDiscovery || !config.operatorCodes) return [];
   const entry = config.operatorCodes[String(operatorName || '').trim()];
   if (!entry) return [];
   const codes = (Array.isArray(entry) ? entry : [entry])
@@ -655,6 +638,7 @@ module.exports = {
   isPerAccountCatalog,
   productCodesFor,
   catalogTypesFor,
+  dynamicProductDiscoveryFor: (provider) => Boolean(catalogConfigFor(provider)?.dynamicProductDiscovery),
   windowFor,
   fetchCatalog,
   parseCatalogResponse,
