@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Linking } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { WebView } from 'react-native-webview';
@@ -26,7 +27,14 @@ export default function WebViewScreen() {
   // so this screen still opens before the first snapshot and on a project with
   // no settings/webviews document.
   const page = (webviewPages && webviewPages[webViewKey]) || webViewPages[webViewKey] || webViewPages.fomema;
+  const platformAllowed = Platform.OS === 'web' ? page?.desktop !== false : page?.mobile !== false;
   const webviewRef = useRef(null);
+  useEffect(() => {
+    if (!platformAllowed) {
+      showAlert('MySheba', Platform.OS === 'web' ? 'This WebView is not available on desktop.' : 'This WebView is not available on mobile.');
+      goHome();
+    }
+  }, [platformAllowed, goHome]);
   const [loading, setLoading] = useState(true);
   // How far the page has got, 0 to 1. Used to take the cover off early: a
   // government status page is readable long before its last tracking pixel
