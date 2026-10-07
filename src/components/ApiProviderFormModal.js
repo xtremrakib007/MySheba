@@ -118,6 +118,7 @@ const AUTH_LABELS = { iimmpactHmac: 'iimmpact (HMAC)' };
 // https://api.iimmpact.com; the preset uses production, so change the base URL
 // while testing.
 const IIMMPACT_DEFAULTS = {
+  iimmpactApiVersion: '2026-09-16',
   name: 'iimmpact',
   baseUrl: 'https://api.iimmpact.com',
   endpointPath: '/v2/topup',
@@ -221,18 +222,13 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
     if (presetService === 'iimmpact') {
       const service = 'Recharge';
       const catalogue = {
-        catalogPreset: 'iimmpact-options',
-        catalogPath: '/v2/options',
+        catalogPreset: 'iimmpact-catalog',
+        catalogPath: '/v2/catalog',
         catalogMethod: 'GET',
         catalogFieldId: 'plan',
         catalogPerAccount: 'true',
-        catalogQueryTemplate: JSON.stringify({
-          product_code: '{{operator}}',
-          field_id: '{{fieldId}}',
-          account_number: '{{account}}',
-          limit: '25000'
-        }),
-        catalogListPath: 'items'
+        catalogQueryTemplate: '{}',
+        catalogListPath: 'products'
       };
       setForm({
         ...baseForm,
@@ -279,7 +275,7 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
     // Only the Internet record gets the per-number catalogue: it is what turns
     // the package step into "plans available on this number". Every other
     // feature is a plain charge with no catalogue to browse.
-    const catalogue = { catalogPreset: 'iimmpact-options', catalogPath: '/v2/options', catalogMethod: 'GET', catalogFieldId: 'plan', catalogPerAccount: 'true', catalogQueryTemplate: JSON.stringify({ product_code: '{{operator}}', field_id: '{{fieldId}}', account_number: '{{account}}', limit: '25000' }), catalogListPath: 'items' };
+    const catalogue = { catalogPreset: 'iimmpact-catalog', catalogPath: '/v2/catalog', catalogMethod: 'GET', catalogFieldId: 'plan', catalogPerAccount: 'true', catalogQueryTemplate: '{}', catalogListPath: 'products' };
     return {
       ...f,
       ...IIMMPACT_DEFAULTS,
