@@ -165,7 +165,7 @@ const PRESETS = {
     // it keeps the built-in package list.
     operatorCodes: {
       Celcom: ['CEL'],
-      CelcomDigi: ['CEL', 'DI'],
+      Digi: ['DI'],
       Hotlink: ['HI'],
       'U Mobile': ['UMI'],
       Tunetalk: ['TI'],
