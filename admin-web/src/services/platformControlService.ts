@@ -31,3 +31,5 @@ export const updateGridManagement = (data: any) => call('updateGridManagement', 
 
 export const saveWebviewPage = (data: any) => call('saveWebviewPage', data);
 export const deleteWebviewPage = (key: string) => call('deleteWebviewPage', { key });
+
+export const purgeFlaggedTestTransactions = (confirmation: string) => call('purgeFlaggedTestTransactions', { confirmation });
