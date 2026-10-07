@@ -24,7 +24,7 @@
     "android": {
       "package": "com.satulink.mysheba",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 50,
+      "versionCode": 51,
       "blockedPermissions": [
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_MEDIA_VIDEO"
