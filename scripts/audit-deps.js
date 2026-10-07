@@ -141,11 +141,11 @@ const EXEMPT = {
     why:
       'npm currently recommends a downgrade to 13.6.1. The pinned 15.8.3 release has no direct known ' +
       'vulnerability in independent package security data, and downgrading would be an unrelated major ' +
-      'compatibility regression. MySheba has additionally disabled the native AdMob initialization and ' +
-      'banner rendering while the Android BannerAd crash is investigated.',
+      'compatibility regression. MySheba uses the pinned release for Android AdMob banners and keeps the ' +
+      'integration on the fixed-size BannerAd path while the prior Android crash is monitored.',
     recheckIf:
-      'AdMob is re-enabled, a direct advisory is confirmed against 15.8.3, or a compatible non-downgrade ' +
-      'security release becomes available.',
+      'A direct advisory is confirmed against 15.8.3, the package publishes a compatible security release, ' +
+      'or the Android BannerAd crash reappears on a current production build.',
   },
 
   'node-forge': {
