@@ -255,6 +255,21 @@ function cleanGridPayload(data) {
     byUser: cleanGridMap(data?.byUser, userIds.size ? userIds : null),
   };
 }
+exports.purgeFlaggedTestTransactions = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
+  const {uid}=await requireSuperadmin(request);
+  if (String(request.data?.confirmation||'') !== 'DELETE TEST TRANSACTIONS') throw new HttpsError('failed-precondition','Type DELETE TEST TRANSACTIONS to confirm.');
+  const dbRef=db(); const found=new Map();
+  for (const field of ['isTest','testMode']) {
+    const snap=await dbRef.collection('transactions').where(field,'==',true).limit(2000).get();
+    snap.forEach(doc=>found.set(doc.id,doc.ref));
+  }
+  const refs=[...found.values()];
+  let deleted=0;
+  for(let i=0;i<refs.length;i+=400){ const batch=dbRef.batch(); refs.slice(i,i+400).forEach(ref=>batch.delete(ref)); await batch.commit(); deleted+=Math.min(400,refs.length-i); }
+  await logAudit({action:'purge_flagged_test_transactions',targetUid:null,performedBy:uid,performedByRole:'superadmin',details:{deleted,matchFields:['isTest','testMode']}});
+  return {ok:true,deleted};
+});
+
 exports.getGridManagementAdmin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
   await requireSuperadmin(request);
   const snap = await db().collection('settings').doc('gridManagement').get();
