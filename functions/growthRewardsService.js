@@ -1,5 +1,6 @@
 const admin = require('firebase-admin');
 const { inferWalletCurrency, money } = require('./walletCurrencyService');
+const { assertWalletUnfrozen } = require('./walletFreeze');
 
 const QUALIFYING = new Set(['Recharge']);
 const DEFAULTS = {
@@ -119,6 +120,7 @@ async function updateReferralProgress(db, transactionId, tx, settings) {
     }
 
     const liveReferrer = referrerSnap.data() || {};
+    assertWalletUnfrozen(liveReferrer, 'The referrer wallet');
     if (!active(liveCustomer) || liveCustomer.role !== 'customer' || !active(liveReferrer) || liveReferrer.role !== 'customer') {
       t.create(eventRef, { transactionId, customerId: uid, amount, status: 'blocked', reason: 'inactive_account', createdAt: admin.firestore.FieldValue.serverTimestamp() });
       return { state: 'blocked' };
@@ -280,6 +282,7 @@ async function updateReferralProgress(db, transactionId, tx, settings) {
     });
     if (config.referralNewUserReward > 0) {
       const newUserRewardRef = db.collection('growthRewardLedger').doc(`referral_new_user_${uid}`);
+      assertWalletUnfrozen(liveCustomer, 'The referred customer wallet');
       const newUserCurrency = inferWalletCurrency(liveCustomer);
       let newUserReward = walletAmountFromBase(config.referralNewUserReward, newUserCurrency, rates);
       const newDigits = ['IDR', 'KHR', 'MMK'].includes(newUserReward.currency) ? 0 : 2;
