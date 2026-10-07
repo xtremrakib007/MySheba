@@ -504,6 +504,10 @@ function validate(data) {
     },
   );
   let country = countries[0];
+  const excludedCountries = providerReach.normaliseCountries(data.excludedCountries || [], {
+    allowed: ALLOWED_COUNTRIES.filter((c) => c !== 'ALL'),
+    onInvalid: (code) => { throw new HttpsError('invalid-argument', '"' + String(code).slice(0, 10) + '" is not a country this app serves.'); },
+  });
   let endpointPath = cleanString(data.endpointPath, 500) || '/';
   let authType = cleanString(data.authType, 20) || 'none';
   let method = cleanString(data.method, 10).toUpperCase() || 'POST';
@@ -621,7 +625,7 @@ function validate(data) {
   }
   if (!ALLOWED_METHODS.includes(method)) throw new HttpsError('invalid-argument', 'Invalid HTTP method.');
   return {
-    service, services, name, country, countries, baseUrl, endpointPath, method, authType, apiKey, secretKey,
+    service, services, name, country, countries, excludedCountries: excludedCountries.filter((c) => c !== 'ALL'), baseUrl, endpointPath, method, authType, apiKey, secretKey,
     username: cleanString(data.username, 200), password: cleanString(data.password, 1000),
     active: data.active !== false, priority: Math.max(0, Math.min(9999, Number(priority) || 0)),
     timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)), notes: cleanString(data.notes, 1000),
@@ -2163,6 +2167,7 @@ exports.listApiProviders = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async 
       name: x.name || '',
       country: x.country || 'ALL',
       countries: providerReach.providerCountries(x),
+      excludedCountries: Array.isArray(x.excludedCountries) ? x.excludedCountries : [],
       baseUrl: x.baseUrl || '',
       endpointPath: x.endpointPath || '/',
       method: x.method || 'POST',
