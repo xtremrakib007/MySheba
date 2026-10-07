@@ -18,6 +18,7 @@ const ROLES = ['customer','dealer','reseller','support','finance','admin','super
 const FEATURE_KINDS = ['webview','service','screen'];
 const SERVICE_KEYS = ['recharge','rechargePin','mobilebanking','internet','offerpacks','entertainment','billpayment','remittance','bus','train','flight','topup','history','support','myAccount','profile','walletTransfer','myDocuments','salary','kyc'];
 const SCREEN_KEYS = ['moreFeatures','history','topup','profile','myAccount','transferPoints','verifyIdentity','support'];
+const AD_CONTROL_SCREEN_KEYS = ['customerHome','dealerHome','resellerHome','adminHome','staffHome','support','help','adminSupport','history','topup','superAdminTopup','profile','settings','myAccount','moreFeatures','adminFeatures','dealerFeatures','resellerFeatures','notifications','referral'];
 const GRID_DEFS = [
   ['recharge','Recharge'],['rechargePin','Recharge PIN'],['mobilebanking','Mobile Banking'],['internet','Internet'],['billpayment','Bill Payment'],
   ['remittance','Remittance'],['bus','Bus'],['train','Train'],['flight','Flight'],['offerpacks','Offer Packs'],['entertainment','Entertainment'],
@@ -120,7 +121,7 @@ exports.getPlatformCatalog = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asyn
     if (page && page.active !== false && allowed(page,viewer)) webviews[key]={key,...page};
   }
   const ads=adsSnap.exists ? adsSnap.data() : {};
-  return { features,countries,operators,webviews,ads:{adsEnabled:ads.adsEnabled!==false,bannerAdsEnabled:ads.bannerAdsEnabled!==false,nativeAdsEnabled:ads.nativeAdsEnabled!==false,interstitialAdsEnabled:ads.interstitialAdsEnabled!==false,admobEnabled:ads.admobEnabled!==false,admobBannerEnabled:ads.admobBannerEnabled!==false,directAdsEnabled:ads.directAdsEnabled!==false} };
+  return { features,countries,operators,webviews,ads:{adsEnabled:ads.adsEnabled!==false,bannerAdsEnabled:ads.bannerAdsEnabled!==false,nativeAdsEnabled:ads.nativeAdsEnabled!==false,interstitialAdsEnabled:ads.interstitialAdsEnabled!==false,admobEnabled:ads.admobEnabled!==false,admobBannerEnabled:ads.admobBannerEnabled!==false,directAdsEnabled:ads.directAdsEnabled!==false,placementControls:ads.placementControls||null} };
 });
 
 exports.listPlatformCatalogAdmin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
