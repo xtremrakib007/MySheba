@@ -120,7 +120,7 @@ exports.getPlatformCatalog = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asyn
     if (page && page.active !== false && allowed(page,viewer)) webviews[key]={key,...page};
   }
   const ads=adsSnap.exists ? adsSnap.data() : {};
-  return { features,countries,operators,webviews,ads:{adsEnabled:ads.adsEnabled!==false,bannerAdsEnabled:ads.bannerAdsEnabled!==false,nativeAdsEnabled:ads.nativeAdsEnabled!==false,interstitialAdsEnabled:ads.interstitialAdsEnabled!==false} };
+  return { features,countries,operators,webviews,ads:{adsEnabled:ads.adsEnabled!==false,bannerAdsEnabled:ads.bannerAdsEnabled!==false,nativeAdsEnabled:ads.nativeAdsEnabled!==false,interstitialAdsEnabled:ads.interstitialAdsEnabled!==false,admobEnabled:ads.admobEnabled!==false,admobBannerEnabled:ads.admobBannerEnabled!==false,directAdsEnabled:ads.directAdsEnabled!==false} };
 });
 
 exports.listPlatformCatalogAdmin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
@@ -193,7 +193,7 @@ exports.updateWebviewTargeting = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, 
 
 exports.updateGoogleAdsControls = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
   const {uid}=await requireSuperadmin(request);
-  const allowedFields=['adsEnabled','bannerAdsEnabled','nativeAdsEnabled','interstitialAdsEnabled','directAdsEnabled'];
+  const allowedFields=['adsEnabled','bannerAdsEnabled','nativeAdsEnabled','interstitialAdsEnabled','directAdsEnabled','admobEnabled','admobBannerEnabled'];
   const changes=request.data?.changes||{}; const clean={};
   for(const [k,v] of Object.entries(changes)){ if(!allowedFields.includes(k)) throw new HttpsError('invalid-argument',`Unknown ads control: ${k}`); if(typeof v!=='boolean') throw new HttpsError('invalid-argument',`${k} must be boolean.`); clean[k]=v; }
   if(!Object.keys(clean).length) throw new HttpsError('invalid-argument','No ad controls supplied.');
