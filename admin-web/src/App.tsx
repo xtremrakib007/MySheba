@@ -119,6 +119,6 @@ export default function App() {
       <AuthProvider>
         <AdminRoutes />
       </AuthProvider>
-    </BrowserRouter>
+    </BrowserRouter></AdminErrorBoundary>
   );
 }
