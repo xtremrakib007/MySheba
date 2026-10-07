@@ -347,6 +347,7 @@ function validateCatalog(data) {
     catalogFieldId: cleanString(data.catalogFieldId, 100),
     catalogSuccessPath: cleanString(data.catalogSuccessPath, 200),
     catalogErrorLabel: cleanString(data.catalogErrorLabel, 100),
+    catalogDynamicProductDiscovery: data.catalogDynamicProductDiscovery === true,
   };
   if (out.catalogPath && (out.catalogPath.includes('?') || out.catalogPath.includes('#'))) {
     throw new HttpsError('invalid-argument', 'Catalogue path must not contain a query string or fragment.');
