@@ -38,8 +38,7 @@
         "android.permission.ACCESS_NETWORK_STATE",
         "android.permission.INTERNET",
         "android.permission.POST_NOTIFICATIONS",
-        "android.permission.VIBRATE",
-        "com.google.android.gms.permission.AD_ID"
+        "android.permission.VIBRATE"
       ],
       "intentFilters": [
         {
@@ -117,12 +116,6 @@
         "expo-camera",
         {
           "cameraPermission": "Allow MySheba to access your camera for KYC identity verification and QR scanning."
-        }
-      ],
-      [
-        "react-native-google-mobile-ads",
-        {
-          "androidAppId": "ca-app-pub-5028998697615030~7504898532"
         }
       ],
       [
