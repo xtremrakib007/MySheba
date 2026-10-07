@@ -75,6 +75,7 @@ const PRESETS = {
       data: ['data', 'data_amount', 'volume'],
       valid: ['valid', 'validity', 'duration'],
       category: ['category', 'pack_type', 'packType', 'product_type', 'type'],
+      processingTime: ['processing_time', 'processingTime', 'processing-time'],
       price: ['price', 'amount'],
     },
     // `regular` first so it wins a duplicate id.
@@ -140,6 +141,7 @@ const PRESETS = {
       data: ['data', 'volume', 'quota'],
       valid: ['validity', 'valid', 'duration', 'period'],
       category: ['category', 'type', 'product_group'],
+      processingTime: ['processing_time', 'processingTime', 'processing-time'],
       // denomination FIRST, and this is not a preference.
       //
       // It is the face value, and iimmpact's guide says to send the selected
@@ -163,6 +165,7 @@ const DEFAULT_ITEM_MAP = {
   data: ['data', 'volume', 'quantity'],
   valid: ['valid', 'validity', 'duration'],
   category: ['category', 'type'],
+  processingTime: ['processing_time', 'processingTime', 'processing-time'],
   price: ['price', 'amount', 'fare'],
 };
 
@@ -366,6 +369,7 @@ function normaliseItem(item, itemMap) {
     data: String(firstOf(item, map.data) ?? '').slice(0, 100),
     valid: String(firstOf(item, map.valid) ?? '').slice(0, 100),
     category: String(firstOf(item, map.category) ?? '').slice(0, 60),
+    processingTime: String(firstOf(item, map.processingTime || ['processing_time', 'processingTime', 'processing-time']) ?? '').slice(0, 100),
     price: toAmount(firstOf(item, map.price)),
   };
 }
