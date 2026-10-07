@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Users, SlidersHorizontal, BadgeCheck, ShieldAlert,
   MessageCircle, LifeBuoy, BarChart3, Tag, Wallet, Megaphone, BellRing, LayoutGrid, Layers,
   CreditCard, Coins, Smartphone, PercentCircle, Receipt, Plane, Send, LineChart, Lock,
-  Activity, Search, TriangleAlert, ClipboardList, Headphones, BriefcaseBusiness, Banknote,
+  Activity, Search, TriangleAlert, ClipboardList, Headphones, BriefcaseBusiness, Banknote, Wifi,
   Network, TrendingUp, ScrollText, Settings2, ShieldCheck, Gauge, Workflow, KeyRound,
 } from 'lucide-react';
 
@@ -83,6 +83,7 @@ export const PATH_ACCESS: Record<string, Requirement> = {
   '/config/rates': ['settings'],
   '/config/pricing': ['settings'],
   '/config/payments': ['settings'],
+  '/config/api-providers': SUPERADMIN,
   '/config/salary': ['settings'],
   '/config/banners': ['settings'],
   '/config/categories': ['settings'],
@@ -207,6 +208,7 @@ export const navGroups: NavGroup[] = [
     { label: 'Wallet Exchange Rates', path: '/config/wallet-exchange', icon: Coins, superadminOnly: true, enabled: true },
     { label: 'Pricing', path: '/config/pricing', icon: PercentCircle, enabled: true },
     { label: 'Payment Settings', path: '/config/payments', icon: CreditCard, enabled: true },
+    { label: 'API Providers', path: '/config/api-providers', icon: Wifi, superadminOnly: true, enabled: true },
     { label: 'Salary Settings', path: '/config/salary', icon: Wallet, enabled: true },
     { label: 'Banners', path: '/config/banners', icon: Megaphone, enabled: true },
     { label: 'Categories', path: '/config/categories', icon: LayoutGrid, enabled: true },
