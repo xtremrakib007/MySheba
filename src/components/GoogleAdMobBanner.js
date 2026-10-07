@@ -41,6 +41,8 @@ export default function GoogleAdMobBanner() {
   const homeControl = featureControls?.[FEATURE_IDS.HOME];
 
   if (
+    !adSettings.admobEnabled ||
+    !adSettings.admobBannerEnabled ||
     !isGlobalAdTypeEnabled(adSettings, AD_TYPES.BANNER) ||
     !isFeatureAdTypeEnabled(homeControl, AD_TYPES.BANNER)
   ) {
