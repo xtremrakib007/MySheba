@@ -9,6 +9,7 @@ export const countries = [
   { code: 'MM', name: 'Myanmar', flag: '🇲🇲', dial: '+95', curr: 'MMK' },
   { code: 'PH', name: 'Philippines', flag: '🇵🇭', dial: '+63', curr: 'PHP' },
   { code: 'KH', name: 'Cambodia', flag: '🇰🇭', dial: '+855', curr: 'KHR' },
+  { code: 'TH', name: 'Thailand', flag: '🇹🇭', dial: '+66', curr: 'THB' },
 ];
 
 // Remittance rate per country code (MYR -> local currency)
