@@ -74,7 +74,7 @@ const ADMIN_EDITABLE_RATE_KEYS = new Set([
 
 const RECHARGE_RATE_KEYS = new Set([
   'rechargeBD', 'rechargeIN', 'rechargeNP', 'rechargeID',
-  'rechargePK', 'rechargeMM', 'rechargePH', 'rechargeKH',
+  'rechargePK', 'rechargeMM', 'rechargePH', 'rechargeKH', 'rechargeTH',
 ]);
 
 function normalizeRates(raw = {}) {
