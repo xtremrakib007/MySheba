@@ -389,7 +389,24 @@ export function AppProvider({ children }) {
     setScreen("advertiserDetail");
   }, []);
 
-  // Marketing/referral links: preserve attribution until registration consumes it.\n  // Supported forms: mysheba://register?ref=MSXXXXXXXX and https://mysheba.top/register?ref=MSXXXXXXXX.\n  const handleDeepLink = useCallback((url) => {\n    try {\n      const raw = String(url || "");\n      if (!raw) return;\n      const parsed = new URL(raw);\n      const ref = String(parsed.searchParams.get("ref") || parsed.searchParams.get("referral") || "").trim().toUpperCase();\n      if (/^MS[A-F0-9]{8}$/.test(ref)) AsyncStorage.setItem("@mysheba/referralCode", ref).catch(() => {});\n    } catch (_) {}\n  }, []);
+  // Marketing/referral links: preserve attribution until registration consumes it.
+  // Supported forms: mysheba://register?ref=MSXXXXXXXX and https://mysheba.top/register?ref=MSXXXXXXXX.
+  const handleDeepLink = useCallback((url) => {
+    try {
+      const raw = String(url || "");
+      if (!raw) return;
+      const parsed = new URL(raw);
+      const ref = String(
+        parsed.searchParams.get("ref") ||
+        parsed.searchParams.get("referral") ||
+        ""
+      ).trim().toUpperCase();
+
+      if (/^MS[A-F0-9]{8}$/.test(ref)) {
+        AsyncStorage.setItem("@mysheba/referralCode", ref).catch(() => {});
+      }
+    } catch (_) {}
+  }, []);
 
   // ---- Profile navigation state ----
   // These ids are navigation-only; the destination screens load the actual

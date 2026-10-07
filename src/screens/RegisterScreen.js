@@ -56,7 +56,12 @@ export default function RegisterScreen() {
   // produced this token is spent, but the token itself is still good.
   const verifiedPhoneToken = useRef('');
 
-  useEffect(() => {\n    AsyncStorage.getItem('@mysheba/referralCode').then((code) => {\n      const value = String(code || '').trim().toUpperCase();\n      if (/^MS[A-F0-9]{8}$/.test(value)) setReferralCode((current) => current || value);\n    }).catch(() => {});\n  }, []);
+  useEffect(() => {
+    AsyncStorage.getItem('@mysheba/referralCode').then((code) => {
+      const value = String(code || '').trim().toUpperCase();
+      if (/^MS[A-F0-9]{8}$/.test(value)) setReferralCode((current) => current || value);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     let mounted = true;
