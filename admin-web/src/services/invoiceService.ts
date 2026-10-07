@@ -106,3 +106,8 @@ export async function openInvoiceDocument(invoiceId: string): Promise<void> {
     throw err;
   }
 }
+
+export async function archiveFinancialRecord(recordType: 'transaction' | 'invoice', recordId: string, reason: string): Promise<void> {
+  if (!recordId || !reason.trim()) throw new Error('A reason is required.');
+  await httpsCallable(functions, 'archiveFinancialRecord')({ recordType, recordId, reason: reason.trim() });
+}
