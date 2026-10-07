@@ -46,6 +46,8 @@ exports.setRemittanceRateMode = onCall({ enforceAppCheck: false }, async (reques
   };
 
   if (mode === 'live') {
+    const available = Object.keys(REMITTANCE_MAP).filter(currency => cleanRate(live[currency]) !== null);
+    if (available.length === 0) throw new HttpsError('failed-precondition', 'No cached live remittance rates are available. Refresh wallet FX first.');
     for (const [currency, keys] of Object.entries(REMITTANCE_MAP)) {
       const rate = cleanRate(live[currency]);
       if (rate === null) continue;
