@@ -1716,6 +1716,34 @@ exports.listProviderDataPlans = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, a
  * A biller with no code gets no presentment, which is one of the provider's own
  * documented non-blocking answers.
  */
+// Short-lived provider-catalog metadata cache. Processing time is display-only
+// metadata, so it must never become a payment decision or a hardcoded promise.
+const IIMMPACT_PROCESSING_TIME_CACHE = new Map();
+const IIMMPACT_PROCESSING_TIME_CACHE_MS = 5 * 60 * 1000;
+
+async function iimmpactProcessingTimeForProduct(provider, productCode) {
+  if (!provider || provider.authType !== 'iimmpactHmac' || !productCode) return '';
+  const key = String(provider.id || provider.name || 'iimmpact') + '|' + String(productCode).trim().toUpperCase();
+  const hit = IIMMPACT_PROCESSING_TIME_CACHE.get(key);
+  if (hit && Date.now() - hit.at < IIMMPACT_PROCESSING_TIME_CACHE_MS) return hit.value;
+  try {
+    const url = new URL('/v2/catalog', provider.baseUrl);
+    url.searchParams.set('is_active', 'true');
+    const { ok, json } = await signedProviderRequest(url, { method: 'GET', headers: { accept: 'application/json' } }, provider);
+    if (!ok || !json || typeof json !== 'object') return '';
+    const product = json.products && json.products[String(productCode).trim()];
+    const value = product && product.processing_time != null
+      ? String(product.processing_time).trim().slice(0, 100)
+      : '';
+    IIMMPACT_PROCESSING_TIME_CACHE.set(key, { at: Date.now(), value });
+    return value;
+  } catch (error) {
+    console.warn('IIMMPACT processing-time lookup unavailable', String(error?.message || error).slice(0, 160));
+    return '';
+  }
+}
+exports._test_iimmpactProcessingTimeForProduct = iimmpactProcessingTimeForProduct;
+
 const DEFAULT_BILLER_PRODUCT_CODES = { TNB: 'TNB', JomPAY: 'JOMPAY' };
 function billerProductCodeFor(provider, billerName) {
   const map = (provider && provider.billerProductCodes && typeof provider.billerProductCodes === 'object')
@@ -1779,7 +1807,15 @@ exports.getBillPresentment = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asyn
     // Their envelope is `data` on every v2 endpoint; a flat body is read as
     // itself rather than as nothing.
     const body = (json && typeof json.data === 'object' && json.data !== null) ? json.data : json;
-    return billPresentment.readBillPresentment(body);
+    const result = billPresentment.readBillPresentment(body);
+    // Bangladesh bill-payment screens show the provider's live catalogue
+    // processing_time when the configured IIMMPACT product publishes one.
+    // This is advisory metadata only: missing metadata never blocks payment.
+    if (country === 'BD' && provider.authType === 'iimmpactHmac') {
+      const processingTime = await iimmpactProcessingTimeForProduct(provider, productCode);
+      if (processingTime) return { ...result, processingTime };
+    }
+    return result;
   } catch (error) {
     console.warn('Bill presentment unavailable', String(error?.message || error).slice(0, 200));
     return billPresentment.readBillPresentment({}, { reachable: false });
