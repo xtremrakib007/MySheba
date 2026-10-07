@@ -163,6 +163,8 @@ exports.saveOperatorCatalog = platformControl.saveOperatorCatalog;
 exports.deleteOperatorCatalog = platformControl.deleteOperatorCatalog;
 exports.updateWebviewTargeting = platformControl.updateWebviewTargeting;
 exports.updateGoogleAdsControls = platformControl.updateGoogleAdsControls;
+exports.getGridManagementAdmin = platformControl.getGridManagementAdmin;
+exports.updateGridManagement = platformControl.updateGridManagement;
 
 exports.purchaseRechargePin = require('./rechargePinService').purchaseRechargePin;
 exports.getRechargePin = require('./rechargePinService').getRechargePin;
