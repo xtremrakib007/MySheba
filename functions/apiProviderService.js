@@ -2023,7 +2023,21 @@ exports.getIimmpactCatalogForUser = onCall({ enforceAppCheck: ENFORCE_APP_CHECK 
   const db = admin.firestore();
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
   await checkVelocity(db, request.auth.uid, 'getIimmpactCatalogForUser', { ip: getClientIp(request) });
-  const provider = await loadIimmpactProvider(db, request.data?.providerId);
+  let provider;
+  const requestedId = cleanString(request.data?.providerId, 100);
+  if (requestedId) {
+    provider = await loadIimmpactProvider(db, requestedId);
+  } else {
+    const service = cleanString(request.data?.service, 60) || 'Recharge';
+    const country = cleanString(request.data?.country, 2).toUpperCase();
+    provider = await providerCatalog.readProvider(db, service, {
+      country,
+      strictCountry: Boolean(country),
+    });
+    if (!provider || provider.authType !== 'iimmpactHmac') {
+      throw new HttpsError('failed-precondition', 'No active IIMMPACT provider is configured for this service and country.');
+    }
+  }
   const url = iimmpactUrl(provider, '/v2/catalog');
   try {
     const { ok, status, json } = await signedProviderRequest(url, {
@@ -2034,7 +2048,7 @@ exports.getIimmpactCatalogForUser = onCall({ enforceAppCheck: ENFORCE_APP_CHECK 
       const reason = String(getPath(json, 'message') || getPath(json, 'error.message') || `HTTP ${status}`);
       throw new HttpsError('unavailable', `IIMMPACT catalog request failed: ${reason.slice(0, 300)}`);
     }
-    return publicIimmpactCatalog(json);
+    return { providerId: provider.id || '', ...publicIimmpactCatalog(json) };
   } catch (error) {
     if (error instanceof HttpsError) throw error;
     throw new HttpsError('unavailable', String(error?.message || 'Unable to load the IIMMPACT catalog.').slice(0, 500));
