@@ -50,6 +50,7 @@ const GrowthCenterPage = lazy(() => import('./pages/GrowthCenterPage'));
 const AuditCompliancePage = lazy(() => import('./pages/AuditCompliancePage'));
 const SystemHealthPage = lazy(() => import('./pages/SystemHealthPage'));
 import SuperadminRoute from './routes/SuperadminRoute';
+import AdminErrorBoundary from './components/AdminErrorBoundary';
 
 function AdminRoutes() {
   return (
@@ -114,7 +115,7 @@ function AdminRoutes() {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <AdminErrorBoundary><BrowserRouter>
       <AuthProvider>
         <AdminRoutes />
       </AuthProvider>
