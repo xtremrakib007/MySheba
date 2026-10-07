@@ -74,7 +74,7 @@ export default function PlatformControlCenterPage(){
     {tab==='grid' && grid && <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div><h2 className="font-extrabold text-[#0b2447]">Every Home Grid / Tile</h2><p className="mt-1 text-xs text-slate-500">Turn every built-in tile on/off globally or override it for a role, country, or one user. Custom tiles are managed under Features.</p></div>
-        <button disabled={busy} onClick={()=>run(()=>service.updateGridManagement(grid))} className="rounded-xl bg-[#00a99d] px-4 py-2 text-sm font-bold text-white"><Save size={15} className="mr-2 inline"/>Save Grid Controls</button>
+        <button disabled={busy} onClick={()=>run(()=>service.updateGridManagement(grid))} className="rounded-xl bg-[#00a99d] px-4 py-2 text-sm font-bold text-white"><Save size={15} className="mr-2 inline"/>Save Grid Controls</button><button disabled={busy} onClick={()=>{const x=window.prompt('This only removes transactions explicitly flagged isTest=true or testMode=true. Type DELETE TEST TRANSACTIONS to continue.',''); if(x==='DELETE TEST TRANSACTIONS') run(async()=>{const r=await service.purgeFlaggedTestTransactions(x); window.alert(`Removed ${r?.deleted||0} flagged test transaction(s).`);});}} className="rounded-xl border border-red-200 px-4 py-2 text-sm font-bold text-red-700">Remove Test Transactions</button>
       </div>
       <div className="mt-4 grid gap-3 md:grid-cols-3">
         <select value={gridScope} onChange={e=>{setGridScope(e.target.value as any);setGridWho('')}} className="rounded-xl border border-slate-200 px-3 py-2 text-sm">
