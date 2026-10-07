@@ -28,3 +28,6 @@ export async function searchUsers(query:string):Promise<UserLookup[]>{
 
 export const getGridManagementAdmin = () => call('getGridManagementAdmin', {});
 export const updateGridManagement = (data: any) => call('updateGridManagement', data);
+
+export const saveWebviewPage = (data: any) => call('saveWebviewPage', data);
+export const deleteWebviewPage = (key: string) => call('deleteWebviewPage', { key });
