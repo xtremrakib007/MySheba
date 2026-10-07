@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Linking } from 'react-native';
+import { InterstitialAd, AdEventType, TestIds } from 'react-native-google-mobile-ads';
 import { LinearGradient } from 'expo-linear-gradient';
 import { WebView } from 'react-native-webview';
 import { useApp } from '../context/AppContext';
@@ -12,6 +13,8 @@ import GoogleAdMobBanner from '../components/GoogleAdMobBanner';
 // Mirrors #webViewScreen - the original was a static placeholder describing
 // what a real WebView would show; here it's an actual native WebView loading
 // the real government status-check pages, with a fallback "open in browser".
+let LAST_WEBVIEW_INTERSTITIAL_AT = 0;
+
 export default function WebViewScreen() {
   const {
     colors,
@@ -22,14 +25,63 @@ export default function WebViewScreen() {
   const {
     webViewKey, goHome, goBackOrHome, profile, submitWebviewApplication, webViewSubmitBusy, confirmWebviewAccess, webViewBusy,
     confirmPaymentSuccess, webViewPaymentBusy, webViewPaymentCharged, pointCosts, setWebViewBackInterceptor,
-    webviewPages,
+    webviewPages, adSettings,
   } = useApp();
   // The live page a superadmin can edit, falling back to the built-in literal
   // so this screen still opens before the first snapshot and on a project with
   // no settings/webviews document.
   const page = (webviewPages && webviewPages[webViewKey]) || webViewPages[webViewKey] || webViewPages.fomema;
   const platformAllowed = Platform.OS === 'web' ? page?.desktop !== false : page?.mobile !== false;
+  const adControls = adSettings?.placementControls || {};
+  const webviewBanner = adControls.webviewBanners?.[webViewKey] || {
+    enabled: adControls.webviewBannerEnabled !== false,
+    position: adControls.webviewBannerPosition === 'top' ? 'top' : 'bottom',
+  };
+  const shouldShowPreWebviewInterstitial =
+    Platform.OS === 'android' &&
+    adSettings?.adsEnabled !== false &&
+    adSettings?.admobEnabled !== false &&
+    adSettings?.interstitialAdsEnabled !== false &&
+    adControls.webviewInterstitialEnabled !== false &&
+    adControls.webviewInterstitials?.[webViewKey] !== false &&
+    (() => {
+      const cooldown = Math.max(0, Number(adControls.interstitialCooldownSeconds) || 0);
+      return cooldown === 0 || Date.now() - LAST_WEBVIEW_INTERSTITIAL_AT >= cooldown * 1000;
+    })();
+  const [adGateReady, setAdGateReady] = useState(!shouldShowPreWebviewInterstitial);
   const webviewRef = useRef(null);
+  useEffect(() => {
+    if (!shouldShowPreWebviewInterstitial) {
+      setAdGateReady(true);
+      return undefined;
+    }
+    let mounted = true;
+    setAdGateReady(false);
+    const unitId = __DEV__ ? TestIds.INTERSTITIAL : String(adControls.admobInterstitialUnitId || '').trim();
+    if (!unitId) {
+      setAdGateReady(true);
+      return undefined;
+    }
+    const ad = InterstitialAd.createForAdRequest(unitId, { requestNonPersonalizedAdsOnly: true });
+    const finish = () => {
+      if (!mounted) return;
+      LAST_WEBVIEW_INTERSTITIAL_AT = Date.now();
+      setAdGateReady(true);
+    };
+    const unsubLoaded = ad.addAdEventListener(AdEventType.LOADED, () => {
+      ad.show().catch(finish);
+    });
+    const unsubClosed = ad.addAdEventListener(AdEventType.CLOSED, finish);
+    const unsubError = ad.addAdEventListener(AdEventType.ERROR, finish);
+    ad.load();
+    return () => {
+      mounted = false;
+      unsubLoaded();
+      unsubClosed();
+      unsubError();
+    };
+  }, [shouldShowPreWebviewInterstitial, webViewKey, adControls.admobInterstitialUnitId]);
+
   useEffect(() => {
     if (!platformAllowed) {
       showAlert('MySheba', Platform.OS === 'web' ? 'This WebView is not available on desktop.' : 'This WebView is not available on mobile.');
@@ -257,9 +309,14 @@ export default function WebViewScreen() {
         )}
       </View>
 
-      {isFreeWebView && <GoogleAdMobBanner />}
+      {!failed && adGateReady && webviewBanner.enabled && webviewBanner.position === 'top' && <GoogleAdMobBanner placementType="webview" placementKey={webViewKey} />}
 
-      {!failed ? (
+      {!failed && !adGateReady ? (
+        <View style={styles.adGate}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.adGateText}>Preparing this page…</Text>
+        </View>
+      ) : !failed ? (
         <View style={{ flex: 1 }}>
           {/* A thin bar rather than a blank screen. It is the only thing on
               top of the page once the page has started drawing, so people
@@ -284,6 +341,7 @@ export default function WebViewScreen() {
               )}
             </View>
           )}
+          {webviewBanner.enabled && webviewBanner.position === 'bottom' && <View style={styles.webviewBannerSlot}><GoogleAdMobBanner placementType="webview" placementKey={webViewKey} /></View>}
           <WebView
             // No `key`. Keying on the url tore the whole native WebView down
             // and built a new one on every change - a new renderer process, a
@@ -598,6 +656,9 @@ true;
 
 function createStyles(colors) {
   return StyleSheet.create({
+    adGate: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+    adGateText: { marginTop: 10, fontSize: 13, color: colors.textSecondary },
+    webviewBannerSlot: { width: '100%' },
     screen: { flex: 1, backgroundColor: colors.bg },
     header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, backgroundColor: colors.primary , overflow: 'hidden' },
     backBtn: { padding: 4 },
