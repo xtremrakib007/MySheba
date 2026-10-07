@@ -1,8 +1,48 @@
-import React from 'react';
+import React, { memo } from 'react';
+import { Platform, StyleSheet, View } from 'react-native';
+import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
+import { useApp } from '../context/AppContext';
+import { ADMOB_AD_UNITS } from '../constants/adMobUnits';
 
-// Temporarily disabled on native clients because the current native AdMob
-// BannerAd implementation crashes inside BannerAdViewManager.requestAd.
-// Keep the component so existing imports and admin controls remain intact.
-export default function GoogleAdMobBanner() {
-  return null;
+function GoogleAdMobBanner() {
+  const { adSettings } = useApp();
+
+  // Android-only restore: iOS is intentionally untouched.
+  if (Platform.OS !== 'android') return null;
+
+  // Keep the existing Superadmin ad controls authoritative. Defaults are
+  // enabled, so the banner remains visible until an admin explicitly turns
+  // the relevant switch off.
+  const enabled =
+    adSettings?.adsEnabled !== false &&
+    adSettings?.admobEnabled !== false &&
+    adSettings?.admobBannerEnabled !== false &&
+    adSettings?.bannerAdsEnabled !== false;
+
+  if (!enabled) return null;
+
+  const unitId = __DEV__ ? TestIds.BANNER : ADMOB_AD_UNITS.primary;
+
+  return (
+    <View style={styles.container} collapsable={false}>
+      <BannerAd
+        unitId={unitId}
+        size={BannerAdSize.BANNER}
+        requestOptions={{ requestNonPersonalizedAdsOnly: true }}
+        onAdFailedToLoad={() => {}}
+      />
+    </View>
+  );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    width: '100%',
+    minHeight: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+});
+
+export default memo(GoogleAdMobBanner);
