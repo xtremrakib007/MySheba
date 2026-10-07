@@ -229,6 +229,56 @@ exports.updateGoogleAdsControls = onCall({ enforceAppCheck: ENFORCE_APP_CHECK },
   await logAudit({action:'google_ads_controls_changed',targetUid:null,performedBy:uid,performedByRole:'superadmin',details:{changes:clean}});
   return {ok:true};
 });
+function cleanAdPlacementControls(data) {
+  const raw = data && typeof data === 'object' ? data : {};
+  const clean = {};
+  if (typeof raw.webviewBannerEnabled === 'boolean') clean.webviewBannerEnabled = raw.webviewBannerEnabled;
+  if (typeof raw.webviewInterstitialEnabled === 'boolean') clean.webviewInterstitialEnabled = raw.webviewInterstitialEnabled;
+  if (raw.webviewBannerPosition === 'top' || raw.webviewBannerPosition === 'bottom') clean.webviewBannerPosition = raw.webviewBannerPosition;
+  if (Number.isFinite(Number(raw.interstitialCooldownSeconds))) clean.interstitialCooldownSeconds = Math.max(0, Math.min(86400, Math.floor(Number(raw.interstitialCooldownSeconds))));
+  for (const field of ['screenBanners','webviewBanners']) {
+    if (raw[field] == null) continue;
+    if (typeof raw[field] !== 'object' || Array.isArray(raw[field])) throw new HttpsError('invalid-argument', field + ' must be an object.');
+    const out = {};
+    for (const [key, value] of Object.entries(raw[field]).slice(0, 500)) {
+      if (field === 'screenBanners' && !AD_CONTROL_SCREEN_KEYS.includes(key)) continue;
+      if (field === 'webviewBanners' && (!key || String(key).length > 64)) continue;
+      if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+      if (typeof value.enabled !== 'boolean') throw new HttpsError('invalid-argument', field + '.' + key + '.enabled must be boolean.');
+      if (value.position !== 'top' && value.position !== 'bottom') throw new HttpsError('invalid-argument', field + '.' + key + '.position must be top or bottom.');
+      out[key] = {enabled:value.enabled,position:value.position};
+    }
+    clean[field] = out;
+  }
+  if (raw.webviewInterstitials != null) {
+    if (typeof raw.webviewInterstitials !== 'object' || Array.isArray(raw.webviewInterstitials)) throw new HttpsError('invalid-argument','webviewInterstitials must be an object.');
+    const out = {};
+    for (const [key,value] of Object.entries(raw.webviewInterstitials).slice(0,500)) {
+      if (!key || String(key).length > 64) continue;
+      if (typeof value !== 'boolean') throw new HttpsError('invalid-argument','webviewInterstitials.' + key + ' must be boolean.');
+      out[key]=value;
+    }
+    clean.webviewInterstitials=out;
+  }
+  if (!Object.keys(clean).length) throw new HttpsError('invalid-argument','No placement controls supplied.');
+  return clean;
+}
+
+exports.updateAdPlacementControls = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
+  const {uid}=await requireSuperadmin(request);
+  const changes=cleanAdPlacementControls(request.data && request.data.changes);
+  const ref=db().collection('ad_settings').doc('general');
+  const snap=await ref.get();
+  const before=snap.exists ? (snap.data().placementControls || {}) : {};
+  const next={...before,...changes};
+  if (changes.screenBanners) next.screenBanners={...(before.screenBanners||{}),...changes.screenBanners};
+  if (changes.webviewBanners) next.webviewBanners={...(before.webviewBanners||{}),...changes.webviewBanners};
+  if (changes.webviewInterstitials) next.webviewInterstitials={...(before.webviewInterstitials||{}),...changes.webviewInterstitials};
+  await ref.set({placementControls:next,updatedBy:uid,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
+  await logAudit({action:'ad_placement_controls_changed',targetUid:null,performedBy:uid,performedByRole:'superadmin',details:{changes}});
+  return {ok:true,placementControls:next};
+});
+
 
 
 function cleanGridMap(value, allowedIds) {
