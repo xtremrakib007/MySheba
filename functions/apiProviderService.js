@@ -952,6 +952,45 @@ function normaliseCatalogText(value) {
   return String(value || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+async function discoverIimmpactProductCodes(provider, operatorName, service) {
+  const base = new URL(provider.baseUrl);
+  const url = new URL('/v2/catalog', base);
+  url.searchParams.set('is_active', 'true');
+  const { ok, json } = await signedProviderRequest(url, {
+    method: 'GET',
+    headers: { accept: 'application/json' },
+  }, provider);
+  if (!ok || !json || typeof json !== 'object') return [];
+
+  const wanted = normaliseCatalogText(operatorName);
+  if (!wanted) return [];
+  const products = Object.values(json.products || {}).filter((p) => p && p.is_active !== false && p.code);
+  const scored = products.map((p) => {
+    const name = normaliseCatalogText(p.name);
+    const note = normaliseCatalogText(p.note);
+    let score = 0;
+    if (name === wanted) score = 120;
+    else if (name.includes(wanted)) score = 100;
+    else if (wanted.includes(name) && name) score = 90;
+    if (note && note.includes(wanted)) score = Math.max(score, 60);
+    // Mobile-data products are the per-number catalogue we need for Internet
+    // and Offer Packs. Do not accidentally select an unrelated product that
+    // happens to contain the operator's name.
+    if (['Internet', 'Offer Packs'].includes(service)) {
+      const dataField = Array.isArray(p.fields) && p.fields.some((f) =>
+        f && f.type === 'select' && f.data_source
+      );
+      if (!dataField) score = 0;
+    }
+    return { code: String(p.code), score };
+  }).filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  if (!scored.length) return [];
+  const best = scored[0].score;
+  return scored.filter((x) => x.score === best).slice(0, 8).map((x) => x.code);
+}
+
 async function resolveIimmpactCatalogProductCode(provider, service, subject, raw = {}) {
   const key = [provider.id || provider.name || 'iimmpact', service, subject, raw.operator || '', raw.provider || ''].join('|').toLowerCase();
   const cached = IIMMPACT_PRODUCT_CODE_CACHE.get(key);
@@ -1534,7 +1573,7 @@ exports._test_iimmpactRejectionHint = iimmpactRejectionHint;
  * the plan list is resolved against - so a number sent in a different shape
  * does not merely fail, it answers for a different subscriber or for none.
  */
-const DIAL_CODES = { MY: '60', BD: '880', IN: '91', NP: '977', ID: '62', PK: '92', MM: '95', PH: '63', KH: '855' };
+const DIAL_CODES = { MY: '60', BD: '880', IN: '91', NP: '977', ID: '62', PK: '92', MM: '95', PH: '63', KH: '855', TH: '66' };
 function nationalAccountNumber(phone, country) {
   let digits = String(phone || '').replace(/\D/g, '');
   const dial = DIAL_CODES[String(country || '').toUpperCase()];
@@ -1575,10 +1614,22 @@ exports.listProviderDataPlans = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, a
   // the charge has never heard of - and `catalog` in this file is the Success
   // TopUp wrapper, which pins the provider name and accepts no country at all.
   const perAccount = await providerCatalog.perAccountCatalogFor(db, service, country, operatorName);
+  // IIMMPACT is catalog-driven: when no legacy operator map exists, discover
+  // the product codes from the provider's live catalog. This is deliberately
+  // not persisted as configuration, so newly enabled operators/products appear
+  // without a MySheba release.
+  let provider = perAccount?.provider || null;
+  let codes = perAccount?.codes || [];
+  if (!provider) {
+    const candidate = await providerCatalog.readProvider(db, service, { country, strictCountry: true });
+    if (candidate && candidate.authType === 'iimmpactHmac' && providerCatalog.dynamicProductDiscoveryFor(candidate)) {
+      provider = candidate;
+      codes = await discoverIimmpactProductCodes(provider, operatorName, service);
+    }
+  }
   // Not an error: most country/operator pairs have no per-number catalogue and
   // the screen simply keeps the package list it already had.
-  if (!perAccount) return { plans: [], supported: false };
-  const { provider, codes } = perAccount;
+  if (!provider || !codes.length) return { plans: [], supported: false };
   if (!provider.apiKey || !provider.secretKey) throw new HttpsError('failed-precondition', 'The package provider is not configured.');
 
   const account = nationalAccountNumber(request.data?.phone, country);
