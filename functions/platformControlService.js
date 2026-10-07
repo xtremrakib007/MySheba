@@ -186,7 +186,7 @@ function cleanWebview(data) {
   if (!name) throw new HttpsError('invalid-argument','WebView name is required.');
   let parsed; try { parsed = new URL(url); } catch (_) { throw new HttpsError('invalid-argument','WebView URL must be a full https:// address.'); }
   if (parsed.protocol !== 'https:' || !parsed.hostname || !parsed.hostname.includes('.') || parsed.hostname.endsWith('.')) throw new HttpsError('invalid-argument','Only valid https:// WebView URLs are allowed.');
-  return { name,url,title,icon,active:data.active !== false,home:data.home !== false,roles:list(data.roles,ROLES.length,24),countries:list(data.countries,100,2).map(x=>x.toUpperCase()),users:list(data.users,1000,128),custom:/^wv_[a-z0-9]{4,24}$/.test(key) };
+  return { name,url,title,icon,active:data.active !== false,home:data.home !== false,mobile:data.mobile !== false,desktop:data.desktop !== false,roles:list(data.roles,ROLES.length,24),countries:list(data.countries,100,2).map(x=>x.toUpperCase()),users:list(data.users,1000,128),custom:/^wv_[a-z0-9]{4,24}$/.test(key) };
 }
 exports.saveWebviewPage = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
   const {uid}=await requireSuperadmin(request);
