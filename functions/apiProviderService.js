@@ -1942,8 +1942,11 @@ exports.getIimmpactCatalog = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asyn
   const url = iimmpactUrl(provider, '/v2/catalog');
   const productCode = cleanString(request.data?.productCode, 100);
   if (productCode) url.searchParams.set('product_code', productCode);
-  url.searchParams.set('is_active', request.data?.includeInactive === true ? 'false' : 'true');
-  if (request.data?.includeInactive === true) url.searchParams.set('include_inactive', 'true');
+  if (request.data?.includeInactive === true) {
+    url.searchParams.set('include_inactive', 'true');
+  } else {
+    url.searchParams.set('is_active', 'true');
+  }
 
   try {
     const { ok, status, json } = await signedProviderRequest(url, {
