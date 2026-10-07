@@ -26,7 +26,7 @@ export const remitRates = {
 
 export const rechargeOperators = {
   BD: ['Grameenphone', 'Robi', 'Banglalink', 'Airtel', 'Teletalk', 'Skitto'],
-  MY: ['Celcom', 'CelcomDigi', 'U Mobile', 'Hotlink', 'XOX', 'Tunetalk', 'Unifi', 'Yes'],
+  MY: ['Celcom', 'Digi', 'U Mobile', 'Hotlink', 'XOX', 'Tunetalk', 'Unifi', 'Yes'],
   IN: ['Airtel', 'Jio', 'Vi', 'BSNL'],
   NP: ['Ncell', 'NTC'],
   ID: ['Telkomsel', 'Indosat', 'XL', 'Axis', 'Smartfren', 'StarOne', 'Tri Indonesia'],
@@ -100,7 +100,7 @@ export const internetPackagesByOperator = {
     { name: '45GB Monthly', data: '45 GB', valid: '30 Days', price: 62 },
     { name: 'Unlimited', data: 'Unlimited', valid: '30 Days', price: 95 },
   ],
-  CelcomDigi: [
+  Digi: [
     { name: '2GB Daily', data: '2 GB', valid: '1 Day', price: 10 },
     { name: '15GB Weekly', data: '15 GB', valid: '7 Days', price: 30 },
     { name: '40GB Monthly', data: '40 GB', valid: '30 Days', price: 58 },
