@@ -11,7 +11,7 @@ function ensureAdMobInitialized() {
   return sdkInitPromise;
 }
 
-function GoogleAdMobBanner() {
+function GoogleAdMobBanner({ placementType = 'screen', placementKey = '' }) {
   const { adSettings } = useApp();
   const [sdkReady, setSdkReady] = useState(false);
 
@@ -36,10 +36,18 @@ function GoogleAdMobBanner() {
 
   if (!enabled) return null;
 
+  const controls = adSettings?.placementControls || {};
+  const screenControl = controls.screenBanners?.[placementKey];
+  const webviewControl = controls.webviewBanners?.[placementKey];
+  const configured = placementType === 'webview'
+    ? (webviewControl || { enabled: controls.webviewBannerEnabled !== false, position: controls.webviewBannerPosition === 'top' ? 'top' : 'bottom' })
+    : (screenControl || { enabled: true, position: 'bottom' });
+  if (configured.enabled === false) return null;
+
   const unitId = __DEV__ ? TestIds.BANNER : ADMOB_AD_UNITS.primary;
 
   return (
-    <View style={styles.container} collapsable={false}>
+    <View style={[styles.container, configured.position === 'top' ? styles.top : styles.bottom]} collapsable={false}>
       <BannerAd
         unitId={unitId}
         size={BannerAdSize.BANNER}
@@ -58,6 +66,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'transparent',
   },
+  top: { marginBottom: 2 },
+  bottom: { marginTop: 2 },
 });
 
 export default memo(GoogleAdMobBanner);
