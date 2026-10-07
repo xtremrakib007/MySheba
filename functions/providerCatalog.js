@@ -245,7 +245,9 @@ function catalogConfigFor(provider) {
       String(provider.name || '').trim().toLowerCase() === 'iimmpact' ||
       String(provider.catalogPreset || '').trim() === 'iimmpact-subproducts'
     );
-  if (legacyIimmpact) path = '/v2/options';
+  const dynamicIimmpact = path === '/v2/catalog' &&
+    String(provider.catalogPreset || '').trim() === 'iimmpact-catalog';
+  if (legacyIimmpact || dynamicIimmpact) path = '/v2/options';
 
   const baseUrl = String(provider.catalogBaseUrl || provider.baseUrl || (preset && preset.baseUrl) || '').trim();
   if (!baseUrl) return null;
