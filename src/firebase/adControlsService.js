@@ -35,6 +35,28 @@ import { FEATURE_ID_LIST, FEATURE_LABELS } from '../constants/adFeatures';
 // superadmin turns something off, same "opt-out, not opt-in" default
 // featureAccessService.js uses for DEFAULT_FEATURE_ACCESS ----
 
+export const AD_CONTROL_SCREEN_KEYS = [
+  'customerHome','dealerHome','resellerHome','adminHome','staffHome',
+  'support','help','adminSupport','history','topup','superAdminTopup',
+  'profile','settings','myAccount','moreFeatures','adminFeatures',
+  'dealerFeatures','resellerFeatures','notifications','referral',
+];
+
+const DEFAULT_SCREEN_BANNER_CONTROLS = AD_CONTROL_SCREEN_KEYS.reduce((acc, key) => {
+  acc[key] = { enabled: true, position: 'bottom' };
+  return acc;
+}, {});
+
+export const DEFAULT_AD_PLACEMENT_CONTROLS = {
+  screenBanners: DEFAULT_SCREEN_BANNER_CONTROLS,
+  webviewBannerEnabled: true,
+  webviewBannerPosition: 'bottom',
+  webviewBanners: {},
+  webviewInterstitialEnabled: true,
+  webviewInterstitials: {},
+  interstitialCooldownSeconds: 0,
+};
+
 export const DEFAULT_AD_SETTINGS = {
   adsEnabled: true,
   admobEnabled: true,
@@ -77,8 +99,43 @@ export const DEFAULT_AD_FEATURE_CONTROLS = FEATURE_ID_LIST.reduce((acc, featureI
   return acc;
 }, {});
 
+function mergePlacementControls(data) {
+  const raw = data && typeof data === 'object' ? data : {};
+  const screenBanners = { ...DEFAULT_AD_PLACEMENT_CONTROLS.screenBanners, ...(raw.screenBanners || {}) };
+  Object.keys(screenBanners).forEach((key) => {
+    const item = screenBanners[key] || {};
+    screenBanners[key] = {
+      enabled: item.enabled !== false,
+      position: item.position === 'top' ? 'top' : 'bottom',
+    };
+  });
+  const webviewBanners = { ...(raw.webviewBanners || {}) };
+  Object.keys(webviewBanners).forEach((key) => {
+    const item = webviewBanners[key] || {};
+    webviewBanners[key] = {
+      enabled: item.enabled !== false,
+      position: item.position === 'top' ? 'top' : 'bottom',
+    };
+  });
+  const webviewInterstitials = { ...(raw.webviewInterstitials || {}) };
+  Object.keys(webviewInterstitials).forEach((key) => {
+    webviewInterstitials[key] = webviewInterstitials[key] !== false;
+  });
+  return {
+    ...DEFAULT_AD_PLACEMENT_CONTROLS,
+    ...raw,
+    screenBanners,
+    webviewBanners,
+    webviewInterstitials,
+    webviewBannerPosition: raw.webviewBannerPosition === 'top' ? 'top' : 'bottom',
+    interstitialCooldownSeconds: Math.max(0, Math.min(86400, Number(raw.interstitialCooldownSeconds) || 0)),
+  };
+}
+
 function mergeSettings(data) {
-  return { ...DEFAULT_AD_SETTINGS, ...(data || {}) };
+  const merged = { ...DEFAULT_AD_SETTINGS, ...(data || {}) };
+  merged.placementControls = mergePlacementControls(data && data.placementControls);
+  return merged;
 }
 
 function mergeFeatureControls(docsById) {
@@ -131,6 +188,13 @@ export function subscribeAdFeatureControls(callback, onError) {
  * should catch and showAlert. */
 export async function updateAdSettings(changes) {
   const fn = httpsCallable(functions, 'updateAdSettings');
+  await fn({ changes });
+}
+
+/** Superadmin-only placement controls. Stored in the same ad_settings/general
+ * document so all ad renderers receive one live configuration snapshot. */
+export async function updateAdPlacementControls(changes) {
+  const fn = httpsCallable(functions, 'updateAdPlacementControls');
   await fn({ changes });
 }
 
