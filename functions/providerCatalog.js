@@ -100,6 +100,44 @@ const PRESETS = {
   //
   // It is also a GET with query parameters rather than a POST with a body,
   // which is why fetchCatalog grew a query template.
+  // IIMMPACT Dynamic Catalog migration preset. The catalog itself is fetched
+  // from /v2/catalog by the dedicated catalog callables. Product flows that
+  // need selectable options use /v2/options, whose product/field identifiers
+  // come from the catalog rather than the deprecated product-list/subproducts
+  // endpoints.
+  'iimmpact-catalog': {
+    path: '/v2/options',
+    method: 'GET',
+    perAccount: true,
+    fieldId: 'plan',
+    queryTemplate: {
+      product_code: '{{operator}}',
+      field_id: '{{fieldId}}',
+      account_number: '{{account}}',
+      limit: '25000',
+    },
+    listPath: 'items',
+    itemMap: {
+      id: ['code', 'subproduct_code', 'subproductCode', 'id'],
+      name: ['name', 'label', 'description', 'title', 'product_name'],
+      data: ['data', 'volume', 'quota'],
+      valid: ['validity', 'valid', 'duration', 'period'],
+      category: ['category', 'type', 'product_group'],
+      price: ['denomination', 'price', 'amount'],
+    },
+    types: ['regular'],
+    operatorCodes: {
+      Celcom: ['CEL'],
+      CelcomDigi: ['CEL', 'DI'],
+      Hotlink: ['HI'],
+      'U Mobile': ['UMI'],
+      Tunetalk: ['TI'],
+      XOX: ['OXI'],
+      Yes: ['YESI'],
+    },
+    errorLabel: 'iimmpact',
+  },
+
   'iimmpact-options': {
     path: '/v2/options',
     method: 'GET',
