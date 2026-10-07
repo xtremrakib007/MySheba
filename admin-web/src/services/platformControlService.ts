@@ -25,3 +25,11 @@ export async function searchUsers(query:string):Promise<UserLookup[]>{
   const result=await call<{results?:UserLookup[]}>('searchUsers',{query});
   return Array.isArray(result.results) ? result.results : [];
 }
+
+export const getGridManagementAdmin = () => call('getGridManagementAdmin', {});
+export const updateGridManagement = (data: any) => call('updateGridManagement', data);
+
+export const saveWebviewPage = (data: any) => call('saveWebviewPage', data);
+export const deleteWebviewPage = (key: string) => call('deleteWebviewPage', { key });
+
+export const purgeFlaggedTestTransactions = (confirmation: string) => call('purgeFlaggedTestTransactions', { confirmation });

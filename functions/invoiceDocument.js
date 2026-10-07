@@ -90,6 +90,7 @@ function renderInvoiceHtml(invoice) {
   body { margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #0F2E33; background: #fff; }
   .sheet { max-width: 720px; margin: 0 auto; border: 1px solid #D5EFE7; border-radius: 12px; overflow: hidden; }
   .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 20px 24px; background: #F2FAF7; border-bottom: 1px solid #D5EFE7; }
+  .logo { width: 52px; height: 52px; object-fit: contain; margin-bottom: 6px; }
   .brand { font-size: 22px; font-weight: 800; color: #0B8A94; letter-spacing: -0.3px; }
   .company { font-size: 11px; line-height: 16px; color: #476A6B; margin-top: 4px; }
   .no { text-align: right; }
@@ -118,7 +119,7 @@ function renderInvoiceHtml(invoice) {
   }
 </style></head><body><div class="sheet">
 <div class="head">
-  <div><div class="brand">MySheba</div><div class="company">${esc(COMPANY_NAME)}</div></div>
+  <div><img class="logo" src="https://mysheba.top/assets/images/logo.png" alt="MySheba logo"><div class="brand">MySheba</div><div class="company">${esc(COMPANY_NAME)}</div></div>
   <div class="no">
     <div class="label">Invoice</div>
     <div class="value">${esc(i.number || '-')}</div>

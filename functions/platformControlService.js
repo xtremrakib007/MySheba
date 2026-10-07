@@ -18,6 +18,18 @@ const ROLES = ['customer','dealer','reseller','support','finance','admin','super
 const FEATURE_KINDS = ['webview','service','screen'];
 const SERVICE_KEYS = ['recharge','rechargePin','mobilebanking','internet','offerpacks','entertainment','billpayment','remittance','bus','train','flight','topup','history','support','myAccount','profile','walletTransfer','myDocuments','salary','kyc'];
 const SCREEN_KEYS = ['moreFeatures','history','topup','profile','myAccount','transferPoints','verifyIdentity','support'];
+const GRID_DEFS = [
+  ['recharge','Recharge'],['rechargePin','Recharge PIN'],['mobilebanking','Mobile Banking'],['internet','Internet'],['billpayment','Bill Payment'],
+  ['remittance','Remittance'],['bus','Bus'],['train','Train'],['flight','Flight'],['offerpacks','Offer Packs'],['entertainment','Entertainment'],
+  ['topup','Top-Up'],['history','Transactions'],['support','Support'],['myAccount','My Account'],['profile','Profile'],
+  ['dealerFeatures','Dealer Features'],['resellerFeatures','Reseller Features'],['adminFeatures','Admin Features'],['moreFeaturesTile','More Services'],
+  ['walletTransfer','Wallet Transfer'],['myDocuments','My Documents'],['salary','Salary & OT'],['kyc','Profile & KYC'],['fomema','FOMEMA'],['visa','Visa Malaysia'],
+  ['mydigital','Malaysia Arrival Card'],['passport','Passport'],['adminAnalytics','Analytics'],['inquiries','Inquiries'],['pending','Pending'],['topups','Top-Ups'],
+  ['rates','Rates'],['pricing','Pricing'],['payments','Payments'],['transferPoints','Transfers'],['apiManagement','API Management'],['userManagement','Users'],
+  ['verificationManagement','KYC Verification'],['featureAccess','Feature Access'],['banners','Banners'],['announcements','Announcements']
+].map(([key,name])=>({key,name}));
+const GRID_KEYS = new Set(GRID_DEFS.map(x=>x.key));
+const GRID_SCOPES = ['byRole','byCountry','byUser'];
 const RESERVED_FEATURE_KEYS = new Set(['recharge','rechargePin','mobilebanking','internet','billpayment','remittance','bus','train','flight','offerpacks','entertainment','topup','history','support','myAccount','profile','dealerFeatures','resellerFeatures','adminFeatures','moreFeaturesTile','walletTransfer','myDocuments','salary','kyc','fomema','visa','mydigital','passport','adminAnalytics','inquiries','pending','topups','rates','pricing','payments','transferPoints','apiManagement','userManagement','verificationManagement','featureAccess','banners','announcements']);
 const ISO = /^[A-Z]{2}$/;
 const KEY = /^[a-z][a-z0-9_-]{1,47}$/;
@@ -108,7 +120,7 @@ exports.getPlatformCatalog = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asyn
     if (page && page.active !== false && allowed(page,viewer)) webviews[key]={key,...page};
   }
   const ads=adsSnap.exists ? adsSnap.data() : {};
-  return { features,countries,operators,webviews,ads:{adsEnabled:ads.adsEnabled!==false,bannerAdsEnabled:ads.bannerAdsEnabled!==false,nativeAdsEnabled:ads.nativeAdsEnabled!==false,interstitialAdsEnabled:ads.interstitialAdsEnabled!==false} };
+  return { features,countries,operators,webviews,ads:{adsEnabled:ads.adsEnabled!==false,bannerAdsEnabled:ads.bannerAdsEnabled!==false,nativeAdsEnabled:ads.nativeAdsEnabled!==false,interstitialAdsEnabled:ads.interstitialAdsEnabled!==false,admobEnabled:ads.admobEnabled!==false,admobBannerEnabled:ads.admobBannerEnabled!==false,directAdsEnabled:ads.directAdsEnabled!==false} };
 });
 
 exports.listPlatformCatalogAdmin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
@@ -167,6 +179,33 @@ exports.deleteOperatorCatalog = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, a
   await logAudit({action:'operator_catalog_archived',targetUid:null,performedBy:uid,performedByRole:'superadmin',details:{id,before:old.data()}}); return {ok:true};
 });
 
+function cleanWebview(data) {
+  const key = str(data.key,64).toLowerCase();
+  if (!key || (!/^wv_[a-z0-9]{4,24}$/.test(key) && !/^[a-z0-9_-]{2,48}$/.test(key))) throw new HttpsError('invalid-argument','Invalid WebView key.');
+  const name = str(data.name,40), url = str(data.url,500), title = str(data.title || name,60), icon = str(data.icon || '🌐',16);
+  if (!name) throw new HttpsError('invalid-argument','WebView name is required.');
+  let parsed; try { parsed = new URL(url); } catch (_) { throw new HttpsError('invalid-argument','WebView URL must be a full https:// address.'); }
+  if (parsed.protocol !== 'https:' || !parsed.hostname || !parsed.hostname.includes('.') || parsed.hostname.endsWith('.')) throw new HttpsError('invalid-argument','Only valid https:// WebView URLs are allowed.');
+  return { name,url,title,icon,active:data.active !== false,home:data.home !== false,roles:list(data.roles,ROLES.length,24),countries:list(data.countries,100,2).map(x=>x.toUpperCase()),users:list(data.users,1000,128),custom:/^wv_[a-z0-9]{4,24}$/.test(key) };
+}
+exports.saveWebviewPage = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
+  const {uid}=await requireSuperadmin(request);
+  const data=cleanWebview(request.data||{}); const key=String(request.data?.key||'').trim().toLowerCase();
+  const ref=db().collection('settings').doc('webviews'); const snap=await ref.get(); const pages=snap.exists?(snap.data().pages||{}):{};
+  await ref.set({pages:{[key]:data},updatedBy:uid,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
+  await logAudit({action:'webview_page_saved',targetUid:null,performedBy:uid,performedByRole:'superadmin',details:{key,before:pages[key]||null,after:data}});
+  return {ok:true,key,...data};
+});
+exports.deleteWebviewPage = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
+  const {uid}=await requireSuperadmin(request); const key=str(request.data?.key,64).toLowerCase();
+  if(!/^wv_[a-z0-9]{4,24}$/.test(key)) throw new HttpsError('failed-precondition','Built-in WebViews cannot be deleted. Turn them off instead.');
+  const ref=db().collection('settings').doc('webviews'); const snap=await ref.get(); const pages=snap.exists?(snap.data().pages||{}):{};
+  if(!pages[key]) return {ok:true};
+  await ref.set({pages:{[key]:admin.firestore.FieldValue.delete()},updatedBy:uid,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
+  await logAudit({action:'webview_page_archived',targetUid:null,performedBy:uid,performedByRole:'superadmin',details:{key,before:pages[key]}});
+  return {ok:true};
+});
+
 exports.updateWebviewTargeting = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
   const {uid}=await requireSuperadmin(request); const key=str(request.data?.key,64);
   if (!key || (!/^wv_[a-z0-9]{4,24}$/.test(key) && !/^[a-z0-9_-]{2,48}$/.test(key))) throw new HttpsError('invalid-argument','Invalid WebView key.');
@@ -181,13 +220,75 @@ exports.updateWebviewTargeting = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, 
 
 exports.updateGoogleAdsControls = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
   const {uid}=await requireSuperadmin(request);
-  const allowedFields=['adsEnabled','bannerAdsEnabled','nativeAdsEnabled','interstitialAdsEnabled','directAdsEnabled'];
+  const allowedFields=['adsEnabled','bannerAdsEnabled','nativeAdsEnabled','interstitialAdsEnabled','directAdsEnabled','admobEnabled','admobBannerEnabled'];
   const changes=request.data?.changes||{}; const clean={};
   for(const [k,v] of Object.entries(changes)){ if(!allowedFields.includes(k)) throw new HttpsError('invalid-argument',`Unknown ads control: ${k}`); if(typeof v!=='boolean') throw new HttpsError('invalid-argument',`${k} must be boolean.`); clean[k]=v; }
   if(!Object.keys(clean).length) throw new HttpsError('invalid-argument','No ad controls supplied.');
   await db().collection('ad_settings').doc('general').set({...clean,updatedBy:uid,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
   await logAudit({action:'google_ads_controls_changed',targetUid:null,performedBy:uid,performedByRole:'superadmin',details:{changes:clean}});
   return {ok:true};
+});
+
+
+function cleanGridMap(value, allowedIds) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out = {};
+  for (const [who, tiles] of Object.entries(value).slice(0, 1000)) {
+    if (allowedIds && !allowedIds.has(who)) continue;
+    if (!tiles || typeof tiles !== 'object' || Array.isArray(tiles)) continue;
+    const clean = {};
+    for (const key of GRID_KEYS) if (typeof tiles[key] === 'boolean') clean[key] = tiles[key];
+    if (Object.keys(clean).length) out[String(who)] = clean;
+  }
+  return out;
+}
+function cleanGridPayload(data) {
+  const global = {};
+  for (const key of GRID_KEYS) if (typeof data?.global?.[key] === 'boolean') global[key] = data.global[key];
+  const roleIds = new Set(ROLES);
+  const countryIds = new Set(list(data?.countries, 100, 2).map(x => x.toUpperCase()));
+  const userIds = new Set(list(data?.users, 1000, 128));
+  return {
+    global,
+    byRole: cleanGridMap(data?.byRole, roleIds),
+    byCountry: cleanGridMap(data?.byCountry, countryIds.size ? countryIds : null),
+    byUser: cleanGridMap(data?.byUser, userIds.size ? userIds : null),
+  };
+}
+exports.purgeFlaggedTestTransactions = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
+  const {uid}=await requireSuperadmin(request);
+  if (String(request.data?.confirmation||'') !== 'DELETE TEST TRANSACTIONS') throw new HttpsError('failed-precondition','Type DELETE TEST TRANSACTIONS to confirm.');
+  const dbRef=db(); let deleted=0;
+  for (const field of ['isTest','testMode']) {
+    while (true) {
+      const snap=await dbRef.collection('transactions').where(field,'==',true).limit(400).get();
+      if (snap.empty) break;
+      const batch=dbRef.batch(); snap.docs.forEach(doc=>batch.delete(doc.ref)); await batch.commit(); deleted += snap.size;
+      if (snap.size < 400) break;
+    }
+  }
+  await logAudit({action:'purge_flagged_test_transactions',targetUid:null,performedBy:uid,performedByRole:'superadmin',details:{deleted,matchFields:['isTest','testMode']}});
+  return {ok:true,deleted};
+});
+
+exports.getGridManagementAdmin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
+  await requireSuperadmin(request);
+  const snap = await db().collection('settings').doc('gridManagement').get();
+  const raw = snap.exists ? snap.data() || {} : {};
+  const global = {};
+  for (const item of GRID_DEFS) global[item.key] = typeof raw[item.key] === 'boolean' ? raw[item.key] : item.key !== 'rechargePin';
+  return { defs: GRID_DEFS, global, byRole: raw.byRole || {}, byCountry: raw.byCountry || {}, byUser: raw.byUser || {} };
+});
+exports.updateGridManagement = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
+  const {uid} = await requireSuperadmin(request);
+  const payload = request.data || {};
+  const clean = cleanGridPayload(payload);
+  const docData = { ...clean.global, byRole: clean.byRole, byCountry: clean.byCountry, byUser: clean.byUser, updatedBy: uid, updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+  const ref = db().collection('settings').doc('gridManagement');
+  const old = await ref.get();
+  await ref.set(docData, { merge: true });
+  await logAudit({ action:'grid_management_changed', targetUid:null, performedBy:uid, performedByRole:'superadmin', details:{ before:old.exists ? old.data() : null, after:clean } });
+  return { ok:true, ...clean };
 });
 
 module.exports.allowed = allowed;

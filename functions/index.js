@@ -3,6 +3,7 @@ const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/
 const admin = require('firebase-admin');
 const progressionService = require('./progressionService');
 const growthRewardsService = require('./growthRewardsService');
+const financialLedgerService = require('./financialLedgerService');
 const TIER_QUALIFYING_SERVICES = ['Recharge', 'Internet', 'Bill Payment', 'Mobile Banking', 'Remittance'];
 function walletLabel(tx, amountField = 'total') { const currency = String(tx?.currency || tx?.walletCurrency || 'MYR').toUpperCase(); const digits = ['IDR','KHR','MMK'].includes(currency) ? 0 : 2; const amount = Number(tx?.[amountField] ?? 0); return `${currency} ${Number.isFinite(amount) ? amount.toFixed(digits) : '0'.padEnd(digits ? digits + 2 : 1, '0')}`; }
 const userManagement = require('./userManagement');
@@ -19,6 +20,8 @@ exports.manageUser = userManagement.manageUser;
 // client. Keep every client-facing callable reachable from the actual
 // functions entrypoint (secureIndexV2 -> index.js).
 exports.refreshWalletExchangeRates = require('./walletExchangeRateService').refreshWalletExchangeRates;
+exports.setRemittanceRateMode = require('./walletExchangeRateService').setRemittanceRateMode;
+exports.refreshRemittanceRatesAutomatically = require('./remittanceRateScheduler').refreshRemittanceRatesAutomatically;
 exports.setRoleDefaults = require('./accessControl').setRoleDefaults;
 exports.setUserAccessOverride = require('./accessControl').setUserAccessOverride;
 exports.respondToWebSignIn = require('./deviceSessionService').respondToWebSignIn;
@@ -161,7 +164,12 @@ exports.deleteCountryCatalog = platformControl.deleteCountryCatalog;
 exports.saveOperatorCatalog = platformControl.saveOperatorCatalog;
 exports.deleteOperatorCatalog = platformControl.deleteOperatorCatalog;
 exports.updateWebviewTargeting = platformControl.updateWebviewTargeting;
+exports.saveWebviewPage = platformControl.saveWebviewPage;
+exports.deleteWebviewPage = platformControl.deleteWebviewPage;
 exports.updateGoogleAdsControls = platformControl.updateGoogleAdsControls;
+exports.purgeFlaggedTestTransactions = platformControl.purgeFlaggedTestTransactions;
+exports.getGridManagementAdmin = platformControl.getGridManagementAdmin;
+exports.updateGridManagement = platformControl.updateGridManagement;
 
 exports.purchaseRechargePin = require('./rechargePinService').purchaseRechargePin;
 exports.getRechargePin = require('./rechargePinService').getRechargePin;
@@ -225,6 +233,10 @@ exports.onTransactionUpdated = onDocumentUpdated('transactions/{id}', async even
       event.params.id,
       a
     );
+  }
+
+  if (b.status !== 'completed' && a.status === 'completed') {
+    await financialLedgerService.recordCompletedTransaction(event.params.id, a);
   }
 
   if (b.status === a.status && b.rejected === a.rejected) return;

@@ -1,58 +1,60 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './routes/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
 import PortalDashboardPage from './pages/PortalDashboardPage';
-import ExecutiveDashboardPage from './pages/ExecutiveDashboardPage';
-import AlertIntelligencePage from './pages/AlertIntelligencePage';
-import AdminActivityCenterPage from './pages/AdminActivityCenterPage';
-import AdminInvestigationCenterPage from './pages/AdminInvestigationCenterPage';
-import PlatformControlCenterPage from './pages/PlatformControlCenterPage';
-import SystemGovernanceCenterPage from './pages/SystemGovernanceCenterPage';
-import AdvancedUserOperationsPage from './pages/AdvancedUserOperationsPage';
-import FinancialRiskControlsPage from './pages/FinancialRiskControlsPage';
-import UserManagementPage from './pages/UserManagementPage';
-import FeatureAccessPage from './pages/FeatureAccessPage';
-import IdentityVerificationPage from './pages/IdentityVerificationPage';
-import KycOperationsPage from './pages/KycOperationsPage';
-import FraudRiskPage from './pages/FraudRiskPage';
-import CommunicationsCenterPage from './pages/CommunicationsCenterPage';
-import ServiceOperationsPage from './pages/ServiceOperationsPage';
-import NotificationDeliveryPage from './pages/NotificationDeliveryPage';
-import WalletSettlementPage from './pages/WalletSettlementPage';
-import SupportOperationsPage from './pages/SupportOperationsPage';
-import SupportTicketsPage from './pages/SupportTicketsPage';
-import SupportMessagesPage from './pages/SupportMessagesPage';
-import ReportsPage from './pages/ReportsPage';
-import RatesPricingPage from './pages/RatesPricingPage';
-import WalletExchangeRatesPage from './pages/WalletExchangeRatesPage';
-import PricingPage from './pages/PricingPage';
-import TransactionsPage from './pages/TransactionsPage';
-import InvoicesPage from './pages/InvoicesPage';
-import FinancialControlPage from './pages/FinancialControlPage';
-import InquiriesPage from './pages/InquiriesPage';
-import AnnouncementsPage from './pages/AnnouncementsPage';
-import TransferPointsPage from './pages/TransferPointsPage';
-import AnalyticsPage from './pages/AnalyticsPage';
-import ToolAccessPage from './pages/ToolAccessPage';
-import RolePermissionsPage from './pages/RolePermissionsPage';
-import SalarySettingsPage from './pages/SalarySettingsPage';
-import BannersPage from './pages/BannersPage';
-import CategoriesPage from './pages/CategoriesPage';
-import ModuleSubscriptionsPage from './pages/ModuleSubscriptionsPage';
-import PaymentSettingsPage from './pages/PaymentSettingsPage';
-import PointTopUpPage from './pages/PointTopUpPage';
-import AccessControlPage from './pages/AccessControlPage';
-import DeviceSessionsPage from './pages/DeviceSessionsPage';
-import SecurityCenterPage from './pages/SecurityCenterPage';
-import GrowthCenterPage from './pages/GrowthCenterPage';
-import AuditCompliancePage from './pages/AuditCompliancePage';
-import SystemHealthPage from './pages/SystemHealthPage';
+const ExecutiveDashboardPage = lazy(() => import('./pages/ExecutiveDashboardPage'));
+const AlertIntelligencePage = lazy(() => import('./pages/AlertIntelligencePage'));
+const AdminActivityCenterPage = lazy(() => import('./pages/AdminActivityCenterPage'));
+const AdminInvestigationCenterPage = lazy(() => import('./pages/AdminInvestigationCenterPage'));
+const PlatformControlCenterPage = lazy(() => import('./pages/PlatformControlCenterPage'));
+const SystemGovernanceCenterPage = lazy(() => import('./pages/SystemGovernanceCenterPage'));
+const AdvancedUserOperationsPage = lazy(() => import('./pages/AdvancedUserOperationsPage'));
+const FinancialRiskControlsPage = lazy(() => import('./pages/FinancialRiskControlsPage'));
+const UserManagementPage = lazy(() => import('./pages/UserManagementPage'));
+const FeatureAccessPage = lazy(() => import('./pages/FeatureAccessPage'));
+const IdentityVerificationPage = lazy(() => import('./pages/IdentityVerificationPage'));
+const KycOperationsPage = lazy(() => import('./pages/KycOperationsPage'));
+const FraudRiskPage = lazy(() => import('./pages/FraudRiskPage'));
+const CommunicationsCenterPage = lazy(() => import('./pages/CommunicationsCenterPage'));
+const ServiceOperationsPage = lazy(() => import('./pages/ServiceOperationsPage'));
+const NotificationDeliveryPage = lazy(() => import('./pages/NotificationDeliveryPage'));
+const WalletSettlementPage = lazy(() => import('./pages/WalletSettlementPage'));
+const SupportOperationsPage = lazy(() => import('./pages/SupportOperationsPage'));
+const SupportTicketsPage = lazy(() => import('./pages/SupportTicketsPage'));
+const SupportMessagesPage = lazy(() => import('./pages/SupportMessagesPage'));
+const ReportsPage = lazy(() => import('./pages/ReportsPage'));
+const RatesPricingPage = lazy(() => import('./pages/RatesPricingPage'));
+const WalletExchangeRatesPage = lazy(() => import('./pages/WalletExchangeRatesPage'));
+const PricingPage = lazy(() => import('./pages/PricingPage'));
+const TransactionsPage = lazy(() => import('./pages/TransactionsPage'));
+const InvoicesPage = lazy(() => import('./pages/InvoicesPage'));
+const FinancialControlPage = lazy(() => import('./pages/FinancialControlPage'));
+const InquiriesPage = lazy(() => import('./pages/InquiriesPage'));
+const AnnouncementsPage = lazy(() => import('./pages/AnnouncementsPage'));
+const TransferPointsPage = lazy(() => import('./pages/TransferPointsPage'));
+const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
+const ToolAccessPage = lazy(() => import('./pages/ToolAccessPage'));
+const RolePermissionsPage = lazy(() => import('./pages/RolePermissionsPage'));
+const SalarySettingsPage = lazy(() => import('./pages/SalarySettingsPage'));
+const BannersPage = lazy(() => import('./pages/BannersPage'));
+const CategoriesPage = lazy(() => import('./pages/CategoriesPage'));
+const ModuleSubscriptionsPage = lazy(() => import('./pages/ModuleSubscriptionsPage'));
+const PaymentSettingsPage = lazy(() => import('./pages/PaymentSettingsPage'));
+const PointTopUpPage = lazy(() => import('./pages/PointTopUpPage'));
+const AccessControlPage = lazy(() => import('./pages/AccessControlPage'));
+const DeviceSessionsPage = lazy(() => import('./pages/DeviceSessionsPage'));
+const SecurityCenterPage = lazy(() => import('./pages/SecurityCenterPage'));
+const GrowthCenterPage = lazy(() => import('./pages/GrowthCenterPage'));
+const AuditCompliancePage = lazy(() => import('./pages/AuditCompliancePage'));
+const SystemHealthPage = lazy(() => import('./pages/SystemHealthPage'));
 import SuperadminRoute from './routes/SuperadminRoute';
+import AdminErrorBoundary from './components/AdminErrorBoundary';
 
 function AdminRoutes() {
   return (
-    <Routes>
+    <Suspense fallback={<div className="min-h-screen grid place-items-center text-sm text-slate-500">Loading MySheba Admin…</div>}><Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route element={<ProtectedRoute />}>
         <Route index element={<PortalDashboardPage />} />
@@ -107,16 +109,16 @@ function AdminRoutes() {
         </Route>
       </Route>
       <Route path="*" element={<LoginPage />} />
-    </Routes>
+    </Routes></Suspense>
   );
 }
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <AdminErrorBoundary><BrowserRouter>
       <AuthProvider>
         <AdminRoutes />
       </AuthProvider>
-    </BrowserRouter>
+    </BrowserRouter></AdminErrorBoundary>
   );
 }

@@ -37,6 +37,8 @@ import { FEATURE_ID_LIST, FEATURE_LABELS } from '../constants/adFeatures';
 
 export const DEFAULT_AD_SETTINGS = {
   adsEnabled: true,
+  admobEnabled: true,
+  admobBannerEnabled: true,
   directAdsEnabled: true,
   bannerAdsEnabled: true,
   nativeAdsEnabled: true,
