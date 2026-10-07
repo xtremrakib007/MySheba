@@ -116,7 +116,7 @@ const SCREEN_FOR = { apiManagement: 'apiProviderManagement' };
 export default function AdminFeaturesScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
-  const { profile, goBackOrHome, setScreen, openSidebar, dealerTxs, inquiries, topups, setAdminTab, setAdminViewingSection, setHomeBackInterceptor, rates, gridManagement, gridViewer, webviewPages, can, tileLabels } = useApp();
+  const { profile, goBackOrHome, setScreen, openSidebar, dealerTxs, inquiries, topups, setAdminTab, setAdminViewingSection, setHomeBackInterceptor, rates, gridManagement, gridViewer, webviewPages, can, tileLabels, dynamicPlatformFeatures } = useApp();
   const [section, setSection] = useState(null);
   const [rateView, setRateView] = useState(false);
   const [editRateKey, setEditRateKey] = useState(null);
@@ -240,7 +240,7 @@ export default function AdminFeaturesScreen() {
   // reach them, and openHomeItem routes the tiles that live in one.
   // Admin and superadmin land here rather than on ServiceGrid, so the WebView
   // configuration has to be applied to this list too - see serviceTiles.
-  const adminHomeList = adminLandingTiles(webviewPages, hasServiceArt, tileLabels);
+  const adminHomeList = adminLandingTiles(webviewPages, hasServiceArt, tileLabels, { uid: profile?.uid, role: profile?.role, country: profile?.countryCode || profile?.country }, dynamicPlatformFeatures);
 
   const homeItems = adminHomeList.filter((item) => {
     if (item.section === 'system' && !isSuperadmin) return false;
