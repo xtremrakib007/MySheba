@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import {
   approveTransaction,
   assignDealer,
@@ -46,6 +47,7 @@ function OperatorPendingNote({ tx }: { tx: Transaction }) {
 }
 
 export default function TransactionsPage() {
+  const { access } = useAuth();
   const [tab, setTab] = useState<'all' | 'pending'>('all');
   const [txs, setTxs] = useState<Transaction[]>([]);
   const [dealers, setDealers] = useState<DealerOption[]>([]);
@@ -134,7 +136,7 @@ export default function TransactionsPage() {
                 {!!tx.receiptUrl && <p className="mt-2 text-xs"><a href={tx.receiptUrl} target="_blank" rel="noreferrer" className="font-semibold text-[var(--color-primary)] underline">View transfer receipt</a></p>}
                 {tx.status === 'completed' && tx.rejected && <p className="mt-2 text-xs text-[var(--color-danger)]">Rejected: {tx.rejectReason}</p>}
 
-                {archivingId === tx.id ? (
+                {access.role === 'superadmin' && (archivingId === tx.id ? (
                   <div className="mt-4 rounded-lg border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/5 p-3">
                     <p className="text-xs font-semibold text-[var(--color-danger)]">Archive this financial record?</p>
                     <p className="mt-1 text-xs text-[var(--color-ink-soft)]">The record will not be physically deleted. Its status and audit history remain protected.</p>
@@ -168,7 +170,7 @@ export default function TransactionsPage() {
                     onClick={() => setArchivingId(tx.id)}
                     className="mt-4 rounded-lg border border-[var(--color-danger)]/40 px-3 py-1.5 text-xs font-semibold text-[var(--color-danger)] disabled:opacity-40"
                   >Delete / Archive</button>
-                )}
+                ) )}
               </div>
             );
           })}
