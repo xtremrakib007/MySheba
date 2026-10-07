@@ -38,7 +38,7 @@ const ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH'];
 //
 // scripts/test-api-countries.js keeps this in step with RECHARGE_RATE_KEYS and
 // with the admin screen's own copy.
-const ALLOWED_COUNTRIES = ['ALL', 'BD', 'MY', 'SG', 'ID', 'IN', 'PH', 'NP', 'PK', 'MM', 'KH'];
+const ALLOWED_COUNTRIES = ['ALL', 'BD', 'MY', 'SG', 'ID', 'IN', 'PH', 'NP', 'PK', 'MM', 'KH', 'TH'];
 // Services that are never dispatched to a provider, whatever the matrix says.
 //
 // Both move MONEY rather than buy a product. Mobile Banking pays out to a
