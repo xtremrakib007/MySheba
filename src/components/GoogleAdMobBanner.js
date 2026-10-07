@@ -16,7 +16,7 @@ import {
 import { AD_TYPES } from '../constants/adEnums';
 import { FEATURE_IDS } from '../constants/adFeatures';
 
-const AD_UNIT_ID = __DEV__ ? TestIds.ADAPTIVE_BANNER : ADMOB_AD_UNITS.primary;
+const AD_UNIT_ID = __DEV__ ? TestIds.BANNER : ADMOB_AD_UNITS.primary;
 
 export default function GoogleAdMobBanner() {
   const [adSettings, setAdSettings] = useState(DEFAULT_AD_SETTINGS);
@@ -53,7 +53,7 @@ export default function GoogleAdMobBanner() {
     <View style={styles.container} accessibilityLabel="Advertisement">
       <BannerAd
         unitId={AD_UNIT_ID}
-        size={BannerAdSize.LARGE_ANCHORED_ADAPTIVE_BANNER}
+        size={BannerAdSize.BANNER}
         requestOptions={{ requestNonPersonalizedAdsOnly: true }}
         onAdFailedToLoad={() => {}}
       />
