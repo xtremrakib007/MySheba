@@ -10,6 +10,8 @@ const emailOtpService = require('./emailOtpService');
 
 const APP_EMAIL_DOMAIN = 'mysheba.app';
 const REGISTRATION_LOCK_MS = 120000;
+const DEFAULT_REFERRAL_DAYS = 30;
+
 function normalizePhone(phone) { return String(phone || '').replace(/[^0-9]/g, ''); }
 function normalizeEmail(email) { return String(email || '').trim().toLowerCase(); }
 function toE164(phone, dialCode = '+60') {
@@ -23,6 +25,10 @@ function phoneToEmail(phoneE164) { return `${String(phoneE164 || '').replace(/[^
 function isValidPhone(phone) { return normalizePhone(phone).length >= 8; }
 function isValidEmail(email) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email)); }
 function isValidPin(pin) { const value = String(pin || ''); return value.length >= 6 && value.length <= 20; }
+function referralDeadlineFromConfig(settings, nowMs = Date.now()) {
+  const days = Math.max(1, Math.min(365, Math.round(Number(settings?.referralQualificationDays) || DEFAULT_REFERRAL_DAYS)));
+  return admin.firestore.Timestamp.fromMillis(nowMs + days * 86400000);
+}
 
 exports.registerWithDealerCode = onCall({ enforceAppCheck: false }, async (request) => {
   const data = request.data || {};
@@ -36,9 +42,6 @@ exports.registerWithDealerCode = onCall({ enforceAppCheck: false }, async (reque
   if (!isValidPhone(phone)) throw new HttpsError('invalid-argument', 'Please enter a valid phone number.');
   if (!isValidEmail(email)) throw new HttpsError('invalid-argument', 'Please enter a valid email address.');
   if (!isValidPin(pin)) throw new HttpsError('invalid-argument', 'Password must be 6-20 characters.');
-  // A two-letter country code, and only a country the app actually lists.
-  // Stored at registration because it is asked once and used by KYC and
-  // remittance later, where getting it wrong means a refused document.
   const nationalityCode = String(nationality || '').trim().toUpperCase();
   if (!/^[A-Z]{2}$/.test(nationalityCode)) throw new HttpsError('invalid-argument', 'Please choose your nationality.');
 
@@ -77,9 +80,11 @@ exports.registerWithDealerCode = onCall({ enforceAppCheck: false }, async (reque
   }
 
   const db = admin.firestore();
-  // Lock email and phone identities independently. A combined email+phone lock
-  // does not prevent two concurrent registrations from reusing the same email
-  // with different phone numbers.
+  const growthSnap = await db.collection('settings').doc('growth').get();
+  const growth = growthSnap.exists ? growthSnap.data() || {} : {};
+  const referralDays = Math.max(1, Math.min(365, Math.round(Number(growth.referralQualificationDays) || DEFAULT_REFERRAL_DAYS)));
+  const referralEnabled = growth.referralEnabled !== false;
+
   const emailLockRef = db.collection('registrationIdentityLocks').doc('email_' + crypto.createHash('sha256').update(normalizedEmail).digest('hex'));
   const phoneLockRef = db.collection('registrationIdentityLocks').doc('phone_' + crypto.createHash('sha256').update(verifiedPhoneE164).digest('hex'));
   let locksAcquired = false;
@@ -94,26 +99,21 @@ exports.registerWithDealerCode = onCall({ enforceAppCheck: false }, async (reque
         throw new HttpsError('resource-exhausted', 'Registration is already being processed. Please wait a few seconds.');
       }
       const expiresAt = admin.firestore.Timestamp.fromMillis(now + REGISTRATION_LOCK_MS);
-      tx.set(emailLockRef, { type: 'email', createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      referralCode: 'MS' + crypto.createHash('sha256').update(userRecord.uid).digest('hex').slice(0, 8).toUpperCase(),
-      ...(referral ? { referral } : {}), expiresAt });
+      tx.set(emailLockRef, { type: 'email', createdAt: admin.firestore.FieldValue.serverTimestamp(), expiresAt });
       tx.set(phoneLockRef, { type: 'phone', createdAt: admin.firestore.FieldValue.serverTimestamp(), expiresAt });
     });
     locksAcquired = true;
+
     const emailSnap = await db.collection('users').where('email', '==', normalizedEmail).limit(1).get();
     if (!emailSnap.empty) throw new HttpsError('already-exists', 'This email address is already registered to another account.');
 
     const phoneSnap = await db.collection('users').where('phoneE164', '==', verifiedPhoneE164).limit(1).get();
     if (!phoneSnap.empty) throw new HttpsError('already-exists', 'This phone number is already registered to another account.');
 
-    // Never delete an already-established Firebase Auth account merely because its
-    // verification credential was supplied during a new registration attempt.
     for (const verifiedUid of [emailAuthUid, phoneAuthUid].filter(Boolean)) {
       try {
         const verifiedProfile = await db.collection('users').doc(verifiedUid).get();
-        if (verifiedProfile.exists) {
-          throw new HttpsError('already-exists', 'The verified identity is already linked to an existing account.');
-        }
+        if (verifiedProfile.exists) throw new HttpsError('already-exists', 'The verified identity is already linked to an existing account.');
       } catch (err) {
         if (err instanceof HttpsError) throw err;
         await logServerError('registerWithDealerCode.identityCheck', err, { userId: verifiedUid });
@@ -133,12 +133,22 @@ exports.registerWithDealerCode = onCall({ enforceAppCheck: false }, async (reque
 
     const cleanReferralCode = String(referralCode || '').trim().toUpperCase().slice(0, 32);
     let referral = null;
-    if (cleanReferralCode) {
+    if (referralEnabled && cleanReferralCode) {
       const referralSnap = await db.collection('users').where('referralCode', '==', cleanReferralCode).limit(1).get();
       if (!referralSnap.empty && referralSnap.docs[0].id !== userRecord.uid) {
         const referrer = referralSnap.docs[0].data() || {};
-        if (referrer.role === 'customer' && referrer.active !== false && referrer.disabled !== true && !referrer.mergedInto) {
-          referral = { referredBy: referralSnap.docs[0].id, referralCode: cleanReferralCode, status: 'registered' };
+        if (referrer.role === 'customer' && referrer.active !== false && referrer.disabled !== true && referrer.suspended !== true && !referrer.mergedInto) {
+          const now = Date.now();
+          referral = {
+            referredBy: referralSnap.docs[0].id,
+            referralCode: cleanReferralCode,
+            status: 'registered',
+            rewardStatus: 'pending',
+            qualifyingSpend: 0,
+            minimumSpend: Math.max(0, Number(growth.referralMinimumSpend) || 50),
+            registeredAt: admin.firestore.Timestamp.fromMillis(now),
+            qualificationDeadlineAt: referralDeadlineFromConfig(growth, now),
+          };
         }
       }
     }
@@ -173,7 +183,7 @@ exports.registerWithDealerCode = onCall({ enforceAppCheck: false }, async (reque
 
     await logAudit({
       action: 'account_created', targetUid: userRecord.uid, performedBy: 'system', performedByRole: null,
-      details: { role: 'customer', method: 'phone_pin', verification: verifiedBy, emailVerification: emailOtpUsed ? 'otp' : (emailAuthUid ? 'firebase_link' : null) },
+      details: { role: 'customer', method: 'phone_pin', verification: verifiedBy, emailVerification: emailOtpUsed ? 'otp' : (emailAuthUid ? 'firebase_link' : null), referred: !!referral },
     });
     return { uid: userRecord.uid, role: 'customer', verification: verifiedBy };
   } finally {
