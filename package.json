@@ -187,6 +187,15 @@
     },
     "compression": "1.8.2",
     "source-map-js": "1.2.2",
-    "shell-quote": "1.12.0"
+    "shell-quote": "1.12.0",
+    "react-devtools-core": {
+      "shell-quote": "1.12.0"
+    },
+    "@expo/cli": {
+      "compression": "1.8.2"
+    },
+    "postcss": {
+      "source-map-js": "1.2.2"
+    }
   }
 }
