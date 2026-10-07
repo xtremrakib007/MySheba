@@ -341,7 +341,6 @@ export default function WebViewScreen() {
               )}
             </View>
           )}
-          {webviewBanner.enabled && webviewBanner.position === 'bottom' && <View style={styles.webviewBannerSlot}><GoogleAdMobBanner placementType="webview" placementKey={webViewKey} /></View>}
           <WebView
             // No `key`. Keying on the url tore the whole native WebView down
             // and built a new one on every change - a new renderer process, a
@@ -408,6 +407,7 @@ export default function WebViewScreen() {
             decelerationRate="normal"
             style={{ flex: 1 }}
           />
+          {webviewBanner.enabled && webviewBanner.position === 'bottom' && <View style={styles.webviewBannerSlot}><GoogleAdMobBanner placementType="webview" placementKey={webViewKey} /></View>}
         </View>
       ) : (
         <View style={styles.placeholder}>
