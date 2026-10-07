@@ -943,6 +943,65 @@ async function providersForService(db, service) {
 }
 exports._providersForService = providersForService;
 
+// Short-lived in-memory catalog lookup. Product codes are provider-owned and
+// can change, so this is intentionally a cache, never a permanent product map.
+const IIMMPACT_PRODUCT_CODE_CACHE = new Map();
+const IIMMPACT_PRODUCT_CODE_CACHE_MS = 5 * 60 * 1000;
+
+function normaliseCatalogText(value) {
+  return String(value || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+async function resolveIimmpactCatalogProductCode(provider, service, subject, raw = {}) {
+  const key = [provider.id || provider.name || 'iimmpact', service, subject, raw.operator || '', raw.provider || ''].join('|').toLowerCase();
+  const cached = IIMMPACT_PRODUCT_CODE_CACHE.get(key);
+  if (cached && Date.now() - cached.at < IIMMPACT_PRODUCT_CODE_CACHE_MS) return cached.code;
+
+  const base = new URL(provider.baseUrl);
+  const url = new URL('/v2/catalog', base);
+  url.searchParams.set('is_active', 'true');
+  const { ok, json } = await signedProviderRequest(url, {
+    method: 'GET',
+    headers: { accept: 'application/json' },
+  }, provider);
+  if (!ok || !json || typeof json !== 'object') return '';
+
+  const wanted = new Set([
+    subject,
+    raw.operator,
+    raw.provider,
+    raw.game,
+    raw.gameName,
+    raw.package,
+    raw.packageName,
+  ].map(normaliseCatalogText).filter(Boolean));
+  if (!wanted.size) return '';
+
+  const products = Object.values(json.products || {}).filter((p) => p && p.is_active !== false && p.code);
+  const scored = products.map((p) => {
+    const name = normaliseCatalogText(p.name);
+    const note = normaliseCatalogText(p.note);
+    const code = normaliseCatalogText(p.code);
+    let score = 0;
+    for (const term of wanted) {
+      if (term === code) score = Math.max(score, 100);
+      if (term === name) score = Math.max(score, 100);
+      if (name.includes(term) || term.includes(name)) score = Math.max(score, 80);
+      if (note && (note.includes(term) || term.includes(note))) score = Math.max(score, 60);
+    }
+    if (service === 'Recharge PIN' && String(p.processing_time || '').toLowerCase() === 'pin' && score > 0) score += 20;
+    return { code: String(p.code), score };
+  }).filter((x) => x.score > 0).sort((a, b) => b.score - a.score);
+
+  // Never guess between equally plausible products. A missing map is safer than
+  // silently buying a different product from the one the customer selected.
+  const code = scored.length && (scored.length === 1 || scored[0].score > scored[1].score)
+    ? scored[0].code
+    : '';
+  if (code) IIMMPACT_PRODUCT_CODE_CACHE.set(key, { code, at: Date.now() });
+  return code;
+}
+
 async function executeConfiguredApi(service, payload, customer, requestId, options = {}) {
   // The last line of defence, and the one that would do the damage. Everything
   // above this refuses a payout earlier - the mode, the stored settings, the
@@ -1041,7 +1100,15 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   // denomination.
   const codeSubject = productCodes.codeSubjectFor(service, raw);
   const codeOptions = { service, denomination: raw.amount };
-  const mappedOperatorCode = productCodes.productCodeFor(provider, codeSubject, codeOptions);
+  let mappedOperatorCode = productCodes.productCodeFor(provider, codeSubject, codeOptions);
+  // Dynamic Catalog is the fallback for IIMMPACT. Manual product-code maps
+  // remain supported for other providers, but an IIMMPACT order can resolve a
+  // live product code from /v2/catalog when no legacy map was entered. This is
+  // especially important for PIN, biller and newly-added products whose codes
+  // are not known when MySheba is released.
+  if (!mappedOperatorCode && provider.authType === 'iimmpactHmac') {
+    mappedOperatorCode = await resolveIimmpactCatalogProductCode(provider, service, codeSubject, raw);
+  }
   const providerOperatorCode = raw.operatorCode || mappedOperatorCode;
   // A fixed product's amount is the provider's to state. Ours is the
   // customer's SELL price, and sending that buys the wrong thing or is
