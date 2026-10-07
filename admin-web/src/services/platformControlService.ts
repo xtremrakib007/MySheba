@@ -9,7 +9,7 @@ export interface PlatformFeature { id:string; key:string; name:string; descripti
 export interface CountryRow { id:string; code:string; name:string; flag?:string; dial?:string; currency?:string; enabled:boolean; archived?:boolean; sortOrder:number; }
 export interface OperatorRow { id:string; name:string; country:string; logo?:string; enabled:boolean; recharge:boolean; internet:boolean; offerPacks:boolean; entertainment:boolean; sortOrder:number; archived?:boolean; }
 export interface UserLookup { uid:string; name:string; phone:string; role:string; userId:string; }
-export interface CatalogAdmin { features:PlatformFeature[]; countries:CountryRow[]; operators:OperatorRow[]; webviews:Array<Record<string,any>>; ads:Record<string,boolean>; }
+export interface CatalogAdmin { features:PlatformFeature[]; countries:CountryRow[]; operators:OperatorRow[]; webviews:Array<Record<string,any>>; ads:Record<string,boolean> & { placementControls?: any }; }
 
 export const listCatalog=()=>call<CatalogAdmin>('listPlatformCatalogAdmin');
 export const saveFeature=(data:Partial<PlatformFeature>)=>call<{ok:boolean,id:string}>('savePlatformFeature',data);
