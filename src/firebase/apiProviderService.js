@@ -11,6 +11,9 @@ const dataPlansFn = httpsCallable(functions, 'listProviderDataPlans');
 const presentmentFn = httpsCallable(functions, 'getBillPresentment');
 const networkStatusFn = httpsCallable(functions, 'getNetworkStatus');
 const productCodesFn = httpsCallable(functions, 'listProviderProductCodes');
+const iimmpactCatalogFn = httpsCallable(functions, 'getIimmpactCatalog');
+const iimmpactUserCatalogFn = httpsCallable(functions, 'getIimmpactCatalogForUser');
+const iimmpactOptionsFn = httpsCallable(functions, 'getIimmpactOptions');
 const testFn = httpsCallable(functions, 'testApiProvider');
 const adminCatalogFn = httpsCallable(functions, 'listSuccessTopUpCatalogForAdmin');
 const balanceFn = httpsCallable(functions, 'getSuccessTopUpBalance');
@@ -80,6 +83,18 @@ export async function listProviderDataPlans({ service = 'Internet', country, ope
  */
 export async function listProviderProductCodes(id) {
   return (await productCodesFn({ id })).data?.products || [];
+}
+
+export async function getIimmpactCatalog(id) {
+  return (await iimmpactCatalogFn({ id })).data || {};
+}
+
+export async function getIimmpactCatalogForUser(providerId) {
+  return (await iimmpactUserCatalogFn({ providerId })).data || {};
+}
+
+export async function getIimmpactOptions({ providerId, productCode, fieldId, accountNumber = '', billerCode = '', page = 1, limit = 100 }) {
+  return (await iimmpactOptionsFn({ providerId, productCode, fieldId, accountNumber, billerCode, page, limit })).data || {};
 }
 
 /**

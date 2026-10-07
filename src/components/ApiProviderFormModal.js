@@ -118,6 +118,7 @@ const AUTH_LABELS = { iimmpactHmac: 'iimmpact (HMAC)' };
 // https://api.iimmpact.com; the preset uses production, so change the base URL
 // while testing.
 const IIMMPACT_DEFAULTS = {
+  iimmpactApiVersion: '2026-09-16',
   name: 'iimmpact',
   baseUrl: 'https://api.iimmpact.com',
   endpointPath: '/v2/topup',
@@ -221,18 +222,13 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
     if (presetService === 'iimmpact') {
       const service = 'Recharge';
       const catalogue = {
-        catalogPreset: 'iimmpact-options',
-        catalogPath: '/v2/options',
+        catalogPreset: 'iimmpact-catalog',
+        catalogPath: '/v2/catalog',
         catalogMethod: 'GET',
         catalogFieldId: 'plan',
         catalogPerAccount: 'true',
-        catalogQueryTemplate: JSON.stringify({
-          product_code: '{{operator}}',
-          field_id: '{{fieldId}}',
-          account_number: '{{account}}',
-          limit: '25000'
-        }),
-        catalogListPath: 'items'
+        catalogQueryTemplate: '{}',
+        catalogListPath: 'products'
       };
       setForm({
         ...baseForm,
@@ -260,9 +256,24 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
     if (productsBusy || !provider?.id) return;
     setProductsBusy(true); setProductsError(''); setProducts([]);
     try {
-      setProducts(await apiProviderService.listProviderProductCodes(provider.id));
+      const isIimmpact = String(provider.authType || '').toLowerCase() === 'iimmpacthmac'
+        || String(provider.name || '').trim().toLowerCase() === 'iimmpact';
+      if (isIimmpact) {
+        const catalog = await apiProviderService.getIimmpactCatalog(provider.id);
+        const rows = Object.values(catalog?.products || {})
+          .filter((p) => p && p.code)
+          .map((p) => ({
+            code: String(p.code),
+            name: p.name || '',
+            category: Array.isArray(p.fields) ? p.fields.map((f) => f?.id).filter(Boolean).join(', ') : '',
+          }))
+          .sort((a, b) => (a.name || a.code).localeCompare(b.name || b.code));
+        setProducts(rows);
+      } else {
+        setProducts(await apiProviderService.listProviderProductCodes(provider.id));
+      }
     } catch (error) {
-      setProductsError(String(error?.message || 'Could not read the product list.'));
+      setProductsError(String(error?.message || 'Could not read the provider catalog.'));
     } finally {
       setProductsBusy(false);
     }
@@ -279,7 +290,7 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
     // Only the Internet record gets the per-number catalogue: it is what turns
     // the package step into "plans available on this number". Every other
     // feature is a plain charge with no catalogue to browse.
-    const catalogue = { catalogPreset: 'iimmpact-options', catalogPath: '/v2/options', catalogMethod: 'GET', catalogFieldId: 'plan', catalogPerAccount: 'true', catalogQueryTemplate: JSON.stringify({ product_code: '{{operator}}', field_id: '{{fieldId}}', account_number: '{{account}}', limit: '25000' }), catalogListPath: 'items' };
+    const catalogue = { catalogPreset: 'iimmpact-catalog', catalogPath: '/v2/catalog', catalogMethod: 'GET', catalogFieldId: 'plan', catalogPerAccount: 'true', catalogQueryTemplate: '{}', catalogListPath: 'products' };
     return {
       ...f,
       ...IIMMPACT_DEFAULTS,
@@ -450,9 +461,9 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
                                   <Text style={styles.presetText}>{productsBusy ? 'Reading\u2026' : 'Product list from the provider'}</Text>
                                 </TouchableOpacity>
                                 <Text style={styles.fieldHint}>
-                                  The codes for the maps below. Nothing is built in, so this reads them from the
-                                  provider itself rather than anybody guessing: a wrong code is a real top-up
-                                  sent to the wrong product.
+                                  For IIMMPACT this reads the active Dynamic Catalog (/v2/catalog), which is the source of truth for
+                                  product codes and fields. Wholesale pricing is kept server-side and is never shown
+                                  here. Other providers continue to use their configured product-list endpoint.
                                 </Text>
                                 {!!productsError && <Text style={styles.fieldHint}>{productsError}</Text>}
                                 {products.map((p) => (

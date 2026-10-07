@@ -881,6 +881,7 @@ async function signedProviderRequest(url, init, provider) {
   if (!pinned) throw new Error('Provider hostname resolved to an invalid address.');
   const headers = { ...(init && init.headers) };
   if (provider && provider.authType === 'iimmpactHmac') {
+    headers['X-API-Version'] = String(provider.iimmpactApiVersion || '2026-09-16');
     Object.assign(headers, signIimmpactRequest({
       apiKey: provider.apiKey,
       secretKey: provider.secretKey,
@@ -941,6 +942,65 @@ async function providersForService(db, service) {
   return [...byId.values()];
 }
 exports._providersForService = providersForService;
+
+// Short-lived in-memory catalog lookup. Product codes are provider-owned and
+// can change, so this is intentionally a cache, never a permanent product map.
+const IIMMPACT_PRODUCT_CODE_CACHE = new Map();
+const IIMMPACT_PRODUCT_CODE_CACHE_MS = 5 * 60 * 1000;
+
+function normaliseCatalogText(value) {
+  return String(value || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+async function resolveIimmpactCatalogProductCode(provider, service, subject, raw = {}) {
+  const key = [provider.id || provider.name || 'iimmpact', service, subject, raw.operator || '', raw.provider || ''].join('|').toLowerCase();
+  const cached = IIMMPACT_PRODUCT_CODE_CACHE.get(key);
+  if (cached && Date.now() - cached.at < IIMMPACT_PRODUCT_CODE_CACHE_MS) return cached.code;
+
+  const base = new URL(provider.baseUrl);
+  const url = new URL('/v2/catalog', base);
+  url.searchParams.set('is_active', 'true');
+  const { ok, json } = await signedProviderRequest(url, {
+    method: 'GET',
+    headers: { accept: 'application/json' },
+  }, provider);
+  if (!ok || !json || typeof json !== 'object') return '';
+
+  const wanted = new Set([
+    subject,
+    raw.operator,
+    raw.provider,
+    raw.game,
+    raw.gameName,
+    raw.package,
+    raw.packageName,
+  ].map(normaliseCatalogText).filter(Boolean));
+  if (!wanted.size) return '';
+
+  const products = Object.values(json.products || {}).filter((p) => p && p.is_active !== false && p.code);
+  const scored = products.map((p) => {
+    const name = normaliseCatalogText(p.name);
+    const note = normaliseCatalogText(p.note);
+    const code = normaliseCatalogText(p.code);
+    let score = 0;
+    for (const term of wanted) {
+      if (term === code) score = Math.max(score, 100);
+      if (term === name) score = Math.max(score, 100);
+      if (name.includes(term) || term.includes(name)) score = Math.max(score, 80);
+      if (note && (note.includes(term) || term.includes(note))) score = Math.max(score, 60);
+    }
+    if (service === 'Recharge PIN' && String(p.processing_time || '').toLowerCase() === 'pin' && score > 0) score += 20;
+    return { code: String(p.code), score };
+  }).filter((x) => x.score > 0).sort((a, b) => b.score - a.score);
+
+  // Never guess between equally plausible products. A missing map is safer than
+  // silently buying a different product from the one the customer selected.
+  const code = scored.length && (scored.length === 1 || scored[0].score > scored[1].score)
+    ? scored[0].code
+    : '';
+  if (code) IIMMPACT_PRODUCT_CODE_CACHE.set(key, { code, at: Date.now() });
+  return code;
+}
 
 async function executeConfiguredApi(service, payload, customer, requestId, options = {}) {
   // The last line of defence, and the one that would do the damage. Everything
@@ -1040,7 +1100,15 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   // denomination.
   const codeSubject = productCodes.codeSubjectFor(service, raw);
   const codeOptions = { service, denomination: raw.amount };
-  const mappedOperatorCode = productCodes.productCodeFor(provider, codeSubject, codeOptions);
+  let mappedOperatorCode = productCodes.productCodeFor(provider, codeSubject, codeOptions);
+  // Dynamic Catalog is the fallback for IIMMPACT. Manual product-code maps
+  // remain supported for other providers, but an IIMMPACT order can resolve a
+  // live product code from /v2/catalog when no legacy map was entered. This is
+  // especially important for PIN, biller and newly-added products whose codes
+  // are not known when MySheba is released.
+  if (!mappedOperatorCode && provider.authType === 'iimmpactHmac') {
+    mappedOperatorCode = await resolveIimmpactCatalogProductCode(provider, service, codeSubject, raw);
+  }
   const providerOperatorCode = raw.operatorCode || mappedOperatorCode;
   // A fixed product's amount is the provider's to state. Ours is the
   // customer's SELL price, and sending that buys the wrong thing or is
@@ -1804,6 +1872,156 @@ function readProductList(json) {
   return out.sort((a, b) => (a.name || a.code).localeCompare(b.name || b.code));
 }
 exports._test_readProductList = readProductList;
+
+/**
+ * IIMMPACT Dynamic Catalog API.
+ *
+ * The catalog is the source of truth for product codes, fields and fulfillment.
+ * These callables keep IIMMPACT credentials on the server and never expose
+ * wholesale pricing to normal users.
+ */
+async function loadIimmpactProvider(db, id) {
+  const providerId = cleanString(id, 100);
+  if (!providerId) throw new HttpsError('invalid-argument', 'Provider id is required.');
+  const snap = await db.collection(COLLECTION).doc(providerId).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'API provider not found.');
+  const provider = { id: providerId, ...(snap.data() || {}) };
+  const isIimmpact =
+    provider.authType === 'iimmpactHmac' ||
+    String(provider.name || '').trim().toLowerCase() === 'iimmpact' ||
+    String(provider.baseUrl || '').trim().toLowerCase() === 'https://api.iimmpact.com';
+  if (!isIimmpact) throw new HttpsError('failed-precondition', 'The selected provider is not configured as an IIMMPACT provider.');
+  if (provider.active === false) throw new HttpsError('failed-precondition', 'The IIMMPACT provider is inactive.');
+  Object.assign(provider, await providerSecretService.getCredentials(provider));
+  if (!provider.apiKey || !provider.secretKey) {
+    throw new HttpsError('failed-precondition', 'IIMMPACT API key and HMAC secret are not configured.');
+  }
+  return provider;
+}
+
+function iimmpactUrl(provider, path) {
+  let base;
+  try { base = new URL(provider.baseUrl); } catch { throw new HttpsError('failed-precondition', 'IIMMPACT base URL is invalid.'); }
+  if (base.protocol !== 'https:') throw new HttpsError('failed-precondition', 'IIMMPACT base URL must use HTTPS.');
+  const cleanPath = String(path || '').trim();
+  if (!cleanPath.startsWith('/') || cleanPath.includes('?') || cleanPath.includes('#')) {
+    throw new HttpsError('invalid-argument', 'IIMMPACT API path is invalid.');
+  }
+  return new URL(cleanPath, base);
+}
+
+function publicIimmpactCatalog(catalog) {
+  const products = {};
+  for (const [code, product] of Object.entries(catalog?.products || {})) {
+    if (!product || typeof product !== 'object') continue;
+    const { pricing: _pricing, ...safeProduct } = product;
+    products[code] = safeProduct;
+  }
+  return { last_updated: catalog?.last_updated || null, tree: catalog?.tree || { groups: [] }, products };
+}
+
+function publicIimmpactOptions(data) {
+  const items = Array.isArray(data?.items) ? data.items.map((item) => {
+    if (!item || typeof item !== 'object') return item;
+    const { cost: _cost, has_loss_risk: _loss, ...safe } = item;
+    return safe;
+  }) : [];
+  return {
+    product_code: data?.product_code || '',
+    field_id: data?.field_id || '',
+    items,
+    meta: data?.meta || {},
+  };
+}
+
+exports.getIimmpactCatalog = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  const db = admin.firestore();
+  await assertSuperadmin(db, request);
+  await checkVelocity(db, request.auth.uid, 'getIimmpactCatalog', { ip: getClientIp(request) });
+  const provider = await loadIimmpactProvider(db, request.data?.id);
+  const url = iimmpactUrl(provider, '/v2/catalog');
+  const productCode = cleanString(request.data?.productCode, 100);
+  if (productCode) url.searchParams.set('product_code', productCode);
+  if (request.data?.includeInactive === true) {
+    url.searchParams.set('include_inactive', 'true');
+  } else {
+    url.searchParams.set('is_active', 'true');
+  }
+
+  try {
+    const { ok, status, json } = await signedProviderRequest(url, {
+      method: 'GET',
+      headers: { accept: 'application/json' },
+    }, provider);
+    if (!ok || !json || typeof json !== 'object') {
+      const reason = String(getPath(json, 'message') || getPath(json, 'error.message') || `HTTP ${status}`);
+      throw new HttpsError('unavailable', `IIMMPACT catalog request failed: ${reason.slice(0, 300)}`);
+    }
+    return json;
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError('unavailable', String(error?.message || 'Unable to load the IIMMPACT catalog.').slice(0, 500));
+  }
+});
+
+exports.getIimmpactCatalogForUser = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  const db = admin.firestore();
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
+  await checkVelocity(db, request.auth.uid, 'getIimmpactCatalogForUser', { ip: getClientIp(request) });
+  const provider = await loadIimmpactProvider(db, request.data?.providerId);
+  const url = iimmpactUrl(provider, '/v2/catalog');
+  try {
+    const { ok, status, json } = await signedProviderRequest(url, {
+      method: 'GET',
+      headers: { accept: 'application/json' },
+    }, provider);
+    if (!ok || !json || typeof json !== 'object') {
+      const reason = String(getPath(json, 'message') || getPath(json, 'error.message') || `HTTP ${status}`);
+      throw new HttpsError('unavailable', `IIMMPACT catalog request failed: ${reason.slice(0, 300)}`);
+    }
+    return publicIimmpactCatalog(json);
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError('unavailable', String(error?.message || 'Unable to load the IIMMPACT catalog.').slice(0, 500));
+  }
+});
+
+exports.getIimmpactOptions = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  const db = admin.firestore();
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
+  await checkVelocity(db, request.auth.uid, 'getIimmpactOptions', { ip: getClientIp(request) });
+  const provider = await loadIimmpactProvider(db, request.data?.providerId);
+  const productCode = cleanString(request.data?.productCode, 100);
+  const fieldId = cleanString(request.data?.fieldId, 100);
+  if (!productCode || !fieldId) throw new HttpsError('invalid-argument', 'productCode and fieldId are required.');
+
+  const page = Math.max(1, Math.min(100000, Number(request.data?.page) || 1));
+  const limit = Math.max(1, Math.min(25000, Number(request.data?.limit) || 100));
+  const accountNumber = cleanString(request.data?.accountNumber, 200);
+  const billerCode = cleanString(request.data?.billerCode, 100);
+  const url = iimmpactUrl(provider, '/v2/options');
+  url.searchParams.set('product_code', productCode);
+  url.searchParams.set('field_id', fieldId);
+  url.searchParams.set('page', String(page));
+  url.searchParams.set('limit', String(limit));
+  if (accountNumber) url.searchParams.set('account_number', accountNumber);
+  if (billerCode) url.searchParams.set('biller_code', billerCode);
+
+  try {
+    const { ok, status, json } = await signedProviderRequest(url, {
+      method: 'GET',
+      headers: { accept: 'application/json' },
+    }, provider);
+    if (!ok || !json || typeof json !== 'object') {
+      const reason = String(getPath(json, 'message') || getPath(json, 'error.message') || `HTTP ${status}`);
+      throw new HttpsError('unavailable', `IIMMPACT options request failed: ${reason.slice(0, 300)}`);
+    }
+    return publicIimmpactOptions(json);
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError('unavailable', String(error?.message || 'Unable to load IIMMPACT options.').slice(0, 500));
+  }
+});
 
 exports.listProviderProductCodes = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();

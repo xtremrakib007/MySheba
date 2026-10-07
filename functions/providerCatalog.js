@@ -100,6 +100,20 @@ const PRESETS = {
   //
   // It is also a GET with query parameters rather than a POST with a body,
   // which is why fetchCatalog grew a query template.
+  // IIMMPACT Dynamic Catalog migration preset. The catalog itself is fetched
+  // from /v2/catalog by the dedicated catalog callables. Product flows that
+  // need selectable options use /v2/options, whose product/field identifiers
+  // come from the catalog rather than the deprecated product-list/subproducts
+  // endpoints.
+  'iimmpact-catalog': {
+    // Product discovery. This is intentionally separate from /v2/options.
+    path: '/v2/catalog',
+    method: 'GET',
+    perAccount: false,
+    listPath: 'products',
+    errorLabel: 'iimmpact',
+  },
+
   'iimmpact-options': {
     path: '/v2/options',
     method: 'GET',
@@ -207,7 +221,9 @@ function catalogConfigFor(provider) {
       String(provider.name || '').trim().toLowerCase() === 'iimmpact' ||
       String(provider.catalogPreset || '').trim() === 'iimmpact-subproducts'
     );
-  if (legacyIimmpact) path = '/v2/options';
+  // IIMMPACT's /v2/catalog is the product-discovery endpoint.
+  // Do not rewrite it to /v2/options: options are a separate endpoint
+  // queried only after a product/field has been selected.
 
   const baseUrl = String(provider.catalogBaseUrl || provider.baseUrl || (preset && preset.baseUrl) || '').trim();
   if (!baseUrl) return null;
@@ -223,7 +239,9 @@ function catalogConfigFor(provider) {
     path,
     method: String(provider.catalogMethod || (preset && preset.method) || 'POST').toUpperCase(),
     requestTemplate: asObject(provider.catalogRequestTemplate) || (preset && preset.requestTemplate) || {},
-    queryTemplate: legacyIimmpact ? { product_code: '{{operator}}', field_id: '{{fieldId}}', account_number: '{{account}}', limit: '25000' } : (asObject(provider.catalogQueryTemplate) || (preset && preset.queryTemplate) || {}),
+    queryTemplate: legacyIimmpact
+      ? { product_code: '{{operator}}', field_id: '{{fieldId}}', account_number: '{{account}}', limit: '25000' }
+      : (asObject(provider.catalogQueryTemplate) || (preset && preset.queryTemplate) || {}),
     // A per-account catalogue is personalised to one phone number: it may not
     // be fetched without one, and its answer is never reusable for another.
     perAccount: provider.catalogPerAccount !== undefined
@@ -240,7 +258,9 @@ function catalogConfigFor(provider) {
     successValue: provider.catalogSuccessValue !== undefined
       ? provider.catalogSuccessValue
       : (preset ? preset.successValue : undefined),
-    listPath: legacyIimmpact ? 'items' : String(provider.catalogListPath || (preset && preset.listPath) || '').trim(),
+    listPath: legacyIimmpact
+      ? 'items'
+      : String(provider.catalogListPath || (preset && preset.listPath) || '').trim(),
     itemMap: asObject(provider.catalogItemMap) || (preset && preset.itemMap) || DEFAULT_ITEM_MAP,
     types,
     window: windowSpec,
