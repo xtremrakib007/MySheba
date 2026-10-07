@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, ChevronDown, Globe2, Layers3, Megaphone, Plus, Save, Search, Smartphone, Trash2, Users } from 'lucide-react';
+import { Check, ChevronDown, Edit2, Globe2, Layers3, Megaphone, Plus, Save, Search, Smartphone, Trash2, Users } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import * as service from '../services/platformControlService';
 
@@ -67,7 +67,7 @@ export default function PlatformControlCenterPage(){
         <MultiSelect label="Countries" placeholder="All countries" options={countryOptions} selected={feature.countries||[]} onChange={countries=>setFeature({...feature,countries})}/>
       </div>
       <button disabled={busy} onClick={()=>run(()=>service.saveFeature(feature))} className="mt-3 rounded-xl bg-[#00a99d] px-4 py-2 text-sm font-bold text-white disabled:opacity-50"><Save size={15} className="mr-2 inline"/>Save Feature</button>
-      <div className="mt-6 divide-y">{data?.features.map(f=><div key={f.id} className="flex flex-wrap items-center gap-3 py-3"><span className="text-xl">{f.icon||'✨'}</span><div className="min-w-[180px] flex-1"><b>{f.name}</b><small className="ml-2 text-slate-400">{f.key}</small><div className="text-xs text-slate-500">{f.kind} · {f.roles?.length?csv(f.roles):'all roles'} · {f.countries?.length?csv(f.countries):'all countries'}</div></div><button onClick={()=>run(()=>service.deleteFeature(f.id))} className="rounded-lg border border-red-200 px-3 py-2 text-red-600"><Trash2 size={15}/></button></div>)}</div>
+      <div className="mt-6 divide-y">{data?.features.map(f=><div key={f.id} className="flex flex-wrap items-center gap-3 py-3"><span className="text-xl">{f.icon||'✨'}</span><div className="min-w-[180px] flex-1"><b>{f.name}</b><small className="ml-2 text-slate-400">{f.key}</small><div className="text-xs text-slate-500">{f.kind} · {f.roles?.length?csv(f.roles):'all roles'} · {f.countries?.length?csv(f.countries):'all countries'}</div></div><button onClick={()=>setFeature({...f})} className="rounded-lg border border-slate-200 px-3 py-2 text-slate-600"><Edit2 size={15}/></button><button onClick={()=>run(()=>service.deleteFeature(f.id))} className="rounded-lg border border-red-200 px-3 py-2 text-red-600"><Trash2 size={15}/></button></div>)}</div>
     </section>}
 
     {tab==='grid' && grid && <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -108,8 +108,8 @@ export default function PlatformControlCenterPage(){
         })}
       </div>
     </section>}
-    {tab==='countries' && <CatalogSection title="Country Catalogue" icon={<Globe2 size={18}/>} rows={data?.countries||[]} fields={country} setFields={setCountry} onSave={()=>run(()=>service.saveCountry(country))} onDelete={id=>run(()=>service.deleteCountry(id))} labels={['code','name','flag','dial','currency','sortOrder']}/>}
-    {tab==='operators' && <CatalogSection title="Operator Catalogue" icon={<Smartphone size={18}/>} rows={data?.operators||[]} fields={operator} setFields={setOperator} onSave={()=>run(()=>service.saveOperator(operator))} onDelete={id=>run(()=>service.deleteOperator(id))} labels={['id','name','country','logo','sortOrder']}/>}
+    {tab==='countries' && <CatalogSection title="Country Catalogue" icon={<Globe2 size={18}/>} rows={data?.countries||[]} fields={country} setFields={setCountry} onSave={()=>run(()=>service.saveCountry(country))} onEdit={r=>setCountry({...r})} onDelete={id=>run(()=>service.deleteCountry(id))} labels={['code','name','flag','dial','currency','sortOrder']}/>}
+    {tab==='operators' && <CatalogSection title="Operator Catalogue" icon={<Smartphone size={18}/>} rows={data?.operators||[]} fields={operator} setFields={setOperator} onSave={()=>run(()=>service.saveOperator(operator))} onEdit={r=>setOperator({...r})} onDelete={id=>run(()=>service.deleteOperator(id))} labels={['id','name','country','logo','sortOrder']}/>}
 
     {tab==='webviews' && <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <h2 className="font-extrabold text-[#0b2447]">WebView Access Targeting</h2>
@@ -162,6 +162,6 @@ function UserMultiSelect({selected,onChange}:{selected:string[];onChange:(v:stri
   </div>;
 }
 
-function CatalogSection({title,icon,rows,fields,setFields,onSave,onDelete,labels}:{title:string;icon:any;rows:any[];fields:any;setFields:(x:any)=>void;onSave:()=>void;onDelete:(id:string)=>void;labels:string[]}){
-  return <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="flex items-center gap-2 font-extrabold text-[#0b2447]">{icon}{title}</h2><div className="mt-4 grid gap-2 md:grid-cols-3 lg:grid-cols-6">{labels.map(k=><input key={k} value={fields[k]??''} onChange={e=>setFields({...fields,[k]:k==='sortOrder'?Number(e.target.value):e.target.value})} placeholder={k} className="rounded-xl border border-slate-200 px-3 py-2 text-sm"/>)}</div><button onClick={onSave} className="mt-3 rounded-xl bg-[#00a99d] px-4 py-2 text-sm font-bold text-white"><Plus size={15} className="mr-2 inline"/>Save</button><div className="mt-5 divide-y">{rows.map((r:any)=><div key={r.id} className="flex items-center gap-3 py-3"><span className="min-w-0 flex-1"><b>{r.name||r.code}</b><small className="ml-2 text-slate-400">{r.code||r.id}{r.country ? ' · '+r.country : ''}</small></span><button onClick={()=>onDelete(r.id||r.code)} className="rounded-lg border border-red-200 p-2 text-red-600"><Trash2 size={15}/></button></div>)}</div></section>;
+function CatalogSection({title,icon,rows,fields,setFields,onSave,onEdit,onDelete,labels}:{title:string;icon:any;rows:any[];fields:any;setFields:(x:any)=>void;onSave:()=>void;onEdit:(row:any)=>void;onDelete:(id:string)=>void;labels:string[]}){
+  return <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="flex items-center gap-2 font-extrabold text-[#0b2447]">{icon}{title}</h2><div className="mt-4 grid gap-2 md:grid-cols-3 lg:grid-cols-6">{labels.map(k=><input key={k} value={fields[k]??''} onChange={e=>setFields({...fields,[k]:k==='sortOrder'?Number(e.target.value):e.target.value})} placeholder={k} className="rounded-xl border border-slate-200 px-3 py-2 text-sm"/>)}</div><button onClick={onSave} className="mt-3 rounded-xl bg-[#00a99d] px-4 py-2 text-sm font-bold text-white"><Plus size={15} className="mr-2 inline"/>Save</button><div className="mt-5 divide-y">{rows.map((r:any)=><div key={r.id} className="flex items-center gap-3 py-3"><span className="min-w-0 flex-1"><b>{r.name||r.code}</b><small className="ml-2 text-slate-400">{r.code||r.id}{r.country ? ' · '+r.country : ''}</small></span><button onClick={()=>onEdit(r)} className="rounded-lg border border-slate-200 p-2 text-slate-600"><Edit2 size={15}/></button><button onClick={()=>onDelete(r.id||r.code)} className="rounded-lg border border-red-200 p-2 text-red-600"><Trash2 size={15}/></button></div>)}</div></section>;
 }
