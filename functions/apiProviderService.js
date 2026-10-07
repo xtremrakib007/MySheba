@@ -146,7 +146,31 @@ function resolveExecutionMode({ country, service, settings, providers }) {
  */
 function autoCountryModes(provider, priorCountryModes) {
   if (!provider || provider.active === false) return null;
-  if (providerReach.isGlobal(provider)) return null;
+  const excluded = Array.isArray(provider.excludedCountries)
+    ? provider.excludedCountries.map((c) => String(c || '').trim().toUpperCase())
+    : [];
+  if (providerReach.isGlobal(provider)) {
+    // A global provider with an explicit exclusion list can safely opt every
+    // other app country into API mode. A plain ALL provider still requires
+    // explicit admin intent, so it changes nothing here.
+    if (!excluded.length) return null;
+    const countries = COUNTRY_CODES.filter((c) => !excluded.includes(c));
+    if (!countries.length) return null;
+    const services = (Array.isArray(provider.services) && provider.services.length ? provider.services : [provider.service])
+      .filter((s) => s && ALLOWED_SERVICES.includes(s) && !isNonApiService(s));
+    if (!services.length) return null;
+    const next = { ...(priorCountryModes || {}) };
+    let changed = false;
+    for (const country of countries) {
+      const row = { ...(next[country] || {}) };
+      for (const service of services) {
+        if (row[service] === 'api' || row[service] === 'legacy') continue;
+        row[service] = 'api'; changed = true;
+      }
+      next[country] = row;
+    }
+    return changed ? next : null;
+  }
   const countries = providerReach.providerCountries(provider).filter((c) => COUNTRY_CODES.includes(c));
   const services = (Array.isArray(provider.services) && provider.services.length
     ? provider.services
