@@ -233,6 +233,11 @@ function cleanAdPlacementControls(data) {
   const raw = data && typeof data === 'object' ? data : {};
   const clean = {};
   if (typeof raw.webviewBannerEnabled === 'boolean') clean.webviewBannerEnabled = raw.webviewBannerEnabled;
+  if (raw.admobInterstitialUnitId !== undefined) {
+    const unit = String(raw.admobInterstitialUnitId || '').trim();
+    if (unit && !/^ca-app-pub-\\d{16}\\/\\d{10}$/.test(unit)) throw new HttpsError('invalid-argument','Invalid AdMob interstitial unit id.');
+    clean.admobInterstitialUnitId = unit;
+  }
   if (typeof raw.webviewInterstitialEnabled === 'boolean') clean.webviewInterstitialEnabled = raw.webviewInterstitialEnabled;
   if (raw.webviewBannerPosition === 'top' || raw.webviewBannerPosition === 'bottom') clean.webviewBannerPosition = raw.webviewBannerPosition;
   if (Number.isFinite(Number(raw.interstitialCooldownSeconds))) clean.interstitialCooldownSeconds = Math.max(0, Math.min(86400, Math.floor(Number(raw.interstitialCooldownSeconds))));
