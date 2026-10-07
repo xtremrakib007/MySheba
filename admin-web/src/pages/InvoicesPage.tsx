@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   INVOICE_KINDS, invoiceKindLabel, createInvoice, approveInvoice, rejectInvoice, listInvoices,
   openInvoiceDocument,
+  archiveFinancialRecord,
   type Invoice, type InvoiceKind, type NewInvoice,
 } from '../services/invoiceService';
 
@@ -25,6 +26,7 @@ const STATUS_CLASS: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-800',
   approved: 'bg-emerald-100 text-emerald-800',
   rejected: 'bg-rose-100 text-rose-800',
+  cancelled: 'bg-slate-100 text-slate-700',
 };
 
 function when(millis: number | null): string {
@@ -264,6 +266,25 @@ export default function InvoicesPage() {
                   >
                     Print / Download
                   </button>
+                  {access.role === 'superadmin' && (
+                    <button
+                      type="button"
+                      disabled={!!busyId}
+                      onClick={() => {
+                        const reason = window.prompt(`Delete/archive invoice ${invoice.number}? Enter the reason. The financial record will be preserved for audit.`);
+                        if (reason === null || !reason.trim()) return;
+                        setBusyId(invoice.id);
+                        setError(null);
+                        void archiveFinancialRecord('invoice', invoice.id, reason.trim())
+                          .then(() => load())
+                          .catch((err) => setError(err instanceof Error ? err.message : 'Could not archive the invoice.'))
+                          .finally(() => setBusyId(''));
+                      }}
+                      className="rounded-lg border border-rose-600 px-4 py-1.5 text-sm font-medium text-rose-700 disabled:opacity-60"
+                    >
+                      {busyId === invoice.id ? '…' : 'Delete / Archive'}
+                    </button>
+                  )}
                 </div>
 
                 {pending && mayDecide && (mine ? (
