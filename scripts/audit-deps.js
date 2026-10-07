@@ -105,6 +105,83 @@ const EXEMPT = {
       'Every consumer in this tree calls uuid.v4() with no buffer.',
     recheckIf: 'any code calls uuid.v3/v5/v6 with a buffer, especially one sized from input.',
   },
+  // ---- Expo/RN 53 build-chain advisories -------------------------------
+  // npm currently reports these through React Native's dependency tree and
+  // recommends RN 0.87.1. That is an Expo-SDK-major upgrade, not a safe
+  // security-only patch for this release. Metro/Jest/CLI packages execute
+  // during bundling/testing and are not shipped in the Android runtime.
+  '@jest/environment': { tree: 'app', aliasOf: 'react-native-build-tooling' },
+  '@jest/fake-timers': { tree: 'app', aliasOf: 'react-native-build-tooling' },
+  '@jest/transform': { tree: 'app', aliasOf: 'react-native-build-tooling' },
+  '@react-native/community-cli-plugin': { tree: 'app', aliasOf: 'react-native-build-tooling' },
+  'babel-jest': { tree: 'app', aliasOf: 'react-native-build-tooling' },
+  braces: { tree: 'app', aliasOf: 'react-native-build-tooling' },
+  'jest-environment-node': { tree: 'app', aliasOf: 'react-native-build-tooling' },
+  'jest-haste-map': { tree: 'app', aliasOf: 'react-native-build-tooling' },
+  'jest-message-util': { tree: 'app', aliasOf: 'react-native-build-tooling' },
+  metro: { tree: 'app', aliasOf: 'react-native-build-tooling' },
+  'metro-config': { tree: 'app', aliasOf: 'react-native-build-tooling' },
+  'metro-file-map': { tree: 'app', aliasOf: 'react-native-build-tooling' },
+  'metro-transform-worker': { tree: 'app', aliasOf: 'react-native-build-tooling' },
+  micromatch: { tree: 'app', aliasOf: 'react-native-build-tooling' },
+  'react-native': {
+    tree: 'app',
+    why:
+      'npm currently reaches this package through its bundled build/test dependency tree and proposes ' +
+      'react-native@0.87.1 as the fix. MySheba is pinned to React Native 0.79.6 by Expo SDK 53; ' +
+      'the audit finding is not a direct CVE affecting the 0.79.6 runtime package. Independent package ' +
+      'security data currently reports no known CVEs for react-native 0.79.6. Do not take an RN major ' +
+      'upgrade as an audit-only change.',
+    recheckIf:
+      'npm reports a direct runtime advisory against react-native 0.79.6 itself, or MySheba moves to ' +
+      'a compatible Expo/RN major where 0.87.1 is a supported upgrade.',
+  },
+  'react-native-build-tooling': {
+    tree: 'app',
+    why:
+      'These packages are Metro/Jest/React Native CLI build or test tooling reached from the Expo/RN ' +
+      'tree. They execute during development/build/test and are not bundled into the shipped app runtime. ' +
+      'The npm audit fix requires an Expo/RN major upgrade.',
+    recheckIf:
+      'any listed package is imported by application runtime code, processed from attacker-controlled input, ' +
+      'or the project moves to a framework version where the advisory can be fixed without a major upgrade.',
+  },
+  'react-native-google-mobile-ads': {
+    tree: 'app',
+    why:
+      'npm currently recommends a downgrade to 13.6.1. The pinned 15.8.3 release has no direct known ' +
+      'vulnerability in independent package security data, and downgrading would be an unrelated major ' +
+      'compatibility regression. MySheba has additionally disabled the native AdMob initialization and ' +
+      'banner rendering while the Android BannerAd crash is investigated.',
+    recheckIf:
+      'AdMob is re-enabled, a direct advisory is confirmed against 15.8.3, or a compatible non-downgrade ' +
+      'security release becomes available.',
+  },
+  compression: {
+    tree: 'app',
+    why:
+      'Compression is Expo CLI/dev-server tooling. It is not part of the shipped React Native runtime or APK. ' +
+      'A non-major patched version is pinned in package overrides; regenerate the lockfile after pulling.',
+    recheckIf:
+      'compression becomes runtime application code or the lockfile still resolves a vulnerable version after install.',
+  },
+  'shell-quote': {
+    tree: 'app',
+    why:
+      'shell-quote is build/dev tooling only and is not bundled into the Android runtime. The project pins a ' +
+      'non-vulnerable 1.12.0 floor; regenerate the lockfile after pulling.',
+    recheckIf:
+      'shell-quote becomes runtime code or the lockfile resolves below 1.12.0.',
+  },
+  'source-map-js': {
+    tree: 'app',
+    why:
+      'source-map-js is used by the build/source-map pipeline and is not shipped in the Android runtime. The ' +
+      'project pins a non-vulnerable 1.2.2 floor; regenerate the lockfile after pulling.',
+    recheckIf:
+      'source-map-js is used to process attacker-controlled source maps or the lockfile resolves below 1.2.2.',
+  },
+
   'node-forge': {
     tree: ['app', 'functions'],
     why:
