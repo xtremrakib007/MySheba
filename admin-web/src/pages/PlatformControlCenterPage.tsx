@@ -14,7 +14,7 @@ function csv(v: string[] | undefined){ return (v||[]).join(', '); }
 
 export default function PlatformControlCenterPage(){
   const { profile } = useAuth();
-  const [tab,setTab]=useState<'features'|'countries'|'operators'|'webviews'|'ads'>('features');
+  const [tab,setTab]=useState<'features'|'grid'|'countries'|'operators'|'webviews'|'ads'>('features');
   const [data,setData]=useState<service.CatalogAdmin|null>(null);
   const [error,setError]=useState(''); const [busy,setBusy]=useState(false);
   const [feature,setFeature]=useState<any>({key:'',name:'',description:'',icon:'✨',kind:'webview',webviewKey:'',serviceKey:'recharge',screenKey:'moreFeatures',enabled:true,home:true,roles:[],countries:[],sortOrder:999});
@@ -22,8 +22,11 @@ export default function PlatformControlCenterPage(){
   const [operator,setOperator]=useState<any>({id:'',name:'',country:'MY',logo:'',enabled:true,recharge:true,internet:true,offerPacks:true,entertainment:true,sortOrder:999});
   const [target,setTarget]=useState<any>(null);
   const [ads,setAds]=useState<Record<string,boolean>>({});
+  const [grid,setGrid]=useState<any>(null);
+  const [gridScope,setGridScope]=useState<'global'|'byRole'|'byCountry'|'byUser'>('global');
+  const [gridWho,setGridWho]=useState('');
 
-  async function load(){ setBusy(true); setError(''); try { const x=await service.listCatalog(); setData(x); setAds(x.ads||{}); } catch(e:any){ setError(e?.message||'Could not load platform controls.'); } finally{setBusy(false);} }
+  async function load(){ setBusy(true); setError(''); try { const x=await service.listCatalog(); setData(x); setAds(x.ads||{}); const g=await service.getGridManagementAdmin(); setGrid(g); } catch(e:any){ setError(e?.message||'Could not load platform controls.'); } finally{setBusy(false);} }
   useEffect(()=>{ if(profile?.role==='superadmin') load(); },[profile?.role]);
   if(profile?.role!=='superadmin') return <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800">Only Superadmin can manage platform controls.</div>;
   async function run(fn:()=>Promise<any>){ setBusy(true); setError(''); try{ await fn(); await load(); }catch(e:any){setError(e?.message||'Operation failed.');}finally{setBusy(false);} }
@@ -36,7 +39,7 @@ export default function PlatformControlCenterPage(){
       <h1 className="mt-1 text-2xl font-extrabold md:text-3xl">Platform Control Center</h1>
       <p className="mt-2 max-w-3xl text-sm text-white/75">Control tiles, features, countries, operators, WebView targeting and Google Ads from one server-owned panel. Changes are live and do not require an app build.</p>
     </div>
-    <div className="flex flex-wrap gap-2">{[['features','Features',Layers3],['countries','Countries',Globe2],['operators','Operators',Smartphone],['webviews','WebViews',Users],['ads','Google Ads',Megaphone]].map(([k,l,I]:any)=><button key={k} onClick={()=>setTab(k)} className={tab===k?'rounded-xl bg-[#0b2447] px-4 py-2 text-sm font-bold text-white':'rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700'}><I size={16} className="mr-2 inline"/>{l}</button>)}</div>
+    <div className="flex flex-wrap gap-2">{[['features','Features',Layers3],['grid','Grid Controls',Layers3],['countries','Countries',Globe2],['operators','Operators',Smartphone],['webviews','WebViews',Users],['ads','Google Ads',Megaphone]].map(([k,l,I]:any)=><button key={k} onClick={()=>setTab(k)} className={tab===k?'rounded-xl bg-[#0b2447] px-4 py-2 text-sm font-bold text-white':'rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700'}><I size={16} className="mr-2 inline"/>{l}</button>)}</div>
     {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
     {tab==='features' && <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -67,6 +70,44 @@ export default function PlatformControlCenterPage(){
       <div className="mt-6 divide-y">{data?.features.map(f=><div key={f.id} className="flex flex-wrap items-center gap-3 py-3"><span className="text-xl">{f.icon||'✨'}</span><div className="min-w-[180px] flex-1"><b>{f.name}</b><small className="ml-2 text-slate-400">{f.key}</small><div className="text-xs text-slate-500">{f.kind} · {f.roles?.length?csv(f.roles):'all roles'} · {f.countries?.length?csv(f.countries):'all countries'}</div></div><button onClick={()=>run(()=>service.deleteFeature(f.id))} className="rounded-lg border border-red-200 px-3 py-2 text-red-600"><Trash2 size={15}/></button></div>)}</div>
     </section>}
 
+    {tab==='grid' && grid && <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div><h2 className="font-extrabold text-[#0b2447]">Every Home Grid / Tile</h2><p className="mt-1 text-xs text-slate-500">Turn every built-in tile on/off globally or override it for a role, country, or one user. Custom tiles are managed under Features.</p></div>
+        <button disabled={busy} onClick={()=>run(()=>service.updateGridManagement(grid))} className="rounded-xl bg-[#00a99d] px-4 py-2 text-sm font-bold text-white"><Save size={15} className="mr-2 inline"/>Save Grid Controls</button>
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <select value={gridScope} onChange={e=>{setGridScope(e.target.value as any);setGridWho('')}} className="rounded-xl border border-slate-200 px-3 py-2 text-sm">
+          <option value="global">Global default</option><option value="byRole">By role</option><option value="byCountry">By country</option><option value="byUser">By user ID</option>
+        </select>
+        {gridScope==='byRole' && <select value={gridWho} onChange={e=>setGridWho(e.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 text-sm"><option value="">Choose role</option>{ROLE_OPTIONS.map(r=><option key={r.value} value={r.value}>{r.label}</option>)}</select>}
+        {gridScope==='byCountry' && <select value={gridWho} onChange={e=>setGridWho(e.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 text-sm"><option value="">Choose country</option>{countryOptions.map(r=><option key={r.value} value={r.value}>{r.label}</option>)}</select>}
+        {gridScope==='byUser' && <input value={gridWho} onChange={e=>setGridWho(e.target.value.trim())} placeholder="Paste user UID" className="rounded-xl border border-slate-200 px-3 py-2 text-sm"/>}
+      </div>
+      {gridScope!=='global' && !gridWho && <div className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-800">Choose a target before changing a scoped grid.</div>}
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {(grid.defs||[]).map((d:any)=>{
+          const active = gridScope==='global' ? grid.global?.[d.key] !== false : grid[gridScope]?.[gridWho]?.[d.key] ?? grid.global?.[d.key] !== false;
+          const hasOverride = gridScope!=='global' && typeof grid[gridScope]?.[gridWho]?.[d.key] === 'boolean';
+          const toggle = () => {
+            if(gridScope!=='global' && !gridWho) return;
+            if(gridScope==='global') setGrid({...grid,global:{...grid.global,[d.key]:!active}});
+            else setGrid({...grid,[gridScope]:{...grid[gridScope],[gridWho]:{...(grid[gridScope]?.[gridWho]||{}),[d.key]:!active}}});
+          };
+          const clear = () => {
+            if(gridScope==='global'||!gridWho) return;
+            const next={...grid,[gridScope]:{...grid[gridScope]}};
+            const row={...(next[gridScope]?.[gridWho]||{})}; delete row[d.key];
+            if(Object.keys(row).length) next[gridScope][gridWho]=row; else delete next[gridScope][gridWho];
+            setGrid(next);
+          };
+          return <div key={d.key} className="flex items-center gap-3 rounded-xl border border-slate-200 p-4">
+            <button type="button" onClick={toggle} disabled={gridScope!=='global'&&!gridWho} className={active?'h-10 w-10 rounded-xl bg-emerald-100 text-emerald-700':'h-10 w-10 rounded-xl bg-slate-100 text-slate-400'}>{active?'✓':'×'}</button>
+            <div className="min-w-0 flex-1"><b className="text-sm">{d.name}</b><div className="text-[11px] text-slate-400">{d.key}{hasOverride?' · override':''}</div></div>
+            {hasOverride && <button type="button" onClick={clear} className="text-xs font-bold text-slate-500">Default</button>}
+          </div>;
+        })}
+      </div>
+    </section>}
     {tab==='countries' && <CatalogSection title="Country Catalogue" icon={<Globe2 size={18}/>} rows={data?.countries||[]} fields={country} setFields={setCountry} onSave={()=>run(()=>service.saveCountry(country))} onDelete={id=>run(()=>service.deleteCountry(id))} labels={['code','name','flag','dial','currency','sortOrder']}/>}
     {tab==='operators' && <CatalogSection title="Operator Catalogue" icon={<Smartphone size={18}/>} rows={data?.operators||[]} fields={operator} setFields={setOperator} onSave={()=>run(()=>service.saveOperator(operator))} onDelete={id=>run(()=>service.deleteOperator(id))} labels={['id','name','country','logo','sortOrder']}/>}
 
