@@ -407,6 +407,7 @@ export default function WebViewScreen() {
             decelerationRate="normal"
             style={{ flex: 1 }}
           />
+          {webviewBanner.enabled && webviewBanner.position === 'top' && <View style={styles.webviewBannerSlot}><GoogleAdMobBanner placementType="webview" placementKey={webViewKey} /></View>}
           {webviewBanner.enabled && webviewBanner.position === 'bottom' && <View style={styles.webviewBannerSlot}><GoogleAdMobBanner placementType="webview" placementKey={webViewKey} /></View>}
         </View>
       ) : (
