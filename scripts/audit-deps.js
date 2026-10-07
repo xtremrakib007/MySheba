@@ -110,20 +110,20 @@ const EXEMPT = {
   // recommends RN 0.87.1. That is an Expo-SDK-major upgrade, not a safe
   // security-only patch for this release. Metro/Jest/CLI packages execute
   // during bundling/testing and are not shipped in the Android runtime.
-  '@jest/environment': { tree: 'app', aliasOf: 'react-native-build-tooling' },
-  '@jest/fake-timers': { tree: 'app', aliasOf: 'react-native-build-tooling' },
-  '@jest/transform': { tree: 'app', aliasOf: 'react-native-build-tooling' },
-  '@react-native/community-cli-plugin': { tree: 'app', aliasOf: 'react-native-build-tooling' },
-  'babel-jest': { tree: 'app', aliasOf: 'react-native-build-tooling' },
-  braces: { tree: 'app', aliasOf: 'react-native-build-tooling' },
-  'jest-environment-node': { tree: 'app', aliasOf: 'react-native-build-tooling' },
-  'jest-haste-map': { tree: 'app', aliasOf: 'react-native-build-tooling' },
-  'jest-message-util': { tree: 'app', aliasOf: 'react-native-build-tooling' },
-  metro: { tree: 'app', aliasOf: 'react-native-build-tooling' },
-  'metro-config': { tree: 'app', aliasOf: 'react-native-build-tooling' },
-  'metro-file-map': { tree: 'app', aliasOf: 'react-native-build-tooling' },
-  'metro-transform-worker': { tree: 'app', aliasOf: 'react-native-build-tooling' },
-  micromatch: { tree: 'app', aliasOf: 'react-native-build-tooling' },
+  '@jest/environment': { tree: 'app', aliasOf: 'metro' },
+  '@jest/fake-timers': { tree: 'app', aliasOf: 'metro' },
+  '@jest/transform': { tree: 'app', aliasOf: 'metro' },
+  '@react-native/community-cli-plugin': { tree: 'app', aliasOf: 'metro' },
+  'babel-jest': { tree: 'app', aliasOf: 'metro' },
+  braces: { tree: 'app', aliasOf: 'metro' },
+  'jest-environment-node': { tree: 'app', aliasOf: 'metro' },
+  'jest-haste-map': { tree: 'app', aliasOf: 'metro' },
+  'jest-message-util': { tree: 'app', aliasOf: 'metro' },
+  metro: { tree: 'app', aliasOf: 'metro' },
+  'metro-config': { tree: 'app', aliasOf: 'metro' },
+  'metro-file-map': { tree: 'app', aliasOf: 'metro' },
+  'metro-transform-worker': { tree: 'app', aliasOf: 'metro' },
+  micromatch: { tree: 'app', aliasOf: 'metro' },
   'react-native': {
     tree: 'app',
     why:
@@ -135,16 +135,6 @@ const EXEMPT = {
     recheckIf:
       'npm reports a direct runtime advisory against react-native 0.79.6 itself, or MySheba moves to ' +
       'a compatible Expo/RN major where 0.87.1 is a supported upgrade.',
-  },
-  'react-native-build-tooling': {
-    tree: 'app',
-    why:
-      'These packages are Metro/Jest/React Native CLI build or test tooling reached from the Expo/RN ' +
-      'tree. They execute during development/build/test and are not bundled into the shipped app runtime. ' +
-      'The npm audit fix requires an Expo/RN major upgrade.',
-    recheckIf:
-      'any listed package is imported by application runtime code, processed from attacker-controlled input, ' +
-      'or the project moves to a framework version where the advisory can be fixed without a major upgrade.',
   },
   'react-native-google-mobile-ads': {
     tree: 'app',
