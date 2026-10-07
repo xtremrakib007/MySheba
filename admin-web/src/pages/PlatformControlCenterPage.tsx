@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import * as service from '../services/platformControlService';
 
 const SERVICE_KEYS = ['recharge','internet','billpayment','mobilebanking','remittance','offerpacks','entertainment','rechargePin','bus','train','flight','topup','history','support','myAccount','profile','walletTransfer','myDocuments','salary','kyc'];
+const AD_CONTROL_SCREENS = ['customerHome','dealerHome','resellerHome','adminHome','staffHome','support','help','adminSupport','history','topup','superAdminTopup','profile','settings','myAccount','moreFeatures','adminFeatures','dealerFeatures','resellerFeatures','notifications','referral'];
 const ROLE_OPTIONS = [
   { value:'customer', label:'Customer' }, { value:'dealer', label:'Dealer' },
   { value:'reseller', label:'Reseller' }, { value:'support', label:'Support Agent' },
@@ -22,12 +23,13 @@ export default function PlatformControlCenterPage(){
   const [operator,setOperator]=useState<any>({id:'',name:'',country:'MY',logo:'',enabled:true,recharge:true,internet:true,offerPacks:true,entertainment:true,sortOrder:999});
   const [target,setTarget]=useState<any>(null);
   const [webviewEdit,setWebviewEdit]=useState<any>(null);
-  const [ads,setAds]=useState<Record<string,boolean>>({});
+  const [ads,setAds]=useState<Record<string,any>>({});
+  const [adPlacementControls,setAdPlacementControls]=useState<any>(null);
   const [grid,setGrid]=useState<any>(null);
   const [gridScope,setGridScope]=useState<'global'|'byRole'|'byCountry'|'byUser'>('global');
   const [gridWho,setGridWho]=useState('');
 
-  async function load(){ setBusy(true); setError(''); try { const x=await service.listCatalog(); setData(x); setAds(x.ads||{}); const g=await service.getGridManagementAdmin(); setGrid(g); } catch(e:any){ setError(e?.message||'Could not load platform controls.'); } finally{setBusy(false);} }
+  async function load(){ setBusy(true); setError(''); try { const x=await service.listCatalog(); setData(x); setAds(x.ads||{}); setAdPlacementControls(x.ads?.placementControls || null); const g=await service.getGridManagementAdmin(); setGrid(g); } catch(e:any){ setError(e?.message||'Could not load platform controls.'); } finally{setBusy(false);} }
   useEffect(()=>{ if(profile?.role==='superadmin') load(); },[profile?.role]);
   if(profile?.role!=='superadmin') return <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800">Only Superadmin can manage platform controls.</div>;
   async function run(fn:()=>Promise<any>){ setBusy(true); setError(''); try{ await fn(); await load(); }catch(e:any){setError(e?.message||'Operation failed.');}finally{setBusy(false);} }
@@ -128,7 +130,62 @@ export default function PlatformControlCenterPage(){
       </div>)}</div>
     </section>}
 
-    {tab==='ads' && <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="font-extrabold text-[#0b2447]">Google Ads Controls</h2><p className="mt-1 text-xs text-slate-500">These controls govern Google/AdMob and MySheba advertising independently. AdMob can be disabled without disabling the rest of the ad system.</p><div className="mt-5 grid gap-3 md:grid-cols-2">{['adsEnabled','bannerAdsEnabled','nativeAdsEnabled','interstitialAdsEnabled','directAdsEnabled','admobEnabled','admobBannerEnabled'].map(k=><label key={k} className="flex items-center justify-between rounded-xl border border-slate-200 p-4"><span className="text-sm font-bold">{k}</span><input type="checkbox" checked={ads[k]!==false} onChange={e=>setAds({...ads,[k]:e.target.checked})}/></label>)}</div><button disabled={busy} onClick={()=>run(()=>service.updateAds(ads))} className="mt-4 rounded-xl bg-[#00a99d] px-4 py-2 text-sm font-bold text-white"><Save size={15} className="mr-2 inline"/>Save Google Ads Controls</button></section>}
+    {tab==='ads' && (() => {
+      const pc = adPlacementControls || {};
+      const screenBanners = pc.screenBanners || {};
+      const webviewBanners = pc.webviewBanners || {};
+      const webviewInterstitials = pc.webviewInterstitials || {};
+      const screenControl = (key:string) => screenBanners[key] || {enabled:true,position:'bottom'};
+      return <section className="space-y-5">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="font-extrabold text-[#0b2447]">Global Advertising Controls</h2>
+          <p className="mt-1 text-xs text-slate-500">Superadmin controls the ad system independently from MySheba features. Turning ads off never disables the underlying service.</p>
+          <div className="mt-5 grid gap-3 md:grid-cols-2">{['adsEnabled','bannerAdsEnabled','nativeAdsEnabled','interstitialAdsEnabled','directAdsEnabled','admobEnabled','admobBannerEnabled'].map(k=><label key={k} className="flex items-center justify-between rounded-xl border border-slate-200 p-4"><span className="text-sm font-bold">{k}</span><input type="checkbox" checked={ads[k]!==false} onChange={e=>setAds({...ads,[k]:e.target.checked})}/></label>)}</div>
+          <button disabled={busy} onClick={()=>run(()=>service.updateAds(ads))} className="mt-4 rounded-xl bg-[#00a99d] px-4 py-2 text-sm font-bold text-white"><Save size={15} className="mr-2 inline"/>Save Global Controls</button>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><h2 className="font-extrabold text-[#0b2447]">Screen Banner Placement</h2><p className="mt-1 text-xs text-slate-500">Choose exactly which app screens receive the small AdMob banner and whether it is above or below that screen's content. This does not affect iOS.</p></div>
+            <button disabled={busy} onClick={()=>run(()=>service.updateAdPlacementControls({screenBanners}))} className="rounded-xl bg-[#00a99d] px-4 py-2 text-sm font-bold text-white"><Save size={15} className="mr-2 inline"/>Save Screen Placement</button>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {AD_CONTROL_SCREENS.map(key=>{ const row=screenControl(key); return <div key={key} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3">
+              <input type="checkbox" checked={row.enabled!==false} onChange={e=>setAdPlacementControls({...pc,screenBanners:{...screenBanners,[key]:{...row,enabled:e.target.checked}}})}/>
+              <span className="min-w-0 flex-1 text-sm font-semibold">{key}</span>
+              <select value={row.position==='top'?'top':'bottom'} onChange={e=>setAdPlacementControls({...pc,screenBanners:{...screenBanners,[key]:{...row,position:e.target.value}}})} className="rounded-lg border border-slate-200 px-2 py-1 text-xs"><option value="top">Top of page</option><option value="bottom">Bottom / above nav</option></select>
+            </div>})}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><h2 className="font-extrabold text-[#0b2447]">WebView Advertising</h2><p className="mt-1 text-xs text-slate-500">Control the small banner inside every WebView and the full-screen interstitial shown immediately before a WebView opens.</p></div>
+            <button disabled={busy} onClick={()=>run(()=>service.updateAdPlacementControls({webviewBannerEnabled:pc.webviewBannerEnabled!==false,webviewBannerPosition:pc.webviewBannerPosition==='top'?'top':'bottom',webviewBanners,webviewInterstitialEnabled:pc.webviewInterstitialEnabled!==false,webviewInterstitials,interstitialCooldownSeconds:Number(pc.interstitialCooldownSeconds)||0,admobInterstitialUnitId:String(pc.admobInterstitialUnitId||'')}))} className="rounded-xl bg-[#00a99d] px-4 py-2 text-sm font-bold text-white"><Save size={15} className="mr-2 inline"/>Save WebView Ad Controls</button>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <label className="flex items-center justify-between rounded-xl border border-slate-200 p-4"><span className="text-sm font-bold">WebView banner globally enabled</span><input type="checkbox" checked={pc.webviewBannerEnabled!==false} onChange={e=>setAdPlacementControls({...pc,webviewBannerEnabled:e.target.checked})}/></label>
+            <label className="flex items-center justify-between rounded-xl border border-slate-200 p-4"><span className="text-sm font-bold">Pre-WebView interstitial globally enabled</span><input type="checkbox" checked={pc.webviewInterstitialEnabled!==false} onChange={e=>setAdPlacementControls({...pc,webviewInterstitialEnabled:e.target.checked})}/></label>
+            <label className="rounded-xl border border-slate-200 p-4"><span className="block text-sm font-bold">Default WebView banner position</span><select value={pc.webviewBannerPosition==='top'?'top':'bottom'} onChange={e=>setAdPlacementControls({...pc,webviewBannerPosition:e.target.value})} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"><option value="top">Top of WebView</option><option value="bottom">Bottom of WebView</option></select></label>
+            <label className="rounded-xl border border-slate-200 p-4"><span className="block text-sm font-bold">Interstitial cooldown (seconds)</span><input type="number" min="0" max="86400" value={pc.interstitialCooldownSeconds??0} onChange={e=>setAdPlacementControls({...pc,interstitialCooldownSeconds:Math.max(0,Math.min(86400,Number(e.target.value)||0))})} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label>
+            <label className="rounded-xl border border-slate-200 p-4 md:col-span-2"><span className="block text-sm font-bold">Production AdMob Interstitial Unit ID</span><input value={pc.admobInterstitialUnitId||''} onChange={e=>setAdPlacementControls({...pc,admobInterstitialUnitId:e.target.value.trim()})} placeholder="ca-app-pub-XXXXXXXXXXXXXXXX/XXXXXXXXXX" className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/><span className="mt-1 block text-[11px] text-slate-500">Required for production full-screen AdMob ads. Development uses Google's test interstitial unit.</span></label>
+          </div>
+
+          <h3 className="mt-6 font-extrabold text-[#0b2447]">Each WebView — Banner + Interstitial</h3>
+          <div className="mt-3 space-y-3">
+            {(data?.webviews||[]).map((w:any)=>{
+              const key=w.key; const banner=webviewBanners[key]||{enabled:pc.webviewBannerEnabled!==false,position:pc.webviewBannerPosition==='top'?'top':'bottom'}; const interstitial=webviewInterstitials[key]!==false;
+              return <div key={key} className="grid gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-[1.4fr_1fr_1fr] md:items-center">
+                <div><b>{w.name||w.title||key}</b><div className="text-xs text-slate-500">{key}</div></div>
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={banner.enabled!==false} onChange={e=>setAdPlacementControls({...pc,webviewBanners:{...webviewBanners,[key]:{...banner,enabled:e.target.checked}}})}/> Small banner</label>
+                <div className="flex items-center gap-3"><select value={banner.position==='top'?'top':'bottom'} onChange={e=>setAdPlacementControls({...pc,webviewBanners:{...webviewBanners,[key]:{...banner,position:e.target.value}}})} className="rounded-lg border border-slate-200 px-2 py-1 text-xs"><option value="top">Top</option><option value="bottom">Bottom</option></select><label className="flex items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={interstitial} onChange={e=>setAdPlacementControls({...pc,webviewInterstitials:{...webviewInterstitials,[key]:e.target.checked}})}/> Full-screen before open</label></div>
+              </div>
+            })}
+            {!data?.webviews?.length && <div className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">No configured WebViews found. New WebViews will inherit the global defaults.</div>}
+          </div>
+        </div>
+      </section>
+    })()}
     {busy && <div className="text-xs text-slate-500">Saving/loading…</div>}
   </div>;
 }
