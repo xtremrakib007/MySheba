@@ -20,6 +20,7 @@ export const saveOperator=(data:Partial<OperatorRow>)=>call<{ok:boolean,id:strin
 export const deleteOperator=(id:string)=>call<{ok:boolean}>('deleteOperatorCatalog',{id});
 export const targetWebview=(data:{key:string;roles:string[];countries:string[];users?:string[]})=>call<{ok:boolean}>('updateWebviewTargeting',data);
 export const updateAds=(changes:Record<string,boolean>)=>call<{ok:boolean}>('updateGoogleAdsControls',{changes});
+export const updateAdPlacementControls=(changes:any)=>call<{ok:boolean}>('updateAdPlacementControls',{changes});
 
 export async function searchUsers(query:string):Promise<UserLookup[]>{
   const result=await call<{results?:UserLookup[]}>('searchUsers',{query});
