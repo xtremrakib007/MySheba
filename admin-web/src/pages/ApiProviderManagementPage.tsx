@@ -10,7 +10,7 @@ type FormState = {
   responseSuccessPath: string; responseSuccessValue: string; responseProcessingPath: string; responseProcessingValue: string;
   responseIdPath: string; responseMessagePath: string; responsePinPath: string; timeoutMs: number; priority: number; active: boolean;
   catalogPreset: string; catalogPath: string; catalogMethod: string; catalogListPath: string; catalogFieldId: string;
-  catalogPerAccount: string; catalogQueryTemplate: string; catalogOperatorCodes: string;
+  catalogPerAccount: string; catalogQueryTemplate: string; catalogOperatorCodes: string; catalogDynamicProductDiscovery: boolean; excludedCountries: string[];
   catalogItemMap: string; notes: string;
 };
 
@@ -21,10 +21,8 @@ const EMPTY: FormState = {
   responseSuccessPath:'', responseSuccessValue:'', responseProcessingPath:'', responseProcessingValue:'',
   responseIdPath:'', responseMessagePath:'', responsePinPath:'', timeoutMs:30000, priority:0, active:true,
   catalogPreset:'', catalogPath:'', catalogMethod:'GET', catalogListPath:'', catalogFieldId:'',
-  catalogPerAccount:'false', catalogQueryTemplate:'{}', catalogOperatorCodes:'{}', catalogItemMap:'{}', notes:'',
+  catalogPerAccount:'false', catalogQueryTemplate:'{}', catalogOperatorCodes:'{}', catalogDynamicProductDiscovery:false, excludedCountries:['BD'], catalogItemMap:'{}', notes:'',
 };
-
-const IIMMPACT_COUNTRIES = ['MY','SG','ID','IN','PH','NP','PK','MM','KH'];
 
 function text(v:any) {
   if (v === null || v === undefined) return '';
@@ -51,7 +49,7 @@ function fromProvider(p: api.ApiProvider): FormState {
     catalogPreset:text(p.catalogPreset), catalogPath:text(p.catalogPath), catalogMethod:text(p.catalogMethod || 'GET'),
     catalogListPath:text(p.catalogListPath), catalogFieldId:text(p.catalogFieldId),
     catalogPerAccount:String(p.catalogPerAccount === true || p.catalogPerAccount === 'true'),
-    catalogQueryTemplate:text(p.catalogQueryTemplate || '{}'), catalogOperatorCodes:text(p.catalogOperatorCodes || '{}'),
+    catalogQueryTemplate:text(p.catalogQueryTemplate || '{}'), catalogOperatorCodes:text(p.catalogOperatorCodes || '{}'), catalogDynamicProductDiscovery:p.catalogDynamicProductDiscovery === true, excludedCountries:Array.isArray(p.excludedCountries) ? p.excludedCountries : [],
     catalogItemMap:text(p.catalogItemMap || '{}'), notes:text(p.notes),
   };
 }
@@ -82,11 +80,13 @@ function applyIimmpact(f:FormState):FormState {
     catalogFieldId:'plan',
     catalogPerAccount:'true',
     catalogQueryTemplate:'{}',
-    catalogOperatorCodes:'{"Celcom":["CEL","DI"],"Hotlink":"HI","U Mobile":"UMI","Tunetalk":"TI","XOX":"OXI","Yes":"YESI"}',
+    catalogOperatorCodes:'{}',
+    catalogDynamicProductDiscovery:true,
+    excludedCountries:['BD'],
     services:['Recharge','Internet','Bill Payment','Recharge PIN','Entertainment'],
     service:'Recharge',
-    countries:IIMMPACT_COUNTRIES,
-    country:'MY',
+    countries:['ALL'],
+    country:'ALL',
     active:true,
   };
 }
@@ -142,7 +142,7 @@ export default function ApiProviderManagementPage() {
         ...form, country:form.countries[0] || form.country, countries:form.countries, service:form.services[0], services:form.services,
         timeoutMs:Math.max(3000,Math.min(60000,Number(form.timeoutMs)||30000)), priority:Number(form.priority)||0,
         headers:parseJson(form.headers,'Headers'), queryTemplate:parseJson(form.queryTemplate,'Query template'), requestTemplate:parseJson(form.requestTemplate,'Request template'),
-        catalogQueryTemplate:parseJson(form.catalogQueryTemplate,'Catalog query'), catalogOperatorCodes:parseJson(form.catalogOperatorCodes,'Operator product codes'), catalogItemMap:parseJson(form.catalogItemMap,'Catalog item map'),
+        catalogQueryTemplate:parseJson(form.catalogQueryTemplate,'Catalog query'), catalogOperatorCodes:parseJson(form.catalogOperatorCodes,'Operator product codes'), catalogItemMap:parseJson(form.catalogItemMap,'Catalog item map'), catalogDynamicProductDiscovery:form.catalogDynamicProductDiscovery, excludedCountries:form.excludedCountries,
         catalogPerAccount:form.catalogPerAccount==='true', active:form.active,
       };
       delete payload.apiKey; delete payload.secretKey; delete payload.username; delete payload.password; delete payload.id;
@@ -247,7 +247,7 @@ export default function ApiProviderManagementPage() {
 
           <div className="rounded-2xl border border-teal-200 bg-teal-50/50 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-extrabold text-teal-900">IIMMPACT Catalog Configuration</h3><p className="mt-1 text-xs text-teal-800/70">Use the preset for the live /v2/catalog migration. Product discovery is separate from /v2/options.</p></div><button type="button" onClick={()=>setForm(applyIimmpact(form))} className="rounded-xl bg-teal-700 px-3 py-2 text-xs font-bold text-white">Apply IIMMPACT preset</button></div>
             <div className="mt-4 grid gap-3 md:grid-cols-2"><Field label="Catalog preset" value={form.catalogPreset} onChange={v=>set('catalogPreset',v)} placeholder="iimmpact-catalog"/><Field label="Catalog path" value={form.catalogPath} onChange={v=>set('catalogPath',v)} placeholder="/v2/catalog"/><Field label="Catalog method" value={form.catalogMethod} onChange={v=>set('catalogMethod',v)}/><Field label="Catalog list path" value={form.catalogListPath} onChange={v=>set('catalogListPath',v)} placeholder="products"/><Field label="Options field ID" value={form.catalogFieldId} onChange={v=>set('catalogFieldId',v)} placeholder="plan"/><Field label="Per-account catalog" value={form.catalogPerAccount} onChange={v=>set('catalogPerAccount',v)} placeholder="true or false"/></div>
-            <div className="mt-3 grid gap-3 lg:grid-cols-2"><TextArea label="Catalog query JSON" value={form.catalogQueryTemplate} onChange={v=>set('catalogQueryTemplate',v)}/><TextArea label="Operator product codes JSON" value={form.catalogOperatorCodes} onChange={v=>set('catalogOperatorCodes',v)}/></div>
+            <div className="mt-3 grid gap-3 lg:grid-cols-2"><TextArea label="Catalog query JSON" value={form.catalogQueryTemplate} onChange={v=>set('catalogQueryTemplate',v)}/><TextArea label="Legacy operator product codes JSON (optional)" value={form.catalogOperatorCodes} onChange={v=>set('catalogOperatorCodes',v)}/></div><div className="mt-3 flex flex-wrap items-center gap-3"><label className="flex items-center gap-2 rounded-xl border border-teal-200 bg-white px-3 py-2 text-xs font-bold"><input type="checkbox" checked={form.catalogDynamicProductDiscovery} onChange={e=>set('catalogDynamicProductDiscovery',e.target.checked)}/> Discover products/operators from live IIMMPACT catalog</label><span className="text-xs text-teal-900/70">No hardcoded operator list. New active IIMMPACT products appear without an app release.</span></div><div className="mt-3"><span className="mb-1.5 block text-xs font-bold text-[var(--color-ink-soft)]">Excluded countries</span><div className="flex flex-wrap gap-2">{api.COUNTRIES.filter(([code])=>code!=='ALL').map(([code,label])=><button type="button" key={code} onClick={()=>set('excludedCountries',form.excludedCountries.includes(code)?form.excludedCountries.filter(x=>x!==code):[...form.excludedCountries,code])} className={form.excludedCountries.includes(code)?'rounded-full bg-red-600 px-3 py-1.5 text-xs font-bold text-white':'rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600'}>{code} · {label}</button>)}</div></div>
             {selected && iimmpactProviders.some(p=>p.id===selected.id) && <div className="mt-4 flex flex-wrap gap-2"><button onClick={()=>void loadCatalog()} disabled={busy} className="rounded-xl bg-[#0b2447] px-4 py-2 text-xs font-bold text-white"><Database size={14} className="mr-1 inline"/>Load live catalog</button><button onClick={()=>setTab('options')} className="rounded-xl border border-teal-300 px-4 py-2 text-xs font-bold text-teal-800">Open options tester</button></div>}
           </div>
 
