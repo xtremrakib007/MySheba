@@ -179,6 +179,33 @@ exports.deleteOperatorCatalog = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, a
   await logAudit({action:'operator_catalog_archived',targetUid:null,performedBy:uid,performedByRole:'superadmin',details:{id,before:old.data()}}); return {ok:true};
 });
 
+function cleanWebview(data) {
+  const key = str(data.key,64).toLowerCase();
+  if (!key || (!/^wv_[a-z0-9]{4,24}$/.test(key) && !/^[a-z0-9_-]{2,48}$/.test(key))) throw new HttpsError('invalid-argument','Invalid WebView key.');
+  const name = str(data.name,40), url = str(data.url,500), title = str(data.title || name,60), icon = str(data.icon || '🌐',16);
+  if (!name) throw new HttpsError('invalid-argument','WebView name is required.');
+  let parsed; try { parsed = new URL(url); } catch (_) { throw new HttpsError('invalid-argument','WebView URL must be a full https:// address.'); }
+  if (parsed.protocol !== 'https:' || !parsed.hostname || !parsed.hostname.includes('.') || parsed.hostname.endsWith('.')) throw new HttpsError('invalid-argument','Only valid https:// WebView URLs are allowed.');
+  return { name,url,title,icon,active:data.active !== false,home:data.home !== false,roles:list(data.roles,ROLES.length,24),countries:list(data.countries,100,2).map(x=>x.toUpperCase()),users:list(data.users,1000,128),custom:/^wv_[a-z0-9]{4,24}$/.test(key) };
+}
+exports.saveWebviewPage = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
+  const {uid}=await requireSuperadmin(request);
+  const data=cleanWebview(request.data||{}); const key=String(request.data?.key||'').trim().toLowerCase();
+  const ref=db().collection('settings').doc('webviews'); const snap=await ref.get(); const pages=snap.exists?(snap.data().pages||{}):{};
+  await ref.set({pages:{[key]:data},updatedBy:uid,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
+  await logAudit({action:'webview_page_saved',targetUid:null,performedBy:uid,performedByRole:'superadmin',details:{key,before:pages[key]||null,after:data}});
+  return {ok:true,key,...data};
+});
+exports.deleteWebviewPage = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
+  const {uid}=await requireSuperadmin(request); const key=str(request.data?.key,64).toLowerCase();
+  if(!/^wv_[a-z0-9]{4,24}$/.test(key)) throw new HttpsError('failed-precondition','Built-in WebViews cannot be deleted. Turn them off instead.');
+  const ref=db().collection('settings').doc('webviews'); const snap=await ref.get(); const pages=snap.exists?(snap.data().pages||{}):{};
+  if(!pages[key]) return {ok:true};
+  await ref.set({pages:{[key]:admin.firestore.FieldValue.delete()},updatedBy:uid,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
+  await logAudit({action:'webview_page_archived',targetUid:null,performedBy:uid,performedByRole:'superadmin',details:{key,before:pages[key]}});
+  return {ok:true};
+});
+
 exports.updateWebviewTargeting = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
   const {uid}=await requireSuperadmin(request); const key=str(request.data?.key,64);
   if (!key || (!/^wv_[a-z0-9]{4,24}$/.test(key) && !/^[a-z0-9_-]{2,48}$/.test(key))) throw new HttpsError('invalid-argument','Invalid WebView key.');
