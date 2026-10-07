@@ -25,3 +25,6 @@ export async function searchUsers(query:string):Promise<UserLookup[]>{
   const result=await call<{results?:UserLookup[]}>('searchUsers',{query});
   return Array.isArray(result.results) ? result.results : [];
 }
+
+export const getGridManagementAdmin = () => call('getGridManagementAdmin', {});
+export const updateGridManagement = (data: any) => call('updateGridManagement', data);
