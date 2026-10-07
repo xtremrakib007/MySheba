@@ -4,7 +4,7 @@ import {
   AlertTriangle, BarChart3, BadgeCheck, Banknote, BellRing, Building2, CheckCircle2,
   CreditCard, FileText, Globe2, Headphones, LayoutGrid, Plane, Search, Settings2,
   ShieldCheck, Smartphone, Ticket, TrainFront, UserRoundCog, Users, XCircle,
-  Activity, FileSearch, Megaphone, WalletCards, RefreshCw,
+  Activity, FileSearch, Megaphone, WalletCards, RefreshCw, Network, KeyRound, ScrollText, Smartphone, BriefcaseBusiness, Lock,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchOpsOverview, type OpsOverview } from '../services/reportsService';
@@ -29,6 +29,16 @@ const FEATURES: Feature[] = [
   { key: 'arrival', label: 'Malaysia\nArrival Card', path: '/inquiries', icon: Smartphone, tone: 'lightblue' },
   { key: 'passport', label: 'Passport', path: '/inquiries', icon: ShieldCheck, tone: 'navy' },
   { key: 'more', label: 'More Features', path: '/feature-access', icon: LayoutGrid, tone: 'purple' },
+  { key: 'governance', label: 'System\nGovernance', path: '/governance', icon: Settings2, tone: 'navy', superadminOnly: true },
+  { key: 'platformControl', label: 'Platform\nControl', path: '/platform-control', icon: BriefcaseBusiness, tone: 'teal', superadminOnly: true },
+  { key: 'rolePermissions', label: 'Role &\nPermissions', path: '/role-permissions', icon: Network, tone: 'indigo', superadminOnly: true },
+  { key: 'accessControl', label: 'Access\nControl', path: '/access-control', icon: KeyRound, tone: 'violet', superadminOnly: true },
+  { key: 'toolAccess', label: 'Tool\nAccess', path: '/tool-access', icon: Lock, tone: 'slate', superadminOnly: true },
+  { key: 'audit', label: 'Audit &\nCompliance', path: '/audit', icon: ScrollText, tone: 'blue', superadminOnly: true },
+  { key: 'activityCenter', label: 'Activity\nCenter', path: '/activity-center', icon: Activity, tone: 'cyan', superadminOnly: true },
+  { key: 'systemHealth', label: 'System\nHealth', path: '/system-health', icon: Activity, tone: 'green', superadminOnly: true },
+  { key: 'devices', label: 'Device\nSessions', path: '/devices', icon: Smartphone, tone: 'sky', superadminOnly: true },
+  { key: 'financialRisk', label: 'Financial Risk\nControls', path: '/financial-risk', icon: Lock, tone: 'orange', superadminOnly: true },
 ];
 
 const SHORTCUTS: Shortcut[] = [
@@ -38,6 +48,7 @@ const SHORTCUTS: Shortcut[] = [
   { label: 'Communications', description: 'Broadcast and monitor notifications', path: '/communications', icon: Megaphone },
   { label: 'Wallet Settlement', description: 'Review point-transfer operations', path: '/wallet-settlement', icon: WalletCards },
   { label: 'System Governance', description: 'Superadmin controls and oversight', path: '/governance', icon: ShieldCheck, superadminOnly: true },
+  { label: 'Platform Control', description: 'Control features, grids, WebViews, catalogs and ads', path: '/platform-control', icon: Settings2, superadminOnly: true },
 ];
 
 const toneClasses: Record<string, string> = {
