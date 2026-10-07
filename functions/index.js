@@ -27,6 +27,7 @@ exports.approveInvoice = require('./invoiceService').approveInvoice;
 exports.rejectInvoice = require('./invoiceService').rejectInvoice;
 exports.listInvoices = require('./invoiceService').listInvoices;
 exports.getInvoiceDocument = require('./invoiceService').getInvoiceDocument;
+exports.archiveFinancialRecord = require('./financialRecordService').archiveFinancialRecord;
 // The handler was renamed to registerWithDealerCode; this line still asked
 // for the old name and so exported undefined. The app calls
 // 'registerCustomer' from three places (sign-up and both email-OTP
