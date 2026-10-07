@@ -402,6 +402,22 @@ export interface AdAuditLog {
  *     "Banner Ads" / "Native Ads" / "Interstitial Ads" - global toggle
  *     per ad *format* (AdType in adEnums.ts), independent of network.
  */
+export interface AdPlacementControl {
+  enabled: boolean;
+  position: 'top' | 'bottom';
+}
+
+export interface AdPlacementControls {
+  screenBanners: Record<string, AdPlacementControl>;
+  webviewBannerEnabled: boolean;
+  webviewBannerPosition: 'top' | 'bottom';
+  webviewBanners: Record<string, AdPlacementControl>;
+  webviewInterstitialEnabled: boolean;
+  webviewInterstitials: Record<string, boolean>;
+  interstitialCooldownSeconds: number;
+  admobInterstitialUnitId: string;
+}
+
 export interface AdSettings {
   adsEnabled: boolean;
   directAdsEnabled: boolean;
@@ -417,6 +433,7 @@ export interface AdSettings {
    * as a whole rather than per-advertiser. 0 = unlimited. */
   maxInterstitialsPerUserPerHour: number;
   updatedBy: string;
+  placementControls?: AdPlacementControls;
   updatedAt: FirestoreTimestamp;
 }
 
