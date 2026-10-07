@@ -2059,7 +2059,21 @@ exports.getIimmpactOptions = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asyn
   const db = admin.firestore();
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
   await checkVelocity(db, request.auth.uid, 'getIimmpactOptions', { ip: getClientIp(request) });
-  const provider = await loadIimmpactProvider(db, request.data?.providerId);
+  let provider;
+  const requestedId = cleanString(request.data?.providerId, 100);
+  if (requestedId) {
+    provider = await loadIimmpactProvider(db, requestedId);
+  } else {
+    const service = cleanString(request.data?.service, 60) || 'Recharge';
+    const country = cleanString(request.data?.country, 2).toUpperCase();
+    provider = await providerCatalog.readProvider(db, service, {
+      country,
+      strictCountry: Boolean(country),
+    });
+    if (!provider || provider.authType !== 'iimmpactHmac') {
+      throw new HttpsError('failed-precondition', 'No active IIMMPACT provider is configured for this service and country.');
+    }
+  }
   const productCode = cleanString(request.data?.productCode, 100);
   const fieldId = cleanString(request.data?.fieldId, 100);
   if (!productCode || !fieldId) throw new HttpsError('invalid-argument', 'productCode and fieldId are required.');
