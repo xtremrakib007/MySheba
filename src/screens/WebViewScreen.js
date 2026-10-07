@@ -7,6 +7,7 @@ import { WebView } from 'react-native-webview';
 import { useApp } from '../context/AppContext';
 import { webViewPages, FOMEMA_CLINIC_FINDER_URL, SUBMIT_CHARGED_WEBVIEWS, WEBVIEW_SUBMIT_TRIGGERS, ACCESS_CLICK_WEBVIEWS, WEBVIEW_ACCESS_CLICK_TRIGGERS, PAYMENT_CHARGED_WEBVIEWS, PAYMENT_SUCCESS_URL_MARKERS, BUS_TICKET_WEBVIEW_KEYS } from '../data/countries';
 import { useTheme } from "../theme/ThemeContext";
+import { showAlert } from '../utils/appAlert';
 import HeaderDecor from '../components/HeaderDecor';
 import GoogleAdMobBanner from '../components/GoogleAdMobBanner';
 

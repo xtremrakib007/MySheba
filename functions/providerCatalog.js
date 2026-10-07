@@ -106,35 +106,11 @@ const PRESETS = {
   // come from the catalog rather than the deprecated product-list/subproducts
   // endpoints.
   'iimmpact-catalog': {
-    path: '/v2/options',
+    // Product discovery. This is intentionally separate from /v2/options.
+    path: '/v2/catalog',
     method: 'GET',
-    perAccount: true,
-    fieldId: 'plan',
-    queryTemplate: {
-      product_code: '{{operator}}',
-      field_id: '{{fieldId}}',
-      account_number: '{{account}}',
-      limit: '25000',
-    },
-    listPath: 'items',
-    itemMap: {
-      id: ['code', 'subproduct_code', 'subproductCode', 'id'],
-      name: ['name', 'label', 'description', 'title', 'product_name'],
-      data: ['data', 'volume', 'quota'],
-      valid: ['validity', 'valid', 'duration', 'period'],
-      category: ['category', 'type', 'product_group'],
-      price: ['denomination', 'price', 'amount'],
-    },
-    types: ['regular'],
-    operatorCodes: {
-      Celcom: ['CEL'],
-      CelcomDigi: ['CEL', 'DI'],
-      Hotlink: ['HI'],
-      'U Mobile': ['UMI'],
-      Tunetalk: ['TI'],
-      XOX: ['OXI'],
-      Yes: ['YESI'],
-    },
+    perAccount: false,
+    listPath: 'products',
     errorLabel: 'iimmpact',
   },
 
@@ -245,9 +221,9 @@ function catalogConfigFor(provider) {
       String(provider.name || '').trim().toLowerCase() === 'iimmpact' ||
       String(provider.catalogPreset || '').trim() === 'iimmpact-subproducts'
     );
-  const dynamicIimmpact = path === '/v2/catalog' &&
-    String(provider.catalogPreset || '').trim() === 'iimmpact-catalog';
-  if (legacyIimmpact || dynamicIimmpact) path = '/v2/options';
+  // IIMMPACT's /v2/catalog is the product-discovery endpoint.
+  // Do not rewrite it to /v2/options: options are a separate endpoint
+  // queried only after a product/field has been selected.
 
   const baseUrl = String(provider.catalogBaseUrl || provider.baseUrl || (preset && preset.baseUrl) || '').trim();
   if (!baseUrl) return null;
@@ -263,16 +239,18 @@ function catalogConfigFor(provider) {
     path,
     method: String(provider.catalogMethod || (preset && preset.method) || 'POST').toUpperCase(),
     requestTemplate: asObject(provider.catalogRequestTemplate) || (preset && preset.requestTemplate) || {},
-    queryTemplate: (legacyIimmpact || dynamicIimmpact) ? { product_code: '{{operator}}', field_id: '{{fieldId}}', account_number: '{{account}}', limit: '25000' } : (asObject(provider.catalogQueryTemplate) || (preset && preset.queryTemplate) || {}),
+    queryTemplate: legacyIimmpact
+      ? { product_code: '{{operator}}', field_id: '{{fieldId}}', account_number: '{{account}}', limit: '25000' }
+      : (asObject(provider.catalogQueryTemplate) || (preset && preset.queryTemplate) || {}),
     // A per-account catalogue is personalised to one phone number: it may not
     // be fetched without one, and its answer is never reusable for another.
     perAccount: provider.catalogPerAccount !== undefined
       ? provider.catalogPerAccount === true
       : Boolean(preset && preset.perAccount),
-    fieldId: String(provider.catalogFieldId || (preset && preset.fieldId) || ((legacyIimmpact || dynamicIimmpact) ? 'plan' : '')).trim(),
+    fieldId: String(provider.catalogFieldId || (preset && preset.fieldId) || (legacyIimmpact ? 'plan' : '')).trim(),
     operatorCodes:
       asObject(provider.catalogOperatorCodes) ||
-      ((legacyIimmpact || dynamicIimmpact) ? PRESETS['iimmpact-catalog'].operatorCodes : (preset && preset.operatorCodes)) ||
+      (legacyIimmpact ? PRESETS['iimmpact-options'].operatorCodes : (preset && preset.operatorCodes)) ||
       null,
     successPath: provider.catalogSuccessPath !== undefined
       ? String(provider.catalogSuccessPath || '')
@@ -280,7 +258,9 @@ function catalogConfigFor(provider) {
     successValue: provider.catalogSuccessValue !== undefined
       ? provider.catalogSuccessValue
       : (preset ? preset.successValue : undefined),
-    listPath: (legacyIimmpact || dynamicIimmpact) ? 'items' : String(provider.catalogListPath || (preset && preset.listPath) || '').trim(),
+    listPath: legacyIimmpact
+      ? 'items'
+      : String(provider.catalogListPath || (preset && preset.listPath) || '').trim(),
     itemMap: asObject(provider.catalogItemMap) || (preset && preset.itemMap) || DEFAULT_ITEM_MAP,
     types,
     window: windowSpec,

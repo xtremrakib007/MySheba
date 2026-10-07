@@ -4,7 +4,7 @@ import {
   AlertTriangle, BarChart3, BadgeCheck, Banknote, BellRing, Building2, CheckCircle2,
   CreditCard, FileText, Globe2, Headphones, LayoutGrid, Plane, Search, Settings2,
   ShieldCheck, Smartphone, Ticket, TrainFront, UserRoundCog, Users, XCircle,
-  Activity, FileSearch, Megaphone, WalletCards, RefreshCw, Network, KeyRound, ScrollText, Smartphone, BriefcaseBusiness, Lock,
+  Activity, FileSearch, Megaphone, WalletCards, RefreshCw, Network, KeyRound, ScrollText, BriefcaseBusiness, Lock,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchOpsOverview, type OpsOverview } from '../services/reportsService';
