@@ -247,7 +247,7 @@ console.log('\nStaff see the same WebViews as customers');
 const admin = read('src/screens/AdminFeaturesScreen.js');
 const gridSrc = read('src/components/ServiceGrid.js');
 const featureGrid = read('src/components/FeatureGrid.js');
-yes('the admin landing uses the shared builder', /adminLandingTiles\(webviewPages, hasServiceArt, tileLabels\)/.test(admin));
+yes('the admin landing uses the shared builder', /adminLandingTiles\(webviewPages, hasServiceArt, tileLabels, [^)]*dynamicPlatformFeatures\)/.test(admin));
 // Looking the tapped key up in the static list made an added tile inert.
 yes('a tapped tile is looked up in the live list', /adminHomeList\.find\(\(x\) => x\.key === key\)/.test(admin));
 // `it.emoji ? '' : it.key` so a superadmin's chosen emoji beats the drawing the
