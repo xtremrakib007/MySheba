@@ -179,16 +179,24 @@ function BillDetails({ bill, loading }) {
   if (loading) return <Text style={[billStyles.note, { color: colors.textSecondary }]}>Checking this account…</Text>;
   if (!bill) return null;
   if (bill.blocking) return <Text style={[billStyles.error, { color: colors.danger || colors.primary }]}>{bill.message}</Text>;
-  if (!bill.fields || !bill.fields.length) return null;
+  if (!bill.fields || !bill.fields.length) return bill.processingTime ? (
+    <View style={[billStyles.card, { borderColor: `${colors.primary}44`, backgroundColor: colors.surface }]}>
+      <Text style={[billStyles.title, { color: colors.text }]}>Processing time: {bill.processingTime}</Text>
+    </View>
+  ) : null;
   return (
     <View style={[billStyles.card, { borderColor: `${colors.primary}44`, backgroundColor: colors.surface }]}>
       <Text style={[billStyles.title, { color: colors.text }]}>Bill details</Text>
       {bill.fields.map((f) => (
+
         <View key={f.key} style={billStyles.row}>
           <Text style={[billStyles.label, { color: colors.textSecondary }]}>{f.label}</Text>
           <Text style={[billStyles.value, { color: colors.text }]}>{f.value}</Text>
         </View>
       ))}
+      {!!bill.processingTime && (
+        <Text style={[billStyles.processing, { color: colors.text }]}>Processing time: {bill.processingTime}</Text>
+      )}
     </View>
   );
 }
@@ -201,6 +209,7 @@ const billStyles = StyleSheet.create({
   value: { fontSize: 12.5, fontWeight: '700', flexShrink: 1, textAlign: 'right' },
   note: { fontSize: 12.5, paddingVertical: 8 },
   error: { fontSize: 13, fontWeight: '700', paddingVertical: 8, lineHeight: 19 },
+  processing: { fontSize: 12.5, fontWeight: '800', paddingTop: 4, lineHeight: 18 },
 });
 
 export default function BillPaymentStep({ step }) {
