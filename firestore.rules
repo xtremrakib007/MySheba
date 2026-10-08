@@ -126,6 +126,10 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
     match /pointTransfers/{id} { allow read: if activeProfile() && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid || can('finance')); allow create, update, delete: if false; }
+    // Customer wallet transfers and their immutable per-wallet ledger are server-owned.
+    // Clients use protected callables; direct writes are never allowed.
+    match /walletTransfers/{id} { allow read: if activeProfile() && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid || can('finance') || can('reports')); allow create, update, delete: if false; }
+    match /walletLedger/{id} { allow read: if activeProfile() && (resource.data.uid == request.auth.uid || can('finance') || can('reports')); allow create, update, delete: if false; }
     match /recommendationViews/{id} { allow read, write: if false; }
     match /announcements/{id} { allow read: if activeProfile() && can('support'); allow write: if false; }
     // Staff support chat remains active for the admin/support inbox. Customer-facing chat UI is retired,
