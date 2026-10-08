@@ -14,24 +14,31 @@
 // is shown prices for plans they cannot buy. So a failure blocks the picker
 // rather than substituting a list.
 //
-// `perNumber` of null means "not offered here" - no such provider for this
-// country and operator - and is the ordinary case that keeps every existing
-// operator working. An empty ARRAY is a different answer: the provider was
-// asked about this number and had nothing.
+// `perNumber` of null means "not asked/offered here". When
+// `requirePerNumber` is true, null is intentionally NOT treated as an
+// invitation to show invented/static packages.
 
-/**
- * @param {object} args
- * @param {string} args.country
- * @param {Array|null} args.perNumber     plans for this number, or null when not offered.
- * @param {string} args.perNumberError    a failed per-number lookup.
- * @param {Array} args.successTopUp       the Bangladesh catalogue.
- * @param {Array} args.builtIn            the built-in/admin-priced list.
- * @returns {{ packages: Array, blocked: boolean, emptyForNumber: boolean, perNumber: boolean }}
- */
-export function resolvePackageSource({ country, perNumber, perNumberError, successTopUp, builtIn }) {
-  if (perNumberError) return { packages: [], blocked: true, emptyForNumber: false, perNumber: true };
+export function resolvePackageSource({
+  country,
+  perNumber,
+  perNumberError,
+  successTopUp,
+  builtIn,
+  requirePerNumber = false,
+}) {
+  if (perNumberError) {
+    return { packages: [], blocked: true, emptyForNumber: false, perNumber: true };
+  }
   if (Array.isArray(perNumber)) {
-    return { packages: perNumber, blocked: false, emptyForNumber: perNumber.length === 0, perNumber: true };
+    return {
+      packages: perNumber,
+      blocked: false,
+      emptyForNumber: perNumber.length === 0,
+      perNumber: true,
+    };
+  }
+  if (requirePerNumber) {
+    return { packages: [], blocked: true, emptyForNumber: false, perNumber: true };
   }
   if (String(country || '').toUpperCase() === 'BD') {
     return { packages: successTopUp || [], blocked: false, emptyForNumber: false, perNumber: false };
