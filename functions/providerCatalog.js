@@ -139,6 +139,8 @@ const PRESETS = {
       name: ['name', 'label', 'description', 'title', 'product_name'],
       data: ['data', 'volume', 'quota'],
       valid: ['validity', 'valid', 'duration', 'period'],
+      description: ['description', 'details', 'additional_description', 'display_description'],
+      features: ['features', 'feature', 'highlights'],
       category: ['category', 'type', 'product_group'],
       processingTime: ['processing_time', 'processingTime', 'processing-time'],
       // denomination FIRST, and this is not a preference.
@@ -396,6 +398,8 @@ function normaliseItem(item, itemMap) {
     name: String(firstOf(item, map.name) ?? '').slice(0, 200),
     data: String(firstOf(item, map.data) ?? '').slice(0, 100),
     valid: String(firstOf(item, map.valid) ?? '').slice(0, 100),
+    description: String(firstOf(item, map.description) ?? '').slice(0, 500),
+    features: Array.isArray(firstOf(item, map.features)) ? firstOf(item, map.features).map((x) => String(x).slice(0, 120)).slice(0, 12) : [],
     category: String(firstOf(item, map.category) ?? '').slice(0, 60),
     processingTime: String(firstOf(item, map.processingTime || ['processing_time', 'processingTime', 'processing-time']) ?? '').slice(0, 100),
     price: toAmount(firstOf(item, map.price)),
