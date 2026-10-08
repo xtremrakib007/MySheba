@@ -32,7 +32,15 @@ function validMoney(value) { const n = Number(value); return Number.isFinite(n) 
 function validBalance(value) { const n = Number(value ?? 0); return Number.isFinite(n) && n >= 0 && Number.isSafeInteger(Math.round(n * 100)) ? n : null; }
 function active(account) { return !!account && account.suspended !== true && account.inactive !== true && account.disabled !== true && account.active !== false && account.mergedInto == null; }
 
-exports.createSelfTopup = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async () => {
+exports.createSelfTopup = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
+  const db = admin.firestore();
+  const snap = await db.collection('users').doc(request.auth.uid).get();
+  const profile = snap.exists ? (snap.data() || {}) : null;
+  if (!profile || profile.disabled === true || profile.suspended === true || profile.inactive === true || profile.active === false) {
+    throw new HttpsError('permission-denied', 'Your account is not active.');
+  }
+  assertWalletUnfrozen(profile, 'Your wallet');
   // Blueprint guardrail: an administrator must never mint wallet value by
   // directly increasing their own balance. Staff funding must come from an
   // approved funding mechanism/partner and move through the audited funding
