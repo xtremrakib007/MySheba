@@ -17,6 +17,7 @@ dist/
 web-build/
 
 # Build outputs
+build-info.json
 *.apk
 *.aab
 *.ipa
