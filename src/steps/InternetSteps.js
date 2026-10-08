@@ -2,7 +2,7 @@ import { operatorForNumber } from '../data/operatorPrefix';
 import React, { useEffect, useState, useRef } from 'react';
 import { View } from 'react-native';
 import { useApp } from '../context/AppContext';
-import { countries, rechargeOperators } from '../data/countries';
+import { countries, internetOperators } from '../data/countries';
 import { getMergedPackages } from '../utils/internetPackages';
 import { resolvePackageSource } from '../utils/packageSource';
 import { getOperatorBrand } from '../data/operatorBrand';
@@ -18,7 +18,7 @@ import { useNetworkStatus } from '../components/useNetworkStatus';
 // conversion helper remains internal for settlement compatibility.
 export default function InternetStep({ step }) {
   const { serviceData, updateServiceData, nextStep, internetPricing } = useApp();
-  const OPERATOR_LIST = rechargeOperators[serviceData.country] || [];
+  const OPERATOR_LIST = internetOperators[serviceData.country] || [];
 
   // The number is collected first so the operator can be read off it. A
   // detected operator is selected and its step skipped, as asked. Prefixes are
@@ -109,7 +109,7 @@ export default function InternetStep({ step }) {
   }
 
   if (step === 2) {
-    const list = rechargeOperators[serviceData.country] || ['Operator 1', 'Operator 2'];
+    const list = internetOperators[serviceData.country] || [];
     return <View><FormLabel>Select Operator</FormLabel><Grid3>{list.map((o) => { const brand = getOperatorBrand(o); return <OperatorCard key={o} name={o} logo={brand.logo} color={brand.color} initials={brand.initials} selected={serviceData.operator === o} onPress={() => { updateServiceData({ operator: o, package: null, amount: null }); nextStep(); }} />; })}</Grid3></View>;
   }
 
@@ -120,6 +120,9 @@ export default function InternetStep({ step }) {
       perNumberError: plansError,
       successTopUp: successTopUpPackages,
       builtIn: getMergedPackages(serviceData.operator, internetPricing[serviceData.operator]),
+      // Non-Bangladesh Internet plans come from IIMMPACT per phone number.
+      // Never display the old hardcoded package prices as a fallback.
+      requirePerNumber: serviceData.country !== 'BD',
     });
     const packages = source.packages;
     const cur = serviceData.currency || 'MYR';
