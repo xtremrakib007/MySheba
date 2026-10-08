@@ -579,34 +579,9 @@ export function moreFeaturesSections({ role = 'customer', can, webviewPages, til
   // the overflow, or removing one duplicate just moves it.
   const kinds = new Set(declared.map((f) => f.kind));
   const keys = new Set(declared.map((f) => f.key));
-
-  // Core provider services are deliberately visible in More Features as well
-  // as Home. This gives every role one complete service catalogue without
-  // making customers hunt for Mobile Reload, Internet, Entertainment or
-  // provider bill categories. The actual transaction flow remains the same.
-  const alwaysShowKeys = new Set([
-    'recharge', 'internet', 'entertainment', 'billpayment', 'esim', 'rechargePin',
-  ]);
-  const allDeclaredServices = applyTileLabels(
-    withWebviewConfig(servicesForRole(role, can), webviewPages),
-    tileLabels,
-  );
-  const coreServices = allDeclaredServices
-    .filter((tile) => alwaysShowKeys.has(tile.key) && isActive(gridKeyFor(tile)))
-    .filter((tile) => !keys.has(tile.key));
-
   const overflow = overflowTiles({ role, can, webviewPages, tileLabels, isActive, excludeKinds: kinds })
-    .filter((tile) => tile.cat !== 'personal' && !keys.has(tile.key))
-    .filter((tile) => !alwaysShowKeys.has(tile.key));
-
-  return {
-    sections: [
-      ...(coreServices.length ? [{ key: 'coreServices', label: 'Core Services', subtitle: 'Mobile, internet, entertainment and bill services', tiles: coreServices }] : []),
-      ...groupTilesByCategory(overflow),
-    ],
-    account,
-  };
-}
+    .filter((tile) => tile.cat !== 'personal' && !keys.has(tile.key));
+  return { sections: groupTilesByCategory(overflow), account };
 
 export function overflowTiles({ role = 'customer', can, webviewPages, tileLabels, isActive = () => true, excludeKinds = [] }) {
   const exclude = new Set(excludeKinds);
