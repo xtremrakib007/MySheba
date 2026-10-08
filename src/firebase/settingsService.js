@@ -8,7 +8,7 @@ import { db } from './config';
 
 const SETTINGS_DOC = doc(db, 'settings', 'pricing');
 
-export const ROLE_PRICE_ROLES = ['customer', 'dealer', 'reseller', 'admin'];
+export const ROLE_PRICE_ROLES = ['customer', 'retail', 'dealer', 'reseller', 'admin'];
 
 export const ROLE_PRICE_KEYS = ['webviewAccessCost', 'webviewSubmitCost', 'paymentSuccessCost', 'notepadCost', 'myDocumentsCost', 'salaryOtCost', 'rechargePointCostPerUnit', 'internetPointCostPerUnit', 'offerPacksPointCostPerUnit', 'entertainmentPointCostPerUnit'];
 
