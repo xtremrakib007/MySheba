@@ -5,6 +5,7 @@ const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { logAudit, logServerError } = require('./logService');
 const { getWalletCurrencyAndFx, baseToWallet } = require('./walletCurrencyService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+const { addWalletLedgerEntry } = require('./walletLedgerService');
 // One session per platform: a phone and a browser can both be signed in,
 // two phones cannot. See functions/sessionSlots.js.
 const { sessionMatches } = require('./sessionSlots');
@@ -158,6 +159,19 @@ exports.chargeWallet = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (req
       if (!Number.isSafeInteger(Math.round(newBalance * 100))) throw new HttpsError('failed-precondition', 'The resulting wallet balance is invalid.');
       const updates = { walletBalance: newBalance, walletCurrency: walletFx.currency, walletBalanceCurrency: walletFx.currency, [field]: now };
       tx.update(userRef, updates);
+      addWalletLedgerEntry(tx, db, {
+        uid,
+        type: 'wallet_service_debit',
+        direction: 'debit',
+        currency: walletFx.currency,
+        amount: walletCost,
+        balanceBefore: balance,
+        balanceAfter: newBalance,
+        relatedTransactionId: opRef.id,
+        idempotencyKey: rid,
+        source: 'service_charge',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
       tx.create(opRef, { uid, type: 'chargeWallet', kind, key: cleanKeyValue, requestId: rid, cost, walletCost: resultData.walletCost, currency: resultData.currency, fxRate: resultData.fxRate, fxRateType: resultData.fxRateType, status: 'completed', result: resultData, createdAt: admin.firestore.FieldValue.serverTimestamp() });
       return resultData;
     });
