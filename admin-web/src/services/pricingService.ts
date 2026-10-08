@@ -36,6 +36,21 @@ export interface CatalogProductPrice {
   currency: string;
   active: boolean;
   prices: Partial<Record<PricingRole, number>>;
+  commissions: Partial<Record<PricingRole, { type: 'fixed' | 'percent'; value: number }>>;
+}
+
+export interface CommissionTier {
+  minAmount: number;
+  maxAmount: number | null;
+  fee: number;
+}
+
+export interface CommissionRules {
+  recharge: { type: 'fixed' | 'percent'; value: number };
+  internet: { type: 'fixed' | 'percent'; value: number };
+  billTiers: CommissionTier[];
+  remittanceTiers: CommissionTier[];
+  touchNGoFeePercent: number;
 }
 
 export interface PricingSettings {
@@ -56,6 +71,7 @@ export interface PricingSettings {
   webviewAccessWindowHours: number;
   rolePricing: Partial<Record<PricingRole, Partial<Record<RolePriceKey, number>>>>;
   catalogProductPricing: CatalogProductPrice[];
+  commissionRules: CommissionRules;
 }
 
 export const DEFAULT_PRICING: PricingSettings = {
@@ -76,12 +92,19 @@ export const DEFAULT_PRICING: PricingSettings = {
   webviewAccessWindowHours: 1,
   rolePricing: {},
   catalogProductPricing: [],
+  commissionRules: {
+    recharge: { type: 'fixed', value: 0 },
+    internet: { type: 'fixed', value: 0 },
+    billTiers: [{ minAmount: 0, maxAmount: 50, fee: 0.10 }, { minAmount: 50.01, maxAmount: null, fee: 0.20 }],
+    remittanceTiers: [{ minAmount: 1, maxAmount: 999, fee: 10 }, { minAmount: 1000, maxAmount: 1999, fee: 15 }, { minAmount: 2000, maxAmount: null, fee: 20 }],
+    touchNGoFeePercent: 0.5,
+  },
 };
 
 export async function fetchPricing(): Promise<PricingSettings> {
   const snap = await getDoc(SETTINGS_DOC);
   const data = snap.exists() ? (snap.data() as Partial<PricingSettings>) : {};
-  return { ...DEFAULT_PRICING, ...data, catalogProductPricing: Array.isArray(data.catalogProductPricing) ? data.catalogProductPricing : [] };
+  return { ...DEFAULT_PRICING, ...data, catalogProductPricing: Array.isArray(data.catalogProductPricing) ? data.catalogProductPricing : [], commissionRules: { ...DEFAULT_PRICING.commissionRules, ...(data.commissionRules || {}), recharge: { ...DEFAULT_PRICING.commissionRules.recharge, ...(data.commissionRules?.recharge || {}) }, internet: { ...DEFAULT_PRICING.commissionRules.internet, ...(data.commissionRules?.internet || {}) }, billTiers: Array.isArray(data.commissionRules?.billTiers) ? data.commissionRules.billTiers : DEFAULT_PRICING.commissionRules.billTiers, remittanceTiers: Array.isArray(data.commissionRules?.remittanceTiers) ? data.commissionRules.remittanceTiers : DEFAULT_PRICING.commissionRules.remittanceTiers } };
 }
 
 export async function updatePricing(key: keyof PricingSettings, value: number): Promise<void> {
