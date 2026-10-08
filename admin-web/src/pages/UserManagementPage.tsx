@@ -5,7 +5,7 @@ import { useAuth, type AdminRole } from '../contexts/AuthContext';
 import { ALL_ROLES, assignableRoles, canEditTarget, fetchUsersPage, filterBySearch, updateUserDisabled, updateUserRole, type AdminUserRow, type UserRole } from '../services/userManagementService';
 import type { DocumentData, QueryDocumentSnapshot } from 'firebase/firestore';
 
-const ROLE_STYLES: Record<UserRole, string> = { user:'bg-slate-100 text-slate-700', customer:'bg-slate-100 text-slate-700', dealer:'bg-blue-50 text-blue-700', reseller:'bg-amber-50 text-amber-700', support:'bg-cyan-50 text-cyan-700', finance:'bg-amber-100 text-amber-800', admin:'bg-emerald-50 text-emerald-700', superadmin:'bg-indigo-50 text-indigo-700' };
+const ROLE_STYLES: Record<UserRole, string> = { user:'bg-slate-100 text-slate-700', customer:'bg-slate-100 text-slate-700', retail:'bg-teal-50 text-teal-700', dealer:'bg-blue-50 text-blue-700', reseller:'bg-amber-50 text-amber-700', support:'bg-cyan-50 text-cyan-700', finance:'bg-amber-100 text-amber-800', admin:'bg-emerald-50 text-emerald-700', superadmin:'bg-indigo-50 text-indigo-700' };
 const KYC_STYLES = { approved:'bg-emerald-50 text-emerald-700', pending:'bg-amber-50 text-amber-700', rejected:'bg-red-50 text-red-700', unknown:'bg-slate-100 text-slate-500' };
 function initials(name:string){return name.trim().split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'U';}
 function KycChip({status}:{status:AdminUserRow['verificationStatus']}){return <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold capitalize ${KYC_STYLES[status]}`}>{status==='unknown'?'Not submitted':`KYC ${status}`}</span>}
