@@ -102,6 +102,7 @@ const CUSTOMER_SERVICES = [
   // Everything below is reached through More Features. Still categorised,
   // because that screen groups them.
   { key: 'entertainment', icon: 'entertainment', name: 'Entertainment', kind: 'service', cat: 'recharge' },
+  { key: 'iimmpactCatalog', icon: 'more', name: 'IIMMPACT Marketplace', kind: 'iimmpactCatalog', cat: 'recharge' },
   { key: 'visa', icon: 'visa', name: 'Visa', kind: 'webview', cat: 'immigration' },
   { key: 'fomema', icon: 'fomema', name: 'FOMEMA', kind: 'webview', cat: 'immigration' },
   { key: 'salary', icon: 'salary', name: 'Salary & OT', kind: 'salary', cat: 'personal' },
