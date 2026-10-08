@@ -1045,7 +1045,15 @@ async function resolveIimmpactCatalogProductCode(provider, service, subject, raw
   ].map(normaliseCatalogText).filter(Boolean));
   if (!wanted.size) return '';
 
-  const products = Object.values(json.products || {}).filter((p) => p && p.is_active !== false && p.code);
+  const allProducts = Object.values(json.products || {}).filter((p) => p && p.is_active !== false && p.code);
+  // Recharge PIN is a fulfillment type, not merely a product name. IIMMPACT
+  // can expose the same operator/brand as both airtime and a voucher product.
+  // Restrict PIN matching to products explicitly fulfilled as PINs before
+  // scoring the operator name; otherwise an airtime product can tie with its
+  // PIN sibling and the safe ambiguity guard returns no code.
+  const products = service === 'Recharge PIN'
+    ? allProducts.filter((p) => String(p.processing_time || '').toLowerCase() === 'pin')
+    : allProducts;
   const scored = products.map((p) => {
     const name = normaliseCatalogText(p.name);
     const note = normaliseCatalogText(p.note);
@@ -1057,7 +1065,6 @@ async function resolveIimmpactCatalogProductCode(provider, service, subject, raw
       if (name.includes(term) || term.includes(name)) score = Math.max(score, 80);
       if (note && (note.includes(term) || term.includes(note))) score = Math.max(score, 60);
     }
-    if (service === 'Recharge PIN' && String(p.processing_time || '').toLowerCase() === 'pin' && score > 0) score += 20;
     return { code: String(p.code), score };
   }).filter((x) => x.score > 0).sort((a, b) => b.score - a.score);
 
