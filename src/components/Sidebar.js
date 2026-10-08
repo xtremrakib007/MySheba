@@ -106,7 +106,6 @@ const SUPERADMIN_GROUPS = [
     { key: 'trustedDevices', icon: 'trustedDevices', label: 'Trusted Devices' },
     { key: 'apiProviderManagement', icon: 'apiProviderManagement', label: 'API Providers' },
     { key: 'tierPromotions', icon: 'tierPromotions', label: 'Tier Promotions' },
-    { key: 'superAdminTopup', icon: 'superAdminTopup', label: 'Wallet Top-Up' },
   ] },
   // Who sees what. These were reachable only through System Control > System,
   // two taps in, so the grid scoping and the WebView editor read as missing
