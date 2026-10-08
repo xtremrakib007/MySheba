@@ -83,7 +83,7 @@ function applyIimmpact(f:FormState):FormState {
     catalogOperatorCodes:'{}',
     catalogDynamicProductDiscovery:true,
     excludedCountries:['BD'],
-    services:['Recharge','Internet','Bill Payment','Recharge PIN','Entertainment'],
+    services:['Recharge','Internet','Bill Payment','Recharge PIN','Entertainment','eSIM'],
     service:'Recharge',
     countries:['ALL'],
     country:'ALL',
