@@ -38,7 +38,7 @@ const ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH'];
 //
 // scripts/test-api-countries.js keeps this in step with RECHARGE_RATE_KEYS and
 // with the admin screen's own copy.
-const ALLOWED_COUNTRIES = ['ALL', 'BD', 'MY', 'SG', 'ID', 'IN', 'PH', 'NP', 'PK', 'MM', 'KH'];
+const ALLOWED_COUNTRIES = ['ALL', 'BD', 'MY', 'SG', 'ID', 'IN', 'PH', 'NP', 'PK', 'MM', 'KH', 'TH'];
 // Services that are never dispatched to a provider, whatever the matrix says.
 //
 // Both move MONEY rather than buy a product. Mobile Banking pays out to a
@@ -146,7 +146,31 @@ function resolveExecutionMode({ country, service, settings, providers }) {
  */
 function autoCountryModes(provider, priorCountryModes) {
   if (!provider || provider.active === false) return null;
-  if (providerReach.isGlobal(provider)) return null;
+  const excluded = Array.isArray(provider.excludedCountries)
+    ? provider.excludedCountries.map((c) => String(c || '').trim().toUpperCase())
+    : [];
+  if (providerReach.isGlobal(provider)) {
+    // A global provider with an explicit exclusion list can safely opt every
+    // other app country into API mode. A plain ALL provider still requires
+    // explicit admin intent, so it changes nothing here.
+    if (!excluded.length) return null;
+    const countries = COUNTRY_CODES.filter((c) => !excluded.includes(c));
+    if (!countries.length) return null;
+    const services = (Array.isArray(provider.services) && provider.services.length ? provider.services : [provider.service])
+      .filter((s) => s && ALLOWED_SERVICES.includes(s) && !isNonApiService(s));
+    if (!services.length) return null;
+    const next = { ...(priorCountryModes || {}) };
+    let changed = false;
+    for (const country of countries) {
+      const row = { ...(next[country] || {}) };
+      for (const service of services) {
+        if (row[service] === 'api' || row[service] === 'legacy') continue;
+        row[service] = 'api'; changed = true;
+      }
+      next[country] = row;
+    }
+    return changed ? next : null;
+  }
   const countries = providerReach.providerCountries(provider).filter((c) => COUNTRY_CODES.includes(c));
   const services = (Array.isArray(provider.services) && provider.services.length
     ? provider.services
@@ -323,6 +347,7 @@ function validateCatalog(data) {
     catalogFieldId: cleanString(data.catalogFieldId, 100),
     catalogSuccessPath: cleanString(data.catalogSuccessPath, 200),
     catalogErrorLabel: cleanString(data.catalogErrorLabel, 100),
+    catalogDynamicProductDiscovery: data.catalogDynamicProductDiscovery === true,
   };
   if (out.catalogPath && (out.catalogPath.includes('?') || out.catalogPath.includes('#'))) {
     throw new HttpsError('invalid-argument', 'Catalogue path must not contain a query string or fragment.');
@@ -504,6 +529,10 @@ function validate(data) {
     },
   );
   let country = countries[0];
+  const excludedCountries = providerReach.normaliseCountries(data.excludedCountries || [], {
+    allowed: ALLOWED_COUNTRIES.filter((c) => c !== 'ALL'),
+    onInvalid: (code) => { throw new HttpsError('invalid-argument', '"' + String(code).slice(0, 10) + '" is not a country this app serves.'); },
+  });
   let endpointPath = cleanString(data.endpointPath, 500) || '/';
   let authType = cleanString(data.authType, 20) || 'none';
   let method = cleanString(data.method, 10).toUpperCase() || 'POST';
@@ -621,7 +650,7 @@ function validate(data) {
   }
   if (!ALLOWED_METHODS.includes(method)) throw new HttpsError('invalid-argument', 'Invalid HTTP method.');
   return {
-    service, services, name, country, countries, baseUrl, endpointPath, method, authType, apiKey, secretKey,
+    service, services, name, country, countries, excludedCountries: excludedCountries.filter((c) => c !== 'ALL'), baseUrl, endpointPath, method, authType, apiKey, secretKey,
     username: cleanString(data.username, 200), password: cleanString(data.password, 1000),
     active: data.active !== false, priority: Math.max(0, Math.min(9999, Number(priority) || 0)),
     timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)), notes: cleanString(data.notes, 1000),
@@ -950,6 +979,45 @@ const IIMMPACT_PRODUCT_CODE_CACHE_MS = 5 * 60 * 1000;
 
 function normaliseCatalogText(value) {
   return String(value || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+async function discoverIimmpactProductCodes(provider, operatorName, service) {
+  const base = new URL(provider.baseUrl);
+  const url = new URL('/v2/catalog', base);
+  url.searchParams.set('is_active', 'true');
+  const { ok, json } = await signedProviderRequest(url, {
+    method: 'GET',
+    headers: { accept: 'application/json' },
+  }, provider);
+  if (!ok || !json || typeof json !== 'object') return [];
+
+  const wanted = normaliseCatalogText(operatorName);
+  if (!wanted) return [];
+  const products = Object.values(json.products || {}).filter((p) => p && p.is_active !== false && p.code);
+  const scored = products.map((p) => {
+    const name = normaliseCatalogText(p.name);
+    const note = normaliseCatalogText(p.note);
+    let score = 0;
+    if (name === wanted) score = 120;
+    else if (name.includes(wanted)) score = 100;
+    else if (wanted.includes(name) && name) score = 90;
+    if (note && note.includes(wanted)) score = Math.max(score, 60);
+    // Mobile-data products are the per-number catalogue we need for Internet
+    // and Offer Packs. Do not accidentally select an unrelated product that
+    // happens to contain the operator's name.
+    if (['Internet', 'Offer Packs'].includes(service)) {
+      const dataField = Array.isArray(p.fields) && p.fields.some((f) =>
+        f && f.type === 'select' && f.data_source
+      );
+      if (!dataField) score = 0;
+    }
+    return { code: String(p.code), score };
+  }).filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  if (!scored.length) return [];
+  const best = scored[0].score;
+  return scored.filter((x) => x.score === best).slice(0, 8).map((x) => x.code);
 }
 
 async function resolveIimmpactCatalogProductCode(provider, service, subject, raw = {}) {
@@ -1534,7 +1602,7 @@ exports._test_iimmpactRejectionHint = iimmpactRejectionHint;
  * the plan list is resolved against - so a number sent in a different shape
  * does not merely fail, it answers for a different subscriber or for none.
  */
-const DIAL_CODES = { MY: '60', BD: '880', IN: '91', NP: '977', ID: '62', PK: '92', MM: '95', PH: '63', KH: '855' };
+const DIAL_CODES = { MY: '60', BD: '880', IN: '91', NP: '977', ID: '62', PK: '92', MM: '95', PH: '63', KH: '855', TH: '66' };
 function nationalAccountNumber(phone, country) {
   let digits = String(phone || '').replace(/\D/g, '');
   const dial = DIAL_CODES[String(country || '').toUpperCase()];
@@ -1575,10 +1643,22 @@ exports.listProviderDataPlans = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, a
   // the charge has never heard of - and `catalog` in this file is the Success
   // TopUp wrapper, which pins the provider name and accepts no country at all.
   const perAccount = await providerCatalog.perAccountCatalogFor(db, service, country, operatorName);
+  // IIMMPACT is catalog-driven: when no legacy operator map exists, discover
+  // the product codes from the provider's live catalog. This is deliberately
+  // not persisted as configuration, so newly enabled operators/products appear
+  // without a MySheba release.
+  let provider = perAccount?.provider || null;
+  let codes = perAccount?.codes || [];
+  if (!provider) {
+    const candidate = await providerCatalog.readProvider(db, service, { country, strictCountry: true });
+    if (candidate && candidate.authType === 'iimmpactHmac' && providerCatalog.dynamicProductDiscoveryFor(candidate)) {
+      provider = candidate;
+      codes = await discoverIimmpactProductCodes(provider, operatorName, service);
+    }
+  }
   // Not an error: most country/operator pairs have no per-number catalogue and
   // the screen simply keeps the package list it already had.
-  if (!perAccount) return { plans: [], supported: false };
-  const { provider, codes } = perAccount;
+  if (!provider || !codes.length) return { plans: [], supported: false };
   if (!provider.apiKey || !provider.secretKey) throw new HttpsError('failed-precondition', 'The package provider is not configured.');
 
   const account = nationalAccountNumber(request.data?.phone, country);
@@ -1636,6 +1716,34 @@ exports.listProviderDataPlans = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, a
  * A biller with no code gets no presentment, which is one of the provider's own
  * documented non-blocking answers.
  */
+// Short-lived provider-catalog metadata cache. Processing time is display-only
+// metadata, so it must never become a payment decision or a hardcoded promise.
+const IIMMPACT_PROCESSING_TIME_CACHE = new Map();
+const IIMMPACT_PROCESSING_TIME_CACHE_MS = 5 * 60 * 1000;
+
+async function iimmpactProcessingTimeForProduct(provider, productCode) {
+  if (!provider || provider.authType !== 'iimmpactHmac' || !productCode) return '';
+  const key = String(provider.id || provider.name || 'iimmpact') + '|' + String(productCode).trim().toUpperCase();
+  const hit = IIMMPACT_PROCESSING_TIME_CACHE.get(key);
+  if (hit && Date.now() - hit.at < IIMMPACT_PROCESSING_TIME_CACHE_MS) return hit.value;
+  try {
+    const url = new URL('/v2/catalog', provider.baseUrl);
+    url.searchParams.set('is_active', 'true');
+    const { ok, json } = await signedProviderRequest(url, { method: 'GET', headers: { accept: 'application/json' } }, provider);
+    if (!ok || !json || typeof json !== 'object') return '';
+    const product = json.products && json.products[String(productCode).trim()];
+    const value = product && product.processing_time != null
+      ? String(product.processing_time).trim().slice(0, 100)
+      : '';
+    IIMMPACT_PROCESSING_TIME_CACHE.set(key, { at: Date.now(), value });
+    return value;
+  } catch (error) {
+    console.warn('IIMMPACT processing-time lookup unavailable', String(error?.message || error).slice(0, 160));
+    return '';
+  }
+}
+exports._test_iimmpactProcessingTimeForProduct = iimmpactProcessingTimeForProduct;
+
 const DEFAULT_BILLER_PRODUCT_CODES = { TNB: 'TNB', JomPAY: 'JOMPAY' };
 function billerProductCodeFor(provider, billerName) {
   const map = (provider && provider.billerProductCodes && typeof provider.billerProductCodes === 'object')
@@ -1699,7 +1807,15 @@ exports.getBillPresentment = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asyn
     // Their envelope is `data` on every v2 endpoint; a flat body is read as
     // itself rather than as nothing.
     const body = (json && typeof json.data === 'object' && json.data !== null) ? json.data : json;
-    return billPresentment.readBillPresentment(body);
+    const result = billPresentment.readBillPresentment(body);
+    // Bangladesh bill-payment screens show the provider's live catalogue
+    // processing_time when the configured IIMMPACT product publishes one.
+    // This is advisory metadata only: missing metadata never blocks payment.
+    if (country === 'BD' && provider.authType === 'iimmpactHmac') {
+      const processingTime = await iimmpactProcessingTimeForProduct(provider, productCode);
+      if (processingTime) return { ...result, processingTime };
+    }
+    return result;
   } catch (error) {
     console.warn('Bill presentment unavailable', String(error?.message || error).slice(0, 200));
     return billPresentment.readBillPresentment({}, { reachable: false });
@@ -1968,7 +2084,21 @@ exports.getIimmpactCatalogForUser = onCall({ enforceAppCheck: ENFORCE_APP_CHECK 
   const db = admin.firestore();
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
   await checkVelocity(db, request.auth.uid, 'getIimmpactCatalogForUser', { ip: getClientIp(request) });
-  const provider = await loadIimmpactProvider(db, request.data?.providerId);
+  let provider;
+  const requestedId = cleanString(request.data?.providerId, 100);
+  if (requestedId) {
+    provider = await loadIimmpactProvider(db, requestedId);
+  } else {
+    const service = cleanString(request.data?.service, 60) || 'Recharge';
+    const country = cleanString(request.data?.country, 2).toUpperCase();
+    provider = await providerCatalog.readProvider(db, service, {
+      country,
+      strictCountry: Boolean(country),
+    });
+    if (!provider || provider.authType !== 'iimmpactHmac') {
+      throw new HttpsError('failed-precondition', 'No active IIMMPACT provider is configured for this service and country.');
+    }
+  }
   const url = iimmpactUrl(provider, '/v2/catalog');
   try {
     const { ok, status, json } = await signedProviderRequest(url, {
@@ -1979,7 +2109,7 @@ exports.getIimmpactCatalogForUser = onCall({ enforceAppCheck: ENFORCE_APP_CHECK 
       const reason = String(getPath(json, 'message') || getPath(json, 'error.message') || `HTTP ${status}`);
       throw new HttpsError('unavailable', `IIMMPACT catalog request failed: ${reason.slice(0, 300)}`);
     }
-    return publicIimmpactCatalog(json);
+    return { providerId: provider.id || '', ...publicIimmpactCatalog(json) };
   } catch (error) {
     if (error instanceof HttpsError) throw error;
     throw new HttpsError('unavailable', String(error?.message || 'Unable to load the IIMMPACT catalog.').slice(0, 500));
@@ -1990,7 +2120,21 @@ exports.getIimmpactOptions = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asyn
   const db = admin.firestore();
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
   await checkVelocity(db, request.auth.uid, 'getIimmpactOptions', { ip: getClientIp(request) });
-  const provider = await loadIimmpactProvider(db, request.data?.providerId);
+  let provider;
+  const requestedId = cleanString(request.data?.providerId, 100);
+  if (requestedId) {
+    provider = await loadIimmpactProvider(db, requestedId);
+  } else {
+    const service = cleanString(request.data?.service, 60) || 'Recharge';
+    const country = cleanString(request.data?.country, 2).toUpperCase();
+    provider = await providerCatalog.readProvider(db, service, {
+      country,
+      strictCountry: Boolean(country),
+    });
+    if (!provider || provider.authType !== 'iimmpactHmac') {
+      throw new HttpsError('failed-precondition', 'No active IIMMPACT provider is configured for this service and country.');
+    }
+  }
   const productCode = cleanString(request.data?.productCode, 100);
   const fieldId = cleanString(request.data?.fieldId, 100);
   if (!productCode || !fieldId) throw new HttpsError('invalid-argument', 'productCode and fieldId are required.');
@@ -2112,6 +2256,7 @@ exports.listApiProviders = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async 
       name: x.name || '',
       country: x.country || 'ALL',
       countries: providerReach.providerCountries(x),
+      excludedCountries: Array.isArray(x.excludedCountries) ? x.excludedCountries : [],
       baseUrl: x.baseUrl || '',
       endpointPath: x.endpointPath || '/',
       method: x.method || 'POST',
@@ -2152,6 +2297,7 @@ exports.listApiProviders = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async 
       catalogItemMap: x.catalogItemMap || null,
       catalogQueryTemplate: x.catalogQueryTemplate || null,
       catalogPerAccount: x.catalogPerAccount === true,
+      catalogDynamicProductDiscovery: x.catalogDynamicProductDiscovery === true,
       catalogOperatorCodes: x.catalogOperatorCodes || null,
       billerProductCodes: x.billerProductCodes || null,
       operatorProductCodes: x.operatorProductCodes || null,
