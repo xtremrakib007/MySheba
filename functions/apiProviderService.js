@@ -21,6 +21,11 @@ const productCodes = require('./productCodes');
 const providerReach = require('./providerReach');
 
 const COLLECTION = 'api_providers';
+
+async function getProfile(db, uid) {
+  const snap = await db.collection('users').doc(uid).get();
+  return snap.exists ? { id: snap.id, ...snap.data() } : null;
+}
 const SETTINGS = 'api_settings/service_modes';
 const ALLOWED_SERVICES = ['Recharge', 'Internet', 'Offer Packs', 'Bill Payment', 'Bus', 'Train', 'Flight', 'Mobile Banking', 'Remittance', 'Payment Gateway', 'Entertainment', 'Recharge PIN', 'eSIM'];
 // `iimmpactHmac` is not a header, it is a signature over the request itself, so
@@ -999,17 +1004,29 @@ async function discoverIimmpactProductCodes(provider, operatorName, service) {
   }, provider);
   if (!ok || !json || typeof json !== 'object') return [];
 
+  const operatorAliases = {
+    hotlink: ['hotlink', 'hotlink malaysia', 'hotlink prepaid'],
+    tunetalk: ['tunetalk', 'tune talk', 'tune talk mobile'],
+    yes: ['yes', 'yes 4g', 'yes 5g', 'yes malaysia'],
+    xox: ['xox', 'onexox', 'one xox'],
+    celcom: ['celcom', 'celcomdigi', 'celcom digi'],
+    digi: ['digi', 'celcomdigi', 'celcom digi'],
+    umi: ['u mobile', 'umobile', 'umi'],
+  };
   const wanted = normaliseCatalogText(operatorName);
   if (!wanted) return [];
+  const aliasTerms = new Set([wanted, ...(operatorAliases[wanted] || [])].map(normaliseCatalogText).filter(Boolean));
   const products = Object.values(json.products || {}).filter((p) => p && p.is_active !== false && p.code);
   const scored = products.map((p) => {
     const name = normaliseCatalogText(p.name);
     const note = normaliseCatalogText(p.note);
     let score = 0;
-    if (name === wanted) score = 120;
-    else if (name.includes(wanted)) score = 100;
-    else if (wanted.includes(name) && name) score = 90;
-    if (note && note.includes(wanted)) score = Math.max(score, 60);
+    for (const term of aliasTerms) {
+      if (name === term) score = Math.max(score, 120);
+      else if (name.includes(term)) score = Math.max(score, 100);
+      else if (term.includes(name) && name) score = Math.max(score, 90);
+      if (note && note.includes(term)) score = Math.max(score, 60);
+    }
     // Mobile-data products are the per-number catalogue we need for Internet
     // and Offer Packs. Do not accidentally select an unrelated product that
     // happens to contain the operator's name.
