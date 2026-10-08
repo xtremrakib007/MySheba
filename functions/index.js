@@ -139,6 +139,7 @@ exports.getNetworkStatus = require('./apiProviderService').getNetworkStatus;
 exports.listProviderProductCodes = require('./apiProviderService').listProviderProductCodes;
 exports.getIimmpactCatalog = require('./apiProviderService').getIimmpactCatalog;
 exports.getIimmpactCatalogForUser = require('./apiProviderService').getIimmpactCatalogForUser;
+exports.getIimmpactFullCatalogForUser = require('./apiProviderService').getIimmpactFullCatalogForUser;
 exports.getIimmpactOptions = require('./apiProviderService').getIimmpactOptions;
 exports.listSuccessTopUpCatalogForAdmin = require('./apiProviderService').listSuccessTopUpCatalogForAdmin;
 exports.getSuccessTopUpBalance = require('./apiProviderService').getSuccessTopUpBalance;
