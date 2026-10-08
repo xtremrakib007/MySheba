@@ -564,6 +564,11 @@ function pickCatalogProductOverride(pricingDoc, pkg = {}) {
   })[0] || null;
 }
 
+function configuredProductPrice(pricingDoc, { service = '', country = '', operator = '', productId = '' } = {}, role = 'customer') {
+  const pkg = { id: productId, service, country, operator };
+  return rolePriceFor(pkg, pricingDoc, role);
+}
+
 function rolePriceFor(pkg, pricingDoc, role) {
   const override = pickCatalogProductOverride(pricingDoc, pkg);
   const value = override?.prices?.[String(role || '').trim()];
@@ -752,6 +757,7 @@ module.exports = {
   valueAtPath,
   sellPriceFor,
   rolePriceFor,
+  configuredProductPrice,
   isHidden,
   readPricingDoc,
   readProvider,
