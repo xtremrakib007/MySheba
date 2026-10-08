@@ -72,6 +72,14 @@ test('the same operator has a different code for a PIN', () => {
   assert.strictEqual(code(WITH_PINS, 'Hotlink', { service: 'Recharge PIN' }), 'HPIN');
 });
 
+test('IIMMPACT PIN catalog matching filters by PIN fulfillment type', () => {
+  const source = require('fs').readFileSync(require('path').join(__dirname, '..', 'functions/apiProviderService.js'), 'utf8');
+  assert.ok(
+    /service === 'Recharge PIN'[\\s\\S]*?allProducts\.filter\\(\\(p\\) => String\\(p\.processing_time \\|\\| ''\\)\.toLowerCase\\(\\) === 'pin'\\)/.test(source),
+    'PIN catalog matching must exclude airtime products before scoring',
+  );
+});
+
 test('a PIN does NOT fall back to the airtime code', () => {
   // The fallback is the tempting one and it is the bug: it would charge for a
   // top-up and hand back no PIN, or sell a product nobody asked for.
