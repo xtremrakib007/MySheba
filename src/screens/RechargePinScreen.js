@@ -196,12 +196,12 @@ export default function RechargePinScreen() {
         <Text style={styles.voucherMeta}>{voucher.productName || product?.name} • {CURRENCY_BY_COUNTRY[voucher.country || country] || ''} {Number(voucher.amount || amount).toFixed(2)}</Text>
         {!!voucher.pin && <Text selectable style={styles.pin}>{voucher.pin}</Text>}
         {!!voucher.deliveryLink && <Text selectable style={styles.link}>{voucher.deliveryLink}</Text>}
-        {!!voucher.deliveryNote && <Text style={styles.warning}>{voucher.deliveryNote}</Text>}
+        {!!voucher.expiry && <Text style={styles.warning}>Expires: {voucher.expiry}</Text>}{!!voucher.deliveryNote && <Text style={styles.warning}>{voucher.deliveryNote}</Text>}
         <Text style={styles.warning}>Keep this voucher private. It is shown only after successful provider fulfillment.</Text>
         <TouchableOpacity onPress={printVoucher} style={styles.print}><Text style={styles.printText}>🖨 Print Voucher</Text></TouchableOpacity>
       </View>}
 
-      <Text style={styles.balance}>Wallet: {CURRENCY_BY_COUNTRY[country] || 'MYR'} {Number(profile?.walletBalance || 0).toFixed(2)}</Text>
+      <Text style={styles.balance}>Wallet: {profile?.walletCurrency || 'MYR'} {Number(profile?.walletBalance || 0).toFixed(2)}</Text>
     </ScrollView>
   </View>;
 }
