@@ -25,8 +25,8 @@ const ROLE_PERMISSIONS = { dealer: { canCreate: ['customer'], canUpgradeTo: [] }
 // to finance is sideways, not a promotion - and the role already held is not.
 const DOWNGRADABLE = {
   dealer: ['dealer'],
-  admin: ['dealer', 'reseller', 'support', 'finance'],
-  superadmin: ['dealer', 'admin', 'reseller', 'support', 'finance'],
+  admin: ['dealer', 'reseller', 'support', 'finance', 'retail'],
+  superadmin: ['dealer', 'admin', 'reseller', 'support', 'finance', 'retail'],
 };
 const ROLE_RANK = { customer: 0, dealer: 1, reseller: 1, support: 1, finance: 1, retail: 1, admin: 2, superadmin: 3 };
 
