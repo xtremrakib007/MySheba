@@ -201,7 +201,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
     });
     await db.collection('rechargePins').doc(txRef.id).set({
       transactionId: txRef.id, customerId: uid, operator, country, productCode: productCode || null, subproductCode: subproductCode || null, productName: productName || null, amount: denomination,
-      currency: 'MYR', pin: api.secret || api.providerPin || null, deliveryLink: api.deliveryLink || null, deliveryNote: api.deliveryNote || null, createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      currency: 'MYR', pin: api.secret || api.providerPin || null, deliveryLink: api.deliveryLink || null, deliveryNote: api.deliveryNote || null, expiry: api.expiry || null, createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
     await txRef.update({
       status: 'completed', rechargePinAvailable: true,
