@@ -13,6 +13,7 @@
 //
 // No React here, so a test can ask where each role lands.
 export function homeScreenForRole(role) {
+  if (role === 'retail') return 'customerHome';
   if (role === 'dealer') return 'dealerHome';
   if (role === 'reseller') return 'resellerHome';
   if (role === 'support' || role === 'finance') return 'staffHome';
