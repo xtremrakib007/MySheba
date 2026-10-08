@@ -1278,7 +1278,18 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     let body;
     if(method!=='GET'){
       headers['content-type']=headers['content-type']||'application/json';
-      const requestBody = service === 'eSIM' && provider.authType === 'iimmpactHmac' ? {
+      const requestBody = service === 'IIMMPACT' && provider.authType === 'iimmpactHmac' ? {
+        refid: vars.requestId,
+        product: providerOperatorCode,
+        account: String(raw.accountNumber || raw.phone || raw.email || raw.billNumber || raw.customerId || '').trim(),
+        amount: vars.amount,
+        remarks: String(raw.remarks || raw.note || '').slice(0, 500),
+        extras: {
+          ...(raw.extras && typeof raw.extras === 'object' ? raw.extras : {}),
+          ...(raw.subproductCode ? { subproduct_code: String(raw.subproductCode).slice(0, 200) } : {}),
+          ...(raw.optionCode ? { option_code: String(raw.optionCode).slice(0, 200) } : {}),
+        },
+      } : service === 'eSIM' && provider.authType === 'iimmpactHmac' ? {
         refid: vars.requestId,
         product: providerOperatorCode,
         account: String(raw.accountNumber || raw.email || '').trim(),
