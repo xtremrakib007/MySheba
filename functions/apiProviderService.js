@@ -1429,7 +1429,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     if (service === 'eSIM' || service === 'Recharge PIN') {
       const deliveryLink = getPath(data, 'data.voucherlink') || getPath(data, 'voucherlink') || getPath(data, 'data.voucher_link') || getPath(data, 'voucher_link');
       const deliveryNote = getPath(data, 'data.note') || getPath(data, 'note') || getPath(data, 'data.redemption_note') || getPath(data, 'redemption_note');
-      if (typeof deliveryLink === 'string' && /^https?:\\/\\//i.test(deliveryLink)) result.deliveryLink = deliveryLink.slice(0, 2000);
+      if (typeof deliveryLink === 'string' && /^https?:\/\//i.test(deliveryLink)) result.deliveryLink = deliveryLink.slice(0, 2000);
       if (typeof deliveryNote === 'string') result.deliveryNote = deliveryNote.slice(0, 1000);
       const pin = getPath(data, 'data.pin') || getPath(data, 'pin');
       const expiry = getPath(data, 'data.expiry') || getPath(data, 'expiry');
