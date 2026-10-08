@@ -4,6 +4,8 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 const { logAudit } = require('./logService');
+const { checkVelocity, getClientIp } = require('./rateLimitService');
+const { enforceRequestEnvelope } = require('./securityGateway');
 
 const ALLOWED_KEYS = new Set([
   'dealerEarningPercent','rechargeCostPercent','rechargeProfitPercent',
@@ -115,16 +117,19 @@ function cleanValue(key, value) {
 }
 
 exports.savePricingSettings = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
+  enforceRequestEnvelope(request, { maxBytes: 512 * 1024 });
   if (!request.auth?.uid) throw new HttpsError('unauthenticated','Sign in required.');
   requireRecentAuth(request);
   const uid=request.auth.uid;
-  const snap=await admin.firestore().collection('users').doc(uid).get();
+  const db=admin.firestore();
+  await checkVelocity(db, uid, 'savePricingSettings', { ip: getClientIp(request) });
+  const snap=await db.collection('users').doc(uid).get();
   const profile=snap.exists?snap.data():null;
   if(!active(profile) || profile.role !== 'superadmin') throw new HttpsError('permission-denied','Only a superadmin can change pricing.');
   const key=String(request.data?.key||'');
   if(!ALLOWED_KEYS.has(key)) throw new HttpsError('invalid-argument','Unsupported pricing field.');
   const value=cleanValue(key, request.data?.value);
-  const ref=admin.firestore().collection('settings').doc('pricing');
+  const ref=db.collection('settings').doc('pricing');
   const beforeSnap=await ref.get();
   const before=beforeSnap.exists?beforeSnap.data()||{}:{};
   await ref.set({[key]:value,updatedBy:uid,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
