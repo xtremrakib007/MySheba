@@ -25,6 +25,19 @@ export const ROLE_PRICE_KEYS = [
 ] as const;
 export type RolePriceKey = (typeof ROLE_PRICE_KEYS)[number];
 
+export interface CatalogProductPrice {
+  id: string;
+  service: string;
+  country: string;
+  operator: string;
+  productId: string;
+  productName: string;
+  costPrice: number;
+  currency: string;
+  active: boolean;
+  prices: Partial<Record<PricingRole, number>>;
+}
+
 export interface PricingSettings {
   dealerEarningPercent: number;
   rechargeCostPercent: number;
@@ -42,6 +55,7 @@ export interface PricingSettings {
   moduleSubscriptionDays: number;
   webviewAccessWindowHours: number;
   rolePricing: Partial<Record<PricingRole, Partial<Record<RolePriceKey, number>>>>;
+  catalogProductPricing: CatalogProductPrice[];
 }
 
 export const DEFAULT_PRICING: PricingSettings = {
@@ -61,11 +75,13 @@ export const DEFAULT_PRICING: PricingSettings = {
   moduleSubscriptionDays: 30,
   webviewAccessWindowHours: 1,
   rolePricing: {},
+  catalogProductPricing: [],
 };
 
 export async function fetchPricing(): Promise<PricingSettings> {
   const snap = await getDoc(SETTINGS_DOC);
-  return { ...DEFAULT_PRICING, ...(snap.exists() ? (snap.data() as Partial<PricingSettings>) : {}) };
+  const data = snap.exists() ? (snap.data() as Partial<PricingSettings>) : {};
+  return { ...DEFAULT_PRICING, ...data, catalogProductPricing: Array.isArray(data.catalogProductPricing) ? data.catalogProductPricing : [] };
 }
 
 export async function updatePricing(key: keyof PricingSettings, value: number): Promise<void> {
@@ -83,4 +99,16 @@ export async function updateRolePrice(
     return;
   }
   await setDoc(SETTINGS_DOC, { [path]: value, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+export async function saveCatalogProductPrice(entry: CatalogProductPrice): Promise<void> {
+  const current = await fetchPricing();
+  const list = current.catalogProductPricing.filter((item) => item.id !== entry.id);
+  list.push({ ...entry, service: entry.service.trim(), country: entry.country.trim().toUpperCase(), operator: entry.operator.trim(), productId: entry.productId.trim(), productName: entry.productName.trim(), currency: entry.currency.trim().toUpperCase() || 'MYR' });
+  await setDoc(SETTINGS_DOC, { catalogProductPricing: list, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+export async function deleteCatalogProductPrice(id: string): Promise<void> {
+  const current = await fetchPricing();
+  await setDoc(SETTINGS_DOC, { catalogProductPricing: current.catalogProductPricing.filter((item) => item.id !== id), updatedAt: serverTimestamp() }, { merge: true });
 }
