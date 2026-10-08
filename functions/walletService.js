@@ -139,7 +139,7 @@ async function resolvePackagePricing(db, service, payload) {
     if (['product-missing', 'product-not-found', 'product-inactive'].includes(found.error)) {
       throw new HttpsError('failed-precondition', 'That IIMMPACT product is no longer available.');
     }
-    if (['option-required', 'option-not-found', 'field-dependency-missing'].includes(found.error)) {
+    if (['option-required', 'option-not-found', 'field-dependency-missing', 'field-required'].includes(found.error)) {
       throw new HttpsError('failed-precondition', 'That IIMMPACT option is no longer available. Please reload the product and choose it again.');
     }
     if (found.error === 'options-unavailable') throw new HttpsError('unavailable', 'IIMMPACT options could not be loaded just now. Please try again.');
