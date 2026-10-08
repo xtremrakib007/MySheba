@@ -111,6 +111,7 @@ const PRESETS = {
     method: 'GET',
     perAccount: false,
     listPath: 'products',
+    dynamicProductDiscovery: true,
     errorLabel: 'iimmpact',
   },
 
