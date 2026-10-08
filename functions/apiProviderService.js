@@ -1741,13 +1741,24 @@ exports.listProviderDataPlans = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, a
   );
   const byId = new Map();
   const failures = [];
-  for (const result of results) {
+  for (const [index, result] of results.entries()) {
     if (result.status === 'fulfilled') {
       for (const pkg of result.value) {
         if (!byId.has(pkg.id)) byId.set(pkg.id, pkg);
       }
     } else {
-      failures.push(String(result.reason?.message || result.reason || 'Catalog request failed.'));
+      const code = codes[index];
+      const message = String(
+        result.reason?.message || result.reason || 'Catalog request failed.'
+      ).slice(0, 500);
+      failures.push(`${code}: ${message}`);
+      console.error('listProviderDataPlans catalog failed', {
+        operator: operatorName,
+        productCode: code,
+        country,
+        accountLast4: String(account || '').slice(-4),
+        error: message,
+      });
     }
   }
   // Every code failed and none answered: that is the provider being
