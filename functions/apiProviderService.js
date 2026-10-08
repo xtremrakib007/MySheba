@@ -2295,11 +2295,18 @@ exports.getIimmpactOptions = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asyn
     provider = await loadIimmpactProvider(db, requestedId);
   } else {
     const service = cleanString(request.data?.service, 60) || 'Recharge';
-    const country = cleanString(request.data?.country, 2).toUpperCase();
+    const country = cleanString(request.data?.country, 2).toUpperCase() || 'MY';
     provider = await providerCatalog.readProvider(db, service, {
       country,
       strictCountry: Boolean(country),
     });
+    // Catalog/options are sourced from the shared IIMMPACT account. If an older
+    // provider document omitted this service from its services array, resolve
+    // the active IIMMPACT account by country instead of making the catalog look
+    // unavailable.
+    if ((!provider || provider.authType !== 'iimmpactHmac') && country) {
+      provider = await findActiveIimmpactProviderForCountry(db, country);
+    }
     if (!provider || provider.authType !== 'iimmpactHmac') {
       throw new HttpsError('failed-precondition', 'No active IIMMPACT provider is configured for this service and country.');
     }
