@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const walletService = require('./walletService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+const { enforceRequestEnvelope } = require('./securityGateway');
 
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const SERVICE_BY_CALLABLE = {
@@ -123,9 +124,16 @@ async function sanitizeRequest(request, requestId) {
 
 function wrap(name) {
   return onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+    // Reject malformed/oversized payloads before any Firestore read/write or
+    // provider work. This is the first application-layer abuse gate.
+    enforceRequestEnvelope(request, { maxBytes: 64 * 1024 });
     const uid = requireAuth(request);
     const requestId = getRequestId(request);
     const db = admin.firestore();
+
+    // Rate-limit before creating the idempotency document. Otherwise an
+    // attacker can force a Firestore write for every rejected request.
+    await checkVelocity(db, uid, 'chargeService', { ip: getClientIp(request) });
     const guardRef = db.collection('chargeRequests').doc(`${uid}_${requestId}`);
 
     let existing = null;
@@ -187,8 +195,6 @@ function wrap(name) {
     }
 
     try {
-      await checkVelocity(db, uid, 'chargeService', { ip: getClientIp(request) });
-
       const fn = walletService.runChargeProduct;
       if (typeof fn !== 'function') {
         throw new HttpsError('internal', 'Charge service is unavailable.');
