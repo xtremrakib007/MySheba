@@ -232,7 +232,6 @@ export const webViewPages = {
   visa: { url: 'https://eservices.imi.gov.my/myimms/VPAStsInq?MAD_DOC_NO=&MAD_DOC_CTRY_CD=BGD&search=CARIAN&lang=en', title: '🛂 Visa Status Inquiry', icon: '🛂' },
   mydigital: { url: 'https://malaysiadigital.mdec.my/apply', title: '💻 Malaysia Arrival Card', icon: '💻' },
   passport: { url: 'https://www.expatservicesmy.com/ESKLPublicportal/Appointment/BookAppointment', title: '📔 Passport Appointment', icon: '📔' },
-  esim: { url: 'https://www.celcomdigi.com/roaming/tourist-sim#roaming-passes', title: '📶 MY e-SIM', icon: '📶' },
   train: { url: 'https://online.ktmb.com.my/', title: '🚂 KTMB Train Ticket', icon: '🚂' },
   // YOYO (yoyo.my) used to be listed here too, but its WebView kept
   // failing to load and getting stuck in the "Reconnecting…" retry loop
@@ -359,21 +358,9 @@ export const WEBVIEW_SUBMIT_TRIGGERS = {
   passport: ['submit'],
 };
 
-// Bus (redBus/Bus Online Ticket/Easybook) and MY e-SIM are real ticket/SIM
-// purchases on the third-party site itself - the user pays redbus.my /
-// busonlineticket.com / easybook.com / CelcomDigi directly, and MySheba
-// only deducts a service fee in points, and only once that payment has
-// actually gone through. Unlike the flows above, these are NEVER free to
-// open: someone who gets past the door has everything they need to
-// complete a real purchase on the third-party site regardless of what
-// MySheba does afterwards, so if we can't collect the points, we don't
-// let them in at all (see checkPaymentEntryAccess in
-// paymentWebviewService.js, called from AppContext.openWebView before
-// navigation). The actual deduction fires once payment success is
-// detected (or self-confirmed) inside WebViewScreen - see
-// PAYMENT_SUCCESS_URL_MARKERS below and confirmPaymentSuccess in
-// AppContext.js.
-export const PAYMENT_CHARGED_WEBVIEWS = [...BUS_TICKET_WEBVIEW_KEYS, 'esim', 'train'];
+// Bus ticket partners are third-party purchase webviews. eSIM is NOT a webview: it is
+// sold through the IIMMPACT catalog/Options flow in ESimSteps.js.
+export const PAYMENT_CHARGED_WEBVIEWS = [...BUS_TICKET_WEBVIEW_KEYS, 'train'];
 export const PAYMENT_SUCCESS_COST = 3; // points (1 point = MYR 1) - service fee per successful purchase
 
 // Lowercase substrings checked against the WebView's current URL after
