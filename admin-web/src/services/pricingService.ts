@@ -95,7 +95,7 @@ export const DEFAULT_PRICING: PricingSettings = {
   commissionRules: {
     recharge: { type: 'fixed', value: 0 },
     internet: { type: 'fixed', value: 0 },
-    billTiers: [{ minAmount: 0, maxAmount: 50, fee: 0.10 }, { minAmount: 50.01, maxAmount: null, fee: 0.20 }],
+    billTiers: [{ minAmount: 10, maxAmount: 50, fee: 0.10 }, { minAmount: 50.01, maxAmount: null, fee: 0.20 }],
     remittanceTiers: [{ minAmount: 1, maxAmount: 999, fee: 10 }, { minAmount: 1000, maxAmount: 1999, fee: 15 }, { minAmount: 2000, maxAmount: null, fee: 20 }],
     touchNGoFeePercent: 0.5,
   },
