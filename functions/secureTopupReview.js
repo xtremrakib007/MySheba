@@ -8,6 +8,7 @@ const ZERO_DECIMAL_CURRENCIES = new Set(['IDR', 'KHR', 'MMK']);
 const { logAudit, logServerError } = require('./logService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 const { POLICY } = require('./walletComplianceService');
+const { addWalletLedgerEntry } = require('./walletLedgerService');
 // One session per platform: a phone and a browser can both be signed in,
 // two phones cannot. See functions/sessionSlots.js.
 const { sessionMatches } = require('./sessionSlots');
@@ -117,7 +118,7 @@ function debitPlan(approverRef, approver, plan) {
       `Your wallet holds ${balance.toFixed(2)} ${currency}, less than the ${plan.points.toFixed(2)} ${currency} this top-up needs. Request wallet funding, then approve this again - it stays pending until you do.`);
   }
   const scale = 10 ** (ZERO_DECIMAL_CURRENCIES.has(currency) ? 0 : 2);
-  return { approverRef, currency, newBalance: (Math.round(balance * scale) - Math.round(plan.points * scale)) / scale };
+  return { approverRef, currency, balanceBefore: balance, newBalance: (Math.round(balance * scale) - Math.round(plan.points * scale)) / scale };
 }
 
 /** Load the caller and re-check them inside the transaction. */
@@ -191,6 +192,30 @@ exports.completeTopup = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async req
       const who = actor(uid, caller);
       tx.update(debit.approverRef, { walletBalance: debit.newBalance, walletCurrency: debit.currency });
       tx.update(plan.userRef, { walletBalance: plan.newBalance, walletCurrency: plan.currency, walletBalanceCurrency: plan.currency });
+      addWalletLedgerEntry(tx, db, {
+        uid: uid,
+        type: 'service_topup_debit',
+        direction: 'debit',
+        currency: debit.currency,
+        amount: plan.points,
+        balanceBefore: debit.balanceBefore,
+        balanceAfter: debit.newBalance,
+        relatedTransactionId: ref.id,
+        relatedUserId: plan.userId,
+        source: 'topup_completion',
+      });
+      addWalletLedgerEntry(tx, db, {
+        uid: plan.userId,
+        type: 'service_topup_credit',
+        direction: 'credit',
+        currency: plan.currency,
+        amount: plan.points,
+        balanceBefore: plan.newBalance - plan.points,
+        balanceAfter: plan.newBalance,
+        relatedTransactionId: ref.id,
+        relatedUserId: uid,
+        source: 'topup_completion',
+      });
       tx.update(ref, {
         // 'approved' stays the terminal status: ReportsScreen totals filter
         // on it, and renaming it would silently drop every past top-up from
@@ -237,6 +262,30 @@ exports.approveTopup = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async requ
       const stamp = admin.firestore.FieldValue.serverTimestamp();
       tx.update(debit.approverRef, { walletBalance: debit.newBalance, walletCurrency: debit.currency });
       tx.update(plan.userRef, { walletBalance: plan.newBalance, walletCurrency: plan.currency, walletBalanceCurrency: plan.currency });
+      addWalletLedgerEntry(tx, db, {
+        uid: uid,
+        type: 'service_topup_debit',
+        direction: 'debit',
+        currency: debit.currency,
+        amount: plan.points,
+        balanceBefore: debit.balanceBefore,
+        balanceAfter: debit.newBalance,
+        relatedTransactionId: ref.id,
+        relatedUserId: plan.userId,
+        source: 'topup_completion',
+      });
+      addWalletLedgerEntry(tx, db, {
+        uid: plan.userId,
+        type: 'service_topup_credit',
+        direction: 'credit',
+        currency: plan.currency,
+        amount: plan.points,
+        balanceBefore: plan.newBalance - plan.points,
+        balanceAfter: plan.newBalance,
+        relatedTransactionId: ref.id,
+        relatedUserId: uid,
+        source: 'topup_completion',
+      });
       tx.update(ref, {
         status: 'approved',
         verifiedBy: topup.verifiedBy || who.uid,
