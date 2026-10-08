@@ -83,9 +83,18 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
   const requestId = requestIdOf(request);
   const db = admin.firestore();
   const input = request.data || {};
+  const country = typeof input.country === 'string' ? input.country.trim().toUpperCase().slice(0, 2) : 'MY';
   const operator = typeof input.operator === 'string' ? input.operator.trim().slice(0, 80) : '';
+  const productCode = typeof input.productCode === 'string' ? input.productCode.trim().slice(0, 100) : '';
+  const subproductCode = typeof input.subproductCode === 'string' ? input.subproductCode.trim().slice(0, 200) : '';
+  const productName = typeof input.productName === 'string' ? input.productName.trim().slice(0, 200) : '';
   const denomination = safeNumber(input.amount, 'Recharge PIN amount');
-  if (!operator || !MALAYSIA_OPERATORS.has(operator)) throw new HttpsError('invalid-argument', 'Select a supported Malaysian mobile operator.');
+  if (!/^[A-Z]{2}$/.test(country)) throw new HttpsError('invalid-argument', 'A valid two-letter country code is required.');
+  if (country === 'BD') throw new HttpsError('failed-precondition', 'Bangladesh Recharge PINs remain on the configured Bangladesh provider and are not routed through IIMMPACT.');
+  if (country === 'MY' && (!operator || !MALAYSIA_OPERATORS.has(operator)) && !productCode) {
+    throw new HttpsError('invalid-argument', 'Select a supported Malaysian operator or an IIMMPACT voucher product.');
+  }
+  if (!operator && !productCode) throw new HttpsError('invalid-argument', 'Select a voucher product before purchasing.');
 
   const profileRef = db.collection('users').doc(uid);
   const txId = crypto.createHash('sha256').update(`${uid}|recharge-pin|${requestId}`).digest('hex').slice(0, 40);
@@ -98,12 +107,10 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
   // processing yet". DEFAULT_MODES is 'legacy' for everything, so that was
   // every voucher, always.
   //
-  // Malaysia by name because this is the Malaysia-only flow: the operator set
-  // above is Malaysian, and the screen says so in its title.
   const settingsSnap = await db.collection('api_settings').doc('service_modes').get();
   const apiSettings = settingsSnap.exists ? (settingsSnap.data() || {}) : {};
   const pinProviders = await providersForService(db, PIN_SERVICE);
-  const mode = resolveExecutionMode({ country: 'MY', service: PIN_SERVICE, settings: apiSettings, providers: pinProviders });
+  const mode = resolveExecutionMode({ country, service: PIN_SERVICE, settings: apiSettings, providers: pinProviders });
   if (mode !== 'api') throw new HttpsError('failed-precondition', 'Recharge PIN is not configured for API processing yet.');
 
   const pricingSnap = await db.collection('settings').doc('pricing').get();
@@ -170,9 +177,9 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
     tx.update(profileRef, { walletBalance: balance - walletCost, walletCurrency: walletFx.currency });
     tx.create(txRef, {
       service: PIN_SERVICE, customerId: uid, customerRole: callerRole, customerPhone: user.data().phone || '',
-      operator, amount: denomination, total: denomination, denominationCurrency: 'MYR', currency: walletFx.currency, walletCurrency: walletFx.currency, cost: walletCost, walletCost, baseCostMyr: cost, fxRate: walletFx.sellRate, fxRateType: 'sell', fxRateSource: walletFx.rateSource,
+      operator, productCode: productCode || null, subproductCode: subproductCode || null, productName: productName || null, country, amount: denomination, total: denomination, denominationCurrency: 'MYR', currency: walletFx.currency, walletCurrency: walletFx.currency, cost: walletCost, walletCost, baseCostMyr: cost, fxRate: walletFx.sellRate, fxRateType: 'sell', fxRateSource: walletFx.rateSource,
       tierDiscountPercent: discount, executionMode: 'api', status: 'processing', rechargePinAvailable: false,
-      apiRefunded: false, raw: { requestId, country: 'MY', operator, amount: denomination },
+      apiRefunded: false, raw: { requestId, country, operator, productCode, subproductCode, productName, amount: denomination, packageCode: productCode || String(denomination) },
       createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
     return { replay: false, id: txRef.id, cost: walletCost, baseCostMyr: cost, pin: null, operator, amount: denomination, currency: walletFx.currency, fxRate: walletFx.sellRate };
@@ -182,8 +189,8 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
   let providerSucceeded = false;
   try {
     const api = await executeConfiguredApi(PIN_SERVICE, {
-      amount: denomination, total: denomination, details: `Malaysia Recharge PIN • ${operator}`,
-      raw: { requestId, country: 'MY', operator, amount: denomination, packageCode: String(denomination) }
+      amount: denomination, total: denomination, details: `${country} Recharge PIN • ${productName || operator || productCode}`,
+      raw: { requestId, country, operator, productCode, subproductCode, productName, amount: denomination, packageCode: productCode || String(denomination) }
     }, { uid, phone: userSnap.data().phone || '' }, requestId, {});
     if (!api.secret) throw new HttpsError('unavailable', 'The Recharge PIN provider completed but the voucher PIN could not be recovered. Please contact support before retrying.');
     providerSucceeded = true;
@@ -193,14 +200,14 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
     });
     await db.collection('rechargePins').doc(txRef.id).set({
       transactionId: txRef.id, customerId: uid, operator, amount: denomination,
-      currency: 'MYR', pin: api.secret, createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      currency: 'MYR', productCode: productCode || null, subproductCode: subproductCode || null, productName: productName || null, country, pin: api.secret, createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
     await txRef.update({
       status: 'completed', rechargePinAvailable: true,
       apiExecution: { status: 'accepted', providerId: api.providerId, providerName: api.providerName, responseId: api.responseId || null, message: api.message || null, providerSucceeded: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
-    return { id: txRef.id, cost: walletCost, baseCostMyr: reserved.baseCostMyr, pin: api.secret, operator, amount: denomination, currency: walletFx.currency, fxRate: walletFx.sellRate };
+    return { id: txRef.id, cost: walletCost, baseCostMyr: reserved.baseCostMyr, pin: api.secret, operator, productCode, subproductCode, productName, country, amount: denomination, currency: walletFx.currency, fxRate: walletFx.sellRate };
   } catch (e) {
     const unavailable = String(e?.code || '') === 'unavailable';
     if (unavailable || providerSucceeded) {
