@@ -2199,6 +2199,20 @@ exports.getIimmpactCatalog = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asyn
   }
 });
 
+async function findActiveIimmpactProviderForCountry(db, country) {
+  const code = String(country || 'MY').trim().toUpperCase() || 'MY';
+  const snap = await db.collection(COLLECTION).where('active', '==', true).limit(100).get();
+  const candidates = snap.docs
+    .map((d) => ({ id: d.id, ...(d.data() || {}) }))
+    .filter((p) => p.authType === 'iimmpactHmac')
+    .filter((p) => providerReach.servesCountry(p, code))
+    .sort((a, b) => Number(b.priority || 0) - Number(a.priority || 0));
+  if (!candidates.length) return null;
+  const provider = candidates[0];
+  Object.assign(provider, await providerSecretService.getCredentials(provider));
+  return provider;
+}
+
 exports.getIimmpactFullCatalogForUser = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
@@ -2238,11 +2252,18 @@ exports.getIimmpactCatalogForUser = onCall({ enforceAppCheck: ENFORCE_APP_CHECK 
     provider = await loadIimmpactProvider(db, requestedId);
   } else {
     const service = cleanString(request.data?.service, 60) || 'Recharge';
-    const country = cleanString(request.data?.country, 2).toUpperCase();
+    const country = cleanString(request.data?.country, 2).toUpperCase() || 'MY';
     provider = await providerCatalog.readProvider(db, service, {
       country,
       strictCountry: Boolean(country),
     });
+    // IIMMPACT is the shared catalogue provider. Its live /v2/catalog and
+    // /v2/options endpoints are not limited to one MySheba service label, so
+    // eSIM/voucher/catalog categories must still resolve the active IIMMPACT
+    // account when the provider record's legacy `services` list is incomplete.
+    if ((!provider || provider.authType !== 'iimmpactHmac') && country) {
+      provider = await findActiveIimmpactProviderForCountry(db, country);
+    }
     if (!provider || provider.authType !== 'iimmpactHmac') {
       throw new HttpsError('failed-precondition', 'No active IIMMPACT provider is configured for this service and country.');
     }
