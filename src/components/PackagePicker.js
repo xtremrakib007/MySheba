@@ -61,9 +61,8 @@ export default function PackagePicker({ packages, label, selectedName, onSelect,
               // The kind is in the heading or the chip above, so repeating it on
               // every card only crowds out the data and validity.
               detail={[
-                p.data,
+                p.data || (Array.isArray(p.features) && p.features.length ? p.features.join(' • ') : ''),
                 p.valid ? `Validity: ${p.valid}` : '',
-                Array.isArray(p.features) && p.features.length ? p.features.join(' • ') : '',
                 p.description,
                 p.processingTime ? `Processing: ${p.processingTime}` : '',
               ].filter(Boolean).join(' • ')}

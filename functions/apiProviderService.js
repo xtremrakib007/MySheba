@@ -1662,6 +1662,11 @@ exports.listProviderDataPlans = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, a
       provider = candidate;
       codes = await discoverIimmpactProductCodes(provider, operatorName, service);
     }
+  } else if (!codes.length && provider.authType === 'iimmpactHmac' && providerCatalog.dynamicProductDiscoveryFor(provider)) {
+    // A partial operator map must not make an operator look unsupported. Use
+    // IIMMPACT's live catalog as a fallback so new/renamed products can still
+    // resolve without a MySheba release.
+    codes = await discoverIimmpactProductCodes(provider, operatorName, service);
   }
   // Not an error: most country/operator pairs have no per-number catalogue and
   // the screen simply keeps the package list it already had.
