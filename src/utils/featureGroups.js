@@ -20,7 +20,7 @@ export const FEATURE_GROUPS = {
   // The service wizard and everything it can open mid-flow.
   service: ['service', 'webview', 'buspicker', 'rechargePin'],
 
-  money: ['topup', 'superAdminTopup', 'transferPoints'],
+  money: ['topup', 'transferPoints'],
 
   salary: [
     'salaryDashboard', 'salarySettings', 'salaryCalculator', 'salaryWorkLog',
