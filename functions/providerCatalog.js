@@ -300,7 +300,13 @@ function isPerAccountCatalog(provider) {
  */
 function productCodesFor(provider, operatorName) {
   const config = catalogConfigFor(provider);
-  if (!config || config.dynamicProductDiscovery || !config.operatorCodes) return [];
+  if (!config) return [];
+  // An explicit operator-code map is authoritative even when the provider
+  // also supports Dynamic Product Discovery. IIMMPACT's catalogue is dynamic,
+  // but the Malaysian Internet products have documented stable codes (CEL, DI,
+  // HI, UMI, TI, OXI, YESI). Ignoring the explicit map whenever
+  // dynamicProductDiscovery=true makes those operators appear to have no plans.
+  if (!config.operatorCodes) return [];
   const entry = config.operatorCodes[String(operatorName || '').trim()];
   if (!entry) return [];
   const codes = (Array.isArray(entry) ? entry : [entry])
@@ -418,7 +424,15 @@ function parseCatalogResponse(config, data) {
     }
   }
   const list = config.listPath ? valueAtPath(body, config.listPath) : body;
-  const items = Array.isArray(list) ? list : [];
+  // Dynamic Catalog returns products as an object keyed by product_code,
+  // while legacy list endpoints return arrays. Normalize both shapes.
+  const items = Array.isArray(list)
+    ? list
+    : (list && typeof list === 'object'
+      ? Object.entries(list).map(([code, item]) => (
+        item && typeof item === 'object' ? { code: item.code || code, ...item } : { code, value: item }
+      ))
+      : []);
   const usable = items
     .slice(0, MAX_ITEMS)
     .map((item) => normaliseItem(item && typeof item === 'object' ? item : {}, config.itemMap))
