@@ -77,6 +77,7 @@ export default function PricingPage() {
   const [pricing, setPricing] = useState<PricingSettings>(DEFAULT_PRICING);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [commissionDraft, setCommissionDraft] = useState(pricing.commissionRules);
   const [catalogDraft, setCatalogDraft] = useState<CatalogProductPrice>({
     id: '',
     service: 'Bill Payment',
@@ -88,10 +89,11 @@ export default function PricingPage() {
     currency: 'MYR',
     active: true,
     prices: { customer: 0, retail: 0, reseller: 0, dealer: 0, admin: 0 },
+    commissions: { customer: { type: 'fixed', value: 0 }, retail: { type: 'fixed', value: 0 }, reseller: { type: 'fixed', value: 0 }, dealer: { type: 'fixed', value: 0 }, admin: { type: 'fixed', value: 0 } },
   });
   async function load() {
     setLoading(true); setError(null);
-    try { setPricing(await fetchPricing()); } catch (err) { console.error(err); setError('Could not load pricing settings.'); } finally { setLoading(false); }
+    try { const next = await fetchPricing(); setPricing(next); setCommissionDraft(next.commissionRules); } catch (err) { console.error(err); setError('Could not load pricing settings.'); } finally { setLoading(false); }
   }
   useEffect(() => { load(); }, []);
   async function save(key: keyof PricingSettings, value: number) { await updatePricing(key, value); setPricing((prev) => ({ ...prev, [key]: value })); }
@@ -103,6 +105,7 @@ export default function PricingPage() {
     setPricing((prev) => ({ ...prev, catalogProductPricing: [...prev.catalogProductPricing.filter((x) => x.id !== entry.id), entry] }));
     setCatalogDraft({ id: '', service: catalogDraft.service, country: catalogDraft.country, operator: '', productId: '', productName: '', costPrice: 0, currency: catalogDraft.currency, active: true, prices: { customer: 0, retail: 0, reseller: 0, dealer: 0, admin: 0 } });
   }
+  async function saveCommissionRules() { await updatePricing('commissionRules' as keyof PricingSettings, commissionDraft as any); setPricing((prev) => ({ ...prev, commissionRules: commissionDraft })); }
   async function removeCatalog(id: string) {
     await deleteCatalogProductPrice(id);
     setPricing((prev) => ({ ...prev, catalogProductPricing: prev.catalogProductPricing.filter((x) => x.id !== id) }));
@@ -146,6 +149,9 @@ export default function PricingPage() {
           <div className="mt-3 grid gap-3 md:grid-cols-5">
             {ROLE_PRICE_ROLES.map((role) => <label key={role} className="text-xs font-semibold">{ROLE_LABELS[role]} Price<input type="number" value={catalogDraft.prices?.[role] ?? 0} onChange={(e) => setCatalogDraft((d) => ({ ...d, prices: { ...d.prices, [role]: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg border border-[var(--color-line)] px-2 py-2 text-sm" /></label>)}
           </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-5">
+            {ROLE_PRICE_ROLES.map((role) => <label key={role} className="text-xs font-semibold">{ROLE_LABELS[role]} Commission<input type="number" min="0" step="0.01" value={catalogDraft.commissions?.[role]?.value ?? 0} onChange={(e) => setCatalogDraft((d) => ({ ...d, commissions: { ...d.commissions, [role]: { type: d.commissions?.[role]?.type || 'fixed', value: Number(e.target.value) } } }))} className="mt-1 w-full rounded-lg border border-[var(--color-line)] px-2 py-2 text-sm" /><select value={catalogDraft.commissions?.[role]?.type || 'fixed'} onChange={(e) => setCatalogDraft((d) => ({ ...d, commissions: { ...d.commissions, [role]: { type: e.target.value as 'fixed' | 'percent', value: d.commissions?.[role]?.value || 0 } } }))} className="mt-1 w-full rounded-lg border border-[var(--color-line)] px-2 py-1 text-xs"><option value="fixed">RM fixed</option><option value="percent">% percent</option></select></label>)}
+          </div>
           <button onClick={saveCatalog} className="mt-4 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white">Save Product Pricing</button>
           <div className="mt-5 space-y-2">
             {pricing.catalogProductPricing.map((item) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--color-line)] p-3 text-sm">
@@ -154,6 +160,17 @@ export default function PricingPage() {
             </div>)}
             {!pricing.catalogProductPricing.length && <p className="text-xs text-[var(--color-ink-soft)]">No product overrides configured yet.</p>}
           </div>
+        </Section> : null}
+        {isSuperadmin ? <Section title="Commission & Fee Rules (superadmin only)">
+          <p className="pb-3 text-xs text-[var(--color-ink-soft)]">Provider prices remain unchanged. These rules only determine commissions or the special Touch ’n Go fee.</p>
+          <div className="grid gap-3 md:grid-cols-3">
+            {(['recharge','internet'] as const).map((service) => <label key={service} className="text-xs font-semibold">{service === 'recharge' ? 'Recharge' : 'Internet'} commission<input type="number" min="0" step="0.01" value={commissionDraft[service].value} onChange={(e) => setCommissionDraft((d) => ({ ...d, [service]: { ...d[service], value: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg border border-[var(--color-line)] px-2 py-2 text-sm" /><select value={commissionDraft[service].type} onChange={(e) => setCommissionDraft((d) => ({ ...d, [service]: { ...d[service], type: e.target.value as 'fixed' | 'percent' } }))} className="mt-1 w-full rounded-lg border border-[var(--color-line)] px-2 py-1 text-xs"><option value="fixed">RM fixed per transaction</option><option value="percent">% of transaction</option></select></label>)}
+            <label className="text-xs font-semibold">Touch ’n Go fee (%)<input type="number" min="0" step="0.01" value={commissionDraft.touchNGoFeePercent} onChange={(e) => setCommissionDraft((d) => ({ ...d, touchNGoFeePercent: Number(e.target.value) }))} className="mt-1 w-full rounded-lg border border-[var(--color-line)] px-2 py-2 text-sm" /></label>
+          </div>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div><p className="text-xs font-bold">Bill commission tiers</p>{commissionDraft.billTiers.map((t,i)=><div key={i} className="mt-2 grid grid-cols-3 gap-2"><input type="number" value={t.minAmount} onChange={e=>setCommissionDraft(d=>({...d,billTiers:d.billTiers.map((x,j)=>j===i?{...x,minAmount:Number(e.target.value)}:x)}))} placeholder="Min" className="rounded-lg border px-2 py-1 text-xs"/><input type="number" value={t.maxAmount ?? ''} onChange={e=>setCommissionDraft(d=>({...d,billTiers:d.billTiers.map((x,j)=>j===i?{...x,maxAmount:e.target.value===''?null:Number(e.target.value)}:x)}))} placeholder="Max (blank = no limit)" className="rounded-lg border px-2 py-1 text-xs"/><input type="number" step="0.01" value={t.fee} onChange={e=>setCommissionDraft(d=>({...d,billTiers:d.billTiers.map((x,j)=>j===i?{...x,fee:Number(e.target.value)}:x)}))} placeholder="Fee RM" className="rounded-lg border px-2 py-1 text-xs"/></div>)}<button onClick={()=>setCommissionDraft(d=>({...d,billTiers:[...d.billTiers,{minAmount:0,maxAmount:null,fee:0}]}))} className="mt-2 rounded-lg border px-3 py-1 text-xs">Add tier</button></div>
+            <div><p className="text-xs font-bold">Remittance fee tiers</p>{commissionDraft.remittanceTiers.map((t,i)=><div key={i} className="mt-2 grid grid-cols-3 gap-2"><input type="number" value={t.minAmount} onChange={e=>setCommissionDraft(d=>({...d,remittanceTiers:d.remittanceTiers.map((x,j)=>j===i?{...x,minAmount:Number(e.target.value)}:x)}))} placeholder="Min" className="rounded-lg border px-2 py-1 text-xs"/><input type="number" value={t.maxAmount ?? ''} onChange={e=>setCommissionDraft(d=>({...d,remittanceTiers:d.remittanceTiers.map((x,j)=>j===i?{...x,maxAmount:e.target.value===''?null:Number(e.target.value)}:x)}))} placeholder="Max" className="rounded-lg border px-2 py-1 text-xs"/><input type="number" step="0.01" value={t.fee} onChange={e=>setCommissionDraft(d=>({...d,remittanceTiers:d.remittanceTiers.map((x,j)=>j===i?{...x,fee:Number(e.target.value)}:x)}))} placeholder="Fee RM" className="rounded-lg border px-2 py-1 text-xs"/></div>)}<button onClick={()=>setCommissionDraft(d=>({...d,remittanceTiers:[...d.remittanceTiers,{minAmount:0,maxAmount:null,fee:0}]}))} className="mt-2 rounded-lg border px-3 py-1 text-xs">Add tier</button></div>
+          </div><button onClick={saveCommissionRules} className="mt-4 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white">Save Commission & Fee Rules</button>
         </Section> : null}
         {isSuperadmin ? <Section title="Role-Based Pricing (superadmin only)">{ROLE_PRICE_KEYS.map((key) => <RolePriceRow key={key} priceKey={key} pricing={pricing} onSave={saveRolePrice} />)}</Section> : <div className="rounded-2xl border border-dashed border-[var(--color-line)] bg-[var(--color-card)] p-5 text-sm text-[var(--color-ink-soft)]">Role-Based Pricing is visible to superadmin accounts only.</div>}
       </div>
