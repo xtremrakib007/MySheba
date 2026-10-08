@@ -1,6 +1,5 @@
 // Backs the "pay on success" webviews - Bus (redBus/Bus Online Ticket/
-// Easybook) and MY e-SIM (see PAYMENT_CHARGED_WEBVIEWS in
-// src/data/countries.js). Unlike
+// Easybook) (see PAYMENT_CHARGED_WEBVIEWS in src/data/countries.js). Unlike
 // webviewAccessService's flows, these never charge just for opening the
 // page: the ticket/SIM itself is paid for directly on the third-party
 // site, and MySheba only takes its points fee once that purchase has
@@ -9,7 +8,7 @@
 // The flip side of "we only charge on success" is that we can never let
 // someone in who can't pay the fee at all - once they're inside the
 // WebView they can complete a real purchase on redbus.my/
-// busonlineticket.com/easybook.com/CelcomDigi with zero further
+// busonlineticket.com/easybook.com with zero further
 // involvement from this app, so there is no later point at which we could
 // still safely deduct. checkPaymentEntryAccess is therefore called before
 // navigation ever happens (AppContext.openWebView)
@@ -45,8 +44,8 @@ export async function checkPaymentEntryAccess(uid, cost = PAYMENT_SUCCESS_COST) 
  * Deducts the admin-set cost (read server-side from settings/pricing - the
  * `cost` param above is a display-only pre-check, not what's actually
  * charged) from `uid` the moment a payment success is detected (or
- * self-confirmed) for `key` ('bus-redbus' | 'bus-busonlineticket' |
- * 'bus-easybook' | 'esim'). The
+ * self-confirmed) for a bus key ('bus-redbus' | 'bus-busonlineticket' |
+ * 'bus-easybook'). The
  * chargeWallet Cloud Function (functions/walletService.js, kind
  * 'payment_success') runs this as a Firestore transaction so a rapid
  * double-fire (the URL-match listener and the manual "I've completed my

@@ -75,7 +75,8 @@ function isNonApiService(service) {
 exports.NON_API_SERVICES = NON_API_SERVICES;
 exports.isNonApiService = isNonApiService;
 
-const DEFAULT_MODES = Object.fromEntries(ALLOWED_SERVICES.map((service) => [service, 'legacy']));
+const IIMMPACT_DEFAULT_SERVICES = new Set(['Recharge', 'Internet', 'Bill Payment', 'Recharge PIN', 'Entertainment', 'eSIM']);
+const DEFAULT_MODES = Object.fromEntries(ALLOWED_SERVICES.map((service) => [service, IIMMPACT_DEFAULT_SERVICES.has(service) ? 'api' : 'legacy']));
 // 'ALL' is a provider's reach, not a place an order comes from, so it is not a
 // row in the country matrix - the service-wide default already plays that part.
 const COUNTRY_CODES = ALLOWED_COUNTRIES.filter((c) => c !== 'ALL');
