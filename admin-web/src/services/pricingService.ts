@@ -107,7 +107,7 @@ export async function fetchPricing(): Promise<PricingSettings> {
   return { ...DEFAULT_PRICING, ...data, catalogProductPricing: Array.isArray(data.catalogProductPricing) ? data.catalogProductPricing : [], commissionRules: { ...DEFAULT_PRICING.commissionRules, ...(data.commissionRules || {}), recharge: { ...DEFAULT_PRICING.commissionRules.recharge, ...(data.commissionRules?.recharge || {}) }, internet: { ...DEFAULT_PRICING.commissionRules.internet, ...(data.commissionRules?.internet || {}) }, billTiers: Array.isArray(data.commissionRules?.billTiers) ? data.commissionRules.billTiers : DEFAULT_PRICING.commissionRules.billTiers, remittanceTiers: Array.isArray(data.commissionRules?.remittanceTiers) ? data.commissionRules.remittanceTiers : DEFAULT_PRICING.commissionRules.remittanceTiers } };
 }
 
-export async function updatePricing(key: keyof PricingSettings, value: number): Promise<void> {
+export async function updatePricing(key: keyof PricingSettings, value: PricingSettings[keyof PricingSettings]): Promise<void> {
   await setDoc(SETTINGS_DOC, { [key]: value, updatedAt: serverTimestamp() }, { merge: true });
 }
 
