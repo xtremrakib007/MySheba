@@ -1281,6 +1281,13 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
         amount: vars.amount,
         remarks: String(raw.remarks || '').slice(0, 500),
         extras: raw.subproductCode ? { subproduct_code: String(raw.subproductCode).slice(0, 200) } : {},
+      } : service === 'Recharge PIN' && provider.authType === 'iimmpactHmac' ? {
+        refid: vars.requestId,
+        product: providerOperatorCode,
+        account: String(raw.accountNumber || raw.phone || customer?.phone || '').trim(),
+        amount: vars.amount,
+        remarks: String(raw.remarks || '').slice(0, 500),
+        extras: raw.subproductCode ? { subproduct_code: String(raw.subproductCode).slice(0, 200) } : {},
       } : isBangladeshMobileBill ? {
         number: vars.billNumber,
         type: 'postpaid',
@@ -1409,6 +1416,10 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
       const deliveryNote = getPath(data, 'data.note') || getPath(data, 'note') || getPath(data, 'data.redemption_note') || getPath(data, 'redemption_note');
       if (typeof deliveryLink === 'string' && /^https?:\\/\\//i.test(deliveryLink)) result.deliveryLink = deliveryLink.slice(0, 2000);
       if (typeof deliveryNote === 'string') result.deliveryNote = deliveryNote.slice(0, 1000);
+      const pin = getPath(data, 'data.pin') || getPath(data, 'pin');
+      const expiry = getPath(data, 'data.expiry') || getPath(data, 'expiry');
+      if (typeof pin === 'string' && pin.trim()) result.providerPin = pin.trim().slice(0, 500);
+      if (typeof expiry === 'string' && expiry.trim()) result.expiry = expiry.trim().slice(0, 32);
     }
     if (provider.authType === 'iimmpactHmac') {
       // IIMMPACT explicitly recommends matching product, account and amount
