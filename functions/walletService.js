@@ -90,6 +90,7 @@ const PACKAGE_SERVICE_LABELS = { internet: 'Internet', offerpacks: 'Offer Packs'
  * exists, or that Superadmin has hidden, is refused rather than priced by guess.
  */
 async function resolvePackagePricing(db, service, payload) {
+  const requestedRole = String(payload?.role || payload?.raw?.role || '').trim().toLowerCase();
   const label = PACKAGE_SERVICE_LABELS[service];
   if (!label) return payload;
   const raw = (payload && payload.raw) || {};
@@ -154,6 +155,7 @@ async function resolvePackagePricing(db, service, payload) {
       country,
       strictCountry: true,
       fetchCatalog: apiProviderService.fetchProviderCatalog,
+      role: requestedRole,
     });
     if (found.error === 'catalog-unreachable') throw new HttpsError('unavailable', 'Package prices could not be confirmed just now. Please try again.');
     if (found.error === 'package-hidden') throw new HttpsError('failed-precondition', 'That package is no longer offered. Please choose another.');
@@ -189,6 +191,7 @@ async function resolvePackagePricing(db, service, payload) {
     operatorCode: String(clean.operatorCode || '').trim(),
     packageId,
     fetchCatalog: apiProviderService.fetchSuccessTopUpCatalog,
+    role: requestedRole,
   });
   if (resolved.error === 'provider-unconfigured') throw new HttpsError('failed-precondition', `The ${label} provider is not configured.`);
   if (resolved.error === 'catalog-unreachable') throw new HttpsError('unavailable', 'Package prices could not be confirmed just now. Please try again.');
