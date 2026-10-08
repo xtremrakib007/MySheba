@@ -80,6 +80,8 @@ const PLAN = {
   denomination: 40,
   cost: { amount: '38.10', currency: 'MYR' },
   validity: '30 days',
+  description: 'Unlimited data with hotspot and calls',
+  features: ['Unlimited data', 'Hotspot', 'Calls'],
 };
 
 console.log('\nOperator to product code');
@@ -200,6 +202,8 @@ console.log('\nThe reply');
   assert.strictEqual(plan.id, PLAN.code, 'the Options API code is the stable plan id');
   assert.strictEqual(plan.name, 'Unlimited 30 days');
   assert.strictEqual(plan.valid, '30 days');
+  assert.strictEqual(plan.description, 'Unlimited data with hotspot and calls');
+  assert.deepStrictEqual(plan.features, ['Unlimited data', 'Hotspot', 'Calls']);
 }));
 
 (atest('the price is the DENOMINATION, never the cost', async () => {
