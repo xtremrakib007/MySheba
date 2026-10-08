@@ -1683,6 +1683,14 @@ exports.nationalAccountNumber = nationalAccountNumber;
  * A code the number is not on simply returns nothing, which is the provider
  * resolving the ambiguity rather than us guessing at it.
  */
+
+// Local profile lookup used by provider catalog callables. Keep this module
+// self-contained; apiProviderService must not depend on walletService helpers.
+async function getProfile(db, uid) {
+  const snap = await db.collection('users').doc(uid).get();
+  return snap.exists ? { id: snap.id, ...snap.data() } : null;
+}
+
 exports.listProviderDataPlans = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
