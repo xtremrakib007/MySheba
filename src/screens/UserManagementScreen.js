@@ -25,7 +25,7 @@ import {
   assignReseller,
 } from '../firebase/userManagementService';
 
-const ROLE_LABEL = { customer: 'Customer', dealer: 'Dealer', reseller: 'Reseller', support: 'Support', finance: 'Finance', admin: 'Admin', superadmin: 'Super Admin' };
+const ROLE_LABEL = { customer: 'Customer', retail: 'Retail', dealer: 'Dealer', reseller: 'Reseller', support: 'Support', finance: 'Finance', admin: 'Admin', superadmin: 'Super Admin' };
 
 // Seniority order used to figure out, per user row, which of the caller's
 // canUpgradeTo roles are actually a step UP from that specific user's
@@ -38,7 +38,7 @@ const ROLE_LABEL = { customer: 'Customer', dealer: 'Dealer', reseller: 'Reseller
 // "upgrade" them to Dealer again.
 // support and finance sit beside dealer and reseller: staff, but not above
 // an admin. `dealer` appeared twice here, which is what an unread list looks like.
-const ROLE_RANK = { customer: 0, dealer: 1, reseller: 1, support: 1, finance: 1, admin: 2, superadmin: 3 };
+const ROLE_RANK = { customer: 0, retail: 1, dealer: 1, reseller: 1, support: 1, finance: 1, admin: 2, superadmin: 3 };
 
 /** Which of `canUpgradeTo` are a genuine promotion for this specific user -
  * i.e. strictly outrank their current role. */
