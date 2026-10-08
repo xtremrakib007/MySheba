@@ -1437,6 +1437,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   }
 }
 exports.executeConfiguredApi = executeConfiguredApi;
+exports.resolveIimmpactEsimPackage = resolveIimmpactEsimPackage;
 
 // Pure validation helpers exported for backend unit tests. These do not expose
 // provider credentials and do not perform network or Firestore operations.
