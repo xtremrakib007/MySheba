@@ -254,7 +254,7 @@ export default function AdminFeaturesScreen() {
   return <View style={styles.screen}>
     <AppHeader onPressMenu={openSidebar} />
     <ScrollView contentContainerStyle={styles.homeContent}>
-      <WalletCard balance={balance} variant="surface" onAddMoney={() => setScreen('superAdminTopup')} onTransfer={() => setScreen('transferPoints')} />
+      <WalletCard balance={balance} variant="surface" onAddMoney={() => profile?.role === 'admin' ? setScreen('walletFunding') : undefined} onTransfer={() => setScreen('transferPoints')} />
       <FeatureGrid
         title={isSuperadmin ? 'Superadmin Control Center' : 'Admin Control Center'}
         items={homeItems}
