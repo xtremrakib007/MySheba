@@ -48,22 +48,18 @@ export default function CustomerHomeScreen() {
           onTransfer={() => setScreen('transferPoints')}
         />
 
-        <View style={styles.statusCard}>
-          <View style={styles.statusIcon}><ServiceIcon name="kyc" size={24} color={colors.primary} /></View>
-          <View style={styles.statusCopy}>
-            <Text style={styles.statusTitle}>{kycVerified ? 'Identity verified' : 'Complete your KYC'}</Text>
-            <Text style={styles.statusText}>
-              {kycVerified
-                ? 'Your account is ready for finance services.'
-                : 'Verify your identity to unlock all finance services.'}
-            </Text>
-          </View>
-          {!kycVerified && (
+        {!kycVerified && (
+          <View style={styles.statusCard}>
+            <View style={styles.statusIcon}><ServiceIcon name="kyc" size={24} color={colors.primary} /></View>
+            <View style={styles.statusCopy}>
+              <Text style={styles.statusTitle}>Complete your KYC</Text>
+              <Text style={styles.statusText}>Verify your identity to unlock all finance services.</Text>
+            </View>
             <TouchableOpacity style={styles.statusAction} onPress={() => setScreen('verifyIdentity')} accessibilityRole="button">
               <Text style={styles.statusActionText}>Verify</Text>
             </TouchableOpacity>
-          )}
-        </View>
+          </View>
+        )}
         <BannerSlider />
         <ServiceGrid homeOnly />
 
