@@ -31,6 +31,8 @@ export interface PricingSettings {
   rechargeProfitPercent: number;
   rechargePointCostPerUnit: number;
   internetPointCostPerUnit: number;
+  offerPacksPointCostPerUnit: number;
+  entertainmentPointCostPerUnit: number;
   webviewAccessCost: number;
   webviewSubmitCost: number;
   paymentSuccessCost: number;
@@ -48,6 +50,8 @@ export const DEFAULT_PRICING: PricingSettings = {
   rechargeProfitPercent: 5,
   rechargePointCostPerUnit: 1,
   internetPointCostPerUnit: 1,
+  offerPacksPointCostPerUnit: 1,
+  entertainmentPointCostPerUnit: 1,
   webviewAccessCost: 2,
   webviewSubmitCost: 2,
   paymentSuccessCost: 3,
