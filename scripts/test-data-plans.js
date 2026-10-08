@@ -644,3 +644,25 @@ function withCatalogue(plans) {
   for (const step of queue) await step();
   console.log(`\n${passed} checks passed.\n`);
 })();
+\natest('IIMMPACT Malaysia Internet uses documented product codes', () => {
+  const providerCatalog = require('../functions/providerCatalog');
+  const provider = {
+    name: 'iimmpact',
+    baseUrl: 'https://api.iimmpact.com',
+    catalogPreset: 'iimmpact-options',
+    catalogPath: '/v2/options',
+    authType: 'iimmpactHmac',
+  };
+  const expected = {
+    Celcom: ['CEL'],
+    Digi: ['DI'],
+    Hotlink: ['HI'],
+    'U Mobile': ['UMI'],
+    Tunetalk: ['TI'],
+    XOX: ['OXI'],
+    Yes: ['YESI'],
+  };
+  for (const [operator, codes] of Object.entries(expected)) {
+    assert.deepStrictEqual(providerCatalog.productCodesFor(provider, operator), codes);
+  }
+});
