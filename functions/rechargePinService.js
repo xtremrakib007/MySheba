@@ -192,7 +192,8 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
       amount: denomination, total: denomination, details: `${country} Recharge PIN • ${productName || operator || productCode}`,
       raw: { requestId, country, operator, productCode, subproductCode, productName, amount: denomination, packageCode: productCode || String(denomination) }
     }, { uid, phone: userSnap.data().phone || '' }, requestId, {});
-    const voucherSecret = api.secret || api.deliveryLink || '';\n    if (!voucherSecret) throw new HttpsError('unavailable', 'The Recharge PIN provider completed but no voucher PIN or delivery link could be recovered. Please contact support before retrying.');
+    const voucherSecret = api.secret || api.providerPin || api.deliveryLink || '';
+    if (!voucherSecret) throw new HttpsError('unavailable', 'The Recharge PIN provider completed but no voucher PIN or delivery link could be recovered. Please contact support before retrying.');
     providerSucceeded = true;
     await txRef.update({
       apiExecution: { status: 'accepted', providerId: api.providerId, providerName: api.providerName, responseId: api.responseId || null, message: api.message || null, providerSucceeded: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
@@ -200,14 +201,14 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
     });
     await db.collection('rechargePins').doc(txRef.id).set({
       transactionId: txRef.id, customerId: uid, operator, country, productCode: productCode || null, subproductCode: subproductCode || null, productName: productName || null, amount: denomination,
-      currency: 'MYR', pin: api.secret || null, deliveryLink: api.deliveryLink || null, deliveryNote: api.deliveryNote || null, createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      currency: 'MYR', pin: api.secret || api.providerPin || null, deliveryLink: api.deliveryLink || null, deliveryNote: api.deliveryNote || null, createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
     await txRef.update({
       status: 'completed', rechargePinAvailable: true,
       apiExecution: { status: 'accepted', providerId: api.providerId, providerName: api.providerName, responseId: api.responseId || null, message: api.message || null, providerSucceeded: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
-    return { id: txRef.id, cost: walletCost, baseCostMyr: reserved.baseCostMyr, pin: api.secret || null, deliveryLink: api.deliveryLink || null, deliveryNote: api.deliveryNote || null, operator, productCode, subproductCode, productName, country, amount: denomination, currency: walletFx.currency, fxRate: walletFx.sellRate };
+    return { id: txRef.id, cost: walletCost, baseCostMyr: reserved.baseCostMyr, pin: api.secret || api.providerPin || null, deliveryLink: api.deliveryLink || null, deliveryNote: api.deliveryNote || null, operator, productCode, subproductCode, productName, country, amount: denomination, currency: walletFx.currency, fxRate: walletFx.sellRate };
   } catch (e) {
     const unavailable = String(e?.code || '') === 'unavailable';
     if (unavailable || providerSucceeded) {
