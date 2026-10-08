@@ -548,11 +548,37 @@ function pickOverride(pricingDoc, packageId) {
 }
 
 /** The customer-facing price for one catalogue entry. */
-function sellPriceFor(pkg, pricingDoc) {
+function pickCatalogProductOverride(pricingDoc, pkg = {}) {
+  const list = Array.isArray(pricingDoc?.catalogProductPricing) ? pricingDoc.catalogProductPricing : [];
+  const id = String(pkg.id || '').trim();
+  const service = String(pkg.service || pricingDoc?.service || '').trim().toLowerCase();
+  const country = String(pkg.country || pricingDoc?.country || '').trim().toUpperCase();
+  const operator = String(pkg.operator || pricingDoc?.operator || '').trim().toLowerCase();
+  const matches = list.filter((x) => x && x.active !== false && String(x.productId || '').trim() === id)
+    .filter((x) => !x.service || String(x.service).trim().toLowerCase() === service)
+    .filter((x) => !x.country || String(x.country).trim().toUpperCase() === country)
+    .filter((x) => !x.operator || String(x.operator).trim().toLowerCase() === operator);
+  return matches.sort((a, b) => {
+    const score = (x) => (x.service ? 4 : 0) + (x.country ? 2 : 0) + (x.operator ? 1 : 0);
+    return score(b) - score(a);
+  })[0] || null;
+}
+
+function rolePriceFor(pkg, pricingDoc, role) {
+  const override = pickCatalogProductOverride(pricingDoc, pkg);
+  const value = override?.prices?.[String(role || '').trim()];
+  const n = Number(value);
+  return override && Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null;
+}
+
+/** The customer-facing price for one catalogue entry. */
+function sellPriceFor(pkg, pricingDoc, role) {
+  const rolePrice = rolePriceFor(pkg, pricingDoc, role);
+  if (rolePrice !== null) return rolePrice;
   const override = pickOverride(pricingDoc, pkg.id);
   const overridden = override ? Number(override.price) : NaN;
   if (Number.isFinite(overridden) && overridden > 0) return Math.round(overridden * 100) / 100;
-  return pkg.price;
+  return Number(pkg.price) || 0;
 }
 
 /** Whether Superadmin has hidden this package from customers. */
@@ -562,9 +588,15 @@ function isHidden(pkg, pricingDoc) {
 }
 
 async function readPricingDoc(db, operatorName) {
-  if (!operatorName) return {};
-  const snap = await db.collection(PRICING_COLLECTION).doc(String(operatorName)).get();
-  return snap.exists ? (snap.data() || {}) : {};
+  const [operatorSnap, globalSnap] = await Promise.all([
+    operatorName ? db.collection(PRICING_COLLECTION).doc(String(operatorName)).get() : Promise.resolve(null),
+    db.collection('settings').doc('pricing').get(),
+  ]);
+  return {
+    ...(operatorSnap?.exists ? (operatorSnap.data() || {}) : {}),
+    ...(globalSnap?.exists ? (globalSnap.data() || {}) : {}),
+    operator: operatorName || '',
+  };
 }
 
 /**
@@ -638,7 +670,7 @@ async function perAccountCatalogFor(db, service, country, operatorName) {
  * with a reason rather than guessing a price.
  */
 async function resolveOrderPackage({
-  db, service, operatorName, operatorCode, packageId, fetchCatalog: fetchFn, providerName, country, account, strictCountry,
+  db, service, operatorName, operatorCode, packageId, fetchCatalog: fetchFn, providerName, country, account, strictCountry, role,
 }) {
   const provider = await readProvider(db, service, { name: providerName, country, strictCountry });
   if (!provider || !provider.apiKey || !provider.secretKey) return { error: 'provider-unconfigured' };
@@ -674,13 +706,14 @@ async function resolveOrderPackage({
         continue;
       }
       const match = packages.find((p) => String(p.id) === String(packageId));
+      if (match) Object.assign(match, { service, country, operator: operatorName });
       if (!match) continue;
       if (isHidden(match, pricingDoc)) return { error: 'package-hidden' };
       return {
         package: match,
         productCode: match.productCode || code,
         costAmount: match.price,
-        sellAmount: sellPriceFor(match, pricingDoc),
+        sellAmount: sellPriceFor(match, pricingDoc, role),
       };
     }
   }
@@ -718,10 +751,11 @@ module.exports = {
   fillTemplate,
   valueAtPath,
   sellPriceFor,
+  rolePriceFor,
   isHidden,
   readPricingDoc,
   readProvider,
   perAccountCatalogFor,
   resolveOrderPackage,
-  _test: { pickOverride, firstOf, slug },
+  _test: { pickOverride, pickCatalogProductOverride, firstOf, slug },
 };
