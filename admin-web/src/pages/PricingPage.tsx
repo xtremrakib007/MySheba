@@ -7,6 +7,9 @@ import {
   fetchPricing,
   updatePricing,
   updateRolePrice,
+  saveCatalogProductPrice,
+  deleteCatalogProductPrice,
+  type CatalogProductPrice,
   type PricingSettings,
   type PricingRole,
   type RolePriceKey,
@@ -74,6 +77,18 @@ export default function PricingPage() {
   const [pricing, setPricing] = useState<PricingSettings>(DEFAULT_PRICING);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [catalogDraft, setCatalogDraft] = useState<CatalogProductPrice>({
+    id: '',
+    service: 'Bill Payment',
+    country: 'MY',
+    operator: '',
+    productId: '',
+    productName: '',
+    costPrice: 0,
+    currency: 'MYR',
+    active: true,
+    prices: { customer: 0, retail: 0, reseller: 0, dealer: 0, admin: 0 },
+  });
   async function load() {
     setLoading(true); setError(null);
     try { setPricing(await fetchPricing()); } catch (err) { console.error(err); setError('Could not load pricing settings.'); } finally { setLoading(false); }
@@ -81,6 +96,17 @@ export default function PricingPage() {
   useEffect(() => { load(); }, []);
   async function save(key: keyof PricingSettings, value: number) { await updatePricing(key, value); setPricing((prev) => ({ ...prev, [key]: value })); }
   async function saveRolePrice(role: PricingRole, key: RolePriceKey, value: number) { await updateRolePrice(role, key, value); setPricing((prev) => ({ ...prev, rolePricing: { ...prev.rolePricing, [role]: { ...prev.rolePricing?.[role], [key]: value } } })); }
+  async function saveCatalog() {
+    if (!isSuperadmin || !catalogDraft.operator.trim() || !catalogDraft.productId.trim() || !catalogDraft.productName.trim()) return;
+    const entry = { ...catalogDraft, id: catalogDraft.id || `catalog-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` };
+    await saveCatalogProductPrice(entry);
+    setPricing((prev) => ({ ...prev, catalogProductPricing: [...prev.catalogProductPricing.filter((x) => x.id !== entry.id), entry] }));
+    setCatalogDraft({ id: '', service: catalogDraft.service, country: catalogDraft.country, operator: '', productId: '', productName: '', costPrice: 0, currency: catalogDraft.currency, active: true, prices: { customer: 0, retail: 0, reseller: 0, dealer: 0, admin: 0 } });
+  }
+  async function removeCatalog(id: string) {
+    await deleteCatalogProductPrice(id);
+    setPricing((prev) => ({ ...prev, catalogProductPricing: prev.catalogProductPricing.filter((x) => x.id !== id) }));
+  }
   if (loading) return <p className="text-sm text-[var(--color-ink-soft)]">Loading…</p>;
   return (
     <div>
@@ -104,7 +130,32 @@ export default function PricingPage() {
           <FieldRow label="My Documents (pts/month)" value={pricing.myDocumentsCost} suffix=" pts" onSave={(v) => save('myDocumentsCost', v)} />
           <FieldRow label="Salary & OT (pts/month)" value={pricing.salaryOtCost} suffix=" pts" onSave={(v) => save('salaryOtCost', v)} />
           <FieldRow label="Subscription Cycle Length (days)" value={pricing.moduleSubscriptionDays} suffix=" days" onSave={(v) => save('moduleSubscriptionDays', v)} />
-        </Section>\n        {isSuperadmin ? <Section title="Role-Based Pricing (superadmin only)">{ROLE_PRICE_KEYS.map((key) => <RolePriceRow key={key} priceKey={key} pricing={pricing} onSave={saveRolePrice} />)}</Section> : <div className="rounded-2xl border border-dashed border-[var(--color-line)] bg-[var(--color-card)] p-5 text-sm text-[var(--color-ink-soft)]">Role-Based Pricing is visible to superadmin accounts only.</div>}
+        </Section>\n        {isSuperadmin ? <Section title="Bills, Vouchers & Marketplace — Product Pricing (superadmin only)">
+          <p className="pb-3 text-xs text-[var(--color-ink-soft)]">Create an independent price for every biller/operator, voucher, Marketplace product, game, eSIM, entertainment package, transportation item, and other catalog product. Each role has its own selling price.</p>
+          <div className="grid gap-3 md:grid-cols-4">
+            {[
+              ['service','Service / Category', 'Bill Payment'],
+              ['country','Country (ISO)', 'MY'],
+              ['operator','Operator / Biller / Brand', 'TNB'],
+              ['productId','Product / Voucher ID', 'product-code'],
+              ['productName','Product / Package Name', 'Example 10GB'],
+              ['costPrice','Provider Cost', '0'],
+              ['currency','Currency', 'MYR'],
+            ].map(([key,label,placeholder]) => <label key={key} className="text-xs font-semibold">{label}<input value={String((catalogDraft as any)[key])} placeholder={placeholder} type={key === 'costPrice' ? 'number' : 'text'} onChange={(e) => setCatalogDraft((d) => ({ ...d, [key]: key === 'costPrice' ? Number(e.target.value) : e.target.value }))} className="mt-1 w-full rounded-lg border border-[var(--color-line)] px-2 py-2 text-sm" /></label>)}
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-5">
+            {ROLE_PRICE_ROLES.map((role) => <label key={role} className="text-xs font-semibold">{ROLE_LABELS[role]} Price<input type="number" value={catalogDraft.prices?.[role] ?? 0} onChange={(e) => setCatalogDraft((d) => ({ ...d, prices: { ...d.prices, [role]: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg border border-[var(--color-line)] px-2 py-2 text-sm" /></label>)}
+          </div>
+          <button onClick={saveCatalog} className="mt-4 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white">Save Product Pricing</button>
+          <div className="mt-5 space-y-2">
+            {pricing.catalogProductPricing.map((item) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--color-line)] p-3 text-sm">
+              <div><b>{item.productName}</b><div className="text-xs text-[var(--color-ink-soft)]">{item.service} · {item.country} · {item.operator} · {item.productId} · cost {item.currency} {item.costPrice}</div></div>
+              <div className="flex flex-wrap gap-2 text-xs">{ROLE_PRICE_ROLES.map((role) => <span key={role} className="rounded-md bg-[var(--color-primary)]/10 px-2 py-1">{ROLE_LABELS[role]}: {item.prices?.[role] ?? '—'}</span>)}<button onClick={() => removeCatalog(item.id)} className="rounded-md border px-2 py-1">Delete</button></div>
+            </div>)}
+            {!pricing.catalogProductPricing.length && <p className="text-xs text-[var(--color-ink-soft)]">No product overrides configured yet.</p>}
+          </div>
+        </Section> : null}
+        {isSuperadmin ? <Section title="Role-Based Pricing (superadmin only)">{ROLE_PRICE_KEYS.map((key) => <RolePriceRow key={key} priceKey={key} pricing={pricing} onSave={saveRolePrice} />)}</Section> : <div className="rounded-2xl border border-dashed border-[var(--color-line)] bg-[var(--color-card)] p-5 text-sm text-[var(--color-ink-soft)]">Role-Based Pricing is visible to superadmin accounts only.</div>}
       </div>
     </div>
   );
