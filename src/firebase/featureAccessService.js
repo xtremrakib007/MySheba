@@ -35,9 +35,9 @@ export const FEATURE_DEFS = [
 // something that should be toggleable off by accident. customer is left
 // out too - customer features are a separate grid (ServiceGrid) that this
 // screen never touches.
-export const TOGGLEABLE_ROLES = ['dealer', 'reseller', 'support', 'finance', 'admin'];
+export const TOGGLEABLE_ROLES = ['retail', 'dealer', 'reseller', 'support', 'finance', 'admin'];
 
-export const ROLE_LABEL = { dealer: 'Dealer', reseller: 'Reseller', support: 'Support Agent', finance: 'Finance', admin: 'Admin' };
+export const ROLE_LABEL = { retail: 'Retail', dealer: 'Dealer', reseller: 'Reseller', support: 'Support Agent', finance: 'Finance', admin: 'Admin' };
 
 function defaultAccessFor(key) {
   const def = FEATURE_DEFS.find((f) => f.key === key);
