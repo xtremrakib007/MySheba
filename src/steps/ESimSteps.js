@@ -12,7 +12,7 @@ export default function ESimStep({ step }) {
  const { serviceData, updateServiceData } = useApp();
  const [products,setProducts]=useState([]),[options,setOptions]=useState([]),[loading,setLoading]=useState(false),[optionsLoading,setOptionsLoading]=useState(false),[error,setError]=useState('');
  useEffect(()=>{ if(step!==0)return; let alive=true; setLoading(true); setError('');
-  apiProviderService.getIimmpactCatalogForUser('', 'eSIM', '')
+  apiProviderService.getIimmpactCatalogForUser('', 'eSIM', serviceData.country || 'MY')
    .then(c=>{ if(!alive)return; const list=Object.values(c?.products||{}).filter(p=>p&&p.is_active!==false&&isEsimProduct(p)); setProducts(list); if(!serviceData.productCode&&list.length===1) updateServiceData({productCode:list[0].code,product:list[0].name}); })
    .catch(e=>alive&&setError(e?.message||'Unable to load eSIM plans.')).finally(()=>alive&&setLoading(false));
   return()=>{alive=false};
@@ -23,7 +23,7 @@ export default function ESimStep({ step }) {
   if(!field){setOptions([]);return()=>{alive=false};}
   const params=field.data_source?.params||{}, productCode=params.product_code?.static||selectedProduct.code, fieldId=params.field_id?.static||field.id;
   setOptionsLoading(true);
-  apiProviderService.getIimmpactOptions({service:'eSIM',country:'',productCode,fieldId,limit:25000})
+  apiProviderService.getIimmpactOptions({service:'eSIM',country:serviceData.country || 'MY',productCode,fieldId,limit:25000})
    .then(o=>alive&&setOptions(Array.isArray(o?.items)?o.items:[])).catch(e=>alive&&setError(e?.message||'Unable to load eSIM packages.')).finally(()=>alive&&setOptionsLoading(false));
   return()=>{alive=false};
  },[step,selectedProduct]);
