@@ -23,11 +23,12 @@ export type FeatureKey = (typeof FEATURE_DEFS)[number]['key'];
 // superadmin excluded on purpose (always has full access, never
 // toggleable off by accident); customer excluded (separate grid this
 // screen never touches).
-export const TOGGLEABLE_ROLES = ['dealer', 'reseller', 'support', 'finance', 'admin'] as const;
+export const TOGGLEABLE_ROLES = ['retail', 'dealer', 'reseller', 'support', 'finance', 'admin'] as const;
 export type ToggleableRole = (typeof TOGGLEABLE_ROLES)[number];
 
 export const ROLE_LABEL: Record<ToggleableRole | 'customer' | 'superadmin', string> = {
   customer: 'Customer',
+  retail: 'Retail',
   dealer: 'Dealer',
   reseller: 'Reseller',
   support: 'Support Agent',
