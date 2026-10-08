@@ -10,7 +10,7 @@ const APP_EMAIL_DOMAIN = 'mysheba.app';
 function normalizePhone(phone) { return String(phone || '').replace(/[^0-9]/g, ''); }
 function phoneToEmail(phone) { return `${normalizePhone(phone)}@${APP_EMAIL_DOMAIN}`; }
 function active(profile) { return !!profile && profile.suspended !== true && profile.inactive !== true && profile.disabled !== true && !profile.mergedInto && profile.active !== false; }
-const ROLE_PERMISSIONS = { dealer: { canCreate: ['customer'], canUpgradeTo: [] }, admin: { canCreate: ['customer', 'dealer', 'reseller', 'support', 'finance'], canUpgradeTo: ['dealer', 'reseller', 'support', 'finance'] }, superadmin: { canCreate: ['customer', 'dealer', 'admin', 'reseller', 'support', 'finance'], canUpgradeTo: ['dealer', 'admin', 'reseller', 'support', 'finance'] }, support: { canCreate: [], canUpgradeTo: [] }, finance: { canCreate: [], canUpgradeTo: [] } };
+const ROLE_PERMISSIONS = { dealer: { canCreate: ['customer'], canUpgradeTo: [] }, admin: { canCreate: ['customer', 'dealer', 'reseller', 'support', 'finance', 'retail'], canUpgradeTo: ['dealer', 'reseller', 'support', 'finance', 'retail'] }, superadmin: { canCreate: ['customer', 'dealer', 'admin', 'reseller', 'support', 'finance', 'retail'], canUpgradeTo: ['dealer', 'admin', 'reseller', 'support', 'finance', 'retail'] }, support: { canCreate: [], canUpgradeTo: [] }, finance: { canCreate: [], canUpgradeTo: [] } };
 // What a downgrade may target.
 //
 // This was a fixed map: an admin always became a dealer, everyone else always
@@ -28,7 +28,7 @@ const DOWNGRADABLE = {
   admin: ['dealer', 'reseller', 'support', 'finance'],
   superadmin: ['dealer', 'admin', 'reseller', 'support', 'finance'],
 };
-const ROLE_RANK = { customer: 0, dealer: 1, reseller: 1, support: 1, finance: 1, admin: 2, superadmin: 3 };
+const ROLE_RANK = { customer: 0, dealer: 1, reseller: 1, support: 1, finance: 1, retail: 1, admin: 2, superadmin: 3 };
 
 function downgradeTargetsFor(callerRole, targetRole) {
   const perms = ROLE_PERMISSIONS[callerRole];
