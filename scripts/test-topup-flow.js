@@ -51,7 +51,8 @@ const complete = body(review, 'completeTopup');
 const approve = body(review, 'approveTopup');
 
 console.log('Who may do what:');
-is('only a superadmin can add money directly', roleList(instant, 'INSTANT_TOPUP_ROLES'), ['superadmin']);
+is('legacy direct-top-up marker is superadmin-only', roleList(instant, 'INSTANT_TOPUP_ROLES'), ['superadmin']);
+has('legacy direct-top-up callable is disabled', instant, 'Direct administrative wallet credit is disabled.');
 // Finance completes now, because finance pays: a top-up is a transfer out of
 // the approver's own wallet rather than credit conjured for the customer.
 is('finance, admin or superadmin completes', roleList(review, 'COMPLETER_ROLES'), ['finance', 'admin', 'superadmin']);
