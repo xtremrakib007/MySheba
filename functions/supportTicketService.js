@@ -6,7 +6,7 @@ const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 
 const MAX_SUBJECT = 200;
 const MAX_MESSAGE = 5000;
-const ALLOWED_ROLES = ['customer', 'dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin'];
+const ALLOWED_ROLES = ['customer', 'retail', 'dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin'];
 const ASSIGNABLE_ROLES = ['admin', 'superadmin', 'support'];
 
 function activeProfile(profile) {
