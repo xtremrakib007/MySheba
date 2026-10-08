@@ -6,6 +6,7 @@ const { logAudit, logServerError } = require('./logService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { checkIpAnomaly } = require('./anomalyService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+const { addWalletLedgerEntry } = require('./walletLedgerService');
 // One session per platform: a phone and a browser can both be signed in,
 // two phones cannot. See functions/sessionSlots.js.
 const { sessionMatches } = require('./sessionSlots');
@@ -181,6 +182,32 @@ exports.transferPoints = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (r
       const dealerScope = caller.role === 'dealer' ? callerUid : caller.dealerId || null;
       tx.update(fromRef, { walletBalance: resultingSenderBalance });
       tx.update(toRef, { walletBalance: resultingRecipientBalance });
+      addWalletLedgerEntry(tx, db, {
+        uid: callerUid,
+        type: 'staff_transfer_debit',
+        direction: 'debit',
+        currency: 'MYR',
+        amount: Math.max(0, fromBalance - resultingSenderBalance),
+        balanceBefore: fromBalance,
+        balanceAfter: resultingSenderBalance,
+        relatedTransactionId: transferRef.id,
+        relatedUserId: toUid,
+        idempotencyKey: requestId,
+        source: 'staff_transfer',
+      });
+      addWalletLedgerEntry(tx, db, {
+        uid: toUid,
+        type: 'staff_transfer_credit',
+        direction: 'credit',
+        currency: 'MYR',
+        amount: amt,
+        balanceBefore: toBalance,
+        balanceAfter: resultingRecipientBalance,
+        relatedTransactionId: transferRef.id,
+        relatedUserId: callerUid,
+        idempotencyKey: requestId,
+        source: 'staff_transfer',
+      });
       tx.set(transferRef, { fromUid: callerUid, fromName: caller.name || '', fromRole: caller.role || '', toUid, toName: recipient.name || '', toRole: recipient.role || '', amount: amt, note: cleanNote, participants: [callerUid, toUid], dealerId: dealerScope, dealerEarningPercent: earningPercent || null, dealerEarning: earning || null, requestId, createdAt: admin.firestore.FieldValue.serverTimestamp() });
       tx.set(opRef, { type: 'transferPoints', uid: callerUid, requestId, toUid, amount: amt, transferId: transferRef.id, status: 'completed', createdAt: admin.firestore.FieldValue.serverTimestamp() });
       return { transferId: transferRef.id, replay: false };
