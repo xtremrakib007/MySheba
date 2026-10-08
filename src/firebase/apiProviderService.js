@@ -13,6 +13,7 @@ const networkStatusFn = httpsCallable(functions, 'getNetworkStatus');
 const productCodesFn = httpsCallable(functions, 'listProviderProductCodes');
 const iimmpactCatalogFn = httpsCallable(functions, 'getIimmpactCatalog');
 const iimmpactUserCatalogFn = httpsCallable(functions, 'getIimmpactCatalogForUser');
+const iimmpactFullCatalogFn = httpsCallable(functions, 'getIimmpactFullCatalogForUser');
 const iimmpactOptionsFn = httpsCallable(functions, 'getIimmpactOptions');
 const testFn = httpsCallable(functions, 'testApiProvider');
 const adminCatalogFn = httpsCallable(functions, 'listSuccessTopUpCatalogForAdmin');
