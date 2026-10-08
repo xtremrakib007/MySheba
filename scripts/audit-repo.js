@@ -48,6 +48,9 @@ function exportsOf(src) {
   return n;
 }
 
+// 0. build metadata must never be committed: EAS logs can contain signed URLs.
+if (fs.existsSync(path.join(root, 'build-info.json'))) fail('tracked-build-metadata', 'build-info.json must not be committed.');
+
 // 1. every relative import resolves — an unbuildable bundle
 for (const f of [...appFiles, ...fnFiles, ...scriptFiles])
   for (const m of fs.readFileSync(f, 'utf8').matchAll(/(?:from\s+|require\(\s*|import\(\s*)['"](\.[^'"]+)['"]/g))
