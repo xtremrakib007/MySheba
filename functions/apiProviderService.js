@@ -1697,17 +1697,22 @@ exports.listProviderDataPlans = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, a
   // provider-touching callables rather than left open to a loop.
   await checkVelocity(db, request.auth.uid, 'listProviderDataPlans', { ip: getClientIp(request) });
 
+  // Ask every applicable product code concurrently. IIMMPACT plans are
+  // independent per product code, so sequential requests make CelcomDigi and
+  // any future multi-code operator unnecessarily slow. Promise.allSettled
+  // keeps one unavailable code from hiding plans returned by the others.
+  const results = await Promise.allSettled(
+    codes.map((code) => fetchProviderCatalog(provider, code, undefined, account))
+  );
   const byId = new Map();
   const failures = [];
-  for (const code of codes) {
-    try {
-      for (const pkg of await fetchProviderCatalog(provider, code, undefined, account)) {
-        // First code wins a duplicate id, which keeps the list stable rather
-        // than reordering on whichever request came back last.
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      for (const pkg of result.value) {
         if (!byId.has(pkg.id)) byId.set(pkg.id, pkg);
       }
-    } catch (error) {
-      failures.push(String(error?.message || error));
+    } else {
+      failures.push(String(result.reason?.message || result.reason || 'Catalog request failed.'));
     }
   }
   // Every code failed and none answered: that is the provider being
