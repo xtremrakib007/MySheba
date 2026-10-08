@@ -28,24 +28,24 @@ export const billerBrand = {
   TIME: { logo: require('../../assets/billers/time.png'), color: '#EC268F', initials: 'TI' },
   Astro: { logo: require('../../assets/billers/astro.jpg'), color: '#EC008C', initials: 'AS' },
   Maxis: { logo: require('../../assets/billers/maxis.png'), color: '#00A94F', initials: 'MX' },
-  'Telekom Malaysia (TM)': { logo: null, color: '#00539F', initials: 'TM' },
+  'Telekom Malaysia (TM)': { logo: { uri: 'https://www.google.com/s2/favicons?domain=tm.com.my&sz=128' }, color: '#00539F', initials: 'TM' },
   // The JomPAY rail itself, which is a biller row of one: the customer types
   // the biller code off their bill rather than picking a biller, so the mark
   // on that row is the one they are matching against the bill in their hand.
   JomPAY: { logo: require('../../assets/billers/jompay.png'), color: '#1B2A6B', initials: 'JP' },
   // Malaysia - the state water boards and the two east-Malaysian grids
-  'Sabah Electricity (SESB)': { logo: null, color: '#E01F26', initials: 'SB' },
-  'Sarawak Energy (SESCO)': { logo: null, color: '#0F8A4C', initials: 'SC' },
+  'Sabah Electricity (SESB)': { logo: { uri: 'https://www.google.com/s2/favicons?domain=sesb.com.my&sz=128' }, color: '#E01F26', initials: 'SB' },
+  'Sarawak Energy (SESCO)': { logo: { uri: 'https://www.google.com/s2/favicons?domain=sarawakenergy.com&sz=128' }, color: '#0F8A4C', initials: 'SC' },
   'SAJ Ranhill Air Johor': { logo: { uri: 'https://www.google.com/s2/favicons?domain=ranhill.com.my&sz=128' }, color: '#00833E', initials: 'SJ' },
-  'Syarikat Air Melaka (SAMB)': { logo: null, color: '#0057A8', initials: 'SM' },
+  'Syarikat Air Melaka (SAMB)': { logo: { uri: 'https://www.google.com/s2/favicons?domain=samb.com.my&sz=128' }, color: '#0057A8', initials: 'SM' },
   'Kuching Water Board': { logo: { uri: 'https://www.google.com/s2/favicons?domain=kuchingwaterboard.com&sz=128' }, color: '#0E7C86', initials: 'KW' },
-  'Syarikat Air Darul Aman (SADA)': { logo: null, color: '#1C6FB8', initials: 'SD' },
-  'Syarikat Air Terengganu (SATU)': { logo: null, color: '#143C8C', initials: 'TG' },
-  'Syarikat Air Negeri Sembilan (SAINS)': { logo: null, color: '#E8821E', initials: 'SN' },
+  'Syarikat Air Darul Aman (SADA)': { logo: { uri: 'https://www.google.com/s2/favicons?domain=sada.com.my&sz=128' }, color: '#1C6FB8', initials: 'SD' },
+  'Syarikat Air Terengganu (SATU)': { logo: { uri: 'https://www.google.com/s2/favicons?domain=satuwater.com.my&sz=128' }, color: '#143C8C', initials: 'TG' },
+  'Syarikat Air Negeri Sembilan (SAINS)': { logo: { uri: 'https://www.google.com/s2/favicons?domain=sainswater.com&sz=128' }, color: '#E8821E', initials: 'SN' },
   'Air Kelantan': { logo: { uri: 'https://www.google.com/s2/favicons?domain=airkelantan.com.my&sz=128' }, color: '#0B7A3B', initials: 'AK' },
   'Sibu Water Board': { logo: { uri: 'https://www.google.com/s2/favicons?domain=sibuwaterboard.gov.my&sz=128' }, color: '#1CA8C4', initials: 'SW' },
-  'Syarikat Air Perlis (SAP)': { logo: null, color: '#1E63A8', initials: 'SP' },
-  'Air Pahang (PAIP)': { logo: null, color: '#1878BE', initials: 'PA' },
+  'Syarikat Air Perlis (SAP)': { logo: { uri: 'https://www.google.com/s2/favicons?domain=airperlis.com&sz=128' }, color: '#1E63A8', initials: 'SP' },
+  'Air Pahang (PAIP)': { logo: { uri: 'https://www.google.com/s2/favicons?domain=paip.com.my&sz=128' }, color: '#1878BE', initials: 'PA' },
 
   // Nepal
   NEA: { logo: { uri: 'https://www.google.com/s2/favicons?domain=nea.org.np&sz=128' }, color: '#14479B', initials: 'NE' },
