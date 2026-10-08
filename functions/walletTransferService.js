@@ -7,6 +7,7 @@ const { checkIpAnomaly } = require('./anomalyService');
 const { logAudit, logServerError } = require('./logService');
 const { getWalletCurrencyAndFx, baseToWallet, walletToBase, inferWalletCurrency } = require('./walletCurrencyService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+const { assertCustomerP2PEligible } = require('./walletComplianceService');
 // One session per platform: a phone and a browser can both be signed in,
 // two phones cannot. See functions/sessionSlots.js.
 const { sessionMatches } = require('./sessionSlots');
@@ -87,8 +88,7 @@ exports.findWalletRecipient = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
   const uid = requireAuth(request), db = admin.firestore(), sender = await getProfile(db, uid);
   if (!sender) throw new HttpsError('not-found', 'Your account was not found.');
   if (!active(sender)) throw new HttpsError('permission-denied', 'Your account is not active.');
-  if (sender.role !== 'customer') throw new HttpsError('permission-denied', 'Wallet-to-wallet transfers are for customer wallets.');
-  if (!isKycApproved(sender)) throw new HttpsError('failed-precondition', 'Complete KYC before using wallet transfers.');
+  assertCustomerP2PEligible(sender, 'wallet');
   await checkVelocity(db, uid, 'findWalletRecipient', { ip: getClientIp(request) });
   const recipient = await resolveRecipient(db, request.data?.recipient, uid);
   return { uid: recipient.id, name: recipient.displayName || recipient.name || 'MySheba Customer', customerId: recipient.customerId || recipient.userId || '', phoneMasked: String(recipient.phone || '').replace(/(\d{3})\d+(\d{2})$/, '$1••••$2'), walletCurrency: inferWalletCurrency(recipient) };
