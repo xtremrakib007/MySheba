@@ -19,6 +19,7 @@ const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 const { inferWalletCurrency, money } = require('./walletCurrencyService');
 const { logAudit, logServerError } = require('./logService');
 const { POLICY } = require('./walletComplianceService');
+const { addWalletLedgerEntry } = require('./walletLedgerService');
 // One session per platform: a phone and a browser can both be signed in,
 // two phones cannot. See functions/sessionSlots.js.
 const { sessionMatches } = require('./sessionSlots');
@@ -193,6 +194,32 @@ exports.decideWalletFunding = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
 
       tx.update(approverSnap.ref, { walletBalance: money(approverBalance - amount, currency), walletCurrency: currency });
       tx.update(requesterRef, { walletBalance: money(requesterBalance + amount, currency), walletCurrency: currency });
+      addWalletLedgerEntry(tx, db, {
+        uid: approverSnap.id,
+        type: 'wallet_funding_debit',
+        direction: 'debit',
+        currency,
+        amount,
+        balanceBefore: approverBalance,
+        balanceAfter: money(approverBalance - amount, currency),
+        relatedTransactionId: ref.id,
+        relatedUserId: requesterRef.id,
+        source: 'wallet_funding',
+        createdAt: stamp,
+      });
+      addWalletLedgerEntry(tx, db, {
+        uid: requesterRef.id,
+        type: 'wallet_funding_credit',
+        direction: 'credit',
+        currency,
+        amount,
+        balanceBefore: requesterBalance,
+        balanceAfter: money(requesterBalance + amount, currency),
+        relatedTransactionId: ref.id,
+        relatedUserId: approverSnap.id,
+        source: 'wallet_funding',
+        createdAt: stamp,
+      });
       tx.update(ref, { status: 'approved', decidedBy: uid, decidedByRole: approver.role, decidedAt: stamp, updatedAt: stamp, transferredAmount: amount, transferredCurrency: currency });
       return { approved: true, amount, toUid: requesterRef.id, currency };
     });
