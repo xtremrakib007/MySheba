@@ -64,7 +64,7 @@ for (const role of Object.keys(serverRoles)) {
   assert.deepStrictEqual([...clientRoles[role].canUpgradeTo].sort(), [...serverRoles[role].canUpgradeTo].sort(),
     `${role} must be offered exactly the upgrades it can perform`);
 }
-const ALL_ROLES = ['customer', 'dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin'];
+const ALL_ROLES = ['customer', 'retail', 'dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin'];
 for (const caller of ALL_ROLES) {
   for (const target of ALL_ROLES) {
     assert.deepStrictEqual(clientDowngrade(caller, target), serverDowngrade(caller, target),
