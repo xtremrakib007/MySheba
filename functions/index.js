@@ -1,4 +1,5 @@
 exports.reverseCommission = require('./commissionReversalService').reverseCommission;
+exports.savePricingSettings = require('./pricingMutationService').savePricingSettings;
 // MySheba push notifications - the SERVER half.
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const admin = require('firebase-admin');
