@@ -139,6 +139,8 @@ const PRESETS = {
       name: ['name', 'label', 'description', 'title', 'product_name'],
       data: ['data', 'volume', 'quota'],
       valid: ['validity', 'valid', 'duration', 'period'],
+      description: ['description', 'details', 'additional_description', 'display_description'],
+      features: ['features', 'feature', 'highlights'],
       category: ['category', 'type', 'product_group'],
       processingTime: ['processing_time', 'processingTime', 'processing-time'],
       // denomination FIRST, and this is not a preference.
