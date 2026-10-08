@@ -109,6 +109,7 @@ exports.chargeBillPayment = chargeGuards.chargeBillPayment;
 exports.chargeMobileBanking = chargeGuards.chargeMobileBanking;
 exports.chargeRemittance = chargeGuards.chargeRemittance;
 exports.chargeEsim = chargeGuards.chargeEsim;
+exports.chargeIimmpactProduct = chargeGuards.chargeIimmpactProduct;
 exports.approveVerification = require('./verificationService').approveVerification;
 exports.rejectVerification = require('./verificationService').rejectVerification;
 exports.setupSecurityPin = require('./securityPinService').setupSecurityPin;
