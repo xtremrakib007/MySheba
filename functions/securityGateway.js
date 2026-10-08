@@ -49,9 +49,4 @@ function enforceRequestEnvelope(request, options = {}) {
   walk(request?.data ?? null, { keys: 0 });
 }
 
-function safeProviderText(value, max = 2048) {
-  if (typeof value !== 'string') return '';
-  return value.replace(/[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]/g, '').slice(0, max);
-}
-
-module.exports = { enforceRequestEnvelope, safeProviderText, MAX_REQUEST_BYTES };
+module.exports = { enforceRequestEnvelope, MAX_REQUEST_BYTES };
