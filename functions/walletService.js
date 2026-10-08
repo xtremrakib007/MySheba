@@ -252,13 +252,17 @@ const transactionCountry = String(payload?.raw?.country || '').trim().toUpperCas
 // property of the data rather than a list of countries to keep in step here.
 let apiMode = 'legacy';
 if (serviceLabel) {
-  const serviceProviders = await apiProviderService.providersForService(db, serviceLabel);
-  apiMode = apiProviderService.resolveExecutionMode({
-    country: transactionCountry,
-    service: serviceLabel,
-    settings: apiSettings,
-    providers: serviceProviders,
-  });
+  const serviceProviders = serviceLabel === 'IIMMPACT'
+    ? [{ authType: 'iimmpactHmac', active: true }]
+    : await apiProviderService.providersForService(db, serviceLabel);
+  apiMode = serviceLabel === 'IIMMPACT'
+    ? 'api'
+    : apiProviderService.resolveExecutionMode({
+      country: transactionCountry,
+      service: serviceLabel,
+      settings: apiSettings,
+      providers: serviceProviders,
+    });
 }
 
 // Bangladesh recharge, internet/data and bill payment are API-only. Fail closed rather than creating a manual order.
