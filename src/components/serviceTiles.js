@@ -258,6 +258,7 @@ export function applyTileLabels(list, tileLabels) {
     if (!override) return item;
     const next = { ...item };
     if (override.name) next.name = override.name;
+    if (item.key === 'iimmpactCatalog') next.name = 'MySheba Marketplace';
     if (override.icon) {
       if (override.iconIsArt) { next.art = override.icon; next.emoji = ''; }
       // `art: ''` matters: without it a tile whose key has a drawing would keep
