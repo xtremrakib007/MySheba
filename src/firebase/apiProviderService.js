@@ -15,6 +15,7 @@ const iimmpactCatalogFn = httpsCallable(functions, 'getIimmpactCatalog');
 const iimmpactUserCatalogFn = httpsCallable(functions, 'getIimmpactCatalogForUser');
 const iimmpactFullCatalogFn = httpsCallable(functions, 'getIimmpactFullCatalogForUser');
 const iimmpactOptionsFn = httpsCallable(functions, 'getIimmpactOptions');
+const chargeIimmpactProductFn = httpsCallable(functions, 'chargeIimmpactProduct');
 const testFn = httpsCallable(functions, 'testApiProvider');
 const adminCatalogFn = httpsCallable(functions, 'listSuccessTopUpCatalogForAdmin');
 const balanceFn = httpsCallable(functions, 'getSuccessTopUpBalance');
@@ -24,7 +25,7 @@ const balanceFn = httpsCallable(functions, 'getSuccessTopUpBalance');
 // superadmin at all: 'Offer Packs' was missing, so the only provider that
 // could ever serve it was the one Success TopUp provisions for itself.
 // scripts/test-api-provider.js fails the build if the two lists drift.
-export const API_SERVICES = ['Recharge', 'Internet', 'Offer Packs', 'Bill Payment', 'Bus', 'Train', 'Flight', 'Mobile Banking', 'Remittance', 'Payment Gateway', 'Entertainment', 'Recharge PIN', 'eSIM'];
+export const API_SERVICES = ['Recharge', 'Internet', 'Offer Packs', 'Bill Payment', 'Bus', 'Train', 'Flight', 'Mobile Banking', 'Remittance', 'Payment Gateway', 'Entertainment', 'Recharge PIN', 'eSIM', 'IIMMPACT'];
 export async function listApiProviders() { const res = await listFn({}); return res.data?.providers || res.data || []; }
 export async function saveApiProvider(provider) { return (await saveFn(provider)).data; }
 
@@ -96,6 +97,10 @@ export async function getIimmpactCatalogForUser(providerId = '', service = 'Rech
 
 export async function getIimmpactFullCatalogForUser(country = 'MY') {
   return (await iimmpactFullCatalogFn({ country })).data || {};
+}
+
+export async function chargeIimmpactProduct(payload, customer = {}) {
+  return (await chargeIimmpactProductFn({ payload, customer })).data || {};
 }
 
 export async function getIimmpactOptions({ providerId = '', productCode, fieldId, accountNumber = '', billerCode = '', page = 1, limit = 100, service = 'Recharge', country = '' }) {
