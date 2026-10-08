@@ -61,17 +61,15 @@ console.log('The home screen is twelve tiles, four rows of three');
 // Named and ordered, because the point of a fixed twelve is that there is no
 // short row and no gap - and a tile added without thought breaks exactly that.
 const EXPECTED_HOME = [
-  'recharge', 'internet', 'rechargePin',
-  // JomPay and the TnG reload are Bill Payment with the country, and for TnG
-  // the category and biller, already chosen - a tile each, not a service each.
-  'billpayment', 'jompay', 'tngewallet',
-  'mobilebanking', 'remittance', 'offerpacks',
+  'recharge', 'rechargePin', 'internet',
+  'billpayment', 'tngewallet', 'jompay',
   'flight', 'bus', 'train',
-  'mydigital', 'passport', 'moreFeaturesTile',
+  'entertainment', 'esim', 'moreFeaturesTile',
 ];
 const customerHome = visibleTiles({ role: 'customer', can: allCaps, homeOnly: true }).map((t) => t.key);
 assert.deepStrictEqual(customerHome, EXPECTED_HOME,
-  'the customer home must be these fifteen, in this order');
+  'the customer home must be these twelve, in this order');
+assert.strictEqual(customerHome.length, 12, 'the homepage is exactly twelve tiles');
 assert.strictEqual(customerHome.length % 3, 0, 'and divide into whole rows of three');
 
 // More Features is the twelfth tile. It is also what visibleTiles appends when
@@ -81,7 +79,7 @@ assert.strictEqual(customerHome.filter((k) => k === 'moreFeaturesTile').length, 
   'More Features appears once, not twice');
 
 // Everything off the home screen is still reachable.
-for (const key of ['entertainment', 'visa', 'fomema']) {
+for (const key of ['mobilebanking', 'remittance', 'offerpacks', 'iimmpactCatalog', 'visa', 'fomema', 'mydigital', 'passport']) {
   assert(!customerHome.includes(key), `${key} belongs under More Features`);
 }
 
