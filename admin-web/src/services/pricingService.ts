@@ -5,7 +5,6 @@
 
 import { doc, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { auth } from '../firebase/config';
 import { db, functions } from '../firebase/config';
 
 const SETTINGS_DOC = doc(db, 'settings', 'pricing');
