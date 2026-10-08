@@ -91,10 +91,19 @@ test('CelcomDigi asks BOTH of the products it could be', () => {
   assert.deepStrictEqual(catalog.productCodesFor(IIMMPACT, 'CelcomDigi'), ['CEL', 'DI']);
 });
 
-test('an unambiguous operator asks one', () => {
-  assert.deepStrictEqual(catalog.productCodesFor(IIMMPACT, 'Hotlink'), ['HI']);
-  assert.deepStrictEqual(catalog.productCodesFor(IIMMPACT, 'U Mobile'), ['UMI']);
-  assert.deepStrictEqual(catalog.productCodesFor(IIMMPACT, 'Yes'), ['YESI']);
+test('all documented Malaysia Internet operators ask their IIMMPACT product', () => {
+  const expected = {
+    Celcom: ['CEL'],
+    Digi: ['DI'],
+    Hotlink: ['HI'],
+    'U Mobile': ['UMI'],
+    Tunetalk: ['TI'],
+    XOX: ['OXI'],
+    Yes: ['YESI'],
+  };
+  for (const [operator, codes] of Object.entries(expected)) {
+    assert.deepStrictEqual(catalog.productCodesFor(IIMMPACT, operator), codes, operator);
+  }
 });
 
 test('an operator the provider sells no plans for asks none', () => {
@@ -104,11 +113,11 @@ test('an operator the provider sells no plans for asks none', () => {
   assert.deepStrictEqual(catalog.productCodesFor(IIMMPACT, 'Nonsense'), []);
 });
 
-test('a provider record can correct the map without a deploy', () => {
+test('a provider record can correct one code without erasing the preset map', () => {
   const corrected = { ...IIMMPACT, catalogOperatorCodes: { CelcomDigi: ['DI'], Unifi: 'UMI' } };
   assert.deepStrictEqual(catalog.productCodesFor(corrected, 'CelcomDigi'), ['DI']);
   assert.deepStrictEqual(catalog.productCodesFor(corrected, 'Unifi'), ['UMI'], 'a bare string is one code');
-  assert.deepStrictEqual(catalog.productCodesFor(corrected, 'Hotlink'), [], 'an override replaces the map, it does not merge');
+  assert.deepStrictEqual(catalog.productCodesFor(corrected, 'Hotlink'), ['HI'], 'preset operators remain available');
 });
 
 test('the number of outbound calls per listing is bounded', () => {
