@@ -107,7 +107,6 @@ const CUSTOMER_SERVICES = [
   { key: 'iimmpactFuel', icon: 'more', name: 'Fuel', kind: 'iimmpactCategory', iimmpactCategory: 'Fuel', cat: 'other' },
   { key: 'iimmpactGrocery', icon: 'more', name: 'Grocery', kind: 'iimmpactCategory', iimmpactCategory: 'Grocery', cat: 'other' },
   { key: 'iimmpactIDD', icon: 'more', name: 'IDD', kind: 'iimmpactCategory', iimmpactCategory: 'IDD', cat: 'other' },
-  { key: 'iimmpactInternationalTopUp', icon: 'recharge', name: 'International Top Up', kind: 'iimmpactCategory', iimmpactCategory: 'International Top Up', cat: 'other' },
   { key: 'iimmpactLoans', icon: 'more', name: 'Loans', kind: 'iimmpactCategory', iimmpactCategory: 'Loans', cat: 'other' },
   { key: 'iimmpactLocalCouncil', icon: 'more', name: 'Local Council', kind: 'iimmpactCategory', iimmpactCategory: 'Local Council', cat: 'other' },
   { key: 'iimmpactRetail', icon: 'more', name: 'Retail Shop', kind: 'iimmpactCategory', iimmpactCategory: 'Retail Shop', cat: 'other' },
