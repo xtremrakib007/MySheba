@@ -109,6 +109,7 @@ const SERVICE_STEPS = {
   bus: 3,
   train: 3,
   flight: 3,
+  esim: 3,
 };
 
 // Flight/Bus/Train are "contact-me" inquiries sent straight to Admin.
@@ -123,6 +124,7 @@ const DEALER_LABELS = {
   entertainment: "Entertainment",
   billpayment: "Bill Payment",
   remittance: "Remittance",
+  esim: "eSIM",
 };
 
 /** Builds the {service, details, amount, total} payload the dealer queue needs, from the wizard's serviceData. */
@@ -209,6 +211,10 @@ function buildTransactionPayload(service, serviceData, pricing, rates) {
       total: amount,
       raw: { country: serviceData.country, provider: serviceData.provider, category: serviceData.category, accountNumber: serviceData.accountNumber, mobileNumber: serviceData.mobileNumber },
     };
+  }
+  if (service === "esim") {
+    const amount = Number(serviceData.amount) || 0;
+    return { service: DEALER_LABELS.esim, details: `${serviceData.product || 'eSIM'} - ${serviceData.package || ''} (${serviceData.accountNumber || ''})`, amount, total: amount, raw: { country: serviceData.country || 'ALL', productCode: serviceData.productCode, accountNumber: serviceData.accountNumber, email: serviceData.email, amount, package: serviceData.package, packageId: serviceData.packageId, subproductCode: serviceData.subproductCode, remarks: serviceData.remarks || '' } };
   }
   if (service === "remittance") {
     const sendAmt = serviceData.sendAmt || 0;
