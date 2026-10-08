@@ -1094,7 +1094,11 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     throw new HttpsError('failed-precondition', `${service} is a payout, not a product purchase. It is never dispatched to an API provider.`);
   }
   const db = admin.firestore();
-  const allProvidersRaw = await providersForService(db, service);
+  const allProvidersRaw = service === 'IIMMPACT'
+    ? (await db.collection(COLLECTION).where('active', '==', true).limit(100).get()).docs
+        .map((d) => ({ id: d.id, ...(d.data() || {}) }))
+        .filter((p) => p.authType === 'iimmpactHmac')
+    : await providersForService(db, service);
   const requestedCountry = String(payload?.raw?.country || '').trim().toUpperCase() || 'ALL';
   const allProviders = allProvidersRaw;
   // A provider that NAMES this country beats one that serves all of them, and
