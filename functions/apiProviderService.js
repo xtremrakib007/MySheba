@@ -945,8 +945,15 @@ function fetchProviderCatalog(provider, operator, type, account) {
 // Success TopUp's operator codes are still validated here, because they are
 // specific to that provider's API rather than to catalogues in general.
 async function fetchSuccessTopUpCatalog(provider, operator, type) {
-  const safeOperator = SUCCESS_TOPUP_OPERATOR_CODES.includes(operator) || operator === 'ALL' ? operator : 'ALL';
-  return fetchProviderCatalog(provider, safeOperator, type);
+  const rawOperator = String(operator || '').trim().toUpperCase();
+  // Never silently fall back to ALL. Success TopUp explicitly supports BT
+  // (Brilliant Connect) and RY (Ryze), so treating either code as invalid and
+  // changing it to ALL can return the wrong catalogue or an "invalid operator"
+  // response. Other supported operators must follow the same exact-code path.
+  if (!SUCCESS_TOPUP_OPERATOR_CODES.includes(rawOperator) && rawOperator !== 'ALL') {
+    throw new Error(`Success TopUp does not support operator code "${rawOperator}".`);
+  }
+  return fetchProviderCatalog(provider, rawOperator, type);
 }
 
 exports.fetchSuccessTopUpCatalog = fetchSuccessTopUpCatalog;
