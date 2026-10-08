@@ -36,6 +36,16 @@ export const rechargeOperators = {
   KH: ['Cellcard', 'Smart Axiata'],
 };
 
+// IIMMPACT mobile-data operators. Unlike Recharge, Internet must not reuse
+// the airtime list: IIMMPACT documents exactly these seven Malaysian data
+// products, and Unifi has no documented IIMMPACT Internet product.
+// Plans are fetched live per phone number; these names are only the operator
+// picker labels and must never be used to invent package prices.
+export const internetOperators = {
+  ...rechargeOperators,
+  MY: ['Celcom', 'Digi', 'Hotlink', 'U Mobile', 'Tunetalk', 'XOX', 'Yes'],
+};
+
 // Who can be bought as a PIN voucher, which is not the same list as who can be
 // topped up directly.
 //
@@ -62,11 +72,9 @@ export const internetPackages = [
 // Data packages on offer, per operator - real plans vary operator to
 // operator (a Jio pack isn't the same as an Airtel pack), so InternetSteps
 // looks a package list up by the operator picked on the previous step.
-// Every operator that appears in rechargeOperators above has an entry here;
-// anyone missing (or a name typo) falls back to the generic internetPackages
-// list so the step never renders empty. Price stays in MYR, same as
-// recharge/remittance - the customer in Malaysia is paying MYR to top up
-// someone's data plan in the destination country.
+// Legacy/static package defaults remain for non-IIMMPACT flows only. IIMMPACT
+// Internet operators never use these invented packages: their plans are
+// personalized per phone number and come from the live provider.
 export const internetPackagesByOperator = {
   // Bangladesh
   Grameenphone: [
@@ -94,36 +102,6 @@ export const internetPackagesByOperator = {
     { name: 'Unlimited', data: 'Unlimited', valid: '30 Days', price: 100 },
   ],
   // Malaysia
-  Celcom: [
-    { name: '3GB Daily', data: '3 GB', valid: '1 Day', price: 11 },
-    { name: '18GB Weekly', data: '18 GB', valid: '7 Days', price: 32 },
-    { name: '45GB Monthly', data: '45 GB', valid: '30 Days', price: 62 },
-    { name: 'Unlimited', data: 'Unlimited', valid: '30 Days', price: 95 },
-  ],
-  Digi: [
-    { name: '2GB Daily', data: '2 GB', valid: '1 Day', price: 10 },
-    { name: '15GB Weekly', data: '15 GB', valid: '7 Days', price: 30 },
-    { name: '40GB Monthly', data: '40 GB', valid: '30 Days', price: 58 },
-    { name: 'Unlimited', data: 'Unlimited', valid: '30 Days', price: 90 },
-  ],
-  'U Mobile': [
-    { name: '5GB Daily', data: '5 GB', valid: '1 Day', price: 10 },
-    { name: '25GB Weekly', data: '25 GB', valid: '7 Days', price: 28 },
-    { name: '60GB Monthly', data: '60 GB', valid: '30 Days', price: 55 },
-    { name: 'Unlimited', data: 'Unlimited', valid: '30 Days', price: 85 },
-  ],
-  Unifi: [
-    { name: '4GB Daily', data: '4 GB', valid: '1 Day', price: 11 },
-    { name: '20GB Weekly', data: '20 GB', valid: '7 Days', price: 30 },
-    { name: '50GB Monthly', data: '50 GB', valid: '30 Days', price: 60 },
-    { name: 'Unlimited', data: 'Unlimited', valid: '30 Days', price: 92 },
-  ],
-  Yes: [
-    { name: '4GB Daily', data: '4 GB', valid: '1 Day', price: 10 },
-    { name: '20GB Weekly', data: '20 GB', valid: '7 Days', price: 27 },
-    { name: '55GB Monthly', data: '55 GB', valid: '30 Days', price: 56 },
-    { name: 'Unlimited', data: 'Unlimited', valid: '30 Days', price: 86 },
-  ],
   // India
   Jio: [
     { name: '1.5GB Daily', data: '1.5 GB', valid: '1 Day', price: 8 },
