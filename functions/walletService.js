@@ -380,6 +380,7 @@ tx.set(txref,{service:serviceLabel || service,customerRole:d.role,commissionAmou
           addWalletLedgerEntry(tx, db, { uid: result.customerUid, direction:'credit', type:'service_commission', currency:tSnap.data()?.currency || 'MYR', amount:earned, balanceBefore:before, balanceAfter:after, relatedTransactionId:txref.id, idempotencyKey:requestId + ':commission', source:'service_commission', createdAt:admin.firestore.FieldValue.serverTimestamp() });
           addCommissionLedgerEntry(tx, db, { uid: result.customerUid, role: result.role, service: serviceLabel || service, amount: earned, currency:tSnap.data()?.currency || 'MYR', transactionId:txref.id, balanceBefore:before, balanceAfter:after });
           tx.update(txref, { commissionStatus:'earned', commissionEarnedAt:admin.firestore.FieldValue.serverTimestamp() });
+                logAudit({ action:'service_commission_earned', targetUid:result.customerUid, performedBy:'system', performedByRole:result.role, details:{ transactionId:txref.id, service:serviceLabel || service, amount:earned, currency:tSnap.data()?.currency || 'MYR' } });
         });
       }
       await txref.update({
