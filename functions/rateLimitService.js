@@ -41,6 +41,16 @@ const DEFAULT_LIMITS = {
   deleteApiProvider: { max: 10, windowMinutes: 60 },
 };
 
+// Global abuse limits apply in addition to each operation's UID/IP limit. They
+// stop an attacker from rotating request IDs or authenticated accounts to
+// bypass a per-operation bucket. These are intentionally generous for normal
+// multi-device/household NAT traffic; expensive operations still have much
+// tighter action-specific limits below.
+const GLOBAL_LIMITS = {
+  globalUid: { max: 180, windowMinutes: 1 },
+  globalIp: { max: 600, windowMinutes: 1 },
+};
+
 const DEFAULT_OTP_LIMITS = {
   otp_send: { max: 8, windowMinutes: 60 },
   otp_verify: { max: 20, windowMinutes: 60 },
@@ -82,6 +92,15 @@ async function slidingWindowTripped(db, collectionName, docId, limit) {
 }
 
 async function checkVelocity(db, uid, action, context = {}) {
+  // Apply the global UID bucket first. This is deliberately independent of
+  // the action bucket so changing one action's limit cannot disable the
+  // overall abuse ceiling.
+  const globalUidTripped = await slidingWindowTripped(db, 'globalVelocity', `${uid}_uid`, GLOBAL_LIMITS.globalUid);
+  if (globalUidTripped) {
+    await logAudit({ action: 'global_uid_velocity_blocked', targetUid: uid, performedBy: uid, performedByRole: null, details: { limit: GLOBAL_LIMITS.globalUid } });
+    throw new HttpsError('resource-exhausted', "You're sending too many requests. Please wait a moment and try again.");
+  }
+
   const limits = await getSecuritySettings(db);
   const limit = limits[action];
   if (!limit || !limit.max) return;
@@ -94,6 +113,11 @@ async function checkVelocity(db, uid, action, context = {}) {
   // hashed before storage so the velocity collection does not retain raw IPs.
   if (context.ip) {
     const ipHash = crypto.createHash('sha256').update(String(context.ip)).digest('hex').slice(0, 32);
+    const globalIpTripped = await slidingWindowTripped(db, 'globalVelocityIp', ipHash, GLOBAL_LIMITS.globalIp);
+    if (globalIpTripped) {
+      await logAudit({ action: 'global_ip_velocity_blocked', targetUid: uid, performedBy: uid, performedByRole: null, details: { limit: GLOBAL_LIMITS.globalIp } });
+      throw new HttpsError('resource-exhausted', "Too many requests from this network. Please wait a moment and try again.");
+    }
     const ipLimit = { max: Math.max(1, Math.ceil(Number(limit.max) * 3)), windowMinutes: Number(limit.windowMinutes) || 60 };
     const ipTripped = await slidingWindowTripped(db, 'walletVelocityIp', `${ipHash}_${action}`, ipLimit);
     if (ipTripped) {
@@ -125,4 +149,4 @@ function getClientIp(request) {
   }
 }
 
-module.exports = { checkVelocity, checkAnonymousVelocity, getClientIp, DEFAULT_LIMITS, DEFAULT_OTP_LIMITS };
+module.exports = { checkVelocity, checkAnonymousVelocity, getClientIp, DEFAULT_LIMITS, DEFAULT_OTP_LIMITS, GLOBAL_LIMITS };
