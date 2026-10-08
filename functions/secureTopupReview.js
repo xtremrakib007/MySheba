@@ -13,7 +13,7 @@ const { assertPublicFundingEnabled } = require('./walletComplianceService');
 const { sessionMatches } = require('./sessionSlots');
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'support', 'finance'];
-const ALLOWED_RECIPIENT_ROLES = ['customer', 'dealer', 'reseller'];
+const ALLOWED_RECIPIENT_ROLES = ['customer', 'retail', 'dealer', 'reseller'];
 const MAX_AMOUNT = 100000;
 const MONEY_RE = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
 const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
