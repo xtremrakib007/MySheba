@@ -2184,6 +2184,154 @@ async function resolveIimmpactEsimPackage(db, raw) {
 }
 
 
+function iimmpactResolvedFieldValue(spec, values, selected) {
+  if (!spec || !spec.from_field) return '';
+  const source = selected?.[spec.from_field] !== undefined
+    ? selected[spec.from_field]
+    : values?.[spec.from_field];
+  if (spec.path) return getPath(source, spec.path);
+  return source;
+}
+
+function iimmpactCustomerPrice(faceAmount, product) {
+  const amount = Number(faceAmount);
+  if (!Number.isFinite(amount) || amount <= 0) return 0;
+  const currency = String(product?.denomination_currency || '').toUpperCase();
+  const unit = Number(product?.denomination_unit_price);
+  const base = currency && currency !== 'MYR' && Number.isFinite(unit) && unit > 0
+    ? amount * unit
+    : amount;
+  const pricing = product?.pricing || {};
+  const multiplier = Number(pricing.unit_price);
+  let price = Number.isFinite(multiplier)
+    ? (multiplier < 0 ? base + multiplier : base * multiplier)
+    : base;
+  const adjustment = pricing.price_adjustment;
+  if (adjustment && typeof adjustment === 'object') {
+    const value = Number(adjustment.value);
+    if (Number.isFinite(value)) {
+      price = String(adjustment.type || '').toLowerCase() === 'percentage'
+        ? price * value
+        : price + value;
+    }
+  }
+  return Math.round(price * 100) / 100;
+}
+
+/**
+ * Resolve a Marketplace purchase against the live IIMMPACT Catalog + Options
+ * APIs. The mobile app can send a selected option for UX, but the server
+ * re-reads the product and options before charging the wallet. This keeps
+ * product codes, plan codes, denomination, account mapping and extras out of
+ * client trust.
+ */
+async function resolveIimmpactMarketplaceProduct(db, raw) {
+  const country = cleanString(raw?.country, 2).toUpperCase() || 'MY';
+  const provider = await findActiveIimmpactProviderForCountry(db, country);
+  if (!provider || provider.authType !== 'iimmpactHmac') return { error: 'provider-unconfigured' };
+
+  const productCode = cleanString(raw?.productCode, 100);
+  if (!productCode) return { error: 'product-missing' };
+
+  const catalogUrl = iimmpactUrl(provider, '/v2/catalog');
+  catalogUrl.searchParams.set('product_code', productCode);
+  catalogUrl.searchParams.set('is_active', 'true');
+  const response = await signedProviderRequest(catalogUrl, { method: 'GET', headers: { accept: 'application/json' } }, provider);
+  if (!response.ok || !response.json?.products?.[productCode]) return { error: 'product-not-found' };
+
+  const product = response.json.products[productCode];
+  if (product.is_active === false) return { error: 'product-inactive' };
+  const fields = Array.isArray(product.fields) ? product.fields : [];
+  const values = raw?.fieldValues && typeof raw.fieldValues === 'object' && !Array.isArray(raw.fieldValues) ? raw.fieldValues : {};
+  const selected = raw?.selectedOptions && typeof raw.selectedOptions === 'object' && !Array.isArray(raw.selectedOptions) ? raw.selectedOptions : {};
+  const resolvedOptions = {};
+
+  for (const field of fields) {
+    if (!field || field.type !== 'select') continue;
+    const submitted = selected[field.id];
+    const source = field.data_source || {};
+    const deps = Array.isArray(source.depends_on) ? source.depends_on : [];
+    if (deps.some((id) => {
+      const v = selected[id] !== undefined ? selected[id] : values[id];
+      return v == null || (typeof v !== 'object' && !String(v).trim());
+    })) {
+      if (field.required) return { error: 'field-dependency-missing' };
+      continue;
+    }
+    if (!submitted || typeof submitted !== 'object' || !submitted.code) {
+      if (field.required) return { error: 'option-required' };
+      continue;
+    }
+
+    const params = source.params || {};
+    const resolveParam = (spec) => {
+      if (!spec || typeof spec !== 'object') return '';
+      if (spec.static !== undefined) return spec.static;
+      if (spec.from_field) {
+        const value = selected[spec.from_field] !== undefined ? selected[spec.from_field] : values[spec.from_field];
+        if (value && typeof value === 'object') return value.code || value.account_number || value.value || '';
+        return value == null ? '' : String(value);
+      }
+      return '';
+    };
+    const fieldId = String(resolveParam(params.field_id) || field.id);
+    const accountNumber = String(resolveParam(params.account_number) || '');
+    const billerCode = String(resolveParam(params.biller_code) || '');
+    const optionsUrl = iimmpactUrl(provider, '/v2/options');
+    optionsUrl.searchParams.set('product_code', productCode);
+    optionsUrl.searchParams.set('field_id', fieldId);
+    optionsUrl.searchParams.set('limit', '25000');
+    if (accountNumber) optionsUrl.searchParams.set('account_number', accountNumber);
+    if (billerCode) optionsUrl.searchParams.set('biller_code', billerCode);
+
+    const optionsResponse = await signedProviderRequest(optionsUrl, { method: 'GET', headers: { accept: 'application/json' } }, provider);
+    if (!optionsResponse.ok || !Array.isArray(optionsResponse.json?.items)) return { error: 'options-unavailable' };
+    const found = optionsResponse.json.items.find((item) => String(item?.code || '') === String(submitted.code));
+    if (!found) return { error: 'option-not-found' };
+    resolvedOptions[field.id] = found;
+  }
+
+  const fulfillment = product.fulfillment || {};
+  const accountRaw = iimmpactResolvedFieldValue(fulfillment.account, values, resolvedOptions);
+  const amountRaw = iimmpactResolvedFieldValue(fulfillment.amount, values, resolvedOptions);
+  const accountNumber = typeof accountRaw === 'object'
+    ? String(accountRaw.account_number || accountRaw.code || '').trim()
+    : String(accountRaw || '').trim();
+  const providerAmount = Number(amountRaw);
+  if (!accountNumber || !Number.isFinite(providerAmount) || providerAmount <= 0) return { error: 'fulfillment-invalid' };
+
+  const pricingField = fields.find((field) => field.role === 'pricing' && field.type === 'select');
+  const pricingOption = pricingField ? resolvedOptions[pricingField.id] : null;
+  const sellAmount = Number(pricingOption?.price?.amount);
+  const customerAmount = Number.isFinite(sellAmount) && sellAmount > 0
+    ? Math.round(sellAmount * 100) / 100
+    : iimmpactCustomerPrice(providerAmount, product);
+  if (!Number.isFinite(customerAmount) || customerAmount <= 0) return { error: 'price-invalid' };
+
+  const extras = {};
+  for (const [key, spec] of Object.entries(fulfillment.extras || {})) {
+    const value = iimmpactResolvedFieldValue(spec, values, resolvedOptions);
+    if ((value == null || value === '') && spec?.omit_if_empty) continue;
+    if (value == null || value === '') continue;
+    extras[key] = typeof value === 'object' ? (value.code || value.account_number || value.value || '') : value;
+  }
+
+  return {
+    productCode,
+    productName: String(product.name || productCode).slice(0, 200),
+    accountNumber,
+    sellAmount: customerAmount,
+    providerAmount,
+    costAmount: Number(pricingOption?.cost?.amount) > 0 ? Number(pricingOption.cost.amount) : null,
+    subproductCode: String(extras.subproduct_code || '').slice(0, 200),
+    optionCode: String(pricingOption?.code || '').slice(0, 200),
+    extras,
+    processingTime: String(product.processing_time || '').slice(0, 100),
+  };
+}
+exports.resolveIimmpactMarketplaceProduct = resolveIimmpactMarketplaceProduct;
+
+
 exports.getIimmpactCatalog = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
