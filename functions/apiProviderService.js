@@ -22,7 +22,7 @@ const providerReach = require('./providerReach');
 
 const COLLECTION = 'api_providers';
 const SETTINGS = 'api_settings/service_modes';
-const ALLOWED_SERVICES = ['Recharge', 'Internet', 'Offer Packs', 'Bill Payment', 'Bus', 'Train', 'Flight', 'Mobile Banking', 'Remittance', 'Payment Gateway', 'Entertainment', 'Recharge PIN'];
+const ALLOWED_SERVICES = ['Recharge', 'Internet', 'Offer Packs', 'Bill Payment', 'Bus', 'Train', 'Flight', 'Mobile Banking', 'Remittance', 'Payment Gateway', 'Entertainment', 'Recharge PIN', 'eSIM'];
 // `iimmpactHmac` is not a header, it is a signature over the request itself, so
 // unlike the others it cannot be produced until the body exists. providerAuth
 // returns nothing for it; the headers are added further down, next to the send.
@@ -1173,7 +1173,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   // "60 UC", so Entertainment is keyed by the pack rather than by an operator.
   // The denomination goes along for a voucher range sold one product per
   // denomination.
-  const codeSubject = productCodes.codeSubjectFor(service, raw);
+  const codeSubject = service === 'eSIM' ? String(raw.productCode || '').trim() : productCodes.codeSubjectFor(service, raw);
   const codeOptions = { service, denomination: raw.amount };
   let mappedOperatorCode = productCodes.productCodeFor(provider, codeSubject, codeOptions);
   // Dynamic Catalog is the fallback for IIMMPACT. Manual product-code maps
@@ -1184,7 +1184,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   if (!mappedOperatorCode && provider.authType === 'iimmpactHmac') {
     mappedOperatorCode = await resolveIimmpactCatalogProductCode(provider, service, codeSubject, raw);
   }
-  const providerOperatorCode = raw.operatorCode || mappedOperatorCode;
+  const providerOperatorCode = raw.productCode || raw.operatorCode || mappedOperatorCode;
   // A fixed product's amount is the provider's to state. Ours is the
   // customer's SELL price, and sending that buys the wrong thing or is
   // refused - so where the map says what the provider wants, that is what
@@ -1266,7 +1266,14 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     let body;
     if(method!=='GET'){
       headers['content-type']=headers['content-type']||'application/json';
-      const requestBody = isBangladeshMobileBill ? {
+      const requestBody = service === 'eSIM' && provider.authType === 'iimmpactHmac' ? {
+        refid: vars.requestId,
+        product: providerOperatorCode,
+        account: String(raw.accountNumber || raw.email || '').trim(),
+        amount: vars.amount,
+        remarks: String(raw.remarks || '').slice(0, 500),
+        extras: raw.subproductCode ? { subproduct_code: String(raw.subproductCode).slice(0, 200) } : {},
+      } : isBangladeshMobileBill ? {
         number: vars.billNumber,
         type: 'postpaid',
         operator: mobileBillOperator,
