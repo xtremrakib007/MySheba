@@ -43,7 +43,7 @@ export default function IimmpactCatalogScreen() {
     let alive = true;
     (async () => {
       try {
-        const data = await apiProviderService.getIimmpactCatalogForUser('', 'Recharge', 'MY');
+        const data = await apiProviderService.getIimmpactFullCatalogForUser('MY');
         if (alive) setCatalog(data || {});
       } catch (e) {
         if (alive) setError(e?.message || 'IIMMPACT catalog is unavailable.');
