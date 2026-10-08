@@ -21,6 +21,7 @@ import TrainStep from '../steps/TrainSteps';
 import FlightStep from '../steps/FlightSteps';
 import { validateStep as validateTravelInquiry } from '../steps/TravelInquirySteps';
 import ServiceRateBar from '../components/ServiceRateBar';
+import ESimStep, { validateStep as validateESim } from '../steps/ESimSteps';
 
 const SERVICE_TITLES = {
   recharge: 'Recharge',
@@ -33,6 +34,7 @@ const SERVICE_TITLES = {
   bus: 'Bus',
   train: 'Train',
   flight: 'Flight',
+  esim: 'eSIM',
 };
 
 const STEP_COMPONENTS = {
@@ -46,6 +48,7 @@ const STEP_COMPONENTS = {
   bus: BusStep,
   train: TrainStep,
   flight: FlightStep,
+  esim: ESimStep,
 };
 
 // Each service's required-field check for its current step. Returns null
@@ -61,6 +64,7 @@ const VALIDATORS = {
   bus: validateTravelInquiry,
   train: validateTravelInquiry,
   flight: validateTravelInquiry,
+  esim: validateESim,
 };
 
 // PHASE 4 - MySheba Advertisement System. Maps this screen's own
