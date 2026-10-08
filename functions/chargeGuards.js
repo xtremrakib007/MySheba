@@ -14,6 +14,7 @@ const SERVICE_BY_CALLABLE = {
   chargeBillPayment: 'Bill Payment',
   chargeMobileBanking: 'Mobile Banking',
   chargeRemittance: 'Remittance',
+  chargeEsim: 'eSIM',
 };
 
 function requireAuth(request) {
@@ -215,3 +216,4 @@ exports.chargeEntertainment = wrap('chargeEntertainment');
 exports.chargeBillPayment = wrap('chargeBillPayment');
 exports.chargeMobileBanking = wrap('chargeMobileBanking');
 exports.chargeRemittance = wrap('chargeRemittance');
+exports.chargeEsim = wrap('chargeEsim');

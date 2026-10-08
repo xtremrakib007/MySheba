@@ -32,6 +32,7 @@ const PER_UNIT_PRICE_KEYS = {
   billpayment: 'billPaymentPointCostPerUnit',
   mobilebanking: null,
   remittance: null,
+  esim: null,
 };
 
 function priceForRole(pricing, key, role) {

@@ -74,6 +74,7 @@ const CUSTOMER_SERVICES = [
   // Row 1 - airtime and data
   { key: 'recharge', icon: 'recharge', name: 'Mobile Recharge', kind: 'service', cat: 'recharge', home: true },
   { key: 'internet', icon: 'internet', name: 'Internet', kind: 'service', cat: 'recharge', home: true },
+  { key: 'esim', icon: 'esim', name: 'eSIM', kind: 'service', cat: 'recharge', home: true },
   { key: 'rechargePin', icon: 'recharge', name: 'PIN Generate', kind: 'rechargePin', cat: 'recharge', home: true },
 
   // Row 2 - bills

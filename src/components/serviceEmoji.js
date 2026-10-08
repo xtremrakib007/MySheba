@@ -14,6 +14,7 @@ export const SERVICE_EMOJI = {
   invoices: '🧾',
   mobilebanking: '🏦',
   internet: '📡',
+  esim: '📶',
   remittance: '💸',
   bus: '🚌',
   train: '🚂',

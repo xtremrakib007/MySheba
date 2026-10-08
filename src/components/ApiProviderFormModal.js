@@ -234,7 +234,7 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
         ...baseForm,
         ...IIMMPACT_DEFAULTS,
         ...catalogue,
-        services: ['Recharge', 'Internet', 'Bill Payment', 'Recharge PIN', 'Entertainment'],
+        services: ['Recharge', 'Internet', 'Bill Payment', 'Recharge PIN', 'Entertainment', 'eSIM'],
         service,
         countries: ['MY', 'SG', 'ID', 'IN', 'PH', 'NP', 'PK', 'MM', 'KH'],
         country: 'MY',
