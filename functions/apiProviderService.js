@@ -1404,9 +1404,9 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     const safeResponseId = responseId == null ? null : (typeof responseId === 'string' || typeof responseId === 'number' || typeof responseId === 'boolean' ? String(responseId).slice(0, 200) : null);
     const safeResponseMessage = responseMessage == null ? null : (typeof responseMessage === 'string' || typeof responseMessage === 'number' || typeof responseMessage === 'boolean' ? String(responseMessage).slice(0, 500) : null);
     const result={providerId:provider.id,providerName:provider.name,responseId:safeResponseId,message:safeResponseMessage,status:isProcessing?'processing':'completed'};
-    if (service === 'eSIM') {
-      const deliveryLink = getPath(data, 'data.voucherlink') || getPath(data, 'voucherlink');
-      const deliveryNote = getPath(data, 'data.note') || getPath(data, 'note');
+    if (service === 'eSIM' || service === 'Recharge PIN') {
+      const deliveryLink = getPath(data, 'data.voucherlink') || getPath(data, 'voucherlink') || getPath(data, 'data.voucher_link') || getPath(data, 'voucher_link');
+      const deliveryNote = getPath(data, 'data.note') || getPath(data, 'note') || getPath(data, 'data.redemption_note') || getPath(data, 'redemption_note');
       if (typeof deliveryLink === 'string' && /^https?:\\/\\//i.test(deliveryLink)) result.deliveryLink = deliveryLink.slice(0, 2000);
       if (typeof deliveryNote === 'string') result.deliveryNote = deliveryNote.slice(0, 1000);
     }
