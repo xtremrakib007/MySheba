@@ -103,6 +103,33 @@ async function resolvePackagePricing(db, service, payload) {
   const country = String(clean.country || '').trim().toUpperCase();
   const operatorName = String(clean.operator || '').trim();
 
+  if (service === 'esim') {
+    const found = await apiProviderService.resolveIimmpactEsimPackage(db, clean);
+    if (found.error === 'provider-unconfigured') throw new HttpsError('failed-precondition', 'The eSIM provider is not configured.');
+    if (found.error === 'product-not-found' || found.error === 'product-missing') throw new HttpsError('failed-precondition', 'That eSIM product is no longer available.');
+    if (found.error === 'options-unavailable') throw new HttpsError('unavailable', 'eSIM packages could not be loaded just now. Please try again.');
+    if (found.error === 'package-not-found') throw new HttpsError('failed-precondition', 'That eSIM package is no longer available. Please choose another.');
+    if (found.error) throw new HttpsError('failed-precondition', 'That eSIM package could not be confirmed. Please choose another.');
+
+    const submitted = Number(clean.amount);
+    if (Number.isFinite(submitted) && Math.abs(submitted - found.sellAmount) > 0.01) {
+      throw new HttpsError('failed-precondition', 'This eSIM price has changed - please review your order.');
+    }
+    return {
+      ...base,
+      amount: undefined,
+      total: undefined,
+      raw: {
+        ...clean,
+        amount: found.sellAmount,
+        packageCostAmount: found.costAmount,
+        productCode: found.productCode,
+        package: found.package || clean.package || '',
+        subproductCode: found.subproductCode || clean.subproductCode || '',
+      },
+    };
+  }
+
   if (country !== 'BD') {
     // Outside Bangladesh a package order used to be priced entirely by the
     // client: recompute() takes raw.amount at face value for MY. That was only
