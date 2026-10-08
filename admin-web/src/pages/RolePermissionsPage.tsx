@@ -4,9 +4,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { FEATURE_DEFS, ROLE_LABEL, subscribeFeatureAccess, type FeatureAccessMap } from '../services/toolAccessService';
 import { useEffect, useState } from 'react';
 
-const ROLE_ORDER = ['customer', 'dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin'] as const;
+const ROLE_ORDER = ['customer', 'retail', 'dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin'] as const;
 const ROLE_COLORS: Record<string, string> = {
   customer: 'bg-slate-100 text-slate-700',
+  retail: 'bg-teal-50 text-teal-700',
   dealer: 'bg-blue-50 text-blue-700',
   reseller: 'bg-purple-50 text-purple-700',
   support: 'bg-cyan-50 text-cyan-700',
