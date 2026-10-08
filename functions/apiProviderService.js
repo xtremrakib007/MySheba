@@ -2184,6 +2184,35 @@ exports.getIimmpactCatalog = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asyn
   }
 });
 
+exports.getIimmpactFullCatalogForUser = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  const db = admin.firestore();
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
+  await checkVelocity(db, request.auth.uid, 'getIimmpactFullCatalogForUser', { ip: getClientIp(request) });
+  const country = cleanString(request.data?.country, 2).toUpperCase() || 'MY';
+  const snap = await db.collection(COLLECTION).where('active', '==', true).limit(100).get();
+  const candidates = snap.docs
+    .map((d) => ({ id: d.id, ...(d.data() || {}) }))
+    .filter((p) => p.authType === 'iimmpactHmac')
+    .filter((p) => providerReach.servesCountry(p, country))
+    .sort((a, b) => Number(b.priority || 0) - Number(a.priority || 0));
+  if (!candidates.length) throw new HttpsError('failed-precondition', 'No active IIMMPACT provider is configured for this country.');
+  const provider = candidates[0];
+  Object.assign(provider, await providerSecretService.getCredentials(provider));
+  const url = iimmpactUrl(provider, '/v2/catalog');
+  url.searchParams.set('is_active', 'true');
+  try {
+    const { ok, status, json } = await signedProviderRequest(url, { method: 'GET', headers: { accept: 'application/json' } }, provider);
+    if (!ok || !json || typeof json !== 'object') {
+      const reason = String(getPath(json, 'message') || getPath(json, 'error.message') || `HTTP ${status}`);
+      throw new HttpsError('unavailable', `IIMMPACT catalog request failed: ${reason.slice(0, 300)}`);
+    }
+    return { providerId: provider.id || '', ...publicIimmpactCatalog(json) };
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError('unavailable', String(error?.message || 'Unable to load the full IIMMPACT catalog.').slice(0, 500));
+  }
+});
+
 exports.getIimmpactCatalogForUser = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
