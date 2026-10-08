@@ -62,6 +62,7 @@ export default function IimmpactCatalogScreen() {
     const target = SERVICE_BY_CATEGORY[category.key] || SERVICE_BY_CATEGORY[category.name.toLowerCase()];
     if (target === 'rechargePin') return setScreen('rechargePin');
     if (target) return startService(target);
+    return setScreen('iimmpactCategory:' + String(category.name || ''));
   };
 
   return (
@@ -69,12 +70,12 @@ export default function IimmpactCatalogScreen() {
       <LinearGradient colors={brandGradient} start={{x:0,y:0}} end={{x:1,y:0}} style={styles.header}>
         <HeaderDecor />
         <TouchableOpacity onPress={goBackOrHome} style={styles.back}><Text style={styles.backText}>←</Text></TouchableOpacity>
-        <Text style={styles.headerTitle}>IIMMPACT Marketplace</Text>
+        <Text style={styles.headerTitle}>MySheba Marketplace</Text>
       </LinearGradient>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.hero}>
-          <Text style={styles.title}>Live IIMMPACT Catalog</Text>
-          <Text style={styles.subtitle}>Categories and products are read from the provider catalog. MySheba does not hard-code the available brands or denominations.</Text>
+          <Text style={styles.title}>All IIMMPACT Products</Text>
+          <Text style={styles.subtitle}>Every active IIMMPACT category and product is loaded from the live provider catalog. MySheba uses this marketplace as the central catalog while existing MySheba services keep their native flows.</Text>
         </View>
         {loading && <Text style={styles.info}>Loading live catalog…</Text>}
         {!!error && !loading && <Text style={styles.error}>{error}</Text>}
