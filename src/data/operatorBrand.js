@@ -23,12 +23,19 @@ export const operatorBrand = {
   Airtel: { logo: require('../../assets/operators/airtel.png'), color: '#E4022E', initials: 'AT' },
   Teletalk: { logo: require('../../assets/operators/teletalk.jpg'), color: '#C8102E', initials: 'TT' },
   Skitto: { logo: require('../../assets/operators/skitto.png'), color: '#FFCD00', initials: 'SK' },
+  // Success TopUp also supports these two Bangladesh operators. Their current
+  // brand marks are loaded from their published image assets so the new
+  // operators never fall back to initials on the operator cards.
+  'Brilliant Connect': { logo: { uri: 'https://img.utdstc.com/icon/d45/570/d45570ea863ea1e2332864642ccee322eba229ff4aa1a00165fd16334848d636%3A600' }, color: '#173B5E', initials: 'BC' },
+  Ryze: { logo: { uri: 'https://digibanglatech.news/uploads/images/202508/image_870x580_6893488c2e8e8.jpg' }, color: '#E95A9D', initials: 'RY' },
   // Malaysia
   Celcom: { logo: require('../../assets/operators/celcom.png'), color: '#004990', initials: 'CC' },
   // Celcom and Digi merged into CelcomDigi in 2022 - Digi's old standalone
   // brand is retired, so this key/logo replaces the old `Digi` entry (see
   // src/data/countries.js, which was also renamed to match).
   CelcomDigi: { logo: require('../../assets/operators/celcomdigi.jpg'), color: '#0033A0', initials: 'CD' },
+  // Digi remains a selectable provider label in the Malaysia catalog; use the current CelcomDigi brand asset rather than showing an initials placeholder.
+  Digi: { logo: require('../../assets/operators/celcomdigi.jpg'), color: '#0033A0', initials: 'DI' },
   'U Mobile': { logo: require('../../assets/operators/umobile.jpg'), color: '#8DC63F', initials: 'UM' },
   Hotlink: { logo: require('../../assets/operators/hotlink.png'), color: '#ED1C24', initials: 'HL' },
   XOX: { logo: require('../../assets/operators/xox.jpg'), color: '#D71920', initials: 'XX' },

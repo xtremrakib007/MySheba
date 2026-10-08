@@ -26,7 +26,7 @@ export const remitRates = {
 };
 
 export const rechargeOperators = {
-  BD: ['Grameenphone', 'Robi', 'Banglalink', 'Airtel', 'Teletalk', 'Skitto'],
+  BD: ['Grameenphone', 'Robi', 'Banglalink', 'Airtel', 'Teletalk', 'Skitto', 'Brilliant Connect', 'Ryze'],
   MY: ['Celcom', 'Digi', 'U Mobile', 'Hotlink', 'XOX', 'Tunetalk', 'Unifi', 'Yes'],
   IN: ['Airtel', 'Jio', 'Vi', 'BSNL'],
   NP: ['Ncell', 'NTC'],

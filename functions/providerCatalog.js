@@ -166,7 +166,16 @@ const PRESETS = {
     //
     // Unifi has no entry: iimmpact publishes no internet product for it, so
     // it keeps the built-in package list.
-    operatorCodes: {},
+    operatorCodes: {
+      // IIMMPACT's documented Malaysian mobile-data product codes.
+      Celcom: ['CEL'],
+      Digi: ['DI'],
+      Hotlink: ['HI'],
+      'U Mobile': ['UMI'],
+      Tunetalk: ['TI'],
+      XOX: ['OXI'],
+      Yes: ['YESI'],
+    },
     errorLabel: 'iimmpact',
   },
 };

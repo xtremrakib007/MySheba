@@ -139,7 +139,7 @@ export default function InternetStep({ step }) {
     return (
       <View>
         <ServiceInterruptionNotice notice={interruption} />
-        {!!packageLoading && <FormLabel>Loading Success TopUp packages…</FormLabel>}
+        {!!packageLoading && <FormLabel>Loading MySheba packages…</FormLabel>}
         {!!plansLoading && <FormLabel>Checking which plans this number can buy…</FormLabel>}
         {!!packageError && <FormLabel>{packageError}</FormLabel>}
         {!!plansError && <FormLabel>{plansError}</FormLabel>}
