@@ -1581,10 +1581,12 @@ exports.listSuccessTopUpDrives = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, 
     // it and it is our margin.
     const pricingDoc = await catalog.readPricingDoc(db, operatorName);
     const quote = await customerWalletQuoter(db, request.auth.uid, service, 'BD');
+    const callerProfile = await getProfile(db, request.auth.uid);
+    const callerRole = String(callerProfile?.role || 'customer').toLowerCase();
     const drives = packages
       .filter((pkg) => !catalog.isHidden(pkg, pricingDoc))
       .map((pkg) => {
-        const price = catalog.sellPriceFor(pkg, pricingDoc);
+        const price = catalog.sellPriceFor(pkg, pricingDoc, callerRole);
         return { ...pkg, price, ...(quote(price) || { walletPrice: null, walletCurrency: '' }) };
       });
     return { drives, driveWindowOpen: true, driveWindowMessage: '' };
@@ -1757,13 +1759,15 @@ exports.listProviderDataPlans = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, a
 
   const pricingDoc = await catalog.readPricingDoc(db, operatorName);
   const quote = await customerWalletQuoter(db, request.auth.uid, service, country);
+  const callerProfile = await getProfile(db, request.auth.uid);
+  const callerRole = String(callerProfile?.role || 'customer').toLowerCase();
   const plans = [...byId.values()]
     .filter((pkg) => !catalog.isHidden(pkg, pricingDoc))
     .map((pkg) => {
       // Superadmin's sell price is what the customer sees and is charged. The
       // catalogue denomination stays on the server: it is what the provider
       // must be sent, and it is our margin.
-      const price = catalog.sellPriceFor(pkg, pricingDoc);
+      const price = catalog.sellPriceFor(pkg, pricingDoc, callerRole);
       const { price: _denomination, ...rest } = pkg;
       return { ...rest, price, ...(quote(price) || { walletPrice: null, walletCurrency: '' }) };
     });
