@@ -1282,7 +1282,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
         refid: vars.requestId,
         product: providerOperatorCode,
         account: String(raw.accountNumber || raw.phone || raw.email || raw.billNumber || raw.customerId || '').trim(),
-        amount: vars.amount,
+        amount: Number(raw.providerAmount ?? vars.amount),
         remarks: String(raw.remarks || raw.note || '').slice(0, 500),
         extras: {
           ...(raw.extras && typeof raw.extras === 'object' ? raw.extras : {}),
