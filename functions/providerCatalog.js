@@ -300,7 +300,13 @@ function isPerAccountCatalog(provider) {
  */
 function productCodesFor(provider, operatorName) {
   const config = catalogConfigFor(provider);
-  if (!config || config.dynamicProductDiscovery || !config.operatorCodes) return [];
+  if (!config) return [];
+  // An explicit operator-code map is authoritative even when the provider
+  // also supports Dynamic Product Discovery. IIMMPACT's catalogue is dynamic,
+  // but the Malaysian Internet products have documented stable codes (CEL, DI,
+  // HI, UMI, TI, OXI, YESI). Ignoring the explicit map whenever
+  // dynamicProductDiscovery=true makes those operators appear to have no plans.
+  if (!config.operatorCodes) return [];
   const entry = config.operatorCodes[String(operatorName || '').trim()];
   if (!entry) return [];
   const codes = (Array.isArray(entry) ? entry : [entry])
