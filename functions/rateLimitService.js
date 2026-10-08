@@ -29,6 +29,7 @@ const DEFAULT_LIMITS = {
   // Catalog reads are cheap compared with a charge, but still provider-facing.
   getIimmpactCatalog: { max: 20, windowMinutes: 10 },
   getIimmpactCatalogForUser: { max: 20, windowMinutes: 10 },
+  getIimmpactFullCatalogForUser: { max: 10, windowMinutes: 10 },
   getIimmpactOptions: { max: 40, windowMinutes: 10 },
   // Reads a bill, changes nothing, and re-runs as the customer corrects an
   // account number - so it is looser than a charge and still bounded.
