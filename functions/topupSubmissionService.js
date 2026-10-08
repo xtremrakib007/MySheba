@@ -6,6 +6,7 @@ const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 // One session per platform: a phone and a browser can both be signed in,
 // two phones cannot. See functions/sessionSlots.js.
 const { sessionMatches } = require('./sessionSlots');
+const { assertPublicFundingEnabled } = require('./walletComplianceService');
 
 const MAX_AMOUNT = 100000;
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
@@ -60,6 +61,7 @@ function validMoney(value) {
 exports.submitTopupRequest = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
   const { uid, requestId } = requireAuth(request);
   const db = admin.firestore();
+  await assertPublicFundingEnabled(db);
   const data = request.data || {};
   const amount = validMoney(data.amount);
   if (amount === null) throw new HttpsError('invalid-argument', 'Enter a valid top-up amount.');
