@@ -166,6 +166,7 @@ const PRESETS = {
     operatorCodes: {
       Celcom: ['CEL'],
       Digi: ['DI'],
+      CelcomDigi: ['CEL', 'DI'],
       Hotlink: ['HI'],
       'U Mobile': ['UMI'],
       Tunetalk: ['TI'],
