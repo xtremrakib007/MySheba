@@ -281,24 +281,3 @@ exports.onSupportTicketUpdated = onDocumentUpdated('supportTickets/{id}', async 
 exports.onInquiryCreated = onDocumentCreated('inquiries/{id}', async event => { const i = event.data.data(); await notifyRoles(ADMIN_ROLES, '✈️ New travel inquiry', `${i.type}: ${i.from} → ${i.to} (${i.date})`, { type: 'inquiry', id: event.params.id }); });
 exports.onInquiryUpdated = onDocumentUpdated('inquiries/{id}', async event => { const b = event.data.before.data(), a = event.data.after.data(); if (b.status !== 'closed' && a.status === 'closed' && a.type === 'flight' && a.ticketUrl) await progressionService.incrementTierPoints(a.customerId, `inquiry:${event.id}`); if (b.status === a.status) return; if (a.status === 'contacted') await notifyUser(a.customerId, '📞 We called about your inquiry', `An agent has reached out about your ${a.type} inquiry.`, { type: 'inquiry', id: event.params.id }); else if (a.status === 'closed') await notifyUser(a.customerId, '✅ Inquiry closed', `Your ${a.type} inquiry has been closed.`, { type: 'inquiry', id: event.params.id }); });
 
-exports.auditPricingChanges = onDocumentUpdated('settings/pricing', async (event) => {
-  const before = event.data?.before?.data() || {};
-  const after = event.data?.after?.data() || {};
-  const changed = {};
-  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
-  for (const key of keys) {
-    if (key === 'updatedAt') continue;
-    const a = JSON.stringify(before[key] ?? null);
-    const b = JSON.stringify(after[key] ?? null);
-    if (a !== b) changed[key] = { before: before[key] ?? null, after: after[key] ?? null };
-  }
-  if (!Object.keys(changed).length) return;
-  const performedBy = String(after.updatedBy || 'unknown');
-  await require('./logService').logAudit({
-    action: 'pricing_settings_changed',
-    targetUid: null,
-    performedBy,
-    performedByRole: 'superadmin',
-    details: { changed },
-  });
-});
