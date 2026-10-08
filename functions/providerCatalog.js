@@ -179,8 +179,11 @@ const PRESETS = {
       Hotlink: ['HI'],
       'U Mobile': ['UMI'],
       Tunetalk: ['TI'],
+      TuneTalk: ['TI'],
       XOX: ['OXI'],
+      OneXOX: ['OXI'],
       Yes: ['YESI'],
+      YES: ['YESI'],
     },
     errorLabel: 'iimmpact',
   },
@@ -411,16 +414,24 @@ function toAmount(value) {
 
 function normaliseItem(item, itemMap) {
   const map = itemMap || DEFAULT_ITEM_MAP;
+  // IIMMPACT has returned both {code,label,price,cost,...} and catalog
+  // responses with slightly different field names. Keep the provider's exact
+  // product code as the order id and use denomination/price as the customer
+  // face value; cost is only a fallback when no face value is supplied.
+  const id = firstOf(item, map.id) ?? firstOf(item, ['code', 'product_code', 'productCode', 'id']);
+  const name = firstOf(item, map.name) ?? firstOf(item, ['label', 'title', 'description', 'product_name']);
+  const facePrice = firstOf(item, map.price) ?? firstOf(item, ['denomination', 'price', 'amount', 'rrp']);
+  const fallbackCost = firstOf(item, ['cost']);
   return {
-    id: String(firstOf(item, map.id) ?? '').slice(0, 200),
-    name: String(firstOf(item, map.name) ?? '').slice(0, 200),
+    id: String(id ?? '').slice(0, 200),
+    name: String(name ?? '').slice(0, 200),
     data: String(firstOf(item, map.data) ?? '').slice(0, 100),
     valid: String(firstOf(item, map.valid) ?? '').slice(0, 100),
     description: String(firstOf(item, map.description) ?? '').slice(0, 500),
     features: Array.isArray(firstOf(item, map.features)) ? firstOf(item, map.features).map((x) => String(x).slice(0, 120)).slice(0, 12) : [],
     category: String(firstOf(item, map.category) ?? '').slice(0, 60),
     processingTime: String(firstOf(item, map.processingTime || ['processing_time', 'processingTime', 'processing-time']) ?? '').slice(0, 100),
-    price: toAmount(firstOf(item, map.price)),
+    price: toAmount(facePrice ?? fallbackCost),
   };
 }
 
