@@ -24,8 +24,8 @@ export const ROLE_PERMISSIONS = {
 // the choice can never hand out a role they could not otherwise create.
 export const DOWNGRADABLE = {
   dealer: ['dealer'],
-  admin: ['dealer', 'reseller', 'support', 'finance'],
-  superadmin: ['dealer', 'admin', 'reseller', 'support', 'finance'],
+  admin: ['dealer', 'reseller', 'support', 'finance', 'retail'],
+  superadmin: ['dealer', 'admin', 'reseller', 'support', 'finance', 'retail'],
 };
 
 export const ROLE_RANK = { customer: 0, dealer: 1, reseller: 1, support: 1, finance: 1, retail: 1, admin: 2, superadmin: 3 };
