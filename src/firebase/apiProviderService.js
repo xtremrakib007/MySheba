@@ -93,6 +93,10 @@ export async function getIimmpactCatalogForUser(providerId = '', service = 'Rech
   return (await iimmpactUserCatalogFn({ providerId, service, country })).data || {};
 }
 
+export async function getIimmpactFullCatalogForUser(country = 'MY') {
+  return (await iimmpactFullCatalogFn({ country })).data || {};
+}
+
 export async function getIimmpactOptions({ providerId = '', productCode, fieldId, accountNumber = '', billerCode = '', page = 1, limit = 100, service = 'Recharge', country = '' }) {
   return (await iimmpactOptionsFn({ providerId, productCode, fieldId, accountNumber, billerCode, page, limit, service, country })).data || {};
 }
