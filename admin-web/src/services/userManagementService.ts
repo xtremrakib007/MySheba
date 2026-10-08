@@ -3,10 +3,10 @@ import { collection, getDocs, limit as fbLimit, orderBy, query, startAfter, wher
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../firebase/config';
 import type { AdminRole } from '../contexts/AuthContext';
-export type UserRole = 'user' | 'customer' | 'dealer' | 'reseller' | 'support' | 'finance' | AdminRole;
-export const ALL_ROLES: UserRole[] = ['customer', 'dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin'];
-export const ROLE_RANK: Record<UserRole, number> = { user: 0, customer: 0, dealer: 1, reseller: 1, support: 2, finance: 2, admin: 3, superadmin: 4 };
-export function assignableRoles(actingRole: AdminRole): UserRole[] { return ALL_ROLES.filter((r) => actingRole === 'superadmin' ? r !== 'superadmin' : ['customer', 'dealer', 'reseller', 'support', 'finance'].includes(r)); }
+export type UserRole = 'user' | 'customer' | 'dealer' | 'reseller' | 'support' | 'finance' | 'retail' | AdminRole;
+export const ALL_ROLES: UserRole[] = ['customer', 'retail', 'dealer', 'reseller', 'support', 'finance', 'admin', 'superadmin'];
+export const ROLE_RANK: Record<UserRole, number> = { user: 0, customer: 0, retail: 1, dealer: 1, reseller: 1, support: 2, finance: 2, admin: 3, superadmin: 4 };
+export function assignableRoles(actingRole: AdminRole): UserRole[] { return ALL_ROLES.filter((r) => actingRole === 'superadmin' ? r !== 'superadmin' : ['customer', 'retail', 'dealer', 'reseller', 'support', 'finance'].includes(r)); }
 export function canEditTarget(actingRole: AdminRole, targetRole: UserRole): boolean { return ROLE_RANK[targetRole] < ROLE_RANK[actingRole]; }
 export type VerificationStatus = 'pending' | 'approved' | 'rejected' | 'unknown';
 export interface FeatureAccess { mobileBanking: boolean; recharge: boolean; remittance: boolean; travel: boolean; ticketReseller: boolean; }
