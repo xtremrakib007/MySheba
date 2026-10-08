@@ -2,6 +2,8 @@
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const admin = require('firebase-admin');
 const progressionService = require('./progressionService');
+// Regulated wallet provider boundary. Concrete providers are registered server-side.
+require('./walletProviderBootstrap').ensureWalletProvidersRegistered();
 const growthRewardsService = require('./growthRewardsService');
 const financialLedgerService = require('./financialLedgerService');
 const TIER_QUALIFYING_SERVICES = ['Recharge', 'Internet', 'Bill Payment', 'Mobile Banking', 'Remittance'];
