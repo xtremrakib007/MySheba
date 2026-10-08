@@ -109,7 +109,11 @@ const PRESETS = {
     // Product discovery. This is intentionally separate from /v2/options.
     path: '/v2/catalog',
     method: 'GET',
-    perAccount: false,
+    // Internet plans are resolved per phone number through /v2/options.
+    // This must be true even when an old Firestore provider record still has
+    // /v2/catalog saved; catalogConfigFor normalizes that legacy record.
+    perAccount: true,
+    fieldId: 'plan',
     listPath: 'products',
     dynamicProductDiscovery: true,
     errorLabel: 'iimmpact',
@@ -228,9 +232,10 @@ function catalogConfigFor(provider) {
       String(provider.name || '').trim().toLowerCase() === 'iimmpact' ||
       String(provider.catalogPreset || '').trim() === 'iimmpact-subproducts'
     );
-  // IIMMPACT's /v2/catalog is the product-discovery endpoint.
-  // Do not rewrite it to /v2/options: options are a separate endpoint
-  // queried only after a product/field has been selected.
+  // IIMMPACT's /v2/catalog is product discovery; personalized plans are
+  // fetched separately from /v2/options. Normalize legacy Firestore records
+  // instead of letting /v2/subproducts suppress the current operator map.
+  if (legacyIimmpact) path = '/v2/catalog';
 
   const baseUrl = String(provider.catalogBaseUrl || provider.baseUrl || (preset && preset.baseUrl) || '').trim();
   if (!baseUrl) return null;
@@ -263,7 +268,6 @@ function catalogConfigFor(provider) {
     operatorCodes: (() => {
       const presetCodes = asObject(preset && preset.operatorCodes);
       const recordCodes = asObject(provider.catalogOperatorCodes);
-      if (legacyIimmpact) return null;
       const merged = { ...presetCodes, ...recordCodes };
       return Object.keys(merged).length ? merged : null;
     })(),
@@ -276,9 +280,7 @@ function catalogConfigFor(provider) {
     successValue: provider.catalogSuccessValue !== undefined
       ? provider.catalogSuccessValue
       : (preset ? preset.successValue : undefined),
-    listPath: legacyIimmpact
-      ? 'items'
-      : String(provider.catalogListPath || (preset && preset.listPath) || '').trim(),
+    listPath: String(provider.catalogListPath || (preset && preset.listPath) || '').trim(),
     itemMap: asObject(provider.catalogItemMap) || (preset && preset.itemMap) || DEFAULT_ITEM_MAP,
     types,
     window: windowSpec,
