@@ -9,6 +9,7 @@ const { logAudit, logServerError } = require('./logService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 const { POLICY } = require('./walletComplianceService');
 const { addWalletLedgerEntry } = require('./walletLedgerService');
+const { assertPublicFundingEnabled } = require('./walletComplianceService');
 // One session per platform: a phone and a browser can both be signed in,
 // two phones cannot. See functions/sessionSlots.js.
 const { sessionMatches } = require('./sessionSlots');
@@ -140,6 +141,7 @@ const actor = (uid, caller) => ({ uid, name: caller.name || caller.displayName |
 exports.verifyTopup = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
   const uid = requireAdmin(request);
   const db = admin.firestore();
+  await assertPublicFundingEnabled(db);
   const topupId = String(request.data?.topupId || request.data?.id || '').trim();
   if (!topupId) throw new HttpsError('invalid-argument', 'topupId is required.');
   const ref = db.collection('topups').doc(topupId);
@@ -175,6 +177,7 @@ exports.verifyTopup = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async reque
 exports.completeTopup = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
   const uid = requireAdmin(request);
   const db = admin.firestore();
+  await assertPublicFundingEnabled(db);
   const topupId = String(request.data?.topupId || request.data?.id || '').trim();
   if (!topupId) throw new HttpsError('invalid-argument', 'topupId is required.');
   const ref = db.collection('topups').doc(topupId);
@@ -245,6 +248,7 @@ exports.completeTopup = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async req
 exports.approveTopup = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
   const uid = requireAdmin(request);
   const db = admin.firestore();
+  await assertPublicFundingEnabled(db);
   const topupId = String(request.data?.topupId || request.data?.id || '').trim();
   if (!topupId) throw new HttpsError('invalid-argument', 'topupId is required.');
   const ref = db.collection('topups').doc(topupId);
