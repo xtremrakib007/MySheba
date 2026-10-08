@@ -39,6 +39,9 @@ const BILLERS = {
     // single entry keeps the provider step's shape without pretending to offer
     // a choice.
     jompay: ['JomPAY'],
+    // Tax is not a separate IIMMPACT rail. Government/tax bills that expose
+    // a JomPAY biller are paid through the same JomPAY flow.
+    tax: ['JomPAY'],
   },
   BD: {
     // Prepaid and postpaid are separate billers, not a setting on one: they
@@ -113,6 +116,7 @@ const CATEGORIES = [
   // to Hotlink and never offered the choice.
   { key: 'ewallet', label: 'E-Wallet Reload', art: 'walletTransfer' },
   { key: 'jompay', label: 'JomPAY Bill', art: 'jompay' },
+  { key: 'tax', label: 'Government / Tax (JomPAY)', art: 'jompay' },
 ];
 
 // Only the categories the chosen country actually bills for. Malaysia has no
@@ -284,7 +288,7 @@ export default function BillPaymentStep({ step }) {
     // account suspension as the stated penalty for sending a made-up one. It
     // is asked for here rather than defaulted from the profile precisely so
     // that the person paying confirms whose number it is.
-    if (serviceData.category === 'jompay') {
+    if (['jompay', 'tax'].includes(serviceData.category)) {
       return <View>
         <FormLabel>JomPAY Biller Code</FormLabel>
         <FormInput placeholder='e.g. 818625' keyboardType='number-pad' value={serviceData.billerCode || ''} onChangeText={(v) => updateServiceData({ billerCode: v.replace(/\D/g, '').slice(0, 6) })} />
