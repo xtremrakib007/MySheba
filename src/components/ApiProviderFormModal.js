@@ -300,7 +300,7 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
       // the operator duplicate the same credentials into five provider rows.
       // Offer Packs is deliberately absent: that one stays with Success TopUp,
       // which is Bangladesh's provider, and IIMMPACT does not serve Bangladesh.
-      services: ['Recharge', 'Internet', 'Bill Payment', 'Recharge PIN', 'Entertainment'],
+      services: ['Recharge', 'Internet', 'Bill Payment', 'Recharge PIN', 'Entertainment', 'eSIM'],
       service: f.service || service,
       // Keep Bangladesh out of this preset. MySheba routes Bangladesh to
       // Success TopUp; every other supported country is selected explicitly.
