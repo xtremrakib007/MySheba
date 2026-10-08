@@ -2247,6 +2247,13 @@ async function resolveIimmpactMarketplaceProduct(db, raw) {
   const resolvedOptions = {};
 
   for (const field of fields) {
+    if (field?.required) {
+      const submittedValue = selected[field.id] !== undefined ? selected[field.id] : values[field.id];
+      const shown = submittedValue && typeof submittedValue === 'object'
+        ? (submittedValue.code || submittedValue.account_number || submittedValue.value || submittedValue.label || '')
+        : submittedValue;
+      if (shown == null || String(shown).trim() === '') return { error: 'field-required', field: String(field.id || '').slice(0, 100) };
+    }
     if (!field || field.type !== 'select') continue;
     const submitted = selected[field.id];
     const source = field.data_source || {};
@@ -2292,8 +2299,8 @@ async function resolveIimmpactMarketplaceProduct(db, raw) {
   }
 
   const fulfillment = product.fulfillment || {};
-  const accountRaw = iimmpactResolvedFieldValue(fulfillment.account, values, resolvedOptions);
-  const amountRaw = iimmpactResolvedFieldValue(fulfillment.amount, values, resolvedOptions);
+  const accountRaw = iimmpactResolvedFieldValue(fulfillment.account, values, resolvedOptions) || raw?.accountNumber || '';
+  const amountRaw = iimmpactResolvedFieldValue(fulfillment.amount, values, resolvedOptions) || raw?.providerAmount || raw?.amount || '';
   const accountNumber = typeof accountRaw === 'object'
     ? String(accountRaw.account_number || accountRaw.code || '').trim()
     : String(accountRaw || '').trim();
