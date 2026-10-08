@@ -75,14 +75,22 @@ function touchNGoFee(settings, payload, amount) {
   return Math.round(Math.max(0, num(amount)) * pct) / 100;
 }
 
+const MAX_COMMISSION_BY_ROLE = { customer: 100, retail: 100, reseller: 100, dealer: 100, admin: 100 };
+function enforceCommissionLimit(amount, role) {
+  const n = Math.max(0, num(amount));
+  const max = MAX_COMMISSION_BY_ROLE[String(role || 'customer').toLowerCase()] ?? 100;
+  if (n > max) throw new Error('Commission exceeds the configured safety limit.');
+  return Math.round(n * 100) / 100;
+}
 function addCommissionLedgerEntry(tx, db, { uid, amount, transactionId, currency, balanceBefore, balanceAfter, role, service }) {
-  if (!(amount > 0)) return;
+  const safeAmount = enforceCommissionLimit(amount, role);
+  if (!(safeAmount > 0)) return;
   const ref = db.collection('commissionLedger').doc();
   tx.set(ref, {
     userId: uid,
     role,
     service,
-    amount,
+    amount: safeAmount,
     currency,
     transactionId,
     status: 'earned',
@@ -92,4 +100,4 @@ function addCommissionLedgerEntry(tx, db, { uid, amount, transactionId, currency
   });
 }
 
-module.exports = { DEFAULT_RULES, resolveCommission, touchNGoFee, addCommissionLedgerEntry, isTouchNGo, tierFee };
+module.exports = { DEFAULT_RULES, resolveCommission, touchNGoFee, addCommissionLedgerEntry, isTouchNGo, tierFee, enforceCommissionLimit };
