@@ -60,7 +60,7 @@ export default function PackagePicker({ packages, label, selectedName, onSelect,
               name={p.name}
               // The kind is in the heading or the chip above, so repeating it on
               // every card only crowds out the data and validity.
-              detail={[p.data, p.valid].filter(Boolean).join(' • ')}
+              detail={[p.data, p.valid, p.processingTime ? `Processing: ${p.processingTime}` : ''].filter(Boolean).join(' • ')}
               price={priceOf(p)}
               currency={currencyOf(p)}
               selected={selectedName === p.name}
