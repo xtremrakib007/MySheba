@@ -19,6 +19,7 @@ const ROLE_LABELS: Record<PricingRole, string> = {
   admin: 'Admin',
 };
 
+const ROLE_LABELS: Record<string,string> = { customer:'Customer', retail:'Retail', dealer:'Dealer', reseller:'Reseller', admin:'Admin' };
 const ROLE_PRICE_LABELS: Record<RolePriceKey, string> = {
   webviewAccessCost: 'FOMEMA / Visa Status Check (pts)',
   webviewSubmitCost: 'Malaysia Arrival Card / Passport Submission (pts)',
