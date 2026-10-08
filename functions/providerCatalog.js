@@ -499,7 +499,9 @@ async function fetchCatalog(provider, { operator, type, account } = {}, { reques
     throw new Error(`${config.errorLabel} prices these plans per phone number, so a number is required.`);
   }
 
-  const useIimmpactOptions = config.dynamicProductDiscovery && config.perAccount && String(provider.authType || '') === 'iimmpactHmac';
+  const isIimmpact = String(provider.authType || '') === 'iimmpactHmac'
+    || String(provider.name || '').trim().toLowerCase() === 'iimmpact';
+  const useIimmpactOptions = config.dynamicProductDiscovery && config.perAccount && isIimmpact;
   const requestPath = useIimmpactOptions ? '/v2/options' : config.path;
   const requestQueryTemplate = useIimmpactOptions ? { product_code: '{{operator}}', field_id: '{{fieldId}}', account_number: '{{account}}', limit: '25000' } : config.queryTemplate;
   const requestListPath = useIimmpactOptions ? 'items' : config.listPath;
