@@ -3,9 +3,10 @@
 // same defaults, same role-override shape). Kept in its own file/page,
 // separate from Rates (rates/current — exchange rates).
 
-import { deleteField, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import { auth } from '../firebase/config';
-import { db } from '../firebase/config';
+import { db, functions } from '../firebase/config';
 
 const SETTINGS_DOC = doc(db, 'settings', 'pricing');
 
@@ -109,7 +110,8 @@ export async function fetchPricing(): Promise<PricingSettings> {
 }
 
 export async function updatePricing(key: keyof PricingSettings, value: PricingSettings[keyof PricingSettings]): Promise<void> {
-  await setDoc(SETTINGS_DOC, { [key]: value, updatedAt: serverTimestamp(), updatedBy: auth.currentUser?.uid || null }, { merge: true });
+  const fn = httpsCallable(functions, 'savePricingSettings');
+  await fn({ key: String(key), value });
 }
 
 export async function updateRolePrice(
@@ -117,22 +119,22 @@ export async function updateRolePrice(
   key: RolePriceKey,
   value: number | null
 ): Promise<void> {
-  const path = `rolePricing.${role}.${key}`;
-  if (value === null) {
-    await setDoc(SETTINGS_DOC, { [path]: deleteField(), updatedAt: serverTimestamp(), updatedBy: auth.currentUser?.uid || null }, { merge: true });
-    return;
-  }
-  await setDoc(SETTINGS_DOC, { [path]: value, updatedAt: serverTimestamp(), updatedBy: auth.currentUser?.uid || null }, { merge: true });
+  const current = await fetchPricing();
+  const rolePricing = { ...(current.rolePricing || {}) };
+  const roleValues = { ...(rolePricing[role] || {}) } as Partial<Record<RolePriceKey, number>>;
+  if (value === null) delete roleValues[key]; else roleValues[key] = value;
+  rolePricing[role] = roleValues;
+  await updatePricing('rolePricing', rolePricing);
 }
 
 export async function saveCatalogProductPrice(entry: CatalogProductPrice): Promise<void> {
   const current = await fetchPricing();
   const list = current.catalogProductPricing.filter((item) => item.id !== entry.id);
   list.push({ ...entry, service: entry.service.trim(), country: entry.country.trim().toUpperCase(), operator: entry.operator.trim(), productId: entry.productId.trim(), productName: entry.productName.trim(), currency: entry.currency.trim().toUpperCase() || 'MYR' });
-  await setDoc(SETTINGS_DOC, { catalogProductPricing: list, updatedAt: serverTimestamp(), updatedBy: auth.currentUser?.uid || null }, { merge: true });
+  await updatePricing('catalogProductPricing', list);
 }
 
 export async function deleteCatalogProductPrice(id: string): Promise<void> {
   const current = await fetchPricing();
-  await setDoc(SETTINGS_DOC, { catalogProductPricing: current.catalogProductPricing.filter((item) => item.id !== id), updatedAt: serverTimestamp(), updatedBy: auth.currentUser?.uid || null }, { merge: true });
+  await updatePricing('catalogProductPricing', current.catalogProductPricing.filter((item) => item.id !== id));
 }
