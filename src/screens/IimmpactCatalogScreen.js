@@ -32,7 +32,7 @@ function flattenGroups(groups, out = []) {
 }
 
 export default function IimmpactCatalogScreen() {
-  const { goBackOrHome, startService } = useApp();
+  const { goBackOrHome, startService, setScreen } = useApp();
   const { colors, brandGradient } = useTheme();
   const [catalog, setCatalog] = useState(null);
   const [error, setError] = useState('');
@@ -60,7 +60,7 @@ export default function IimmpactCatalogScreen() {
 
   const openCategory = (category) => {
     const target = SERVICE_BY_CATEGORY[category.key] || SERVICE_BY_CATEGORY[category.name.toLowerCase()];
-    if (target === 'rechargePin') return startService('rechargePin');
+    if (target === 'rechargePin') return setScreen('rechargePin');
     if (target) return startService(target);
   };
 
