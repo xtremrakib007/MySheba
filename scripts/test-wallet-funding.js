@@ -148,4 +148,15 @@ assert(/out of YOUR wallet/.test(screen), 'approval must say whose balance it sp
 
 console.log('  the funding screen is wired to the chain it describes');
 
+console.log('Public funding is fail-closed until partner approval');
+const compliance = strip(read('functions/walletComplianceService.js'));
+assert(/publicFundingDefaultEnabled: false/.test(compliance), 'public funding must default to disabled');
+assert(/assertPublicFundingEnabled/.test(strip(read('functions/topupSubmissionService.js'))), 'customer deposits must pass the funding-policy gate');
+assert(/assertPublicFundingEnabled/.test(strip(read('functions/secureTopupReview.js'))), 'top-up credit must pass the funding-policy gate');
+assert(/Direct self-credit is disabled/.test(read('functions/secureWalletMutations.js')), 'self-credit must fail closed');
+assert(/Direct administrative wallet credit is disabled/.test(read('functions/adminTopUpService.js')), 'admin balance minting must fail closed');
+assert(/match \/settings\/walletCompliance/.test(read('firestore.rules')), 'wallet compliance configuration needs a rules boundary');
+
+console.log('  public funding remains closed until an approved partner is configured');
+
 console.log('\nEvery hop is a transfer, and nobody sends what they do not hold.');
