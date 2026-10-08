@@ -10,10 +10,16 @@ function requestId() {
   return Crypto.randomUUID().replace(/-/g, '');
 }
 
-export async function purchaseRechargePin({ operator, amount }) {
+export async function purchaseRechargePin({ operator, amount, country = 'MY', productCode = '', subproductCode = '', productName = '' }) {
   const session = await getSessionProof();
-  const { data } = await purchaseFn({ operator, amount, requestId: requestId(), ...session });
+  const { data } = await purchaseFn({
+    operator, amount, country, productCode, subproductCode, productName,
+    requestId: requestId(), ...session
+  });
   return data;
 }
 
-export async function getRechargePin(transactionId) { const { data } = await httpsCallable(functions, 'getRechargePin')({ transactionId }); return data; }
+export async function getRechargePin(transactionId) {
+  const { data } = await httpsCallable(functions, 'getRechargePin')({ transactionId });
+  return data;
+}
