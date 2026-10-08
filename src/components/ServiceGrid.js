@@ -94,6 +94,7 @@ export function useServiceAction() {
     if (s.kind === 'salary') return openSalary();
     if (s.kind === 'documents') return openMyDocuments();
     if (s.kind === 'rechargePin') return setScreen('rechargePin');
+    if (s.kind === 'iimmpactCatalog') return setScreen('iimmpactCatalog');
     if (s.kind === 'moreFeaturesLink') return setScreen('moreFeatures');
     if (s.kind === 'walletTransfer') return setScreen('transferPoints');
     if (s.kind === 'kyc') return setScreen('verifyIdentity');
