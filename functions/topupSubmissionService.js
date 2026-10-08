@@ -11,7 +11,7 @@ const { assertPublicFundingEnabled } = require('./walletComplianceService');
 const MAX_AMOUNT = 100000;
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const MONEY_RE = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
-const ALLOWED_ROLES = ['customer', 'dealer', 'reseller'];
+const ALLOWED_ROLES = ['customer', 'retail', 'dealer', 'reseller'];
 const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const DEVICE_ID_RE = /^[A-Za-z0-9-]{16,100}$/;
 function requireSessionMatch(request, user) { const sessionId=request.data?.sessionId, deviceId=request.data?.deviceId; if(typeof sessionId!=='string'||!SESSION_ID_RE.test(sessionId)||typeof deviceId!=='string'||!DEVICE_ID_RE.test(deviceId)) throw new HttpsError('failed-precondition','Your secure session is missing. Please sign in again.'); if(!sessionMatches(user, { sessionId, deviceId })) throw new HttpsError('permission-denied','This device session is no longer active. Please sign in again.'); }
