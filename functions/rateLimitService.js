@@ -39,6 +39,7 @@ const DEFAULT_LIMITS = {
   getNetworkStatus: { max: 60, windowMinutes: 10 },
   listProviderProductCodes: { max: 20, windowMinutes: 60 },
   deleteApiProvider: { max: 10, windowMinutes: 60 },
+  savePricingSettings: { max: 10, windowMinutes: 60 },
 };
 
 // Global abuse limits apply in addition to each operation's UID/IP limit. They
