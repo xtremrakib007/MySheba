@@ -2075,6 +2075,60 @@ function publicIimmpactOptions(data) {
   };
 }
 
+async function resolveIimmpactEsimPackage(db, raw) {
+  const country = String(raw?.country || '').trim().toUpperCase();
+  const provider = await providerCatalog.readProvider(db, 'eSIM', { country, strictCountry: Boolean(country) });
+  if (!provider || provider.authType !== 'iimmpactHmac') return { error: 'provider-unconfigured' };
+
+  const productCode = cleanString(raw?.productCode, 100);
+  const packageId = cleanString(raw?.packageId || raw?.package_id || raw?.subproductCode, 200);
+  if (!productCode) return { error: 'product-missing' };
+
+  const catalogUrl = iimmpactUrl(provider, '/v2/catalog');
+  catalogUrl.searchParams.set('product_code', productCode);
+  catalogUrl.searchParams.set('is_active', 'true');
+  const catalogResponse = await signedProviderRequest(catalogUrl, { method: 'GET', headers: { accept: 'application/json' } }, provider);
+  if (!catalogResponse.ok || !catalogResponse.json?.products?.[productCode]) return { error: 'product-not-found' };
+
+  const product = catalogResponse.json.products[productCode];
+  const pricingField = Array.isArray(product.fields)
+    ? product.fields.find((field) => field && field.role === 'pricing')
+      || product.fields.find((field) => field && field.type === 'select')
+    : null;
+
+  if (!pricingField) {
+    const amount = Number(raw?.amount);
+    if (!Number.isFinite(amount) || amount <= 0) return { error: 'amount-invalid' };
+    const unit = Number(product?.pricing?.unit_price);
+    const cost = Number.isFinite(unit) ? Math.round(amount * unit * 100) / 100 : amount;
+    return { productCode, sellAmount: amount, costAmount: cost, package: String(raw?.package || product.name || ''), subproductCode: '' };
+  }
+
+  const fieldId = String(pricingField.id || '').trim();
+  if (!fieldId) return { error: 'pricing-field-missing' };
+  const optionUrl = iimmpactUrl(provider, '/v2/options');
+  optionUrl.searchParams.set('product_code', productCode);
+  optionUrl.searchParams.set('field_id', fieldId);
+  optionUrl.searchParams.set('limit', '25000');
+  const optionsResponse = await signedProviderRequest(optionUrl, { method: 'GET', headers: { accept: 'application/json' } }, provider);
+  if (!optionsResponse.ok || !Array.isArray(optionsResponse.json?.items)) return { error: 'options-unavailable' };
+
+  const option = optionsResponse.json.items.find((item) => String(item?.code || '') === packageId);
+  if (!option) return { error: 'package-not-found' };
+  const sellAmount = Number(option?.price?.amount ?? option?.denomination);
+  const costAmount = Number(option?.cost?.amount ?? sellAmount);
+  if (!Number.isFinite(sellAmount) || sellAmount <= 0) return { error: 'package-price-invalid' };
+  return {
+    productCode,
+    sellAmount,
+    costAmount: Number.isFinite(costAmount) && costAmount > 0 ? costAmount : sellAmount,
+    package: String(option.label || option.description || option.code || raw?.package || '').slice(0, 500),
+    subproductCode: String(option.code || '').slice(0, 200),
+    option,
+  };
+}
+
+
 exports.getIimmpactCatalog = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
