@@ -29,6 +29,8 @@ export const operatorBrand = {
   // brand is retired, so this key/logo replaces the old `Digi` entry (see
   // src/data/countries.js, which was also renamed to match).
   CelcomDigi: { logo: require('../../assets/operators/celcomdigi.jpg'), color: '#0033A0', initials: 'CD' },
+  // Digi remains a selectable provider label in the Malaysia catalog; use the current CelcomDigi brand asset rather than showing an initials placeholder.
+  Digi: { logo: require('../../assets/operators/celcomdigi.jpg'), color: '#0033A0', initials: 'DI' },
   'U Mobile': { logo: require('../../assets/operators/umobile.jpg'), color: '#8DC63F', initials: 'UM' },
   Hotlink: { logo: require('../../assets/operators/hotlink.png'), color: '#ED1C24', initials: 'HL' },
   XOX: { logo: require('../../assets/operators/xox.jpg'), color: '#D71920', initials: 'XX' },
