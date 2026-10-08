@@ -237,13 +237,11 @@ export default function EntertainmentStep({ step }) {
   return null;
 }
 export function validateStep(step, serviceData) {
-  if (step === 0 && !serviceData.gameKey) return 'Please choose a game.';
-  if (step === 1 && !serviceData.packageId) return 'Please choose a pack.';
+  if (step === 0 && !serviceData.gameKey) return 'Please choose a game or entertainment product.';
+  if (step === 1 && !serviceData.packageId) return 'Please choose a package.';
   if (step === 2) {
     const game = gameByKey(serviceData.gameKey);
-    if (!(serviceData.playerId || '').trim()) return `Please enter your ${game ? game.playerIdLabel : 'player ID'}.`;
-    // A Mobile Legends ID without its zone, or a Genshin UID without its
-    // server, is not something anybody can deliver to.
+    if (!(serviceData.playerId || '').trim()) return `Please enter your ${game ? game.playerIdLabel : 'player / account ID'}.`;
     if (game && game.needsServer && !(serviceData.serverId || '').trim()) return `Please enter your ${game.serverLabel}.`;
   }
   return null;
