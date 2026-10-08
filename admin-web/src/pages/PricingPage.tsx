@@ -14,12 +14,12 @@ import {
 
 const ROLE_LABELS: Record<PricingRole, string> = {
   customer: 'Customer',
+  retail: 'Retail',
   dealer: 'Dealer',
   reseller: 'Reseller',
   admin: 'Admin',
 };
 
-const ROLE_LABELS: Record<string,string> = { customer:'Customer', retail:'Retail', dealer:'Dealer', reseller:'Reseller', admin:'Admin' };
 const ROLE_PRICE_LABELS: Record<RolePriceKey, string> = {
   webviewAccessCost: 'FOMEMA / Visa Status Check (pts)',
   webviewSubmitCost: 'Malaysia Arrival Card / Passport Submission (pts)',
@@ -29,6 +29,8 @@ const ROLE_PRICE_LABELS: Record<RolePriceKey, string> = {
   salaryOtCost: 'Salary & OT (pts/month)',
   rechargePointCostPerUnit: 'Recharge point cost per unit',
   internetPointCostPerUnit: 'Internet package point cost per unit',
+  offerPacksPointCostPerUnit: 'Offer Packs point cost per unit',
+  entertainmentPointCostPerUnit: 'Entertainment point cost per unit',
 };
 
 function FieldRow({ label, value, suffix, onSave }: { label: string; value: number; suffix?: string; onSave: (next: number) => Promise<void> }) {
