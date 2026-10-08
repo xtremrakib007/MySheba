@@ -10,8 +10,8 @@ import { functions, db } from './config';
 // scripts/test-user-roles.js fails if the two drift again.
 export const ROLE_PERMISSIONS = {
   dealer: { canCreate: ['customer'], canUpgradeTo: [] },
-  admin: { canCreate: ['customer', 'dealer', 'reseller', 'support', 'finance'], canUpgradeTo: ['dealer', 'reseller', 'support', 'finance'] },
-  superadmin: { canCreate: ['customer', 'dealer', 'admin', 'reseller', 'support', 'finance'], canUpgradeTo: ['dealer', 'admin', 'reseller', 'support', 'finance'] },
+  admin: { canCreate: ['customer', 'dealer', 'reseller', 'support', 'finance', 'retail'], canUpgradeTo: ['dealer', 'reseller', 'support', 'finance', 'retail'] },
+  superadmin: { canCreate: ['customer', 'dealer', 'admin', 'reseller', 'support', 'finance', 'retail'], canUpgradeTo: ['dealer', 'admin', 'reseller', 'support', 'finance', 'retail'] },
   support: { canCreate: [], canUpgradeTo: [] },
   finance: { canCreate: [], canUpgradeTo: [] },
 };
@@ -28,7 +28,7 @@ export const DOWNGRADABLE = {
   superadmin: ['dealer', 'admin', 'reseller', 'support', 'finance'],
 };
 
-export const ROLE_RANK = { customer: 0, dealer: 1, reseller: 1, support: 1, finance: 1, admin: 2, superadmin: 3 };
+export const ROLE_RANK = { customer: 0, dealer: 1, reseller: 1, support: 1, finance: 1, retail: 1, admin: 2, superadmin: 3 };
 
 export function downgradeTargetsFor(callerRole, targetRole) {
   const perms = ROLE_PERMISSIONS[callerRole];
