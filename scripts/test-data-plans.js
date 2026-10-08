@@ -343,6 +343,41 @@ const fakeDb = (providers) => ({
   assert.strictEqual(await catalog.perAccountCatalogFor(fakeDb([]), 'Internet', 'MY', 'Hotlink'), null);
 }));
 
+console.log('\nIIMMPACT Malaysia operator/package boundary');
+
+test('Malaysia Internet shows exactly IIMMPACT documented operators', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src/data/countries.js'), 'utf8');
+  assert.ok(/export const internetOperators/.test(source));
+  assert.ok(/MY:\s*\['Celcom', 'Digi', 'Hotlink', 'U Mobile', 'Tunetalk', 'XOX', 'Yes'\]/.test(source));
+  assert.ok(!/MY:\s*\[[^\]]*'Unifi'[^\]]*\]/.test(
+    source.slice(source.indexOf('export const internetOperators'), source.indexOf('// Who can be bought as a PIN voucher')),
+  ));
+});
+
+test('Malaysia Internet screen does not use the recharge operator list', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src/steps/InternetSteps.js'), 'utf8');
+  assert.ok(/internetOperators/.test(source));
+  assert.ok(!/import \{ countries, rechargeOperators \}/.test(source));
+  assert.ok(/const OPERATOR_LIST = internetOperators/.test(source));
+});
+
+test('IIMMPACT Internet cannot fall back to invented packages', () => {
+  const out = resolvePackageSource({
+    country: 'MY',
+    perNumber: null,
+    perNumberError: '',
+    successTopUp: [],
+    builtIn: BUILT_IN,
+    requirePerNumber: true,
+  });
+  assert.strictEqual(out.blocked, true);
+  assert.deepStrictEqual(out.packages, []);
+});
+ 
 console.log('\nThe number, and the price');
 
 test('a number reaches the provider in the national form its examples use', () => {
