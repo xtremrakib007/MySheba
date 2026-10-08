@@ -18,11 +18,13 @@ const { assertWalletUnfrozen } = require('./walletFreeze');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 const { inferWalletCurrency, money } = require('./walletCurrencyService');
 const { logAudit, logServerError } = require('./logService');
+const { POLICY } = require('./walletComplianceService');
 // One session per platform: a phone and a browser can both be signed in,
 // two phones cannot. See functions/sessionSlots.js.
 const { sessionMatches } = require('./sessionSlots');
 
 const COLLECTION = 'walletFundingRequests';
+const WALLET_CURRENCY = POLICY.currency;
 const MAX_AMOUNT = 1000000;
 const MONEY_RE = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
 const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
@@ -95,7 +97,7 @@ exports.requestWalletFunding = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, as
     fromRole: me.role,
     approverRole,
     amount,
-    currency: inferWalletCurrency(me),
+    currency: inferWalletCurrency(me) || WALLET_CURRENCY,
     note,
     status: 'pending',
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
