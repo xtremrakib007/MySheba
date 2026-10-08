@@ -434,6 +434,7 @@ exports.chargeInternetPackage=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },asyn
 exports.chargeOfferPacks=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>chargeProduct(r,'offerpacks',r.data?.payload,r.data?.customer));
 exports.chargeEntertainment=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>chargeProduct(r,'entertainment',r.data?.payload,r.data?.customer));
 exports.chargeEsim=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>chargeProduct(r,'esim',r.data?.payload,r.data?.customer));
+exports.chargeIimmpactProduct=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>chargeProduct(r,'iimmpact',r.data?.payload,r.data?.customer));
 exports.chargeBillPayment=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>chargeProduct(r,'billpayment',r.data?.payload,r.data?.customer));
 exports.chargeMobileBanking=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>chargeProduct(r,'mobilebanking',r.data?.payload,r.data?.customer));
 exports.chargeRemittance=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>chargeProduct(r,'remittance',r.data?.payload,r.data?.customer));
