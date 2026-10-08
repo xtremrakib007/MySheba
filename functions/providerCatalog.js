@@ -309,7 +309,15 @@ function productCodesFor(provider, operatorName) {
   // HI, UMI, TI, OXI, YESI). Ignoring the explicit map whenever
   // dynamicProductDiscovery=true makes those operators appear to have no plans.
   if (!config.operatorCodes) return [];
-  const entry = config.operatorCodes[String(operatorName || '').trim()];
+  const rawName = String(operatorName || '').trim();
+  const direct = config.operatorCodes[rawName];
+  // UI/provider naming varies ("TuneTalk"/"Tunetalk", "Umobile"/"U Mobile",
+  // "OneXOX"/"XOX"). Match by a normalized alias before declaring that the
+  // operator has no IIMMPACT product. The product code itself remains exact.
+  const normalizeOperator = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const wanted = normalizeOperator(rawName);
+  const alias = Object.keys(config.operatorCodes).find((name) => normalizeOperator(name) === wanted);
+  const entry = direct || (alias ? config.operatorCodes[alias] : null);
   if (!entry) return [];
   const codes = (Array.isArray(entry) ? entry : [entry])
     .map((c) => String(c || '').trim())
