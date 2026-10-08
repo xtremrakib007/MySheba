@@ -341,6 +341,7 @@ assert.throws(() => api.validate({ service: 'Recharge', name: 'Test', baseUrl: '
   // a Bangladesh-only provider and came back "outcome is uncertain [503]" on a
   // wallet that had already been charged.
   const resolve = api.resolveExecutionMode;
+const autoCountryModes = api._test_autoCountryModes;
   const bdOnly = [{ country: 'BD', active: true }];
   const everywhere = [{ country: 'ALL', active: true }];
   const bdOn = { countryModes: { BD: { Recharge: 'api' } } };
@@ -578,3 +579,15 @@ assert.throws(() => api.validate({ service: 'Recharge', name: 'Test', baseUrl: '
 }
 
 console.log('apiProviderService tests: PASS');
+
+// Global IIMMPACT reach with Bangladesh explicitly excluded must enable every
+// other supported country, without inventing a Bangladesh API route.
+{
+  const autoCountryModes = api._test_autoCountryModes;
+  const provider = { country: 'ALL', countries: ['ALL'], excludedCountries: ['BD'], active: true, service: 'Recharge', services: ['Recharge'] };
+  const out = autoCountryModes(provider, {});
+  assert.strictEqual(out.BD, undefined);
+  assert.strictEqual(out.MY.Recharge, 'api');
+  assert.strictEqual(out.TH.Recharge, 'api');
+}
+

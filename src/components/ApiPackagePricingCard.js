@@ -125,6 +125,7 @@ export default function ApiPackagePricingCard({ service = 'Internet', title = '�
               <Text style={styles.meta}>
                 {[p.data, p.valid, p.category].filter(Boolean).join(' • ')}
               </Text>
+              {!!p.processingTime && <Text style={styles.processing}>Processing time: {p.processingTime}</Text>}
               <Text style={styles.meta}>
                 Cost BDT {Number(p.costPrice).toFixed(2)}
                 {p.overridden ? `  →  selling BDT ${Number(p.sellPrice).toFixed(2)}` : '  •  selling at cost'}
@@ -208,5 +209,6 @@ const styles = StyleSheet.create({
   btnPrimaryText: { fontSize: 11, fontWeight: '800', color: '#fff' },
   error: { fontSize: 12, color: '#c0392b', marginBottom: 8 },
   notice: { fontSize: 11, lineHeight: 17, color: '#8a6d00', backgroundColor: '#fff8e1', borderRadius: 8, padding: 8, marginBottom: 10 },
+  processing: { fontSize: 11, fontWeight: '700', marginTop: 3, opacity: 0.8 },
   dim: { opacity: 0.45 },
 });

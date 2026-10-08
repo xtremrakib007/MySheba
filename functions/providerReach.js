@@ -43,6 +43,10 @@ function isGlobal(provider) {
 function isSpecificFor(provider, country) {
   const code = String(country || '').trim().toUpperCase();
   if (!code || code === GLOBAL) return false;
+  const excluded = Array.isArray(provider?.excludedCountries)
+    ? provider.excludedCountries.map((x) => String(x || '').trim().toUpperCase())
+    : [];
+  if (excluded.includes(code)) return false;
   const countries = providerCountries(provider);
   // The GLOBAL half is belt-and-braces: providerCountries already drops every
   // other country once ALL is present, so a list cannot hold both. It stays
@@ -55,7 +59,12 @@ function isSpecificFor(provider, country) {
 
 /** Would reach this country at all, by name or by serving all of them. */
 function servesCountry(provider, country) {
-  return isGlobal(provider) || isSpecificFor(provider, country);
+  const code = String(country || '').trim().toUpperCase();
+  const excluded = Array.isArray(provider?.excludedCountries)
+    ? provider.excludedCountries.map((x) => String(x || '').trim().toUpperCase())
+    : [];
+  if (excluded.includes(code)) return false;
+  return isGlobal(provider) || isSpecificFor(provider, code);
 }
 
 /**
