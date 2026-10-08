@@ -5,6 +5,7 @@ const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { logAudit, logServerError } = require('./logService');
 const { getWalletCurrencyAndFx, baseToWallet } = require('./walletCurrencyService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+const { enforceRequestEnvelope } = require('./securityGateway');
 const { addWalletLedgerEntry } = require('./walletLedgerService');
 // One session per platform: a phone and a browser can both be signed in,
 // two phones cannot. See functions/sessionSlots.js.
@@ -65,6 +66,7 @@ function priceForRole(pricing, key, role) {
 }
 
 exports.chargeWallet = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  enforceRequestEnvelope(request, { maxBytes: 16 * 1024 });
   const uid = auth(request);
   const rid = requestId(request);
   const { kind, key } = request.data || {};
