@@ -406,9 +406,21 @@ function fillTemplate(template, values) {
  * with no error anywhere. Providers are no more consistent about number
  * formatting than they are about true vs "true".
  */
-function toAmount(value) {
+function toAmount(value, depth = 0) {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
-  const n = Number(String(value ?? '').replace(/[^0-9.-]/g, ''));
+  if (value && typeof value === 'object' && !Array.isArray(value) && depth < 3) {
+    // IIMMPACT may encode price, cost, rrp, or denomination as a money object
+    // (for example { amount: 30, currency: "MYR" }) rather than a scalar.
+    for (const key of ['amount', 'value', 'price', 'denomination', 'total']) {
+      if (value[key] !== undefined && value[key] !== null) {
+        const amount = toAmount(value[key], depth + 1);
+        if (amount > 0) return amount;
+      }
+    }
+    return 0;
+  }
+  const cleaned = String(value ?? '').replace(/,/g, '').replace(/[^0-9.-]/g, '');
+  const n = Number(cleaned);
   return Number.isFinite(n) ? n : 0;
 }
 
