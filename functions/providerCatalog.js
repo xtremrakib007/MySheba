@@ -255,10 +255,18 @@ function catalogConfigFor(provider) {
       ? provider.catalogPerAccount === true
       : Boolean(preset && preset.perAccount),
     fieldId: String(provider.catalogFieldId || (preset && preset.fieldId) || (legacyIimmpact ? 'plan' : '')).trim(),
-    operatorCodes:
-      asObject(provider.catalogOperatorCodes) ||
-      (legacyIimmpact ? null : (preset && preset.operatorCodes)) ||
-      null,
+    // Merge provider overrides ON TOP of the preset map. A provider record may
+    // intentionally override one operator, but it must not accidentally erase
+    // the other documented IIMMPACT Malaysia Internet codes (HI, UMI, TI, OXI,
+    // YESI). This was the reason a partially configured map could leave only
+    // Celcom/Digi visible.
+    operatorCodes: (() => {
+      const presetCodes = asObject(preset && preset.operatorCodes);
+      const recordCodes = asObject(provider.catalogOperatorCodes);
+      if (legacyIimmpact) return null;
+      const merged = { ...presetCodes, ...recordCodes };
+      return Object.keys(merged).length ? merged : null;
+    })(),
     dynamicProductDiscovery: provider.catalogDynamicProductDiscovery !== undefined
       ? provider.catalogDynamicProductDiscovery === true
       : Boolean(preset && preset.dynamicProductDiscovery),
