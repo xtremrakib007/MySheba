@@ -578,12 +578,16 @@ const autoCountryModes = api._test_autoCountryModes;
   console.log('  finance can refund and reconcile, through one role list');
 }
 
-console.log('apiProviderService tests: PASS');test('global IIMMPACT exclusions auto-enable every non-excluded country', () => {
+console.log('apiProviderService tests: PASS');
+
+// Global IIMMPACT reach with Bangladesh explicitly excluded must enable every
+// other supported country, without inventing a Bangladesh API route.
+{
+  const autoCountryModes = api._test_autoCountryModes;
   const provider = { country: 'ALL', countries: ['ALL'], excludedCountries: ['BD'], active: true, service: 'Recharge', services: ['Recharge'] };
   const out = autoCountryModes(provider, {});
   assert.strictEqual(out.BD, undefined);
   assert.strictEqual(out.MY.Recharge, 'api');
   assert.strictEqual(out.TH.Recharge, 'api');
-});
-
+}
 
