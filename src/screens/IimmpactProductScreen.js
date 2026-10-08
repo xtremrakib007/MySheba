@@ -190,10 +190,12 @@ export default function IimmpactProductScreen({ category }) {
     const fulfillment = selectedProduct?.fulfillment || {};
     const accountValue = fulfillmentValue(fulfillment.account);
     const amountValue = fulfillmentValue(fulfillment.amount);
-    const accountNumber = typeof accountValue === 'object'
+    const fallbackAccount = String(values.__account || '').trim();
+    const fallbackAmount = Number(values.__amount);
+    const accountNumber = (typeof accountValue === 'object'
       ? String(accountValue.account_number || accountValue.code || '').trim()
-      : String(accountValue || '').trim();
-    const amount = Number(amountValue);
+      : String(accountValue || '').trim()) || fallbackAccount;
+    const amount = Number.isFinite(Number(amountValue)) && Number(amountValue) > 0 ? Number(amountValue) : fallbackAmount;
 
     if (!selectedProduct?.code) return;
     if (!accountNumber) return Alert.alert('Account required', 'Enter the account, phone, player ID or reference required for this product.');
@@ -304,6 +306,43 @@ export default function IimmpactProductScreen({ category }) {
               </View>
             </View>
 
+            {(() => {
+              const fulfillment = selectedProduct?.fulfillment || {};
+              const accountFieldId = String(fulfillment?.account?.from_field || '');
+              const amountFieldId = String(fulfillment?.amount?.from_field || '');
+              const hasAccountField = accountFieldId && fields.some((field) => String(field.id) === accountFieldId);
+              const hasAmountField = amountFieldId && fields.some((field) => String(field.id) === amountFieldId);
+              return (
+                <>
+                  {!hasAccountField && (
+                    <View style={st.field}>
+                      <Text style={st.label}>Account / Recipient *</Text>
+                      <TextInput
+                        style={st.input}
+                        placeholder="Enter account, phone, player ID or recipient"
+                        placeholderTextColor={colors.textSecondary}
+                        value={String(values.__account || '')}
+                        onChangeText={(text) => setValues((x) => ({...x, __account: text}))}
+                        autoCapitalize="none"
+                      />
+                    </View>
+                  )}
+                  {!hasAmountField && (
+                    <View style={st.field}>
+                      <Text style={st.label}>Amount / Denomination *</Text>
+                      <TextInput
+                        style={st.input}
+                        placeholder="Enter amount"
+                        placeholderTextColor={colors.textSecondary}
+                        value={String(values.__amount || '')}
+                        onChangeText={(text) => setValues((x) => ({...x, __amount: text}))}
+                        keyboardType="decimal-pad"
+                      />
+                    </View>
+                  )}
+                </>
+              );
+            })()}
             {fields.map((field) => {
               const id = String(field.id || field.name || '');
               const value = rawValue(values, selectedOptions, id);
