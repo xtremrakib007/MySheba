@@ -52,6 +52,7 @@ const TRANSACTION_RAW_FIELDS = {
   billpayment: new Set(['phone', 'country', 'amount', 'provider', 'category', 'accountNumber', 'billNumber', 'mobileNumber', 'monthName', 'note', 'billerCode', 'ref2', 'icNumber', 'subproductCode']),
   mobilebanking: new Set(['phone', 'country', 'amount', 'provider', 'category', 'accountNumber']),
   esim: new Set(['country', 'productCode', 'accountNumber', 'email', 'amount', 'package', 'subproductCode', 'remarks']),
+  iimmpact: new Set(['country', 'productCode', 'productName', 'accountNumber', 'amount', 'providerAmount', 'packageCostAmount', 'package', 'subproductCode', 'optionCode', 'processingTime', 'remarks']),
   remittance: new Set([
     'phone', 'senderName', 'senderPhone', 'senderCompany', 'senderPassportNo', 'senderPassportExpiry',
     'senderAddress', 'receiverFirstName', 'receiverLastName', 'receiverRelationship', 'receiverPhone',
@@ -81,7 +82,7 @@ function priceForRole(p,key,role){const v=role&&p.rolePricing&&p.rolePricing[rol
 function safePrice(p,key,role){const raw=priceForRole(p,key,role);if(raw==null||raw==='')return 1;const n=Number(raw);if(!Number.isFinite(n)||n<0)throw new HttpsError('failed-precondition','Pricing configuration is invalid.');return n===0?1:n;}
 function amountToPoints(n,c,r){const x=Number(n)||0;const country=String(c||'').trim().toUpperCase();if(country==='MY')return{x,rate:1};const k=RECHARGE_RATE_KEYS[country];if(!k)throw new HttpsError('invalid-argument','Unsupported recharge country.');const rate=Number(r[k]);if(!Number.isFinite(rate)||rate<=0)throw new HttpsError('failed-precondition','The exchange rate for this country is unavailable.');return{x:Math.round(x/rate*100)/100,rate};}
 function recompute(service,raw,rates){const r=raw||{};if(service==='recharge'||service==='internet'||service==='offerpacks'||service==='entertainment'){const country=String(r.country||'').trim().toUpperCase();if(!country)throw new HttpsError('invalid-argument','Recharge country is required.');const q=amountToPoints(r.amount,country,rates);return{amount:q.x,total:q.x,exchangeRate:country!=='MY'?q.rate:null,exchangeRateSource:country!=='MY'?RECHARGE_RATE_KEYS[country]:null};}if(service==='mobilebanking'){const a=Math.round((Number(r.myr)||0)*100)/100;return{amount:a,total:a,exchangeRate:Number(rates.mobileBanking)||110.5,exchangeRateSource:'mobileBanking'};}if(service==='billpayment'){const country=String(r.country||'').trim().toUpperCase();if(!['MY','BD'].includes(country))throw new HttpsError('invalid-argument','Unsupported bill payment country.');const raw=Math.round((Number(r.amount)||0)*100)/100;if(!Number.isFinite(raw)||raw<=0)throw new HttpsError('invalid-argument','Bill amount must be greater than zero.');const q=amountToPoints(raw,country,rates);return{amount:q.x,total:q.x,exchangeRate:q.rate,exchangeRateSource:country==='MY'?'MYR':RECHARGE_RATE_KEYS[country]};}if(service==='remittance'){const country=String(r.country||'').trim().toUpperCase();const allowed=['BD','NP','PK','PH','IN','ID','MM'];if(!allowed.includes(country))throw new HttpsError('invalid-argument','Unsupported remittance country.');const a=Math.round((Number(r.sendAmt)||0)*100)/100;const fee=0;const rate=country==='BD'?(r.method==='deposit'?Number(rates.BD_ACC):Number(rates.BD_CASH)):Number(rates[country]);if(!Number.isFinite(rate)||rate<=0)throw new HttpsError('failed-precondition','The exchange rate for this country is unavailable.');return{amount:a,total:Math.round((a+fee)*100)/100,exchangeRate:rate,exchangeRateSource:country==='BD'?(r.method==='deposit'?'BD_ACC':'BD_CASH'):country};}return{amount:Number(r.amount)||0,total:Number(r.total)||0,exchangeRate:null,exchangeRateSource:null};}
-const PACKAGE_SERVICE_LABELS = { internet: 'Internet', offerpacks: 'Offer Packs', entertainment: 'Entertainment' };
+const PACKAGE_SERVICE_LABELS = { internet: 'Internet', offerpacks: 'Offer Packs', entertainment: 'Entertainment', iimmpact: 'IIMMPACT' };
 
 /**
  * For a Bangladesh package order, replace the client's amount with the price
@@ -128,6 +129,42 @@ async function resolvePackagePricing(db, service, payload) {
         productCode: found.productCode,
         package: found.package || clean.package || '',
         subproductCode: found.subproductCode || clean.subproductCode || '',
+      },
+    };
+  }
+
+  if (service === 'iimmpact') {
+    const found = await apiProviderService.resolveIimmpactMarketplaceProduct(db, clean);
+    if (found.error === 'provider-unconfigured') throw new HttpsError('failed-precondition', 'The IIMMPACT Marketplace provider is not configured for this country.');
+    if (['product-missing', 'product-not-found', 'product-inactive'].includes(found.error)) {
+      throw new HttpsError('failed-precondition', 'That IIMMPACT product is no longer available.');
+    }
+    if (['option-required', 'option-not-found', 'field-dependency-missing', 'field-required'].includes(found.error)) {
+      throw new HttpsError('failed-precondition', 'That IIMMPACT option is no longer available. Please reload the product and choose it again.');
+    }
+    if (found.error === 'options-unavailable') throw new HttpsError('unavailable', 'IIMMPACT options could not be loaded just now. Please try again.');
+    if (found.error) throw new HttpsError('failed-precondition', 'That IIMMPACT product could not be confirmed. Please review it and try again.');
+    const submitted = Number(clean.amount);
+    if (Number.isFinite(submitted) && Math.abs(submitted - found.sellAmount) > 0.01) {
+      throw new HttpsError('failed-precondition', 'This IIMMPACT price has changed - please review your order.');
+    }
+    return {
+      ...base,
+      amount: undefined,
+      total: undefined,
+      raw: {
+        ...clean,
+        amount: found.sellAmount,
+        providerAmount: found.providerAmount,
+        packageCostAmount: found.providerAmount,
+        productCode: found.productCode,
+        productName: found.productName,
+        accountNumber: found.accountNumber,
+        package: found.productName,
+        subproductCode: found.subproductCode || clean.subproductCode || '',
+        optionCode: found.optionCode || clean.optionCode || '',
+        extras: found.extras || {},
+        processingTime: found.processingTime || '',
       },
     };
   }

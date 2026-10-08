@@ -55,7 +55,7 @@ export default function MoreFeaturesScreen() {
         <TouchableOpacity style={styles.backBtn} onPress={goBackOrHome} accessibilityRole="button" accessibilityLabel="Back">
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>All Services</Text>
+        <Text style={styles.headerTitle}>More Features</Text>
       </LinearGradient>
 
       <ScrollView contentContainerStyle={styles.content}>

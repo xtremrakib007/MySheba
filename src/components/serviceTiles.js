@@ -67,44 +67,31 @@ export function groupTilesByCategory(tiles) {
 }
 
 const CUSTOMER_SERVICES = [
-  // The home screen is these twelve, in this order: four rows of three, no
-  // short row and no gap. Declaration order IS render order, so the rows below
-  // are the rows on the phone.
-  //
-  // Row 1 - airtime and data
+  // Fixed customer homepage: exactly 12 tiles, 3 columns x 4 rows.
   { key: 'recharge', icon: 'recharge', name: 'Mobile Recharge', kind: 'service', cat: 'recharge', home: true },
-  { key: 'internet', icon: 'internet', name: 'Internet', kind: 'service', cat: 'recharge', home: true },
-  { key: 'esim', icon: 'esim', name: 'eSIM', kind: 'service', cat: 'recharge', home: true },
   { key: 'rechargePin', icon: 'recharge', name: 'PIN Generate', kind: 'rechargePin', cat: 'recharge', home: true },
-
-  // Row 2 - bills
-  { key: 'billpayment', icon: 'billpayment', name: 'Bill Pay', kind: 'service', cat: 'recharge', home: true },
+  { key: 'internet', icon: 'internet', name: 'Internet Packages', kind: 'service', cat: 'recharge', home: true },
+  { key: 'billpayment', icon: 'billpayment', name: 'Bill Payment', kind: 'service', cat: 'recharge', home: true },
+  { key: 'tngewallet', icon: 'walletTransfer', art: 'photoTngewallet', name: "Touch'n Go eWallet", kind: 'tngShortcut', cat: 'recharge', home: true,
+    seed: { country: 'MY', category: 'ewallet', provider: "Touch 'n Go eWallet" }, startStep: 3 },
   { key: 'jompay', icon: 'billpayment', art: 'photoJompay', name: 'JomPAY', kind: 'billShortcut', cat: 'recharge', home: true,
     seed: { country: 'MY', category: 'jompay', provider: 'JomPAY' }, startStep: 3 },
-  { key: 'tngewallet', icon: 'walletTransfer', art: 'photoTngewallet', name: 'TnG eWallet', kind: 'tngShortcut', cat: 'money', home: true,
-    seed: { country: 'MY', category: 'ewallet', provider: "Touch 'n Go eWallet" }, startStep: 3 },
-
-  // Row 3 - money
-  { key: 'mobilebanking', icon: 'mobilebanking', name: 'Mobile Banking', kind: 'service', cat: 'money', home: true },
-  { key: 'remittance', icon: 'remittance', name: 'Remittance', kind: 'service', cat: 'money', home: true },
-  { key: 'offerpacks', icon: 'internet', name: 'Offer Packs', kind: 'service', cat: 'recharge', home: true },
-
-  // Row 4 - tickets
   { key: 'flight', icon: 'flight', name: 'Flight Ticket', kind: 'service', cat: 'travel', home: true },
   { key: 'bus', icon: 'bus', name: 'Bus Ticket', kind: 'buspicker', cat: 'travel', home: true },
   { key: 'train', icon: 'train', name: 'Train Ticket', kind: 'webview', cat: 'travel', home: true },
+  { key: 'entertainment', icon: 'entertainment', name: 'Entertainment', kind: 'service', cat: 'recharge', home: true },
+  { key: 'esim', icon: 'esim', name: 'eSIM', kind: 'service', cat: 'recharge', home: true },
+  { key: 'moreFeaturesTile', icon: 'more', name: 'More Features', kind: 'moreFeaturesLink', cat: 'recharge', home: true },
 
-  // Row 5 - immigration, then the way to everything else
-  { key: 'mydigital', icon: 'mydigital', name: 'Malaysia Arrival Card', kind: 'webview', cat: 'immigration', home: true },
-  { key: 'passport', icon: 'passport', name: 'Passport Appointment', kind: 'webview', cat: 'immigration', home: true },
-  { key: 'moreFeaturesTile', icon: 'more', name: 'More Features', kind: 'moreFeaturesLink', home: true },
-
-  // Everything below is reached through More Features. Still categorised,
-  // because that screen groups them.
-  { key: 'entertainment', icon: 'entertainment', name: 'Entertainment', kind: 'service', cat: 'recharge' },
+  // Everything else is reached through More Features.
+  { key: 'mobilebanking', icon: 'mobilebanking', name: 'Mobile Banking', kind: 'service', cat: 'money' },
+  { key: 'remittance', icon: 'remittance', name: 'Remittance', kind: 'service', cat: 'money' },
+  { key: 'offerpacks', icon: 'internet', name: 'Offer Packs', kind: 'service', cat: 'recharge' },
   { key: 'iimmpactCatalog', icon: 'more', name: 'MySheba Marketplace', kind: 'iimmpactCatalog', cat: 'recharge' },
   { key: 'visa', icon: 'visa', name: 'Visa', kind: 'webview', cat: 'immigration' },
   { key: 'fomema', icon: 'fomema', name: 'FOMEMA', kind: 'webview', cat: 'immigration' },
+  { key: 'mydigital', icon: 'mydigital', name: 'Malaysia Arrival Card', kind: 'webview', cat: 'immigration' },
+  { key: 'passport', icon: 'passport', name: 'Passport Appointment', kind: 'webview', cat: 'immigration' },
   { key: 'salary', icon: 'salary', name: 'Salary & OT', kind: 'salary', cat: 'personal' },
 ];
 
@@ -486,14 +473,10 @@ export function visibleTiles({ role, can, webviewPages, tileLabels, viewer, dyna
   // The fallback stays, for a different reason than before: a list where
   // nothing is flagged would otherwise render as a single More Services tile
   // and nothing else, which looks like the app failed to load.
-  const flagged = active.filter((service) => service.home);
-  if (flagged.length === 0) return active;
-  // More Features is flagged for home like everything else now, so appending it
-  // unconditionally drew it twice - once in its declared place at the end of the
-  // last row, once again on a row of its own below.
-  if (flagged.some((service) => service.kind === 'moreFeaturesLink')) return flagged;
-  const moreTile = active.find((service) => service.kind === 'moreFeaturesLink');
-  return [...flagged, ...(moreTile ? [moreTile] : [])];
+  // All roles use the same fixed twelve-tile service homepage. Management
+  // tools are deliberately kept in More Features / role hubs.
+  const homeKeys = new Set(CUSTOMER_SERVICES.filter((service) => service.home).map((service) => service.key));
+  return active.filter((service) => homeKeys.has(service.key));
 }
 
 /**
