@@ -103,7 +103,7 @@ export default function PricingPage() {
     const entry = { ...catalogDraft, id: catalogDraft.id || `catalog-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` };
     await saveCatalogProductPrice(entry);
     setPricing((prev) => ({ ...prev, catalogProductPricing: [...prev.catalogProductPricing.filter((x) => x.id !== entry.id), entry] }));
-    setCatalogDraft({ id: '', service: catalogDraft.service, country: catalogDraft.country, operator: '', productId: '', productName: '', costPrice: 0, currency: catalogDraft.currency, active: true, prices: { customer: 0, retail: 0, reseller: 0, dealer: 0, admin: 0 } });
+    setCatalogDraft({ id: '', service: catalogDraft.service, country: catalogDraft.country, operator: '', productId: '', productName: '', costPrice: 0, currency: catalogDraft.currency, active: true, prices: { customer: 0, retail: 0, reseller: 0, dealer: 0, admin: 0 }, commissions: { customer: { type: 'fixed', value: 0 }, retail: { type: 'fixed', value: 0 }, reseller: { type: 'fixed', value: 0 }, dealer: { type: 'fixed', value: 0 }, admin: { type: 'fixed', value: 0 } } });
   }
   async function saveCommissionRules() { await updatePricing('commissionRules' as keyof PricingSettings, commissionDraft as any); setPricing((prev) => ({ ...prev, commissionRules: commissionDraft })); }
   async function removeCatalog(id: string) {
