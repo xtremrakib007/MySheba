@@ -14,7 +14,7 @@ const COLLECTIONS = Object.freeze({
   operators: 'operatorCatalog',
 });
 
-const ROLES = ['customer','dealer','reseller','support','finance','admin','superadmin'];
+const ROLES = ['customer','retail','dealer','reseller','support','finance','admin','superadmin'];
 const FEATURE_KINDS = ['webview','service','screen'];
 const SERVICE_KEYS = ['recharge','rechargePin','mobilebanking','internet','esim','offerpacks','entertainment','billpayment','remittance','bus','train','flight','topup','history','support','myAccount','profile','walletTransfer','myDocuments','salary','kyc'];
 const SCREEN_KEYS = ['moreFeatures','history','topup','profile','myAccount','transferPoints','verifyIdentity','support'];
