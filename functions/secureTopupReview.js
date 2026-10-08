@@ -3,9 +3,11 @@ const admin = require('firebase-admin');
 const { assertWalletUnfrozen } = require('./walletFreeze');
 const { hasCapability } = require('./accessControl');
 const { inferWalletCurrency } = require('./walletCurrencyService');
+const WALLET_CURRENCY = POLICY.currency;
 const ZERO_DECIMAL_CURRENCIES = new Set(['IDR', 'KHR', 'MMK']);
 const { logAudit, logServerError } = require('./logService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+const { POLICY } = require('./walletComplianceService');
 // One session per platform: a phone and a browser can both be signed in,
 // two phones cannot. See functions/sessionSlots.js.
 const { sessionMatches } = require('./sessionSlots');
