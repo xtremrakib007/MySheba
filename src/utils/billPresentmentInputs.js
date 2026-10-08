@@ -10,7 +10,7 @@
 // flow.
 
 /** Billers that need more than an account number before a bill can be read. */
-const NEEDS_AMOUNT = new Set(['jompay']);
+const NEEDS_AMOUNT = new Set(['jompay', 'tax']);
 
 export function presentmentRequest(serviceData) {
   const d = serviceData || {};
