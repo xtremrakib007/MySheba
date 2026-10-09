@@ -81,10 +81,14 @@ export default function RemittanceReceipt({ transaction = {}, profile = {}, oper
     'MySheba Remittance Receipt',
     `Transaction ID: ${val(d.txId)}`,
     `Date & Time: ${val(d.created)}`,
-    `Amount: ${val(d.send)}`,
+    ...d.rows.map(([label, value]) => `${label}: ${val(value)}`),
+    ...d.receiverRows.map(([label, value]) => `${label}: ${val(value)}`),
+    `Send amount: ${val(d.send)} ${val(d.curr)}`,
+    `Transfer fee: ${val(d.fee)}`,
+    `Total: ${val(d.total)} ${val(d.curr)}`,
     `Status: ${val(transaction.status || 'pending').toUpperCase()}`,
     'Provider cost and commission are not included.',
-  ].join('\n') }).catch(() => {})}><Text style={styles.printText}>Share Receipt</Text></TouchableOpacity>
+  ].join('\\n') }).catch(() => {})}><Text style={styles.printText}>Share Receipt</Text></TouchableOpacity>
 </View></ScrollView></View>;
 }
 
