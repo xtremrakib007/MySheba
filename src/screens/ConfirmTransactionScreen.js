@@ -2,7 +2,6 @@ import React, { useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
-import { showAlert } from '../utils/appAlert';
 import { amountToPoints } from '../data/countries';
 
 const TITLES = {
@@ -73,7 +72,6 @@ export default function ConfirmTransactionScreen() {
     !isPrivateKey(key) && value !== undefined && value !== null && String(value).trim() !== '' &&
     !['cost', 'costPrice', 'providerCost', 'wholesalePrice', 'commission', 'commissionAmount', 'providerCommission', 'profit', 'profitAmount'].includes(key)
   );
-  const role = profile?.role || 'customer';
 
   const confirm = async () => {
     if (submitting) return;
