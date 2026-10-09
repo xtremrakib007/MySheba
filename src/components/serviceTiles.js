@@ -566,6 +566,7 @@ export function moreFeaturesSections({ role = 'customer', can, webviewPages, til
   const overflow = overflowTiles({ role, can, webviewPages, tileLabels, isActive, excludeKinds: kinds })
     .filter((tile) => tile.cat !== 'personal' && !keys.has(tile.key));
   return { sections: groupTilesByCategory(overflow), account };
+}
 
 export function overflowTiles({ role = 'customer', can, webviewPages, tileLabels, isActive = () => true, excludeKinds = [] }) {
   const exclude = new Set(excludeKinds);

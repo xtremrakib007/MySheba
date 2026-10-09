@@ -11,7 +11,7 @@
  * string, which is what makes the wording and the two names testable.
  */
 
-const COMPANY_NAME = 'SatuLink Solutions Sdn Bhd (1641555-U)';
+const COMPANY_NAME = 'MySheba';
 const WEBSITE = 'www.mysheba.top';
 const EMAIL = 'info@mysheba.top';
 

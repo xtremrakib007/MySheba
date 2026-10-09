@@ -306,7 +306,6 @@ export default function AnimatedSplash({ ready, onFinished }) {
           },
         ]}
       >
-        {'Powered By - SATULINK SOLUTIONS SDN BHD'}
       </Animated.Text>
     </Animated.View>
   );
