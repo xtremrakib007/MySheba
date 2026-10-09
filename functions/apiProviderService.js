@@ -2573,6 +2573,56 @@ exports.getIimmpactOptions = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asyn
   }
 });
 
+/**
+ * Superadmin-only IIMMPACT package options, including provider cost.
+ * The ordinary getIimmpactOptions callable intentionally strips cost fields.
+ */
+exports.getIimmpactOptionsForSuperadmin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  const db = admin.firestore();
+  await assertSuperadmin(db, request);
+  await checkVelocity(db, request.auth.uid, 'getIimmpactOptionsForSuperadmin', { ip: getClientIp(request) });
+  const country = cleanString(request.data?.country, 2).toUpperCase() || 'MY';
+  const productCode = cleanString(request.data?.productCode, 100);
+  const fieldId = cleanString(request.data?.fieldId, 100);
+  if (!productCode || !fieldId) throw new HttpsError('invalid-argument', 'productCode and fieldId are required.');
+  const provider = await findActiveIimmpactProviderForCountry(db, country);
+  if (!provider || provider.authType !== 'iimmpactHmac') throw new HttpsError('failed-precondition', 'No active IIMMPACT provider is configured for this country.');
+  const url = iimmpactUrl(provider, '/v2/options');
+  url.searchParams.set('product_code', productCode);
+  url.searchParams.set('field_id', fieldId);
+  url.searchParams.set('page', String(Math.max(1, Math.min(100000, Number(request.data?.page) || 1))));
+  url.searchParams.set('limit', String(Math.max(1, Math.min(25000, Number(request.data?.limit) || 25000))));
+  const accountNumber = cleanString(request.data?.accountNumber, 200);
+  const billerCode = cleanString(request.data?.billerCode, 100);
+  if (accountNumber) url.searchParams.set('account_number', accountNumber);
+  if (billerCode) url.searchParams.set('biller_code', billerCode);
+  try {
+    const { ok, status, json } = await signedProviderRequest(url, { method: 'GET', headers: { accept: 'application/json' } }, provider);
+    if (!ok || !json || typeof json !== 'object') {
+      const reason = String(getPath(json, 'message') || getPath(json, 'error.message') || `HTTP ${status}`);
+      throw new HttpsError('unavailable', `IIMMPACT options request failed: ${reason.slice(0, 300)}`);
+    }
+    const items = Array.isArray(json.items) ? json.items.map((item) => ({
+      code: cleanString(item?.code, 300),
+      name: cleanString(item?.name || item?.label || item?.description || item?.code, 500),
+      label: cleanString(item?.label, 500),
+      description: cleanString(item?.description, 1000),
+      price: item?.price ?? null,
+      cost: item?.cost ?? item?.provider_cost ?? item?.cost_price ?? null,
+      denomination: item?.denomination ?? null,
+      rrp: item?.rrp ?? item?.recommended_retail_price ?? null,
+      currency: cleanString(item?.currency || item?.cost_currency || item?.price?.currency || item?.cost?.currency, 8),
+      has_loss_risk: item?.has_loss_risk === true || item?.hasLossRisk === true,
+      validity: item?.validity ?? item?.duration ?? null,
+      data: item?.data ?? item?.volume ?? null,
+    })) : [];
+    return { product_code: cleanString(json.product_code, 100) || productCode, field_id: cleanString(json.field_id, 100) || fieldId, items, meta: json.meta && typeof json.meta === 'object' ? json.meta : {} };
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError('unavailable', String(error?.message || 'Unable to load IIMMPACT package options.').slice(0, 400));
+  }
+});
+
 exports.listProviderProductCodes = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
