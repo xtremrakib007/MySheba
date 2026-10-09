@@ -31,11 +31,15 @@ function inputKeyboard(field) {
   return 'default';
 }
 
-function optionLabel(option) {
+function optionLabel(option, showWholesale = false) {
   const parts = [option?.label || option?.description || option?.code];
   if (option?.validity) parts.push(option.validity);
   const price = option?.price?.amount;
-  if (price != null) parts.push('RM ' + Number(price).toFixed(2));
+  if (price != null) parts.push('Sell RM ' + Number(price).toFixed(2));
+  const cost = option?.cost?.amount;
+  if (showWholesale && cost != null) parts.push('Provider cost RM ' + Number(cost).toFixed(4));
+  const rrp = option?.rrp?.amount;
+  if (showWholesale && rrp != null) parts.push('RRP RM ' + Number(rrp).toFixed(2));
   return parts.filter(Boolean).join(' • ');
 }
 
@@ -45,6 +49,7 @@ export default function IimmpactProductScreen({ category }) {
   }, [category]);
 
   const { goBackOrHome, profile } = useApp();
+  const isSuperadmin = String(profile?.role || '').toLowerCase() === 'superadmin';
   const { colors, brandGradient } = useTheme();
   const [catalog, setCatalog] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -374,7 +379,7 @@ export default function IimmpactProductScreen({ category }) {
                           const selected = selectedOptions[id]?.code === option?.code;
                           return (
                             <TouchableOpacity key={String(option?.code || index)} style={[st.option, selected && st.optionSelected]} onPress={() => chooseOption(field, option)}>
-                              <Text style={[st.optionText, selected && st.optionTextSelected]}>{optionLabel(option)}</Text>
+                              <Text style={[st.optionText, selected && st.optionTextSelected]}>{optionLabel(option, isSuperadmin)}</Text>
                             </TouchableOpacity>
                           );
                         })}
