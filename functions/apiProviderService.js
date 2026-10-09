@@ -1495,7 +1495,7 @@ exports.resolveIimmpactEsimPackage = resolveIimmpactEsimPackage;
 exports.resolveExecutionMode = resolveExecutionMode;
 exports.providersForService = providersForService;
 exports.COUNTRY_CODES = COUNTRY_CODES;
-exports._test = { isPrivateIp, resolveExecutionMode, pinnedLookup, validateBaseUrl, validateHeaders, validateTemplate, getPath, render, providerAuth, validate, matchesStatus, classifyResponse, providerAmountFor };
+exports._test = { isPrivateIp, resolveExecutionMode, pinnedLookup, validateBaseUrl, validateHeaders, validateTemplate, getPath, render, providerAuth, validate, matchesStatus, classifyResponse, providerAmountFor, _test_autoCountryModes: autoCountryModes };
 
 exports.testApiProvider = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
@@ -2132,27 +2132,109 @@ function iimmpactUrl(provider, path) {
   return new URL(cleanPath, base);
 }
 
+const IIMMPACT_PRIVATE_KEYS = new Set([
+  'cost',
+  'cost_amount',
+  'cost_price',
+  'provider_cost',
+  'provider_cost_amount',
+  'provider_amount',
+  'cost_currency',
+  'provider_currency',
+  'rrp',
+  'recommended_retail_price',
+  'denomination_unit_price',
+  'has_loss_risk',
+  'provider_details',
+  'pricing',
+]);
+
+function scrubIimmpactPublicValue(value, depth = 0) {
+  if (depth > 12 || value == null) return value;
+
+  if (Array.isArray(value)) {
+    return value.slice(0, 1000)
+      .map((item) => scrubIimmpactPublicValue(item, depth + 1));
+  }
+
+  if (typeof value !== 'object') return value;
+
+  const safe = {};
+  for (const [key, child] of Object.entries(value)) {
+    const normalizedKey = String(key)
+      .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+      .toLowerCase()
+      .replace(/[-\s]/g, '_');
+    const compactKey = normalizedKey.replace(/_/g, '');
+    if (IIMMPACT_PRIVATE_KEYS.has(normalizedKey) ||
+        IIMMPACT_PRIVATE_KEYS.has(compactKey)) continue;
+    safe[key] = scrubIimmpactPublicValue(child, depth + 1);
+  }
+  return safe;
+}
+
 function publicIimmpactCatalog(catalog) {
   const products = {};
+
   for (const [code, product] of Object.entries(catalog?.products || {})) {
-    if (!product || typeof product !== 'object') continue;
-    const { pricing: _pricing, ...safeProduct } = product;
-    products[code] = safeProduct;
+    if (!product || typeof product !== 'object' || Array.isArray(product)) {
+      continue;
+    }
+
+    // Explicit allowlist: never expose the raw provider product object.
+    // Fulfillment mappings and fields are required by the customer purchase form.
+    products[code] = {
+      code: String(product.code || code).slice(0, 200),
+      name: String(product.name || product.label || code).slice(0, 200),
+      is_active: product.is_active !== false,
+      image_url: typeof product.image_url === 'string'
+        ? product.image_url.slice(0, 2000)
+        : '',
+      processing_time: String(product.processing_time || product.processingTime || '').slice(0, 100),
+      description: String(product.description || '').slice(0, 1000),
+      fields: Array.isArray(product.fields)
+        ? scrubIimmpactPublicValue(product.fields)
+        : [],
+      fulfillment: product.fulfillment && typeof product.fulfillment === 'object'
+        ? scrubIimmpactPublicValue(product.fulfillment)
+        : {},
+    };
   }
-  return { last_updated: catalog?.last_updated || null, tree: catalog?.tree || { groups: [] }, products };
+
+  const groups = Array.isArray(catalog?.tree?.groups)
+    ? catalog.tree.groups.map((group) => {
+        if (!group || typeof group !== 'object') return null;
+        return {
+          name: String(group.name || '').slice(0, 200),
+          categories: (Array.isArray(group.categories) ? group.categories : [])
+            .filter((category) => category && typeof category === 'object')
+            .map((category) => ({
+              name: String(category.name || '').slice(0, 200),
+              product_codes: (Array.isArray(category.product_codes)
+                ? category.product_codes
+                : []).map((item) => String(item).slice(0, 200)).slice(0, 5000),
+            })),
+        };
+      }).filter(Boolean)
+    : [];
+
+  return {
+    last_updated: catalog?.last_updated || null,
+    tree: { groups },
+    products,
+  };
 }
 
 function publicIimmpactOptions(data) {
-  const items = Array.isArray(data?.items) ? data.items.map((item) => {
-    if (!item || typeof item !== 'object') return item;
-    const { cost: _cost, has_loss_risk: _loss, ...safe } = item;
-    return safe;
-  }) : [];
+  const items = Array.isArray(data?.items)
+    ? scrubIimmpactPublicValue(data.items)
+    : [];
+
   return {
-    product_code: data?.product_code || '',
-    field_id: data?.field_id || '',
+    product_code: String(data?.product_code || '').slice(0, 200),
+    field_id: String(data?.field_id || '').slice(0, 200),
     items,
-    meta: data?.meta || {},
+    meta: scrubIimmpactPublicValue(data?.meta || {}),
   };
 }
 
