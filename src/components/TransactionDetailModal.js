@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity, ScrollView, Linking, Image, StyleSheet } from 'react-native';
+import { Modal, View, Text, TouchableOpacity, ScrollView, Linking, Image, StyleSheet, Share } from 'react-native';
 import * as Print from 'expo-print';
 import { showAlert } from '../utils/appAlert';
 import { radius } from '../theme/theme';
@@ -409,18 +409,21 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
 
           <View style={styles.footer}>
             {(type === 'tx' || type === 'topup') && (
-              <TouchableOpacity style={styles.printBtn} onPress={async () => {
-                try {
-                  // A top-up had no printable receipt at all, which is the one
-                  // thing a customer asks for after paying money in. The
-                  // document, and the escaping, come from src/utils/receiptHtml.js
-                  // so the two cannot drift apart.
-                  const html = type === 'topup' ? topupReceiptHtml(item) : orderReceiptHtml(item, pinOverride);
-                  await Print.printAsync({ html });
-                } catch (err) { showAlert('Printer', err?.message || 'Printing is not available on this device.'); }
-              }}>
-                <Text style={styles.printText}>🖨 Print</Text>
-              </TouchableOpacity>
+              <>
+                <TouchableOpacity style={styles.printBtn} onPress={async () => {
+                  try {
+                    // Customer receipt builders intentionally whitelist customer-safe fields.
+                    // Cost price, commission and profit are not part of either receipt.
+                    const html = type === 'topup' ? topupReceiptHtml(item) : orderReceiptHtml(item, pinOverride);
+                    await Print.printAsync({ html });
+                  } catch (err) { showAlert('Printer', err?.message || 'Printing is not available on this device.'); }
+                }}>
+                  <Text style={styles.printText}>🖨 Print</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.printBtn} onPress={() => Share.share({ title: 'MySheba Receipt', message: copyValue }).catch(() => {})}>
+                  <Text style={styles.printText}>↗ Share</Text>
+                </TouchableOpacity>
+              </>
             )}
             <CopyButton value={copyValue} label="Copy Details" />
             <TouchableOpacity style={styles.closeBtn} onPress={onClose}>

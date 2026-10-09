@@ -23,6 +23,8 @@ export const ROLE_PRICE_KEYS = [
   'salaryOtCost',
   'rechargePointCostPerUnit',
   'internetPointCostPerUnit',
+  'offerPacksPointCostPerUnit',
+  'entertainmentPointCostPerUnit',
 ] as const;
 export type RolePriceKey = (typeof ROLE_PRICE_KEYS)[number];
 
