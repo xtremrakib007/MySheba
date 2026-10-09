@@ -75,7 +75,17 @@ export default function RemittanceReceipt({ transaction = {}, profile = {}, oper
   const d = useMemo(() => getReceiptData(transaction, profile, operator), [transaction, profile, operator]);
   const html = useMemo(() => buildReceiptHtml(transaction, profile, operator), [transaction, profile, operator]);
   const printReceipt = async () => { try { setPrinting(true); await printHtml(html); } catch (e) { console.warn('Receipt print failed', e); } finally { setPrinting(false); } };
-  return <View style={[styles.container,{backgroundColor:colors.bg}]}><ScrollView contentContainerStyle={styles.content}><View style={styles.preview}><View style={styles.previewHeader}><Text style={styles.brand}>MySheba</Text><View><Text style={styles.company}>{COMPANY_NAME}</Text><Text style={styles.company}>{COMPANY_ADDRESS}</Text></View><Text style={styles.title}>Remittance Transaction Receipt</Text></View><View style={styles.meta}><Row label="Date & Time" value={d.created}/><Row label="Transaction ID" value={val(d.txId)}/><Row label="PIN" value={val(d.pin)}/></View><View style={styles.columns}><Section title="SENDER DETAILS" rows={d.rows}/><Section title="RECEIVER DETAILS" rows={d.receiverRows}/><Summary d={d}/></View><View style={styles.footer}><Text>{EMAIL}  •  {WEBSITE}</Text><Text>{POWERED_BY}</Text></View></View><TouchableOpacity style={styles.printButton} onPress={printReceipt} disabled={printing}>{printing ? <ActivityIndicator color="#fff"/> : <Text style={styles.printText}>Print / Save Receipt PDF</Text>}</TouchableOpacity></ScrollView></View>;
+  return <View style={[styles.container,{backgroundColor:colors.bg}]}><ScrollView contentContainerStyle={styles.content}><View style={styles.preview}><View style={styles.previewHeader}><Text style={styles.brand}>MySheba</Text><View><Text style={styles.company}>{COMPANY_NAME}</Text><Text style={styles.company}>{COMPANY_ADDRESS}</Text></View><Text style={styles.title}>Remittance Transaction Receipt</Text></View><View style={styles.meta}><Row label="Date & Time" value={d.created}/><Row label="Transaction ID" value={val(d.txId)}/><Row label="PIN" value={val(d.pin)}/></View><View style={styles.columns}><Section title="SENDER DETAILS" rows={d.rows}/><Section title="RECEIVER DETAILS" rows={d.receiverRows}/><Summary d={d}/></View><View style={styles.footer}><Text>{EMAIL}  •  {WEBSITE}</Text><Text>{POWERED_BY}</Text></View></View><View style={{ gap: 8 }}>
+  <TouchableOpacity style={styles.printButton} onPress={printReceipt} disabled={printing}>{printing ? <ActivityIndicator color="#fff"/> : <Text style={styles.printText}>Print / Save Receipt PDF</Text>}</TouchableOpacity>
+  <TouchableOpacity style={[styles.printButton, { backgroundColor: '#16834A' }]} onPress={() => Share.share({ title: 'MySheba Remittance Receipt', message: [
+    'MySheba Remittance Receipt',
+    `Transaction ID: ${val(d.txId)}`,
+    `Date & Time: ${val(d.created)}`,
+    `Amount: ${val(d.amount)}`,
+    `Status: ${val(transaction.status || 'pending').toUpperCase()}`,
+    'Provider cost and commission are not included.',
+  ].join('\\n') }).catch(() => {})}><Text style={styles.printText}>Share Receipt</Text></TouchableOpacity>
+</View></ScrollView></View>;
 }
 
 const styles = StyleSheet.create({
