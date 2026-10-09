@@ -61,7 +61,7 @@ export async function printUri(uri) {
   await Print.printAsync(printer ? { uri, printerUrl: printer.url } : { uri });
 }
 
-const COMPANY_NAME = 'SatuLink Solutions Sdn Bhd (1641555-U)';
+const COMPANY_NAME = '';
 const WEBSITE = 'www.mysheba.top';
 const EMAIL = 'info@mysheba.top';
 
