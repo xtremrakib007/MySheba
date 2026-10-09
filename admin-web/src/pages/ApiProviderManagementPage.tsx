@@ -189,6 +189,7 @@ export default function ApiProviderManagementPage() {
   if(!editable) return <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800">Only Superadmin can manage API providers.</div>;
 
   return <div className="mx-auto max-w-[1500px] space-y-5 pb-10">
+    <div className="flex justify-end"><a href="/config/iimmpact-costs" className="rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white">View IIMMPACT Provider Costs</a></div>
     <div className="rounded-3xl bg-gradient-to-r from-[#0b2447] via-[#155e9c] to-[#00a99d] p-6 text-white shadow-lg">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div><p className="text-xs font-bold uppercase tracking-[0.2em] text-white/60">Superadmin</p><h1 className="mt-1 text-2xl font-extrabold md:text-3xl">API Provider Management</h1><p className="mt-2 max-w-3xl text-sm text-white/75">Configure provider credentials, service reach, endpoints and catalog behaviour. IIMMPACT discovery uses the live server-side catalog and never exposes wholesale cost to customers.</p></div>

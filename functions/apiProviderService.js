@@ -2520,6 +2520,131 @@ exports.getIimmpactFullCatalogForUser = onCall({ enforceAppCheck: ENFORCE_APP_CH
   }
 });
 
+
+
+/**
+ * Convert provider money fields to a bounded amount/currency shape.
+ * Never pass arbitrary provider objects to the superadmin UI.
+ */
+function safeIimmpactMoney(value) {
+  if (value == null || value === '') return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string') return value.slice(0, 100);
+  if (typeof value !== 'object' || Array.isArray(value)) return null;
+  const amount = value.amount ?? value.value ?? null;
+  const currency = cleanString(value.currency || value.currency_code || value.code_currency, 8);
+  const safeAmount = typeof amount === 'number'
+    ? (Number.isFinite(amount) ? amount : null)
+    : (typeof amount === 'string' ? amount.slice(0, 100) : null);
+  if (safeAmount == null && !currency) return null;
+  return { ...(safeAmount == null ? {} : { amount: safeAmount }), ...(currency ? { currency } : {}) };
+}
+
+function safeIimmpactScalar(value, max = 500) {
+  if (typeof value === 'string') return value.slice(0, max);
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'boolean') return value;
+  return null;
+}
+
+function safeIimmpactPricing(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out = {};
+  for (const key of ['unit_price', 'base_price', 'price_currency', 'currency', 'cost_currency']) {
+    const item = value[key];
+    if (typeof item === 'number' && Number.isFinite(item)) out[key] = item;
+    else if (typeof item === 'string') out[key] = item.slice(0, 100);
+  }
+  const adjustment = value.price_adjustment;
+  if (adjustment && typeof adjustment === 'object' && !Array.isArray(adjustment)) {
+    const type = cleanString(adjustment.type, 40);
+    const amount = safeIimmpactScalar(adjustment.value, 100);
+    if (type || amount != null) out.price_adjustment = { ...(type ? { type } : {}), ...(amount == null ? {} : { value: amount }) };
+  } else {
+    const amount = safeIimmpactScalar(adjustment, 100);
+    if (amount != null) out.price_adjustment = amount;
+  }
+  return out;
+}
+
+/**
+ * Superadmin-only live IIMMPACT catalogue including controlled cost metadata.
+ * Customer-facing catalogues continue to use publicIimmpactCatalog unchanged.
+ */
+exports.getIimmpactFullCatalogForSuperadmin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  const db = admin.firestore();
+  await assertSuperadmin(db, request);
+  await checkVelocity(db, request.auth.uid, 'getIimmpactFullCatalogForSuperadmin', { ip: getClientIp(request) });
+  const country = cleanString(request.data?.country, 2).toUpperCase() || 'MY';
+  const provider = await findActiveIimmpactProviderForCountry(db, country);
+  if (!provider || provider.authType !== 'iimmpactHmac') {
+    throw new HttpsError('failed-precondition', 'No active IIMMPACT provider is configured for this country.');
+  }
+  const url = iimmpactUrl(provider, '/v2/catalog');
+  url.searchParams.set('is_active', 'true');
+  try {
+    const { ok, status, json } = await signedProviderRequest(url, {
+      method: 'GET',
+      headers: { accept: 'application/json' },
+    }, provider);
+    if (!ok || !json || typeof json !== 'object' || Array.isArray(json)) {
+      const reason = String(getPath(json, 'message') || getPath(json, 'error.message') || ('HTTP ' + status));
+      throw new HttpsError('unavailable', 'IIMMPACT catalog request failed: ' + reason.slice(0, 300));
+    }
+
+    const safe = publicIimmpactCatalog(json);
+    const rawProducts = json.products && typeof json.products === 'object' && !Array.isArray(json.products)
+      ? json.products
+      : {};
+    const products = {};
+    for (const [code, product] of Object.entries(safe.products || {})) {
+      const raw = rawProducts[code] && typeof rawProducts[code] === 'object' && !Array.isArray(rawProducts[code])
+        ? rawProducts[code]
+        : {};
+      const costValue = raw.cost ?? raw.cost_price ?? raw.provider_cost ?? raw.provider_cost_amount ?? null;
+      const currency = cleanString(
+        raw.cost_currency || raw.provider_currency || raw.currency ||
+        (costValue && typeof costValue === 'object' ? costValue.currency : ''),
+        8,
+      ) || 'MYR';
+      const fields = Array.isArray(product.fields) ? product.fields : [];
+      products[code] = {
+        ...product,
+        providerCost: safeIimmpactMoney(costValue),
+        providerCurrency: currency,
+        rrp: safeIimmpactMoney(raw.rrp ?? raw.recommended_retail_price ?? null),
+        denomination: safeIimmpactMoney(raw.denomination ?? null),
+        providerDetails: {
+          denomination: safeIimmpactMoney(raw.denomination ?? null),
+          denominationUnitPrice: safeIimmpactMoney(raw.denomination_unit_price ?? null),
+          pricing: safeIimmpactPricing(raw.pricing),
+          fulfillment: scrubIimmpactPublicValue(raw.fulfillment ?? raw.fulfillment_details ?? product.fulfillment ?? {}),
+          processingTime: String(raw.processing_time || raw.processingTime || product.processing_time || '').slice(0, 100),
+          requiredFields: fields.map((field) => ({
+            id: String(field.id || '').slice(0, 100),
+            name: String(field.name || field.label || field.id || '').slice(0, 160),
+            type: String(field.type || '').slice(0, 40),
+            required: field.required === true,
+            role: String(field.role || '').slice(0, 40),
+            dataSource: scrubIimmpactPublicValue(field.data_source ?? null),
+          })),
+        },
+      };
+    }
+    return {
+      providerId: String(provider.id || '').slice(0, 100),
+      country,
+      fetchedAt: new Date().toISOString(),
+      costAccess: true,
+      ...safe,
+      products,
+    };
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError('unavailable', String(error?.message || 'Unable to load the IIMMPACT cost catalogue.').slice(0, 400));
+  }
+});
+
 exports.getIimmpactCatalogForUser = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
@@ -2618,6 +2743,92 @@ exports.getIimmpactOptions = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asyn
   } catch (error) {
     if (error instanceof HttpsError) throw error;
     throw new HttpsError('unavailable', String(error?.message || 'Unable to load IIMMPACT options.').slice(0, 500));
+  }
+});
+
+
+
+/**
+ * Superadmin-only package options with provider cost.
+ * The customer-facing getIimmpactOptions callable remains sanitized.
+ */
+exports.getIimmpactOptionsForSuperadmin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  const db = admin.firestore();
+  await assertSuperadmin(db, request);
+  await checkVelocity(db, request.auth.uid, 'getIimmpactOptionsForSuperadmin', { ip: getClientIp(request) });
+  const country = cleanString(request.data?.country, 2).toUpperCase() || 'MY';
+  const productCode = cleanString(request.data?.productCode, 100);
+  const fieldId = cleanString(request.data?.fieldId, 100);
+  if (!productCode || !fieldId) {
+    throw new HttpsError('invalid-argument', 'productCode and fieldId are required.');
+  }
+  const provider = await findActiveIimmpactProviderForCountry(db, country);
+  if (!provider || provider.authType !== 'iimmpactHmac') {
+    throw new HttpsError('failed-precondition', 'No active IIMMPACT provider is configured for this country.');
+  }
+
+  const page = Math.max(1, Math.min(100000, Number(request.data?.page) || 1));
+  const limit = Math.max(1, Math.min(25000, Number(request.data?.limit) || 25000));
+  const url = iimmpactUrl(provider, '/v2/options');
+  url.searchParams.set('product_code', productCode);
+  url.searchParams.set('field_id', fieldId);
+  url.searchParams.set('page', String(page));
+  url.searchParams.set('limit', String(limit));
+  const accountNumber = cleanString(request.data?.accountNumber, 200);
+  const billerCode = cleanString(request.data?.billerCode, 100);
+  if (accountNumber) url.searchParams.set('account_number', accountNumber);
+  if (billerCode) url.searchParams.set('biller_code', billerCode);
+
+  try {
+    const { ok, status, json } = await signedProviderRequest(url, {
+      method: 'GET',
+      headers: { accept: 'application/json' },
+    }, provider);
+    if (!ok || !json || typeof json !== 'object' || Array.isArray(json)) {
+      const reason = String(getPath(json, 'message') || getPath(json, 'error.message') || ('HTTP ' + status));
+      throw new HttpsError('unavailable', 'IIMMPACT options request failed: ' + reason.slice(0, 300));
+    }
+    const items = Array.isArray(json.items) ? json.items.slice(0, limit).map((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+      const costValue = item.cost ?? item.provider_cost ?? item.cost_price ?? null;
+      const currency = cleanString(
+        item.cost_currency || item.provider_currency || item.currency ||
+        (costValue && typeof costValue === 'object' ? costValue.currency : '') ||
+        (item.price && typeof item.price === 'object' ? item.price.currency : ''),
+        8,
+      );
+      return {
+        code: cleanString(item.code, 300),
+        name: cleanString(item.name || item.label || item.description || item.code, 500),
+        label: cleanString(item.label, 500),
+        description: cleanString(item.description, 1000),
+        price: safeIimmpactMoney(item.price),
+        cost: safeIimmpactMoney(costValue),
+        denomination: safeIimmpactMoney(item.denomination),
+        rrp: safeIimmpactMoney(item.rrp ?? item.recommended_retail_price ?? null),
+        currency,
+        has_loss_risk: item.has_loss_risk === true || item.hasLossRisk === true,
+        validity: safeIimmpactScalar(item.validity ?? item.duration ?? null, 200),
+        data: safeIimmpactScalar(item.data ?? item.volume ?? null, 200),
+      };
+    }).filter(Boolean) : [];
+    const rawMeta = json.meta && typeof json.meta === 'object' && !Array.isArray(json.meta) ? json.meta : {};
+    const meta = {};
+    for (const key of ['page', 'limit', 'total', 'total_pages', 'has_more', 'next_page']) {
+      const value = rawMeta[key];
+      if (typeof value === 'number' && Number.isFinite(value)) meta[key] = value;
+      else if (typeof value === 'boolean') meta[key] = value;
+      else if (typeof value === 'string') meta[key] = value.slice(0, 100);
+    }
+    return {
+      product_code: cleanString(json.product_code, 100) || productCode,
+      field_id: cleanString(json.field_id, 100) || fieldId,
+      items,
+      meta,
+    };
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError('unavailable', String(error?.message || 'Unable to load IIMMPACT package options.').slice(0, 400));
   }
 });
 
