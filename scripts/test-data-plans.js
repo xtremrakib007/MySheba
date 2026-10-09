@@ -657,7 +657,7 @@ function withCatalogue(plans) {
   for (const step of queue) await step();
   console.log(`\n${passed} checks passed.\n`);
 })();
-\natest('IIMMPACT Malaysia Internet uses documented product codes', () => {
+\ntest('IIMMPACT Malaysia Internet uses documented product codes', () => {
   const providerCatalog = require('../functions/providerCatalog');
   const provider = {
     name: 'iimmpact',
