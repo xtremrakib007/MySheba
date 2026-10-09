@@ -57,8 +57,8 @@ function getPricing(service, data, pricing, rates) {
   return {
     selling, fee, total,
     cost: Number.isFinite(cost) && cost >= 0 ? cost : null,
-    commission: Number.isFinite(commission) && commission >= 0 ? commission : null,
-    profit: Number.isFinite(profit) ? profit : null,
+    commission: Number.isFinite(commission) && commission >= 0 ? commission : (Number.isFinite(cost) && cost >= 0 ? Math.round((selling - cost) * 100) / 100 : null),
+    profit: Number.isFinite(profit) ? profit : (Number.isFinite(cost) && cost >= 0 ? Math.round((selling - cost - fee) * 100) / 100 : null),
   };
 }
 
@@ -106,6 +106,8 @@ export default function ConfirmTransactionScreen() {
           <View style={styles.row}><Text style={styles.label}>Provider cost price</Text><Text style={[styles.value, { color: colors.text }]}>{summary.cost == null ? 'Not provided by provider' : money(summary.cost)}</Text></View>
           <View style={styles.row}><Text style={styles.label}>Commission amount</Text><Text style={[styles.value, { color: colors.text }]}>{summary.commission == null ? 'Not provided by provider' : money(summary.commission)}</Text></View>
           <View style={styles.row}><Text style={styles.label}>Expected profit / loss</Text><Text style={[styles.value, { color: colors.text }]}>{summary.profit == null ? 'Not available' : money(summary.profit)}</Text></View>
+          <View style={styles.row}><Text style={styles.label}>Wallet balance before</Text><Text style={[styles.value, { color: colors.text }]}>{money(profile?.walletBalance ?? profile?.balance ?? 0, profile?.walletCurrency || 'MYR')}</Text></View>
+          <View style={styles.row}><Text style={styles.label}>Wallet balance after (estimated)</Text><Text style={[styles.value, { color: colors.text }]}>{money(Number(profile?.walletBalance ?? profile?.balance ?? 0) - summary.total, profile?.walletCurrency || 'MYR')}</Text></View>
           <View style={[styles.totalRow, { borderTopColor: colors.border || '#E4E7EC' }]}><Text style={[styles.totalLabel, { color: colors.text }]}>Total wallet deduction</Text><Text style={[styles.totalValue, { color: colors.primary }]}>{money(summary.total)}</Text></View>
         </View>
         <Text style={styles.note}>Internal cost and commission are shown only when the app has reliable pricing data. Final charges and provider results are validated by the server.</Text>
