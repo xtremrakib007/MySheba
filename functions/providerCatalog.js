@@ -156,6 +156,9 @@ const PRESETS = {
       // between this and the customer's sell price, not by quietly topping up
       // less than was asked for.
       price: ['denomination', 'price', 'amount'],
+      cost: ['cost', 'provider_cost', 'cost_price'],
+      rrp: ['rrp', 'recommended_retail_price'],
+      currency: ['currency', 'cost_currency'],
     },
     types: ['regular'],
     dynamicProductDiscovery: true,
@@ -405,7 +408,17 @@ function fillTemplate(template, values) {
  */
 function toAmount(value) {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
-  const n = Number(String(value ?? '').replace(/[^0-9.-]/g, ''));
+  if (value && typeof value === 'object') {
+    // Some provider responses wrap monetary values as { amount, value, price }.
+    for (const key of ['amount', 'value', 'price', 'denomination']) {
+      if (value[key] !== undefined && value[key] !== null) {
+        const parsed = toAmount(value[key]);
+        if (parsed > 0) return parsed;
+      }
+    }
+    return 0;
+  }
+  const n = Number(String(value ?? '').replace(/,/g, '').replace(/[^0-9.-]/g, ''));
   return Number.isFinite(n) ? n : 0;
 }
 
@@ -421,6 +434,16 @@ function normaliseItem(item, itemMap) {
     category: String(firstOf(item, map.category) ?? '').slice(0, 60),
     processingTime: String(firstOf(item, map.processingTime || ['processing_time', 'processingTime', 'processing-time']) ?? '').slice(0, 100),
     price: toAmount(firstOf(item, map.price)),
+    // Keep provider-side amounts separate from the face-value price used for
+    // fulfillment. These fields are internal catalogue metadata and are not
+    // automatically exposed by customer-facing callable responses.
+    cost: toAmount(firstOf(item, map.cost || ['cost', 'provider_cost', 'cost_price'])) || null,
+    rrp: toAmount(firstOf(item, map.rrp || ['rrp', 'recommended_retail_price'])) || null,
+    denomination: firstOf(item, map.denomination || ['denomination']) ?? null,
+    currency: String(firstOf(item, map.currency || ['currency', 'cost_currency']) ?? '').slice(0, 8),
+    fulfillment: firstOf(item, map.fulfillment || ['fulfillment', 'fulfillment_details']) ?? null,
+    requiredFields: Array.isArray(firstOf(item, map.requiredFields || ['required_fields', 'fields'])) ? firstOf(item, map.requiredFields || ['required_fields', 'fields']) : [],
+    rawLabel: String(firstOf(item, ['label']) ?? '').slice(0, 200),
   };
 }
 
