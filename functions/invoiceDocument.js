@@ -11,7 +11,7 @@
  * string, which is what makes the wording and the two names testable.
  */
 
-const COMPANY_NAME = 'SatuLink Solutions Sdn Bhd (1641555-U)';
+const COMPANY_NAME = '';
 const WEBSITE = 'www.mysheba.top';
 const EMAIL = 'info@mysheba.top';
 
@@ -119,7 +119,7 @@ function renderInvoiceHtml(invoice) {
   }
 </style></head><body><div class="sheet">
 <div class="head">
-  <div><img class="logo" src="https://mysheba.top/assets/images/logo.png" alt="MySheba logo"><div class="brand">MySheba</div><div class="company">${esc(COMPANY_NAME)}</div></div>
+  <div><img class="logo" src="https://mysheba.top/assets/images/logo.png" alt="MySheba logo"><div class="brand">MySheba</div>${COMPANY_NAME ? `<div class="company">${esc(COMPANY_NAME)}</div>` : ''}</div>
   <div class="no">
     <div class="label">Invoice</div>
     <div class="value">${esc(i.number || '-')}</div>
