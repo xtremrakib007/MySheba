@@ -84,3 +84,17 @@ export async function getIimmpactOptions(args: {
 }): Promise<any> {
   return (await optionsFn(args)).data || {};
 }
+
+const fullCostOptionsFn = httpsCallable(functions, 'getIimmpactOptionsForSuperadmin');
+
+export async function getIimmpactOptionsForSuperadmin(args: {
+  country: string;
+  productCode: string;
+  fieldId: string;
+  accountNumber?: string;
+  billerCode?: string;
+  page?: number;
+  limit?: number;
+}): Promise<any> {
+  return (await fullCostOptionsFn(args)).data || {};
+}
