@@ -20,6 +20,8 @@ export default function ResultModal() {
 
   const finishAndHome = () => { closeResult(); goHome(); };
   const sendAgain = () => { submitService(); };
+  const isTravel = kind === 'travel';
+  const isRemittance = !isTravel && service === 'Remittance';
   const receiptTx = {
     id: txId,
     service,
@@ -49,9 +51,6 @@ export default function ResultModal() {
     try { await printTransactionReceipt(receiptTx, profile || {}); }
     catch (e) { showAlert('Print receipt', e?.message || 'Could not print this receipt.'); }
   };
-  const isTravel = kind === 'travel';
-  const isRemittance = !isTravel && service === 'Remittance';
-
   if (isRemittance) {
     const receiptTransaction = {
       id: txId,
