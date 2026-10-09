@@ -84,7 +84,7 @@ export default function RemittanceReceipt({ transaction = {}, profile = {}, oper
     `Amount: ${val(d.send)}`,
     `Status: ${val(transaction.status || 'pending').toUpperCase()}`,
     'Provider cost and commission are not included.',
-  ].join('\\n') }).catch(() => {})}><Text style={styles.printText}>Share Receipt</Text></TouchableOpacity>
+  ].join('\n') }).catch(() => {})}><Text style={styles.printText}>Share Receipt</Text></TouchableOpacity>
 </View></ScrollView></View>;
 }
 
