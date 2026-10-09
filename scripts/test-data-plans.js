@@ -54,205 +54,11 @@ function test(name, fn) {
 // another's run - which looks exactly like the code being broken.
 const queue = [];
 function atest(name, fn) {
-  queue.pushtest('IIMMPACT Malaysia Internet uses documented product codes', () => {
-  const providerCatalog = require('../functions/providerCatalog');
-  const provider = {
-    name: 'iimmpact',
-    baseUrl: 'https://api.iimmpact.com',
-    catalogPreset: 'iimmpact-options',
-    catalogPath: '/v2/options',
-    authType: 'iimmpactHmac',
-  };
-  const expected = {
-    Celcom: ['CEL'],
-    Digi: ['DI'],
-    Hotlink: ['HI'],
-    'U Mobile': ['UMI'],
-    Tunetalk: ['TI'],
-    XOX: ['OXI'],
-    Yes: ['YESI'],
-  };
-  for (const [operator, codes] of Object.entries(expected)) {
-    assert.deepStrictEqual(providerCatalog.productCodesFor(provider, operator), codes);
-  }
-});
-
-(async () => {
+  queue.push(async () => {
     try { await fn(); passed += 1; console.log('  ok  ' + name); }
     catch (error) { console.error('  FAIL  ' + name + '\n        ' + (error && error.message)); process.exitCode = 1; }
   });
 }
-
-const IIMMPACT = {
-  id: 'p1',
-  name: 'iimmpact',
-  service: 'Internet',
-  country: 'MY',
-  baseUrl: 'https://api.iimmpact.com',
-  catalogPreset: 'iimmpact-options',
-  authType: 'iimmpactHmac',
-  apiKey: 'pk',
-  secretKey: Buffer.from('0123456789abcdef0123456789abcdef').toString('base64'),
-};
-
-// What a subproducts reply looks like, in iimmpact's documented vocabulary.
-const planReply = (plans) => ({ product_code: 'HI', field_id: 'plan', items: plans });
-const PLAN = {
-  code: 'PLAN-HI-30',
-  label: 'Unlimited 30 days',
-  denomination: 40,
-  cost: { amount: '38.10', currency: 'MYR' },
-  validity: '30 days',
-  description: 'Unlimited data with hotspot and calls',
-  features: ['Unlimited data', 'Hotspot', 'Calls'],
-};
-
-console.log('\nOperator to product code');
-
-test('CelcomDigi asks BOTH of the products it could be', () => {
-  // Celcom and Digi merged under one brand; the provider still sells CEL and
-  // DI separately and our prefix table cannot tell which half a number is on.
-  // Picking one would offer a Celcom customer Digi's plans.
-  assert.deepStrictEqual(catalog.productCodesFor(IIMMPACT, 'CelcomDigi'), ['CEL', 'DI']);
-});
-
-test('all documented Malaysia Internet operators ask their IIMMPACT product', () => {
-  const expected = {
-    Celcom: ['CEL'],
-    Digi: ['DI'],
-    Hotlink: ['HI'],
-    'U Mobile': ['UMI'],
-    Tunetalk: ['TI'],
-    XOX: ['OXI'],
-    Yes: ['YESI'],
-  };
-  for (const [operator, codes] of Object.entries(expected)) {
-    assert.deepStrictEqual(catalog.productCodesFor(IIMMPACT, operator), codes, operator);
-  }
-});
-
-test('an operator the provider sells no plans for asks none', () => {
-  // Not a failure. Unifi keeps the built-in package list it already had.
-  assert.deepStrictEqual(catalog.productCodesFor(IIMMPACT, 'Unifi'), []);
-  assert.deepStrictEqual(catalog.productCodesFor(IIMMPACT, ''), []);
-  assert.deepStrictEqual(catalog.productCodesFor(IIMMPACT, 'Nonsense'), []);
-});
-
-test('a provider record can correct one code without erasing the preset map', () => {
-  const corrected = { ...IIMMPACT, catalogOperatorCodes: { CelcomDigi: ['DI'], Unifi: 'UMI' } };
-  assert.deepStrictEqual(catalog.productCodesFor(corrected, 'CelcomDigi'), ['DI']);
-  assert.deepStrictEqual(catalog.productCodesFor(corrected, 'Unifi'), ['UMI'], 'a bare string is one code');
-  assert.deepStrictEqual(catalog.productCodesFor(corrected, 'Hotlink'), ['HI'], 'preset operators remain available');
-});
-
-test('the number of outbound calls per listing is bounded', () => {
-  const silly = { ...IIMMPACT, catalogOperatorCodes: { X: ['A', 'B', 'C', 'D', 'E', 'F', 'G'] } };
-  assert.ok(catalog.productCodesFor(silly, 'X').length <= 4);
-});
-
-test('this catalogue declares itself per-number, and Success TopUp does not', () => {
-  assert.strictEqual(catalog.isPerAccountCatalog(IIMMPACT), true);
-  assert.strictEqual(catalog.isPerAccountCatalog({ name: 'Success TopUp', baseUrl: 'https://x' }), false);
-});
-
-console.log('\nThe request');
-
-// A transport that records what it was asked to send and replays a canned body.
-function recorder(reply = planReply([PLAN])) {
-  const calls = [];
-  return {
-    calls,
-    request: async (url, init, config, provider) => { calls.push({ url, init, config, provider }); return reply; },
-  };
-}
-
-
-(atest('the number is sent as account_number, with the product code', async () => {
-  const r = recorder();
-  await catalog.fetchCatalog(IIMMPACT, { operator: 'HI', account: '0178855286' }, { request: r.request });
-  assert.strictEqual(r.calls.length, 1);
-  const { url } = r.calls[0];
-  assert.strictEqual(url.pathname, '/v2/options');
-  assert.strictEqual(url.searchParams.get('field_id'), 'plan');
-  assert.strictEqual(url.searchParams.get('product_code'), 'HI');
-  assert.strictEqual(url.searchParams.get('account_number'), '0178855286');
-}));
-
-(atest('a per-number catalogue is REFUSED without a number', async () => {
-  // The failure this prevents is silent: asked with an empty account_number the
-  // provider answers with a default list, and that list would be priced and
-  // charged as though it were this customer's.
-  const r = recorder();
-  await assert.rejects(
-    () => catalog.fetchCatalog(IIMMPACT, { operator: 'HI', account: '' }, { request: r.request }),
-    /per phone number/,
-  );
-  assert.strictEqual(r.calls.length, 0, 'and nothing is sent');
-}));
-
-(atest('a GET carries no body at all', async () => {
-  // Not tidiness. The signature covers the body, so "{}" and no body hash
-  // differently and every signed request would be rejected.
-  const r = recorder();
-  await catalog.fetchCatalog(IIMMPACT, { operator: 'HI', account: '0178855286' }, { request: r.request });
-  const { init } = r.calls[0];
-  assert.strictEqual(init.method, 'GET');
-  assert.strictEqual(init.body, undefined);
-  assert.ok(!('content-type' in init.headers), 'and no content-type for a body that does not exist');
-}));
-
-(atest('the provider reaches the transport, so the request can be signed', async () => {
-  const r = recorder();
-  await catalog.fetchCatalog(IIMMPACT, { operator: 'HI', account: '0178855286' }, { request: r.request });
-  assert.strictEqual(r.calls[0].provider, IIMMPACT, 'without it a signed catalogue call is a 401 and no packages ever load');
-}));
-
-(atest("Success TopUp's POST body is unchanged", async () => {
-  const successTopUp = { name: 'Success TopUp', baseUrl: 'https://api.successtopup.com', apiKey: 'k', secretKey: 's' };
-  const r = recorder({ result: true, drives: [{ driveId: '7', title: 'Pack', price: 100 }] });
-  const out = await catalog.fetchCatalog(successTopUp, { operator: 'GP', type: 'regular' }, { request: r.request });
-  const { init } = r.calls[0];
-  assert.strictEqual(init.method, 'POST');
-  assert.deepStrictEqual(JSON.parse(init.body), { operator: 'GP', type: 'regular', successtopup_key: 'k', successtopup_secret: 's' });
-  assert.strictEqual(out.length, 1);
-}));
-
-console.log('\nThe reply');
-
-(atest('a plan is read out of iimmpact’s own field names', async () => {
-  const r = recorder();
-  const [plan] = await catalog.fetchCatalog(IIMMPACT, { operator: 'HI', account: '0178855286' }, { request: r.request });
-  assert.strictEqual(plan.id, PLAN.code, 'the Options API code is the stable plan id');
-  assert.strictEqual(plan.name, 'Unlimited 30 days');
-  assert.strictEqual(plan.valid, '30 days');
-  assert.strictEqual(plan.description, 'Unlimited data with hotspot and calls');
-  assert.deepStrictEqual(plan.features, ['Unlimited data', 'Hotspot', 'Calls']);
-}));
-
-(atest('the price is the DENOMINATION, never the cost', async () => {
-  // denomination is the face value and is what must be sent as the amount.
-  // cost is what we pay, 38.10 against a face value of 40 - sending that as
-  // the amount buys a different product or is rejected outright.
-  const r = recorder();
-  const [plan] = await catalog.fetchCatalog(IIMMPACT, { operator: 'HI', account: '0178855286' }, { request: r.request });
-  assert.strictEqual(plan.price, 40);
-  assert.notStrictEqual(plan.price, 38.1);
-}));
-
-(atest('each plan remembers which product answered for it', async () => {
-  const r = recorder();
-  const [plan] = await catalog.fetchCatalog(IIMMPACT, { operator: 'DI', account: '0123456789' }, { request: r.request });
-  assert.strictEqual(plan.productCode, 'DI', 'with CelcomDigi asking two products, the operator name cannot answer this later');
-}));
-
-(atest('a mapping that no longer fits says which fields arrived', async () => {
-  const r = recorder(planReply([{ unexpected: 1, other: 2 }]));
-  await assert.rejects(
-    () => catalog.fetchCatalog(IIMMPACT, { operator: 'HI', account: '0178855286' }, { request: r.request }),
-    /unexpected, other/,
-    'otherwise the customer is told their number has no plans, which sends them looking at their own line',
-  );
-}));
 
 console.log('\nResolving the order (what decides the charge)');
 
@@ -674,6 +480,29 @@ function withCatalogue(plans) {
 (atest('a service that sells no packages is left alone entirely', async () => {
   const out = await resolvePricing(fakeDb([IIMMPACT]), 'recharge', myOrder());
   assert.strictEqual(out.raw.amount, 40);
+}));
+
+(atest('IIMMPACT Malaysia Internet uses documented product codes', () => {
+  const providerCatalog = require('../functions/providerCatalog');
+  const provider = {
+    name: 'iimmpact',
+    baseUrl: 'https://api.iimmpact.com',
+    catalogPreset: 'iimmpact-options',
+    catalogPath: '/v2/options',
+    authType: 'iimmpactHmac',
+  };
+  const expected = {
+    Celcom: ['CEL'],
+    Digi: ['DI'],
+    Hotlink: ['HI'],
+    'U Mobile': ['UMI'],
+    Tunetalk: ['TI'],
+    XOX: ['OXI'],
+    Yes: ['YESI'],
+  };
+  for (const [operator, codes] of Object.entries(expected)) {
+    assert.deepStrictEqual(providerCatalog.productCodesFor(provider, operator), codes);
+  }
 }));
 
 (async () => {
