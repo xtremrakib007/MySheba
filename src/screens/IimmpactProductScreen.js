@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, Alert, ActivityIndicator, Image } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, Alert, ActivityIndicator, Image, Modal, Share } from 'react-native';
+import { printTransactionReceipt } from '../utils/printService';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
@@ -59,6 +60,8 @@ export default function IimmpactProductScreen({ category }) {
   const [optionBusy, setOptionBusy] = useState({});
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const [pendingPurchase, setPendingPurchase] = useState(null);
   const [search, setSearch] = useState({});
   const styles = createStyles(colors);
 
@@ -191,8 +194,13 @@ export default function IimmpactProductScreen({ category }) {
   const buy = async () => {
     const validationError = validate();
     if (validationError) return Alert.alert('Check details', validationError);
-
     const fulfillment = selectedProduct?.fulfillment || {};
+    const fulfillmentValue = (spec) => {
+      if (!spec || !spec.from_field) return '';
+      const value = rawValue(values, selectedOptions, spec.from_field);
+      if (spec.path) return pathValue(value, spec.path);
+      return value;
+    };
     const accountValue = fulfillmentValue(fulfillment.account);
     const amountValue = fulfillmentValue(fulfillment.amount);
     const fallbackAccount = String(values.__account || '').trim();
@@ -201,11 +209,9 @@ export default function IimmpactProductScreen({ category }) {
       ? String(accountValue.account_number || accountValue.code || '').trim()
       : String(accountValue || '').trim()) || fallbackAccount;
     const amount = Number.isFinite(Number(amountValue)) && Number(amountValue) > 0 ? Number(amountValue) : fallbackAmount;
-
     if (!selectedProduct?.code) return;
     if (!accountNumber) return Alert.alert('Account required', 'Enter the account, phone, player ID or reference required for this product.');
     if (!Number.isFinite(amount) || amount <= 0) return Alert.alert('Amount required', 'Select a package or enter a valid amount.');
-
     const extras = {};
     for (const [key, spec] of Object.entries(fulfillment.extras || {})) {
       const value = fulfillmentValue(spec);
@@ -213,41 +219,64 @@ export default function IimmpactProductScreen({ category }) {
       if (value == null || value === '') continue;
       extras[key] = typeof value === 'object' ? (value.code || value.account_number || value.value || '') : value;
     }
-
     const pricingField = fields.find((field) => field.role === 'pricing' && field.type === 'select');
     const pricingOption = pricingField ? selectedOptions[pricingField.id] : null;
     const sellAmount = Number(pricingOption?.price?.amount ?? amount);
+    setPendingPurchase({
+      accountNumber, amount, extras, sellAmount, pricingOption,
+      productCode: String(selectedProduct.code),
+      productName: String(selectedProduct.name || selectedProduct.code),
+      selectedFields: Object.fromEntries(Object.entries(values).map(([key, value]) => [key, displayValue(value)])),
+    });
+    setReviewing(true);
+  };
 
+  const confirmBuy = async () => {
+    if (!pendingPurchase || busy) return;
+    const purchase = pendingPurchase;
     setBusy(true);
     try {
       const requestId = 'ms_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 12);
       const result = await api.chargeIimmpactProduct({
         requestId,
-        amount: sellAmount,
-        total: sellAmount,
+        amount: purchase.sellAmount,
+        total: purchase.sellAmount,
         raw: {
           country: 'MY',
-          productCode: String(selectedProduct.code),
-          accountNumber,
-          amount: sellAmount,
-          providerAmount: amount,
-          packageCostAmount: amount,
-          subproductCode: pricingOption?.code || '',
-          optionCode: pricingOption?.code || '',
-          extras,
-          fieldValues: Object.fromEntries(Object.entries(values).map(([key, value]) => [key, displayValue(value)])),
+          productCode: purchase.productCode,
+          accountNumber: purchase.accountNumber,
+          amount: purchase.sellAmount,
+          providerAmount: purchase.amount,
+          packageCostAmount: purchase.amount,
+          subproductCode: purchase.pricingOption?.code || '',
+          optionCode: purchase.pricingOption?.code || '',
+          extras: purchase.extras,
+          fieldValues: purchase.selectedFields,
           selectedOptions,
-          remarks: String(selectedProduct.name || '').slice(0, 200),
+          remarks: purchase.productName.slice(0, 200),
         },
-      }, {
-        uid: profile?.id || '',
-        phone: profile?.phone || '',
-      });
-      Alert.alert(
-        'Order submitted',
-        'Transaction ' + String(result?.id || '') + ' has been accepted.',
-        [{ text: 'OK', onPress: goBackOrHome }],
-      );
+      }, { uid: profile?.id || '', phone: profile?.phone || '' });
+      const tx = {
+        id: String(result?.id || ''),
+        service: purchase.productName,
+        details: purchase.accountNumber,
+        amount: purchase.sellAmount,
+        total: purchase.sellAmount,
+        status: 'pending',
+        customerPhone: profile?.phone || '',
+        createdAt: new Date(),
+      };
+      setReviewing(false);
+      Alert.alert('Order submitted', 'Transaction ' + tx.id + ' has been accepted. The final status will update when the provider responds.', [
+        { text: 'Print', onPress: () => printTransactionReceipt(tx, profile || {}).catch((e) => Alert.alert('Print receipt', e?.message || 'Could not print receipt.')) },
+        { text: 'Share', onPress: () => Share.share({ title: 'MySheba Receipt', message: [
+          'MySheba Transaction Receipt', 'Service: ' + tx.service, 'Account: ' + tx.details,
+          'Transaction ID: ' + tx.id, 'Amount: MYR ' + Number(tx.amount).toFixed(2),
+          'Status: PENDING', 'Provider cost and commission are not included.',
+        ].join('\\n') }).catch(() => {}) },
+        { text: 'OK', onPress: goBackOrHome },
+      ]);
+      setPendingPurchase(null);
     } catch (e) {
       Alert.alert('Order failed', e?.message || 'Unable to complete this purchase.');
     } finally {
@@ -407,11 +436,33 @@ export default function IimmpactProductScreen({ category }) {
           </>
         )}
       </ScrollView>
+      <Modal visible={reviewing && !!pendingPurchase} transparent animationType="slide" onRequestClose={() => setReviewing(false)}>
+        <View style={st.confirmOverlay}>
+          <View style={st.confirmCard}>
+            <Text style={st.confirmTitle}>Confirm {pendingPurchase?.productName || 'Purchase'}</Text>
+            <ScrollView style={{ maxHeight: 360 }}>
+              <View style={st.confirmRow}><Text style={st.confirmLabel}>Product</Text><Text style={st.confirmValue}>{pendingPurchase?.productName}</Text></View>
+              <View style={st.confirmRow}><Text style={st.confirmLabel}>Account / recipient</Text><Text style={st.confirmValue}>{pendingPurchase?.accountNumber}</Text></View>
+              {Object.entries(pendingPurchase?.selectedFields || {}).filter(([k,v]) => v && !/(pin|password|token|secret|otp)/i.test(k)).map(([k,v]) => <View key={k} style={st.confirmRow}><Text style={st.confirmLabel}>{k.replace(/([A-Z])/g, ' $1')}</Text><Text style={st.confirmValue}>{v}</Text></View>)}
+              <View style={st.confirmRow}><Text style={st.confirmLabel}>Selling price</Text><Text style={st.confirmValue}>MYR {Number(pendingPurchase?.sellAmount || 0).toFixed(2)}</Text></View>
+              <View style={st.confirmRow}><Text style={st.confirmLabel}>Provider cost price</Text><Text style={st.confirmValue}>MYR {Number(pendingPurchase?.pricingOption?.cost?.amount ?? pendingPurchase?.amount ?? 0).toFixed(4)}</Text></View>
+              <View style={st.confirmRow}><Text style={st.confirmLabel}>Commission / margin</Text><Text style={st.confirmValue}>MYR {(Number(pendingPurchase?.sellAmount || 0) - Number(pendingPurchase?.pricingOption?.cost?.amount ?? pendingPurchase?.amount ?? 0)).toFixed(2)}</Text></View>
+              <View style={st.confirmRow}><Text style={st.confirmLabel}>Total wallet deduction</Text><Text style={st.confirmTotal}>MYR {Number(pendingPurchase?.sellAmount || 0).toFixed(2)}</Text></View>
+            </ScrollView>
+            <View style={st.confirmActions}>
+              <TouchableOpacity style={[st.confirmBtn, st.cancelBtn]} onPress={() => setReviewing(false)} disabled={busy}><Text style={st.cancelText}>Cancel</Text></TouchableOpacity>
+              <TouchableOpacity style={[st.confirmBtn, st.payBtn, busy && {opacity:0.6}]} onPress={confirmBuy} disabled={busy}><Text style={st.payText}>{busy ? 'Submitting…' : 'Confirm & Pay'}</Text></TouchableOpacity>
+            </View>
+            <Text style={st.confirmHint}>Printed and shared receipts include customer-facing details only, never provider cost or commission.</Text>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = (c) => StyleSheet.create({
+  confirmOverlay:{flex:1,backgroundColor:'rgba(0,0,0,0.58)',justifyContent:'center',padding:18},confirmCard:{backgroundColor:c.card,borderRadius:16,padding:16,maxHeight:'88%',borderWidth:1,borderColor:c.border},confirmTitle:{fontSize:18,fontWeight:'900',color:c.text,marginBottom:12},confirmRow:{flexDirection:'row',justifyContent:'space-between',gap:12,paddingVertical:9,borderBottomWidth:StyleSheet.hairlineWidth,borderBottomColor:c.border},confirmLabel:{flex:1,fontSize:12,color:c.textSecondary},confirmValue:{flex:1,fontSize:12,fontWeight:'700',color:c.text,textAlign:'right'},confirmTotal:{fontSize:15,fontWeight:'900',color:c.primary},confirmActions:{flexDirection:'row',gap:10,marginTop:14},confirmBtn:{flex:1,minHeight:44,borderRadius:9,alignItems:'center',justifyContent:'center'},cancelBtn:{borderWidth:1,borderColor:c.primary},payBtn:{backgroundColor:c.primary},cancelText:{fontWeight:'800',color:c.primary},payText:{fontWeight:'900',color:c.onPrimary},confirmHint:{fontSize:10,color:c.textSecondary,marginTop:10,lineHeight:15},
   screen:{flex:1,backgroundColor:c.bg},head:{flexDirection:'row',alignItems:'center',padding:12,gap:10,overflow:'hidden'},
   back:{color:'#fff',fontSize:22},ht:{color:'#fff',fontSize:17,fontWeight:'900'},hs:{color:'#ffffffcc',fontSize:10,marginTop:2},
   body:{padding:14,paddingBottom:50},h:{fontSize:20,fontWeight:'900',color:c.text,marginBottom:4},muted:{fontSize:11,color:c.textSecondary,lineHeight:17},
