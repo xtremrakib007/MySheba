@@ -7,6 +7,7 @@ const deleteFn = httpsCallable(functions, 'deleteApiProvider');
 const testFn = httpsCallable(functions, 'testApiProvider');
 const catalogFn = httpsCallable(functions, 'getIimmpactCatalog');
 const optionsFn = httpsCallable(functions, 'getIimmpactOptions');
+const fullCostCatalogFn = httpsCallable(functions, 'getIimmpactFullCatalogForSuperadmin');
 
 export type ApiProvider = Record<string, any> & {
   id?: string;
@@ -66,6 +67,10 @@ export async function testApiProvider(id: string): Promise<any> {
 
 export async function getIimmpactCatalog(id: string, productCode = '', includeInactive = false): Promise<any> {
   return (await catalogFn({ id, productCode, includeInactive })).data || {};
+}
+
+export async function getIimmpactFullCatalogForSuperadmin(country = 'MY'): Promise<any> {
+  return (await fullCostCatalogFn({ country })).data || {};
 }
 
 export async function getIimmpactOptions(args: {
