@@ -1598,7 +1598,8 @@ exports.listSuccessTopUpDrives = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, 
     // it and it is our margin.
     const pricingDoc = await catalog.readPricingDoc(db, operatorName);
     const quote = await customerWalletQuoter(db, request.auth.uid, service, 'BD');
-    const callerProfile = await getProfile(db, request.auth.uid);
+    const callerProfileSnap = await db.collection('users').doc(request.auth.uid).get();
+  const callerProfile = callerProfileSnap.exists ? { id: callerProfileSnap.id, ...callerProfileSnap.data() } : null;
     const callerRole = String(callerProfile?.role || 'customer').toLowerCase();
     const drives = packages
       .filter((pkg) => !catalog.isHidden(pkg, pricingDoc))
