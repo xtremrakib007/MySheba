@@ -92,7 +92,7 @@ export default function ServiceScreen() {
   } = useTheme();
 
   const styles = createStyles(colors);
-  const { currentService, currentStep, totalSteps, serviceData, goBackOrHome, nextStep, prevStep, submitService, submitting } = useApp();
+  const { currentService, currentStep, totalSteps, serviceData, goBackOrHome, nextStep, prevStep, setScreen, submitting } = useApp();
 
   const StepComponent = STEP_COMPONENTS[currentService];
   const title = SERVICE_TITLES[currentService] || 'Service';
@@ -130,7 +130,7 @@ export default function ServiceScreen() {
       }
     }
     if (!isLast) nextStep();
-    else if (!submitting) submitService();
+    else if (!submitting) setScreen('confirmTransaction');
   };
 
   return (
