@@ -2436,19 +2436,24 @@ exports.getIimmpactFullCatalogForSuperadmin = onCall({ enforceAppCheck: ENFORCE_
       throw new HttpsError('unavailable', `IIMMPACT catalog request failed: ${reason.slice(0, 300)}`);
     }
     const safe = publicIimmpactCatalog(json);
+    const rawProducts = json.products && typeof json.products === 'object' ? json.products : {};
     const products = {};
     for (const [code, product] of Object.entries(safe.products || {})) {
+      const raw = rawProducts[code] && typeof rawProducts[code] === 'object' ? rawProducts[code] : {};
       const fields = Array.isArray(product.fields) ? product.fields : [];
+      // Pricing is deliberately removed by publicIimmpactCatalog for customers.
+      // The superadmin-only response may inspect it without weakening that rule.
       products[code] = {
         ...product,
-        providerCost: product.cost ?? product.cost_price ?? product.provider_cost ?? null,
-        providerCurrency: String(product.cost_currency || product.currency || 'MYR').slice(0, 8),
+        providerCost: product.cost ?? product.cost_price ?? product.provider_cost ?? raw.cost ?? raw.cost_price ?? raw.provider_cost ?? null,
+        providerCurrency: String(product.cost_currency || product.currency || raw.cost_currency || raw.currency || 'MYR').slice(0, 8),
+        rrp: product.rrp ?? raw.rrp ?? raw.recommended_retail_price ?? null,
         providerDetails: {
-          denomination: product.denomination ?? null,
-          denominationUnitPrice: product.denomination_unit_price ?? null,
-          pricing: product.pricing ?? null,
-          fulfillment: product.fulfillment ?? null,
-          processingTime: product.processing_time ?? null,
+          denomination: product.denomination ?? raw.denomination ?? null,
+          denominationUnitPrice: product.denomination_unit_price ?? raw.denomination_unit_price ?? null,
+          pricing: raw.pricing ?? null,
+          fulfillment: product.fulfillment ?? raw.fulfillment ?? raw.fulfillment_details ?? null,
+          processingTime: product.processing_time ?? raw.processing_time ?? raw.processingTime ?? null,
           requiredFields: fields.map((f) => ({
             id: String(f.id || '').slice(0, 100),
             name: String(f.name || f.label || f.id || '').slice(0, 160),
