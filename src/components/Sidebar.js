@@ -302,7 +302,7 @@ export default function Sidebar() {
           <View style={styles.brandFooter}>
             <View style={styles.brandIdentity}>
               <Image source={require('../../assets/icon-transparent.png')} style={styles.brandLogo} resizeMode="contain" />
-              <View><View style={styles.brandRow}><Text style={styles.brandDark}>My</Text><Text style={styles.brandTeal}>Sheba</Text></View><Text style={styles.brandCompany}>SatuLink Solutions Sdn Bhd</Text></View>
+              <View><View style={styles.brandRow}><Text style={styles.brandDark}>My</Text><Text style={styles.brandTeal}>Sheba</Text></View></View>
             </View>
             <Text style={styles.brandVersion}>
               v{APP_VERSION}{bundleLabel() ? `  ·  ${bundleLabel()}` : ''}
