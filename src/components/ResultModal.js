@@ -25,7 +25,7 @@ export default function ResultModal() {
   const receiptTx = {
     id: txId,
     service,
-    details,
+    details: details || (isTravel ? [serviceData?.from, serviceData?.to, serviceData?.date, serviceData?.time].filter(Boolean).join(' · ') : ''),
     amount,
     total: total != null ? total : amount,
     status: isTravel ? 'inquiry_received' : 'pending',
