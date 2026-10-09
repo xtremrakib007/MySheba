@@ -1,7 +1,9 @@
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Modal, View, Text, TouchableOpacity, StyleSheet, Share } from 'react-native';
+import { printTransactionReceipt } from '../utils/printService';
 import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
+import { showAlert } from '../utils/appAlert';
 import { useTheme } from '../theme/ThemeContext';
 import AppModalHeader from './AppModalHeader';
 import RemittanceReceipt from './RemittanceReceipt';
@@ -18,6 +20,35 @@ export default function ResultModal() {
 
   const finishAndHome = () => { closeResult(); goHome(); };
   const sendAgain = () => { submitService(); };
+  const receiptTx = {
+    id: txId,
+    service,
+    details,
+    amount,
+    total: total != null ? total : amount,
+    status: isTravel ? 'inquiry_received' : 'pending',
+    createdAt,
+    customerPhone: profile?.phone || '',
+  };
+  const shareReceipt = async () => {
+    const lines = [
+      'MySheba Transaction Receipt',
+      `Service: ${service || ''}`,
+      details ? `Details: ${details}` : '',
+      txId ? `Transaction ID: ${txId}` : '',
+      amount != null ? `Amount: MYR ${Number(amount || 0).toFixed(2)}` : '',
+      total != null ? `Total charged: MYR ${Number(total || 0).toFixed(2)}` : '',
+      `Status: ${isTravel ? 'INQUIRY RECEIVED' : 'PENDING'}`,
+      dateStr ? `Date: ${dateStr}` : '',
+      'This receipt does not include provider cost or commission.',
+    ].filter(Boolean);
+    try { await Share.share({ message: lines.join('\\n'), title: 'MySheba Receipt' }); }
+    catch (e) { /* Share sheet cancelled or unavailable. */ }
+  };
+  const printReceipt = async () => {
+    try { await printTransactionReceipt(receiptTx, profile || {}); }
+    catch (e) { showAlert('Print receipt', e?.message || 'Could not print this receipt.'); }
+  };
   const isTravel = kind === 'travel';
   const isRemittance = !isTravel && service === 'Remittance';
 
@@ -64,6 +95,10 @@ export default function ResultModal() {
           {!!dateStr && <View style={styles.row}><Text style={styles.rowLabel}>Date</Text><Text style={styles.rowValue}>{dateStr}</Text></View>}
         </View>}
         {!!txId && <View style={styles.txId}><Text style={styles.txIdText}>Ref: {txId}</Text></View>}
+        <View style={styles.btnRow}>
+          {!isTravel && <TouchableOpacity style={[styles.btn,styles.btnOutline]} onPress={printReceipt}><Text style={[styles.btnText,styles.btnOutlineText]}>Print</Text></TouchableOpacity>}
+          {!isTravel && <TouchableOpacity style={[styles.btn,styles.btnOutline]} onPress={shareReceipt}><Text style={[styles.btnText,styles.btnOutlineText]}>Share</Text></TouchableOpacity>}
+        </View>
         <View style={styles.btnRow}>
           {!isTravel && <TouchableOpacity style={[styles.btn,styles.btnOutline,submitting&&styles.btnDisabled]} onPress={sendAgain} disabled={submitting}><Text style={[styles.btnText,styles.btnOutlineText]}>{submitting?'Sending…':'Send Again'}</Text></TouchableOpacity>}
           <TouchableOpacity style={[styles.btn,styles.btnPrimary]} onPress={finishAndHome}><Text style={styles.btnText}>Return to Home</Text></TouchableOpacity>
