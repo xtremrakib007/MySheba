@@ -145,6 +145,7 @@ exports.getIimmpactCatalogForUser = require('./apiProviderService').getIimmpactC
 exports.getIimmpactFullCatalogForUser = require('./apiProviderService').getIimmpactFullCatalogForUser;
 exports.getIimmpactFullCatalogForSuperadmin = require('./apiProviderService').getIimmpactFullCatalogForSuperadmin;
 exports.getIimmpactOptions = require('./apiProviderService').getIimmpactOptions;
+exports.getIimmpactOptionsForSuperadmin = require('./apiProviderService').getIimmpactOptionsForSuperadmin;
 exports.listSuccessTopUpCatalogForAdmin = require('./apiProviderService').listSuccessTopUpCatalogForAdmin;
 exports.getSuccessTopUpBalance = require('./apiProviderService').getSuccessTopUpBalance;
 exports.listApiWebhooks = require('./apiWebhookService').listApiWebhooks;
