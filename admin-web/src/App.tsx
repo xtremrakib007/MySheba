@@ -93,7 +93,7 @@ function AdminRoutes() {
         <Route element={<SuperadminRoute />}><Route path="/config/wallet-exchange" element={<WalletExchangeRatesPage />} /></Route>
         <Route path="/config/pricing" element={<PricingPage />} />
         <Route path="/config/payments" element={<PaymentSettingsPage />} />
-        <Route element={<SuperadminRoute />}><Route path="/config/api-providers" element={<ApiProviderManagementPage />}<Route path="/config/iimmpact-costs" element={<IimmpactCostCatalogPage />} /></Route>
+        <Route element={<SuperadminRoute />}><Route path="/config/api-providers" element={<ApiProviderManagementPage />} /><Route path="/config/iimmpact-costs" element={<IimmpactCostCatalogPage />} /></Route>
         <Route path="/config/salary" element={<SalarySettingsPage />} />
         <Route path="/config/banners" element={<BannersPage />} />
         <Route path="/config/categories" element={<CategoriesPage />} />
