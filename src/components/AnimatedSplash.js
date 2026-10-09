@@ -293,21 +293,6 @@ export default function AnimatedSplash({ ready, onFinished }) {
           <Text style={styles.checkMark}>✓</Text>
         </Animated.View>
       )}
-
-      <Animated.Text
-        style={[
-          styles.footerText,
-          {
-            opacity: footerOpacity,
-            color: footerColorAnim.interpolate({
-              inputRange: FOOTER_COLORS.map((_, i) => i / (FOOTER_COLORS.length - 1)),
-              outputRange: FOOTER_COLORS,
-            }),
-          },
-        ]}
-      >
-        {'Powered By - SATULINK SOLUTIONS SDN BHD'}
-      </Animated.Text>
     </Animated.View>
   );
 }
