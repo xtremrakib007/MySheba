@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View, Share } from 'react-native';
 import { printHtml } from '../utils/printService';
 import { countries } from '../data/countries';
 import { useTheme } from '../theme/ThemeContext';
@@ -81,7 +81,7 @@ export default function RemittanceReceipt({ transaction = {}, profile = {}, oper
     'MySheba Remittance Receipt',
     `Transaction ID: ${val(d.txId)}`,
     `Date & Time: ${val(d.created)}`,
-    `Amount: ${val(d.amount)}`,
+    `Amount: ${val(d.send)}`,
     `Status: ${val(transaction.status || 'pending').toUpperCase()}`,
     'Provider cost and commission are not included.',
   ].join('\\n') }).catch(() => {})}><Text style={styles.printText}>Share Receipt</Text></TouchableOpacity>
