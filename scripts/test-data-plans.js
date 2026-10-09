@@ -31,6 +31,18 @@ const catalog = require('../functions/providerCatalog');
 const apiProviderService = require('../functions/apiProviderService');
 const wallet = require('../functions/walletService');
 
+const IIMMPACT = {
+  id: 'iimmpact-my',
+  name: 'iimmpact',
+  service: 'Internet',
+  country: 'MY',
+  active: true,
+  baseUrl: 'https://api.iimmpact.com',
+  catalogPreset: 'iimmpact-options',
+  catalogPath: '/v2/options',
+  authType: 'iimmpactHmac',
+};
+
 // The client is ESM and this script is CommonJS. Rather than add a build step
 // for one pure function, its source is read and evaluated - it imports nothing,
 // which is the point of having lifted it out of the screen.
