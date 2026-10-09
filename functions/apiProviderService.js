@@ -2412,6 +2412,60 @@ exports.getIimmpactFullCatalogForUser = onCall({ enforceAppCheck: ENFORCE_APP_CH
   }
 });
 
+
+/**
+ * Superadmin-only live Marketplace catalogue including provider cost.
+ * Cost fields are never added to the customer-facing catalogue callable.
+ */
+exports.getIimmpactFullCatalogForSuperadmin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  const db = admin.firestore();
+  await assertSuperadmin(db, request);
+  await checkVelocity(db, request.auth.uid, 'getIimmpactFullCatalogForSuperadmin', { ip: getClientIp(request) });
+  const country = cleanString(request.data?.country, 2).toUpperCase() || 'MY';
+  const provider = await findActiveIimmpactProviderForCountry(db, country);
+  if (!provider || provider.authType !== 'iimmpactHmac') {
+    throw new HttpsError('failed-precondition', 'No active IIMMPACT provider is configured for this country.');
+  }
+  const url = iimmpactUrl(provider, '/v2/catalog');
+  url.searchParams.set('is_active', 'true');
+  try {
+    const { ok, status, json } = await signedProviderRequest(url, { method: 'GET', headers: { accept: 'application/json' } }, provider);
+    if (!ok || !json || typeof json !== 'object') {
+      const reason = String(getPath(json, 'message') || getPath(json, 'error.message') || `HTTP ${status}`);
+      throw new HttpsError('unavailable', `IIMMPACT catalog request failed: ${reason.slice(0, 300)}`);
+    }
+    const safe = publicIimmpactCatalog(json);
+    const products = {};
+    for (const [code, product] of Object.entries(safe.products || {})) {
+      const fields = Array.isArray(product.fields) ? product.fields : [];
+      products[code] = {
+        ...product,
+        providerCost: product.cost ?? product.cost_price ?? product.provider_cost ?? null,
+        providerCurrency: String(product.cost_currency || product.currency || 'MYR').slice(0, 8),
+        providerDetails: {
+          denomination: product.denomination ?? null,
+          denominationUnitPrice: product.denomination_unit_price ?? null,
+          pricing: product.pricing ?? null,
+          fulfillment: product.fulfillment ?? null,
+          processingTime: product.processing_time ?? null,
+          requiredFields: fields.map((f) => ({
+            id: String(f.id || '').slice(0, 100),
+            name: String(f.name || f.label || f.id || '').slice(0, 160),
+            type: String(f.type || '').slice(0, 40),
+            required: f.required === true,
+            role: String(f.role || '').slice(0, 40),
+            dataSource: f.data_source || null,
+          })),
+        },
+      };
+    }
+    return { providerId: provider.id || '', country, fetchedAt: new Date().toISOString(), costAccess: true, ...safe, products };
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError('unavailable', String(error?.message || 'Unable to load the IIMMPACT cost catalogue.').slice(0, 400));
+  }
+});
+
 exports.getIimmpactCatalogForUser = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
