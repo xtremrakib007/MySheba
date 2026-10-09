@@ -54,7 +54,30 @@ function test(name, fn) {
 // another's run - which looks exactly like the code being broken.
 const queue = [];
 function atest(name, fn) {
-  queue.push(async () => {
+  queue.pushtest('IIMMPACT Malaysia Internet uses documented product codes', () => {
+  const providerCatalog = require('../functions/providerCatalog');
+  const provider = {
+    name: 'iimmpact',
+    baseUrl: 'https://api.iimmpact.com',
+    catalogPreset: 'iimmpact-options',
+    catalogPath: '/v2/options',
+    authType: 'iimmpactHmac',
+  };
+  const expected = {
+    Celcom: ['CEL'],
+    Digi: ['DI'],
+    Hotlink: ['HI'],
+    'U Mobile': ['UMI'],
+    Tunetalk: ['TI'],
+    XOX: ['OXI'],
+    Yes: ['YESI'],
+  };
+  for (const [operator, codes] of Object.entries(expected)) {
+    assert.deepStrictEqual(providerCatalog.productCodesFor(provider, operator), codes);
+  }
+});
+
+(async () => {
     try { await fn(); passed += 1; console.log('  ok  ' + name); }
     catch (error) { console.error('  FAIL  ' + name + '\n        ' + (error && error.message)); process.exitCode = 1; }
   });
@@ -657,25 +680,3 @@ function withCatalogue(plans) {
   for (const step of queue) await step();
   console.log(`\n${passed} checks passed.\n`);
 })();
-\ntest('IIMMPACT Malaysia Internet uses documented product codes', () => {
-  const providerCatalog = require('../functions/providerCatalog');
-  const provider = {
-    name: 'iimmpact',
-    baseUrl: 'https://api.iimmpact.com',
-    catalogPreset: 'iimmpact-options',
-    catalogPath: '/v2/options',
-    authType: 'iimmpactHmac',
-  };
-  const expected = {
-    Celcom: ['CEL'],
-    Digi: ['DI'],
-    Hotlink: ['HI'],
-    'U Mobile': ['UMI'],
-    Tunetalk: ['TI'],
-    XOX: ['OXI'],
-    Yes: ['YESI'],
-  };
-  for (const [operator, codes] of Object.entries(expected)) {
-    assert.deepStrictEqual(providerCatalog.productCodesFor(provider, operator), codes);
-  }
-});
