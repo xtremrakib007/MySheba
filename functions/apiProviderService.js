@@ -2164,7 +2164,7 @@ function scrubIimmpactPublicValue(value, depth = 0) {
     const normalizedKey = String(key)
       .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
       .toLowerCase()
-      .replace(/[-\\s]/g, '_');
+      .replace(/[-\s]/g, '_');
     const compactKey = normalizedKey.replace(/_/g, '');
     if (IIMMPACT_PRIVATE_KEYS.has(normalizedKey) ||
         IIMMPACT_PRIVATE_KEYS.has(compactKey)) continue;
