@@ -25,7 +25,7 @@ const balanceFn = httpsCallable(functions, 'getSuccessTopUpBalance');
 // superadmin at all: 'Offer Packs' was missing, so the only provider that
 // could ever serve it was the one Success TopUp provisions for itself.
 // scripts/test-api-provider.js fails the build if the two lists drift.
-export const API_SERVICES = ['Recharge', 'Internet', 'Offer Packs', 'Bill Payment', 'Bus', 'Train', 'Flight', 'Mobile Banking', 'Remittance', 'Payment Gateway', 'Entertainment', 'Recharge PIN', 'eSIM', 'IIMMPACT'];
+export const API_SERVICES = ['Recharge', 'Internet', 'Offer Packs', 'Bill Payment', 'Bus', 'Train', 'Flight', 'Mobile Banking', 'Remittance', 'Payment Gateway', 'Entertainment', 'Recharge PIN', 'eSIM''];
 export async function listApiProviders() { const res = await listFn({}); return res.data?.providers || res.data || []; }
 export async function saveApiProvider(provider) { return (await saveFn(provider)).data; }
 
