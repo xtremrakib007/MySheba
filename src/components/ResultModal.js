@@ -44,7 +44,7 @@ export default function ResultModal() {
       dateStr ? `Date: ${dateStr}` : '',
       'This receipt does not include provider cost or commission.',
     ].filter(Boolean);
-    try { await Share.share({ message: lines.join('\\n'), title: 'MySheba Receipt' }); }
+    try { await Share.share({ message: lines.join('\n'), title: 'MySheba Receipt' }); }
     catch (e) { /* Share sheet cancelled or unavailable. */ }
   };
   const printReceipt = async () => {
@@ -95,8 +95,8 @@ export default function ResultModal() {
         </View>}
         {!!txId && <View style={styles.txId}><Text style={styles.txIdText}>Ref: {txId}</Text></View>}
         <View style={styles.btnRow}>
-          {!isTravel && <TouchableOpacity style={[styles.btn,styles.btnOutline]} onPress={printReceipt}><Text style={[styles.btnText,styles.btnOutlineText]}>Print</Text></TouchableOpacity>}
-          {!isTravel && <TouchableOpacity style={[styles.btn,styles.btnOutline]} onPress={shareReceipt}><Text style={[styles.btnText,styles.btnOutlineText]}>Share</Text></TouchableOpacity>}
+          <TouchableOpacity style={[styles.btn,styles.btnOutline]} onPress={printReceipt}><Text style={[styles.btnText,styles.btnOutlineText]}>Print</Text></TouchableOpacity>
+          <TouchableOpacity style={[styles.btn,styles.btnOutline]} onPress={shareReceipt}><Text style={[styles.btnText,styles.btnOutlineText]}>Share</Text></TouchableOpacity>
         </View>
         <View style={styles.btnRow}>
           {!isTravel && <TouchableOpacity style={[styles.btn,styles.btnOutline,submitting&&styles.btnDisabled]} onPress={sendAgain} disabled={submitting}><Text style={[styles.btnText,styles.btnOutlineText]}>{submitting?'Sending…':'Send Again'}</Text></TouchableOpacity>}
