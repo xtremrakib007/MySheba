@@ -84,6 +84,7 @@ export const PATH_ACCESS: Record<string, Requirement> = {
   '/config/pricing': ['settings'],
   '/config/payments': ['settings'],
   '/config/api-providers': SUPERADMIN,
+  '/config/iimmpact-costs': SUPERADMIN,
   '/config/salary': ['settings'],
   '/config/banners': ['settings'],
   '/config/categories': ['settings'],
