@@ -273,7 +273,7 @@ export default function IimmpactProductScreen({ category }) {
           'MySheba Transaction Receipt', 'Service: ' + tx.service, 'Account: ' + tx.details,
           'Transaction ID: ' + tx.id, 'Amount: MYR ' + Number(tx.amount).toFixed(2),
           'Status: PENDING', 'Provider cost and commission are not included.',
-        ].join('\\n') }).catch(() => {}) },
+        ].join('\n') }).catch(() => {}) },
         { text: 'OK', onPress: goBackOrHome },
       ]);
       setPendingPurchase(null);
