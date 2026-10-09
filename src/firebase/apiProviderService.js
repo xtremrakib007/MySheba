@@ -14,6 +14,7 @@ const productCodesFn = httpsCallable(functions, 'listProviderProductCodes');
 const iimmpactCatalogFn = httpsCallable(functions, 'getIimmpactCatalog');
 const iimmpactUserCatalogFn = httpsCallable(functions, 'getIimmpactCatalogForUser');
 const iimmpactFullCatalogFn = httpsCallable(functions, 'getIimmpactFullCatalogForUser');
+const iimmpactAdminFullCatalogFn = httpsCallable(functions, 'getIimmpactFullCatalogForSuperadmin');
 const iimmpactOptionsFn = httpsCallable(functions, 'getIimmpactOptions');
 const chargeIimmpactProductFn = httpsCallable(functions, 'chargeIimmpactProduct');
 const testFn = httpsCallable(functions, 'testApiProvider');
@@ -97,6 +98,11 @@ export async function getIimmpactCatalogForUser(providerId = '', service = 'Rech
 
 export async function getIimmpactFullCatalogForUser(country = 'MY') {
   return (await iimmpactFullCatalogFn({ country })).data || {};
+}
+
+export async function getIimmpactFullCatalogForSuperadmin(country = 'MY') {
+  const result = await iimmpactAdminFullCatalogFn({ country });
+  return result.data || {};
 }
 
 export async function chargeIimmpactProduct(payload, customer = {}) {
