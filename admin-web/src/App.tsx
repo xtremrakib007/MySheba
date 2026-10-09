@@ -43,6 +43,7 @@ const CategoriesPage = lazy(() => import('./pages/CategoriesPage'));
 const ModuleSubscriptionsPage = lazy(() => import('./pages/ModuleSubscriptionsPage'));
 const PaymentSettingsPage = lazy(() => import('./pages/PaymentSettingsPage'));
 const ApiProviderManagementPage = lazy(() => import('./pages/ApiProviderManagementPage'));
+const IimmpactCostCatalogPage = lazy(() => import('./pages/IimmpactCostCatalogPage'));
 const PointTopUpPage = lazy(() => import('./pages/PointTopUpPage'));
 const AccessControlPage = lazy(() => import('./pages/AccessControlPage'));
 const DeviceSessionsPage = lazy(() => import('./pages/DeviceSessionsPage'));
@@ -92,7 +93,7 @@ function AdminRoutes() {
         <Route element={<SuperadminRoute />}><Route path="/config/wallet-exchange" element={<WalletExchangeRatesPage />} /></Route>
         <Route path="/config/pricing" element={<PricingPage />} />
         <Route path="/config/payments" element={<PaymentSettingsPage />} />
-        <Route element={<SuperadminRoute />}><Route path="/config/api-providers" element={<ApiProviderManagementPage />} /></Route>
+        <Route element={<SuperadminRoute />}><Route path="/config/api-providers" element={<ApiProviderManagementPage} /><Route path="/config/iimmpact-costs" element={<IimmpactCostCatalogPage />} /></Route>
         <Route path="/config/salary" element={<SalarySettingsPage />} />
         <Route path="/config/banners" element={<BannersPage />} />
         <Route path="/config/categories" element={<CategoriesPage />} />
