@@ -1478,7 +1478,7 @@ exports.resolveIimmpactEsimPackage = resolveIimmpactEsimPackage;
 exports.resolveExecutionMode = resolveExecutionMode;
 exports.providersForService = providersForService;
 exports.COUNTRY_CODES = COUNTRY_CODES;
-exports._test = { isPrivateIp, resolveExecutionMode, pinnedLookup, validateBaseUrl, validateHeaders, validateTemplate, getPath, render, providerAuth, validate, matchesStatus, classifyResponse, providerAmountFor };
+exports._test = { _test_autoCountryModes: autoCountryModes, isPrivateIp, resolveExecutionMode, pinnedLookup, validateBaseUrl, validateHeaders, validateTemplate, getPath, render, providerAuth, validate, matchesStatus, classifyResponse, providerAmountFor };
 
 exports.testApiProvider = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
@@ -1771,7 +1771,13 @@ exports.listProviderDataPlans = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, a
 
   const pricingDoc = await catalog.readPricingDoc(db, operatorName);
   const quote = await customerWalletQuoter(db, request.auth.uid, service, country);
-  const callerProfile = await getProfile(db, request.auth.uid);
+  const callerProfileSnap = await db
+    .collection('users')
+    .doc(request.auth.uid)
+    .get();
+  const callerProfile = callerProfileSnap.exists
+    ? callerProfileSnap.data()
+    : null;
   const callerRole = String(callerProfile?.role || 'customer').toLowerCase();
   const plans = [...byId.values()]
     .filter((pkg) => !catalog.isHidden(pkg, pricingDoc))
@@ -1780,8 +1786,21 @@ exports.listProviderDataPlans = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, a
       // catalogue denomination stays on the server: it is what the provider
       // must be sent, and it is our margin.
       const price = catalog.sellPriceFor(pkg, pricingDoc, callerRole);
-      const { price: _denomination, ...rest } = pkg;
-      return { ...rest, price, ...(quote(price) || { walletPrice: null, walletCurrency: '' }) };
+      // Customer response uses an explicit allowlist. Never spread internal
+      // provider cost, RRP, denomination, fulfillment, or risk metadata.
+      return {
+        id: pkg.id,
+        productCode: pkg.productCode,
+        name: pkg.name,
+        data: pkg.data,
+        valid: pkg.valid,
+        description: pkg.description,
+        features: pkg.features,
+        category: pkg.category,
+        processingTime: pkg.processingTime,
+        price,
+        ...(quote(price) || { walletPrice: null, walletCurrency: '' }),
+      };
     });
   return { plans, supported: true };
 });
@@ -2107,27 +2126,118 @@ function iimmpactUrl(provider, path) {
   return new URL(cleanPath, base);
 }
 
+
+const IIMMPACT_PRIVATE_KEYS = new Set([
+  'cost',
+  'cost_amount',
+  'cost_price',
+  'provider_cost',
+  'provider_cost_amount',
+  'provider_amount',
+  'rrp',
+  'recommended_retail_price',
+  'denomination_unit_price',
+  'has_loss_risk',
+  'haslossrisk',
+  'provider_details',
+  'providerdetails',
+  'providercost',
+  'providercostamount',
+  'costamount',
+  'costprice',
+  'provideramount',
+  'costcurrency',
+  'providercurrency',
+  'recommendedretailprice',
+  'denominationunitprice',
+  'pricing',
+]);
+
+function scrubIimmpactPublicValue(value, depth = 0) {
+  if (depth > 12 || value == null) return value;
+
+  if (Array.isArray(value)) {
+    return value.slice(0, 1000)
+      .map((item) => scrubIimmpactPublicValue(item, depth + 1));
+  }
+
+  if (typeof value !== 'object') return value;
+
+  const safe = {};
+  for (const [key, child] of Object.entries(value)) {
+    const normalizedKey = String(key)
+      .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+      .toLowerCase()
+      .replace(/[-\s]/g, '_');
+    const compactKey = normalizedKey.replace(/_/g, '');
+    if (IIMMPACT_PRIVATE_KEYS.has(normalizedKey) ||
+        IIMMPACT_PRIVATE_KEYS.has(compactKey)) continue;
+    safe[key] = scrubIimmpactPublicValue(child, depth + 1);
+  }
+  return safe;
+}
+
 function publicIimmpactCatalog(catalog) {
   const products = {};
+
   for (const [code, product] of Object.entries(catalog?.products || {})) {
-    if (!product || typeof product !== 'object') continue;
-    const { pricing: _pricing, ...safeProduct } = product;
-    products[code] = safeProduct;
+    if (!product || typeof product !== 'object' || Array.isArray(product)) {
+      continue;
+    }
+
+    // Explicit product allowlist: do not spread provider product objects.
+    // Fields and fulfillment mappings are needed by the purchase form.
+    products[code] = {
+      code: String(product.code || code).slice(0, 200),
+      name: String(product.name || product.label || code).slice(0, 200),
+      is_active: product.is_active !== false,
+      image_url: typeof product.image_url === 'string'
+        ? product.image_url.slice(0, 2000)
+        : '',
+      processing_time: String(product.processing_time || '').slice(0, 100),
+      fields: Array.isArray(product.fields)
+        ? scrubIimmpactPublicValue(product.fields)
+        : [],
+      fulfillment: product.fulfillment && typeof product.fulfillment === 'object'
+        ? scrubIimmpactPublicValue(product.fulfillment)
+        : {},
+    };
   }
-  return { last_updated: catalog?.last_updated || null, tree: catalog?.tree || { groups: [] }, products };
+
+  const groups = Array.isArray(catalog?.tree?.groups)
+    ? catalog.tree.groups.map((group) => {
+        if (!group || typeof group !== 'object') return null;
+        return {
+          name: String(group.name || '').slice(0, 200),
+          categories: (Array.isArray(group.categories) ? group.categories : [])
+            .filter((category) => category && typeof category === 'object')
+            .map((category) => ({
+              name: String(category.name || '').slice(0, 200),
+              product_codes: (Array.isArray(category.product_codes)
+                ? category.product_codes
+                : []).map((item) => String(item).slice(0, 200)).slice(0, 5000),
+            })),
+        };
+      }).filter(Boolean)
+    : [];
+
+  return {
+    last_updated: catalog?.last_updated || null,
+    tree: { groups },
+    products,
+  };
 }
 
 function publicIimmpactOptions(data) {
-  const items = Array.isArray(data?.items) ? data.items.map((item) => {
-    if (!item || typeof item !== 'object') return item;
-    const { cost: _cost, has_loss_risk: _loss, ...safe } = item;
-    return safe;
-  }) : [];
+  const items = Array.isArray(data?.items)
+    ? scrubIimmpactPublicValue(data.items)
+    : [];
+
   return {
-    product_code: data?.product_code || '',
-    field_id: data?.field_id || '',
+    product_code: String(data?.product_code || '').slice(0, 200),
+    field_id: String(data?.field_id || '').slice(0, 200),
     items,
-    meta: data?.meta || {},
+    meta: scrubIimmpactPublicValue(data?.meta || {}),
   };
 }
 

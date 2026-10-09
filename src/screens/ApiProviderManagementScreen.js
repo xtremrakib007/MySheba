@@ -17,7 +17,7 @@ import * as webhookService from '../firebase/apiWebhookService';
 // country the backend accepts but this list omits cannot be given a mode or a
 // provider from the only screen that sets them, which is how NP, PK, MM and KH
 // came to be chargeable countries nobody could configure.
-const SCOPE_COUNTRIES=['BD','MY','SG','ID','IN','PH','NP','PK','MM','KH'];
+const SCOPE_COUNTRIES=['BD','MY','SG','ID','IN','PH','NP','PK','MM','KH','TH'];
 
 export default function ApiProviderManagementScreen() {
   const { profile, goBackOrHome } = useApp();
@@ -128,7 +128,7 @@ export default function ApiProviderManagementScreen() {
   // and nothing said so, because the fallback is a plausible-looking label
   // rather than a blank. scripts/test-api-countries.js fails the build now if
   // a scope country has no name.
-  const COUNTRY_LABELS={BD:'🇧🇩 Bangladesh',MY:'🇲🇾 Malaysia',SG:'🇸🇬 Singapore',ID:'🇮🇩 Indonesia',IN:'🇮🇳 India',PH:'🇵🇭 Philippines',NP:'🇳🇵 Nepal',PK:'🇵🇰 Pakistan',MM:'🇲🇲 Myanmar',KH:'🇰🇭 Cambodia',ALL:'🌍 All countries'};
+  const COUNTRY_LABELS={BD:'🇧🇩 Bangladesh',MY:'🇲🇾 Malaysia',SG:'🇸🇬 Singapore',ID:'🇮🇩 Indonesia',IN:'🇮🇳 India',PH:'🇵🇭 Philippines',NP:'🇳🇵 Nepal',PK:'🇵🇰 Pakistan',MM:'🇲🇲 Myanmar',KH:'🇰🇭 Cambodia',TH:'🇹🇭 Thailand',ALL:'🌍 All countries'};
   const countryLabel=(c)=>COUNTRY_LABELS[c]||String(c||'');
   // A provider can serve several features now, so it appears under each one it
   // was given rather than only under its primary. `services` is projected with
