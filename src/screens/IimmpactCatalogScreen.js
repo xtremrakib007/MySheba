@@ -31,11 +31,16 @@ function flattenCategories(groups) {
 }
 
 export default function IimmpactCatalogScreen() {
-  const { goBackOrHome, setScreen } = useApp();
+  const { goBackOrHome, setScreen, profile } = useApp();
   const { colors, brandGradient } = useTheme();
   const [catalog, setCatalog] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [showCosts, setShowCosts] = useState(false);
+  const [costLoading, setCostLoading] = useState(false);
+  const [costError, setCostError] = useState('');
+  const [costCatalog, setCostCatalog] = useState(null);
+  const isSuperadmin = String(profile?.role || '').toLowerCase() === 'superadmin';
   const styles = createStyles(colors);
 
   useEffect(() => {
@@ -54,6 +59,17 @@ export default function IimmpactCatalogScreen() {
   }, []);
 
   const products = catalog?.products || {};
+  const costProducts = costCatalog?.products || {};
+  const toggleCosts = async () => {
+    if (!isSuperadmin) return;
+    if (showCosts) { setShowCosts(false); return; }
+    setShowCosts(true);
+    if (costCatalog) return;
+    setCostLoading(true); setCostError('');
+    try { setCostCatalog(await apiProviderService.getIimmpactFullCatalogForSuperadmin('MY')); }
+    catch (e) { setCostError(e?.message || 'Could not load provider costs.'); }
+    finally { setCostLoading(false); }
+  };
   const categories = useMemo(() => flattenCategories(catalog?.tree?.groups), [catalog]);
 
   const categoryInfo = (category) => {
@@ -95,6 +111,30 @@ export default function IimmpactCatalogScreen() {
           </Text>
           {!!catalog?.last_updated && <Text style={styles.updated}>Catalog updated: {String(catalog.last_updated)}</Text>}
         </View>
+
+        {isSuperadmin && <TouchableOpacity style={styles.costToggle} onPress={toggleCosts}><Text style={styles.costToggleText}>{showCosts ? 'Hide provider costs' : 'Superadmin: Show provider costs & full details'}</Text></TouchableOpacity>}
+        {showCosts && isSuperadmin && <View style={styles.costPanel}>
+          <Text style={styles.costTitle}>Provider cost — Superadmin only</Text>
+          <Text style={styles.costNote}>Live provider data. Costs are never shown to customers or regular staff.</Text>
+          {costLoading && <ActivityIndicator color={colors.primary} />}
+          {!!costError && <Text style={styles.error}>{costError}</Text>}
+          {!costLoading && !costError && categories.map(category => <View key={'cost-'+(category.id||category.name)} style={styles.costCategory}>
+            <Text style={styles.costCategoryTitle}>{category.group} / {category.name}</Text>
+            {category.productCodes.map(code => {
+              const p = costProducts[String(code)] || products[String(code)];
+              if (!p || p.is_active === false) return null;
+              const cost = p.providerCost ?? p.cost ?? p.cost_price ?? p.provider_cost;
+              return <View key={'cost-product-'+code} style={styles.costRow}>
+                <View style={{flex:1}}>
+                  <Text style={styles.costProductName}>{String(p.name || p.label || code)}</Text>
+                  <Text style={styles.costMeta}>Code: {code} · {String(p.processing_time || 'Processing time not supplied')}</Text>
+                  <Text style={styles.costMeta}>Fields: {(Array.isArray(p.fields) ? p.fields : []).map(f => String(f.name || f.label || f.id)).join(', ') || 'Not supplied'}</Text>
+                </View>
+                <Text style={styles.costAmount}>{cost == null ? 'Cost not supplied' : String(p.providerCurrency || p.currency || 'MYR')+' '+String(cost)}</Text>
+              </View>;
+            })}
+          </View>)}
+        </View>}
 
         {loading && (
           <View style={styles.state}><ActivityIndicator color={colors.primary} /><Text style={styles.info}>Loading the live IIMMPACT catalogue…</Text></View>
@@ -142,6 +182,7 @@ function createStyles(colors) {
     updated:{fontSize:9,color:colors.textSecondary,marginTop:8},
     state:{alignItems:'center',paddingVertical:22,gap:8},info:{color:colors.textSecondary,fontSize:11},
     error:{padding:12,color:colors.danger || colors.text},
+    costToggle:{padding:13,marginBottom:12,borderRadius:radius.md,backgroundColor:colors.primary},costToggleText:{color:colors.onPrimary,fontSize:12,fontWeight:'900',textAlign:'center'},costPanel:{padding:12,marginBottom:14,borderWidth:1,borderColor:colors.border,borderRadius:radius.lg,backgroundColor:colors.card},costTitle:{fontSize:16,fontWeight:'900',color:colors.text},costNote:{fontSize:10,color:colors.textSecondary,marginTop:4,marginBottom:8},costCategory:{marginTop:10},costCategoryTitle:{fontSize:12,fontWeight:'900',color:colors.text,marginBottom:5},costRow:{flexDirection:'row',gap:8,alignItems:'center',paddingVertical:8,borderTopWidth:1,borderTopColor:colors.border},costProductName:{fontSize:11,fontWeight:'800',color:colors.text},costMeta:{fontSize:9,color:colors.textSecondary,marginTop:2},costAmount:{fontSize:10,fontWeight:'900',color:colors.primary,maxWidth:100,textAlign:'right'},
     grid:{flexDirection:'row',flexWrap:'wrap',justifyContent:'space-between',rowGap:10},
     tile:{width:'31.5%',minHeight:170,backgroundColor:colors.card,borderWidth:1,borderColor:colors.border,borderRadius:radius.lg,padding:10,alignItems:'center'},
     logo:{width:48,height:42,marginBottom:6},logoFallback:{width:42,height:42,borderRadius:21,backgroundColor:colors.primary,alignItems:'center',justifyContent:'center',marginBottom:6},
