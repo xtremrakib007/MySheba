@@ -159,6 +159,7 @@ const PRESETS = {
       cost: ['cost', 'provider_cost', 'cost_price'],
       rrp: ['rrp', 'recommended_retail_price'],
       currency: ['currency', 'cost_currency'],
+      hasLossRisk: ['has_loss_risk', 'hasLossRisk'],
     },
     types: ['regular'],
     dynamicProductDiscovery: true,
@@ -444,6 +445,7 @@ function normaliseItem(item, itemMap) {
     fulfillment: firstOf(item, map.fulfillment || ['fulfillment', 'fulfillment_details']) ?? null,
     requiredFields: Array.isArray(firstOf(item, map.requiredFields || ['required_fields', 'fields'])) ? firstOf(item, map.requiredFields || ['required_fields', 'fields']) : [],
     rawLabel: String(firstOf(item, ['label']) ?? '').slice(0, 200),
+    hasLossRisk: firstOf(item, map.hasLossRisk || ['has_loss_risk', 'hasLossRisk']) === true || String(firstOf(item, map.hasLossRisk || ['has_loss_risk', 'hasLossRisk']) ?? '').toLowerCase() === 'true',
   };
 }
 
