@@ -63,7 +63,7 @@ export default function IimmpactProductScreen({ category }) {
   const [reviewing, setReviewing] = useState(false);
   const [pendingPurchase, setPendingPurchase] = useState(null);
   const [search, setSearch] = useState({});
-  const styles = createStyles(colors);
+  const styles = makeStyles(colors);
 
   useEffect(() => {
     let alive = true;
@@ -461,7 +461,7 @@ export default function IimmpactProductScreen({ category }) {
   );
 }
 
-const styles = (c) => StyleSheet.create({
+const makeStyles = (c) => StyleSheet.create({
   confirmOverlay:{flex:1,backgroundColor:'rgba(0,0,0,0.58)',justifyContent:'center',padding:18},confirmCard:{backgroundColor:c.card,borderRadius:16,padding:16,maxHeight:'88%',borderWidth:1,borderColor:c.border},confirmTitle:{fontSize:18,fontWeight:'900',color:c.text,marginBottom:12},confirmRow:{flexDirection:'row',justifyContent:'space-between',gap:12,paddingVertical:9,borderBottomWidth:StyleSheet.hairlineWidth,borderBottomColor:c.border},confirmLabel:{flex:1,fontSize:12,color:c.textSecondary},confirmValue:{flex:1,fontSize:12,fontWeight:'700',color:c.text,textAlign:'right'},confirmTotal:{fontSize:15,fontWeight:'900',color:c.primary},confirmActions:{flexDirection:'row',gap:10,marginTop:14},confirmBtn:{flex:1,minHeight:44,borderRadius:9,alignItems:'center',justifyContent:'center'},cancelBtn:{borderWidth:1,borderColor:c.primary},payBtn:{backgroundColor:c.primary},cancelText:{fontWeight:'800',color:c.primary},payText:{fontWeight:'900',color:c.onPrimary},confirmHint:{fontSize:10,color:c.textSecondary,marginTop:10,lineHeight:15},
   screen:{flex:1,backgroundColor:c.bg},head:{flexDirection:'row',alignItems:'center',padding:12,gap:10,overflow:'hidden'},
   back:{color:'#fff',fontSize:22},ht:{color:'#fff',fontSize:17,fontWeight:'900'},hs:{color:'#ffffffcc',fontSize:10,marginTop:2},
