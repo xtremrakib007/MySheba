@@ -862,7 +862,7 @@ export function AppProvider({ children }) {
   // and manually triggered handlers) must pass role + live grid checks here.
   // Backend/Firebase rules remain the final authority for data mutations.
   const SCREEN_GRID_KEYS = {
-    service: null,
+    service: null, confirmTransaction: null,
     buspicker: 'bus',
     topup: 'topup', history: 'history', support: 'support',
     profile: 'profile', myAccount: 'myAccount', verifyIdentity: 'kyc',
