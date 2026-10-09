@@ -1495,7 +1495,7 @@ exports.resolveIimmpactEsimPackage = resolveIimmpactEsimPackage;
 exports.resolveExecutionMode = resolveExecutionMode;
 exports.providersForService = providersForService;
 exports.COUNTRY_CODES = COUNTRY_CODES;
-exports._test = { isPrivateIp, resolveExecutionMode, pinnedLookup, validateBaseUrl, validateHeaders, validateTemplate, getPath, render, providerAuth, validate, matchesStatus, classifyResponse, providerAmountFor };
+exports._test = { isPrivateIp, resolveExecutionMode, pinnedLookup, validateBaseUrl, validateHeaders, validateTemplate, getPath, render, providerAuth, validate, matchesStatus, classifyResponse, providerAmountFor, _test_autoCountryModes: autoCountryModes };
 
 exports.testApiProvider = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
