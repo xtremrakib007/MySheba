@@ -46,3 +46,6 @@ firebase-debug.log
 
 # `firebase functions:list > deployed.txt` for npm run audit:deployed
 deployed.txt
+
+# Android Gradle cache
+android/.gradle/

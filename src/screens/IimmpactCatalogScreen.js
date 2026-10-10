@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Image, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import HeaderDecor from '../components/HeaderDecor';
 import * as apiProviderService from '../firebase/apiProviderService';
-import { radius } from '../theme/theme';
+import { radius, tileGrid } from '../theme/theme';
+import { Tile } from '../components/ServiceGrid';
 
 function keyFor(value) {
   return String(value || '').trim().toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
@@ -103,22 +104,18 @@ export default function IimmpactCatalogScreen() {
 
         {!loading && !error && (
           <View style={styles.grid}>
-            {categories.map((category) => {
-              const info = categoryInfo(category);
-              return (
-                <TouchableOpacity key={category.id || category.group + ':' + category.name} style={styles.tile} onPress={() => openCategory(category)} activeOpacity={0.82}>
-                  {info.imageUrl ? (
-                    <Image source={{uri: info.imageUrl}} style={styles.logo} resizeMode="contain" />
-                  ) : (
-                    <View style={styles.logoFallback}><Text style={styles.logoText}>I</Text></View>
-                  )}
-                  <Text style={styles.category} numberOfLines={2}>{category.name}</Text>
-                  <Text style={styles.group} numberOfLines={1}>{category.group}</Text>
-                  <Text style={styles.meta}>{info.count} product{info.count === 1 ? '' : 's'}</Text>
-                  <View style={styles.open}><Text style={styles.openText}>Browse & Buy</Text></View>
-                </TouchableOpacity>
-              );
-            })}
+            {categories.map((category) => (
+              <Tile
+                key={category.id || category.group + ':' + category.name}
+                s={{
+                  key: 'marketplace_' + String(category.key || category.id || 'category').toLowerCase().replace(/[^a-z0-9_]+/g, '_'),
+                  name: category.name,
+                  icon: 'more',
+                  imageUrl: categoryInfo(category).imageUrl,
+                }}
+                onPress={() => openCategory(category)}
+              />
+            ))}
           </View>
         )}
 
@@ -142,14 +139,14 @@ function createStyles(colors) {
     updated:{fontSize:9,color:colors.textSecondary,marginTop:8},
     state:{alignItems:'center',paddingVertical:22,gap:8},info:{color:colors.textSecondary,fontSize:11},
     error:{padding:12,color:colors.danger || colors.text},
-    grid:{flexDirection:'row',flexWrap:'wrap',justifyContent:'space-between',rowGap:10},
-    tile:{width:'31.5%',minHeight:170,backgroundColor:colors.card,borderWidth:1,borderColor:colors.border,borderRadius:radius.lg,padding:10,alignItems:'center'},
-    logo:{width:48,height:42,marginBottom:6},logoFallback:{width:42,height:42,borderRadius:21,backgroundColor:colors.primary,alignItems:'center',justifyContent:'center',marginBottom:6},
-    logoText:{color:colors.onPrimary,fontWeight:'900',fontSize:20},
-    category:{fontSize:11.5,fontWeight:'900',textAlign:'center',color:colors.text,minHeight:30},
-    group:{fontSize:9,color:colors.textSecondary,marginTop:2,maxWidth:'100%'},
-    meta:{fontSize:9,color:colors.textSecondary,marginTop:5},
-    open:{marginTop:'auto',backgroundColor:colors.primary,borderRadius:radius.md,paddingVertical:7,paddingHorizontal:9},
-    openText:{color:colors.onPrimary,fontSize:9.5,fontWeight:'900'},empty:{color:colors.textSecondary,padding:16,textAlign:'center'},
+    grid:{flexDirection:'row',flexWrap:'wrap',justifyContent:'flex-start',columnGap:tileGrid.gap},
+
+
+
+
+
+
+
+    empty:{color:colors.textSecondary,padding:16,textAlign:'center'},
   });
 }

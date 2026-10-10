@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, Image, StyleSheet, ActivityIndicator } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { showAlert } from '../utils/appAlert';
 import { useTheme } from '../theme/ThemeContext';
@@ -26,6 +26,7 @@ export function Tile({ s, onPress, disabled }) {
   const translated = typeof t === 'function' ? t(`service.${safeKey}`, s?.name) : null;
   const label = asSafeText(translated, asSafeText(s?.name, safeKey));
   const icon = asSafeText(s?.icon, 'more');
+  const imageUrl = asSafeText(s?.imageUrl, '').trim();
   // Fixed colour per service. ServiceIcon actually strokes in this colour,
   // which RoyalIcon did not - its paths hardcoded gold and green, so the
   // accent only ever tinted the wash behind an identical illustration.
@@ -60,15 +61,23 @@ export function Tile({ s, onPress, disabled }) {
   // showing the old artwork no matter what shipped.
   const photoKey = hasPhotoTileIcon(artKey) ? artKey : (chosenArt ? '' : photoIconFor(artKey));
   return <TouchableOpacity style={[styles.item, { borderColor: `${colors.primary}66`, backgroundColor: colors.card }, disabled && styles.itemDisabled]} activeOpacity={0.82} disabled={!!disabled} onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
-    {photoKey
+    {imageUrl
+      ? <View style={styles.logoWrap}>
+          <Image
+            source={{ uri: imageUrl }}
+            style={{ width: tileIcon.wrap, height: tileIcon.wrap }}
+            resizeMode="contain"
+          />
+        </View>
+      : photoKey
       ? <View style={styles.logoWrap}><PhotoTileIcon art={photoKey} size={tileIcon.size} /></View>
       : hasBrandTileLogo(artKey)
       ? <View style={styles.logoWrap}><BrandTileLogo art={artKey} size={tileIcon.size} /></View>
       : hasBusLogo(artKey)
       ? <View style={styles.logoWrap}><BusOperatorLogo operatorKey={artKey} size={tileIcon.size} /></View>
       : hasServiceArt(artKey)
-        ? <View style={styles.logoWrap}><ServiceArt name={artKey} size={tileIcon.size} color={colors.primary} /></View>
-        : <Text style={styles.emoji} numberOfLines={1}>{chosenEmoji || serviceEmoji(asSafeText(s?.key, icon))}</Text>}
+      ? <View style={styles.logoWrap}><ServiceArt name={artKey} size={tileIcon.size} color={colors.primary} /></View>
+      : <Text style={styles.emoji} numberOfLines={1}>{chosenEmoji || serviceEmoji(asSafeText(s?.key, icon))}</Text>}
     <Text style={[styles.name, { color: colors.text || '#222' }]} numberOfLines={2}>{label}</Text>
   </TouchableOpacity>;
 }
