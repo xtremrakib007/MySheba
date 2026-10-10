@@ -348,10 +348,10 @@ export const ADMIN_HOME = [
   { key: 'remittance', icon: '\uD83D\uDCB8', name: 'Remittance', service: { key: 'remittance', kind: 'service' } },
   { key: 'mobilebanking', icon: '\uD83C\uDFE6', name: 'Mobile Banking', service: { key: 'mobilebanking', kind: 'service' } },
 
-  { key: 'internet', icon: '\uD83D\uDCE1', name: 'Internet', service: { key: 'internet', kind: 'service' } },
-  { key: 'billpayment', icon: '\uD83E\uDDFE', name: 'Bill Pay', service: { key: 'billpayment', kind: 'service' } },
+  { key: 'internet', icon: '\uD83D\uDCE1', name: 'Internet Packages', service: { key: 'internet', kind: 'service' } },
+  { key: 'billpayment', icon: '\uD83E\uDDFE', name: 'Bill Payment', service: { key: 'billpayment', kind: 'service' } },
   { key: 'jompay', icon: '\uD83C\uDDF2\uD83C\uDDFE', name: 'JomPAY', service: { key: 'jompay', kind: 'billShortcut', seed: { country: 'MY', category: 'jompay', provider: 'JomPAY' }, startStep: 3 } },
-  { key: 'tngewallet', icon: '\uD83D\uDC5B', name: 'TnG eWallet', service: { key: 'tngewallet', kind: 'tngShortcut', seed: { country: 'MY', category: 'ewallet', provider: "Touch 'n Go eWallet" }, startStep: 3 } },
+  { key: 'tngewallet', icon: '\uD83D\uDC5B', name: "Touch'n Go eWallet", service: { key: 'tngewallet', kind: 'tngShortcut', seed: { country: 'MY', category: 'ewallet', provider: "Touch 'n Go eWallet" }, startStep: 3 } },
   { key: 'rechargePin', icon: '\uD83D\uDD22', name: 'PIN Generate', service: { key: 'rechargePin', kind: 'rechargePin' } },
   // offerpacks is the one customer key ServiceArt has no drawing for, so this
   // emoji is what renders rather than a fallback nobody sees.
@@ -471,10 +471,17 @@ export function visibleTiles({ role, can, webviewPages, tileLabels, viewer, dyna
   // The fallback stays, for a different reason than before: a list where
   // nothing is flagged would otherwise render as a single More Services tile
   // and nothing else, which looks like the app failed to load.
-  // All roles use the same fixed twelve-tile service homepage. Management
-  // tools are deliberately kept in More Features / role hubs.
+  // All roles use the same fixed twelve-tile SERVICE block. Staff management
+  // tiles marked home:true are rendered in ServiceGrid's separate management
+  // block above that service block, so preserve them here as well. Without this,
+  // dealer/admin tools marked home:true were filtered out of both the home grid
+  // and overflow (which excludes home tiles), making them unreachable.
   const homeKeys = new Set(CUSTOMER_SERVICES.filter((service) => service.home).map((service) => service.key));
-  return active.filter((service) => homeKeys.has(service.key));
+  return active.filter((service) =>
+    (homeKeys.has(service.key) && service.home !== false) ||
+    (service.kind === 'webview' && service.home === true && !homeKeys.has(service.key)) ||
+    (service.cat === 'manage' && service.home === true),
+  );
 }
 
 /**

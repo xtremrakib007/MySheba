@@ -99,8 +99,8 @@ const more = read('src/screens/MoreFeaturesScreen.js');
 // Management is split off because a dealer's tools are a different kind of
 // thing from the services they also sell - and splitting it leaves exactly the
 // twelve behind.
-assert(/const manage = services\.filter\(\(t\) => t\.cat === 'manage'\)/.test(grid), 'management is its own block');
-assert(/const rest = services\.filter\(\(t\) => t\.cat !== 'manage'\)/.test(grid), 'and the services are the other');
+assert(/const manage = (?:mergedServices|services)\.filter\(\(t\) => t\.cat === 'manage'\)/.test(grid), 'management is its own block');
+assert(/const rest = (?:mergedServices|services)\.filter\(\(t\) => t\.cat !== 'manage'\)/.test(grid), 'and the services are the other');
 assert(/blocks\.length > 1 &&/.test(grid), 'a customer has one block, so it needs no heading');
 // Three across, so a row of three is a full row. The width lives in theme.js
 // now, with the column count and the gap, because the feature grid has to lay
@@ -199,8 +199,11 @@ for (const key of ['visa', 'fomema']) {
   assert(!withPages.includes(key), `${key} is declared off the home screen; a stored page must not put it back`);
 }
 // Declared on, and a stored page must not knock them off either.
-for (const key of ['train', 'mydigital', 'passport']) {
-  assert(withPages.includes(key), `${key} is one of the twelve and must stay`);
+for (const key of ['train']) {
+  assert(withPages.includes(key), `${key} is declared on the home screen and must stay`);
+}
+for (const key of ['mydigital', 'passport']) {
+  assert(!withPages.includes(key), `${key} is declared off the home screen and must stay in More Features`);
 }
 // The control that does exist still works: taking a built-in off home removes it.
 const movedOff = { train: { key: 'train', name: 'Train Ticket', url: 'x', active: true, home: false } };
