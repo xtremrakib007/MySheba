@@ -138,13 +138,7 @@ export default function RechargePinScreen() {
         <Text style={styles.subtitle}>Products, brands, denominations and product codes come from the live IIMMPACT catalogue. MySheba does not invent voucher codes.</Text>
       </View>
 
-      <Text style={styles.label}>Country</Text>
-      <View style={styles.grid}>{IIMMPACT_COUNTRIES.map(([code, name]) =>
-        <TouchableOpacity key={code} onPress={() => setCountry(code)} style={[styles.country, country === code && styles.countrySelected]}>
-          <Text style={[styles.countryCode, country === code && styles.countryTextSelected]}>{code}</Text>
-          <Text style={[styles.countryName, country === code && styles.countryTextSelected]}>{name}</Text>
-        </TouchableOpacity>
-      )}</View>
+      {/* PIN Generator is Malaysia-only; country is fixed to MY and not selectable. */}
 
       {loadingCatalog && <Text style={styles.info}>Loading live IIMMPACT voucher products…</Text>}
       {!!catalogError && !loadingCatalog && <Text style={styles.error}>{catalogError}</Text>}
