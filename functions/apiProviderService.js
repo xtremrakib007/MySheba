@@ -2259,6 +2259,9 @@ function publicIimmpactCatalog(catalog) {
         ? product.image_url.slice(0, 2000)
         : '',
       processing_time: String(product.processing_time || product.processingTime || '').slice(0, 100),
+      // Face denomination is safe for customer display and is needed for
+      // eSIM products that accept a direct amount instead of a pricing select.
+      denomination: safeIimmpactMoney(product.denomination ?? null),
       description: String(product.description || '').slice(0, 1000),
       fields: Array.isArray(product.fields)
         ? scrubIimmpactPublicValue(product.fields)
