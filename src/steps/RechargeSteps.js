@@ -45,10 +45,21 @@ export default function RechargeStep({ step }) {
         const products = catalog && catalog.products && typeof catalog.products === 'object' ? catalog.products : {};
         const groups = Array.isArray(catalog && catalog.tree && catalog.tree.groups) ? catalog.tree.groups : [];
         const rechargeCodes = new Set();
+        const billCodes = new Set();
+        const billCategory = /post.?paid|bill.?payment|bill.?pay|biller|utility|electricity|water bill|gas bill|invoice|jom.?pay/i;
         for (const group of groups) {
           for (const category of (Array.isArray(group && group.categories) ? group.categories : [])) {
-            if (/recharge|airtime|top.?up|prepaid reload|mobile reload/i.test(String(group.name || '') + ' ' + String(category.name || ''))) {
-              for (const code of (Array.isArray(category.product_codes) ? category.product_codes : [])) rechargeCodes.add(String(code));
+            const taxonomy = String(group.name || '') + ' ' + String(category.name || '');
+            const codes = (Array.isArray(category.product_codes) ? category.product_codes : []).map(String);
+            // A broad group can contain both airtime and postpaid bill categories.
+            // Record bill codes independently so they can never enter Recharge
+            // merely because the parent group contains the word "recharge".
+            if (billCategory.test(taxonomy)) {
+              for (const code of codes) billCodes.add(code);
+              continue;
+            }
+            if (/recharge|airtime|top.?up|prepaid reload|mobile reload/i.test(taxonomy)) {
+              for (const code of codes) rechargeCodes.add(code);
             }
           }
         }
@@ -62,27 +73,35 @@ export default function RechargeStep({ step }) {
             const name = rawName.toLowerCase();
             const normalizedName = name.replace(/[^a-z0-9]/g, '');
             const normalizedCode = String(p.code || code).toLowerCase().replace(/[^a-z0-9]/g, '');
+            const productCode = String(p.code || code);
+            const searchable = [name, p.description, p.label, p.note, p.processing_time, productCode]
+              .map((value) => String(value || '')).join(' ').toLowerCase();
+            // Bills, postpaid accounts and utility billers must never be treated
+            // as airtime. This guard wins even if a mixed provider taxonomy lists
+            // the same product code under a broad "Recharge" parent group.
+            if (billCodes.has(productCode) ||
+                /\b(post.?paid|bill.?payment|bill.?pay|biller|utility bill|electricity bill|water bill|gas bill|invoice|jom.?pay)\b/i.test(searchable)) return false;
             // The catalog can contain country-level/category labels. Never render
             // a country as an operator tile, even if its product code says "recharge".
             if (countryNames.has(normalizedName)) return false;
-            const belongsToRechargeCategory = rechargeCodes.has(String(p.code || code));
-            const searchable = name + ' ' + String(p.code || code);
+            const belongsToRechargeCategory = rechargeCodes.has(productCode);
             const hasRechargeLabel = /recharge|airtime|top.?up|prepaid|reload|mobile.?credit|mobile.?balance|cellular.?credit/i.test(searchable);
             const looksLikeMobileProduct = /mobile|telecom|telco|cellular|msisdn|phone.?number/i.test(searchable);
             const matchesKnownOperator = knownNames.some((known) =>
               normalizedName.includes(known) || known.includes(normalizedName) ||
               normalizedCode.includes(known) || known.includes(normalizedCode));
-            // Use category mapping when IIMMPACT provides a recharge category.
-            // Some catalogues omit that taxonomy, so fall back to recognizable
-            // operator names/mobile products while still excluding country labels,
-            // PIN products and data-plan option products below.
+            // Category membership is authoritative when the provider supplies
+            // recharge taxonomy. Name-based fallback is only for catalogues with
+            // no usable recharge categories and still requires a phone/account field.
             const fields = Array.isArray(p.fields) ? p.fields : [];
             const hasAccountField = fields.some((field) => field && (
               field.role === 'account' ||
               /phone|mobile|msisdn|accountnumber/i.test(String(field.id || '') + ' ' + String(field.label || ''))
             ));
-            return belongsToRechargeCategory ||
-              ((hasRechargeLabel || matchesKnownOperator || looksLikeMobileProduct) && hasAccountField);
+            const hasRechargeTaxonomy = rechargeCodes.size > 0;
+            return hasRechargeTaxonomy
+              ? belongsToRechargeCategory
+              : ((hasRechargeLabel || matchesKnownOperator || looksLikeMobileProduct) && hasAccountField);
           })
           .filter(([, p]) => String(p.processing_time || '').toLowerCase() !== 'pin')
           .filter(([code, p]) => rechargeCodes.has(String(p.code || code)) || !isDataPlan(p))

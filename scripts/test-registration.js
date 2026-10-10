@@ -149,6 +149,20 @@ test('recharge loads active operator products from IIMMPACT', () => {
   assert.ok(recharge.includes('p.is_active !== false'), 'inactive products must not be shown');
   assert.ok(recharge.includes("String(serviceData.country || '').toUpperCase() !== 'BD'"),
     'non-Bangladesh IIMMPACT recharge must keep the dynamic operator picker visible');
+  assert.ok(recharge.includes('const billCodes = new Set()'),
+    'bill/postpaid catalog codes must be tracked separately from recharge');
+  assert.ok(recharge.includes('if (billCodes.has(productCode)'),
+    'postpaid bill products must be excluded even if the provider taxonomy overlaps');
+  assert.ok(recharge.includes('const hasRechargeTaxonomy = rechargeCodes.size > 0'),
+    'when recharge taxonomy exists, do not fall back to loose name matching');
+});
+
+test('IIMMPACT PIN purchases are gated by provider reach and API mode, not Malaysia-only code', () => {
+  const pinService = read('functions/rechargePinService.js');
+  assert.ok(pinService.includes('provider reach and the per-country API mode below decide'),
+    'PIN service must defer country eligibility to provider reach and service mode');
+  assert.ok(!pinService.includes("country !== 'MY') throw new HttpsError('failed-precondition', 'Recharge PIN is currently supported only in Malaysia."),
+    'catalog-backed PIN products must not be rejected solely because country is not MY');
 });
 
 console.log('\n' + passed + ' checks passed.\n');
