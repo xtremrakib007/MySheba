@@ -51,7 +51,10 @@ function writeCachedPinCatalog(country, data) {
 
 function isVoucherProduct(product) {
   if (!product || product.is_active === false || !product.code) return false;
-  const text = String(product.name || '') + ' ' + String(product.note || '') + ' ' + String(product.product_group || '');
+  const text = [
+    product.name, product.description, product.note, product.category,
+    product.subcategory, product.product_group, product.label,
+  ].map((value) => String(value || '')).join(' ');
   return String(product.processing_time || '').toLowerCase() === 'pin'
     || /voucher|gift card|giftcard|digital code|gaming code/i.test(text);
 }
