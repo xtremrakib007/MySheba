@@ -53,25 +53,34 @@ export default function EntertainmentStep({ step }) {
     return () => { alive = false; };
   }, []);
 
+  // Entertainment must contain game/digital entertainment products only.
+  // IIMMPACT's top-level "Entertainment" group can also contain telecom and
+  // wallet/payment products, so group membership alone is not sufficient.
+  // In particular, never show DigiPay, Maxis Pay or other operator payment
+  // products in the games picker.
   const dynamicProducts = (() => {
     const products = catalog?.products || {};
     const tree = catalog?.tree?.groups || [];
-    const wanted = new Set();
+    const gameCategoryCodes = new Set();
     tree.forEach((group) => {
-      const text = String(group?.name || '').toLowerCase();
-      if (/game|entertainment|gaming/.test(text)) {
-        (group.categories || []).forEach((category) => {
-          (category.product_codes || []).forEach((code) => wanted.add(String(code)));
-        });
-      }
+      (group?.categories || []).forEach((category) => {
+        const categoryLabel = String(category?.name || '').toLowerCase();
+        if (/game|gaming|game top.?up|game credit|game voucher/.test(categoryLabel)) {
+          (category?.product_codes || []).forEach((code) => gameCategoryCodes.add(String(code)));
+        }
+      });
     });
+
+    const nonGamePattern = /digi\s*pay|maxis\s*pay|celcom|digi|hotlink|u\s*mobile|umobile|tunetalk|unifi|yes\s*(?:telco|mobile)?|xox|telco|mobile operator|airtime|top.?up phone|e.?wallet|wallet reload|bill payment|jompay|payment|prepaid reload/i;
+    const explicitGamePattern = /pubg|free.?fire|mobile.?legends|mlbb|roblox|steam|playstation|xbox|nintendo|genshin|hon.?kai|razor gold|game.?voucher|game.?credit|gaming|game top.?up/i;
+
     return Object.values(products).filter((p) => {
       if (!p || p.is_active === false || !p.code) return false;
-      const text = `${p.name || ''} ${p.description || ''} ${p.note || ''} ${p.code || ''}`.toLowerCase();
-      return wanted.has(String(p.code)) || /game|entertainment|gaming|pubg|free.?fire|mobile.?legends|roblox|steam|playstation|xbox|nintendo|uc|diamond/.test(text);
-    }).filter((p) => {
+      const text = `${p.name || ''} ${p.description || ''} ${p.note || ''} ${p.product_group || ''} ${p.code || ''}`.toLowerCase();
+      if (nonGamePattern.test(text)) return false;
+      if (!gameCategoryCodes.has(String(p.code)) && !explicitGamePattern.test(text)) return false;
       const fields = Array.isArray(p.fields) ? p.fields : [];
-      const account = fields.find((f) => f && (f.role === 'account' || f.id === 'player_id' || f.id === 'account'));
+      const account = fields.find((f) => f && (f.role === 'account' || /player.?id|game.?id|account/.test(String(f.id || '').toLowerCase())));
       const pricing = fields.find((f) => f && (f.role === 'pricing' || f.type === 'select'));
       return !!account && !!pricing;
     });
