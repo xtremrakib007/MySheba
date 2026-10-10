@@ -46,7 +46,7 @@ function pricingField(product) {
   return fields.find((f) => f && (f.role === 'pricing' || f.type === 'select')) || null;
 }
 
-export default function RechargePinScreen() {
+export default function RechargePinScreen({ initialCategory = null } = {}) {
   const { colors, brandGradient } = useTheme();
   const { goBackOrHome, profile } = useApp();
   const styles = createStyles(colors);
@@ -63,6 +63,8 @@ export default function RechargePinScreen() {
   const [busy, setBusy] = useState(false);
   const [voucher, setVoucher] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
+
+  useEffect(() => { if (initialCategory) setSelectedCategory(initialCategory); }, [initialCategory]);
 
   useEffect(() => {
     let alive = true;
