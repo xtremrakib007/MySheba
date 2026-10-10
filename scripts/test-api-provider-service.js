@@ -94,6 +94,12 @@ assert.strictEqual(api.providerAmountFor({
   payload: { amount: 31 },
   isSuccessTopUpBd: false,
 }), 30, 'IIMMPACT must receive the selected face denomination, not wholesale cost or sell price');
+assert.strictEqual(api.providerAmountFor({
+  raw: { amount: 100 },
+  payload: { amount: 3.30 },
+  isSuccessTopUpBd: false,
+  isIimmpact: true,
+}), 100, 'foreign-country IIMMPACT recharge must send the face value, not MYR after FX conversion');
 
 // Nested response extraction.
 assert.strictEqual(api.getPath({ data: { pin: '1234' } }, 'data.pin'), '1234');
