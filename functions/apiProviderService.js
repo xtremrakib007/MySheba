@@ -1089,14 +1089,40 @@ async function resolveIimmpactCatalogProductCode(provider, service, subject, raw
   if (!wanted.size) return '';
 
   const allProducts = Object.values(json.products || {}).filter((p) => p && p.is_active !== false && p.code);
+  // The catalog is organized by the partner into groups/categories. When it
+  // explicitly marks a service category, restrict discovery to those product
+  // codes first: an operator can have both an airtime product and an Internet
+  // product with nearly identical names, and a name-only match must not choose
+  // one for the other service.
+  const categoryPatterns = {
+    Recharge: /recharge|airtime|top.?up|prepaid reload|mobile reload/i,
+    Internet: /internet|data plan|mobile data|data package|broadband/i,
+    'Bill Payment': /bill|jom.?pay|utility/i,
+    eSIM: /e\s*-?sim|travel connectivity/i,
+  };
+  const categoryPattern = categoryPatterns[service];
+  const categoryCodes = new Set();
+  if (categoryPattern) {
+    for (const group of json?.tree?.groups || []) {
+      for (const category of group?.categories || []) {
+        const label = `${group?.name || ''} ${category?.name || ''}`;
+        if (categoryPattern.test(label)) {
+          for (const code of category?.product_codes || []) categoryCodes.add(String(code));
+        }
+      }
+    }
+  }
+  const serviceProducts = categoryCodes.size
+    ? allProducts.filter((p) => categoryCodes.has(String(p.code)))
+    : allProducts;
   // Recharge PIN is a fulfillment type, not merely a product name. IIMMPACT
   // can expose the same operator/brand as both airtime and a voucher product.
   // Restrict PIN matching to products explicitly fulfilled as PINs before
   // scoring the operator name; otherwise an airtime product can tie with its
   // PIN sibling and the safe ambiguity guard returns no code.
   const products = service === 'Recharge PIN'
-    ? allProducts.filter((p) => String(p.processing_time || '').toLowerCase() === 'pin')
-    : allProducts;
+    ? serviceProducts.filter((p) => String(p.processing_time || '').toLowerCase() === 'pin')
+    : serviceProducts;
   const scored = products.map((p) => {
     const name = normaliseCatalogText(p.name);
     const note = normaliseCatalogText(p.note);
@@ -2315,6 +2341,8 @@ async function resolveIimmpactEsimPackage(db, raw) {
   optionUrl.searchParams.set('product_code', productCode);
   optionUrl.searchParams.set('field_id', fieldId);
   optionUrl.searchParams.set('limit', '25000');
+  const accountNumber = cleanString(raw?.accountNumber || raw?.email, 200);
+  if (accountNumber) optionUrl.searchParams.set('account_number', accountNumber);
   const optionsResponse = await signedProviderRequest(optionUrl, { method: 'GET', headers: { accept: 'application/json' } }, provider);
   if (!optionsResponse.ok || !Array.isArray(optionsResponse.json?.items)) return { error: 'options-unavailable' };
 
