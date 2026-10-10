@@ -176,6 +176,9 @@ const PRESETS = {
       // IIMMPACT's documented Malaysian mobile-data product codes.
       Celcom: ['CEL'],
       Digi: ['DI'],
+      // CelcomDigi is a shared display brand, not a third product. Ask both
+      // underlying products; the per-number catalogue tells us which applies.
+      CelcomDigi: ['CEL', 'DI'],
       Hotlink: ['HI'],
       'U Mobile': ['UMI'],
       Tunetalk: ['TI'],
@@ -224,10 +227,7 @@ function asObject(value) {
  */
 function catalogConfigFor(provider) {
   if (!provider) return null;
-  const preset = PRESETS[presetKeyFor(provider)] || null;
-
-  let path = String(provider.catalogPath || (preset && preset.path) || '').trim();
-  if (!path) return null;
+  let path = String(provider.catalogPath || '').trim();
   const legacyIimmpact =
     path === '/v2/subproducts' &&
     (
@@ -235,6 +235,12 @@ function catalogConfigFor(provider) {
       String(provider.name || '').trim().toLowerCase() === 'iimmpact' ||
       String(provider.catalogPreset || '').trim() === 'iimmpact-subproducts'
     );
+  // Older saved IIMMPACT records still say `iimmpact-subproducts`. Treat that
+  // legacy label as the current options preset too, otherwise it normalizes
+  // the path but silently loses the documented Internet operator-code map.
+  const preset = PRESETS[presetKeyFor(provider)] || (legacyIimmpact ? PRESETS['iimmpact-options'] : null);
+  path = path || String((preset && preset.path) || '').trim();
+  if (!path) return null;
   // IIMMPACT's /v2/catalog is product discovery; personalized plans are
   // fetched separately from /v2/options. Normalize legacy Firestore records
   // instead of letting /v2/subproducts suppress the current operator map.
