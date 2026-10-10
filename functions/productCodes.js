@@ -33,6 +33,8 @@
 const FIELD_BY_SERVICE = {
   'recharge pin': 'pinProductCodes',
   entertainment: 'gameProductCodes',
+  internet: 'catalogOperatorCodes',
+  offerpacks: 'catalogOperatorCodes',
   // Bill Payment is keyed by the selected biller, not a mobile operator.
   'bill payment': 'billerProductCodes',
   billpayment: 'billerProductCodes',
