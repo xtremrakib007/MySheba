@@ -6,7 +6,7 @@ const DOC = doc(db, 'settings', 'gridManagement');
 
 export const GRID_DEFS = [
   ['recharge','Recharge'],['rechargePin','Recharge PIN'],['mobilebanking','Mobile Banking'],['internet','Internet'],['esim','eSIM'],['billpayment','Bill Payment'],
-  ['remittance','Remittance'],['bus','Bus'],['train','Train'],['flight','Flight'],['offerpacks','Offer Packs'],['entertainment','Entertainment'],
+  ['remittance','Remittance'],['bus','Bus'],['train','Train'],['flight','Flight'],['entertainment','Entertainment'],
   ['topup','Top-Up'],['history','Transactions'],['support','Support'],['myAccount','My Account'],['profile','Profile'],
   ['dealerFeatures','Dealer Features'],['resellerFeatures','Reseller Features'],['adminFeatures','Admin Features'],
   ['moreFeaturesTile','More Services'],['walletTransfer','Wallet Transfer'],['myDocuments','My Documents'],
