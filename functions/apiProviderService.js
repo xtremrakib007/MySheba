@@ -1299,7 +1299,8 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   // "60 UC", so Entertainment is keyed by the pack rather than by an operator.
   // The denomination goes along for a voucher range sold one product per
   // denomination.
-  const codeSubject = service === 'eSIM' ? String(raw.productCode || '').trim() : productCodes.codeSubjectFor(service, raw);
+  const codeSubject = productCodes.codeSubjectFor(service, raw) ||
+    (service === 'eSIM' ? String(raw.productName || raw.productCode || '').trim() : '');
   const codeOptions = { service, denomination: raw.amount };
   let mappedOperatorCode = productCodes.productCodeFor(provider, codeSubject, codeOptions);
   // Dynamic Catalog is the fallback for IIMMPACT. Manual product-code maps
@@ -1310,7 +1311,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   if (!mappedOperatorCode && provider.authType === 'iimmpactHmac') {
     mappedOperatorCode = await resolveIimmpactCatalogProductCode(provider, service, codeSubject, raw);
   }
-  const providerOperatorCode = raw.productCode || raw.operatorCode || mappedOperatorCode;
+  const providerOperatorCode = raw.operatorCode || mappedOperatorCode;
   // A fixed product's amount is the provider's to state. Ours is the
   // customer's SELL price, and sending that buys the wrong thing or is
   // refused - so where the map says what the provider wants, that is what
