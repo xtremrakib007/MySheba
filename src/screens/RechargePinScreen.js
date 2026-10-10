@@ -18,6 +18,18 @@ const IIMMPACT_COUNTRIES = [['MY', 'Malaysia']];
 const CURRENCY_BY_COUNTRY = { MY: 'MYR', SG: 'SGD', ID: 'IDR', IN: 'INR', PH: 'PHP', NP: 'NPR', PK: 'PKR', MM: 'MMK', KH: 'KHR' };
 const MALAYSIA_OPERATORS = rechargePinBrands.MY || ['Celcom', 'CelcomDigi', 'U Mobile', 'Hotlink', 'XOX', 'Tunetalk', 'Unifi', 'Yes', "Touch 'n Go eWallet"];
 const AMOUNTS = [10, 20, 30, 50, 100];
+const PIN_CATEGORIES = [
+  { id: 'mobile', title: 'Mobile Operator PIN', pattern: /digi|celcom|hotlink|maxis|u mobile|umobile|xox|tunetalk|unifi mobile|yes telco|hello sim|mobile.*pin|telco/i },
+  { id: 'coffee', title: 'Coffee & Tea', pattern: /coffee|cafe|tea|tealive|starbucks|zuss|oldtown|kenangan/i },
+  { id: 'wellness', title: 'Health & Wellness', pattern: /health|wellness|beauty|guardian|watsons|pharmacy|fitness|spa/i },
+  { id: 'transport', title: 'Transport', pattern: /grab|transport|ride|taxi|bus|train|rapid|myrapid|touch.?n.?go|tng/i },
+  { id: 'apple', title: 'Apple & iTunes', pattern: /apple|itunes|app store/i },
+  { id: 'shopping', title: 'Shopping PIN', pattern: /shopping|retail|shopee|lazada|mall|fashion|gift card|voucher/i },
+  { id: 'grocery', title: 'Grocery & GrabMart', pattern: /grocery|grabmart|grab mart|supermarket|foodpanda|pandamart/i },
+  { id: 'food', title: 'Food & Delivery', pattern: /food|restaurant|meal|delivery|dining|restaurant/i },
+  { id: 'gaming', title: 'Gaming & Entertainment', pattern: /game|gaming|playstation|xbox|steam|roblox|pubg|mobile legends|netflix|spotify|movie|music|stream/i },
+  { id: 'other', title: 'Other PIN & Vouchers', pattern: /.*/ },
+];
 const FEATURED_PIN_ORDER = [
   /digi.*internet.*pin|internet.*pin.*digi/i,
   /digipin|digi.*pin/i,
@@ -189,37 +201,21 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
   // group/category names and product_codes are authoritative; do not guess
   // categories from brand-name regexes (which used to mix unrelated products).
   const categorizedProducts = useMemo(() => {
-    const byCode = new Map(dynamicProducts.map((p) => [String(p.code), p]));
-    const seen = new Set();
-    const categories = [];
-    for (const group of catalog?.tree?.groups || []) {
-      for (const category of group?.categories || []) {
-        const codes = Array.isArray(category?.product_codes) ? category.product_codes : [];
-        const products = codes.map((code) => byCode.get(String(code))).filter(Boolean);
-        if (!products.length) continue;
-        const title = String(category.name || group.name || 'PIN Products').trim();
-        const id = 'iimmpact-' + String(category.id || category.code || title).toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-        products.forEach((p) => seen.add(String(p.code)));
-        categories.push({ id, title, products });
-      }
+    const grouped = new Map(PIN_CATEGORIES.map((category) => [category.id, { ...category, products: [] }]));
+    for (const product of dynamicProducts) {
+      const text = `${product.name || ''} ${product.note || ''} ${product.category || ''} ${product.subcategory || ''} ${product.product_group || ''}`;
+      const category = PIN_CATEGORIES.find((item) => item.id !== 'other' && item.pattern.test(text)) || PIN_CATEGORIES.find((item) => item.id === 'other');
+      grouped.get(category.id).products.push(product);
     }
-    // Some provider catalogue versions omit product_codes from the tree.
-    // Preserve those products under their own provider-supplied category
-    // metadata, never infer a category from unrelated brand keywords.
-    const fallback = new Map();
-    for (const p of dynamicProducts) {
-      if (seen.has(String(p.code))) continue;
-      const title = String(p.category || p.subcategory || p.product_group || 'Other PIN & Vouchers').trim();
-      if (!fallback.has(title)) fallback.set(title, []);
-      fallback.get(title).push(p);
-    }
-    for (const [title, products] of fallback) {
-      const id = 'iimmpact-' + title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-      categories.push({ id, title, products });
-    }
-    return categories;
-  }, [catalog, dynamicProducts]);
+    return PIN_CATEGORIES
+      .map((category) => grouped.get(category.id))
+      .filter((category) => category.products.length > 0)
+      .map((category) => ({
+        id: category.id,
+        title: category.title,
+        products: category.products.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))),
+      }));
+  }, [dynamicProducts]);
 
   const selectProduct = (p) => {
     setProduct(p); setVoucher(null); setOperator(''); setSelectedOption(null); setAmount(null);
