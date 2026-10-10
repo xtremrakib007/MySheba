@@ -49,8 +49,17 @@ export default function RechargeStep({ step }) {
           }
         }
         const isDataPlan = (p) => Array.isArray(p && p.fields) && p.fields.some((field) => field && field.type === 'select' && field.data_source);
+        const knownNames = staticOperators.map((name) => String(name).toLowerCase().replace(/[^a-z0-9]/g, '')).filter(Boolean);
         const entries = Object.entries(products)
-          .filter(([code, p]) => p && p.is_active !== false && p.code && (!rechargeCodes.size || rechargeCodes.has(String(p.code || code))))
+          .filter(([code, p]) => {
+            if (!p || p.is_active === false || !p.code) return false;
+            const name = String(p.name || p.label || code).toLowerCase();
+            const normalizedName = name.replace(/[^a-z0-9]/g, '');
+            const belongsToRechargeCategory = rechargeCodes.has(String(p.code || code));
+            const hasRechargeLabel = /recharge|airtime|top.?up|prepaid|reload/i.test(name);
+            const matchesKnownOperator = knownNames.some((known) => normalizedName.includes(known) || known.includes(normalizedName));
+            return rechargeCodes.size ? belongsToRechargeCategory : (hasRechargeLabel || matchesKnownOperator);
+          })
           .filter(([, p]) => String(p.processing_time || '').toLowerCase() !== 'pin' && !isDataPlan(p))
           .map(([code, p]) => String(p.name || p.label || code).trim())
           .filter(Boolean);
