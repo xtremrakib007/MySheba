@@ -318,7 +318,7 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
 
       {!product && !dynamicProducts.length && country === 'MY' && !catalog?.providerId && !!operator && <>
         <Text style={styles.label}>Legacy Denomination</Text>
-        <View style={styles.grid}>{AMOUNTS.map((item) => <TouchableOpacity key={item} onPress={() => { setAmount(item); setVoucher(null); }} style={[styles.amount, amount === item && styles.amountSelected]}><Text style={[styles.amountText, amount === item && styles.amountTextSelected]}>MYR {item}</Text></TouchableOpacity>)}</View>
+        <View style={styles.grid}>{AMOUNTS.map((item) => <TouchableOpacity key={item} onPress={() => { setAmount(item); setVoucher(null); }} style={[styles.amount, amount === item && styles.amountSelected]}><Text style={styles.amountIcon}>💳</Text><Text style={[styles.amountText, amount === item && styles.amountTextSelected]}>MYR {item}</Text></TouchableOpacity>)}</View>
       </>}
 
       <TouchableOpacity disabled={busy || (!operator && (!product || !selectedOption) && !(amount > 0))} onPress={buy} style={styles.buy}><Text style={styles.buyText}>{busy ? 'Processing…' : 'Next'}</Text></TouchableOpacity>
