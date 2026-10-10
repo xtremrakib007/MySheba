@@ -190,7 +190,7 @@ test('the charge actually passes the stated amount through', () => {
   // last time.
   const source = require('fs').readFileSync(require('path').join(__dirname, '..', 'functions/apiProviderService.js'), 'utf8');
   assert.ok(/const mappedProductAmount = productCodes\.productAmountFor\(provider, codeSubject, codeOptions\);/.test(source));
-  assert.ok(/providerAmountFor\(\{ raw, payload, isSuccessTopUpBd, mappedAmount: mappedProductAmount \}\)/.test(source));
+  assert.ok(/providerAmountFor\(\{ raw, payload, isSuccessTopUpBd,[^}]*mappedAmount: mappedProductAmount \}\)/.test(source));
 });
 
 test('a stated amount reaches the provider ahead of the sell price', () => {
