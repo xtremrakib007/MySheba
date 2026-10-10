@@ -10,6 +10,8 @@ const fs = require('fs');
 const path = require('path');
 
 const src = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'components', 'serviceTiles.js'), 'utf8')
+  // serviceTiles imports Platform for WebView visibility; provide its native default in Node tests.
+  .replace(/^import \\{ Platform \\} from 'react-native';\\s*$/m, "const Platform = { OS: 'android' };")
   .replace(/^export (const|function) /gm, '$1 ')
   .replace(/^export \{[^}]*\};?$/gm, '');
 
