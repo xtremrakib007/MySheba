@@ -19,9 +19,13 @@ const ROOT = path.join(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 const bills = read('src/steps/BillPaymentSteps.js');
 
-console.log('The reload is a bill category, with a biller');
-assert(/\{ key: 'ewallet', label: 'E-Wallet Reload'/.test(bills), 'the category exists');
-assert(/ewallet: \["Touch 'n Go eWallet"\]/.test(bills), 'and Malaysia bills for it');
+console.log('TnG and JomPAY are dedicated homepage flows, not general bill categories');
+assert(/ewallet: \["Touch 'n Go eWallet"\]/.test(bills), 'the seeded TnG flow retains its provider mapping');
+assert(/jompay: \['JomPAY'\]/.test(bills), 'the seeded JomPAY flow retains its provider mapping');
+assert(/dedicatedHomepageCategories = new Set\(\['ewallet', 'jompay', 'tax'\]\)/.test(bills),
+  'the general bill category picker hides dedicated homepage shortcuts');
+assert(/!dedicatedHomepageCategories\.has\(c\.key\)/.test(bills),
+  'dedicated shortcut categories are filtered from Bill Payment');
 // categoriesFor() hides a category with no biller, so Bangladesh must not grow
 // an E-Wallet tile that can only say "no biller is configured".
 const bd = bills.slice(bills.indexOf('  BD: {'), bills.indexOf('};', bills.indexOf('  BD: {')));
@@ -83,7 +87,7 @@ assert.strictEqual(byKey.jompay.startStep, 3, 'so it opens on the fields printed
 // suspension.
 const billSteps = read('src/steps/BillPaymentSteps.js');
 assert(/jompay: \['JomPAY'\]/.test(billSteps), 'JomPAY is a biller entry so the provider step still resolves');
-assert(/key: 'jompay', label: 'JomPAY Bill'/.test(billSteps), 'and a category of its own');
+assert(/key: 'jompay', label: 'JomPAY Bill'/.test(billSteps), 'the internal seed still resolves even though the picker hides it');
 for (const field of ['billerCode', 'icNumber', 'ref2']) {
   assert(new RegExp(`updateServiceData\\(\\{ ${field}:`).test(billSteps), `the JomPAY step must collect ${field}`);
   assert(new RegExp(`'${field}'`).test(wallet), `${field} must be allowed through to the provider`);
@@ -96,7 +100,11 @@ assert(/label: 'IC \/ Passport', value: maskId\(serviceData\.icNumber\)/.test(bi
 
 const grid = read('src/components/ServiceGrid.js');
 assert(/s\.kind === 'billShortcut'\) return startService\('billpayment', s\.seed, s\.startStep\)/.test(grid),
-  'the shortcut must open billpayment, carrying its seed');
+  'JomPAY must open its seeded payment flow from the homepage');
+assert(/if \(s\.kind === 'tngShortcut'\) return startService\('billpayment', s\.seed, s\.startStep\)/.test(grid),
+  'Touch n Go must open its seeded reload flow directly without a chooser');
+assert(!/Buy PIN voucher/.test(grid.slice(grid.indexOf("if (s.kind === 'tngShortcut')"), grid.indexOf("return startService(s.key)", grid.indexOf("if (s.kind === 'tngShortcut')")))),
+  'PIN Generate is a separate homepage tile, not a Touch n Go popup option');
 const ctx = read('src/context/AppContext.js');
 // Switching Bill Payment off has to switch its shortcuts off with it, or a tile
 // survives the service it depends on.
