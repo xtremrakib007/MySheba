@@ -87,7 +87,7 @@ test('the same operator has a different code for a PIN', () => {
 test('IIMMPACT PIN catalog matching filters by PIN fulfillment type', () => {
   const source = require('fs').readFileSync(require('path').join(__dirname, '..', 'functions/apiProviderService.js'), 'utf8');
   assert.ok(
-    /const products = service === 'Recharge PIN'\\s*\\?\\s*serviceProducts\\.filter\\(\\(p\\) => String\\(p\.processing_time \\|\\| ''\\)\.toLowerCase\\(\\) === 'pin'\\)/.test(source),
+    /const products = service === 'Recharge PIN'\s*\?\s*serviceProducts\.filter\(\(p\) => String\(p\.processing_time \|\| ''\)\.toLowerCase\(\) === 'pin'\)/.test(source),
     'PIN catalog matching must exclude airtime products before scoring',
   );
 });
@@ -283,7 +283,7 @@ test('the charge resolves the code for its OWN service and denomination', () => 
   // denomination a per-denomination voucher range resolves to nothing and the
   // sale is refused.
   const source = require('fs').readFileSync(require('path').join(__dirname, '..', 'functions/apiProviderService.js'), 'utf8');
-  assert.ok(/const codeSubject = productCodes\.codeSubjectFor\(service, raw\)(?:\\s*\\|\\|[^;]+)?;/.test(source),
+  assert.ok(/const codeSubject = productCodes\.codeSubjectFor\(service, raw\)(?:\s*\|\|[^;]+)?;/.test(source),
     'what the map is keyed by depends on the service too (with only the documented eSIM fallback)');
   assert.ok(/const codeOptions = \{ service, denomination: raw\.amount \};/.test(source));
   assert.ok(/productCodes\.productCodeFor\(provider, codeSubject, codeOptions\)/.test(source));
