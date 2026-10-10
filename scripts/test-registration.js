@@ -163,6 +163,9 @@ test('IIMMPACT PIN purchases are gated by provider reach and API mode, not Malay
     'PIN service must defer country eligibility to provider reach and service mode');
   assert.ok(!pinService.includes("country !== 'MY') throw new HttpsError('failed-precondition', 'Recharge PIN is currently supported only in Malaysia."),
     'catalog-backed PIN products must not be rejected solely because country is not MY');
+  const pinScreen = read('src/screens/RechargePinScreen.js');
+  assert.ok(pinScreen.includes('product.name, product.description, product.note'),
+    'voucher classification must use public IIMMPACT product description as well as name');
 });
 
 console.log('\n' + passed + ' checks passed.\n');
