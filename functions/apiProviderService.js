@@ -2306,7 +2306,7 @@ async function resolveIimmpactEsimPackage(db, raw) {
     if (!Number.isFinite(amount) || amount <= 0) return { error: 'amount-invalid' };
     const unit = Number(product?.pricing?.unit_price);
     const cost = Number.isFinite(unit) ? Math.round(amount * unit * 100) / 100 : amount;
-    return { productCode, sellAmount: amount, costAmount: cost, package: String(raw?.package || product.name || ''), subproductCode: '' };
+    return { productCode, sellAmount: amount, providerAmount: amount, costAmount: cost, package: String(raw?.package || product.name || ''), subproductCode: '' };
   }
 
   const fieldId = String(pricingField.id || '').trim();
@@ -2320,12 +2320,15 @@ async function resolveIimmpactEsimPackage(db, raw) {
 
   const option = optionsResponse.json.items.find((item) => String(item?.code || '') === packageId);
   if (!option) return { error: 'package-not-found' };
-  const sellAmount = Number(option?.price?.amount ?? option?.denomination);
+  const sellAmount = Number(option?.price?.amount ?? option?.price ?? option?.denomination);
+  const providerAmount = Number(option?.denomination ?? option?.amount);
   const costAmount = Number(option?.cost?.amount ?? sellAmount);
   if (!Number.isFinite(sellAmount) || sellAmount <= 0) return { error: 'package-price-invalid' };
+  if (!Number.isFinite(providerAmount) || providerAmount <= 0) return { error: 'package-denomination-invalid' };
   return {
     productCode,
     sellAmount,
+    providerAmount,
     costAmount: Number.isFinite(costAmount) && costAmount > 0 ? costAmount : sellAmount,
     package: String(option.label || option.description || option.code || raw?.package || '').slice(0, 500),
     subproductCode: String(option.code || '').slice(0, 200),
