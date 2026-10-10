@@ -135,6 +135,18 @@ check below is what makes a replay harmless.
 | Entertainment | every country except BD | - |
 | Offer Packs | - | BD |
 
+### Four-service production checklist
+
+These are separate service routes even though they share one IIMMPACT HMAC account and the same live catalog endpoint.
+
+1. **Recharge** — service mode must be API for each intended non-BD country; provider must be active and serve that country; map only the provider's prepaid/airtime product codes. Do not put postpaid, biller, utility, data-plan, or voucher codes in the recharge map. The customer operator picker uses the IIMMPACT category tree where available.
+2. **Internet** — service mode must be API for each intended non-BD country; select an operator supported by the live data-plan path; plans must come from `listProviderDataPlans` / the provider's number-specific catalog. Do not create placeholder prices or reuse Recharge product codes as Internet plans. Celcom and Digi may map separately even when the UI groups them under CelcomDigi.
+3. **Bill Payment** — service mode must be API for each intended non-BD country; configure each biller's exact product code under **Biller product codes**. For postpaid mobile, internet bills and utilities, collect the biller's required account/customer fields and use the provider's bill-presentment/validation path where that biller supports it. A successful catalog read alone does not prove bill payment or presentment is enabled for a biller.
+4. **Recharge PIN** — service mode must be API for each intended non-BD country; configure voucher product codes separately under **PIN product codes**, not Biller product codes or Recharge operator mappings. Set **Response PIN Path** to `data.pin` when that is the provider response shape. The screen should show only active voucher/PIN products and load denominations from `/v2/options` where the product has a pricing field.
+
+Before opening any of these services to customers, use the admin **Test** action and a low-value/approved test product for each service, confirm the returned product code and provider transaction status, then confirm the MySheba transaction/receipt and callback update. Never test with a live customer account or an unverified biller code.
+
+**Important:** IIMMPACT's dashboard SDK status is distinct from MySheba's server-side HMAC API integration. Active webhook URLs do not, by themselves, activate the dashboard SDK or prove that each service/product is enabled for the API key. If the SDK badge remains Inactive, ask IIMMPACT to enable the SDK/API product on the account; continue to validate MySheba's `/v2/catalog`, `/v2/options`, and transaction endpoints independently.
 Bangladesh is protected by the provider record itself, not by a setting:
 IIMMPACT's country list names the nine countries it serves and BD is not one of
 them, and provider selection prefers a provider that names a country over one
