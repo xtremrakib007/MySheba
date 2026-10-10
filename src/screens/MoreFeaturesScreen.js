@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import HeaderDecor from '../components/HeaderDecor';
-import { radius } from '../theme/theme';
+import { radius, tileGrid } from '../theme/theme';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import { useServiceAction, Tile } from '../components/ServiceGrid';
@@ -61,7 +61,7 @@ export default function MoreFeaturesScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         {/* Show only features absent from this role's homepage. Keep one
             home-style grid instead of dividing the overflow into categories. */}
-        <View style={styles.sectionCard}>
+        <View style={styles.gridCanvas}>
           <View style={styles.grid}>
             {[...sections.flatMap((section) => section.tiles), ...visible(account)].map((item) => (
               <Tile key={item.key} s={item} onPress={() => handlePress(item)} />
@@ -84,10 +84,9 @@ function createStyles(colors) {
     section: { marginBottom: 18 },
     sectionTitle: { fontSize: 12, fontWeight: '800', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 2, marginLeft: 2 },
     sectionSubtitle: { fontSize: 11.5, color: colors.textSecondary, marginBottom: 9, marginLeft: 2 },
-    sectionCard: { backgroundColor: colors.canvasBg || colors.surface, borderRadius: 18, padding: 10 },
-    // Three across, left-packed, same as the home grid: the tile width is
-    // ServiceGrid's, so the two screens cannot disagree about how wide a
-    // service is.
-    grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', columnGap: 8 },
+    // Match the homepage canvas and grid spacing exactly; every overflow
+    // feature is an individual Tile in one continuous multi-column grid.
+    gridCanvas: { marginHorizontal: 4, padding: 10, borderRadius: 18, backgroundColor: colors.canvasBg || colors.surface },
+    grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', columnGap: tileGrid.gap },
   });
 }
