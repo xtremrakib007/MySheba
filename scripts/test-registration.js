@@ -168,4 +168,16 @@ test('IIMMPACT PIN purchases are gated by provider reach and API mode, not Malay
     'voucher classification must use public IIMMPACT product description as well as name');
 });
 
+test('PIN category routing keeps commerce vouchers out of Mobile Operator PIN', () => {
+  const pin = read('src/screens/RechargePinScreen.js');
+  assert.ok(/function classifyPinProduct\(product\)/.test(pin), 'one classifier must decide each PIN product category');
+  assert.ok(/const exclusions = \[/.test(pin), 'specific non-telecom categories must be checked before telco matching');
+  assert.ok(/touch\.?n\.?go|\\btng\\b/.test(pin), 'Touch n Go must be classified as transport before mobile PIN');
+  assert.ok(/shopee|lazada|e-commerce/.test(pin), 'shopping products must have a dedicated category');
+  assert.ok(/operatorPattern\.test\(name\)/.test(pin), 'mobile PIN requires a recognized telco in the product name');
+  assert.ok(!/operatorPattern\.test\(text\)/.test(pin), 'generic taxonomy text alone must not qualify as a mobile operator');
+  assert.ok(/if \(\/gift card\|voucher\|digital code\|giftcard\/i\.test\(text\)\) return category\('shopping'\)/.test(pin),
+    'generic gift cards and digital codes must route to a voucher category instead');
+});
+
 console.log('\n' + passed + ' checks passed.\n');

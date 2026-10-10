@@ -22,9 +22,9 @@ const PIN_CATEGORIES = [
   { id: 'mobile', title: 'Mobile Operator PIN', pattern: /digi|celcom|hotlink|maxis|u mobile|umobile|xox|tunetalk|unifi mobile|yes telco|hello sim|mobile.*pin|telco/i },
   { id: 'coffee', title: 'Coffee & Tea', pattern: /coffee|cafe|tea|tealive|starbucks|zuss|oldtown|kenangan/i },
   { id: 'wellness', title: 'Health & Wellness', pattern: /health|wellness|beauty|guardian|watsons|pharmacy|fitness|spa/i },
-  { id: 'transport', title: 'Transport', pattern: /grab|transport|ride|taxi|bus|train|rapid|myrapid|touch.?n.?go|tng/i },
+  { id: 'transport', title: 'Transport', pattern: /grab|transport|ride|taxi|bus|train|rapid|myrapid|touch.?n.?go|tng|travel pass/i },
   { id: 'apple', title: 'Apple & iTunes', pattern: /apple|itunes|app store/i },
-  { id: 'shopping', title: 'Shopping PIN', pattern: /shopping|retail|shopee|lazada|mall|fashion|gift card|voucher/i },
+  { id: 'shopping', title: 'Shopping PIN', pattern: /shopping|retail|shopee|lazada|mall|fashion|e-commerce|ecommerce/i },
   { id: 'grocery', title: 'Grocery & GrabMart', pattern: /grocery|grabmart|grab mart|supermarket|foodpanda|pandamart/i },
   { id: 'food', title: 'Food & Delivery', pattern: /food|restaurant|meal|delivery|dining|restaurant/i },
   { id: 'gaming', title: 'Gaming & Entertainment', pattern: /game|gaming|playstation|xbox|steam|roblox|pubg|mobile legends|netflix|spotify|movie|music|stream/i },
@@ -200,14 +200,46 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
     return () => { alive = false; };
   }, [product?.code, catalog?.providerId, country]);
 
-  // Build PIN categories from IIMMPACT's own catalogue tree. The provider's
-  // group/category names and product_codes are authoritative; do not guess
-  // categories from brand-name regexes (which used to mix unrelated products).
+// Classify using specific non-telecom categories first. IIMMPACT may attach
+// a generic "mobile PIN" product-group label to unrelated voucher products,
+// so that label alone must never put a shopping/food/transport product in
+// Mobile Operator PIN. Only a recognizable Malaysian telco product qualifies.
+function classifyPinProduct(product) {
+  const name = String(product?.name || '');
+  const taxonomy = [product?.category, product?.subcategory, product?.product_group, product?.label]
+    .map((value) => String(value || '')).join(' ');
+  const text = [name, product?.description, product?.note, taxonomy]
+    .map((value) => String(value || '')).join(' ');
+  const category = (id) => PIN_CATEGORIES.find((item) => item.id === id);
+
+  const exclusions = [
+    ['transport', /grab|transport|ride|taxi|bus|train|rapid|myrapid|touch.?n.?go|\btng\b|travel pass/i],
+    ['coffee', /coffee|cafe|tea|tealive|starbucks|zuss|oldtown|kenangan/i],
+    ['grocery', /grocery|grabmart|grab mart|supermarket|pandamart/i],
+    ['shopping', /shopping|retail|shopee|lazada|mall|fashion|e-commerce|ecommerce/i],
+    ['wellness', /health|wellness|beauty|guardian|watsons|pharmacy|fitness|spa/i],
+    ['food', /food|restaurant|meal|delivery|dining|foodpanda/i],
+    ['apple', /apple|itunes|app store/i],
+    ['gaming', /game|gaming|playstation|xbox|steam|roblox|pubg|mobile legends|netflix|spotify|movie|music|stream/i],
+  ];
+  for (const [id, pattern] of exclusions) {
+    if (pattern.test(text)) return category(id);
+  }
+
+  const operatorPattern = /celcomdigi|celcom|digi|hotlink|maxis|u.?mobile|xox|tune.?talk|unifi|\\byes\\b|hello\\s?sim|red.?one|altel/i;
+  const explicitTelco = /mobile operator|mobile top.?up|telco|telecom|sim card|airtime|prepaid reload|internet pin/i.test(`${name} ${taxonomy}`);
+  if (operatorPattern.test(name) || (explicitTelco && operatorPattern.test(text))) return category('mobile');
+  if (/gift card|voucher|digital code|giftcard/i.test(text)) return category('shopping');
+  return category('other');
+}
+
+  // Build categories from the product itself, preferring specific commerce
+  // categories over generic provider taxonomy. Generic "mobile PIN" metadata
+  // must not contaminate the mobile operator grid.
   const categorizedProducts = useMemo(() => {
     const grouped = new Map(PIN_CATEGORIES.map((category) => [category.id, { ...category, products: [] }]));
     for (const product of dynamicProducts) {
-      const text = `${product.name || ''} ${product.note || ''} ${product.category || ''} ${product.subcategory || ''} ${product.product_group || ''}`;
-      const category = PIN_CATEGORIES.find((item) => item.id !== 'other' && item.pattern.test(text)) || PIN_CATEGORIES.find((item) => item.id === 'other');
+      const category = classifyPinProduct(product) || PIN_CATEGORIES.find((item) => item.id === 'other');
       grouped.get(category.id).products.push(product);
     }
     return PIN_CATEGORIES
