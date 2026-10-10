@@ -157,4 +157,12 @@ test('recharge loads active operator products from IIMMPACT', () => {
     'when recharge taxonomy exists, do not fall back to loose name matching');
 });
 
+test('IIMMPACT PIN purchases are gated by provider reach and API mode, not Malaysia-only code', () => {
+  const pinService = read('functions/rechargePinService.js');
+  assert.ok(pinService.includes('provider reach and the per-country API mode below decide'),
+    'PIN service must defer country eligibility to provider reach and service mode');
+  assert.ok(!pinService.includes("country !== 'MY') throw new HttpsError('failed-precondition', 'Recharge PIN is currently supported only in Malaysia."),
+    'catalog-backed PIN products must not be rejected solely because country is not MY');
+});
+
 console.log('\n' + passed + ' checks passed.\n');
