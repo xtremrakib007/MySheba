@@ -133,4 +133,22 @@ test('the homepage tile opens Touch n Go directly; PIN Generate stays separate',
     'Android back follows the same one-level PIN navigation');
 });
 
+// Confirmation back must pop one actual screen-history entry, not route home.
+const confirmScreen = read('src/screens/ConfirmTransactionScreen.js');
+test('confirmation back returns to the previous screen only', () => {
+  assert.ok(confirmScreen.includes("const returnToPrevious = () => { if (!goBack()) setScreen('service'); };"),
+    'confirmation should pop the prior screen, with service as fallback');
+  assert.ok((confirmScreen.match(/onPress=\{returnToPrevious\}/g) || []).length >= 2,
+    'header back and Edit details must use one-level navigation');
+});
+
+test('recharge loads active operator products from IIMMPACT', () => {
+  const recharge = read('src/steps/RechargeSteps.js');
+  assert.ok(recharge.includes("getIimmpactCatalogForUser('', 'Recharge', country)"));
+  assert.ok(recharge.includes('category.product_codes'), 'catalog category product codes must scope recharge products');
+  assert.ok(recharge.includes('p.is_active !== false'), 'inactive products must not be shown');
+  assert.ok(recharge.includes("String(serviceData.country || '').toUpperCase() !== 'BD'"),
+    'non-Bangladesh IIMMPACT recharge must keep the dynamic operator picker visible');
+});
+
 console.log('\n' + passed + ' checks passed.\n');
