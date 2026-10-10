@@ -445,8 +445,10 @@ export default function IimmpactProductScreen({ category }) {
               <View style={st.confirmRow}><Text style={st.confirmLabel}>Account / recipient</Text><Text style={st.confirmValue}>{pendingPurchase?.accountNumber}</Text></View>
               {Object.entries(pendingPurchase?.selectedFields || {}).filter(([k,v]) => v && !/(pin|password|token|secret|otp)/i.test(k)).map(([k,v]) => <View key={k} style={st.confirmRow}><Text style={st.confirmLabel}>{k.replace(/([A-Z])/g, ' $1')}</Text><Text style={st.confirmValue}>{v}</Text></View>)}
               <View style={st.confirmRow}><Text style={st.confirmLabel}>Selling price</Text><Text style={st.confirmValue}>MYR {Number(pendingPurchase?.sellAmount || 0).toFixed(2)}</Text></View>
-              <View style={st.confirmRow}><Text style={st.confirmLabel}>Provider cost price</Text><Text style={st.confirmValue}>MYR {Number(pendingPurchase?.pricingOption?.cost?.amount ?? pendingPurchase?.amount ?? 0).toFixed(4)}</Text></View>
-              <View style={st.confirmRow}><Text style={st.confirmLabel}>Commission / margin</Text><Text style={st.confirmValue}>MYR {(Number(pendingPurchase?.sellAmount || 0) - Number(pendingPurchase?.pricingOption?.cost?.amount ?? pendingPurchase?.amount ?? 0)).toFixed(2)}</Text></View>
+              {isSuperadmin && <>
+                <View style={st.confirmRow}><Text style={st.confirmLabel}>Provider cost price</Text><Text style={st.confirmValue}>MYR {Number(pendingPurchase?.pricingOption?.cost?.amount ?? pendingPurchase?.amount ?? 0).toFixed(4)}</Text></View>
+                <View style={st.confirmRow}><Text style={st.confirmLabel}>Commission / margin</Text><Text style={st.confirmValue}>MYR {(Number(pendingPurchase?.sellAmount || 0) - Number(pendingPurchase?.pricingOption?.cost?.amount ?? pendingPurchase?.amount ?? 0)).toFixed(2)}</Text></View>
+              </>}
               <View style={st.confirmRow}><Text style={st.confirmLabel}>Total wallet deduction</Text><Text style={st.confirmTotal}>MYR {Number(pendingPurchase?.sellAmount || 0).toFixed(2)}</Text></View>
             </ScrollView>
             <View style={st.confirmActions}>
