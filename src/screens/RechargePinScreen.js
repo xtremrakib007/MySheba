@@ -105,15 +105,28 @@ export default function RechargePinScreen() {
     const liveAmount = Number(selectedOption?.price?.amount ?? selectedOption?.denomination ?? amount);
     if (!product) return showAlert('Voucher', 'Please select a voucher product.');
     if (!(liveAmount > 0)) return showAlert('Voucher', 'Please select a denomination.');
+    const currency = selectedOption?.price?.currency || product?.denomination_currency || 'MYR';
+    showAlert(
+      'Confirm PIN Purchase',
+      'Product: ' + String(product.name || '') + '\\nAmount: ' + currency + ' ' + liveAmount.toFixed(2) + '\\nPayment will be taken from your MySheba wallet. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Confirm & Pay', onPress: async () => { await completePurchase(liveAmount); } },
+      ],
+    );
+  };
+
+  const completePurchase = async (liveAmount) => {
+    if (busy) return;
     setBusy(true);
     try {
       const result = await purchaseRechargePin({
         country,
         operator,
         amount: liveAmount,
-        productCode: String(product.code),
+        productCode: String(product?.code || ''),
         subproductCode: String(selectedOption?.code || ''),
-        productName: String(product.name || ''),
+        productName: String(product?.name || operator || ''),
       });
       setVoucher(result);
     } catch (err) {
