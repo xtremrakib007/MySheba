@@ -59,24 +59,15 @@ export default function MoreFeaturesScreen() {
       </LinearGradient>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* One section per category, so this screen reads the same way the home
-            screen does rather than as one long undifferentiated list. Hidden
-            when empty - every tile being on the home screen is the good case,
-            not a reason for a bare heading. */}
-        {sections.map((section) => (
-          <Section key={section.key} title={section.label} subtitle={section.subtitle} items={section.tiles} onPress={handlePress} />
-        ))}
-        {/* The account rows are the same for everyone; only the list differs,
-            and a staff member's includes the management shortcuts. Shown for
-            staff too, which it was not: the staff branch used to replace the
-            overflow entirely, so a tile that left a dealer's home screen had
-            nowhere to appear. */}
-        <Section
-          title={isCustomer ? 'Personal' : 'Account & Operations'}
-          subtitle={isCustomer ? 'Your account, documents and activity' : 'Manage your account and operational features'}
-          items={visible(account)}
-          onPress={handlePress}
-        />
+        {/* Show only features absent from this role's homepage. Keep one
+            home-style grid instead of dividing the overflow into categories. */}
+        <View style={styles.sectionCard}>
+          <View style={styles.grid}>
+            {[...sections.flatMap((section) => section.tiles), ...visible(account)].map((item) => (
+              <Tile key={item.key} s={item} onPress={() => handlePress(item)} />
+            ))}
+          </View>
+        </View>
       </ScrollView>
     </View>
   );
