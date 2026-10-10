@@ -208,6 +208,14 @@ const fakeDb = (providers) => ({
   assert.strictEqual(await catalog.perAccountCatalogFor(fakeDb([]), 'Internet', 'MY', 'Hotlink'), null);
 }));
 
+// The screen's own rule, lifted out of the JSX so the failure case can be
+// stated rather than read.
+const { resolvePackageSource } = requireEsm('src/utils/packageSource.js', 'resolvePackageSource');
+
+const BUILT_IN = [{ id: 'base:0', name: 'Built-in 30GB', price: 35 }];
+const BD_LIST = [{ id: 'd1', name: 'BD pack', price: 199 }];
+const PER_NUMBER = [{ id: 'PLAN-X', name: 'Unlimited 30d', price: 40 }];
+
 console.log('\nIIMMPACT Malaysia operator/package boundary');
 
 test('Malaysia Internet shows exactly IIMMPACT documented operators', () => {
@@ -293,14 +301,6 @@ test('the wrapper refuses options it cannot honour, rather than dropping them', 
 });
 
 console.log('\nWhat the customer is offered');
-
-// The screen's own rule, lifted out of the JSX so the failure case can be
-// stated rather than read.
-const { resolvePackageSource } = requireEsm('src/utils/packageSource.js', 'resolvePackageSource');
-
-const BUILT_IN = [{ id: 'base:0', name: 'Built-in 30GB', price: 35 }];
-const BD_LIST = [{ id: 'd1', name: 'BD pack', price: 199 }];
-const PER_NUMBER = [{ id: 'PLAN-X', name: 'Unlimited 30d', price: 40 }];
 
 test('plans for this number replace the built-in list', () => {
   const out = resolvePackageSource({ country: 'MY', perNumber: PER_NUMBER, successTopUp: [], builtIn: BUILT_IN });
