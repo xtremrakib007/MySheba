@@ -45,6 +45,56 @@ assert.strictEqual(api.render('order-{{requestId}}-{{missing}}', { requestId: 'a
 // at the end of this file for why. This used to assert the string '10'.
 assert.deepStrictEqual(api.render({ amount: '{{amount}}' }, { amount: 10 }), { amount: 10 });
 
+// IIMMPACT uses one documented /v2/topup envelope for all service types.
+{
+  const build = api.buildIimmpactTopupBody;
+  assert.strictEqual(typeof build, 'function', 'IIMMPACT body builder must be testable');
+  assert.deepStrictEqual(build({
+    raw: { phone: '0123456789', subproductCode: 'HI-30' },
+    requestId: 'request-123456789012',
+    productCode: 'HI',
+    amount: 30,
+    customer: {},
+  }), {
+    refid: 'request-123456789012',
+    product: 'HI',
+    account: '0123456789',
+    amount: 30,
+    remarks: '',
+    extras: { subproduct_code: 'HI-30' },
+  });
+  assert.deepStrictEqual(build({
+    raw: { accountNumber: 'REF1-123', billerCode: '818625', ref2: 'REF2', icNumber: '941123045001' },
+    requestId: 'bill-123456789012',
+    productCode: 'JOMPAY',
+    amount: 150,
+    customer: {},
+  }).extras, {
+    biller_code: '818625',
+    ic_number: '941123045001',
+    ref2: 'REF2',
+  });
+  assert.strictEqual(build({
+    raw: { email: 'travel@example.com', subproductCode: 'ESIM-5GB' },
+    requestId: 'esim-123456789012',
+    productCode: 'ESIM',
+    amount: 25,
+    customer: {},
+  }).account, 'travel@example.com');
+  assert.throws(() => build({
+    raw: { phone: '0123456789' },
+    requestId: 'request-123456789012',
+    productCode: '',
+    amount: 30,
+    customer: {},
+  }), /product code/);
+}
+assert.strictEqual(api.providerAmountFor({
+  raw: { providerAmount: 30, packageCostAmount: 27.5 },
+  payload: { amount: 31 },
+  isSuccessTopUpBd: false,
+}), 30, 'IIMMPACT must receive the selected face denomination, not wholesale cost or sell price');
+
 // Nested response extraction.
 assert.strictEqual(api.getPath({ data: { pin: '1234' } }, 'data.pin'), '1234');
 assert.strictEqual(api.getPath({ data: {} }, 'data.pin'), undefined);
