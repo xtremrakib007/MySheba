@@ -704,6 +704,8 @@ function getPath(obj, path) { return path ? path.split('.').reduce((v,k) => v ==
  */
 function providerAmountFor({ raw, payload, isSuccessTopUpBd, mappedAmount }) {
   const r = raw || {};
+  const resolvedProviderAmount = Number(r.providerAmount);
+  if (Number.isFinite(resolvedProviderAmount) && resolvedProviderAmount > 0) return resolvedProviderAmount;
   const packageCost = Number(r.packageCostAmount);
   if (Number.isFinite(packageCost) && packageCost > 0) return packageCost;
   // Stated on the provider record for a fixed product that has no catalogue to
