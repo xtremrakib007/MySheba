@@ -152,6 +152,7 @@ exports.listApiWebhooks = require('./apiWebhookService').listApiWebhooks;
 exports.saveApiWebhook = require('./apiWebhookService').saveApiWebhook;
 exports.deleteApiWebhook = require('./apiWebhookService').deleteApiWebhook;
 exports.apiWebhook = require('./apiWebhookService').apiWebhook;
+exports.iimmpactCatalogWebhook = require('./iimmpactCatalogWebhook').iimmpactCatalogWebhook;
 exports.revealApiWebhookToken = require('./apiWebhookService').revealApiWebhookToken;
 exports.rotateApiWebhookToken = require('./apiWebhookService').rotateApiWebhookToken;
 exports.listApiWebhookUnmatched = require('./apiWebhookService').listApiWebhookUnmatched;
