@@ -432,7 +432,16 @@ function normaliseItem(item, itemMap) {
   // face value; cost is only a fallback when no face value is supplied.
   const id = firstOf(item, map.id) ?? firstOf(item, ['code', 'product_code', 'productCode', 'id']);
   const name = firstOf(item, map.name) ?? firstOf(item, ['label', 'title', 'description', 'product_name']);
-  const facePrice = firstOf(item, map.price) ?? firstOf(item, ['denomination', 'price', 'amount', 'rrp']);
+  // A zero denomination is often a placeholder, not a sellable price. Do
+  // not let that first non-empty field mask a valid nested `price` value
+  // such as { amount: 10, currency: "MYR" }.
+  const priceKeys = [...new Set([
+    ...(Array.isArray(map.price) ? map.price : [map.price]),
+    'denomination', 'price', 'amount', 'rrp',
+  ].filter((key) => typeof key === 'string' && key))];
+  const facePrice = priceKeys
+    .map((key) => item[key])
+    .find((value) => value !== undefined && value !== null && value !== '' && toAmount(value) > 0);
   const fallbackCost = firstOf(item, ['cost']);
   return {
     id: String(id ?? '').slice(0, 200),
