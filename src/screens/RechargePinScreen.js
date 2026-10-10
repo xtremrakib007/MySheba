@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Image } from 'react-native';
+import { BackHandler, View, Text, TouchableOpacity, ScrollView, StyleSheet, Image } from 'react-native';
 import * as Print from 'expo-print';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
@@ -109,6 +109,30 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
   const [busy, setBusy] = useState(false);
   const [voucher, setVoucher] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
+
+  // Back should unwind the current PIN task one level at a time. Previously
+  // this header always delegated to app-level navigation, whose feature
+  // boundary intentionally clears screen history and sent PIN users home.
+  const handlePinBack = () => {
+    if (voucher) { setVoucher(null); return; }
+    if (product) {
+      setProduct(null);
+      setOptions([]);
+      setSelectedOption(null);
+      setAmount(null);
+      return;
+    }
+    if (selectedCategory) { setSelectedCategory(null); return; }
+    goBackOrHome();
+  };
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      handlePinBack();
+      return true;
+    });
+    return () => sub.remove();
+  }, [voucher, product, selectedCategory, goBackOrHome]);
 
   useEffect(() => {
     let alive = true;
@@ -256,7 +280,7 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
 
   return <View style={styles.screen}>
     <LinearGradient colors={brandGradient} start={{x:0,y:0}} end={{x:1,y:0}} style={styles.header}>
-      <HeaderDecor /><TouchableOpacity onPress={goBackOrHome} style={styles.back}><Text style={styles.backText}>←</Text></TouchableOpacity>
+      <HeaderDecor /><TouchableOpacity onPress={handlePinBack} style={styles.back}><Text style={styles.backText}>←</Text></TouchableOpacity>
       <Text style={styles.headerTitle}>Vouchers & Gift Cards</Text>
     </LinearGradient>
     <ScrollView contentContainerStyle={styles.content}>
