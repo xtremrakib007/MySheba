@@ -90,7 +90,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
   const productName = typeof input.productName === 'string' ? input.productName.trim().slice(0, 200) : '';
   const denomination = safeNumber(input.amount, 'Recharge PIN amount');
   if (!/^[A-Z]{2}$/.test(country)) throw new HttpsError('invalid-argument', 'A valid two-letter country code is required.');
-  if (country === 'BD') throw new HttpsError('failed-precondition', 'Bangladesh Recharge PINs remain on the configured Bangladesh provider and are not routed through IIMMPACT.');
+  if (country !== 'MY') throw new HttpsError('failed-precondition', 'Recharge PIN is currently supported only in Malaysia. Please select a Malaysian PIN product.');
   if (country === 'MY' && (!operator || !MALAYSIA_OPERATORS.has(operator)) && !productCode) {
     throw new HttpsError('invalid-argument', 'Select a supported Malaysian operator or an IIMMPACT voucher product.');
   }
