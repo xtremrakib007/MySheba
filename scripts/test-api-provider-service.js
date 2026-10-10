@@ -49,6 +49,30 @@ assert.deepStrictEqual(api.render({ amount: '{{amount}}' }, { amount: 10 }), { a
 assert.strictEqual(api.getPath({ data: { pin: '1234' } }, 'data.pin'), '1234');
 assert.strictEqual(api.getPath({ data: {} }, 'data.pin'), undefined);
 
+// Country routing is provider-specific: Success TopUp must never retain an
+// incoming ALL/MY scope, and IIMMPACT must be explicitly scoped outside BD.
+{
+  const success = api.validate({
+    service: 'Recharge', name: 'Success TopUp', country: 'MY', countries: ['ALL'],
+    baseUrl: 'https://api.example.com', apiKey: 'key', secretKey: 'secret',
+  });
+  assert.deepStrictEqual(success.countries, ['BD']);
+  assert.strictEqual(success.country, 'BD');
+
+  const iimmpact = api.validate({
+    service: 'Recharge', name: 'IIMMPACT', country: 'BD', countries: ['BD', 'MY', 'SG'],
+    baseUrl: 'https://api.example.com', authType: 'iimmpactHmac',
+    apiKey: 'key', secretKey: Buffer.from('test secret').toString('base64'),
+  });
+  assert.deepStrictEqual(iimmpact.countries, ['MY', 'SG']);
+  assert.strictEqual(iimmpact.country, 'MY');
+  assert.throws(() => api.validate({
+    service: 'Recharge', name: 'IIMMPACT', countries: ['ALL'],
+    baseUrl: 'https://api.example.com', authType: 'iimmpactHmac',
+    apiKey: 'key', secretKey: Buffer.from('test secret').toString('base64'),
+  }), /specific non-Bangladesh countries/);
+}
+
 // Authentication must not silently produce empty credentials.
 assert.deepStrictEqual(api.providerAuth({ authType: 'apiKey', apiKey: 'abc' }), { 'x-api-key': 'abc' });
 assert.deepStrictEqual(api.providerAuth({ authType: 'bearer', apiKey: 'abc' }), { authorization: 'Bearer abc' });
