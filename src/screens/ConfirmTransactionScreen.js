@@ -30,7 +30,7 @@ const money = (value, currency = 'MYR') => {
   return Number.isFinite(n) ? `${currency} ${n.toFixed(2)}` : 'Not provided';
 };
 const labelFor = (key) => LABELS[key] || key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase());
-const isPrivateKey = (key) => /(secret|token|password|security.?pin|collection.?pin|otp|authorization|receipt.?url|api.?key)/i.test(key);
+const isPrivateKey = (key) => /(secret|token|password|security.?pin|collection.?pin|otp|authorization|receipt.?url|api.?key|selectedOptions|fieldValues|iimmpactCatalog|iimmpactFields|iimmpactDenomination|iimmpactProcessingTime|providerId)/i.test(key);
 
 function getPricing(service, data, pricing, rates) {
   const raw = Number(data.amount ?? data.myr ?? data.sendAmt ?? 0);
