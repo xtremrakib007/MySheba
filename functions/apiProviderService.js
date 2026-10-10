@@ -2493,12 +2493,15 @@ async function resolveIimmpactMarketplaceProduct(db, raw) {
   }
 
   const fulfillment = product.fulfillment || {};
-  const accountRaw = iimmpactResolvedFieldValue(fulfillment.account, values, resolvedOptions) || raw?.accountNumber || '';
+  const accountRaw = iimmpactResolvedFieldValue(fulfillment.account, values, resolvedOptions) || raw?.accountNumber || raw?.phone || '';
   const amountRaw = iimmpactResolvedFieldValue(fulfillment.amount, values, resolvedOptions) || raw?.providerAmount || raw?.amount || '';
   const accountNumber = typeof accountRaw === 'object'
-    ? String(accountRaw.account_number || accountRaw.code || '').trim()
+    ? String(accountRaw.account_number || accountRaw.code || accountRaw.value || '').trim()
     : String(accountRaw || '').trim();
-  const providerAmount = Number(amountRaw);
+  const amountValue = amountRaw && typeof amountRaw === 'object'
+    ? (amountRaw.amount ?? amountRaw.denomination ?? amountRaw.value ?? amountRaw.price?.amount ?? '')
+    : amountRaw;
+  const providerAmount = Number(amountValue);
   if (!accountNumber || !Number.isFinite(providerAmount) || providerAmount <= 0) return { error: 'fulfillment-invalid' };
 
   const pricingField = fields.find((field) => field.role === 'pricing' && field.type === 'select');
