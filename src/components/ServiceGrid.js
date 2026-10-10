@@ -170,6 +170,21 @@ export default function ServiceGrid({ homeOnly }) {
     return () => { alive = false; };
   }, []);
 
+
+  // Both of these live in serviceTiles.js, so what a role sees - and that an
+  // added WebView reaches every staff role through the one ...SHARED_SERVICES
+  // line - is something a test can compute rather than infer from a render.
+  const services = visibleTiles({
+    role,
+    can,
+    webviewPages,
+    tileLabels,
+    viewer: gridViewer,
+    dynamicFeatures: dynamicPlatformFeatures,
+    isActive: (key) => gridManagementService.isGridActive(gridManagement, key, gridViewer),
+    homeOnly,
+  });
+
   const marketplaceTiles = useMemo(() => {
     const groups = iimmpactCatalog?.tree?.groups;
     const products = iimmpactCatalog?.products || {};
@@ -192,19 +207,6 @@ export default function ServiceGrid({ homeOnly }) {
     }
     return tiles;
   }, [iimmpactCatalog, services, gridManagement, gridViewer]);
-  // Both of these live in serviceTiles.js, so what a role sees - and that an
-  // added WebView reaches every staff role through the one ...SHARED_SERVICES
-  // line - is something a test can compute rather than infer from a render.
-  const services = visibleTiles({
-    role,
-    can,
-    webviewPages,
-    tileLabels,
-    viewer: gridViewer,
-    dynamicFeatures: dynamicPlatformFeatures,
-    isActive: (key) => gridManagementService.isGridActive(gridManagement, key, gridViewer),
-    homeOnly,
-  });
 
   // The home screen is one block of services, three across, in declaration
   // order - which for a customer is exactly twelve: four full rows, no short
