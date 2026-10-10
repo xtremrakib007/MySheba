@@ -6,7 +6,6 @@ import { radius } from '../theme/theme';
 import BannerSlider from '../components/BannerSlider';
 import ServiceGrid from '../components/ServiceGrid';
 import AppHeader from '../components/AppHeader';
-import WalletCard from '../components/WalletCard';
 import ServiceIcon from '../components/ServiceIcon';
 import { SectionCard, ListRow } from '../components/uiRows';
 
@@ -17,10 +16,8 @@ import { SectionCard, ListRow } from '../components/uiRows';
 // More are both behind More. Four buttons that each duplicated something one
 // tap away, taking a full row above the fold.
 //
-// The grid is capped at six. The customer list is 17 tiles - the entire
-// catalogue on the home page, pushing everything else below the fold - and
-// the Services tab already shows all of them, so home keeps the money
-// services and the More Services tile.
+// Home keeps the existing MySheba feature grid and merges in live IIMMPACT
+// categories. Wallet balance is intentionally not shown on the homepage.
 //
 // Every surface here used to be a hardcoded teal: #A6F5D2 borders, #D9F6EA
 // card fills, #0A5C78 and #0E9E8C text, #19C39B rings, #374151 labels, with
@@ -33,7 +30,6 @@ export default function CustomerHomeScreen() {
   const { colors } = useTheme();
   const { openSidebar, setScreen, hasUnreadNotifications, profile } = useApp();
   const styles = createStyles(colors);
-  const balance = profile?.balance ?? profile?.walletBalance ?? profile?.wallet?.balance ?? 0;
   const kycVerified = profile?.verified === true || profile?.verificationStatus === 'approved';
 
   return (
@@ -41,13 +37,6 @@ export default function CustomerHomeScreen() {
       <AppHeader unreadCount={hasUnreadNotifications ? 1 : 0} onPressMenu={openSidebar} hero />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <WalletCard
-          balance={balance}
-          variant="solid"
-          onAddMoney={() => setScreen('topup')}
-          onTransfer={() => setScreen('transferPoints')}
-        />
-
         {!kycVerified && (
           <View style={styles.statusCard}>
             <View style={styles.statusIcon}><ServiceIcon name="kyc" size={24} color={colors.primary} /></View>
