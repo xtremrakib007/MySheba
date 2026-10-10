@@ -211,7 +211,9 @@ export default function ServiceGrid({ homeOnly }) {
         seen.add(normalized);
         const key = 'iimmpact_' + normalized.replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
         if (!gridManagementService.isGridActive(gridManagement, key, gridViewer)) continue;
-        tiles.push({ key, name, icon: 'iimmpact', emoji: '🛍️', kind: 'iimmpactCategory', iimmpactCategory: encodeURIComponent(name), cat: 'recharge', home: true, iimmpactCount: count });
+        const firstProductImage = codes.map((code) => products[code]).find((product) => product && product.is_active !== false && typeof product.image_url === 'string' && (product.image_url.startsWith('https://') || product.image_url.startsWith('http://')))?.image_url || '';
+        const imageUrl = (typeof category?.icon_url === 'string' && (category.icon_url.startsWith('https://') || category.icon_url.startsWith('http://')) ? category.icon_url : '') || firstProductImage;
+        tiles.push({ key, name, icon: 'iimmpact', emoji: '🛍️', imageUrl, kind: 'iimmpactCategory', iimmpactCategory: encodeURIComponent(name), cat: 'recharge', home: true, iimmpactCount: count });
       }
     }
     return tiles;
@@ -264,4 +266,4 @@ const styles = StyleSheet.create({ sectionSpacer: { marginTop: 14 }, catLabel: {
 // tiles drew one against the left margin and one against the right with a
 // canyon between them. Packing left with a fixed gap means a row of two looks
 // like the first two of a row of four, which is what it is.
-  catalogState: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8 }, catalogStateText: { fontSize: 11 }, grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', columnGap: tileGrid.gap }, item: { width: tileGrid.width, aspectRatio: 1, marginBottom: 10, paddingHorizontal: 2, paddingVertical: 10, borderWidth: 1.5, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 1 }, itemDisabled: { opacity: 0.45 }, emoji: { fontSize: tileIcon.emoji, lineHeight: tileIcon.wrap, marginBottom: 6, textAlign: 'center' }, logoWrap: { height: tileIcon.wrap, marginBottom: 6, alignItems: 'center', justifyContent: 'center' }, iconText: { fontSize: 28 }, name: { fontSize: 11.5, lineHeight: 14, fontWeight: '700', textAlign: 'center' } });
+  catalogState: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8 }, catalogStateText: { fontSize: 11 }, grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', columnGap: tileGrid.gap }, item: { width: tileGrid.width, aspectRatio: 1, marginBottom: 10, paddingHorizontal: 2, paddingVertical: 10, borderWidth: 1.5, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 1 }, itemDisabled: { opacity: 0.45 }, emoji: { fontSize: tileIcon.emoji, lineHeight: tileIcon.wrap, marginBottom: 6, textAlign: 'center' }, remoteLogo: { width: tileIcon.size, height: tileIcon.size }, logoWrap: { height: tileIcon.wrap, marginBottom: 6, alignItems: 'center', justifyContent: 'center' }, iconText: { fontSize: 28 }, name: { fontSize: 11.5, lineHeight: 14, fontWeight: '700', textAlign: 'center' } });
