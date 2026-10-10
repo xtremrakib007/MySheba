@@ -85,7 +85,7 @@ const CUSTOMER_SERVICES = [
   { key: 'flight', icon: 'flight', name: 'Flight Ticket', kind: 'service', cat: 'travel', home: true },
   { key: 'bus', icon: 'bus', name: 'Bus Ticket', kind: 'buspicker', cat: 'travel', home: true },
   { key: 'train', icon: 'train', name: 'Train Ticket', kind: 'webview', cat: 'travel', home: true },
-  { key: 'entertainment', icon: 'entertainment', name: 'Entertainment', kind: 'service', cat: 'entertainment', home: true },
+  { key: 'offerpacks', icon: 'internet', name: 'Offer Packs', kind: 'service', cat: 'recharge', home: true },
   { key: 'esim', icon: 'esim', name: 'eSIM', kind: 'service', cat: 'esim', home: true },
   { key: 'moreFeaturesTile', icon: 'more', name: 'More Features', kind: 'moreFeaturesLink', cat: 'recharge', home: true },
 
@@ -103,7 +103,7 @@ const CUSTOMER_SERVICES = [
   // Everything else is reached through More Features.
   { key: 'mobilebanking', icon: 'mobilebanking', name: 'Mobile Banking', kind: 'service', cat: 'money' },
   { key: 'remittance', icon: 'remittance', name: 'Remittance', kind: 'service', cat: 'money' },
-  { key: 'offerpacks', icon: 'internet', name: 'Offer Packs', kind: 'service', cat: 'recharge' },
+
   { key: 'visa', icon: 'visa', name: 'Visa', kind: 'webview', cat: 'immigration' },
   { key: 'fomema', icon: 'fomema', name: 'FOMEMA', kind: 'webview', cat: 'immigration' },
   { key: 'mydigital', icon: 'mydigital', name: 'Malaysia Arrival Card', kind: 'webview', cat: 'immigration' },
