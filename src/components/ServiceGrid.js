@@ -103,6 +103,7 @@ export function useServiceAction() {
     if (s.kind === 'salary') return openSalary();
     if (s.kind === 'documents') return openMyDocuments();
     if (s.kind === 'rechargePin') return setScreen('rechargePin');
+    if (s.kind === 'pinCategory') return setScreen('rechargePinCategory:' + encodeURIComponent(String(s.pinCategory || 'other')));
     if (s.kind === 'iimmpactCatalog') return setScreen('iimmpactCatalog');
     if (s.kind === 'iimmpactCategory') return setScreen('iimmpactCategoryGrid:' + encodeURIComponent(String(s.iimmpactCategory || '')));
     if (s.kind === 'moreFeaturesLink') return setScreen('moreFeatures');

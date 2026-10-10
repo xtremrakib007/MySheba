@@ -87,6 +87,16 @@ const CUSTOMER_SERVICES = [
   { key: 'moreFeaturesTile', icon: 'more', name: 'More Features', kind: 'moreFeaturesLink', cat: 'recharge', home: true },
 
 
+  // Native PIN/voucher category tiles. Products load only after a category is opened.
+  { key: 'pinCategoryMobile', icon: 'recharge', art: 'recharge', name: 'Mobile Operator PIN', kind: 'pinCategory', pinCategory: 'mobile', cat: 'iimmpact' },
+  { key: 'pinCategoryCoffee', icon: 'coffeeVoucher', art: 'coffeeVoucher', name: 'Coffee & Tea', kind: 'pinCategory', pinCategory: 'coffee', cat: 'iimmpact' },
+  { key: 'pinCategoryWellness', icon: 'wellnessVoucher', art: 'wellnessVoucher', name: 'Health & Wellness', kind: 'pinCategory', pinCategory: 'wellness', cat: 'iimmpact' },
+  { key: 'pinCategoryTransport', icon: 'bus', art: 'bus', name: 'Transport', kind: 'pinCategory', pinCategory: 'transport', cat: 'iimmpact' },
+  { key: 'pinCategoryApple', icon: 'appleVoucher', art: 'appleVoucher', name: 'Apple & iTunes', kind: 'pinCategory', pinCategory: 'apple', cat: 'iimmpact' },
+  { key: 'pinCategoryShopping', icon: 'shoppingVoucher', art: 'shoppingVoucher', name: 'Shopping PIN', kind: 'pinCategory', pinCategory: 'shopping', cat: 'iimmpact' },
+  { key: 'pinCategoryGrocery', icon: 'groceryVoucher', art: 'groceryVoucher', name: 'Grocery & GrabMart', kind: 'pinCategory', pinCategory: 'grocery', cat: 'iimmpact' },
+  { key: 'pinCategoryOther', icon: 'rechargePin', art: 'rechargePin', name: 'Other PIN & Vouchers', kind: 'pinCategory', pinCategory: 'other', cat: 'iimmpact' },
+
   // Everything else is reached through More Features.
   { key: 'mobilebanking', icon: 'mobilebanking', name: 'Mobile Banking', kind: 'service', cat: 'money' },
   { key: 'remittance', icon: 'remittance', name: 'Remittance', kind: 'service', cat: 'money' },

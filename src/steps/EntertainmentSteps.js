@@ -29,9 +29,9 @@ export default function EntertainmentStep({ step }) {
   const [optionsLoading, setOptionsLoading] = useState(false);
   const [optionsError, setOptionsError] = useState('');
 
-  // IIMMPACT is the source of truth when an Entertainment provider is configured.
-  // The old hardcoded games remain only as a safe manual fallback until an
-  // IIMMPACT Entertainment provider is actually enabled.
+  // Fetch the live IIMMPACT catalogue directly. The backend resolves the active
+  // IIMMPACT provider for Malaysia, so this does not depend on the provider's
+  // legacy services[] list containing the exact label "Entertainment".
   useEffect(() => {
     let alive = true;
     setCatalog(null);
@@ -40,17 +40,9 @@ export default function EntertainmentStep({ step }) {
     const load = async () => {
       setCatalogLoading(true);
       try {
-        const providers = await apiProviderService.listApiProviders();
-        const provider = (providers || []).find((p) => (
-          p && p.active !== false &&
-          (Array.isArray(p.services) ? p.services.includes('Entertainment') : p.service === 'Entertainment') &&
-          (String(p.authType || '') === 'iimmpactHmac' ||
-            String(p.name || '').trim().toLowerCase() === 'iimmpact' ||
-            String(p.baseUrl || '').trim().toLowerCase() === 'https://api.iimmpact.com')
-        ));
-        if (!provider?.id) return;
-        const data = await apiProviderService.getIimmpactCatalogForUser(provider.id);
-        if (alive) setCatalog({ providerId: provider.id, ...data });
+        const data = await apiProviderService.getIimmpactCatalogForUser('', 'Entertainment', 'MY');
+        if (alive) setCatalog(data?.providerId ? data : null);
+        if (alive && !data?.providerId) setCatalogError('No active IIMMPACT provider is configured for Malaysia.');
       } catch (e) {
         if (alive) setCatalogError(e?.message || 'IIMMPACT Entertainment catalog is unavailable.');
       } finally {
@@ -67,7 +59,7 @@ export default function EntertainmentStep({ step }) {
     const wanted = new Set();
     tree.forEach((group) => {
       const text = String(group?.name || '').toLowerCase();
-      if (/game|entertainment|gift|voucher|digital/.test(text)) {
+      if (/game|entertainment|gaming/.test(text)) {
         (group.categories || []).forEach((category) => {
           (category.product_codes || []).forEach((code) => wanted.add(String(code)));
         });
@@ -75,8 +67,8 @@ export default function EntertainmentStep({ step }) {
     });
     return Object.values(products).filter((p) => {
       if (!p || p.is_active === false || !p.code) return false;
-      const text = `${p.name || ''} ${p.note || ''}`.toLowerCase();
-      return wanted.has(String(p.code)) || /game|entertainment|gift card|voucher|gaming/.test(text);
+      const text = `${p.name || ''} ${p.description || ''} ${p.note || ''} ${p.code || ''}`.toLowerCase();
+      return wanted.has(String(p.code)) || /game|entertainment|gaming|pubg|free.?fire|mobile.?legends|roblox|steam|playstation|xbox|nintendo|uc|diamond/.test(text);
     }).filter((p) => {
       const fields = Array.isArray(p.fields) ? p.fields : [];
       const account = fields.find((f) => f && (f.role === 'account' || f.id === 'player_id' || f.id === 'account'));
@@ -116,7 +108,8 @@ export default function EntertainmentStep({ step }) {
 
   if (step === 0) {
     if (catalogLoading) return <FormLabel>Loading IIMMPACT Games & Entertainment…</FormLabel>;
-    if (usingDynamic) {
+    if (catalog?.providerId) {
+      if (!usingDynamic) return <FormLabel>{catalogError || 'IIMMPACT has no matching game or entertainment products for Malaysia. Other IIMMPACT products are kept out of this grid.'}</FormLabel>;
       return (
         <View>
           <FormLabel>Choose a Game / Entertainment Product</FormLabel>

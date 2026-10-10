@@ -34,6 +34,19 @@ const FEATURED_PIN_ORDER = [
   /hello.*sim.*pin|hello.*pin/i,
 ];
 
+// Keep the last successful catalogue in memory so reopening PIN Generator or
+// switching back from a category never waits on the network to draw its grid.
+// Refresh in the background so provider updates still appear without a cold wait.
+const pinCatalogCache = new Map();
+
+function readCachedPinCatalog(country) {
+  return pinCatalogCache.has(country) ? pinCatalogCache.get(country) : null;
+}
+
+function writeCachedPinCatalog(country, data) {
+  pinCatalogCache.set(country, data);
+}
+
 function isVoucherProduct(product) {
   if (!product || product.is_active === false || !product.code) return false;
   const text = String(product.name || '') + ' ' + String(product.note || '') + ' ' + String(product.product_group || '');
@@ -46,7 +59,7 @@ function pricingField(product) {
   return fields.find((f) => f && (f.role === 'pricing' || f.type === 'select')) || null;
 }
 
-export default function RechargePinScreen() {
+export default function RechargePinScreen({ initialCategory = null } = {}) {
   const { colors, brandGradient } = useTheme();
   const { goBackOrHome, profile } = useApp();
   const styles = createStyles(colors);
@@ -62,16 +75,24 @@ export default function RechargePinScreen() {
   const [amount, setAmount] = useState(null);
   const [busy, setBusy] = useState(false);
   const [voucher, setVoucher] = useState(null);
-  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState(initialCategory);
 
   useEffect(() => {
     let alive = true;
-    setCatalog(null); setCatalogError(''); setProduct(null); setOptions([]);
-    setSelectedOption(null); setOperator(''); setAmount(null); setVoucher(null); setSelectedCategory(null);
-    setLoadingCatalog(true);
+    const cached = readCachedPinCatalog(country);
+    setCatalog(cached);
+    setCatalogError('');
+    setProduct(null); setOptions([]);
+    setSelectedOption(null); setOperator(''); setAmount(null); setVoucher(null); setSelectedCategory(initialCategory);
+    // Cached categories render immediately; only a first-ever load blocks on the network.
+    setLoadingCatalog(!cached);
     apiProviderService.getIimmpactCatalogForUser('', 'Recharge PIN', country)
-      .then((data) => { if (alive) setCatalog(data || {}); })
-      .catch((e) => { if (alive) setCatalogError(e?.message || 'IIMMPACT voucher catalogue is unavailable.'); })
+      .then((data) => {
+        const next = data || {};
+        writeCachedPinCatalog(country, next);
+        if (alive) { setCatalog(next); setCatalogError(''); }
+      })
+      .catch((e) => { if (alive && !cached) setCatalogError(e?.message || 'IIMMPACT voucher catalogue is unavailable.'); })
       .finally(() => { if (alive) setLoadingCatalog(false); });
     return () => { alive = false; };
   }, [country]);
