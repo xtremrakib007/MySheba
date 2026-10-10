@@ -79,7 +79,7 @@ export default function RechargeStep({ step }) {
   // the operator would skip forward again and the grid could never be opened.
   const autoSkippedFor = useRef('');
   useEffect(() => {
-    if (step !== 2) return;
+    if (step !== 2 || String(serviceData.country || '').toUpperCase() !== 'BD') return;
     const phone = String(serviceData.phone || '');
     const detected = operatorForNumber(serviceData.country, phone, OPERATOR_LIST);
     if (!detected || autoSkippedFor.current === phone) return;
