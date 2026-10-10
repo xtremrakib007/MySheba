@@ -522,6 +522,7 @@ function withCatalogue(plans) {
   const expected = {
     Celcom: ['CEL'],
     Digi: ['DI'],
+    CelcomDigi: ['CEL', 'DI'],
     Hotlink: ['HI'],
     'U Mobile': ['UMI'],
     Tunetalk: ['TI'],
@@ -531,6 +532,10 @@ function withCatalogue(plans) {
   for (const [operator, codes] of Object.entries(expected)) {
     assert.deepStrictEqual(providerCatalog.productCodesFor(provider, operator), codes);
   }
+
+  const legacy = { ...provider, catalogPreset: 'iimmpact-subproducts', catalogPath: '/v2/subproducts' };
+  assert.deepStrictEqual(providerCatalog.productCodesFor(legacy, 'Hotlink'), ['HI'],
+    'legacy saved IIMMPACT records must retain the current operator-code defaults');
 }));
 
 (async () => {
