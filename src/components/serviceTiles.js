@@ -471,10 +471,13 @@ export function visibleTiles({ role, can, webviewPages, tileLabels, viewer, dyna
   // The fallback stays, for a different reason than before: a list where
   // nothing is flagged would otherwise render as a single More Services tile
   // and nothing else, which looks like the app failed to load.
-  // All roles use the same fixed twelve-tile service homepage. Management
-  // tools are deliberately kept in More Features / role hubs.
+  // All roles use the same fixed twelve-tile SERVICE block. Staff management
+  // tiles marked home:true are rendered in ServiceGrid's separate management
+  // block above that service block, so preserve them here as well. Without this,
+  // dealer/admin tools marked home:true were filtered out of both the home grid
+  // and overflow (which excludes home tiles), making them unreachable.
   const homeKeys = new Set(CUSTOMER_SERVICES.filter((service) => service.home).map((service) => service.key));
-  return active.filter((service) => homeKeys.has(service.key));
+  return active.filter((service) => homeKeys.has(service.key) || (service.cat === 'manage' && service.home === true));
 }
 
 /**
