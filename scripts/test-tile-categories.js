@@ -199,7 +199,12 @@ for (const key of ['visa', 'fomema']) {
   assert(!withPages.includes(key), `${key} is declared off the home screen; a stored page must not put it back`);
 }
 // Declared on, and a stored page must not knock them off either.
-for (const key of ['train', 'mydigital', 'passport']) {
+for (const key of ['train']) {
+  assert(withPages.includes(key), `${key} is declared on the home screen and must stay`);
+}
+for (const key of ['mydigital', 'passport']) {
+  assert(!withPages.includes(key), `${key} is declared off the home screen and must stay in More Features`);
+}
   assert(withPages.includes(key), `${key} is one of the twelve and must stay`);
 }
 // The control that does exist still works: taking a built-in off home removes it.
