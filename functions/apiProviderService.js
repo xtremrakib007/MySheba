@@ -1206,8 +1206,8 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     throw new HttpsError('failed-precondition', `${service} is a payout, not a product purchase. It is never dispatched to an API provider.`);
   }
   const db = admin.firestore();
-  const raw = payload?.raw || {};
-  const forceIimmpact = service === 'IIMMPACT' || raw.iimmpactCatalog === true;
+  const routingRaw = payload?.raw || {};
+  const forceIimmpact = service === 'IIMMPACT' || routingRaw.iimmpactCatalog === true;
   const allProvidersRaw = forceIimmpact
     ? (await db.collection(COLLECTION).where('active', '==', true).limit(100).get()).docs
         .map((d) => ({ id: d.id, ...(d.data() || {}) }))
