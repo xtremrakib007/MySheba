@@ -249,6 +249,9 @@ export default function IimmpactProductScreen({ category }) {
     setReviewing(true);
   };
 
+  // This is the only customer action that submits a purchase to IIMMPACT.
+  // Catalogue and option lookups above are read-only; no charge is submitted
+  // until the customer explicitly taps Confirm & Pay in the review modal.
   const confirmBuy = async () => {
     if (!pendingPurchase || busy) return;
     const purchase = pendingPurchase;
@@ -449,7 +452,7 @@ export default function IimmpactProductScreen({ category }) {
             })}
 
             <TouchableOpacity disabled={busy} style={[st.buy, busy && {opacity:0.6}]} onPress={buy}>
-              <Text style={st.buyText}>{busy ? 'Processing…' : 'Buy / Pay Now'}</Text>
+              <Text style={st.buyText}>{busy ? 'Preparing review…' : 'Review purchase'}</Text>
             </TouchableOpacity>
           </>
         )}
