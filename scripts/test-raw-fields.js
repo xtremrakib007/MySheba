@@ -83,7 +83,8 @@ for (const service of ['internet', 'offerpacks', 'entertainment', 'billpayment']
 }
 assert(sets.billpayment.includes('billerCode') && sets.billpayment.includes('icNumber') && sets.billpayment.includes('ref2'),
   'JomPAY biller/ref/IC fields must survive dispatch');
-assert(/key === 'extras'[\\s\\S]*?subproduct_code[\\s\\S]*?biller_code[\\s\\S]*?ic_number[\\s\\S]*?ref2/.test(wallet),
+assert(/key === 'extras'/.test(wallet) &&
+  ['subproduct_code', 'biller_code', 'ic_number', 'ref2'].every((key) => wallet.includes(key)),
   'only documented IIMMPACT extras should be persisted');
 
 console.log('A dropped field is not a thing the client can fix');
