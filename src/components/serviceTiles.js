@@ -83,21 +83,11 @@ const CUSTOMER_SERVICES = [
   { key: 'bus', icon: 'bus', name: 'Bus Ticket', kind: 'buspicker', cat: 'travel', home: true },
   { key: 'train', icon: 'train', name: 'Train Ticket', kind: 'webview', cat: 'travel', home: true },
   { key: 'entertainment', icon: 'entertainment', name: 'Entertainment', kind: 'service', cat: 'recharge', home: true },
-  { key: 'esim', icon: 'esim', name: 'eSIM', kind: 'service', cat: 'recharge', home: true },
+  // Digital Voucher replaces eSIM on the fixed twelve-tile home grid. Its
+  // child categories are shown together inside the Digital Voucher screen.
+  { key: 'iimmpactDigitalVouchers', icon: 'more', name: 'Digital Voucher', kind: 'iimmpactCategoryGrid', iimmpactCategory: 'Digital Voucher', cat: 'iimmpact', home: true },
   { key: 'moreFeaturesTile', icon: 'more', name: 'More Features', kind: 'moreFeaturesLink', cat: 'recharge', home: true },
   { key: 'iimmpactCatalog', icon: 'more', name: 'All MySheba Products', kind: 'iimmpactCatalog', cat: 'iimmpact', home: false },
-  // Standalone native MySheba tiles for additional IIMMPACT catalogue categories.
-  // Existing recharge, internet, PIN and bill services stay in their current flows.
-  { key: 'iimmpactFoodBeverage', icon: 'more', name: 'Food & Beverage', kind: 'iimmpactCategory', iimmpactCategory: 'Food & Beverage', cat: 'iimmpact' },
-  { key: 'iimmpactRetailShopping', icon: 'more', name: 'Retail Shopping', kind: 'iimmpactCategory', iimmpactCategory: 'Retail Shopping', cat: 'iimmpact' },
-  { key: 'iimmpactDigitalVouchers', icon: 'more', name: 'Digital Voucher', kind: 'iimmpactCategory', iimmpactCategory: 'Digital Voucher', cat: 'iimmpact' },
-  { key: 'iimmpactGrocery', icon: 'more', name: 'Grocery', kind: 'iimmpactCategory', iimmpactCategory: 'Grocery', cat: 'iimmpact' },
-  { key: 'iimmpactTransportation', icon: 'bus', name: 'Transportation', kind: 'iimmpactCategory', iimmpactCategory: 'Transportation', cat: 'iimmpact' },
-  { key: 'iimmpactFuel', icon: 'more', name: 'Fuel', kind: 'iimmpactCategory', iimmpactCategory: 'Fuel', cat: 'iimmpact' },
-  { key: 'iimmpactWellnessBeauty', icon: 'more', name: 'Wellness & Beauty', kind: 'iimmpactCategory', iimmpactCategory: 'Wellness & Beauty', cat: 'iimmpact' },
-  { key: 'iimmpactGamesCredit', icon: 'entertainment', name: 'Games Credit', kind: 'iimmpactCategory', iimmpactCategory: 'Games Credit', cat: 'iimmpact' },
-  { key: 'iimmpactGamesPlatforms', icon: 'entertainment', name: 'Gaming Platforms', kind: 'iimmpactCategory', iimmpactCategory: 'Gaming Platforms', cat: 'iimmpact' },
-  { key: 'iimmpactConsoleStores', icon: 'walletTransfer', name: 'Console & App Stores', kind: 'iimmpactCategory', iimmpactCategory: 'Console & App Stores', cat: 'iimmpact' },
 
   // Everything else is reached through More Features.
   { key: 'mobilebanking', icon: 'mobilebanking', name: 'Mobile Banking', kind: 'service', cat: 'money' },
