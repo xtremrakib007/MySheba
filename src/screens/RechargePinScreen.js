@@ -18,6 +18,16 @@ const IIMMPACT_COUNTRIES = [['MY', 'Malaysia']];
 const CURRENCY_BY_COUNTRY = { MY: 'MYR', SG: 'SGD', ID: 'IDR', IN: 'INR', PH: 'PHP', NP: 'NPR', PK: 'PKR', MM: 'MMK', KH: 'KHR' };
 const MALAYSIA_OPERATORS = rechargePinBrands.MY || ['Celcom', 'CelcomDigi', 'U Mobile', 'Hotlink', 'XOX', 'Tunetalk', 'Unifi', 'Yes', "Touch 'n Go eWallet"];
 const AMOUNTS = [10, 20, 30, 50, 100];
+const PIN_CATEGORIES = [
+  { id: 'mobile', title: 'Mobile Operator PIN', pattern: /digi|celcom|hotlink|maxis|u mobile|umobile|xox|tunetalk|unifi mobile|yes telco|hello sim|mobile.*pin|telco/i },
+  { id: 'coffee', title: 'Coffee & Tea', pattern: /coffee|cafe|tea|tealive|starbucks|zuss|oldtown|kenangan/i },
+  { id: 'wellness', title: 'Health & Wellness', pattern: /health|wellness|beauty|guardian|watsons|pharmacy|fitness|spa/i },
+  { id: 'transport', title: 'Transport', pattern: /grab|transport|ride|taxi|bus|train|rapid|myrapid|touch.?n.?go|tng/i },
+  { id: 'apple', title: 'Apple & iTunes', pattern: /apple|itunes|app store/i },
+  { id: 'shopping', title: 'Shopping PIN', pattern: /shopping|retail|shopee|lazada|mall|fashion|gift card|voucher/i },
+  { id: 'grocery', title: 'Grocery & GrabMart', pattern: /grocery|grabmart|grab mart|supermarket|foodpanda|pandamart/i },
+  { id: 'other', title: 'Other PIN & Vouchers', pattern: /.*/ },
+];
 const FEATURED_PIN_ORDER = [
   /digi.*internet.*pin|internet.*pin.*digi/i,
   /digipin|digi.*pin/i,
@@ -52,11 +62,12 @@ export default function RechargePinScreen() {
   const [amount, setAmount] = useState(null);
   const [busy, setBusy] = useState(false);
   const [voucher, setVoucher] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState(null);
 
   useEffect(() => {
     let alive = true;
     setCatalog(null); setCatalogError(''); setProduct(null); setOptions([]);
-    setSelectedOption(null); setOperator(''); setAmount(null); setVoucher(null);
+    setSelectedOption(null); setOperator(''); setAmount(null); setVoucher(null); setSelectedCategory(null);
     setLoadingCatalog(true);
     apiProviderService.getIimmpactCatalogForUser('', 'Recharge PIN', country)
       .then((data) => { if (alive) setCatalog(data || {}); })
@@ -95,6 +106,19 @@ export default function RechargePinScreen() {
     }).finally(() => { if (alive) setLoadingOptions(false); });
     return () => { alive = false; };
   }, [product?.code, catalog?.providerId, country]);
+
+  const categorizedProducts = useMemo(() => {
+    const known = PIN_CATEGORIES.slice(0, -1);
+    return PIN_CATEGORIES.map((category) => ({
+      ...category,
+      products: dynamicProducts.filter((p) => {
+        const text = [p.name, p.note, p.product_group, p.category, p.subcategory].filter(Boolean).join(' ');
+        return category.id === 'other'
+          ? !known.some((item) => item.pattern.test(text))
+          : category.pattern.test(text);
+      }),
+    })).filter((category) => category.products.length > 0);
+  }, [dynamicProducts]);
 
   const selectProduct = (p) => {
     setProduct(p); setVoucher(null); setOperator(''); setSelectedOption(null); setAmount(null);
@@ -169,15 +193,29 @@ export default function RechargePinScreen() {
       {loadingCatalog && <Text style={styles.info}>Loading live IIMMPACT voucher products…</Text>}
       {!!catalogError && !loadingCatalog && <Text style={styles.error}>{catalogError}</Text>}
 
-      {!loadingCatalog && dynamicProducts.length > 0 && <>
-        <Text style={styles.label}>Select PIN Voucher</Text>
-        <View style={styles.grid}>{dynamicProducts.map((p) =>
-          <TouchableOpacity key={p.code} onPress={() => selectProduct(p)} style={[styles.option, product?.code === p.code && styles.optionSelected]}>
-            {p.image_url ? <View style={styles.logoWrap}><Image source={{ uri: p.image_url }} style={styles.logo} resizeMode="contain" /></View> : <View style={styles.badge}><Text style={styles.badgeText}>V</Text></View>}
-            <Text style={[styles.optionText, product?.code === p.code && styles.optionTextSelected]} numberOfLines={3}>{p.name}</Text>
+      {!loadingCatalog && dynamicProducts.length > 0 && !selectedCategory && !product && <>
+        <Text style={styles.label}>Choose PIN Category</Text>
+        <View style={styles.grid}>{categorizedProducts.map((category) =>
+          <TouchableOpacity key={category.id} onPress={() => setSelectedCategory(category.id)} style={styles.option}>
+            <View style={styles.badge}><Text style={styles.badgeText}>{category.id === 'mobile' ? 'M' : category.id === 'coffee' ? 'C' : category.id === 'wellness' ? 'H' : category.id === 'transport' ? 'T' : category.id === 'apple' ? 'A' : category.id === 'shopping' ? 'S' : category.id === 'grocery' ? 'G' : 'O'}</Text></View>
+            <Text style={styles.optionText} numberOfLines={3}>{category.title}</Text>
+            <Text style={styles.optionMeta}>{category.products.length} products</Text>
           </TouchableOpacity>
         )}</View>
       </>}
+
+      {!!selectedCategory && !product && <>
+        <TouchableOpacity onPress={() => setSelectedCategory(null)} style={styles.backCategory}><Text style={styles.backCategoryText}>← All PIN Categories</Text></TouchableOpacity>
+        <Text style={styles.label}>{categorizedProducts.find((item) => item.id === selectedCategory)?.title || 'PIN Products'}</Text>
+        <View style={styles.grid}>{(categorizedProducts.find((item) => item.id === selectedCategory)?.products || []).map((p) =>
+          <TouchableOpacity key={p.code} onPress={() => selectProduct(p)} style={styles.option}>
+            {p.image_url ? <View style={styles.logoWrap}><Image source={{ uri: p.image_url }} style={styles.logo} resizeMode="contain" /></View> : <View style={styles.badge}><Text style={styles.badgeText}>{String(p.name || 'P').slice(0,1).toUpperCase()}</Text></View>}
+            <Text style={styles.optionText} numberOfLines={3}>{p.name}</Text>
+          </TouchableOpacity>
+        )}</View>
+      </>}
+
+      {!!product && <TouchableOpacity onPress={() => { setProduct(null); setSelectedOption(null); setAmount(null); setVoucher(null); }} style={styles.backCategory}><Text style={styles.backCategoryText}>← Back to {(categorizedProducts.find((item) => item.id === selectedCategory)?.title) || 'PIN Categories'}</Text></TouchableOpacity>}
 
       {!loadingCatalog && !dynamicProducts.length && country === 'MY' && !catalog?.providerId && <>
         <Text style={styles.label}>Legacy Malaysia Voucher</Text>
@@ -228,6 +266,6 @@ function createStyles(colors) { return StyleSheet.create({
   content:{padding:16,paddingBottom:40}, intro:{backgroundColor:colors.card,borderRadius:radius.lg,borderWidth:1,borderColor:colors.border,padding:16,marginBottom:16}, title:{fontSize:21,fontWeight:'800',color:colors.text}, subtitle:{fontSize:12,lineHeight:18,color:colors.textSecondary,marginTop:6}, label:{fontSize:14,fontWeight:'800',color:colors.text,marginTop:8,marginBottom:8},
   grid:{flexDirection:'row',flexWrap:'wrap',gap:9,marginBottom:14}, country:{width:'31%',minHeight:52,alignItems:'center',justifyContent:'center',borderWidth:1,borderColor:colors.border,borderRadius:radius.md,backgroundColor:colors.card,padding:6}, countrySelected:{backgroundColor:colors.primary,borderColor:colors.primary}, countryCode:{fontSize:12,fontWeight:'900',color:colors.primary}, countryName:{fontSize:9,fontWeight:'700',color:colors.text,textAlign:'center',marginTop:2}, countryTextSelected:{color:colors.onPrimary},
   option:{width:'31%',minHeight:82,alignItems:'center',justifyContent:'center',padding:7,borderWidth:1,borderColor:colors.border,borderRadius:radius.md,backgroundColor:colors.card}, optionSelected:{borderColor:colors.primary,borderWidth:2,backgroundColor:colors.surfaceElevated || colors.card}, logoWrap:{width:'90%',height:34,borderRadius:7,backgroundColor:'#fff',alignItems:'center',justifyContent:'center',paddingHorizontal:4,marginBottom:7}, logo:{width:'100%',height:27}, badge:{width:32,height:32,borderRadius:16,alignItems:'center',justifyContent:'center',marginBottom:7,backgroundColor:colors.primary}, badgeText:{color:colors.onPrimary,fontWeight:'900'}, optionText:{fontSize:10,fontWeight:'700',textAlign:'center',color:colors.text}, optionTextSelected:{color:colors.primary},
-  amount:{width:'31%',minHeight:54,alignItems:'center',justifyContent:'center',borderWidth:1,borderColor:colors.border,borderRadius:radius.md,backgroundColor:colors.card,padding:5}, amountSelected:{backgroundColor:colors.primary,borderColor:colors.primary}, amountText:{fontSize:12,fontWeight:'900',color:colors.text},amountTextSelected:{color:colors.onPrimary},optionMeta:{fontSize:9,color:colors.textSecondary,textAlign:'center',marginTop:2},
+  amount:{width:'31%',minHeight:54,alignItems:'center',justifyContent:'center',borderWidth:1,borderColor:colors.border,borderRadius:radius.md,backgroundColor:colors.card,padding:5}, amountSelected:{backgroundColor:colors.primary,borderColor:colors.primary}, amountText:{fontSize:12,fontWeight:'900',color:colors.text},amountTextSelected:{color:colors.onPrimary},optionMeta:{fontSize:9,color:colors.textSecondary,textAlign:'center',marginTop:2}, backCategory:{paddingVertical:10,marginBottom:8},backCategoryText:{fontSize:13,fontWeight:'800',color:colors.primary},
   info:{padding:12,color:colors.textSecondary,fontSize:12},error:{padding:12,color:colors.danger || colors.text,fontSize:12},buy:{marginTop:6,backgroundColor:colors.primary,borderRadius:radius.md,paddingVertical:14,alignItems:'center'},buyText:{color:colors.onPrimary,fontWeight:'800',fontSize:14},voucher:{marginTop:18,backgroundColor:colors.card,borderRadius:radius.lg,borderWidth:1.5,borderColor:colors.primary,padding:18,alignItems:'center'},voucherTitle:{fontSize:18,fontWeight:'800',color:colors.text},voucherMeta:{marginTop:5,color:colors.textSecondary,fontSize:12,textAlign:'center'},pin:{marginVertical:18,fontSize:27,fontWeight:'900',letterSpacing:4,color:colors.primary,textAlign:'center'},link:{marginVertical:15,fontSize:12,color:colors.primary,textAlign:'center'},warning:{marginTop:8,fontSize:11,lineHeight:16,textAlign:'center',color:colors.textSecondary},print:{marginTop:14,borderRadius:radius.md,borderWidth:1,borderColor:colors.primary,paddingVertical:11,paddingHorizontal:20},printText:{color:colors.primary,fontWeight:'800'},balance:{marginTop:18,textAlign:'center',fontSize:11,color:colors.textSecondary}
 });}
