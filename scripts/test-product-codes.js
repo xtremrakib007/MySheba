@@ -63,6 +63,18 @@ test('declaring a map is what says "this provider needs codes"', () => {
   assert.strictEqual(productCodes.declaresProductCodes(MAPPED), true);
 });
 
+test('bill payment resolves a biller code from billerProductCodes', () => {
+  const billers = {
+    name: 'iimmpact',
+    operatorProductCodes: { TNB: 'WRONG-OPERATOR-CODE' },
+    billerProductCodes: { TNB: 'TNB', JomPAY: 'JOMPAY' },
+  };
+  assert.strictEqual(productCodes.codeFieldFor('Bill Payment'), 'billerProductCodes');
+  assert.strictEqual(productCodes.codeFieldFor('bill payment'), 'billerProductCodes');
+  assert.strictEqual(productCodes.codeSubjectFor('Bill Payment', { provider: 'TNB' }), 'TNB');
+  assert.strictEqual(productCodes.productCodeFor(billers, 'TNB', { service: 'Bill Payment' }), 'TNB');
+});
+
 console.log('\nA voucher PIN is a different product from airtime');
 
 test('the same operator has a different code for a PIN', () => {
