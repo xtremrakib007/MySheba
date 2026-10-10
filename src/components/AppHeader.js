@@ -31,7 +31,8 @@ export default function AppHeader({ unreadCount = 0, onPressMenu, hero = false }
   const country = countryCodeOf(profile);
   const look = heroFor(country);
   // A country of its own, or the brand's colours when we do not know one.
-  const palette = hero && country ? look.gradient : brandGradient;
+  // Keep the header aligned to MySheba's logo palette across every country.
+  const palette = brandGradient;
 
   // First name only: the bar is narrow, and "Mohammad Rakibul Islam" would
   // either wrap or be clipped mid-word. Falls back through the fields a
