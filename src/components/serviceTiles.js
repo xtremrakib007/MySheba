@@ -348,10 +348,10 @@ export const ADMIN_HOME = [
   { key: 'remittance', icon: '\uD83D\uDCB8', name: 'Remittance', service: { key: 'remittance', kind: 'service' } },
   { key: 'mobilebanking', icon: '\uD83C\uDFE6', name: 'Mobile Banking', service: { key: 'mobilebanking', kind: 'service' } },
 
-  { key: 'internet', icon: '\uD83D\uDCE1', name: 'Internet', service: { key: 'internet', kind: 'service' } },
-  { key: 'billpayment', icon: '\uD83E\uDDFE', name: 'Bill Pay', service: { key: 'billpayment', kind: 'service' } },
+  { key: 'internet', icon: '\uD83D\uDCE1', name: 'Internet Packages', service: { key: 'internet', kind: 'service' } },
+  { key: 'billpayment', icon: '\uD83E\uDDFE', name: 'Bill Payment', service: { key: 'billpayment', kind: 'service' } },
   { key: 'jompay', icon: '\uD83C\uDDF2\uD83C\uDDFE', name: 'JomPAY', service: { key: 'jompay', kind: 'billShortcut', seed: { country: 'MY', category: 'jompay', provider: 'JomPAY' }, startStep: 3 } },
-  { key: 'tngewallet', icon: '\uD83D\uDC5B', name: 'TnG eWallet', service: { key: 'tngewallet', kind: 'tngShortcut', seed: { country: 'MY', category: 'ewallet', provider: "Touch 'n Go eWallet" }, startStep: 3 } },
+  { key: 'tngewallet', icon: '\uD83D\uDC5B', name: "Touch'n Go eWallet", service: { key: 'tngewallet', kind: 'tngShortcut', seed: { country: 'MY', category: 'ewallet', provider: "Touch 'n Go eWallet" }, startStep: 3 } },
   { key: 'rechargePin', icon: '\uD83D\uDD22', name: 'PIN Generate', service: { key: 'rechargePin', kind: 'rechargePin' } },
   // offerpacks is the one customer key ServiceArt has no drawing for, so this
   // emoji is what renders rather than a fallback nobody sees.
