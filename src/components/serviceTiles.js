@@ -87,7 +87,6 @@ const CUSTOMER_SERVICES = [
   { key: 'mobilebanking', icon: 'mobilebanking', name: 'Mobile Banking', kind: 'service', cat: 'money' },
   { key: 'remittance', icon: 'remittance', name: 'Remittance', kind: 'service', cat: 'money' },
   { key: 'offerpacks', icon: 'internet', name: 'Offer Packs', kind: 'service', cat: 'recharge' },
-  { key: 'iimmpactCatalog', icon: 'more', name: 'MySheba Marketplace', kind: 'iimmpactCatalog', cat: 'recharge' },
   { key: 'visa', icon: 'visa', name: 'Visa', kind: 'webview', cat: 'immigration' },
   { key: 'fomema', icon: 'fomema', name: 'FOMEMA', kind: 'webview', cat: 'immigration' },
   { key: 'mydigital', icon: 'mydigital', name: 'Malaysia Arrival Card', kind: 'webview', cat: 'immigration' },
@@ -245,7 +244,6 @@ export function applyTileLabels(list, tileLabels) {
     if (!override) return item;
     const next = { ...item };
     if (override.name) next.name = override.name;
-    if (item.key === 'iimmpactCatalog') next.name = 'MySheba Marketplace';
     if (override.icon) {
       if (override.iconIsArt) { next.art = override.icon; next.emoji = ''; }
       // `art: ''` matters: without it a tile whose key has a drawing would keep
