@@ -72,6 +72,17 @@ function atest(name, fn) {
   });
 }
 
+console.log('\nIIMMPACT catalogue price normalization');
+
+test('a zero denomination does not hide a valid nested face price', () => {
+  const item = catalog.normaliseItem(
+    { code: 'YES Internet', label: 'YES Internet', denomination: 0, price: { amount: 30, currency: 'MYR' }, cost: 29.4 },
+    { id: ['code'], name: ['label'], price: ['denomination', 'price', 'amount'] },
+  );
+  assert.strictEqual(item.id, 'YES Internet');
+  assert.strictEqual(item.price, 30, 'the face price is used, not zero denomination or provider cost');
+});
+
 console.log('\nResolving the order (what decides the charge)');
 
 // A fake Firestore that honours where(), because which provider a query finds
