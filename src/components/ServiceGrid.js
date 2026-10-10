@@ -214,7 +214,7 @@ export default function ServiceGrid({ homeOnly }) {
         if (!gridManagementService.isGridActive(gridManagement, key, gridViewer)) continue;
         const firstProductImage = codes.map((code) => products[code]).find((product) => product && product.is_active !== false && typeof product.image_url === 'string' && (product.image_url.startsWith('https://') || product.image_url.startsWith('http://')))?.image_url || '';
         const imageUrl = (typeof category?.icon_url === 'string' && (category.icon_url.startsWith('https://') || category.icon_url.startsWith('http://')) ? category.icon_url : '') || firstProductImage;
-        tiles.push({ key, name, icon: 'iimmpact', emoji: '🛍️', imageUrl, kind: 'iimmpactCategory', iimmpactCategory: encodeURIComponent(name), cat: 'recharge', home: true, iimmpactCount: count });
+        tiles.push({ key, name, icon: 'iimmpact', emoji: '🛍️', imageUrl, kind: 'iimmpactCategory', iimmpactCategory: encodeURIComponent(name), cat: 'iimmpact', home: false, iimmpactCount: count });
       }
     }
     return tiles;
@@ -228,7 +228,8 @@ export default function ServiceGrid({ homeOnly }) {
   // thing from the services they also sell, so they get their own block above.
   // What is left is the same twelve. A customer has no management block, so the
   // heading is dropped and the screen's own title does that work.
-  const mergedServices = [...services, ...marketplaceTiles];
+  // Dynamic provider categories belong in More Features, never as extra home tiles.
+  const mergedServices = [...services, ...(homeOnly ? [] : marketplaceTiles)];
   const blocks = [];
   const manage = mergedServices.filter((t) => t.cat === 'manage');
   const rest = mergedServices.filter((t) => t.cat !== 'manage');
