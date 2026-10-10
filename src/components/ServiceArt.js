@@ -389,6 +389,37 @@ const ART = {
     {s('M35 27l1.7 4.3 4.3 1.7-4.3 1.7L35 39l-1.7-4.3L29 33l4.3-1.7L35 27z', c)}
   </>),
 
+  // ---- PIN and voucher category marks ----
+  coffeeVoucher: (c) => (<>
+    {s('M13 16h19v12a8 8 0 0 1-8 8h-3a8 8 0 0 1-8-8V16z', c)}
+    {s('M32 19h3a4 4 0 0 1 0 8h-4', c)}
+    {s('M17 10c-2 2 2 3 0 5M24 8c-2 2 2 3 0 5M30 10c-2 2 2 3 0 5', c)}
+    {s('M10 40h27', c)}
+  </>),
+
+  wellnessVoucher: (c) => (<>
+    {box(8, 8, 32, 32, c, 7)}
+    {s('M24 15v18M15 24h18', c, 3)}
+  </>),
+
+  appleVoucher: (c) => (<>
+    {s('M24 18c-5-7-13-3-13 6 0 7 5 15 9 15 2 0 3-2 5-2s3 2 5 2c4 0 9-8 9-15 0-9-8-13-15-6z', c)}
+    {s('M25 15c0-5 4-8 9-9-1 5-4 8-9 9z', c)}
+  </>),
+
+  shoppingVoucher: (c) => (<>
+    {s('M12 17h24l-2 24H14l-2-24z', c)}
+    {s('M18 18v-4a6 6 0 0 1 12 0v4', c)}
+    {s('M18 25v3M30 25v3', c)}
+  </>),
+
+  groceryVoucher: (c) => (<>
+    {s('M7 10h5l4 22h19l5-16H14', c)}
+    {ring(19, 38, 2.5, c)}
+    {ring(33, 38, 2.5, c)}
+    {s('M18 21h17M20 26h13', c)}
+  </>),
+
   // ---- bill categories ----
   // Drawn inside a ring, because the Bill Payment step shows them as one row
   // of choices rather than as service tiles.
