@@ -21,7 +21,7 @@ export default function RechargeStep({ step }) {
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogUnavailable, setCatalogUnavailable] = useState(false);
   const staticOperators = rechargeOperators[serviceData.country] || [];
-  const OPERATOR_LIST = catalogUnavailable ? staticOperators : ((catalogLoading || step === 2) ? iimmpactOperators : staticOperators);
+  const OPERATOR_LIST = String(serviceData.country || '').toUpperCase() === 'BD' ? staticOperators : iimmpactOperators;
 
   // In API-routed countries, use the active provider's own recharge products.
   // Static country lists can include unsupported operators and miss new ones.
@@ -124,7 +124,7 @@ export default function RechargeStep({ step }) {
     return (<View>
       <FormLabel>Select Operator</FormLabel>
       {catalogLoading && <Text style={styles.catalogInfo}>Loading available operators from IIMMPACT…</Text>}
-      {!catalogLoading && catalogUnavailable && serviceData.country !== 'BD' && <Text style={styles.catalogInfo}>Live operator catalogue is unavailable. The saved country operator list is shown temporarily.</Text>}
+      {!catalogLoading && catalogUnavailable && serviceData.country !== 'BD' && <Text style={styles.catalogInfo}>Could not load IIMMPACT's live catalog. No static operators are shown because they may not be supported by the provider. Please retry or check the active IIMMPACT provider configuration.</Text>}
       {!catalogLoading && !catalogUnavailable && !list.length && <Text style={styles.catalogInfo}>IIMMPACT returned no active recharge products for this country. Add or enable the operator product in the IIMMPACT catalog before offering it here.</Text>}
       <View style={styles.grid3}>{list.map((o) => { const brand = getOperatorBrand(o); return <RechargeOperatorCard key={o} name={o} logo={brand.logo} color={brand.color} initials={brand.initials} selected={serviceData.operator === o} onPress={() => { updateServiceData({ operator: o }); nextStep(); }} styles={styles} primaryColor={colors.primary} />; })}</View>
     </View>);
