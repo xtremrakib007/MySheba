@@ -95,8 +95,8 @@ async function resolvePackagePricing(db, service, payload) {
   const requestedRole = String(payload?.role || payload?.raw?.role || '').trim().toLowerCase();
   const label = PACKAGE_SERVICE_LABELS[service];
   const raw = (payload && payload.raw) || {};
-  const country = String(raw.country || '').trim().toUpperCase();
-  if (service === 'recharge' && country !== 'BD' && raw.iimmpactCatalog === true) {
+  const requestedCountry = String(raw.country || '').trim().toUpperCase();
+  if (service === 'recharge' && requestedCountry !== 'BD' && raw.iimmpactCatalog === true) {
     const { providerAmount: _clientProviderAmount, packageCostAmount: _clientCost, ...clean } = raw;
     const found = await apiProviderService.resolveIimmpactMarketplaceProduct(db, clean);
     if (found.error === 'provider-unconfigured') throw new HttpsError('failed-precondition', 'IIMMPACT is not configured for this recharge country.');
