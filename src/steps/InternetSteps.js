@@ -39,6 +39,8 @@ export default function InternetStep({ step }) {
     nextStep();
   });
   const [successTopUpPackages, setSuccessTopUpPackages] = useState([]);
+  const [successTopUpDrivePackages, setSuccessTopUpDrivePackages] = useState([]);
+  const [driveWindowMessage, setDriveWindowMessage] = useState('');
   const [packageLoading, setPackageLoading] = useState(false);
   const [packageError, setPackageError] = useState('');
   useEffect(() => {
@@ -53,6 +55,33 @@ export default function InternetStep({ step }) {
       .then((items) => { if (alive) setSuccessTopUpPackages(items); })
       .catch((e) => { if (alive) { setSuccessTopUpPackages([]); setPackageError(e?.message || 'Unable to load Success TopUp packages.'); } })
       .finally(() => { if (alive) setPackageLoading(false); });
+    return () => { alive = false; };
+  }, [serviceData.country, serviceData.operator, step]);
+
+  // Bangladesh drive/offer packages are merged into Internet Packages, but
+  // the server returns them only during Success TopUp's selling window
+  // (10:00-22:00 Bangladesh time). Never infer availability from the device
+  // clock; a closed window means no drive products are rendered.
+  useEffect(() => {
+    let alive = true;
+    if (serviceData.country !== 'BD' || step !== 3) {
+      setSuccessTopUpDrivePackages([]);
+      setDriveWindowMessage('');
+      return () => { alive = false; };
+    }
+    apiProviderService.listSuccessTopUpDrives(
+      ({ Grameenphone: 'GP', Robi: 'RB', Banglalink: 'BL', Airtel: 'AT', Teletalk: 'TT', Skitto: 'SK', 'Brilliant Connect': 'BT', Ryze: 'RY' })[serviceData.operator] || 'ALL',
+      'drive', 'Internet', serviceData.operator || ''
+    ).then((result) => {
+      if (!alive) return;
+      setSuccessTopUpDrivePackages(result);
+      setDriveWindowMessage('');
+    }).catch((e) => {
+      if (alive) {
+        setSuccessTopUpDrivePackages([]);
+        setDriveWindowMessage(e?.message || 'Offer packages are temporarily unavailable.');
+      }
+    });
     return () => { alive = false; };
   }, [serviceData.country, serviceData.operator, step]);
 
@@ -118,7 +147,7 @@ export default function InternetStep({ step }) {
       country: serviceData.country,
       perNumber: perNumberPlans,
       perNumberError: plansError,
-      successTopUp: successTopUpPackages,
+      successTopUp: [...successTopUpPackages, ...successTopUpDrivePackages],
       builtIn: getMergedPackages(serviceData.operator, internetPricing[serviceData.operator]),
       // Non-Bangladesh Internet plans come from IIMMPACT per phone number.
       // Never display the old hardcoded package prices as a fallback.
@@ -142,6 +171,7 @@ export default function InternetStep({ step }) {
         {!!packageLoading && <FormLabel>Loading MySheba packages…</FormLabel>}
         {!!plansLoading && <FormLabel>Checking which plans this number can buy…</FormLabel>}
         {!!packageError && <FormLabel>{packageError}</FormLabel>}
+        {!!driveWindowMessage && <FormLabel>{driveWindowMessage}</FormLabel>}
         {!!plansError && <FormLabel>{plansError}</FormLabel>}
         {!packageLoading && !packageError && serviceData.country === 'BD' && packages.length === 0 && <FormLabel>No internet packages are available for this operator right now. Try another operator, or use Recharge for a plain top-up.</FormLabel>}
         {!plansLoading && !!source.emptyForNumber && <FormLabel>This number has no data plans available right now. Try Recharge for a plain top-up.</FormLabel>}
