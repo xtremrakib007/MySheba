@@ -50,19 +50,24 @@ export default function RechargeStep({ step }) {
         }
         const isDataPlan = (p) => Array.isArray(p && p.fields) && p.fields.some((field) => field && field.type === 'select' && field.data_source);
         const knownNames = staticOperators.map((name) => String(name).toLowerCase().replace(/[^a-z0-9]/g, '')).filter(Boolean);
+        const countryNames = new Set(countries.map((item) => String(item.name || '').toLowerCase().replace(/[^a-z0-9]/g, '')).filter(Boolean));
         const entries = Object.entries(products)
           .filter(([code, p]) => {
             if (!p || p.is_active === false || !p.code) return false;
-            const name = String(p.name || p.label || code).toLowerCase();
+            const rawName = String(p.name || p.label || code).trim();
+            const name = rawName.toLowerCase();
             const normalizedName = name.replace(/[^a-z0-9]/g, '');
             const normalizedCode = String(p.code || code).toLowerCase().replace(/[^a-z0-9]/g, '');
+            // The catalog can contain country-level/category labels. Never render
+            // a country as an operator tile, even if its product code says "recharge".
+            if (countryNames.has(normalizedName)) return false;
             const belongsToRechargeCategory = rechargeCodes.has(String(p.code || code));
             const hasRechargeLabel = /recharge|airtime|top.?up|prepaid|reload/i.test(name + ' ' + String(p.code || code));
             const matchesKnownOperator = knownNames.some((known) =>
               normalizedName.includes(known) || known.includes(normalizedName) ||
               normalizedCode.includes(known) || known.includes(normalizedCode));
-            // Explicit IIMMPACT category codes are authoritative. Without them,
-            // only recognizable recharge products may be offered.
+            // Explicit IIMMPACT category codes are authoritative for service
+            // membership, but they do not turn a country label into an operator.
             return rechargeCodes.size ? belongsToRechargeCategory : (hasRechargeLabel || matchesKnownOperator);
           })
           .filter(([, p]) => String(p.processing_time || '').toLowerCase() !== 'pin')
