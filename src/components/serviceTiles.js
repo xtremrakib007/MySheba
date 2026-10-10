@@ -477,7 +477,11 @@ export function visibleTiles({ role, can, webviewPages, tileLabels, viewer, dyna
   // dealer/admin tools marked home:true were filtered out of both the home grid
   // and overflow (which excludes home tiles), making them unreachable.
   const homeKeys = new Set(CUSTOMER_SERVICES.filter((service) => service.home).map((service) => service.key));
-  return active.filter((service) => homeKeys.has(service.key) || (service.cat === 'manage' && service.home === true));
+  return active.filter((service) =>
+    (homeKeys.has(service.key) && service.home !== false) ||
+    (service.kind === 'webview' && service.home === true && !homeKeys.has(service.key)) ||
+    (service.cat === 'manage' && service.home === true),
+  );
 }
 
 /**
