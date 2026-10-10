@@ -87,7 +87,7 @@ test('the same operator has a different code for a PIN', () => {
 test('IIMMPACT PIN catalog matching filters by PIN fulfillment type', () => {
   const source = require('fs').readFileSync(require('path').join(__dirname, '..', 'functions/apiProviderService.js'), 'utf8');
   assert.ok(
-    /service === 'Recharge PIN'[\\s\\S]*?allProducts\.filter\\(\\(p\\) => String\\(p\.processing_time \\|\\| ''\\)\.toLowerCase\\(\\) === 'pin'\\)/.test(source),
+    /service === 'Recharge PIN'[\\s\\S]*?serviceProducts\.filter\\(\\(p\\) => String\\(p\.processing_time \\|\\| ''\\)\.toLowerCase\\(\\) === 'pin'\\)/.test(source),
     'PIN catalog matching must exclude airtime products before scoring',
   );
 });
@@ -124,7 +124,7 @@ test('which map a service charges from is explicit', () => {
   assert.strictEqual(productCodes.codeFieldFor('Recharge PIN'), 'pinProductCodes');
   assert.strictEqual(productCodes.codeFieldFor('Recharge'), 'operatorProductCodes');
   assert.strictEqual(productCodes.codeFieldFor('Entertainment'), 'gameProductCodes');
-  assert.strictEqual(productCodes.codeFieldFor('Internet'), 'operatorProductCodes');
+  assert.strictEqual(productCodes.codeFieldFor('Internet'), 'catalogOperatorCodes');
   assert.strictEqual(productCodes.codeFieldFor(undefined), 'operatorProductCodes');
 });
 
