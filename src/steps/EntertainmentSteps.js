@@ -40,7 +40,7 @@ export default function EntertainmentStep({ step }) {
     const load = async () => {
       setCatalogLoading(true);
       try {
-        const data = await apiProviderService.getIimmpactFullCatalogForUser('MY');
+        const data = await apiProviderService.getIimmpactCatalogForUser('', 'Entertainment', 'MY');
         if (alive) setCatalog(data?.providerId ? data : null);
         if (alive && !data?.providerId) setCatalogError('No active IIMMPACT provider is configured for Malaysia.');
       } catch (e) {
@@ -59,7 +59,7 @@ export default function EntertainmentStep({ step }) {
     const wanted = new Set();
     tree.forEach((group) => {
       const text = String(group?.name || '').toLowerCase();
-      if (/game|entertainment|gift|voucher|digital|gaming|pin|top.?up/.test(text)) {
+      if (/game|entertainment|gaming/.test(text)) {
         (group.categories || []).forEach((category) => {
           (category.product_codes || []).forEach((code) => wanted.add(String(code)));
         });
@@ -68,7 +68,7 @@ export default function EntertainmentStep({ step }) {
     return Object.values(products).filter((p) => {
       if (!p || p.is_active === false || !p.code) return false;
       const text = `${p.name || ''} ${p.description || ''} ${p.note || ''} ${p.code || ''}`.toLowerCase();
-      return wanted.has(String(p.code)) || /game|entertainment|gift.?card|voucher|gaming|pubg|free.?fire|mobile.?legends|roblox|steam|playstation|xbox|nintendo|google.?play|itunes|uc|diamond/.test(text);
+      return wanted.has(String(p.code)) || /game|entertainment|gaming|pubg|free.?fire|mobile.?legends|roblox|steam|playstation|xbox|nintendo|uc|diamond/.test(text);
     }).filter((p) => {
       const fields = Array.isArray(p.fields) ? p.fields : [];
       const account = fields.find((f) => f && (f.role === 'account' || f.id === 'player_id' || f.id === 'account'));
@@ -108,7 +108,8 @@ export default function EntertainmentStep({ step }) {
 
   if (step === 0) {
     if (catalogLoading) return <FormLabel>Loading IIMMPACT Games & Entertainment…</FormLabel>;
-    if (usingDynamic) {
+    if (catalog?.providerId) {
+      if (!usingDynamic) return <FormLabel>{catalogError || 'IIMMPACT has no matching game or entertainment products for Malaysia. Other IIMMPACT products are kept out of this grid.'}</FormLabel>;
       return (
         <View>
           <FormLabel>Choose a Game / Entertainment Product</FormLabel>
