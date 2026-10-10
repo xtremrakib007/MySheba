@@ -5,17 +5,26 @@ import { FormLabel, FormInput } from '../components/ui';
 import PackagePicker from '../components/PackagePicker';
 import * as apiProviderService from '../firebase/apiProviderService';
 
-// The backend catalog is already scoped to service='eSIM'. Do not filter by
-// product-name text: valid provider plans often have destination/brand names
-// (not the literal word eSIM), and that filter made a healthy catalog look empty.
-function firstDenomination(v) { if(typeof v==='number') return v; const m=String(v||'').replace(/,/g,'').match(/\d+(?:\.\d+)?/); return m?Number(m[0]):0; }
+// IIMMPACT's /v2/catalog is shared across service types; the service argument
+// selects the provider, not necessarily a product subset. Prefer category-tree
+// membership for eSIM and fall back to explicit eSIM product labels only.
+function esimProductCodes(catalog) {
+ const codes=new Set();
+ for(const group of catalog?.tree?.groups||[]) for(const category of group?.categories||[]) {
+  const label=`${group?.name||''} ${category?.name||''}`.toLowerCase();
+  if(/e\\s*-?\\s*sim|esim|travel connectivity/i.test(label)) for(const code of category?.product_codes||[]) codes.add(String(code));
+ }
+ return codes;
+}
+function isExplicitEsim(p) { return /e\\s*-?\\s*sim|esim/i.test(`${p?.code||''} ${p?.name||''} ${p?.description||''}`); }
+function firstDenomination(v) { if(typeof v==='number') return v; const m=String(v||'').replace(/,/g,'').match(/\\d+(?:\\.\\d+)?/); return m?Number(m[0]):0; }
 
 export default function ESimStep({ step }) {
  const { serviceData, updateServiceData } = useApp();
  const [products,setProducts]=useState([]),[options,setOptions]=useState([]),[loading,setLoading]=useState(false),[optionsLoading,setOptionsLoading]=useState(false),[error,setError]=useState('');
  useEffect(()=>{ if(step!==0)return; let alive=true; setLoading(true); setError('');
   apiProviderService.getIimmpactCatalogForUser('', 'eSIM', serviceData.country || 'MY')
-   .then(c=>{ if(!alive)return; const list=Object.values(c?.products||{}).filter(p=>p&&p.is_active!==false&&p.code); setProducts(list); if(!serviceData.productCode&&list.length===1) updateServiceData({productCode:list[0].code,product:list[0].name}); })
+   .then(c=>{ if(!alive)return; const categoryCodes=esimProductCodes(c); const list=Object.values(c?.products||{}).filter(p=>p&&p.is_active!==false&&p.code&&(categoryCodes.has(String(p.code))||isExplicitEsim(p))); setProducts(list); if(!serviceData.productCode&&list.length===1) updateServiceData({productCode:list[0].code,product:list[0].name}); })
    .catch(e=>alive&&setError(e?.message||'Unable to load eSIM plans.')).finally(()=>alive&&setLoading(false));
   return()=>{alive=false};
  },[step]);
