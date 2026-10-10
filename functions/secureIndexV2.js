@@ -44,6 +44,11 @@ functions.deleteDeduction = salaryMutationService.deleteDeduction;
 functions.saveSalaryEstimate = salaryMutationService.saveSalaryEstimate;
 functions.recordActualSalary = salaryMutationService.recordActualSalary;
 functions.attachSalaryPayslip = salaryMutationService.attachSalaryPayslip;
-functions.deleteSalaryRecord = salaryMutationService.deleteSalaryRecord;
+
+// Dedicated IIMMPACT webhooks. Keep these separate from the transaction
+// callback in apiWebhookService.js; their authentication and payload contracts
+// are different.
+functions.iimmpactCatalogChangeWebhook = require('./iimmpactCatalogChangeWebhook').iimmpactCatalogChangeWebhook;
+functions.iimmpactBalanceWebhook = require('./iimmpactBalanceWebhook').iimmpactBalanceWebhook;
 
 module.exports = functions;
