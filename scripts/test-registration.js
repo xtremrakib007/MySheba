@@ -116,12 +116,21 @@ test('the homepage tile opens Touch n Go directly; PIN Generate stays separate',
   assert.ok(!/Buy PIN voucher/.test(grid), 'the separate PIN Generate tile replaces the popup option');
 
   const tiles = read('src/components/serviceTiles.js');
-  // On the home grid for a customer AND on the Control Center, both as one
-  // tile that offers the choice.
+  // The homepage and the editable Control Center must preserve the dedicated
+  // tile; the action itself now goes straight to reload rather than a chooser.
   assert.strictEqual((tiles.match(/kind: 'tngShortcut'/g) || []).length, 2,
-    'both lists must use the chooser, or one of them still hides a path');
+    'both lists must preserve the dedicated Touch n Go tile');
   assert.ok(/key: 'tngewallet'[^}]*home: true/.test(tiles), 'and it stays on the home screen');
   assert.ok(/key: 'jompay'[^}]*home: true/.test(tiles), 'as does JomPAY');
+  const pinScreen = read('src/screens/RechargePinScreen.js');
+  assert.ok(/if \(voucher\) \{ setVoucher\(null\); return; \}/.test(pinScreen),
+    'PIN back clears the voucher result before leaving its product');
+  assert.ok(/if \(product\) \{[\s\S]{0,160}setProduct\(null\)/.test(pinScreen),
+    'PIN back returns from the amount/product view to the product list');
+  assert.ok(/if \(selectedCategory\) \{ setSelectedCategory\(null\); return; \}/.test(pinScreen),
+    'PIN back returns from a category to all PIN categories');
+  assert.ok(/BackHandler\.addEventListener\('hardwareBackPress'/.test(pinScreen),
+    'Android back follows the same one-level PIN navigation');
 });
 
 console.log('\n' + passed + ' checks passed.\n');
