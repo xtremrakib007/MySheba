@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, Alert, ActivityIndicator, Image, Modal, Share } from 'react-native';
 import { printTransactionReceipt } from '../utils/printService';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -67,9 +68,26 @@ export default function IimmpactProductScreen({ category }) {
 
   useEffect(() => {
     let alive = true;
-    api.getIimmpactFullCatalogForUser('MY')
-      .then((data) => { if (alive) setCatalog(data || {}); })
-      .catch((e) => { if (alive) setError(e?.message || 'IIMMPACT catalogue unavailable.'); });
+    const cacheKey = '@mysheba/iimmpact-catalog/MY/v1';
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem(cacheKey);
+        if (alive && saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && typeof parsed === 'object') setCatalog(parsed);
+        }
+      } catch (_) {}
+      try {
+        const data = await api.getIimmpactFullCatalogForUser('MY');
+        if (alive && data && typeof data === 'object') {
+          setCatalog(data);
+          setError('');
+          try { await AsyncStorage.setItem(cacheKey, JSON.stringify(data)); } catch (_) {}
+        }
+      } catch (e) {
+        if (alive && !catalog) setError(e?.message || 'IIMMPACT catalogue unavailable.');
+      }
+    })();
     return () => { alive = false; };
   }, []);
 
