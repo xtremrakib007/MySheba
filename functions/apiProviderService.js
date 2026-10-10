@@ -702,10 +702,15 @@ function getPath(obj, path) { return path ? path.split('.').reduce((v,k) => v ==
  * so there is no client value left here to trust. It used to be read only for
  * Bangladesh; any resolved catalogue now gets the same treatment.
  */
-function providerAmountFor({ raw, payload, isSuccessTopUpBd, mappedAmount }) {
+function providerAmountFor({ raw, payload, isSuccessTopUpBd, isIimmpact, mappedAmount }) {
   const r = raw || {};
   const resolvedProviderAmount = Number(r.providerAmount);
   if (Number.isFinite(resolvedProviderAmount) && resolvedProviderAmount > 0) return resolvedProviderAmount;
+  // IIMMPACT charges the product's face denomination, not the wallet-converted
+  // sell total. For foreign-country airtime, payload.amount is MYR after FX
+  // conversion while raw.amount is the denomination the provider must fulfill.
+  if (isIimmpact && Number.isFinite(Number(r.packageCostAmount)) && Number(r.packageCostAmount) > 0) return Number(r.packageCostAmount);
+  if (isIimmpact && Number.isFinite(Number(r.amount)) && Number(r.amount) > 0) return Number(r.amount);
   const packageCost = Number(r.packageCostAmount);
   if (Number.isFinite(packageCost) && packageCost > 0) return packageCost;
   // Stated on the provider record for a fixed product that has no catalogue to
@@ -1334,7 +1339,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   // packageCostAmount being present is what makes it server-resolved:
   // resolvePackagePricing drops whatever the client sent before setting its
   // own, so there is no client value left for this to trust.
-  const providerAmount = providerAmountFor({ raw, payload, isSuccessTopUpBd, mappedAmount: mappedProductAmount });
+  const providerAmount = providerAmountFor({ raw, payload, isSuccessTopUpBd, isIimmpact: provider.authType === 'iimmpactHmac', mappedAmount: mappedProductAmount });
   // The client's own fields FIRST, so nothing it sends can overwrite a value
   // this server worked out. They used to come last, and last wins:
   //
