@@ -41,6 +41,11 @@ const IIMMPACT = {
   catalogPreset: 'iimmpact-options',
   catalogPath: '/v2/options',
   authType: 'iimmpactHmac',
+  // Provider selection is tested without a live Secret Manager; these fixture
+  // credentials keep the resolver on the catalogue path instead of testing a
+  // deliberately unconfigured provider.
+  apiKey: 'test-api-key',
+  secretKey: 'test-secret-key',
 };
 
 // The client is ESM and this script is CommonJS. Rather than add a build step
@@ -71,6 +76,17 @@ function atest(name, fn) {
     catch (error) { console.error('  FAIL  ' + name + '\n        ' + (error && error.message)); process.exitCode = 1; }
   });
 }
+
+console.log('\nIIMMPACT catalogue price normalization');
+
+test('a zero denomination does not hide a valid nested face price', () => {
+  const item = catalog.normaliseItem(
+    { code: 'YES Internet', label: 'YES Internet', denomination: 0, price: { amount: 30, currency: 'MYR' }, cost: 29.4 },
+    { id: ['code'], name: ['label'], price: ['denomination', 'price', 'amount'] },
+  );
+  assert.strictEqual(item.id, 'YES Internet');
+  assert.strictEqual(item.price, 30, 'the face price is used, not zero denomination or provider cost');
+});
 
 console.log('\nResolving the order (what decides the charge)');
 
@@ -192,10 +208,18 @@ const fakeDb = (providers) => ({
   // offered a list the charge path has never heard of.
   const found = await catalog.perAccountCatalogFor(fakeDb([IIMMPACT]), 'Internet', 'MY', 'CelcomDigi');
   assert.deepStrictEqual(found.codes, ['CEL', 'DI']);
-  assert.strictEqual(found.provider.id, 'p1');
+  assert.strictEqual(found.provider.id, IIMMPACT.id, 'the picker and charge must resolve the same configured provider');
   assert.strictEqual(await catalog.perAccountCatalogFor(fakeDb([IIMMPACT]), 'Internet', 'MY', 'Unifi'), null);
   assert.strictEqual(await catalog.perAccountCatalogFor(fakeDb([]), 'Internet', 'MY', 'Hotlink'), null);
 }));
+
+// The screen's own rule, lifted out of the JSX so the failure case can be
+// stated rather than read.
+const { resolvePackageSource } = requireEsm('src/utils/packageSource.js', 'resolvePackageSource');
+
+const BUILT_IN = [{ id: 'base:0', name: 'Built-in 30GB', price: 35 }];
+const BD_LIST = [{ id: 'd1', name: 'BD pack', price: 199 }];
+const PER_NUMBER = [{ id: 'PLAN-X', name: 'Unlimited 30d', price: 40 }];
 
 console.log('\nIIMMPACT Malaysia operator/package boundary');
 
@@ -282,14 +306,6 @@ test('the wrapper refuses options it cannot honour, rather than dropping them', 
 });
 
 console.log('\nWhat the customer is offered');
-
-// The screen's own rule, lifted out of the JSX so the failure case can be
-// stated rather than read.
-const { resolvePackageSource } = requireEsm('src/utils/packageSource.js', 'resolvePackageSource');
-
-const BUILT_IN = [{ id: 'base:0', name: 'Built-in 30GB', price: 35 }];
-const BD_LIST = [{ id: 'd1', name: 'BD pack', price: 199 }];
-const PER_NUMBER = [{ id: 'PLAN-X', name: 'Unlimited 30d', price: 40 }];
 
 test('plans for this number replace the built-in list', () => {
   const out = resolvePackageSource({ country: 'MY', perNumber: PER_NUMBER, successTopUp: [], builtIn: BUILT_IN });
@@ -506,6 +522,7 @@ function withCatalogue(plans) {
   const expected = {
     Celcom: ['CEL'],
     Digi: ['DI'],
+    CelcomDigi: ['CEL', 'DI'],
     Hotlink: ['HI'],
     'U Mobile': ['UMI'],
     Tunetalk: ['TI'],
@@ -515,6 +532,10 @@ function withCatalogue(plans) {
   for (const [operator, codes] of Object.entries(expected)) {
     assert.deepStrictEqual(providerCatalog.productCodesFor(provider, operator), codes);
   }
+
+  const legacy = { ...provider, catalogPreset: 'iimmpact-subproducts', catalogPath: '/v2/subproducts' };
+  assert.deepStrictEqual(providerCatalog.productCodesFor(legacy, 'Hotlink'), ['HI'],
+    'legacy saved IIMMPACT records must retain the current operator-code defaults');
 }));
 
 (async () => {

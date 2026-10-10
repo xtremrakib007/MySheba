@@ -41,18 +41,18 @@ const REQUEST_ID_RE=/^[A-Za-z0-9_-]{16,128}$/;
 // [400]". Internet, Offer Packs and Entertainment all listed it; recharge did
 // not.
 const TRANSACTION_RAW_FIELDS = {
-  recharge: new Set(['phone', 'country', 'amount', 'operator', 'operatorCode', 'productCode', 'productName', 'iimmpactCatalog', 'selectedOptions', 'fieldValues', 'accountNumber', 'package', 'subproductCode', 'providerAmount', 'packageCostAmount']),
-  internet: new Set(['phone', 'country', 'amount', 'provider', 'operator', 'operatorCode', 'packageId', 'package', 'packageCostAmount', 'subproductCode']),
-  offerpacks: new Set(['phone', 'country', 'amount', 'provider', 'operator', 'operatorCode', 'packageId', 'package', 'packageCostAmount']),
-  entertainment: new Set(['country', 'amount', 'gameKey', 'game', 'packageId', 'package', 'playerId', 'serverId']),
+  recharge: new Set(['phone', 'country', 'amount', 'operator', 'productCode', 'productName', 'iimmpactCatalog', 'selectedOptions', 'fieldValues', 'accountNumber', 'package', 'subproductCode', 'providerAmount', 'packageCostAmount', 'extras']),
+  internet: new Set(['phone', 'country', 'amount', 'provider', 'operator', 'operatorCode', 'productCode', 'productName', 'packageId', 'package', 'packageCostAmount', 'subproductCode', 'optionCode', 'processingTime', 'extras', 'selectedOptions', 'fieldValues']),
+  offerpacks: new Set(['phone', 'country', 'amount', 'provider', 'operator', 'operatorCode', 'productCode', 'productName', 'packageId', 'package', 'packageCostAmount', 'subproductCode', 'optionCode', 'processingTime', 'extras', 'selectedOptions', 'fieldValues']),
+  entertainment: new Set(['country', 'amount', 'provider', 'operator', 'operatorCode', 'productCode', 'productName', 'iimmpactCatalog', 'gameKey', 'game', 'packageId', 'package', 'playerId', 'serverId', 'packageCostAmount', 'subproductCode', 'optionCode', 'processingTime', 'extras', 'selectedOptions', 'fieldValues']),
   // billerCode/ref2/icNumber are JomPAY's own three fields and subproductCode
   // is what iimmpact calls a chosen plan. Without them here the screen collects
   // an IC the provider never sees, and JomPAY refuses the payment for the
   // AMLA reason - visible only as a rejection from the provider.
-  billpayment: new Set(['phone', 'country', 'amount', 'provider', 'category', 'accountNumber', 'billNumber', 'mobileNumber', 'monthName', 'note', 'billerCode', 'ref2', 'icNumber', 'subproductCode']),
+  billpayment: new Set(['phone', 'country', 'amount', 'provider', 'operator', 'operatorCode', 'productCode', 'productName', 'category', 'accountNumber', 'billNumber', 'mobileNumber', 'monthName', 'note', 'billerCode', 'ref2', 'icNumber', 'subproductCode', 'optionCode', 'processingTime', 'packageCostAmount', 'extras', 'selectedOptions', 'fieldValues']),
   mobilebanking: new Set(['phone', 'country', 'amount', 'provider', 'category', 'accountNumber']),
-  esim: new Set(['country', 'productCode', 'accountNumber', 'email', 'amount', 'package', 'subproductCode', 'providerAmount', 'remarks']),
-  iimmpact: new Set(['country', 'productCode', 'productName', 'accountNumber', 'amount', 'providerAmount', 'packageCostAmount', 'package', 'subproductCode', 'optionCode', 'processingTime', 'remarks']),
+  esim: new Set(['country', 'productCode', 'productName', 'accountNumber', 'email', 'amount', 'package', 'subproductCode', 'providerAmount', 'packageCostAmount', 'extras', 'remarks']),
+  iimmpact: new Set(['phone', 'country', 'productCode', 'productName', 'operator', 'operatorCode', 'provider', 'accountNumber', 'email', 'customerId', 'amount', 'providerAmount', 'packageCostAmount', 'package', 'subproductCode', 'optionCode', 'processingTime', 'extras', 'selectedOptions', 'fieldValues', 'iimmpactCatalog', 'billerCode', 'icNumber', 'ref2', 'remarks']),
   remittance: new Set([
     'phone', 'senderName', 'senderPhone', 'senderCompany', 'senderPassportNo', 'senderPassportExpiry',
     'senderAddress', 'receiverFirstName', 'receiverLastName', 'receiverRelationship', 'receiverPhone',
@@ -69,7 +69,19 @@ function sanitizeTransactionRaw(raw, service) {
     const value = raw[key];
     if (typeof value === 'string') out[key] = value.slice(0, 500);
     else if (typeof value === 'number' && Number.isFinite(value)) out[key] = value;
-    else if (typeof value === 'boolean') out[key] = value; else if ((key === 'selectedOptions' || key === 'fieldValues') && value && typeof value === 'object' && !Array.isArray(value)) { const safe = {}; for (const [fieldKey, fieldValue] of Object.entries(value).slice(0, 40)) { if (!/^[a-zA-Z0-9_.-]{1,100}$/.test(fieldKey)) continue; if (typeof fieldValue === 'string') safe[fieldKey] = fieldValue.slice(0, 500); else if (typeof fieldValue === 'number' && Number.isFinite(fieldValue)) safe[fieldKey] = fieldValue; else if (fieldValue && typeof fieldValue === 'object' && !Array.isArray(fieldValue)) { const option = {}; for (const [optionKey, optionValue] of Object.entries(fieldValue)) { if (!['code','label','value','description','amount','account_number','price','denomination'].includes(optionKey)) continue; if (['string','number','boolean'].includes(typeof optionValue)) option[optionKey] = typeof optionValue === 'string' ? optionValue.slice(0, 500) : optionValue; else if (optionKey === 'price' && optionValue && typeof optionValue === 'object' && Number.isFinite(Number(optionValue.amount))) option.price = { amount: Number(optionValue.amount), currency: String(optionValue.currency || '').slice(0, 8) }; } safe[fieldKey] = option; } } out[key] = safe; }
+    else if (typeof value === 'boolean') out[key] = value; else if (key === 'extras' && value && typeof value === 'object' && !Array.isArray(value)) {
+      // Preserve only documented IIMMPACT extras; never forward arbitrary keys.
+      const extras = {};
+      for (const extraKey of ['subproduct_code', 'biller_code', 'ic_number', 'ref2']) {
+        const extraValue = value[extraKey];
+        if (typeof extraValue === 'string' || (typeof extraValue === 'number' && Number.isFinite(extraValue))) {
+          const cleanValue = String(extraValue).trim().slice(0, 300);
+          if (cleanValue) extras[extraKey] = cleanValue;
+        }
+      }
+      out[key] = extras;
+    }
+    else if ((key === 'selectedOptions' || key === 'fieldValues') && value && typeof value === 'object' && !Array.isArray(value)) { const safe = {}; for (const [fieldKey, fieldValue] of Object.entries(value).slice(0, 40)) { if (!/^[a-zA-Z0-9_.-]{1,100}$/.test(fieldKey)) continue; if (typeof fieldValue === 'string') safe[fieldKey] = fieldValue.slice(0, 500); else if (typeof fieldValue === 'number' && Number.isFinite(fieldValue)) safe[fieldKey] = fieldValue; else if (fieldValue && typeof fieldValue === 'object' && !Array.isArray(fieldValue)) { const option = {}; for (const [optionKey, optionValue] of Object.entries(fieldValue)) { if (!['code','label','value','description','amount','account_number','price','denomination'].includes(optionKey)) continue; if (['string','number','boolean'].includes(typeof optionValue)) option[optionKey] = typeof optionValue === 'string' ? optionValue.slice(0, 500) : optionValue; else if (optionKey === 'price' && optionValue && typeof optionValue === 'object' && Number.isFinite(Number(optionValue.amount))) option.price = { amount: Number(optionValue.amount), currency: String(optionValue.currency || '').slice(0, 8) }; } safe[fieldKey] = option; } } out[key] = safe; }
   }
   return out;
 }
@@ -106,7 +118,7 @@ async function resolvePackagePricing(db, service, payload) {
     if (found.error) throw new HttpsError('failed-precondition', 'IIMMPACT could not validate this recharge. Please review the product and number.');
     const submitted = Number(clean.amount);
     if (Number.isFinite(submitted) && Math.abs(submitted - found.sellAmount) > 0.01) throw new HttpsError('failed-precondition', 'This recharge price has changed. Please review the amount.');
-    return { ...payload, amount: undefined, total: undefined, raw: { ...clean, amount: found.sellAmount, providerAmount: found.providerAmount, packageCostAmount: found.providerAmount, productCode: found.productCode, productName: found.productName, accountNumber: found.accountNumber, operator: found.productName, package: found.productName, subproductCode: found.subproductCode || clean.subproductCode || '', optionCode: found.optionCode || '', extras: found.extras || {}, processingTime: found.processingTime || '' } };
+    return { ...payload, amount: undefined, total: undefined, raw: { ...clean, amount: found.sellAmount, providerAmount: found.providerAmount, packageCostAmount: found.providerAmount, productCode: found.productCode, operatorCode: found.productCode, productName: found.productName, accountNumber: found.accountNumber, operator: found.productName, package: found.productName, subproductCode: found.subproductCode || clean.subproductCode || '', optionCode: found.optionCode || '', extras: found.extras || {}, processingTime: found.processingTime || '' } };
   }
   if (!label) return payload;
   // packageCostAmount is what gets SENT to the provider as the amount, and it
@@ -141,6 +153,7 @@ async function resolvePackagePricing(db, service, payload) {
         packageCostAmount: found.costAmount,
         providerAmount: found.providerAmount,
         productCode: found.productCode,
+        operatorCode: found.productCode,
         package: found.package || clean.package || '',
         subproductCode: found.subproductCode || clean.subproductCode || '',
       },
@@ -172,6 +185,7 @@ async function resolvePackagePricing(db, service, payload) {
         providerAmount: found.providerAmount,
         packageCostAmount: found.providerAmount,
         productCode: found.productCode,
+        operatorCode: found.productCode,
         productName: found.productName,
         accountNumber: found.accountNumber,
         package: found.productName,
@@ -228,6 +242,9 @@ async function resolvePackagePricing(db, service, payload) {
         // client named: with CelcomDigi asking both CEL and DI, the client's
         // claim is a guess and this is the answer.
         operatorCode: found.productCode || '',
+        // IIMMPACT's selected plan id is the subproduct_code required by /v2/topup.
+        subproductCode: found.package.id || clean.subproductCode || '',
+        productCode: found.productCode || clean.productCode || '',
         package: found.package.name || clean.package || '',
       },
     };

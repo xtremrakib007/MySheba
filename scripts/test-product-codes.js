@@ -63,6 +63,18 @@ test('declaring a map is what says "this provider needs codes"', () => {
   assert.strictEqual(productCodes.declaresProductCodes(MAPPED), true);
 });
 
+test('bill payment resolves a biller code from billerProductCodes', () => {
+  const billers = {
+    name: 'iimmpact',
+    operatorProductCodes: { TNB: 'WRONG-OPERATOR-CODE' },
+    billerProductCodes: { TNB: 'TNB', JomPAY: 'JOMPAY' },
+  };
+  assert.strictEqual(productCodes.codeFieldFor('Bill Payment'), 'billerProductCodes');
+  assert.strictEqual(productCodes.codeFieldFor('bill payment'), 'billerProductCodes');
+  assert.strictEqual(productCodes.codeSubjectFor('Bill Payment', { provider: 'TNB' }), 'TNB');
+  assert.strictEqual(productCodes.productCodeFor(billers, 'TNB', { service: 'Bill Payment' }), 'TNB');
+});
+
 console.log('\nA voucher PIN is a different product from airtime');
 
 test('the same operator has a different code for a PIN', () => {
@@ -75,7 +87,7 @@ test('the same operator has a different code for a PIN', () => {
 test('IIMMPACT PIN catalog matching filters by PIN fulfillment type', () => {
   const source = require('fs').readFileSync(require('path').join(__dirname, '..', 'functions/apiProviderService.js'), 'utf8');
   assert.ok(
-    /service === 'Recharge PIN'[\\s\\S]*?allProducts\.filter\\(\\(p\\) => String\\(p\.processing_time \\|\\| ''\\)\.toLowerCase\\(\\) === 'pin'\\)/.test(source),
+    /const products = service === 'Recharge PIN'\s*\?\s*serviceProducts\.filter\(\(p\) => String\(p\.processing_time \|\| ''\)\.toLowerCase\(\) === 'pin'\)/.test(source),
     'PIN catalog matching must exclude airtime products before scoring',
   );
 });
@@ -112,7 +124,7 @@ test('which map a service charges from is explicit', () => {
   assert.strictEqual(productCodes.codeFieldFor('Recharge PIN'), 'pinProductCodes');
   assert.strictEqual(productCodes.codeFieldFor('Recharge'), 'operatorProductCodes');
   assert.strictEqual(productCodes.codeFieldFor('Entertainment'), 'gameProductCodes');
-  assert.strictEqual(productCodes.codeFieldFor('Internet'), 'operatorProductCodes');
+  assert.strictEqual(productCodes.codeFieldFor('Internet'), 'catalogOperatorCodes');
   assert.strictEqual(productCodes.codeFieldFor(undefined), 'operatorProductCodes');
 });
 
@@ -178,7 +190,7 @@ test('the charge actually passes the stated amount through', () => {
   // last time.
   const source = require('fs').readFileSync(require('path').join(__dirname, '..', 'functions/apiProviderService.js'), 'utf8');
   assert.ok(/const mappedProductAmount = productCodes\.productAmountFor\(provider, codeSubject, codeOptions\);/.test(source));
-  assert.ok(/providerAmountFor\(\{ raw, payload, isSuccessTopUpBd, mappedAmount: mappedProductAmount \}\)/.test(source));
+  assert.ok(/providerAmountFor\(\{ raw, payload, isSuccessTopUpBd,[^}]*mappedAmount: mappedProductAmount \}\)/.test(source));
 });
 
 test('a stated amount reaches the provider ahead of the sell price', () => {
@@ -271,8 +283,8 @@ test('the charge resolves the code for its OWN service and denomination', () => 
   // denomination a per-denomination voucher range resolves to nothing and the
   // sale is refused.
   const source = require('fs').readFileSync(require('path').join(__dirname, '..', 'functions/apiProviderService.js'), 'utf8');
-  assert.ok(/const codeSubject = productCodes\.codeSubjectFor\(service, raw\);/.test(source),
-    'what the map is keyed by depends on the service too');
+  assert.ok(/const codeSubject = productCodes\.codeSubjectFor\(service, raw\)(?:\s*\|\|[^;]+)?;/.test(source),
+    'what the map is keyed by depends on the service too (with only the documented eSIM fallback)');
   assert.ok(/const codeOptions = \{ service, denomination: raw\.amount \};/.test(source));
   assert.ok(/productCodes\.productCodeFor\(provider, codeSubject, codeOptions\)/.test(source));
 });

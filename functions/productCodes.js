@@ -31,25 +31,36 @@
 
 /** Which map a service charges from. */
 const FIELD_BY_SERVICE = {
-  'Recharge PIN': 'pinProductCodes',
-  Entertainment: 'gameProductCodes',
+  'recharge pin': 'pinProductCodes',
+  entertainment: 'gameProductCodes',
+  internet: 'catalogOperatorCodes',
+  offerpacks: 'catalogOperatorCodes',
+  // Bill Payment is keyed by the selected biller, not a mobile operator.
+  'bill payment': 'billerProductCodes',
+  billpayment: 'billerProductCodes',
 };
 const DEFAULT_FIELD = 'operatorProductCodes';
 const ALL_FIELDS = ['operatorProductCodes', 'pinProductCodes', 'gameProductCodes', 'catalogOperatorCodes', 'billerProductCodes'];
 
 /** What that map is keyed by, for a service. */
 const SUBJECT_BY_SERVICE = {
-  Entertainment: 'packageId',
+  entertainment: 'packageId',
+  'bill payment': 'provider',
+  billpayment: 'provider',
 };
 const DEFAULT_SUBJECT = 'operator';
 
+function serviceKey(service) {
+  return String(service || '').trim().toLowerCase();
+}
+
 function codeFieldFor(service) {
-  return FIELD_BY_SERVICE[String(service || '').trim()] || DEFAULT_FIELD;
+  return FIELD_BY_SERVICE[serviceKey(service)] || DEFAULT_FIELD;
 }
 
 /** The field of an order that names what is being bought, for a service. */
 function codeSubjectKeyFor(service) {
-  return SUBJECT_BY_SERVICE[String(service || '').trim()] || DEFAULT_SUBJECT;
+  return SUBJECT_BY_SERVICE[serviceKey(service)] || DEFAULT_SUBJECT;
 }
 
 /** What this order is buying, as the map would name it. */
