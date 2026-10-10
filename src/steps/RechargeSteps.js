@@ -62,13 +62,19 @@ export default function RechargeStep({ step }) {
             // a country as an operator tile, even if its product code says "recharge".
             if (countryNames.has(normalizedName)) return false;
             const belongsToRechargeCategory = rechargeCodes.has(String(p.code || code));
-            const hasRechargeLabel = /recharge|airtime|top.?up|prepaid|reload/i.test(name + ' ' + String(p.code || code));
+            const searchable = name + ' ' + String(p.code || code);
+            const hasRechargeLabel = /recharge|airtime|top.?up|prepaid|reload|mobile.?credit|mobile.?balance|cellular.?credit/i.test(searchable);
+            const looksLikeMobileProduct = /mobile|telecom|telco|cellular|msisdn|phone.?number/i.test(searchable);
             const matchesKnownOperator = knownNames.some((known) =>
               normalizedName.includes(known) || known.includes(normalizedName) ||
               normalizedCode.includes(known) || known.includes(normalizedCode));
-            // Explicit IIMMPACT category codes are authoritative for service
-            // membership, but they do not turn a country label into an operator.
-            return rechargeCodes.size ? belongsToRechargeCategory : (hasRechargeLabel || matchesKnownOperator);
+            // Use category mapping when IIMMPACT provides a recharge category.
+            // Some catalogues omit that taxonomy, so fall back to recognizable
+            // operator names/mobile products while still excluding country labels,
+            // PIN products and data-plan option products below.
+            return rechargeCodes.size
+              ? belongsToRechargeCategory
+              : (hasRechargeLabel || matchesKnownOperator || looksLikeMobileProduct);
           })
           .filter(([, p]) => String(p.processing_time || '').toLowerCase() !== 'pin')
           .filter(([code, p]) => rechargeCodes.has(String(p.code || code)) || !isDataPlan(p))
