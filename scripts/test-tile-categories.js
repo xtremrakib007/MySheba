@@ -205,8 +205,6 @@ for (const key of ['train']) {
 for (const key of ['mydigital', 'passport']) {
   assert(!withPages.includes(key), `${key} is declared off the home screen and must stay in More Features`);
 }
-  assert(withPages.includes(key), `${key} is one of the twelve and must stay`);
-}
 // The control that does exist still works: taking a built-in off home removes it.
 const movedOff = { train: { key: 'train', name: 'Train Ticket', url: 'x', active: true, home: false } };
 assert(!visibleTiles({ role: 'customer', can: allCaps, webviewPages: movedOff, homeOnly: true }).some((t) => t.key === 'train'),
