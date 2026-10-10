@@ -5,7 +5,9 @@ import { FormLabel, FormInput } from '../components/ui';
 import PackagePicker from '../components/PackagePicker';
 import * as apiProviderService from '../firebase/apiProviderService';
 
-function isEsimProduct(p) { const t=[p?.code,p?.name,p?.note,p?.category,p?.group].join(' ').toLowerCase(); return /e-?sim/.test(t); }
+// The backend catalog is already scoped to service='eSIM'. Do not filter by
+// product-name text: valid provider plans often have destination/brand names
+// (not the literal word eSIM), and that filter made a healthy catalog look empty.
 function firstDenomination(v) { if(typeof v==='number') return v; const m=String(v||'').replace(/,/g,'').match(/\d+(?:\.\d+)?/); return m?Number(m[0]):0; }
 
 export default function ESimStep({ step }) {
@@ -13,7 +15,7 @@ export default function ESimStep({ step }) {
  const [products,setProducts]=useState([]),[options,setOptions]=useState([]),[loading,setLoading]=useState(false),[optionsLoading,setOptionsLoading]=useState(false),[error,setError]=useState('');
  useEffect(()=>{ if(step!==0)return; let alive=true; setLoading(true); setError('');
   apiProviderService.getIimmpactCatalogForUser('', 'eSIM', serviceData.country || 'MY')
-   .then(c=>{ if(!alive)return; const list=Object.values(c?.products||{}).filter(p=>p&&p.is_active!==false&&isEsimProduct(p)); setProducts(list); if(!serviceData.productCode&&list.length===1) updateServiceData({productCode:list[0].code,product:list[0].name}); })
+   .then(c=>{ if(!alive)return; const list=Object.values(c?.products||{}).filter(p=>p&&p.is_active!==false&&p.code); setProducts(list); if(!serviceData.productCode&&list.length===1) updateServiceData({productCode:list[0].code,product:list[0].name}); })
    .catch(e=>alive&&setError(e?.message||'Unable to load eSIM plans.')).finally(()=>alive&&setLoading(false));
   return()=>{alive=false};
  },[step]);
