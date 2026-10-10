@@ -109,14 +109,11 @@ test('the nationality is a real country code, decided by the server', () => {
 
 console.log('\nOne Touch ‘n Go tile, both ways of buying');
 
-test('the tile asks which, rather than hiding one inside another screen', () => {
+test('the homepage tile opens Touch n Go directly; PIN Generate stays separate', () => {
   const grid = read('src/components/ServiceGrid.js');
-  assert.ok(/if \(s\.kind === 'tngShortcut'\)/.test(grid));
-  assert.ok(/text: 'Reload wallet'[\s\S]{0,120}startService\('billpayment', s\.seed, s\.startStep\)/.test(grid),
-    'one branch must be the direct reload');
-  assert.ok(/text: 'Buy PIN voucher'[\s\S]{0,80}setScreen\('rechargePin'\)/.test(grid),
-    'the other must be the voucher');
-  assert.ok(/text: 'Cancel', style: 'cancel'/.test(grid), 'and it must be dismissable');
+  assert.ok(/if \(s\.kind === 'tngShortcut'\) return startService\('billpayment', s\.seed, s\.startStep\)/.test(grid),
+    'Touch n Go must start its seeded reload flow directly');
+  assert.ok(!/Buy PIN voucher/.test(grid), 'the separate PIN Generate tile replaces the popup option');
 
   const tiles = read('src/components/serviceTiles.js');
   // On the home grid for a customer AND on the Control Center, both as one
