@@ -1362,12 +1362,16 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     let base; try { base = new URL(provider.baseUrl); } catch { throw new Error('Provider URL is invalid.'); }
     if (base.protocol !== 'https:') throw new Error('Provider URL is not allowed.');
     const pinnedAddress = await resolvePublicAddress(base.hostname);
-    let endpointPath = String(provider.endpointPath || '/');
+    // IIMMPACT's unified payment endpoint is fixed by its API contract. Old
+    // provider documents may still contain a legacy /v1/order path, which
+    // would otherwise sign and send a valid body to the wrong endpoint.
+    let endpointPath = provider.authType === 'iimmpactHmac' ? '/v2/topup' : String(provider.endpointPath || '/');
     const isBangladeshMobileBill = isSuccessTopUpBill && String(raw.country || '').toUpperCase() === 'BD' && String(raw.category || '').toLowerCase() === 'mobile';
     if (isBangladeshMobileBill) endpointPath = '/api/recharge';
     if (/^https?:\/\//i.test(endpointPath) || endpointPath.startsWith('//')) throw new Error('Endpoint path must be relative to the provider base URL.');
     const url = new URL(endpointPath,base);
-    for (const [k,v] of Object.entries(render(asObject(provider.queryTemplate),vars))) {
+    const renderedQuery = provider.authType === 'iimmpactHmac' ? {} : render(asObject(provider.queryTemplate),vars);
+    for (const [k,v] of Object.entries(renderedQuery)) {
       if (!/^[A-Za-z0-9_.-]{1,100}$/.test(k)) throw new Error('Provider query parameter name is invalid.');
       if (/^(authorization|proxy-authorization|api[-_]?key|access[-_]?token|auth[-_]?token|token|password|passwd|secret|credential|private[-_]?key)$/i.test(k)) {
         throw new Error('Sensitive credentials must not be sent through provider query parameters.');
@@ -1378,7 +1382,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
         url.searchParams.set(k, value);
       }
     }
-    const method = String(provider.method||'POST').toUpperCase();
+    const method = provider.authType === 'iimmpactHmac' ? 'POST' : String(provider.method||'POST').toUpperCase();
     if (!ALLOWED_METHODS.includes(method)) throw new Error('Provider HTTP method is not allowed.');
     if (url.search.length > 8000) throw new Error('Provider query string is too large.');
     const headers = { accept:'application/json', ...render(asObject(provider.headers),vars), ...providerAuth(provider) };
