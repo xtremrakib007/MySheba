@@ -706,18 +706,17 @@ function providerAmountFor({ raw, payload, isSuccessTopUpBd, isIimmpact, mappedA
   const r = raw || {};
   const resolvedProviderAmount = Number(r.providerAmount);
   if (Number.isFinite(resolvedProviderAmount) && resolvedProviderAmount > 0) return resolvedProviderAmount;
+  const packageCost = Number(r.packageCostAmount);
+  if (Number.isFinite(packageCost) && packageCost > 0) return packageCost;
+  // A provider-defined fixed denomination is more authoritative than the
+  // display amount supplied by the customer.
+  if (Number.isFinite(mappedAmount) && mappedAmount > 0) return mappedAmount;
   // IIMMPACT charges the product's face denomination, not the wallet-converted
   // sell total. For foreign-country airtime, payload.amount is MYR after FX
   // conversion while raw.amount is the denomination the provider must fulfill.
-  if (isIimmpact && Number.isFinite(Number(r.packageCostAmount)) && Number(r.packageCostAmount) > 0) return Number(r.packageCostAmount);
   if (isIimmpact && Number.isFinite(Number(r.amount)) && Number(r.amount) > 0) return Number(r.amount);
-  const packageCost = Number(r.packageCostAmount);
-  if (Number.isFinite(packageCost) && packageCost > 0) return packageCost;
-  // Stated on the provider record for a fixed product that has no catalogue to
-  // resolve a price from - a game pack, a voucher. Same rule, different source.
-  if (Number.isFinite(mappedAmount) && mappedAmount > 0) return mappedAmount;
-  // The legacy orders differ and are kept: a Success TopUp Bangladesh order
-  // reads raw first, everything else reads the payload first.
+  // Success TopUp Bangladesh also needs the submitted face amount; for legacy
+  // non-IIMMPACT providers retain the wallet amount behavior.
   return isSuccessTopUpBd
     ? (r.amount ?? payload?.amount ?? '')
     : (payload?.amount ?? r.amount ?? '');
