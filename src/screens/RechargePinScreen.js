@@ -18,6 +18,11 @@ const IIMMPACT_COUNTRIES = [['MY', 'Malaysia']];
 const CURRENCY_BY_COUNTRY = { MY: 'MYR', SG: 'SGD', ID: 'IDR', IN: 'INR', PH: 'PHP', NP: 'NPR', PK: 'PKR', MM: 'MMK', KH: 'KHR' };
 const MALAYSIA_OPERATORS = rechargePinBrands.MY || ['Celcom', 'CelcomDigi', 'U Mobile', 'Hotlink', 'XOX', 'Tunetalk', 'Unifi', 'Yes', "Touch 'n Go eWallet"];
 const AMOUNTS = [10, 20, 30, 50, 100];
+const FEATURED_PIN_ORDER = [
+  /digi.*internet.*pin|internet.*pin.*digi/i,
+  /digipin|digi.*pin/i,
+  /hello.*sim.*pin|hello.*pin/i,
+];
 
 function isVoucherProduct(product) {
   if (!product || product.is_active === false || !product.code) return false;
@@ -60,7 +65,15 @@ export default function RechargePinScreen() {
     return () => { alive = false; };
   }, [country]);
 
-  const dynamicProducts = useMemo(() => Object.values(catalog?.products || {}).filter(isVoucherProduct), [catalog]);
+  const dynamicProducts = useMemo(() => {
+    const products = Object.values(catalog?.products || {}).filter(isVoucherProduct);
+    const rank = (p) => {
+      const name = String(p.name || '');
+      const i = FEATURED_PIN_ORDER.findIndex((pattern) => pattern.test(name));
+      return i < 0 ? FEATURED_PIN_ORDER.length : i;
+    };
+    return products.sort((a, b) => rank(a) - rank(b) || String(a.name || '').localeCompare(String(b.name || '')));
+  }, [catalog]);
 
   useEffect(() => {
     let alive = true;
@@ -134,8 +147,8 @@ export default function RechargePinScreen() {
     </LinearGradient>
     <ScrollView contentContainerStyle={styles.content}>
       <View style={styles.intro}>
-        <Text style={styles.title}>Live IIMMPACT Vouchers</Text>
-        <Text style={styles.subtitle}>Products, brands, denominations and product codes come from the live IIMMPACT catalogue. MySheba does not invent voucher codes.</Text>
+        <Text style={styles.title}>PIN Generator</Text>
+        <Text style={styles.subtitle}>Select a PIN voucher, choose an amount, then confirm your purchase.</Text>
       </View>
 
       {/* PIN Generator is Malaysia-only; country is fixed to MY and not selectable. */}
@@ -144,7 +157,7 @@ export default function RechargePinScreen() {
       {!!catalogError && !loadingCatalog && <Text style={styles.error}>{catalogError}</Text>}
 
       {!loadingCatalog && dynamicProducts.length > 0 && <>
-        <Text style={styles.label}>Voucher / Gift Card</Text>
+        <Text style={styles.label}>Select PIN Voucher</Text>
         <View style={styles.grid}>{dynamicProducts.map((p) =>
           <TouchableOpacity key={p.code} onPress={() => selectProduct(p)} style={[styles.option, product?.code === p.code && styles.optionSelected]}>
             {p.image_url ? <View style={styles.logoWrap}><Image source={{ uri: p.image_url }} style={styles.logo} resizeMode="contain" /></View> : <View style={styles.badge}><Text style={styles.badgeText}>V</Text></View>}
@@ -163,7 +176,7 @@ export default function RechargePinScreen() {
         ); })}</View>
       </>}
 
-      {!!product && <Text style={styles.label}>{product.name} — Denomination</Text>}
+      {!!product && <Text style={styles.label}>{product.name} — Select Amount</Text>}
       {!!product && loadingOptions && <Text style={styles.info}>Loading live denominations…</Text>}
       {!!product && !loadingOptions && options.length > 0 && <View style={styles.grid}>{options.map((item) => {
         const value = Number(item?.price?.amount ?? item?.denomination);
@@ -180,7 +193,7 @@ export default function RechargePinScreen() {
         <View style={styles.grid}>{AMOUNTS.map((item) => <TouchableOpacity key={item} onPress={() => { setAmount(item); setVoucher(null); }} style={[styles.amount, amount === item && styles.amountSelected]}><Text style={[styles.amountText, amount === item && styles.amountTextSelected]}>MYR {item}</Text></TouchableOpacity>)}</View>
       </>}
 
-      <TouchableOpacity disabled={busy} onPress={buy} style={styles.buy}><Text style={styles.buyText}>{busy ? 'Processing…' : 'Buy Voucher'}</Text></TouchableOpacity>
+      <TouchableOpacity disabled={busy || (!operator && (!product || !selectedOption) && !(amount > 0))} onPress={buy} style={styles.buy}><Text style={styles.buyText}>{busy ? 'Processing…' : 'Next'}</Text></TouchableOpacity>
 
       {!!(voucher?.pin || voucher?.deliveryLink) && <View style={styles.voucher}>
         <Text style={styles.voucherTitle}>Voucher Ready</Text>
