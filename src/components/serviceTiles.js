@@ -29,8 +29,11 @@
  */
 export const TILE_CATEGORIES = [
   { key: 'manage', label: 'Management', subtitle: 'Transactions, accounts and operations', home: true },
-  { key: 'recharge', label: 'Recharge & Bills', subtitle: 'Top-ups, data, packs and bills', home: true },
-  { key: 'iimmpact', label: 'MySheba More Services', subtitle: 'Shopping, food, vouchers, gaming and more', home: false },
+  { key: 'recharge', label: 'Recharge & Bills', subtitle: 'Mobile top-ups, data and bills', home: true },
+  { key: 'pin', label: 'PIN Generate', subtitle: 'IIMMPACT PIN and voucher categories', home: true },
+  { key: 'entertainment', label: 'Entertainment', subtitle: 'IIMMPACT game and entertainment products', home: true },
+  { key: 'esim', label: 'eSIM', subtitle: 'Travel eSIM products and data plans', home: true },
+  { key: 'iimmpact', label: 'MySheba More Services', subtitle: 'Shopping, food and other vouchers', home: false },
   { key: 'tng', label: "Touch'n Go eWallet", subtitle: 'Direct eWallet top-up', home: true },
   { key: 'jompay', label: 'JomPAY', subtitle: 'Direct bill reference payment', home: true },
   { key: 'money', label: 'Send Money', subtitle: 'Remittance and mobile banking', home: true },
@@ -72,7 +75,7 @@ export function groupTilesByCategory(tiles) {
 const CUSTOMER_SERVICES = [
   // Fixed customer homepage: exactly 12 tiles, 3 columns x 4 rows.
   { key: 'recharge', icon: 'recharge', name: 'Mobile Recharge', kind: 'service', cat: 'recharge', home: true },
-  { key: 'rechargePin', icon: 'recharge', name: 'PIN Generate', kind: 'rechargePin', cat: 'recharge', home: true },
+  { key: 'rechargePin', icon: 'recharge', name: 'PIN Generate', kind: 'rechargePin', cat: 'pin', home: true },
   { key: 'internet', icon: 'internet', name: 'Internet Packages', kind: 'service', cat: 'recharge', home: true },
   { key: 'billpayment', icon: 'billpayment', name: 'Bill Payment', kind: 'service', cat: 'recharge', home: true },
   { key: 'tngewallet', icon: 'walletTransfer', art: 'photoTngewallet', name: "Touch'n Go eWallet", kind: 'tngShortcut', cat: 'tng', home: true,
@@ -82,8 +85,8 @@ const CUSTOMER_SERVICES = [
   { key: 'flight', icon: 'flight', name: 'Flight Ticket', kind: 'service', cat: 'travel', home: true },
   { key: 'bus', icon: 'bus', name: 'Bus Ticket', kind: 'buspicker', cat: 'travel', home: true },
   { key: 'train', icon: 'train', name: 'Train Ticket', kind: 'webview', cat: 'travel', home: true },
-  { key: 'entertainment', icon: 'entertainment', name: 'Entertainment', kind: 'service', cat: 'recharge', home: true },
-  { key: 'esim', icon: 'esim', name: 'eSIM', kind: 'service', cat: 'recharge', home: true },
+  { key: 'entertainment', icon: 'entertainment', name: 'Entertainment', kind: 'service', cat: 'entertainment', home: true },
+  { key: 'esim', icon: 'esim', name: 'eSIM', kind: 'service', cat: 'esim', home: true },
   { key: 'moreFeaturesTile', icon: 'more', name: 'More Features', kind: 'moreFeaturesLink', cat: 'recharge', home: true },
 
 
