@@ -62,14 +62,12 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
   const [amount, setAmount] = useState(null);
   const [busy, setBusy] = useState(false);
   const [voucher, setVoucher] = useState(null);
-  const [selectedCategory, setSelectedCategory] = useState(null);
-
-  useEffect(() => { if (initialCategory) setSelectedCategory(initialCategory); }, [initialCategory]);
+  const [selectedCategory, setSelectedCategory] = useState(initialCategory);
 
   useEffect(() => {
     let alive = true;
     setCatalog(null); setCatalogError(''); setProduct(null); setOptions([]);
-    setSelectedOption(null); setOperator(''); setAmount(null); setVoucher(null); setSelectedCategory(null);
+    setSelectedOption(null); setOperator(''); setAmount(null); setVoucher(null); setSelectedCategory(initialCategory);
     setLoadingCatalog(true);
     apiProviderService.getIimmpactCatalogForUser('', 'Recharge PIN', country)
       .then((data) => { if (alive) setCatalog(data || {}); })
