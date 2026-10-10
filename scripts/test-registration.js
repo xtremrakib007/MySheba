@@ -149,6 +149,12 @@ test('recharge loads active operator products from IIMMPACT', () => {
   assert.ok(recharge.includes('p.is_active !== false'), 'inactive products must not be shown');
   assert.ok(recharge.includes("String(serviceData.country || '').toUpperCase() !== 'BD'"),
     'non-Bangladesh IIMMPACT recharge must keep the dynamic operator picker visible');
+  assert.ok(recharge.includes('const billCodes = new Set()'),
+    'bill/postpaid catalog codes must be tracked separately from recharge');
+  assert.ok(recharge.includes('if (billCodes.has(productCode)'),
+    'postpaid bill products must be excluded even if the provider taxonomy overlaps');
+  assert.ok(recharge.includes('const hasRechargeTaxonomy = rechargeCodes.size > 0'),
+    'when recharge taxonomy exists, do not fall back to loose name matching');
 });
 
 console.log('\n' + passed + ' checks passed.\n');
