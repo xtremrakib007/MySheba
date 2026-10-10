@@ -50,7 +50,7 @@ export default function IimmpactCatalogScreen() {
         const data = await apiProviderService.getIimmpactFullCatalogForUser('MY');
         if (alive) setCatalog(data || {});
       } catch (e) {
-        if (alive) setError(e?.message || 'IIMMPACT Marketplace is unavailable.');
+        if (alive) setError(e?.message || 'MySheba Features are unavailable.');
       } finally {
         if (alive) setLoading(false);
       }
@@ -98,16 +98,16 @@ export default function IimmpactCatalogScreen() {
         <HeaderDecor />
         <TouchableOpacity onPress={goBackOrHome} style={styles.back}><Text style={styles.backText}>←</Text></TouchableOpacity>
         <View style={styles.headerCopy}>
-          <Text style={styles.headerTitle}>MySheba Marketplace</Text>
-          <Text style={styles.headerSub}>IIMMPACT full catalogue</Text>
+          <Text style={styles.headerTitle}>MySheba Features</Text>
+          <Text style={styles.headerSub}>All services & features</Text>
         </View>
       </LinearGradient>
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.hero}>
-          <Text style={styles.title}>Marketplace</Text>
+          <Text style={styles.title}>MySheba Features</Text>
           <Text style={styles.subtitle}>
-            Choose a category to browse the live IIMMPACT products. Every category opens a functional product form powered by the current catalog and Options API.
+            Browse all available MySheba services in one grid. Categories are loaded from the live IIMMPACT catalogue and open functional product forms.
           </Text>
           {!!catalog?.last_updated && <Text style={styles.updated}>Catalog updated: {String(catalog.last_updated)}</Text>}
         </View>
@@ -137,7 +137,7 @@ export default function IimmpactCatalogScreen() {
         </View>}
 
         {loading && (
-          <View style={styles.state}><ActivityIndicator color={colors.primary} /><Text style={styles.info}>Loading the live IIMMPACT catalogue…</Text></View>
+          <View style={styles.state}><ActivityIndicator color={colors.primary} /><Text style={styles.info}>Loading all available features…</Text></View>
         )}
         {!!error && !loading && <Text style={styles.error}>{error}</Text>}
 
@@ -163,7 +163,7 @@ export default function IimmpactCatalogScreen() {
         )}
 
         {!loading && !error && !categories.length && (
-          <Text style={styles.empty}>IIMMPACT returned no active marketplace categories for Malaysia.</Text>
+          <Text style={styles.empty}>No active catalogue features are available for Malaysia right now.</Text>
         )}
       </ScrollView>
     </View>
