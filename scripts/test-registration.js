@@ -175,7 +175,9 @@ test('PIN category routing keeps commerce vouchers out of Mobile Operator PIN', 
   assert.ok(/touch\.?n\.?go|\\btng\\b/.test(pin), 'Touch n Go must be classified as transport before mobile PIN');
   assert.ok(/shopee|lazada|e-commerce/.test(pin), 'shopping products must have a dedicated category');
   assert.ok(/operatorPattern\.test\(name\)/.test(pin), 'mobile PIN requires a recognized telco in the product name');
-  assert.ok(!/gift card\|voucher\|giftcard\|i/.test(pin), 'generic voucher wording must not qualify as a mobile operator');
+  assert.ok(!/operatorPattern\.test\(text\)/.test(pin), 'generic taxonomy text alone must not qualify as a mobile operator');
+  assert.ok(/if \(\/gift card\|voucher\|digital code\|giftcard\/i\.test\(text\)\) return category\('shopping'\)/.test(pin),
+    'generic gift cards and digital codes must route to a voucher category instead');
 });
 
 console.log('\n' + passed + ' checks passed.\n');
