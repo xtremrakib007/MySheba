@@ -51,7 +51,7 @@ const TRANSACTION_RAW_FIELDS = {
   // AMLA reason - visible only as a rejection from the provider.
   billpayment: new Set(['phone', 'country', 'amount', 'provider', 'category', 'accountNumber', 'billNumber', 'mobileNumber', 'monthName', 'note', 'billerCode', 'ref2', 'icNumber', 'subproductCode']),
   mobilebanking: new Set(['phone', 'country', 'amount', 'provider', 'category', 'accountNumber']),
-  esim: new Set(['country', 'productCode', 'accountNumber', 'email', 'amount', 'package', 'subproductCode', 'remarks']),
+  esim: new Set(['country', 'productCode', 'accountNumber', 'email', 'amount', 'package', 'subproductCode', 'providerAmount', 'remarks']),
   iimmpact: new Set(['country', 'productCode', 'productName', 'accountNumber', 'amount', 'providerAmount', 'packageCostAmount', 'package', 'subproductCode', 'optionCode', 'processingTime', 'remarks']),
   remittance: new Set([
     'phone', 'senderName', 'senderPhone', 'senderCompany', 'senderPassportNo', 'senderPassportExpiry',
@@ -101,7 +101,7 @@ async function resolvePackagePricing(db, service, payload) {
   // onto the transaction, which also means a client can put one there - so
   // whatever arrived is dropped here, before anything can read it. Every
   // return below either sets it from a resolved catalogue or leaves it absent.
-  const { packageCostAmount: _clientCost, ...clean } = raw;
+  const { packageCostAmount: _clientCost, providerAmount: _clientProviderAmount, ...clean } = raw;
   const base = { ...payload, raw: clean };
   const country = String(clean.country || '').trim().toUpperCase();
   const operatorName = String(clean.operator || '').trim();
@@ -126,6 +126,7 @@ async function resolvePackagePricing(db, service, payload) {
         ...clean,
         amount: found.sellAmount,
         packageCostAmount: found.costAmount,
+        providerAmount: found.providerAmount,
         productCode: found.productCode,
         package: found.package || clean.package || '',
         subproductCode: found.subproductCode || clean.subproductCode || '',
