@@ -12,12 +12,12 @@ function esimProductCodes(catalog) {
  const codes=new Set();
  for(const group of catalog?.tree?.groups||[]) for(const category of group?.categories||[]) {
   const label=`${group?.name||''} ${category?.name||''}`.toLowerCase();
-  if(/e\\s*-?\\s*sim|esim|travel connectivity/i.test(label)) for(const code of category?.product_codes||[]) codes.add(String(code));
+  if(/e\s*-?\s*sim|esim|travel connectivity/i.test(label)) for(const code of category?.product_codes||[]) codes.add(String(code));
  }
  return codes;
 }
-function isExplicitEsim(p) { return /e\\s*-?\\s*sim|esim/i.test(`${p?.code||''} ${p?.name||''} ${p?.description||''}`); }
-function firstDenomination(v) { if(typeof v==='number') return v; const m=String(v||'').replace(/,/g,'').match(/\\d+(?:\\.\\d+)?/); return m?Number(m[0]):0; }
+function isExplicitEsim(p) { return /e\s*-?\s*sim|esim/i.test(`${p?.code||''} ${p?.name||''} ${p?.description||''}`); }
+function firstDenomination(v) { if(typeof v==='number') return v; const m=String(v||'').replace(/,/g,'').match(/\d+(?:\.\d+)?/); return m?Number(m[0]):0; }
 
 export default function ESimStep({ step }) {
  const { serviceData, updateServiceData } = useApp();
