@@ -374,6 +374,7 @@ export const ADMIN_HOME = [
   // emoji is what renders rather than a fallback nobody sees.
   { key: 'offerpacks', icon: '\uD83C\uDF81', name: 'Offer Packs', service: { key: 'offerpacks', kind: 'service' } },
   { key: 'entertainment', icon: '\uD83C\uDFAC', name: 'Entertainment', service: { key: 'entertainment', kind: 'service' } },
+  { key: 'esim', icon: '\uD83D\uDCF6', name: 'eSIM', service: { key: 'esim', kind: 'service' } },
   { key: 'flight', icon: '\u2708\uFE0F', name: 'Flight Ticket', service: { key: 'flight', kind: 'service' } },
   { key: 'bus', icon: '\uD83D\uDE8C', name: 'Bus Ticket', service: { key: 'bus', kind: 'buspicker' } },
   { key: 'train', icon: '\uD83D\uDE82', name: 'Train Ticket', service: { key: 'train', kind: 'webview' } },
