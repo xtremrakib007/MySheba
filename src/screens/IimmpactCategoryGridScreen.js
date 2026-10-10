@@ -67,6 +67,37 @@ export default function IimmpactCategoryGridScreen({ category }) {
   const categories = useMemo(() => collectGroupCategories(groups, products), [catalog]);
   const subcategories = useMemo(() => {
     const wanted = norm(title);
+    // Digital Voucher is a curated hub: keep these related voucher categories
+    // together rather than exposing separate shopping tiles on the home grid.
+    // Match actual provider catalogue labels; unavailable categories are not
+    // fabricated or shown as purchasable.
+    if (wanted === 'digital voucher' || wanted === 'digital vouchers') {
+      const aliases = [
+        ['food beverage', ['food beverage', 'food and beverage']],
+        ['retail shopping', ['retail shopping', 'retail']],
+        ['grocery', ['grocery', 'groceries']],
+        ['transportation', ['transportation', 'transport']],
+        ['fuel', ['fuel']],
+        ['wellness beauty', ['wellness beauty', 'wellness', 'beauty']],
+        ['games credit', ['games credit', 'game credit', 'gaming credit']],
+        ['gaming platforms', ['gaming platforms', 'game platforms', 'gaming']],
+        ['console app stores', ['console app stores', 'console stores', 'app stores', 'console and app stores']],
+      ];
+      return aliases.flatMap(([id, names]) => {
+        const item = categories.find((candidate) => names.includes(norm(candidate.name)) || names.includes(norm(candidate.group)));
+        return item ? [{ ...item, id: String(id), name: ({
+          'food beverage': 'Food & Beverage',
+          'retail shopping': 'Retail Shopping',
+          grocery: 'Grocery',
+          transportation: 'Transportation',
+          fuel: 'Fuel',
+          'wellness beauty': 'Wellness & Beauty',
+          'games credit': 'Game Credit',
+          'gaming platforms': 'Game Platforms',
+          'console app stores': 'Console & App Stores',
+        })[id] }] : [];
+      });
+    }
     const groupMatches = categories.filter((item) => norm(item.group) === wanted || norm(item.group).includes(wanted) || wanted.includes(norm(item.group)));
     if (groupMatches.length) return groupMatches;
     // Some provider catalogues publish the tile's label as a category rather
