@@ -102,7 +102,6 @@ const CUSTOMER_SERVICES = [
   // Everything else is reached through More Features.
   { key: 'mobilebanking', icon: 'mobilebanking', name: 'Mobile Banking', kind: 'service', cat: 'money' },
   { key: 'remittance', icon: 'remittance', name: 'Remittance', kind: 'service', cat: 'money' },
-  { key: 'offerpacks', icon: 'internet', name: 'Offer Packs', kind: 'service', cat: 'recharge' },
   { key: 'visa', icon: 'visa', name: 'Visa', kind: 'webview', cat: 'immigration' },
   { key: 'fomema', icon: 'fomema', name: 'FOMEMA', kind: 'webview', cat: 'immigration' },
   { key: 'mydigital', icon: 'mydigital', name: 'Malaysia Arrival Card', kind: 'webview', cat: 'immigration' },
