@@ -41,7 +41,7 @@ const REQUEST_ID_RE=/^[A-Za-z0-9_-]{16,128}$/;
 // [400]". Internet, Offer Packs and Entertainment all listed it; recharge did
 // not.
 const TRANSACTION_RAW_FIELDS = {
-  recharge: new Set(['phone', 'country', 'amount', 'operator', 'operatorCode', 'productCode', 'productName', 'iimmpactCatalog', 'selectedOptions', 'fieldValues', 'accountNumber', 'package', 'subproductCode', 'providerAmount', 'packageCostAmount', 'extras']),
+  recharge: new Set(['phone', 'country', 'amount', 'operator', 'productCode', 'productName', 'iimmpactCatalog', 'selectedOptions', 'fieldValues', 'accountNumber', 'package', 'subproductCode', 'providerAmount', 'packageCostAmount', 'extras']),
   internet: new Set(['phone', 'country', 'amount', 'provider', 'operator', 'operatorCode', 'productCode', 'productName', 'packageId', 'package', 'packageCostAmount', 'subproductCode', 'optionCode', 'processingTime', 'extras', 'selectedOptions', 'fieldValues']),
   offerpacks: new Set(['phone', 'country', 'amount', 'provider', 'operator', 'operatorCode', 'productCode', 'productName', 'packageId', 'package', 'packageCostAmount', 'subproductCode', 'optionCode', 'processingTime', 'extras', 'selectedOptions', 'fieldValues']),
   entertainment: new Set(['country', 'amount', 'provider', 'operator', 'operatorCode', 'productCode', 'productName', 'iimmpactCatalog', 'gameKey', 'game', 'packageId', 'package', 'playerId', 'serverId', 'packageCostAmount', 'subproductCode', 'optionCode', 'processingTime', 'extras', 'selectedOptions', 'fieldValues']),
@@ -118,7 +118,7 @@ async function resolvePackagePricing(db, service, payload) {
     if (found.error) throw new HttpsError('failed-precondition', 'IIMMPACT could not validate this recharge. Please review the product and number.');
     const submitted = Number(clean.amount);
     if (Number.isFinite(submitted) && Math.abs(submitted - found.sellAmount) > 0.01) throw new HttpsError('failed-precondition', 'This recharge price has changed. Please review the amount.');
-    return { ...payload, amount: undefined, total: undefined, raw: { ...clean, amount: found.sellAmount, providerAmount: found.providerAmount, packageCostAmount: found.providerAmount, productCode: found.productCode, productName: found.productName, accountNumber: found.accountNumber, operator: found.productName, package: found.productName, subproductCode: found.subproductCode || clean.subproductCode || '', optionCode: found.optionCode || '', extras: found.extras || {}, processingTime: found.processingTime || '' } };
+    return { ...payload, amount: undefined, total: undefined, raw: { ...clean, amount: found.sellAmount, providerAmount: found.providerAmount, packageCostAmount: found.providerAmount, productCode: found.productCode, operatorCode: found.productCode, productName: found.productName, accountNumber: found.accountNumber, operator: found.productName, package: found.productName, subproductCode: found.subproductCode || clean.subproductCode || '', optionCode: found.optionCode || '', extras: found.extras || {}, processingTime: found.processingTime || '' } };
   }
   if (!label) return payload;
   // packageCostAmount is what gets SENT to the provider as the amount, and it
@@ -153,6 +153,7 @@ async function resolvePackagePricing(db, service, payload) {
         packageCostAmount: found.costAmount,
         providerAmount: found.providerAmount,
         productCode: found.productCode,
+        operatorCode: found.productCode,
         package: found.package || clean.package || '',
         subproductCode: found.subproductCode || clean.subproductCode || '',
       },
@@ -184,6 +185,7 @@ async function resolvePackagePricing(db, service, payload) {
         providerAmount: found.providerAmount,
         packageCostAmount: found.providerAmount,
         productCode: found.productCode,
+        operatorCode: found.productCode,
         productName: found.productName,
         accountNumber: found.accountNumber,
         package: found.productName,
