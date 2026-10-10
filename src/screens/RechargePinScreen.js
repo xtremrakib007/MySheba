@@ -61,7 +61,8 @@ export default function RechargePinScreen() {
   const [operator, setOperator] = useState('');
   const [amount, setAmount] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [voucher, setVoucher] = useState(null);\n  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [voucher, setVoucher] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState(null);
 
   useEffect(() => {
     let alive = true;
