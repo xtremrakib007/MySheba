@@ -208,7 +208,7 @@ const fakeDb = (providers) => ({
   // offered a list the charge path has never heard of.
   const found = await catalog.perAccountCatalogFor(fakeDb([IIMMPACT]), 'Internet', 'MY', 'CelcomDigi');
   assert.deepStrictEqual(found.codes, ['CEL', 'DI']);
-  assert.strictEqual(found.provider.id, 'p1');
+  assert.strictEqual(found.provider.id, IIMMPACT.id, 'the picker and charge must resolve the same configured provider');
   assert.strictEqual(await catalog.perAccountCatalogFor(fakeDb([IIMMPACT]), 'Internet', 'MY', 'Unifi'), null);
   assert.strictEqual(await catalog.perAccountCatalogFor(fakeDb([]), 'Internet', 'MY', 'Hotlink'), null);
 }));
