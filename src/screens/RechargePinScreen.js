@@ -12,12 +12,9 @@ import { purchaseRechargePin } from '../firebase/rechargePinService';
 import * as apiProviderService from '../firebase/apiProviderService';
 import { radius } from '../theme/theme';
 
-// IIMMPACT countries configured by the MySheba provider preset. Bangladesh is
-// deliberately excluded; Bangladesh voucher/recharge flows remain separate.
-const IIMMPACT_COUNTRIES = [
-  ['MY', 'Malaysia'], ['SG', 'Singapore'], ['ID', 'Indonesia'], ['IN', 'India'],
-  ['PH', 'Philippines'], ['NP', 'Nepal'], ['PK', 'Pakistan'], ['MM', 'Myanmar'], ['KH', 'Cambodia'],
-];
+// Recharge PIN is currently a Malaysia-only product. Keep this list
+// intentionally limited so the screen cannot show unrelated country products.
+const IIMMPACT_COUNTRIES = [['MY', 'Malaysia']];
 const CURRENCY_BY_COUNTRY = { MY: 'MYR', SG: 'SGD', ID: 'IDR', IN: 'INR', PH: 'PHP', NP: 'NPR', PK: 'PKR', MM: 'MMK', KH: 'KHR' };
 const MALAYSIA_OPERATORS = rechargePinBrands.MY || ['Celcom', 'CelcomDigi', 'U Mobile', 'Hotlink', 'XOX', 'Tunetalk', 'Unifi', 'Yes', "Touch 'n Go eWallet"];
 const AMOUNTS = [10, 20, 30, 50, 100];
