@@ -64,7 +64,7 @@ function getPricing(service, data, pricing, rates) {
 
 export default function ConfirmTransactionScreen() {
   const { colors } = useTheme();
-  const { currentService, serviceData, pricing, rates, profile, submitService, setScreen, submitting } = useApp();
+  const { currentService, serviceData, pricing, rates, profile, submitService, setScreen, goBack, submitting } = useApp();
   const styles = createStyles(colors);
   const title = TITLES[currentService] || currentService || 'Transaction';
   const summary = useMemo(() => getPricing(currentService, serviceData || {}, pricing, rates), [currentService, serviceData, pricing, rates]);
@@ -72,6 +72,9 @@ export default function ConfirmTransactionScreen() {
     !isPrivateKey(key) && value !== undefined && value !== null && String(value).trim() !== '' &&
     !['cost', 'costPrice', 'providerCost', 'wholesalePrice', 'commission', 'commissionAmount', 'providerCommission', 'profit', 'profitAmount'].includes(key)
   );
+
+  // Return to the screen that actually opened this confirmation. The wizard is a safe fallback.
+  const returnToPrevious = () => { if (!goBack()) setScreen('service'); };
 
   const confirm = async () => {
     if (submitting) return;
@@ -81,7 +84,7 @@ export default function ConfirmTransactionScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.bg }]}>
       <View style={[styles.header, { backgroundColor: colors.primary }]}>
-        <TouchableOpacity accessibilityRole="button" onPress={() => setScreen('service')} style={styles.back}>
+        <TouchableOpacity accessibilityRole="button" onPress={returnToPrevious} style={styles.back}>
           <Text style={styles.backText}>‹</Text>
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
@@ -113,7 +116,7 @@ export default function ConfirmTransactionScreen() {
         <Text style={styles.note}>Internal cost and commission are shown only when the app has reliable pricing data. Final charges and provider results are validated by the server.</Text>
       </ScrollView>
       <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border || '#E4E7EC' }]}>
-        <TouchableOpacity style={[styles.cancel, { borderColor: colors.primary }]} onPress={() => setScreen('service')} disabled={submitting}>
+        <TouchableOpacity style={[styles.cancel, { borderColor: colors.primary }]} onPress={returnToPrevious} disabled={submitting}>
           <Text style={[styles.cancelText, { color: colors.primary }]}>Edit details</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.confirm, { backgroundColor: colors.primary, opacity: submitting ? 0.6 : 1 }]} onPress={confirm} disabled={submitting}>
