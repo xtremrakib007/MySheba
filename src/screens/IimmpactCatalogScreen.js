@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
@@ -37,18 +38,38 @@ export default function IimmpactCatalogScreen() {
   const [catalog, setCatalog] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const styles = createStyles(colors);
 
   useEffect(() => {
     let alive = true;
+    const cacheKey = '@mysheba/iimmpact-catalog/MY/v1';
     (async () => {
+      // Show the last saved catalogue immediately. Network refresh happens in
+      // the background, so opening this native grid does not wait for IIMMPACT.
+      try {
+        const saved = await AsyncStorage.getItem(cacheKey);
+        if (alive && saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && typeof parsed === 'object') {
+            setCatalog(parsed);
+            setLoading(false);
+            setRefreshing(true);
+          }
+        }
+      } catch (_) {}
       try {
         const data = await apiProviderService.getIimmpactFullCatalogForUser('MY');
-        if (alive) setCatalog(data || {});
+        if (!alive) return;
+        if (data && typeof data === 'object') {
+          setCatalog(data);
+          setError('');
+          try { await AsyncStorage.setItem(cacheKey, JSON.stringify(data)); } catch (_) {}
+        }
       } catch (e) {
-        if (alive) setError(e?.message || 'IIMMPACT Marketplace is unavailable.');
+        if (alive && !catalog) setError(e?.message || 'IIMMPACT Marketplace is unavailable.');
       } finally {
-        if (alive) setLoading(false);
+        if (alive) { setLoading(false); setRefreshing(false); }
       }
     })();
     return () => { alive = false; };
@@ -92,9 +113,9 @@ export default function IimmpactCatalogScreen() {
         <View style={styles.hero}>
           <Text style={styles.title}>Marketplace</Text>
           <Text style={styles.subtitle}>
-            Choose a category to browse the live IIMMPACT products. Every category opens a functional product form powered by the current catalog and Options API.
+            Browse IIMMPACT categories using the saved catalogue. It opens instantly from cache and refreshes in the background. Purchases are submitted only after you review and confirm them.
           </Text>
-          {!!catalog?.last_updated && <Text style={styles.updated}>Catalog updated: {String(catalog.last_updated)}</Text>}
+          {!!catalog?.last_updated && <Text style={styles.updated}>Catalog updated: {String(catalog.last_updated)}</Text>}{refreshing && <Text style={styles.updated}>Refreshing catalogue in background…</Text>}
         </View>
 
         {loading && (
