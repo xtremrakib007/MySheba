@@ -525,7 +525,7 @@ function validate(data) {
   let service = cleanString(data.service, 40), name = cleanString(data.name, 100), baseUrl = cleanString(data.baseUrl, 500);
   // A list, with `country` as its first entry. Every reader written before
   // multiple countries existed goes on using `country` and keeps working.
-  const countries = providerReach.normaliseCountries(
+  let countries = providerReach.normaliseCountries(
     (Array.isArray(data.countries) && data.countries.length) || typeof data.countries === 'string'
       ? data.countries
       : [data.country],
@@ -601,7 +601,11 @@ function validate(data) {
     responseIdPath = '';
     responseMessagePath = 'message';
     priority = 9999;
+    // Success TopUp is the Bangladesh provider. The legacy `country` field
+    // alone is not enough: providerReach reads `countries` first, so leaving
+    // an incoming ALL/MY scope here could route non-BD orders to this endpoint.
     country = 'BD';
+    countries = ['BD'];
   }
 
   if (endpointPath.includes('?') || endpointPath.includes('#')) throw new HttpsError('invalid-argument', 'Endpoint path must not contain a query string or fragment; use Query Template instead.');
@@ -629,6 +633,18 @@ function validate(data) {
       if (!ALLOWED_SERVICES.includes(entry)) throw new HttpsError('invalid-argument', `Invalid service: ${entry}.`);
     }
     services = unique;
+  }
+  // Keep IIMMPACT out of Bangladesh so the Bangladesh-specific Success TopUp
+  // route remains authoritative. Do not expand ALL into guessed country
+  // coverage: require the superadmin to select only countries IIMMPACT confirms
+  // are enabled on the account. Specific mixed scopes are safely narrowed.
+  const isIimmpactProvider = name.toLowerCase().includes('iimmpact') || authType === 'iimmpactHmac';
+  if (isIimmpactProvider) {
+    countries = countries.filter((code) => code !== 'BD' && code !== 'ALL');
+    if (!countries.length) {
+      throw new HttpsError('invalid-argument', 'Select the specific non-Bangladesh countries enabled for this IIMMPACT account. Bangladesh recharge must use Success TopUp; IIMMPACT cannot be scoped to ALL.');
+    }
+    country = countries[0];
   }
   if (!ALLOWED_COUNTRIES.includes(country)) throw new HttpsError('invalid-argument', 'Invalid provider country.');
   if (!name) throw new HttpsError('invalid-argument', 'API provider name is required.');
