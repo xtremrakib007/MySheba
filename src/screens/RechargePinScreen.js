@@ -200,8 +200,8 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
     return () => { alive = false; };
   }, [product?.code, catalog?.providerId, country]);
 
-  // Classify using specific non-telecom categories first. IIMMPACT may attach
-  // a generic "mobile PIN" product-group label to unrelated voucher products,
+// Classify using specific non-telecom categories first. IIMMPACT may attach
+// a generic "mobile PIN" product-group label to unrelated voucher products,
 // so that label alone must never put a shopping/food/transport product in
 // Mobile Operator PIN. Only a recognizable Malaysian telco product qualifies.
 function classifyPinProduct(product) {
@@ -214,11 +214,11 @@ function classifyPinProduct(product) {
 
   const exclusions = [
     ['transport', /grab|transport|ride|taxi|bus|train|rapid|myrapid|touch.?n.?go|\btng\b|travel pass/i],
-    ['food', /food|restaurant|meal|delivery|dining|tealive|starbucks|zuss|oldtown|kenangan|foodpanda/i],
+    ['coffee', /coffee|cafe|tea|tealive|starbucks|zuss|oldtown|kenangan/i],
     ['grocery', /grocery|grabmart|grab mart|supermarket|pandamart/i],
     ['shopping', /shopping|retail|shopee|lazada|mall|fashion|e-commerce|ecommerce/i],
     ['wellness', /health|wellness|beauty|guardian|watsons|pharmacy|fitness|spa/i],
-    ['coffee', /coffee|cafe|tea|tealive|starbucks|zuss|oldtown|kenangan/i],
+    ['food', /food|restaurant|meal|delivery|dining|foodpanda/i],
     ['apple', /apple|itunes|app store/i],
     ['gaming', /game|gaming|playstation|xbox|steam|roblox|pubg|mobile legends|netflix|spotify|movie|music|stream/i],
   ];
