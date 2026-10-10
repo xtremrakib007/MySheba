@@ -80,7 +80,7 @@ export default function RechargeStep({ step }) {
             // as airtime. This guard wins even if a mixed provider taxonomy lists
             // the same product code under a broad "Recharge" parent group.
             if (billCodes.has(productCode) ||
-                /\\b(post.?paid|bill.?payment|bill.?pay|biller|utility bill|electricity bill|water bill|gas bill|invoice|jom.?pay)\\b/i.test(searchable)) return false;
+                /\b(post.?paid|bill.?payment|bill.?pay|biller|utility bill|electricity bill|water bill|gas bill|invoice|jom.?pay)\b/i.test(searchable)) return false;
             // The catalog can contain country-level/category labels. Never render
             // a country as an operator tile, even if its product code says "recharge".
             if (countryNames.has(normalizedName)) return false;
