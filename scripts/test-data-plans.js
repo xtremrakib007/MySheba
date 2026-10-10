@@ -41,6 +41,11 @@ const IIMMPACT = {
   catalogPreset: 'iimmpact-options',
   catalogPath: '/v2/options',
   authType: 'iimmpactHmac',
+  // Provider selection is tested without a live Secret Manager; these fixture
+  // credentials keep the resolver on the catalogue path instead of testing a
+  // deliberately unconfigured provider.
+  apiKey: 'test-api-key',
+  secretKey: 'test-secret-key',
 };
 
 // The client is ESM and this script is CommonJS. Rather than add a build step
