@@ -21,7 +21,7 @@ export default function RechargeStep({ step }) {
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogUnavailable, setCatalogUnavailable] = useState(false);
   const staticOperators = rechargeOperators[serviceData.country] || [];
-  const OPERATOR_LIST = iimmpactOperators.length ? iimmpactOperators : staticOperators;
+  const OPERATOR_LIST = catalogUnavailable ? staticOperators : ((catalogLoading || step === 2) ? iimmpactOperators : staticOperators);
 
   // In API-routed countries, use the active provider's own recharge products.
   // Static country lists can include unsupported operators and miss new ones.
@@ -55,12 +55,18 @@ export default function RechargeStep({ step }) {
             if (!p || p.is_active === false || !p.code) return false;
             const name = String(p.name || p.label || code).toLowerCase();
             const normalizedName = name.replace(/[^a-z0-9]/g, '');
+            const normalizedCode = String(p.code || code).toLowerCase().replace(/[^a-z0-9]/g, '');
             const belongsToRechargeCategory = rechargeCodes.has(String(p.code || code));
-            const hasRechargeLabel = /recharge|airtime|top.?up|prepaid|reload/i.test(name);
-            const matchesKnownOperator = knownNames.some((known) => normalizedName.includes(known) || known.includes(normalizedName));
+            const hasRechargeLabel = /recharge|airtime|top.?up|prepaid|reload/i.test(name + ' ' + String(p.code || code));
+            const matchesKnownOperator = knownNames.some((known) =>
+              normalizedName.includes(known) || known.includes(normalizedName) ||
+              normalizedCode.includes(known) || known.includes(normalizedCode));
+            // Explicit IIMMPACT category codes are authoritative. Without them,
+            // only recognizable recharge products may be offered.
             return rechargeCodes.size ? belongsToRechargeCategory : (hasRechargeLabel || matchesKnownOperator);
           })
-          .filter(([, p]) => String(p.processing_time || '').toLowerCase() !== 'pin' && !isDataPlan(p))
+          .filter(([, p]) => String(p.processing_time || '').toLowerCase() !== 'pin')
+          .filter(([code, p]) => rechargeCodes.has(String(p.code || code)) || !isDataPlan(p))
           .map(([code, p]) => String(p.name || p.label || code).trim())
           .filter(Boolean);
         const seen = new Set();
@@ -70,8 +76,8 @@ export default function RechargeStep({ step }) {
           seen.add(key);
           return true;
         });
-        if (names.length) setIimmpactOperators(names);
-        else setCatalogUnavailable(true);
+        // A successful empty catalogue is not a network failure: don't advertise static operators the provider may not fulfil.
+        setIimmpactOperators(names);
       })
       .catch(() => { if (alive) setCatalogUnavailable(true); })
       .finally(() => { if (alive) setCatalogLoading(false); });
@@ -119,7 +125,7 @@ export default function RechargeStep({ step }) {
       <FormLabel>Select Operator</FormLabel>
       {catalogLoading && <Text style={styles.catalogInfo}>Loading available operators from IIMMPACT…</Text>}
       {!catalogLoading && catalogUnavailable && serviceData.country !== 'BD' && <Text style={styles.catalogInfo}>Live operator catalogue is unavailable. The saved country operator list is shown temporarily.</Text>}
-      {!catalogLoading && !list.length && <Text style={styles.catalogInfo}>No recharge operators are available for this country in the current catalogue.</Text>}
+      {!catalogLoading && !catalogUnavailable && !list.length && <Text style={styles.catalogInfo}>IIMMPACT returned no active recharge products for this country. Add or enable the operator product in the IIMMPACT catalog before offering it here.</Text>}
       <View style={styles.grid3}>{list.map((o) => { const brand = getOperatorBrand(o); return <RechargeOperatorCard key={o} name={o} logo={brand.logo} color={brand.color} initials={brand.initials} selected={serviceData.operator === o} onPress={() => { updateServiceData({ operator: o }); nextStep(); }} styles={styles} primaryColor={colors.primary} />; })}</View>
     </View>);
   }
