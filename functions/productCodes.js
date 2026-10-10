@@ -35,6 +35,7 @@ const FIELD_BY_SERVICE = {
   entertainment: 'gameProductCodes',
   // Bill Payment is keyed by the selected biller, not a mobile operator.
   'bill payment': 'billerProductCodes',
+  billpayment: 'billerProductCodes',
 };
 const DEFAULT_FIELD = 'operatorProductCodes';
 const ALL_FIELDS = ['operatorProductCodes', 'pinProductCodes', 'gameProductCodes', 'catalogOperatorCodes', 'billerProductCodes'];
@@ -43,6 +44,7 @@ const ALL_FIELDS = ['operatorProductCodes', 'pinProductCodes', 'gameProductCodes
 const SUBJECT_BY_SERVICE = {
   entertainment: 'packageId',
   'bill payment': 'provider',
+  billpayment: 'provider',
 };
 const DEFAULT_SUBJECT = 'operator';
 
