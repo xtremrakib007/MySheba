@@ -30,6 +30,7 @@
 export const TILE_CATEGORIES = [
   { key: 'manage', label: 'Management', subtitle: 'Transactions, accounts and operations', home: true },
   { key: 'recharge', label: 'Recharge & Bills', subtitle: 'Top-ups, data, packs and bills', home: true },
+  { key: 'iimmpact', label: 'IIMMPACT Services', subtitle: 'More products and services', home: false },
   { key: 'tng', label: "Touch'n Go eWallet", subtitle: 'Direct eWallet top-up', home: true },
   { key: 'jompay', label: 'JomPAY', subtitle: 'Direct bill reference payment', home: true },
   { key: 'money', label: 'Send Money', subtitle: 'Remittance and mobile banking', home: true },
@@ -84,6 +85,7 @@ const CUSTOMER_SERVICES = [
   { key: 'entertainment', icon: 'entertainment', name: 'Entertainment', kind: 'service', cat: 'recharge', home: true },
   { key: 'esim', icon: 'esim', name: 'eSIM', kind: 'service', cat: 'recharge', home: true },
   { key: 'moreFeaturesTile', icon: 'more', name: 'More Features', kind: 'moreFeaturesLink', cat: 'recharge', home: true },
+  { key: 'iimmpactCatalog', icon: 'more', name: 'IIMMPACT Catalogue', kind: 'iimmpactCatalog', cat: 'iimmpact', home: false },
 
   // Everything else is reached through More Features.
   { key: 'mobilebanking', icon: 'mobilebanking', name: 'Mobile Banking', kind: 'service', cat: 'money' },
