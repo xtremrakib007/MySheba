@@ -1444,6 +1444,7 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
         const field = {
           pinProductCodes: 'PIN product codes',
           gameProductCodes: 'Game product codes',
+          billerProductCodes: 'Biller product codes',
         }[productCodes.codeFieldFor(service)] || 'Operator product codes';
         throw new Error(`${provider.name || 'This provider'} has no ${service} product code configured for "${codeSubject.slice(0, 40)}". Add it under ${field}.`);
       }
