@@ -123,7 +123,14 @@ const CATEGORIES = [
 // gas biller and Bangladesh no Astro, and offering either led to a category
 // that could only answer "no biller is configured for this yet".
 function categoriesFor(country) {
-  return CATEGORIES.filter((c) => billersFor(country, c.key).length > 0);
+  // JomPAY and Touch 'n Go have dedicated homepage tiles. Keep their
+  // internal biller mappings for those seeded flows, but don't duplicate them
+  // inside the general Bill Payment category picker. Tax/JomPAY likewise
+  // remains reachable only through the dedicated JomPAY entry point.
+  const dedicatedHomepageCategories = new Set(['ewallet', 'jompay', 'tax']);
+  return CATEGORIES.filter((c) =>
+    !dedicatedHomepageCategories.has(c.key) && billersFor(country, c.key).length > 0
+  );
 }
 
 // The category row draws its own card rather than borrowing OperatorCard:
