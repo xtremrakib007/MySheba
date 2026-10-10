@@ -226,7 +226,7 @@ function classifyPinProduct(product) {
     if (pattern.test(text)) return category(id);
   }
 
-  const operatorPattern = /celcomdigi|celcom|digi|hotlink|maxis|u.?mobile|xox|tune.?talk|unifi.?mobile|yes\s?(?:5g|telco)|hello\s?sim|red.?one|altel/i;
+  const operatorPattern = /celcomdigi|celcom|digi|hotlink|maxis|u.?mobile|xox|tune.?talk|unifi|\\byes\\b|hello\\s?sim|red.?one|altel/i;
   const explicitTelco = /mobile operator|mobile top.?up|telco|telecom|sim card|airtime|prepaid reload|internet pin/i.test(`${name} ${taxonomy}`);
   if (operatorPattern.test(name) || (explicitTelco && operatorPattern.test(text))) return category('mobile');
   if (/gift card|voucher|digital code|giftcard/i.test(text)) return category('shopping');
