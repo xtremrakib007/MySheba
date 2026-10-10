@@ -74,6 +74,18 @@ for (const service of ['internet', 'offerpacks']) {
     `${service} must allow both keys the provider reads`);
 }
 
+// IIMMPACT catalogue ids must survive the transaction document. The
+// provider product and selected subproduct are different values, and both are
+// needed by /v2/topup for catalogue-backed products.
+for (const service of ['internet', 'offerpacks', 'entertainment', 'billpayment']) {
+  assert(sets[service].includes('productCode'), `${service} must preserve the selected IIMMPACT product code`);
+  assert(sets[service].includes('subproductCode'), `${service} must preserve the selected IIMMPACT subproduct code`);
+}
+assert(sets.billpayment.includes('billerCode') && sets.billpayment.includes('icNumber') && sets.billpayment.includes('ref2'),
+  'JomPAY biller/ref/IC fields must survive dispatch');
+assert(/key === 'extras'[\\s\\S]*?subproduct_code[\\s\\S]*?biller_code[\\s\\S]*?ic_number[\\s\\S]*?ref2/.test(wallet),
+  'only documented IIMMPACT extras should be persisted');
+
 console.log('A dropped field is not a thing the client can fix');
 // The allowlist is the security boundary, so it is right that it exists - the
 // failure is only ever an omission, never the filtering itself.
