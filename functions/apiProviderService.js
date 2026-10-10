@@ -1118,6 +1118,53 @@ async function resolveIimmpactCatalogProductCode(provider, service, subject, raw
   return code;
 }
 
+/**
+ * Build IIMMPACT's documented unified POST /v2/topup body for every product
+ * family. The provider uses the same envelope for airtime, mobile data, JomPAY,
+ * eSIM and vouchers; only the account and documented extras vary.
+ */
+function buildIimmpactTopupBody({ raw = {}, requestId, productCode, amount, customer }) {
+  const ref = String(requestId || '').trim();
+  const refid = ref.length <= 50
+    ? ref
+    : crypto.createHash('sha256').update(ref).digest('hex').slice(0, 40);
+  const product = String(productCode || '').trim();
+  const account = String(raw.accountNumber || raw.phone || raw.email || raw.billNumber || raw.customerId || customer?.phone || '').trim();
+  const providerAmount = Number(raw.providerAmount ?? amount);
+  if (!refid || !product) throw new Error('IIMMPACT requires a transaction reference and product code.');
+  if (!account) throw new Error('IIMMPACT requires the recipient phone number, bill account, or identifier.');
+  if (!Number.isFinite(providerAmount) || providerAmount <= 0) throw new Error('IIMMPACT requires a valid provider amount.');
+
+  // Only documented IIMMPACT extras are forwarded. In particular, plan codes
+  // belong in subproduct_code, not the unsupported option_code key.
+  const extras = {};
+  const safeExtras = raw.extras && typeof raw.extras === 'object' && !Array.isArray(raw.extras)
+    ? raw.extras
+    : {};
+  for (const key of ['subproduct_code', 'biller_code', 'ic_number', 'ref2']) {
+    const value = safeExtras[key];
+    if (value != null && String(value).trim()) extras[key] = String(value).trim().slice(0, 300);
+  }
+  const fields = [
+    ['subproduct_code', raw.subproductCode],
+    ['biller_code', raw.billerCode],
+    ['ic_number', raw.icNumber],
+    ['ref2', raw.ref2],
+  ];
+  for (const [key, value] of fields) {
+    if (value != null && String(value).trim()) extras[key] = String(value).trim().slice(0, 300);
+  }
+
+  return {
+    refid,
+    product,
+    account: account.slice(0, 500),
+    amount: providerAmount,
+    remarks: String(raw.remarks || raw.note || '').slice(0, 500),
+    extras,
+  };
+}
+
 async function executeConfiguredApi(service, payload, customer, requestId, options = {}) {
   // The last line of defence, and the one that would do the damage. Everything
   // above this refuses a payout earlier - the mode, the stored settings, the
@@ -1311,32 +1358,9 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     let body;
     if(method!=='GET'){
       headers['content-type']=headers['content-type']||'application/json';
-      const requestBody = service === 'IIMMPACT' && provider.authType === 'iimmpactHmac' ? {
-        refid: vars.requestId,
-        product: providerOperatorCode,
-        account: String(raw.accountNumber || raw.phone || raw.email || raw.billNumber || raw.customerId || '').trim(),
-        amount: Number(raw.providerAmount ?? vars.amount),
-        remarks: String(raw.remarks || raw.note || '').slice(0, 500),
-        extras: {
-          ...(raw.extras && typeof raw.extras === 'object' ? raw.extras : {}),
-          ...(raw.subproductCode ? { subproduct_code: String(raw.subproductCode).slice(0, 200) } : {}),
-          ...(raw.optionCode ? { option_code: String(raw.optionCode).slice(0, 200) } : {}),
-        },
-      } : service === 'eSIM' && provider.authType === 'iimmpactHmac' ? {
-        refid: vars.requestId,
-        product: providerOperatorCode,
-        account: String(raw.accountNumber || raw.email || '').trim(),
-        amount: vars.amount,
-        remarks: String(raw.remarks || '').slice(0, 500),
-        extras: raw.subproductCode ? { subproduct_code: String(raw.subproductCode).slice(0, 200) } : {},
-      } : service === 'Recharge PIN' && provider.authType === 'iimmpactHmac' ? {
-        refid: vars.requestId,
-        product: providerOperatorCode,
-        account: String(raw.accountNumber || raw.phone || customer?.phone || '').trim(),
-        amount: vars.amount,
-        remarks: String(raw.remarks || '').slice(0, 500),
-        extras: raw.subproductCode ? { subproduct_code: String(raw.subproductCode).slice(0, 200) } : {},
-      } : isBangladeshMobileBill ? {
+      const requestBody = provider.authType === 'iimmpactHmac'
+        ? buildIimmpactTopupBody({ raw, requestId: vars.requestId, productCode: providerOperatorCode, amount: vars.amount, customer })
+        : isBangladeshMobileBill ? {
         number: vars.billNumber,
         type: 'postpaid',
         operator: mobileBillOperator,
@@ -1511,7 +1535,7 @@ exports.resolveIimmpactEsimPackage = resolveIimmpactEsimPackage;
 exports.resolveExecutionMode = resolveExecutionMode;
 exports.providersForService = providersForService;
 exports.COUNTRY_CODES = COUNTRY_CODES;
-exports._test = { isPrivateIp, resolveExecutionMode, pinnedLookup, validateBaseUrl, validateHeaders, validateTemplate, getPath, render, providerAuth, validate, matchesStatus, classifyResponse, providerAmountFor, _test_autoCountryModes: autoCountryModes };
+exports._test = { isPrivateIp, resolveExecutionMode, pinnedLookup, validateBaseUrl, validateHeaders, validateTemplate, getPath, render, providerAuth, validate, matchesStatus, classifyResponse, providerAmountFor, buildIimmpactTopupBody, _test_autoCountryModes: autoCountryModes };
 
 exports.testApiProvider = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
