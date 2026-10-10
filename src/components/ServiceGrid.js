@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Image } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { showAlert } from '../utils/appAlert';
 import { useTheme } from '../theme/ThemeContext';
@@ -60,7 +60,9 @@ export function Tile({ s, onPress, disabled }) {
   // showing the old artwork no matter what shipped.
   const photoKey = hasPhotoTileIcon(artKey) ? artKey : (chosenArt ? '' : photoIconFor(artKey));
   return <TouchableOpacity style={[styles.item, { borderColor: `${colors.primary}66`, backgroundColor: colors.card }, disabled && styles.itemDisabled]} activeOpacity={0.82} disabled={!!disabled} onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
-    {photoKey
+    {typeof s?.imageUrl === 'string' && /^https?:\\/\\//i.test(s.imageUrl)
+      ? <View style={styles.logoWrap}><Image source={{ uri: s.imageUrl }} style={styles.remoteLogo} resizeMode="contain" /></View>
+      : photoKey
       ? <View style={styles.logoWrap}><PhotoTileIcon art={photoKey} size={tileIcon.size} /></View>
       : hasBrandTileLogo(artKey)
       ? <View style={styles.logoWrap}><BrandTileLogo art={artKey} size={tileIcon.size} /></View>
@@ -202,7 +204,9 @@ export default function ServiceGrid({ homeOnly }) {
         seen.add(normalized);
         const key = 'iimmpact_' + normalized.replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
         if (!gridManagementService.isGridActive(gridManagement, key, gridViewer)) continue;
-        tiles.push({ key, name, icon: 'iimmpact', emoji: '🛍️', kind: 'iimmpactCategory', iimmpactCategory: encodeURIComponent(name), cat: 'recharge', home: true, iimmpactCount: count });
+        const firstProductImage = codes.map((code) => products[code]).find((product) => product && product.is_active !== false && typeof product.image_url === 'string' && /^https?:\\/\\//i.test(product.image_url))?.image_url || '';
+        const imageUrl = (typeof category?.icon_url === 'string' && /^https?:\\/\\//i.test(category.icon_url) ? category.icon_url : '') || firstProductImage;
+        tiles.push({ key, name, icon: 'iimmpact', emoji: '🛍️', imageUrl, kind: 'iimmpactCategory', iimmpactCategory: encodeURIComponent(name), cat: 'recharge', home: true, iimmpactCount: count });
       }
     }
     return tiles;
