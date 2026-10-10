@@ -25,6 +25,21 @@ function flattenGroups(groups = []) {
   })));
 }
 
+function brandLabel(product) {
+  const explicit = product?.brand_name || product?.brand || product?.merchant_name || product?.merchant || product?.provider_name || product?.provider;
+  if (typeof explicit === 'string' && explicit.trim()) return explicit.trim();
+  let name = String(product?.name || product?.code || 'Other').trim();
+  // Catalogue names often repeat the merchant for each denomination. Remove
+  // only clear denomination/price suffixes so the merchant becomes one tile.
+  name = name
+    .replace(/\\s*[-–—|:]?\\s*(?:RM|MYR)\\s*\\d+(?:[.,]\\d{1,2})?\\s*$/i, '')
+    .replace(/\\s*[-–—|:]?\\s*\\d+(?:[.,]\\d{1,2})?\\s*(?:RM|MYR)\\s*$/i, '')
+    .replace(/\\s*[-–—|:]?\\s*(?:RM|MYR)?\\s*\\d+(?:[.,]\\d{1,2})?\\s*(?:voucher|gift card|e voucher|evoucher|top up|top-up)\\s*$/i, '')
+    .replace(/\\s*\\([^)]*(?:RM|MYR|\\d+)[^)]*\\)\\s*$/i, '')
+    .trim();
+  return name || String(product?.name || product?.code || 'Other');
+}
+
 function inputKeyboard(field) {
   const mode = String(field?.input_mode || '').toLowerCase();
   if (mode === 'decimal') return 'decimal-pad';
@@ -55,6 +70,7 @@ export default function IimmpactProductScreen({ category }) {
   const { colors, brandGradient } = useTheme();
   const [catalog, setCatalog] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [selectedBrand, setSelectedBrand] = useState(null);
   const [values, setValues] = useState({});
   const [selectedOptions, setSelectedOptions] = useState({});
   const [options, setOptions] = useState({});
@@ -101,8 +117,22 @@ export default function IimmpactProductScreen({ category }) {
     .map((code) => products[code])
     .filter((p) => p && p.is_active !== false && p.code), [match, products]);
 
+  const brandGroups = useMemo(() => {
+    const map = new Map();
+    productList.forEach((product) => {
+      const label = brandLabel(product);
+      const key = norm(label);
+      if (!map.has(key)) map.set(key, { key, name: label, products: [], imageUrl: product.image_url || '' });
+      const item = map.get(key);
+      item.products.push(product);
+      if (!item.imageUrl && product.image_url) item.imageUrl = product.image_url;
+    });
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [productList]);
+
   useEffect(() => {
     setSelectedProduct(null);
+    setSelectedBrand(null);
     setValues({});
     setSelectedOptions({});
     setOptions({});
@@ -329,17 +359,34 @@ export default function IimmpactProductScreen({ category }) {
     <View style={st.screen}>
       <LinearGradient colors={brandGradient} style={st.head}>
         <HeaderDecor />
-        <TouchableOpacity onPress={selectedProduct ? () => { setSelectedProduct(null); setValues({}); setSelectedOptions({}); } : goBackOrHome}><Text style={st.back}>←</Text></TouchableOpacity>
+        <TouchableOpacity onPress={selectedProduct ? () => { setSelectedProduct(null); setValues({}); setSelectedOptions({}); } : selectedBrand ? () => setSelectedBrand(null) : goBackOrHome}><Text style={st.back}>←</Text></TouchableOpacity>
         <View style={{flex:1}}><Text style={st.ht}>{decodedCategory || 'Marketplace'}</Text><Text style={st.hs}>IIMMPACT • live catalogue</Text></View>
       </LinearGradient>
 
       <ScrollView contentContainerStyle={st.body} keyboardShouldPersistTaps="handled">
         {!selectedProduct ? (
           <>
-            <Text style={st.h}>Products</Text>
-            <Text style={st.muted}>{productList.length} active product{productList.length === 1 ? '' : 's'} in this category.</Text>
-            <View style={st.productGrid}>
-              {productList.map((product) => (
+            {!selectedBrand ? (
+              <>
+                <Text style={st.h}>Brands & providers</Text>
+                <Text style={st.muted}>{brandGroups.length} brand/provider tiles. Products with the same merchant name are grouped together.</Text>
+                <View style={st.productGrid}>
+                  {brandGroups.map((brand) => (
+                    <TouchableOpacity key={brand.key} style={st.productCard} onPress={() => setSelectedBrand(brand)}>
+                      {brand.imageUrl ? <Image source={{uri: brand.imageUrl}} style={st.productLogo} resizeMode="contain" /> : <View style={st.productFallback}><Text style={st.productFallbackText}>{String(brand.name || 'I').slice(0,1).toUpperCase()}</Text></View>}
+                      <Text style={st.productName} numberOfLines={3}>{brand.name}</Text>
+                      <Text style={st.processing}>{brand.products.length} product{brand.products.length === 1 ? '' : 's'}</Text>
+                      <Text style={st.buySmall}>View products</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={st.h}>{selectedBrand.name}</Text>
+                <Text style={st.muted}>{selectedBrand.products.length} product/denomination options.</Text>
+                <View style={st.productGrid}>
+              {selectedBrand.products.map((product) => (
                 <TouchableOpacity key={product.code} style={st.productCard} onPress={() => { setSelectedProduct(product); setValues({}); setSelectedOptions({}); setOptions({}); }}>
                   {product.image_url ? <Image source={{uri: product.image_url}} style={st.productLogo} resizeMode="contain" /> : <View style={st.productFallback}><Text style={st.productFallbackText}>I</Text></View>}
                   <Text style={st.productName} numberOfLines={3}>{product.name || product.code}</Text>
@@ -347,7 +394,9 @@ export default function IimmpactProductScreen({ category }) {
                   <Text style={st.buySmall}>Select</Text>
                 </TouchableOpacity>
               ))}
-            </View>
+                </View>
+              </>
+            )}
             {!productList.length && <Text style={st.empty}>No active products are currently published in this category.</Text>}
           </>
         ) : (
