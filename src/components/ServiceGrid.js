@@ -60,7 +60,7 @@ export function Tile({ s, onPress, disabled }) {
   // showing the old artwork no matter what shipped.
   const photoKey = hasPhotoTileIcon(artKey) ? artKey : (chosenArt ? '' : photoIconFor(artKey));
   return <TouchableOpacity style={[styles.item, { borderColor: `${colors.primary}66`, backgroundColor: colors.card }, disabled && styles.itemDisabled]} activeOpacity={0.82} disabled={!!disabled} onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
-    {typeof s?.imageUrl === 'string' && /^https?:\\/\\//i.test(s.imageUrl)
+    {typeof s?.imageUrl === 'string' && (s.imageUrl.startsWith('https://') || s.imageUrl.startsWith('http://'))
       ? <View style={styles.logoWrap}><Image source={{ uri: s.imageUrl }} style={styles.remoteLogo} resizeMode="contain" /></View>
       : photoKey
       ? <View style={styles.logoWrap}><PhotoTileIcon art={photoKey} size={tileIcon.size} /></View>
@@ -204,8 +204,8 @@ export default function ServiceGrid({ homeOnly }) {
         seen.add(normalized);
         const key = 'iimmpact_' + normalized.replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
         if (!gridManagementService.isGridActive(gridManagement, key, gridViewer)) continue;
-        const firstProductImage = codes.map((code) => products[code]).find((product) => product && product.is_active !== false && typeof product.image_url === 'string' && /^https?:\\/\\//i.test(product.image_url))?.image_url || '';
-        const imageUrl = (typeof category?.icon_url === 'string' && /^https?:\\/\\//i.test(category.icon_url) ? category.icon_url : '') || firstProductImage;
+        const firstProductImage = codes.map((code) => products[code]).find((product) => product && product.is_active !== false && typeof product.image_url === 'string' && (product.image_url.startsWith('https://') || product.image_url.startsWith('http://')))?.image_url || '';
+        const imageUrl = (typeof category?.icon_url === 'string' && (category.icon_url.startsWith('https://') || category.icon_url.startsWith('http://')) ? category.icon_url : '') || firstProductImage;
         tiles.push({ key, name, icon: 'iimmpact', emoji: '🛍️', imageUrl, kind: 'iimmpactCategory', iimmpactCategory: encodeURIComponent(name), cat: 'recharge', home: true, iimmpactCount: count });
       }
     }
