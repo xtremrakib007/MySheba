@@ -49,6 +49,49 @@ function pricingField(product) {
   return fields.find((f) => f && (f.role === 'pricing' || f.type === 'select')) || null;
 }
 
+// Every catalogue tile gets a recognizable visual when IIMMPACT has no image.
+function pinCategoryIcon(category) {
+  const text = `${category?.title || ''} ${category?.id || ''}`.toLowerCase();
+  if (/mobile|operator|telecom|telco|recharge|sim/.test(text)) return '📱';
+  if (/game|gaming|playstation|xbox|steam/.test(text)) return '🎮';
+  if (/coffee|tea|cafe/.test(text)) return '☕';
+  if (/wellness|health|medical|beauty/.test(text)) return '💆';
+  if (/transport|train|bus|ride|travel/.test(text)) return '🚆';
+  if (/apple|itunes|app store/.test(text)) return '🍎';
+  if (/shopping|retail|fashion|mall/.test(text)) return '🛍️';
+  if (/grocery|supermarket|market/.test(text)) return '🛒';
+  if (/food|restaurant|meal|delivery/.test(text)) return '🍔';
+  if (/entertainment|movie|music|stream/.test(text)) return '🎬';
+  if (/esim|data plan|internet/.test(text)) return '📶';
+  if (/wallet|payment|cash/.test(text)) return '💳';
+  return '🎁';
+}
+
+function pinProductIcon(product) {
+  const text = `${product?.name || ''} ${product?.category || ''} ${product?.product_group || ''}`.toLowerCase();
+  if (/celcomdigi|celcom|digi|hotlink|u mobile|umobile|xox|tunetalk|unifi|\byes\b|touch.?n.?go/.test(text)) return '📱';
+  if (/game|gaming|playstation|xbox|steam|roblox|mobile legends|pubg/.test(text)) return '🎮';
+  if (/coffee|tea|cafe|starbucks/.test(text)) return '☕';
+  if (/wellness|health|medical|beauty|spa/.test(text)) return '💆';
+  if (/transport|train|bus|ride|travel/.test(text)) return '🚆';
+  if (/apple|itunes|app store/.test(text)) return '🍎';
+  if (/shopping|retail|fashion|mall|lazada|shopee/.test(text)) return '🛍️';
+  if (/grocery|supermarket|market/.test(text)) return '🛒';
+  if (/food|restaurant|meal|delivery/.test(text)) return '🍔';
+  if (/movie|music|stream|entertainment|netflix|spotify/.test(text)) return '🎬';
+  if (/esim|data plan|internet/.test(text)) return '📶';
+  if (/wallet|payment|cash/.test(text)) return '💳';
+  return '🎁';
+}
+
+function brandForPinProduct(product) {
+  const name = String(product?.name || '');
+  const match = MALAYSIA_OPERATORS.find((operatorName) =>
+    name.toLowerCase().includes(operatorName.toLowerCase())
+  );
+  return match ? getOperatorBrand(match) : null;
+}
+
 export default function RechargePinScreen({ initialCategory = null } = {}) {
   const { colors, brandGradient } = useTheme();
   const { goBackOrHome, profile } = useApp();
@@ -231,7 +274,7 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
         <Text style={styles.label}>Choose PIN Category</Text>
         <View style={styles.grid}>{categorizedProducts.map((category) =>
           <TouchableOpacity key={category.id} onPress={() => setSelectedCategory(category.id)} style={styles.option}>
-            <View style={styles.badge}><Text style={styles.badgeText}>{category.id === 'mobile' ? 'M' : category.id === 'coffee' ? 'C' : category.id === 'wellness' ? 'H' : category.id === 'transport' ? 'T' : category.id === 'apple' ? 'A' : category.id === 'shopping' ? 'S' : category.id === 'grocery' ? 'G' : 'O'}</Text></View>
+            <View style={styles.badge}><Text style={styles.badgeIcon}>{pinCategoryIcon(category)}</Text></View>
             <Text style={styles.optionText} numberOfLines={3}>{category.title}</Text>
             <Text style={styles.optionMeta}>{category.products.length} products</Text>
           </TouchableOpacity>
@@ -243,7 +286,7 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
         <Text style={styles.label}>{categorizedProducts.find((item) => item.id === selectedCategory)?.title || 'PIN Products'}</Text>
         <View style={styles.grid}>{(categorizedProducts.find((item) => item.id === selectedCategory)?.products || []).map((p) =>
           <TouchableOpacity key={p.code} onPress={() => selectProduct(p)} style={styles.option}>
-            {p.image_url ? <View style={styles.logoWrap}><Image source={{ uri: p.image_url }} style={styles.logo} resizeMode="contain" /></View> : <View style={styles.badge}><Text style={styles.badgeText}>{String(p.name || 'P').slice(0,1).toUpperCase()}</Text></View>}
+            {p.image_url ? <View style={styles.logoWrap}><Image source={{ uri: p.image_url }} style={styles.logo} resizeMode="contain" /></View> : (brandForPinProduct(p)?.logo ? <View style={styles.logoWrap}><Image source={brandForPinProduct(p).logo} style={styles.logo} resizeMode="contain" /></View> : <View style={styles.badge}><Text style={styles.badgeIcon}>{pinProductIcon(p)}</Text></View>)}
             <Text style={styles.optionText} numberOfLines={3}>{p.name}</Text>
           </TouchableOpacity>
         )}</View>
@@ -267,7 +310,7 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
         const value = Number(item?.price?.amount ?? item?.denomination);
         const currency = item?.price?.currency || product?.denomination_currency || CURRENCY_BY_COUNTRY[country] || '';
         return <TouchableOpacity key={item.code} onPress={() => { setSelectedOption(item); setAmount(value); setVoucher(null); }} style={[styles.amount, selectedOption?.code === item.code && styles.amountSelected]}>
-          <Text style={[styles.amountText, selectedOption?.code === item.code && styles.amountTextSelected]}>{currency} {Number.isFinite(value) ? value : item.label || item.code}</Text>
+          <Text style={styles.amountIcon}>💳</Text><Text style={[styles.amountText, selectedOption?.code === item.code && styles.amountTextSelected]}>{currency} {Number.isFinite(value) ? value : item.label || item.code}</Text>
           {!!item.label && <Text style={styles.optionMeta} numberOfLines={2}>{item.label}</Text>}
         </TouchableOpacity>;
       })}</View>}
@@ -299,7 +342,7 @@ function createStyles(colors) { return StyleSheet.create({
   screen:{flex:1,backgroundColor:colors.bg}, header:{flexDirection:'row',alignItems:'center',padding:12,gap:10,overflow:'hidden'}, back:{padding:4},backText:{color:'#fff',fontSize:22},headerTitle:{color:'#fff',fontSize:17,fontWeight:'800',marginLeft:8},
   content:{padding:16,paddingBottom:40}, intro:{backgroundColor:colors.card,borderRadius:radius.lg,borderWidth:1,borderColor:colors.border,padding:16,marginBottom:16}, title:{fontSize:21,fontWeight:'800',color:colors.text}, subtitle:{fontSize:12,lineHeight:18,color:colors.textSecondary,marginTop:6}, label:{fontSize:14,fontWeight:'800',color:colors.text,marginTop:8,marginBottom:8},
   grid:{flexDirection:'row',flexWrap:'wrap',gap:9,marginBottom:14}, country:{width:'31%',minHeight:52,alignItems:'center',justifyContent:'center',borderWidth:1,borderColor:colors.border,borderRadius:radius.md,backgroundColor:colors.card,padding:6}, countrySelected:{backgroundColor:colors.primary,borderColor:colors.primary}, countryCode:{fontSize:12,fontWeight:'900',color:colors.primary}, countryName:{fontSize:9,fontWeight:'700',color:colors.text,textAlign:'center',marginTop:2}, countryTextSelected:{color:colors.onPrimary},
-  option:{width:'31%',minHeight:82,alignItems:'center',justifyContent:'center',padding:7,borderWidth:1,borderColor:colors.border,borderRadius:radius.md,backgroundColor:colors.card}, optionSelected:{borderColor:colors.primary,borderWidth:2,backgroundColor:colors.surfaceElevated || colors.card}, logoWrap:{width:'90%',height:34,borderRadius:7,backgroundColor:'#fff',alignItems:'center',justifyContent:'center',paddingHorizontal:4,marginBottom:7}, logo:{width:'100%',height:27}, badge:{width:32,height:32,borderRadius:16,alignItems:'center',justifyContent:'center',marginBottom:7,backgroundColor:colors.primary}, badgeText:{color:colors.onPrimary,fontWeight:'900'}, optionText:{fontSize:10,fontWeight:'700',textAlign:'center',color:colors.text}, optionTextSelected:{color:colors.primary},
+  option:{width:'31%',minHeight:82,alignItems:'center',justifyContent:'center',padding:7,borderWidth:1,borderColor:colors.border,borderRadius:radius.md,backgroundColor:colors.card}, optionSelected:{borderColor:colors.primary,borderWidth:2,backgroundColor:colors.surfaceElevated || colors.card}, logoWrap:{width:'90%',height:34,borderRadius:7,backgroundColor:'#fff',alignItems:'center',justifyContent:'center',paddingHorizontal:4,marginBottom:7}, logo:{width:'100%',height:27}, badge:{width:32,height:32,borderRadius:16,alignItems:'center',justifyContent:'center',marginBottom:7,backgroundColor:colors.primary}, badgeText:{color:colors.onPrimary,fontWeight:'900'},badgeIcon:{fontSize:21,lineHeight:27},amountIcon:{fontSize:17,marginBottom:2}, optionText:{fontSize:10,fontWeight:'700',textAlign:'center',color:colors.text}, optionTextSelected:{color:colors.primary},
   amount:{width:'31%',minHeight:54,alignItems:'center',justifyContent:'center',borderWidth:1,borderColor:colors.border,borderRadius:radius.md,backgroundColor:colors.card,padding:5}, amountSelected:{backgroundColor:colors.primary,borderColor:colors.primary}, amountText:{fontSize:12,fontWeight:'900',color:colors.text},amountTextSelected:{color:colors.onPrimary},optionMeta:{fontSize:9,color:colors.textSecondary,textAlign:'center',marginTop:2}, backCategory:{paddingVertical:10,marginBottom:8},backCategoryText:{fontSize:13,fontWeight:'800',color:colors.primary},
   info:{padding:12,color:colors.textSecondary,fontSize:12},error:{padding:12,color:colors.danger || colors.text,fontSize:12},buy:{marginTop:6,backgroundColor:colors.primary,borderRadius:radius.md,paddingVertical:14,alignItems:'center'},buyText:{color:colors.onPrimary,fontWeight:'800',fontSize:14},voucher:{marginTop:18,backgroundColor:colors.card,borderRadius:radius.lg,borderWidth:1.5,borderColor:colors.primary,padding:18,alignItems:'center'},voucherTitle:{fontSize:18,fontWeight:'800',color:colors.text},voucherMeta:{marginTop:5,color:colors.textSecondary,fontSize:12,textAlign:'center'},pin:{marginVertical:18,fontSize:27,fontWeight:'900',letterSpacing:4,color:colors.primary,textAlign:'center'},link:{marginVertical:15,fontSize:12,color:colors.primary,textAlign:'center'},warning:{marginTop:8,fontSize:11,lineHeight:16,textAlign:'center',color:colors.textSecondary},print:{marginTop:14,borderRadius:radius.md,borderWidth:1,borderColor:colors.primary,paddingVertical:11,paddingHorizontal:20},printText:{color:colors.primary,fontWeight:'800'},balance:{marginTop:18,textAlign:'center',fontSize:11,color:colors.textSecondary}
 });}
