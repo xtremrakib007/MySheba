@@ -1,11 +1,12 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { showAlert } from '../utils/appAlert';
 import { useTheme } from '../theme/ThemeContext';
 import { tileIcon, tileGrid } from '../theme/theme';
 import { useLanguage } from '../i18n/LanguageContext';
 import * as gridManagementService from '../firebase/gridManagementService';
+import * as apiProviderService from '../firebase/apiProviderService';
 import { serviceEmoji } from './serviceEmoji';
 import BusOperatorLogo, { hasBusLogo } from './BusOperatorLogo';
 import BrandTileLogo, { hasBrandTileLogo } from './BrandTileLogo';
@@ -152,6 +153,45 @@ export default function ServiceGrid({ homeOnly }) {
   const { colors } = useTheme(); const { webViewBusy, profile, gridManagement, gridViewer, can, webviewPages, tileLabels, dynamicPlatformFeatures } = useApp();
   const handlePress = useServiceAction(); const role = profile?.role || 'customer';
   const isStaff = STAFF_ROLES.includes(role);
+  const [iimmpactCatalog, setIimmpactCatalog] = useState(null);
+  const [iimmpactLoading, setIimmpactLoading] = useState(false);
+  const [iimmpactError, setIimmpactError] = useState('');
+
+  // Load the same live catalogue used by the former Marketplace screen.
+  // This merges categories into the existing grid rather than creating a
+  // second marketplace-only landing page.
+  useEffect(() => {
+    let alive = true;
+    setIimmpactLoading(true);
+    apiProviderService.getIimmpactFullCatalogForUser('MY')
+      .then((data) => { if (alive) setIimmpactCatalog(data || {}); })
+      .catch((error) => { if (alive) setIimmpactError(error?.message || 'IIMMPACT categories are temporarily unavailable.'); })
+      .finally(() => { if (alive) setIimmpactLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
+  const marketplaceTiles = useMemo(() => {
+    const groups = iimmpactCatalog?.tree?.groups;
+    const products = iimmpactCatalog?.products || {};
+    const norm = (value) => String(value || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
+    const existingNames = new Set(services.map((item) => norm(item.name)));
+    const seen = new Set();
+    const tiles = [];
+    for (const group of Array.isArray(groups) ? groups : []) {
+      for (const category of Array.isArray(group?.categories) ? group.categories : []) {
+        const name = String(category?.name || group?.name || 'Other').trim();
+        const codes = Array.isArray(category?.product_codes) ? category.product_codes.map(String) : [];
+        const count = codes.filter((code) => products[code] && products[code].is_active !== false).length;
+        const normalized = norm(name);
+        if (!normalized || !count || seen.has(normalized) || existingNames.has(normalized)) continue;
+        seen.add(normalized);
+        const key = 'iimmpact_' + normalized.replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+        if (!gridManagementService.isGridActive(gridManagement, key, gridViewer)) continue;
+        tiles.push({ key, name, icon: 'iimmpact', emoji: '🛍️', kind: 'iimmpactCategory', iimmpactCategory: encodeURIComponent(name), cat: 'recharge', home: true, iimmpactCount: count });
+      }
+    }
+    return tiles;
+  }, [iimmpactCatalog, services, gridManagement, gridViewer]);
   // Both of these live in serviceTiles.js, so what a role sees - and that an
   // added WebView reaches every staff role through the one ...SHARED_SERVICES
   // line - is something a test can compute rather than infer from a render.
@@ -174,9 +214,10 @@ export default function ServiceGrid({ homeOnly }) {
   // thing from the services they also sell, so they get their own block above.
   // What is left is the same twelve. A customer has no management block, so the
   // heading is dropped and the screen's own title does that work.
+  const mergedServices = [...services, ...marketplaceTiles];
   const blocks = [];
-  const manage = services.filter((t) => t.cat === 'manage');
-  const rest = services.filter((t) => t.cat !== 'manage');
+  const manage = mergedServices.filter((t) => t.cat === 'manage');
+  const rest = mergedServices.filter((t) => t.cat !== 'manage');
   if (manage.length) blocks.push({ key: 'manage', label: 'Management', tiles: manage });
   if (rest.length) blocks.push({ key: 'services', label: 'Quick Services', tiles: rest });
 
@@ -189,6 +230,8 @@ export default function ServiceGrid({ homeOnly }) {
         </Text>
       </View>
       <View style={[styles.gridCanvas, { backgroundColor: colors.canvasBg || colors.surface }]}>
+        {iimmpactLoading && <View style={styles.catalogState}><ActivityIndicator size="small" color={colors.primary} /><Text style={[styles.catalogStateText, { color: colors.textSecondary }]}>Loading additional services…</Text></View>}
+        {!!iimmpactError && !iimmpactLoading && <Text style={[styles.catalogStateText, { color: colors.textSecondary }]}>{iimmpactError}</Text>}
         {blocks.map((block, i) => (
           <View key={block.key} style={i > 0 && styles.sectionSpacer}>
             {blocks.length > 1 && (
@@ -210,4 +253,4 @@ const styles = StyleSheet.create({ sectionSpacer: { marginTop: 14 }, catLabel: {
 // tiles drew one against the left margin and one against the right with a
 // canyon between them. Packing left with a fixed gap means a row of two looks
 // like the first two of a row of four, which is what it is.
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', columnGap: tileGrid.gap }, item: { width: tileGrid.width, aspectRatio: 1, marginBottom: 10, paddingHorizontal: 2, paddingVertical: 10, borderWidth: 1.5, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 1 }, itemDisabled: { opacity: 0.45 }, emoji: { fontSize: tileIcon.emoji, lineHeight: tileIcon.wrap, marginBottom: 6, textAlign: 'center' }, logoWrap: { height: tileIcon.wrap, marginBottom: 6, alignItems: 'center', justifyContent: 'center' }, iconText: { fontSize: 28 }, name: { fontSize: 11.5, lineHeight: 14, fontWeight: '700', textAlign: 'center' } });
+  catalogState: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8 }, catalogStateText: { fontSize: 11 }, grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', columnGap: tileGrid.gap }, item: { width: tileGrid.width, aspectRatio: 1, marginBottom: 10, paddingHorizontal: 2, paddingVertical: 10, borderWidth: 1.5, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 1 }, itemDisabled: { opacity: 0.45 }, emoji: { fontSize: tileIcon.emoji, lineHeight: tileIcon.wrap, marginBottom: 6, textAlign: 'center' }, logoWrap: { height: tileIcon.wrap, marginBottom: 6, alignItems: 'center', justifyContent: 'center' }, iconText: { fontSize: 28 }, name: { fontSize: 11.5, lineHeight: 14, fontWeight: '700', textAlign: 'center' } });
