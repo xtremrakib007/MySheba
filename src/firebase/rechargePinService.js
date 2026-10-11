@@ -10,10 +10,14 @@ function requestId() {
   return Crypto.randomUUID().replace(/-/g, '');
 }
 
-export async function purchaseRechargePin({ operator, amount, country = 'MY', productCode = '', subproductCode = '', productName = '' }) {
+// For a catalogue voucher the server re-reads the product and its options, so
+// productCode/subproductCode only point at what was chosen; accountNumber is
+// the Malaysian mobile number IIMMPACT validates the order against, and
+// fieldValues/selectedOptions answer any other field the product declares.
+export async function purchaseRechargePin({ operator = '', amount, country = 'MY', productCode = '', subproductCode = '', productName = '', accountNumber = '', fieldValues = {}, selectedOptions = {} }) {
   const session = await getSessionProof();
   const { data } = await purchaseFn({
-    operator, amount, country, productCode, subproductCode, productName,
+    operator, amount, country, productCode, subproductCode, productName, accountNumber, fieldValues, selectedOptions,
     requestId: requestId(), ...session
   });
   return data;

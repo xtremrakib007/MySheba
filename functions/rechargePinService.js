@@ -4,7 +4,7 @@ const { assertWalletUnfrozen } = require('./walletFreeze');
 const crypto = require('crypto');
 const progressionService = require('./progressionService');
 const { checkVelocity, getClientIp } = require('./rateLimitService');
-const { executeConfiguredApi, resolveExecutionMode, providersForService } = require('./apiProviderService');
+const { executeConfiguredApi, resolveExecutionMode, providersForService, resolveIimmpactMarketplaceProduct, nationalAccountNumber } = require('./apiProviderService');
 const { getWalletCurrencyAndFx, baseToWallet } = require('./walletCurrencyService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 // One session per platform: a phone and a browser can both be signed in,
@@ -72,6 +72,37 @@ function requireSessionMatch(request, user) {
     throw new HttpsError('permission-denied', 'This device session is no longer active. Please sign in again.');
   }
 }
+// The catalogue form's answers, bounded the way walletService bounds them:
+// plain values and option objects only, under field ids that look like ids.
+function cleanFormMap(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out = {};
+  for (const [key, item] of Object.entries(value).slice(0, 40)) {
+    if (!/^[a-zA-Z0-9_.-]{1,100}$/.test(key)) continue;
+    if (typeof item === 'string') out[key] = item.slice(0, 500);
+    else if (typeof item === 'number' && Number.isFinite(item)) out[key] = item;
+    else if (item && typeof item === 'object' && !Array.isArray(item)) {
+      const option = {};
+      for (const field of ['code', 'label', 'value', 'account_number']) {
+        if (typeof item[field] === 'string' || typeof item[field] === 'number') option[field] = String(item[field]).slice(0, 500);
+      }
+      if (option.code || option.value || option.account_number) out[key] = option;
+    }
+  }
+  return out;
+}
+
+// What IIMMPACT is told the voucher is for. A PIN is not delivered to the
+// number - it comes back in the reply - but the provider still validates the
+// account as a Malaysian mobile number, so the customer's own number goes in
+// national form ("0123456789"). Sending "+60..." or a Bangladeshi number is
+// what came back as "Select a supported Malaysian mobile operator. [400]".
+function pinAccountFor(input, user, country) {
+  const typed = typeof input.accountNumber === 'string' ? input.accountNumber.trim().slice(0, 200) : '';
+  if (typed) return /^[+\d\s-]+$/.test(typed) ? nationalAccountNumber(typed, country) : typed;
+  return nationalAccountNumber(user?.phone || '', country);
+}
+
 function requestIdOf(request) {
   const id = request.data?.requestId;
   if (typeof id !== 'string' || !REQUEST_ID_RE.test(id)) throw new HttpsError('invalid-argument', 'A valid requestId is required.');
@@ -88,7 +119,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
   const productCode = typeof input.productCode === 'string' ? input.productCode.trim().slice(0, 100) : '';
   const subproductCode = typeof input.subproductCode === 'string' ? input.subproductCode.trim().slice(0, 200) : '';
   const productName = typeof input.productName === 'string' ? input.productName.trim().slice(0, 200) : '';
-  const denomination = safeNumber(input.amount, 'Recharge PIN amount');
+  let denomination = safeNumber(input.amount, 'Recharge PIN amount');
   if (!/^[A-Z]{2}$/.test(country)) throw new HttpsError('invalid-argument', 'A valid two-letter country code is required.');
   // IIMMPACT PIN products are catalog-driven for every country the provider
   // serves. Do not hard-code Malaysia-only support here: provider reach and the
@@ -114,6 +145,45 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
   const pinProviders = await providersForService(db, PIN_SERVICE);
   const mode = resolveExecutionMode({ country, service: PIN_SERVICE, settings: apiSettings, providers: pinProviders });
   if (mode !== 'api') throw new HttpsError('failed-precondition', 'Recharge PIN is not configured for API processing yet.');
+
+  // A catalogue product is re-read from IIMMPACT here, the same way the
+  // Marketplace's charge is: the product code, the denomination the provider
+  // fulfils, the price and the account all come from the live catalogue and
+  // options, never from the screen. Before this the code the customer chose
+  // never reached the provider at all - Recharge PIN looks its product up by
+  // operator, a catalogue voucher has none, and the order went out empty.
+  let catalogProduct = null;
+  if (productCode) {
+    const accountNumber = pinAccountFor(input, (await profileRef.get()).data(), country);
+    const found = await resolveIimmpactMarketplaceProduct(db, {
+      country,
+      productCode,
+      optionCode: subproductCode,
+      accountNumber,
+      phone: accountNumber,
+      amount: denomination,
+      fieldValues: cleanFormMap(input.fieldValues),
+      selectedOptions: cleanFormMap(input.selectedOptions),
+    });
+    if (found.error === 'provider-unconfigured') throw new HttpsError('failed-precondition', 'IIMMPACT is not configured for this country.');
+    if (['product-missing', 'product-not-found', 'product-inactive'].includes(found.error)) throw new HttpsError('failed-precondition', 'That voucher is no longer available.');
+    if (['option-required', 'option-not-found'].includes(found.error)) throw new HttpsError('failed-precondition', 'That voucher amount is no longer available. Please choose it again.');
+    if (['field-required', 'field-dependency-missing'].includes(found.error)) throw new HttpsError('invalid-argument', 'Please complete every required voucher detail.');
+    if (found.error === 'fulfillment-invalid') throw new HttpsError('invalid-argument', 'A valid Malaysian mobile number is required for this voucher.');
+    if (found.error === 'options-unavailable') throw new HttpsError('unavailable', 'Voucher amounts could not be confirmed just now. Please try again.');
+    if (found.error) throw new HttpsError('failed-precondition', 'That voucher could not be confirmed. Please review it and try again.');
+    if (Math.abs(found.sellAmount - denomination) > 0.01) throw new HttpsError('failed-precondition', 'This voucher price has changed. Please review the amount.');
+    denomination = found.sellAmount;
+    catalogProduct = found;
+  }
+  const dispatchRaw = catalogProduct ? {
+    requestId, country, operator, productCode: catalogProduct.productCode, operatorCode: catalogProduct.productCode,
+    subproductCode: catalogProduct.subproductCode || catalogProduct.optionCode || '', optionCode: catalogProduct.optionCode || '',
+    productName: catalogProduct.productName, accountNumber: catalogProduct.accountNumber, amount: denomination,
+    providerAmount: catalogProduct.providerAmount, packageCostAmount: catalogProduct.providerAmount,
+    extras: catalogProduct.extras || {}, iimmpactCatalog: true, packageCode: catalogProduct.productCode,
+  } : { requestId, country, operator, productCode, subproductCode, productName, amount: denomination, packageCode: productCode || String(denomination) };
+  const displayName = (catalogProduct && catalogProduct.productName) || productName || operator || productCode;
 
   const pricingSnap = await db.collection('settings').doc('pricing').get();
   const pricing = pricingSnap.exists ? pricingSnap.data() || {} : {};
@@ -179,9 +249,9 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
     tx.update(profileRef, { walletBalance: balance - walletCost, walletCurrency: walletFx.currency });
     tx.create(txRef, {
       service: PIN_SERVICE, customerId: uid, customerRole: callerRole, customerPhone: user.data().phone || '',
-      operator, productCode: productCode || null, subproductCode: subproductCode || null, productName: productName || null, country, amount: denomination, total: denomination, denominationCurrency: 'MYR', currency: walletFx.currency, walletCurrency: walletFx.currency, cost: walletCost, walletCost, baseCostMyr: cost, fxRate: walletFx.sellRate, fxRateType: 'sell', fxRateSource: walletFx.rateSource,
+      operator, productCode: dispatchRaw.productCode || null, subproductCode: dispatchRaw.subproductCode || null, productName: displayName || null, country, amount: denomination, total: denomination, denominationCurrency: 'MYR', currency: walletFx.currency, walletCurrency: walletFx.currency, cost: walletCost, walletCost, baseCostMyr: cost, fxRate: walletFx.sellRate, fxRateType: 'sell', fxRateSource: walletFx.rateSource,
       tierDiscountPercent: discount, executionMode: 'api', status: 'processing', rechargePinAvailable: false,
-      apiRefunded: false, raw: { requestId, country, operator, productCode, subproductCode, productName, amount: denomination, packageCode: productCode || String(denomination) },
+      apiRefunded: false, raw: dispatchRaw,
       createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
     return { replay: false, id: txRef.id, cost: walletCost, baseCostMyr: cost, pin: null, operator, amount: denomination, currency: walletFx.currency, fxRate: walletFx.sellRate };
@@ -191,26 +261,40 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
   let providerSucceeded = false;
   try {
     const api = await executeConfiguredApi(PIN_SERVICE, {
-      amount: denomination, total: denomination, details: `${country} Recharge PIN • ${productName || operator || productCode}`,
-      raw: { requestId, country, operator, productCode, subproductCode, productName, amount: denomination, packageCode: productCode || String(denomination) }
+      amount: denomination, total: denomination, details: `${country} Recharge PIN • ${displayName}`,
+      raw: dispatchRaw,
     }, { uid, phone: userSnap.data().phone || '' }, requestId, {});
     const voucherSecret = api.secret || api.providerPin || api.deliveryLink || '';
+    if (!voucherSecret && api.status === 'processing') {
+      // Accepted, with the voucher still being issued. The money stays taken -
+      // the provider has the order - and the customer is told it is on its
+      // way rather than shown a failure for a purchase that is going through.
+      providerSucceeded = true;
+      await txRef.update({
+        status: 'processing',
+        apiExecution: { status: 'processing', providerId: api.providerId, providerName: api.providerName, responseId: api.responseId || null, message: api.message || null, providerSucceeded: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return { id: txRef.id, pending: true, cost: walletCost, baseCostMyr: reserved.baseCostMyr, pin: null, operator, productCode: dispatchRaw.productCode, productName: displayName, country, amount: denomination, currency: walletFx.currency, fxRate: walletFx.sellRate };
+    }
     if (!voucherSecret) throw new HttpsError('unavailable', 'The Recharge PIN provider completed but no voucher PIN or delivery link could be recovered. Please contact support before retrying.');
+    // A delivery link is not a PIN; it is shown as the link it is.
+    const voucherPin = api.providerPin || (api.secret && api.secret !== api.deliveryLink ? api.secret : null);
     providerSucceeded = true;
     await txRef.update({
       apiExecution: { status: 'accepted', providerId: api.providerId, providerName: api.providerName, responseId: api.responseId || null, message: api.message || null, providerSucceeded: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     await db.collection('rechargePins').doc(txRef.id).set({
-      transactionId: txRef.id, customerId: uid, operator, country, productCode: productCode || null, subproductCode: subproductCode || null, productName: productName || null, amount: denomination,
-      currency: 'MYR', pin: api.secret || api.providerPin || null, deliveryLink: api.deliveryLink || null, deliveryNote: api.deliveryNote || null, expiry: api.expiry || null, createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      transactionId: txRef.id, customerId: uid, operator, country, productCode: dispatchRaw.productCode || null, subproductCode: dispatchRaw.subproductCode || null, productName: displayName || null, amount: denomination,
+      currency: 'MYR', pin: voucherPin || voucherSecret, deliveryLink: api.deliveryLink || null, deliveryNote: api.deliveryNote || null, expiry: api.expiry || null, createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
     await txRef.update({
       status: 'completed', rechargePinAvailable: true,
       apiExecution: { status: 'accepted', providerId: api.providerId, providerName: api.providerName, responseId: api.responseId || null, message: api.message || null, providerSucceeded: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
-    return { id: txRef.id, cost: walletCost, baseCostMyr: reserved.baseCostMyr, pin: api.secret || api.providerPin || null, deliveryLink: api.deliveryLink || null, deliveryNote: api.deliveryNote || null, operator, productCode, subproductCode, productName, country, amount: denomination, currency: walletFx.currency, fxRate: walletFx.sellRate };
+    return { id: txRef.id, cost: walletCost, baseCostMyr: reserved.baseCostMyr, pin: voucherPin, deliveryLink: api.deliveryLink || null, deliveryNote: api.deliveryNote || null, expiry: api.expiry || null, operator, productCode: dispatchRaw.productCode, subproductCode: dispatchRaw.subproductCode, productName: displayName, country, amount: denomination, currency: walletFx.currency, fxRate: walletFx.sellRate };
   } catch (e) {
     const unavailable = String(e?.code || '') === 'unavailable';
     if (unavailable || providerSucceeded) {

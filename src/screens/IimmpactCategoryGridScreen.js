@@ -1,11 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import HeaderDecor from '../components/HeaderDecor';
-import * as apiProviderService from '../firebase/apiProviderService';
+import { useIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
 import { radius, tileGrid } from '../theme/theme';
 import { Tile } from '../components/ServiceGrid';
 
@@ -33,40 +32,20 @@ export default function IimmpactCategoryGridScreen({ category }) {
   try { title = decodeURIComponent(title); } catch (_) {}
   const { goBackOrHome, setScreen } = useApp();
   const { colors, brandGradient } = useTheme();
-  const [catalog, setCatalog] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const { catalog, loading, error: loadError } = useIimmpactCatalog();
+  const error = catalog ? '' : loadError;
   const styles = makeStyles(colors);
-
-  useEffect(() => {
-    let alive = true;
-    const cacheKey = '@mysheba/iimmpact-catalog/MY/v1';
-    (async () => {
-      try {
-        const saved = await AsyncStorage.getItem(cacheKey);
-        if (alive && saved) setCatalog(JSON.parse(saved));
-      } catch (_) {}
-      try {
-        const fresh = await apiProviderService.getIimmpactFullCatalogForUser('MY');
-        if (!alive) return;
-        if (fresh && typeof fresh === 'object') {
-          setCatalog(fresh);
-          try { await AsyncStorage.setItem(cacheKey, JSON.stringify(fresh)); } catch (_) {}
-        }
-      } catch (e) {
-        if (alive) setError(e?.message || 'Could not refresh IIMMPACT catalogue.');
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-    return () => { alive = false; };
-  }, []);
 
   const products = catalog?.products || {};
   const groups = Array.isArray(catalog?.tree?.groups) ? catalog.tree.groups : [];
   const categories = useMemo(() => collectGroupCategories(groups, products), [catalog]);
   const subcategories = useMemo(() => {
     const wanted = norm(title);
+    if (!wanted) return [];
+    const exactGroup = categories.filter((item) => norm(item.group) === wanted);
+    if (exactGroup.length) return exactGroup;
+    const exactName = categories.filter((item) => norm(item.name) === wanted);
+    if (exactName.length) return exactName;
     const groupMatches = categories.filter((item) => norm(item.group) === wanted || norm(item.group).includes(wanted) || wanted.includes(norm(item.group)));
     if (groupMatches.length) return groupMatches;
     // Some provider catalogues publish the tile's label as a category rather
