@@ -100,6 +100,11 @@ const CUSTOMER_SERVICES = [
   { key: 'pinCategoryGrocery', icon: 'groceryVoucher', art: 'groceryVoucher', name: 'Grocery & GrabMart', kind: 'pinCategory', pinCategory: 'grocery', cat: 'iimmpact' },
   { key: 'pinCategoryFood', icon: 'rechargePin', emoji: '\uD83C\uDF54', art: '', name: 'Food & Delivery', kind: 'pinCategory', pinCategory: 'food', cat: 'iimmpact' },
   { key: 'pinCategoryGaming', icon: 'entertainment', art: 'entertainment', name: 'Gaming & Entertainment', kind: 'pinCategory', pinCategory: 'gaming', cat: 'iimmpact' },
+  { key: 'pinCategoryFuel', icon: 'rechargePin', emoji: '\u26FD', art: '', name: 'Fuel', kind: 'pinCategory', pinCategory: 'fuel', cat: 'iimmpact' },
+  // Every IIMMPACT category exactly as the provider lists it, including the
+  // ones merged into a tile above - so nothing in the catalogue is ever more
+  // than two taps away, whatever the merge rules decide.
+  { key: 'iimmpactCatalog', icon: 'more', art: 'rechargePin', name: 'All Products', kind: 'iimmpactCatalog', cat: 'iimmpact' },
   { key: 'pinCategoryOther', icon: 'rechargePin', art: 'rechargePin', name: 'Other PIN & Vouchers', kind: 'pinCategory', pinCategory: 'other', cat: 'iimmpact' },
 
   // Everything else is reached through More Features.

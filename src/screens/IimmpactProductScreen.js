@@ -9,6 +9,7 @@ import * as api from '../firebase/apiProviderService';
 import { purchaseRechargePin } from '../firebase/rechargePinService';
 import { useIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
 import ConfirmReview, { formatMoney } from '../components/ConfirmReview';
+import { catalogCategories } from '../components/iimmpactTiles';
 import { radius } from '../theme/theme';
 
 const norm = (v) => String(v || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
@@ -20,12 +21,6 @@ const displayValue = (value) => {
   return String(value);
 };
 
-function flattenGroups(groups = []) {
-  return groups.flatMap((group) => (group?.categories || []).map((category) => ({
-    name: category?.name || group?.name || 'Other',
-    codes: Array.isArray(category?.product_codes) ? category.product_codes.map(String) : [],
-  })));
-}
 
 function brandLabel(product) {
   const explicit = product?.brand_name || product?.brand || product?.merchant_name || product?.merchant || product?.provider_name || product?.provider;
@@ -110,18 +105,18 @@ export default function IimmpactProductScreen({ category }) {
   const match = useMemo(() => {
     const wanted = norm(decodedCategory);
     if (!wanted) return null;
-    const all = flattenGroups(catalog?.tree?.groups || []);
-    // Exact first: "Entertainment" is a bills category and also a substring of
-    // nothing else, but "Mobile" is part of five names, and the first loose
-    // match used to open whichever category happened to be listed first.
-    const exact = all.filter((x) => norm(x.name) === wanted);
-    if (exact.length) return { name: exact[0].name, codes: [...new Set(exact.flatMap((x) => x.codes))] };
-    return all.find((x) => norm(x.name).includes(wanted) || wanted.includes(norm(x.name)));
+    // The same category list the tiles are drawn from, so a tile always finds
+    // its products - including Other Products, which is in no provider group.
+    const all = catalogCategories(catalog);
+    // Exact first: "Mobile" is part of five names, and the first loose match
+    // used to open whichever category happened to be listed first.
+    return all.find((x) => norm(x.name) === wanted)
+      || all.find((x) => norm(x.name).includes(wanted) || wanted.includes(norm(x.name)));
   }, [catalog, decodedCategory]);
 
   const productList = useMemo(() => (match?.codes || [])
-    .map((code) => products[code])
-    .filter((p) => p && p.is_active !== false && p.code), [match, products]);
+    .map((code) => (products[code] ? { ...products[code], code: String(products[code].code || code) } : null))
+    .filter((p) => p && p.is_active !== false), [match, products]);
 
   const brandGroups = useMemo(() => {
     const map = new Map();

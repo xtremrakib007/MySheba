@@ -16,6 +16,7 @@ export const PIN_CATEGORIES = [
   { id: 'grocery', title: 'Grocery & GrabMart', tileKey: 'pinCategoryGrocery', art: 'groceryVoucher', emoji: '\uD83D\uDED2' },
   { id: 'food', title: 'Food & Delivery', tileKey: 'pinCategoryFood', art: '', emoji: '\uD83C\uDF54' },
   { id: 'gaming', title: 'Gaming & Entertainment', tileKey: 'pinCategoryGaming', art: 'entertainment', emoji: '\uD83C\uDFAE' },
+  { id: 'fuel', title: 'Fuel', tileKey: 'pinCategoryFuel', art: '', emoji: '\u26FD' },
   { id: 'other', title: 'Other PIN & Vouchers', tileKey: 'pinCategoryOther', art: 'rechargePin', emoji: '\uD83C\uDF81' },
 ];
 
@@ -84,16 +85,94 @@ export function classifyPinProduct(product) {
  * Every voucher in a catalogue, by category, in PIN_CATEGORIES order. Only
  * categories with products are returned, so an empty one is never a tile.
  */
-export function categorizePinProducts(products) {
-  const list = Array.isArray(products)
-    ? products
-    : Object.values((products && products.products) || {});
-  const grouped = new Map(PIN_CATEGORIES.map((category) => [category.id, []]));
-  for (const product of list) {
-    if (!isVoucherProduct(product)) continue;
-    const category = classifyPinProduct(product) || PIN_CATEGORIES.find((item) => item.id === 'other');
-    grouped.get(category.id).push(product);
+// IIMMPACT's own category, when it names one, decides the PIN category: it is
+// the provider's statement of what a product is. Guessing from the product
+// name filed one of the thirteen "Mobile Pin" products elsewhere and had no
+// home at all for "Fuel". The name is consulted only to split a provider
+// category the PIN grid divides further (Food & Beverage into coffee and
+// food), and for products IIMMPACT files under no voucher category.
+const TREE_RULES = [
+  [/^(mobile |telco )?pins?( vouchers?)?$/, 'mobile'],
+  [/\b(fuel|petrol|petronas|shell|caltex|bhp)\b/, 'fuel'],
+  [/\btransport(ation)?\b/, 'transport'],
+  [/\bgrocer(y|ies)\b/, 'grocery'],
+  [/\b(wellness|beauty|health)\b/, 'wellness'],
+  [/\b(retail|shopping)\b/, 'shopping'],
+  [/\b(food|beverage|dining|restaurant|f and b)\b/, 'food-or-coffee'],
+  [/\b(app stores?|apple|itunes)\b/, 'apple-or-gaming'],
+  [/\b(digital vouchers?|gift cards?|vouchers?)\b/, 'by-name'],
+];
+// Categories whose every product is sold as a code even when IIMMPACT does
+// not mark it processing_time "pin". Game top-ups are not here: most are
+// credited straight to a player ID and only the PIN ones belong to vouchers.
+const VOUCHER_TREE_IDS = new Set(['mobile', 'fuel', 'transport', 'grocery', 'wellness', 'shopping', 'food-or-coffee', 'apple-or-gaming', 'by-name']);
+
+function phrase(value) {
+  return String(value || '').trim().toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+/** The PIN rule a provider category maps to, or '' when it maps to none. */
+export function pinRuleForTreeCategory(name) {
+  const text = phrase(name);
+  const rule = TREE_RULES.find(([pattern]) => pattern.test(text));
+  return rule ? rule[1] : '';
+}
+
+/** product code -> the provider category phrase it is listed under. */
+export function treeCategoryIndex(catalog) {
+  const index = new Map();
+  for (const group of Array.isArray(catalog?.tree?.groups) ? catalog.tree.groups : []) {
+    for (const category of Array.isArray(group?.categories) ? group.categories : []) {
+      for (const code of Array.isArray(category?.product_codes) ? category.product_codes : []) {
+        if (!index.has(String(code))) index.set(String(code), String(category?.name || ''));
+      }
+    }
   }
+  return index;
+}
+
+/** Whether PIN Generator sells this product: a code, by its kind or its category. */
+export function isPinServed(product, treeCategory = '') {
+  if (!product || product.is_active === false || !product.code) return false;
+  return isVoucherProduct(product) || VOUCHER_TREE_IDS.has(pinRuleForTreeCategory(treeCategory));
+}
+
+/** The PIN category for a product, preferring the provider's own category. */
+export function pinCategoryFor(product, treeCategory = '') {
+  const byId = (id) => PIN_CATEGORIES.find((item) => item.id === id);
+  const named = classifyPinProduct(product) || byId('other');
+  const rule = pinRuleForTreeCategory(treeCategory);
+  if (rule === 'food-or-coffee') return named.id === 'coffee' ? named : byId('food');
+  if (rule === 'apple-or-gaming') return named.id === 'gaming' ? named : byId('apple');
+  if (rule && rule !== 'by-name') return byId(rule);
+  return named;
+}
+
+/** Every product PIN Generator sells from a catalogue, featured ones first. */
+export function pinProducts(catalog) {
+  const index = treeCategoryIndex(catalog);
+  const rank = (p) => {
+    const i = FEATURED_PIN_ORDER.findIndex((pattern) => pattern.test(String(p.name || '')));
+    return i < 0 ? FEATURED_PIN_ORDER.length : i;
+  };
+  return Object.entries((catalog && catalog.products) || {})
+    .map(([code, p]) => (p && !p.code ? { ...p, code } : p))
+    .filter((p) => isPinServed(p, index.get(String(p?.code))))
+    .sort((a, b) => rank(a) - rank(b) || String(a.name || '').localeCompare(String(b.name || '')));
+}
+
+/**
+ * Every voucher in a catalogue, by category, in PIN_CATEGORIES order. Only
+ * categories with products are returned, so an empty one is never a tile.
+ * Takes the catalogue (preferred: its category tree places each product) or a
+ * bare product list.
+ */
+export function categorizePinProducts(source) {
+  const isCatalog = source && !Array.isArray(source);
+  const index = isCatalog ? treeCategoryIndex(source) : new Map();
+  const list = isCatalog ? pinProducts(source) : (source || []).filter((p) => isPinServed(p));
+  const grouped = new Map(PIN_CATEGORIES.map((category) => [category.id, []]));
+  for (const product of list) grouped.get(pinCategoryFor(product, index.get(String(product.code))).id).push(product);
   return PIN_CATEGORIES
     .map((category) => ({ ...category, products: grouped.get(category.id) }))
     .filter((category) => category.products.length > 0)

@@ -56,6 +56,12 @@ const SPEC = {
   DV1: ['Razer Gold', PIN], GROC1: ['Lotus Grocery Voucher', PIN], TRN1: ['Touch n Go Card', PIN],
   WELL1: ['Watsons Voucher', PIN], APP1: ['Apple Gift Card', PIN], GAMEPIN1: ['Steam Wallet Code', PIN],
   GAME1: ['PUBG Mobile UC'], EW1: ['DuitNow QR'], IDD1: ['IDD Call Credit'],
+  // Filed by IIMMPACT under Mobile Pin, but named like a voucher and not
+  // marked "pin": the old name-guessing put it under Shopping.
+  RED1: ['redONE Prepaid Voucher'],
+  FUEL1: ['Petron e-Voucher'], DATA2: ['Unifi Mobile Data'],
+  // In no category at all.
+  ORPH1: ['Mystery Product'],
 };
 function product(code, name, extra = {}) { return { code, name, is_active: true, ...extra }; }
 const CATALOG = {
@@ -65,9 +71,9 @@ const CATALOG = {
     groups: [
       { name: 'Mobile', categories: [
         { name: 'International Topup', product_codes: ['IDT1', 'IDT2'] },
-        { name: 'Mobile Data', product_codes: ['DATA1'] },
+        { name: 'Mobile Data', product_codes: ['DATA1', 'DATA2'] },
         { name: 'Mobile Prepaid', product_codes: ['PRE1', 'PRE2', 'PRE3'] },
-        { name: 'Mobile Pin', product_codes: ['PIN1'] },
+        { name: 'Mobile Pin', product_codes: ['PIN1', 'RED1'] },
         { name: 'IDD', product_codes: ['IDD1'] },
       ] },
       { name: 'Bills', categories: [
@@ -82,6 +88,7 @@ const CATALOG = {
         { name: 'Grocery', product_codes: ['GROC1'] },
         { name: 'Transportation', product_codes: ['TRN1'] },
         { name: 'Wellness & Beauty', product_codes: ['WELL1'] },
+        { name: 'Fuel', product_codes: ['FUEL1'] },
       ] },
       { name: 'Games', categories: [
         { name: 'Game Credits', product_codes: ['GAME1'] },
@@ -141,23 +148,53 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
   await test('every PIN Generator category is a native tile, and voucher categories fold into them', () => {
     const keys = tiles.mergeCatalogTiles(overflow, CATALOG, NATIVE).map((t) => t.key);
     for (const key of ['pinCategoryMobile', 'pinCategoryCoffee', 'pinCategoryWellness', 'pinCategoryTransport',
-      'pinCategoryApple', 'pinCategoryShopping', 'pinCategoryGrocery', 'pinCategoryFood', 'pinCategoryGaming', 'pinCategoryOther']) {
+      'pinCategoryApple', 'pinCategoryShopping', 'pinCategoryGrocery', 'pinCategoryFood', 'pinCategoryGaming', 'pinCategoryFuel', 'pinCategoryOther']) {
       assert.ok(keys.includes(key), key + ' missing from ' + keys.join(', '));
     }
     for (const folded of ['iimmpact_food_and_beverage', 'iimmpact_retail_and_shopping', 'iimmpact_digital_voucher',
-      'iimmpact_grocery', 'iimmpact_transportation', 'iimmpact_wellness_and_beauty', 'iimmpact_console_and_app_stores']) {
+      'iimmpact_grocery', 'iimmpact_transportation', 'iimmpact_wellness_and_beauty', 'iimmpact_console_and_app_stores', 'iimmpact_fuel']) {
       assert.ok(!keys.includes(folded), folded + ' is drawn beside the PIN tiles that already sell it');
     }
   });
 
   await test('the PIN tiles and the PIN screen sort products the same way', () => {
     const byId = Object.fromEntries(Array.from(pins.categorizePinProducts(CATALOG)).map((c) => [c.id, Array.from(c.products).map((p) => p.code).sort()]));
-    assert.deepStrictEqual(byId.mobile, ['PIN1'], 'Yes Pin is a mobile operator PIN');
+    assert.deepStrictEqual(byId.mobile, ['PIN1', 'RED1'], 'everything IIMMPACT files under Mobile Pin is a mobile operator PIN');
+    assert.deepStrictEqual(byId.fuel, ['FUEL1'], 'Fuel has its own PIN category');
     assert.deepStrictEqual(byId.coffee, ['FNB1', 'FNB2']);
     assert.deepStrictEqual(byId.food, ['FOOD1']);
     assert.deepStrictEqual(byId.gaming, ['GAMEPIN1']);
     assert.deepStrictEqual(byId.apple, ['APP1']);
     assert.ok(!Object.values(byId).flat().includes('GAME1'), 'a live game top-up is not a voucher');
+  });
+
+  await test('every active product in the catalogue is reachable from some tile', () => {
+    const merged = tiles.mergeCatalogTiles(overflow, CATALOG, NATIVE);
+    const keys = new Set(merged.map((t) => t.key));
+    const categories = Array.from(tiles.catalogCategories(CATALOG));
+    const pinCodes = new Set(Array.from(pins.categorizePinProducts(CATALOG)).flatMap((c) => Array.from(c.products).map((p) => p.code)));
+    const reachable = new Set();
+    for (const category of categories) {
+      const native = tiles.nativeTileFor(category, NATIVE);
+      const own = keys.has(tiles.catalogTileKey(category.name));
+      for (const code of category.codes) {
+        if (native || own || pinCodes.has(code)) reachable.add(code);
+      }
+    }
+    const missing = Object.keys(CATALOG.products).filter((code) => CATALOG.products[code].is_active !== false && !reachable.has(code));
+    assert.deepStrictEqual(missing, [], 'unreachable: ' + missing.join(', '));
+    assert.ok(keys.has('iimmpact_other_products'), 'a product in no category still gets a tile');
+  });
+
+  await test('Internet lists every data operator IIMMPACT sells beyond the built-in names', () => {
+    const extra = Array.from(recharge.extraDataOperators(CATALOG, ['Celcom', 'Digi', 'Hotlink', 'U Mobile', 'Tunetalk', 'XOX', 'Yes']));
+    assert.deepStrictEqual(extra, ['Unifi Mobile Data'], 'Digi Internet is covered by Digi; Unifi is not covered by anything');
+  });
+
+  await test('All Products and Fuel are declared tiles', () => {
+    const declared = fs.readFileSync(path.join(ROOT, 'src/components/serviceTiles.js'), 'utf8');
+    assert.ok(/key: 'iimmpactCatalog'[^\n]*kind: 'iimmpactCatalog'/.test(declared));
+    assert.ok(/key: 'pinCategoryFuel'[^\n]*pinCategory: 'fuel'/.test(declared));
   });
 
   await test('a PIN category with no products is not drawn once the catalogue is known', () => {

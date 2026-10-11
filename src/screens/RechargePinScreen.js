@@ -13,7 +13,7 @@ import * as apiProviderService from '../firebase/apiProviderService';
 import { radius, tileGrid } from '../theme/theme';
 import { Tile } from '../components/ServiceGrid';
 import ConfirmReview, { formatMoney } from '../components/ConfirmReview';
-import { FEATURED_PIN_ORDER, isVoucherProduct, categorizePinProducts } from '../data/pinCategories';
+import { pinProducts, categorizePinProducts } from '../data/pinCategories';
 
 // Recharge PIN is currently a Malaysia-only product. Keep this list
 // intentionally limited so the screen cannot show unrelated country products.
@@ -139,15 +139,9 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
     return () => { alive = false; };
   }, [country]);
 
-  const dynamicProducts = useMemo(() => {
-    const products = Object.values(catalog?.products || {}).filter(isVoucherProduct);
-    const rank = (p) => {
-      const name = String(p.name || '');
-      const i = FEATURED_PIN_ORDER.findIndex((pattern) => pattern.test(name));
-      return i < 0 ? FEATURED_PIN_ORDER.length : i;
-    };
-    return products.sort((a, b) => rank(a) - rank(b) || String(a.name || '').localeCompare(String(b.name || '')));
-  }, [catalog]);
+  // Products and their categories both come from the catalogue's own tree,
+  // the same way the native grid decides which PIN tiles to draw.
+  const dynamicProducts = useMemo(() => pinProducts(catalog), [catalog]);
 
   useEffect(() => {
     let alive = true;
@@ -170,7 +164,7 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
     return () => { alive = false; };
   }, [product?.code, catalog?.providerId, country]);
 
-  const categorizedProducts = useMemo(() => categorizePinProducts(dynamicProducts), [dynamicProducts]);
+  const categorizedProducts = useMemo(() => categorizePinProducts(catalog || {}), [catalog]);
 
   const selectProduct = (p) => {
     setProduct(p); setVoucher(null); setOperator(''); setSelectedOption(null); setAmount(null); setFieldValues({});
