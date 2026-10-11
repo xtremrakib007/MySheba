@@ -5,6 +5,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { amountToPoints } from '../data/countries';
 import { resolveCommission } from '../utils/commission';
 import { applyMarkup } from '../utils/markup';
+import { billForm, fieldValue } from '../utils/iimmpactBillForm';
 
 const TITLES = {
   recharge: 'Mobile Recharge', internet: 'Internet Package', offerpacks: 'Offer Pack',
@@ -32,7 +33,7 @@ const money = (value, currency = 'MYR') => {
   return Number.isFinite(n) ? `${currency} ${n.toFixed(2)}` : 'Not provided';
 };
 const labelFor = (key) => LABELS[key] || key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase());
-const isPrivateKey = (key) => /(secret|token|password|security.?pin|collection.?pin|otp|authorization|receipt.?url|api.?key|selectedOptions|fieldValues|iimmpactCatalog|iimmpactFields|iimmpactDenomination|iimmpactProcessingTime|providerId)/i.test(key);
+const isPrivateKey = (key) => /(secret|token|password|security.?pin|collection.?pin|otp|authorization|receipt.?url|api.?key|selectedOptions|fieldValues|iimmpactCatalog|iimmpactFields|iimmpactFulfillment|iimmpactDenomination|iimmpactProcessingTime|providerId|extras)/i.test(key);
 
 function getPricing(service, data, pricing, rates, role) {
   const raw = Number(data.amount ?? data.myr ?? data.sendAmt ?? 0);
@@ -101,7 +102,19 @@ export default function ConfirmTransactionScreen() {
     : generic();
   // On a recharge the "package" is the amount in the destination's money
   // (IDR 50,000), so it is labelled as that.
-  const fieldLabel = (key) => (currentService === 'recharge' && key === 'package' ? 'Top-up amount' : '') || (!full && SUMMARY_LABELS[key]) || labelFor(key);
+  // A bill's own extra details (an IC, a district, a package), as the
+  // customer gave them. An identity number shows its last four only.
+  if (currentService === 'billpayment' && !full) {
+    const form = billForm(serviceData || {});
+    for (const field of form.extra) {
+      const value = fieldValue(serviceData || {}, String(field.id));
+      const text = value && typeof value === 'object' ? String(value.label || value.description || value.code || '') : String(value ?? '').trim();
+      if (!text) continue;
+      const masked = /\b(ic|nric|passport|identity|mykad)\b/i.test(`${field.id} ${field.label || ''}`) && text.length > 4 ? '\u2022'.repeat(Math.min(8, text.length - 4)) + text.slice(-4) : text;
+      fields.push(['field:' + String(field.label || field.id), masked]);
+    }
+  }
+  const fieldLabel = (key) => (key.startsWith('field:') ? key.slice(6) : '') || (currentService === 'recharge' && key === 'package' ? 'Top-up amount' : '') || (!full && SUMMARY_LABELS[key]) || labelFor(key);
   // What the wallet ends at: net of commission on the short review, the full
   // charge on a payout, which earns none.
   const deduction = full ? summary.charged : summary.total;

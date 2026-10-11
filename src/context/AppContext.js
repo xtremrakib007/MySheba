@@ -46,6 +46,7 @@ import * as featureAccessService from "../firebase/featureAccessService";
 import * as webviewConfigService from '../firebase/webviewConfigService';
 import * as tileLabelService from '../firebase/tileLabelService';
 import { forgetIimmpactOptionsOn } from '../firebase/apiProviderService';
+import { billOrderFields } from '../utils/iimmpactBillForm';
 import * as gridManagementService from "../firebase/gridManagementService";
 import * as platformControlService from "../firebase/platformControlService";
 import * as accessControlService from "../firebase/accessControlService";
@@ -2816,8 +2817,11 @@ export function AppProvider({ children }) {
           pricing,
           rates,
         );
+        // An IIMMPACT biller's answers go to the provider in its own shape: the
+        // extras its fulfillment map names, and the chosen plan.
+        const raw = currentService === "billpayment" ? { ...serviceData, ...billOrderFields(serviceData) } : serviceData;
         const id = await transactionService.createTransaction(
-          { ...payload, raw: serviceData },
+          { ...payload, raw },
           {
             uid: authUser ? authUser.uid : null,
             phone: profile ? profile.phone : "",

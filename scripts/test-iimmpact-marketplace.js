@@ -395,6 +395,66 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     assert.ok(/renderedScreen\.startsWith\('iimmpactProduct:'\) && <IimmpactProductScreen productCode=/.test(app));
   });
 
+  console.log('\nBill Payment asks what each biller needs');
+
+  const billForm = runEsm('src/utils/iimmpactBillForm.js');
+  // Shaped like an IIMMPACT loan biller: account, IC, a district list that
+  // depends on the account, and a typed amount with limits.
+  const LOAN = {
+    iimmpactFields: [
+      { id: 'district', label: 'District', type: 'select', required: true, order: 3, data_source: { depends_on: ['acc'] } },
+      { id: 'acc', label: 'Loan Account No.', type: 'text', required: true, order: 1, validation: { pattern: '^[0-9]{10}$', message: 'Loan account is 10 digits.' } },
+      { id: 'ic', label: 'IC Number', type: 'text', required: true, order: 2 },
+      { id: 'note', label: 'Note', type: 'text', required: false, order: 4 },
+      { id: 'amt', label: 'Amount', type: 'money', required: true, order: 5, validation: { min: 10, max: 5000 } },
+    ],
+    iimmpactFulfillment: {
+      account: { from_field: 'acc' },
+      amount: { from_field: 'amt' },
+      extras: { ic_number: { from_field: 'ic' }, biller_code: { from_field: 'district', path: 'code' }, unknown_key: { from_field: 'note' } },
+    },
+  };
+
+  await test('the account step asks for the biller\u2019s own fields, in its order, and holds the customer to them', () => {
+    const form = billForm.billForm(LOAN);
+    assert.strictEqual(form.account.label, 'Loan Account No.', 'the account box carries the biller\u2019s own label');
+    assert.strictEqual(form.amount.id, 'amt');
+    assert.deepStrictEqual(Array.from(form.extra).map((f) => f.id), ['ic', 'district', 'note']);
+    const err = (data) => billForm.accountStepError({ ...LOAN, ...data });
+    assert.strictEqual(err({ accountNumber: '' }), 'Please enter Loan Account No..');
+    assert.strictEqual(err({ accountNumber: '12345' }), 'Loan account is 10 digits.', 'the biller\u2019s own pattern and message');
+    assert.strictEqual(err({ accountNumber: '1234567890' }), 'Please enter IC Number.');
+    assert.strictEqual(err({ accountNumber: '1234567890', fieldValues: { ic: '901010101234' } }), 'Please enter District.');
+    assert.strictEqual(err({ accountNumber: '1234567890', fieldValues: { ic: '901010101234' }, selectedOptions: { district: { code: 'KL', label: 'Kuala Lumpur' } } }), '', 'an optional field may stay empty');
+  });
+
+  await test('the amount step keeps to the biller\u2019s limits, or to its packages', () => {
+    assert.strictEqual(billForm.amountStepError({ ...LOAN, amount: 5 }), 'Amount must be at least 10.');
+    assert.strictEqual(billForm.amountStepError({ ...LOAN, amount: 6000 }), 'Amount must be at most 5000.');
+    assert.strictEqual(billForm.amountStepError({ ...LOAN, amount: 150 }), '');
+    const PACKAGES = { iimmpactFields: [{ id: 'acc', type: 'text' }, { id: 'plan', label: 'Package', type: 'select', role: 'pricing', required: true }], iimmpactFulfillment: { account: { from_field: 'acc' }, amount: { from_field: 'plan', path: 'denomination' } } };
+    assert.strictEqual(billForm.amountStepError({ ...PACKAGES }), 'Please choose Package.');
+    assert.strictEqual(billForm.amountStepError({ ...PACKAGES, selectedOptions: { plan: { code: 'P99' } } }), '');
+    assert.strictEqual(JSON.stringify(billForm.billOrderFields({ ...PACKAGES, accountNumber: '1', selectedOptions: { plan: { code: 'P99' } } })), JSON.stringify({ extras: {}, subproductCode: 'P99' }), 'the chosen package is the plan sent');
+    assert.strictEqual(billForm.optionAmount({ price: { amount: 49.9 } }), 49.9);
+  });
+
+  await test('the order carries the extras IIMMPACT documents, from the fields that fill them', () => {
+    const order = billForm.billOrderFields({ ...LOAN, accountNumber: '1234567890', fieldValues: { ic: '901010101234', note: 'hi' }, selectedOptions: { district: { code: 'KL' } } });
+    assert.deepStrictEqual({ ...order.extras }, { ic_number: '901010101234', biller_code: 'KL' }, 'undocumented keys are not sent');
+    assert.deepStrictEqual({ ...billForm.billOrderFields({ accountNumber: '1' }) }, {}, 'a built-in biller is unchanged');
+    const wallet = fs.readFileSync(path.join(ROOT, 'functions/walletService.js'), 'utf8');
+    assert.ok(/billpayment: new Set\(\[[^\]]*'extras'[^\]]*'selectedOptions'/.test(wallet), 'the server keeps them on a bill order');
+    const app = fs.readFileSync(path.join(ROOT, 'src/context/AppContext.js'), 'utf8');
+    assert.ok(/currentService === "billpayment" \? \{ \.\.\.serviceData, \.\.\.billOrderFields\(serviceData\) \}/.test(app), 'and the app sends them');
+  });
+
+  await test('choosing an IIMMPACT biller stores its fields for the next steps', () => {
+    const steps = fs.readFileSync(path.join(ROOT, 'src/steps/BillPaymentSteps.js'), 'utf8');
+    assert.ok(/iimmpactFields: Array\.isArray\(product\?\.fields\) \? product\.fields : \[\], iimmpactFulfillment: product\?\.fulfillment \|\| null/.test(steps));
+    assert.ok(/billForm\(serviceData\)\.active && !\['jompay', 'tax'\]\.includes\(serviceData\.category\)\s*\? accountStepError\(serviceData\)/.test(steps), 'and validates against them');
+  });
+
   console.log('\nMarkup');
 
   await test('the most specific markup wins, and payouts are never marked up', () => {

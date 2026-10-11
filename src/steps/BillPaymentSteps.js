@@ -15,6 +15,7 @@ import { useNetworkStatus } from '../components/useNetworkStatus';
 import { BILLERS, BILL_CATEGORIES as CATEGORIES } from '../data/billers';
 import { useIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
 import { billCategories } from '../components/iimmpactTiles';
+import { billForm, fieldValue, accountStepError, amountStepError, optionAmount } from '../utils/iimmpactBillForm';
 
 /** Billers for a country and category, every entry in { name, amount } form. */
 function billersFor(country, category) {
@@ -206,7 +207,7 @@ export default function BillPaymentStep({ step }) {
     // server charges that exact product instead of matching the biller's name.
     // A built-in biller clears any code left from an earlier choice.
     return <View><FormLabel>Select Provider</FormLabel>{providers.length
-      ? <Grid3>{providers.map((b) => { const brand = getBillerBrand(b.name); const logo = brand.logo || (b.imageUrl ? { uri: b.imageUrl } : null); return <OperatorCard key={b.code || b.name} name={b.name} logo={logo} color={brand.color} initials={brand.initials} selected={serviceData.provider === b.name} onPress={() => { updateServiceData({ provider: b.name, operatorCode: b.code || '', productCode: b.code || '', productName: b.code ? b.name : '', amount: b.amount != null ? b.amount : null }); nextStep(); }} />; })}</Grid3>
+      ? <Grid3>{providers.map((b) => { const brand = getBillerBrand(b.name); const logo = brand.logo || (b.imageUrl ? { uri: b.imageUrl } : null); return <OperatorCard key={b.code || b.name} name={b.name} logo={logo} color={brand.color} initials={brand.initials} selected={serviceData.provider === b.name} onPress={() => { const product = b.code ? catalog?.products?.[b.code] : null; updateServiceData({ provider: b.name, operatorCode: b.code || '', productCode: b.code || '', productName: b.code ? b.name : '', amount: b.amount != null ? b.amount : null, iimmpactFields: Array.isArray(product?.fields) ? product.fields : [], iimmpactFulfillment: product?.fulfillment || null, fieldValues: {}, selectedOptions: {} }); nextStep(); }} />; })}</Grid3>
       : <Text style={noneStyles.none}>No biller is configured for this country and category yet.</Text>}</View>;
   }
   if (step === 3) {
@@ -232,15 +233,31 @@ export default function BillPaymentStep({ step }) {
         <BillDetails bill={bill} loading={billLoading} />
       </View>;
     }
+    const form = billForm(serviceData);
+    if (form.active) {
+      // An IIMMPACT biller: the account box under the biller's own label, then
+      // every other field the biller asks for, in its order.
+      const account = form.account || {};
+      return <View>
+        <FormLabel>{(account.label || 'Bill / Account Number') + ' *'}</FormLabel>
+        <FormInput placeholder={account.placeholder || 'Bill / account number'} keyboardType={keyboardFor(account)} autoCapitalize='characters' value={serviceData.accountNumber || ''} onChangeText={(v) => updateServiceData({ accountNumber: v })} />
+        {form.extra.map((field) => <BillField key={String(field.id)} field={field} serviceData={serviceData} updateServiceData={updateServiceData} />)}
+        <ServiceInterruptionNotice notice={interruption} />
+        <BillDetails bill={bill} loading={billLoading} />
+      </View>;
+    }
     return <View><FormLabel>{serviceData.category === 'ewallet' ? 'Mobile number registered to the wallet' : 'Enter Bill / Account Number'}</FormLabel><FormInput placeholder={serviceData.category === 'ewallet' ? 'e.g. 0123456789' : 'Bill / account number'} keyboardType={serviceData.category === 'ewallet' ? 'phone-pad' : 'default'} autoCapitalize={serviceData.category === 'ewallet' ? 'none' : 'characters'} value={serviceData.accountNumber || ''} onChangeText={(v) => updateServiceData({ accountNumber: v })} />{serviceData.country === 'BD' && <><FormLabel>Bangladesh Mobile Number</FormLabel><FormInput placeholder='01XXXXXXXXX' keyboardType='phone-pad' value={serviceData.mobileNumber || ''} onChangeText={(v) => updateServiceData({ mobileNumber: v.replace(/\D/g, '').slice(0, 11) })} /></>}<ServiceInterruptionNotice notice={interruption} /><BillDetails bill={bill} loading={billLoading} /></View>;
   }
   if (step === 4) {
     const fixed = fixedAmountFor(serviceData);
     const cur = serviceData.currency || 'MYR';
+    const amountField = billForm(serviceData).amount;
     return <View>
-      {fixed != null
+      {amountField && amountField.type === 'select'
+        ? <><FormLabel>{(amountField.label || 'Amount') + ' *'}</FormLabel><BillField field={amountField} serviceData={serviceData} updateServiceData={updateServiceData} asAmount /></>
+        : fixed != null
         ? <><FormLabel>Amount</FormLabel><Text style={noneStyles.fixed}>{cur} {Number(fixed).toFixed(2)} - set by the voucher you chose</Text></>
-        : <><FormLabel>Enter Amount ({cur})</FormLabel><FormInput placeholder='Amount' keyboardType='decimal-pad' value={serviceData.amount != null ? String(serviceData.amount) : ''} onChangeText={(v) => updateServiceData({ amount: parseFloat(v) || 0 })} /></>}
+        : <><FormLabel>{amountField?.label ? `${amountField.label} (${cur})` : `Enter Amount (${cur})`}</FormLabel><FormInput placeholder='Amount' keyboardType='decimal-pad' value={serviceData.amount != null ? String(serviceData.amount) : ''} onChangeText={(v) => updateServiceData({ amount: parseFloat(v) || 0 })} /></>}
       <ServiceInterruptionNotice notice={interruption} />
       <BillDetails bill={bill} loading={billLoading} />
       <SummaryCard rows={serviceData.category === 'jompay'
@@ -257,6 +274,93 @@ export default function BillPaymentStep({ step }) {
   }
   return null;
 }
+
+function keyboardFor(field) {
+  const mode = String(field?.input_mode || '').toLowerCase();
+  if (mode === 'decimal' || field?.type === 'money') return 'decimal-pad';
+  if (mode === 'numeric' || field?.type === 'number') return 'number-pad';
+  if (mode === 'tel') return 'phone-pad';
+  if (mode === 'email') return 'email-address';
+  return 'default';
+}
+
+/**
+ * One field an IIMMPACT biller asks for. A list field loads its choices from
+ * IIMMPACT (kept on the device like every other option list) once the fields
+ * it depends on are filled; as the amount, a choice also sets the amount.
+ */
+function BillField({ field, serviceData, updateServiceData, asAmount = false }) {
+  const { colors } = useTheme();
+  const id = String(field.id);
+  const [options, setOptions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const source = field.data_source || {};
+  const deps = Array.isArray(source.depends_on) ? source.depends_on.map(String) : [];
+  const accountId = String(serviceData?.iimmpactFulfillment?.account?.from_field || '');
+  const valueOf = (fieldId) => (fieldId === accountId ? serviceData.accountNumber : fieldValue(serviceData, fieldId));
+  const text = (v) => (v && typeof v === 'object' ? String(v.code || v.account_number || v.value || '') : String(v ?? ''));
+  const param = (spec) => {
+    if (!spec || typeof spec !== 'object') return '';
+    if (spec.static !== undefined) return String(spec.static);
+    return spec.from_field ? text(valueOf(String(spec.from_field))) : '';
+  };
+  const ready = deps.every((dep) => text(valueOf(dep)).trim());
+  const depKey = deps.map((dep) => text(valueOf(dep))).join('|');
+  useEffect(() => {
+    let alive = true;
+    if (field.type !== 'select' || !ready) { setOptions([]); return () => { alive = false; }; }
+    const params = source.params || {};
+    setLoading(true);
+    apiProviderService.getIimmpactOptions({
+      productCode: param(params.product_code) || serviceData.productCode,
+      fieldId: param(params.field_id) || id,
+      accountNumber: param(params.account_number),
+      billerCode: param(params.biller_code),
+      service: 'Bill Payment',
+      country: serviceData.country || 'MY',
+      limit: source.type === 'reference' ? 25000 : 100,
+    })
+      .then((data) => { if (alive) setOptions(Array.isArray(data?.items) ? data.items : []); })
+      .catch(() => { if (alive) setOptions([]); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serviceData.productCode, id, depKey, ready]);
+
+  if (field.type !== 'select') {
+    return <View>
+      <FormLabel>{(field.label || field.name || id) + (field.required ? ' *' : '')}</FormLabel>
+      <FormInput placeholder={field.placeholder || ''} keyboardType={keyboardFor(field)} autoCapitalize='characters' value={String(serviceData.fieldValues?.[id] ?? '')} onChangeText={(v) => updateServiceData({ fieldValues: { ...(serviceData.fieldValues || {}), [id]: v } })} />
+    </View>;
+  }
+  const chosen = serviceData.selectedOptions?.[id];
+  const choose = (option) => updateServiceData({
+    selectedOptions: { ...(serviceData.selectedOptions || {}), [id]: option },
+    ...(asAmount ? { amount: optionAmount(option), package: String(option.label || option.description || option.code || '') } : {}),
+  });
+  return <View>
+    {!asAmount && <FormLabel>{(field.label || field.name || id) + (field.required ? ' *' : '')}</FormLabel>}
+    {!ready && <Text style={[noneStyles.none, { color: colors.textSecondary }]}>Fill in the details above to see the choices.</Text>}
+    {ready && loading && <Text style={[noneStyles.none, { color: colors.textSecondary }]}>Loading choices…</Text>}
+    {ready && !loading && !options.length && <Text style={[noneStyles.none, { color: colors.textSecondary }]}>No choices are available for these details.</Text>}
+    <View style={fieldStyles.options}>
+      {options.slice(0, 100).map((option) => {
+        const selected = String(chosen?.code || '') === String(option.code);
+        const amount = optionAmount(option);
+        const label = String(option.label || option.description || option.code);
+        return <TouchableOpacity key={String(option.code)} onPress={() => choose(option)} style={[fieldStyles.option, { borderColor: selected ? colors.primary : colors.border, backgroundColor: selected ? colors.primary : colors.card }]}>
+          <Text style={[fieldStyles.optionText, { color: selected ? colors.onPrimary : colors.text }]}>{asAmount && amount ? `${label}\nRM ${amount.toFixed(2)}` : label}</Text>
+        </TouchableOpacity>;
+      })}
+    </View>
+  </View>;
+}
+
+const fieldStyles = StyleSheet.create({
+  options: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
+  option: { borderWidth: 1, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12, minWidth: '30%' },
+  optionText: { fontSize: 12.5, fontWeight: '700', textAlign: 'center' },
+});
 
 function validateAccountStep(serviceData) {
   if (serviceData.category === 'jompay') {
@@ -277,10 +381,17 @@ export function validateStep(step, serviceData) {
   if (step === 1 && !serviceData.category) return 'Please select a bill category.';
   if (step === 2 && !serviceData.provider) return 'Please select a bill provider.';
   if (step === 3) {
-    const fieldError = validateAccountStep(serviceData);
+    // An IIMMPACT biller is held to its own fields; the rest keep the old rules.
+    const fieldError = billForm(serviceData).active && !['jompay', 'tax'].includes(serviceData.category)
+      ? accountStepError(serviceData)
+      : validateAccountStep(serviceData);
     if (fieldError) return fieldError;
   }
-  if (step === 4 && !(Number(serviceData.amount) > 0)) return 'Please enter a valid amount.';
+  if (step === 4) {
+    const amountError = amountStepError(serviceData);
+    if (amountError) return amountError;
+    if (!(Number(serviceData.amount) > 0)) return 'Please enter a valid amount.';
+  }
   // The single provider answer that stops a payment: this account number is
   // not theirs. Checked AFTER the field rules so an empty form complains about
   // the empty field rather than about a bill nobody has asked for yet, and
