@@ -465,7 +465,9 @@ export default function IimmpactProductScreen({ category }) {
               const hasAmountField = amountFieldId && fields.some((field) => String(field.id) === amountFieldId);
               return (
                 <>
-                  {!hasAccountField && (
+                  {/* A PIN product with the customer's own Malaysian number already
+                      filled in needs nothing typed: the code is shown on screen. */}
+                  {!hasAccountField && !(isPinProduct(selectedProduct) && malaysianNational(profile?.phone)) && (
                     <View style={st.field}>
                       <Text style={st.label}>Account / Recipient *</Text>
                       <TextInput
