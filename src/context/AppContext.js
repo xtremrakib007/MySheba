@@ -45,6 +45,7 @@ import * as settingsService from "../firebase/settingsService";
 import * as featureAccessService from "../firebase/featureAccessService";
 import * as webviewConfigService from '../firebase/webviewConfigService';
 import * as tileLabelService from '../firebase/tileLabelService';
+import { forgetIimmpactOptionsOn } from '../firebase/apiProviderService';
 import * as gridManagementService from "../firebase/gridManagementService";
 import * as platformControlService from "../firebase/platformControlService";
 import * as accessControlService from "../firebase/accessControlService";
@@ -2833,6 +2834,9 @@ export function AppProvider({ children }) {
         });
       }
     } catch (err) {
+      // A kept IIMMPACT amount the server refused as stale is dropped, so the
+      // customer sees current amounts when they go back.
+      forgetIimmpactOptionsOn(err, serviceData?.productCode);
       showAlert(
         "MySheba",
         err.message || "Could not submit your request. Please try again.",

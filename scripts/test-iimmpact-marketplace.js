@@ -269,6 +269,57 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     assert.strictEqual(client.resolveCommission(settings, { service: 'recharge', amount: 50, role: 'customer', payload: { raw: {} } }), 0.5);
   });
 
+  console.log('\nDenominations kept in MySheba');
+
+  await test('amounts come from IIMMPACT once, then from the device until a purchase says they are stale', async () => {
+    const calls = [];
+    const answers = { YESPIN: { items: [{ code: 'YES10', price: { amount: 10 } }] }, EMPTY: { items: [] } };
+    const storage = new Map();
+    const code = esbuild.transformSync(fs.readFileSync(path.join(ROOT, 'src/firebase/apiProviderService.js'), 'utf8'), { loader: 'js', format: 'cjs' }).code;
+    const box = { module: { exports: {} }, exports: {}, Promise, JSON, Date, Map, Object, Array, String, Number, Set, console };
+    box.module.exports = box.exports;
+    box.require = (id) => {
+      if (id === 'firebase/functions') {
+        return { httpsCallable: (_f, name) => async (input) => {
+          calls.push(name);
+          if (name === 'getIimmpactOptions') return { data: answers[input.productCode] };
+          if (name === 'listProviderDataPlans') return { data: { supported: true, plans: [{ id: 'P1' }] } };
+          if (name === 'chargeIimmpactProduct') { const e = new Error('This IIMMPACT price has changed - please review your order.'); throw e; }
+          return { data: {} };
+        } };
+      }
+      if (id === './config') return { functions: {} };
+      if (id === '@react-native-async-storage/async-storage') {
+        return { __esModule: true, default: { getItem: async (k) => storage.get(k) ?? null, setItem: async (k, v) => { storage.set(k, v); } } };
+      }
+      throw new Error('unexpected require: ' + id);
+    };
+    vm.createContext(box);
+    vm.runInContext(code, box);
+    const api = box.module.exports;
+    const ask = (productCode, accountNumber = '') => api.getIimmpactOptions({ productCode, fieldId: 'amount', accountNumber, service: 'Recharge PIN', country: 'MY' });
+    const count = () => calls.filter((n) => n === 'getIimmpactOptions').length;
+
+    assert.strictEqual((await ask('YESPIN')).items.length, 1);
+    await ask('YESPIN');
+    await ask('YESPIN');
+    assert.strictEqual(count(), 1, 'reopening the amounts must not call IIMMPACT again');
+    await Promise.all([ask('YESPIN', '0123'), ask('YESPIN', '0123')]);
+    assert.strictEqual(count(), 2, 'a different number is its own answer, and two screens asking at once share one call');
+    await ask('EMPTY'); await ask('EMPTY');
+    assert.strictEqual(count(), 4, 'an empty answer is not kept');
+    assert.ok(storage.has('@mysheba/iimmpact-options/v1'), 'kept amounts survive an app restart');
+
+    await api.listProviderDataPlans({ service: 'Internet', country: 'MY', operator: 'Digi', phone: '0123456789' });
+    await api.listProviderDataPlans({ service: 'Internet', country: 'MY', operator: 'Digi', phone: '012-345 6789' });
+    assert.strictEqual(calls.filter((n) => n === 'listProviderDataPlans').length, 1, 'data plans are kept per number too');
+
+    await assert.rejects(() => api.chargeIimmpactProduct({ raw: { productCode: 'YESPIN' } }), /price has changed/);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await ask('YESPIN');
+    assert.strictEqual(count(), 5, 'after the server refuses a stale price, the next open asks IIMMPACT afresh');
+  });
+
   console.log('\nPIN Generator dispatch');
 
   const sent = [];
