@@ -17,7 +17,8 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
-const bills = read('src/steps/BillPaymentSteps.js');
+// The biller list moved to src/data/billers.js; the screen still owns the flow.
+const bills = read('src/steps/BillPaymentSteps.js') + read('src/data/billers.js');
 
 console.log('TnG and JomPAY are dedicated homepage flows, not general bill categories');
 assert(/ewallet: \["Touch 'n Go eWallet"\]/.test(bills), 'the seeded TnG flow retains its provider mapping');
@@ -85,7 +86,7 @@ assert.strictEqual(byKey.jompay.startStep, 3, 'so it opens on the fields printed
 // is the one that is not ours to make optional: JomPAY falls under Malaysia's
 // AMLA and the provider's stated penalty for a fictitious number is account
 // suspension.
-const billSteps = read('src/steps/BillPaymentSteps.js');
+const billSteps = read('src/steps/BillPaymentSteps.js') + read('src/data/billers.js');
 assert(/jompay: \['JomPAY'\]/.test(billSteps), 'JomPAY is a biller entry so the provider step still resolves');
 assert(/key: 'jompay', label: 'JomPAY Bill'/.test(billSteps), 'the internal seed still resolves even though the picker hides it');
 for (const field of ['billerCode', 'icNumber', 'ref2']) {

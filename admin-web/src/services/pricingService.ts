@@ -56,6 +56,27 @@ export interface CommissionRules {
   touchNGoFeePercent: number;
 }
 
+// MySheba's markup on the provider price - see functions/markupService.js.
+// The most specific rule wins: product, then service in a country, then service.
+export interface MarkupRule { percent: number; fixed: number }
+export interface Markups {
+  services: Partial<Record<MarkupService, MarkupRule>>;
+  countries: Record<string, MarkupRule>;
+  products: Record<string, MarkupRule>;
+}
+export const MARKUP_SERVICES = ['recharge', 'internet', 'offerpacks', 'entertainment', 'billpayment', 'esim', 'iimmpact', 'rechargePin'] as const;
+export type MarkupService = (typeof MARKUP_SERVICES)[number];
+export const MARKUP_SERVICE_LABELS: Record<MarkupService, string> = {
+  recharge: 'Mobile Recharge (incl. International Topup)',
+  internet: 'Internet Packages',
+  offerpacks: 'Offer Packs',
+  entertainment: 'Entertainment / Games',
+  billpayment: 'Bill Payment',
+  esim: 'eSIM',
+  iimmpact: 'Marketplace (All Products)',
+  rechargePin: 'PIN Generator / Vouchers',
+};
+
 export interface PricingSettings {
   dealerEarningPercent: number;
   rechargeCostPercent: number;
@@ -75,6 +96,7 @@ export interface PricingSettings {
   rolePricing: Partial<Record<PricingRole, Partial<Record<RolePriceKey, number>>>>;
   catalogProductPricing: CatalogProductPrice[];
   commissionRules: CommissionRules;
+  markups: Markups;
 }
 
 export const DEFAULT_PRICING: PricingSettings = {
@@ -102,12 +124,14 @@ export const DEFAULT_PRICING: PricingSettings = {
     remittanceTiers: [{ minAmount: 1, maxAmount: 999, fee: 10 }, { minAmount: 1000, maxAmount: 1999, fee: 15 }, { minAmount: 2000, maxAmount: null, fee: 20 }],
     touchNGoFeePercent: 0.5,
   },
+  markups: { services: {}, countries: {}, products: {} },
 };
 
 export async function fetchPricing(): Promise<PricingSettings> {
   const snap = await getDoc(SETTINGS_DOC);
   const data = snap.exists() ? (snap.data() as Partial<PricingSettings>) : {};
-  return { ...DEFAULT_PRICING, ...data, catalogProductPricing: Array.isArray(data.catalogProductPricing) ? data.catalogProductPricing : [], commissionRules: { ...DEFAULT_PRICING.commissionRules, ...(data.commissionRules || {}), recharge: { ...DEFAULT_PRICING.commissionRules.recharge, ...(data.commissionRules?.recharge || {}) }, internet: { ...DEFAULT_PRICING.commissionRules.internet, ...(data.commissionRules?.internet || {}) }, billTiers: Array.isArray(data.commissionRules?.billTiers) ? data.commissionRules.billTiers : DEFAULT_PRICING.commissionRules.billTiers, remittanceTiers: Array.isArray(data.commissionRules?.remittanceTiers) ? data.commissionRules.remittanceTiers : DEFAULT_PRICING.commissionRules.remittanceTiers } };
+  const markups = data.markups || DEFAULT_PRICING.markups;
+  return { ...DEFAULT_PRICING, ...data, markups: { services: markups.services || {}, countries: markups.countries || {}, products: markups.products || {} }, catalogProductPricing: Array.isArray(data.catalogProductPricing) ? data.catalogProductPricing : [], commissionRules: { ...DEFAULT_PRICING.commissionRules, ...(data.commissionRules || {}), recharge: { ...DEFAULT_PRICING.commissionRules.recharge, ...(data.commissionRules?.recharge || {}) }, internet: { ...DEFAULT_PRICING.commissionRules.internet, ...(data.commissionRules?.internet || {}) }, billTiers: Array.isArray(data.commissionRules?.billTiers) ? data.commissionRules.billTiers : DEFAULT_PRICING.commissionRules.billTiers, remittanceTiers: Array.isArray(data.commissionRules?.remittanceTiers) ? data.commissionRules.remittanceTiers : DEFAULT_PRICING.commissionRules.remittanceTiers } };
 }
 
 export async function updatePricing(key: keyof PricingSettings, value: PricingSettings[keyof PricingSettings]): Promise<void> {

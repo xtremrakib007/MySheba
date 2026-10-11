@@ -7,6 +7,7 @@ const { checkVelocity, getClientIp } = require('./rateLimitService');
 const { executeConfiguredApi, resolveExecutionMode, providersForService, resolveIimmpactMarketplaceProduct, nationalAccountNumber } = require('./apiProviderService');
 const { getWalletCurrencyAndFx, baseToWallet } = require('./walletCurrencyService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+const { applyMarkup } = require('./markupService');
 // One session per platform: a phone and a browser can both be signed in,
 // two phones cannot. See functions/sessionSlots.js.
 const { sessionMatches } = require('./sessionSlots');
@@ -208,7 +209,10 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
   assertWalletUnfrozen(userSnap.data(), 'Your wallet');
   await checkVelocity(db, uid, 'rechargePin', { ip: getClientIp(request) });
   const discount = progressionService.discountPercentFromSettings(tierSettings, userSnap.data().tier);
-  const cost = Math.round(denomination * priceMultiplier * (1 - discount / 100) * 100) / 100;
+  // MySheba's markup on the provider price, then the role multiplier and tier
+  // discount as before. The provider is still sent its own denomination.
+  const marked = applyMarkup(pricing, { service: 'rechargePin', country, productCode: dispatchRaw.productCode || operator, amount: denomination });
+  const cost = Math.round(marked.amount * priceMultiplier * (1 - discount / 100) * 100) / 100;
   let walletFx;
   try { walletFx = await getWalletCurrencyAndFx(db, userSnap.data()); } catch (fxErr) { throw new HttpsError('failed-precondition', fxErr.message || 'Wallet currency is not configured.'); }
   const walletCost = baseToWallet(cost, walletFx);
@@ -250,7 +254,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
     tx.create(txRef, {
       service: PIN_SERVICE, customerId: uid, customerRole: callerRole, customerPhone: user.data().phone || '',
       operator, productCode: dispatchRaw.productCode || null, subproductCode: dispatchRaw.subproductCode || null, productName: displayName || null, country, amount: denomination, total: denomination, denominationCurrency: 'MYR', currency: walletFx.currency, walletCurrency: walletFx.currency, cost: walletCost, walletCost, baseCostMyr: cost, fxRate: walletFx.sellRate, fxRateType: 'sell', fxRateSource: walletFx.rateSource,
-      tierDiscountPercent: discount, executionMode: 'api', status: 'processing', rechargePinAvailable: false,
+      tierDiscountPercent: discount, markupAmount: marked.markup, executionMode: 'api', status: 'processing', rechargePinAvailable: false,
       apiRefunded: false, raw: dispatchRaw,
       createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });

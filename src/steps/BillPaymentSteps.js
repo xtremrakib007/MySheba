@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { countries } from '../data/countries';
@@ -12,78 +12,9 @@ import { presentmentRequest, presentmentKey } from '../utils/billPresentmentInpu
 import * as apiProviderService from '../firebase/apiProviderService';
 import ServiceInterruptionNotice from '../components/ServiceInterruptionNotice';
 import { useNetworkStatus } from '../components/useNetworkStatus';
-
-// An entry is a name, or { name, amount } when the denomination IS the
-// product. Prepaid electricity tokens are sold that way - you buy a 50,000
-// IDR PLN token, you do not tell PLN how much your bill was - so those
-// billers carry their amount and the amount step shows it rather than
-// asking for it.
-const BILLERS = {
-  MY: {
-    electricity: ['TNB', 'Sabah Electricity (SESB)', 'Sarawak Energy (SESCO)'],
-    water: [
-      'Air Selangor', 'SAJ Ranhill Air Johor', 'Syarikat Air Melaka (SAMB)',
-      'Lembaga Air Perak', 'PBAPP', 'Kuching Water Board',
-      'Syarikat Air Darul Aman (SADA)', 'Syarikat Air Terengganu (SATU)',
-      'Syarikat Air Negeri Sembilan (SAINS)', 'Air Kelantan',
-      'Sibu Water Board', 'Syarikat Air Perlis (SAP)', 'Air Pahang (PAIP)',
-    ],
-    internet: ['Unifi', 'Telekom Malaysia (TM)', 'TIME', 'Maxis'],
-    tv: ['Astro'],
-    mobile: ['CelcomDigi', 'Maxis', 'U Mobile', 'Yes'],
-    utilities: ['Indah Water'],
-    ewallet: ["Touch 'n Go eWallet"],
-    // JomPAY is one rail covering thousands of billers, so there is no list to
-    // choose from here: the biller code is printed on the customer's own bill
-    // and they type it, exactly as they would at a bank's JomPAY screen. The
-    // single entry keeps the provider step's shape without pretending to offer
-    // a choice.
-    jompay: ['JomPAY'],
-    // Tax is not a separate IIMMPACT rail. Government/tax bills that expose
-    // a JomPAY biller are paid through the same JomPAY flow.
-    tax: ['JomPAY'],
-  },
-  BD: {
-    // Prepaid and postpaid are separate billers, not a setting on one: they
-    // are different accounts with different numbers at the same board.
-    electricity: [
-      'Palli Bidyut (Prepaid)', 'Palli Bidyut (Postpaid)',
-      'DESCO (Prepaid)', 'DESCO (Postpaid)',
-      'NESCO (Prepaid)', 'NESCO (Postpaid)',
-      'DPDC (Prepaid)', 'DPDC (Postpaid)',
-    ],
-    gas: ['Titas Gas', 'Karnaphuli Gas', 'Jalalabad Gas', 'Sundarban Gas', 'Bakhrabad Gas'],
-    water: ['Dhaka WASA'],
-    internet: ['Amber IT'],
-    mobile: ['Grameenphone', 'Robi', 'Banglalink'],
-  },
-  NP: {
-    electricity: ['NEA (Nepal Electricity Authority)'],
-    water: ['Nepal Water Supply', 'Khanepani (KUKL)'],
-    internet: ['Vianet', 'Sky Internet', 'Websurfer', 'Arrownet'],
-    tv: ['Dish Home', 'Sim TV', 'Mero TV', 'Sky TV'],
-  },
-  ID: {
-    electricity: [
-      { name: 'PLN Meter 20000 IDR', amount: 20000 },
-      { name: 'PLN Meter 50000 IDR', amount: 50000 },
-      { name: 'PLN Meter 100000 IDR', amount: 100000 },
-      { name: 'PLN Meter 200000 IDR', amount: 200000 },
-      { name: 'PLN Meter 500000 IDR', amount: 500000 },
-      { name: 'PLN Meter 1000000 IDR', amount: 1000000 },
-    ],
-    utilities: ['BPJS Insurance'],
-  },
-  PH: {
-    electricity: [
-      { name: 'Meralco Load 100', amount: 100 },
-      { name: 'Meralco Load 200', amount: 200 },
-      { name: 'Meralco Load 300', amount: 300 },
-      { name: 'Meralco Load 500', amount: 500 },
-      { name: 'Meralco Load 1000', amount: 1000 },
-    ],
-  },
-};
+import { BILLERS, BILL_CATEGORIES as CATEGORIES } from '../data/billers';
+import { useIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
+import { billCategories } from '../components/iimmpactTiles';
 
 /** Billers for a country and category, every entry in { name, amount } form. */
 function billersFor(country, category) {
@@ -98,31 +29,15 @@ function fixedAmountFor(serviceData) {
   return match && match.amount != null ? match.amount : null;
 }
 
-const CATEGORIES = [
-  { key: 'electricity', label: 'Electricity', art: 'billElectricity' },
-  { key: 'water', label: 'Water', art: 'billWater' },
-  { key: 'gas', label: 'Gas', art: 'billGas' },
-  { key: 'internet', label: 'Internet & Broadband', art: 'billInternet' },
-  { key: 'tv', label: 'TV / Astro', art: 'billTv' },
-  { key: 'mobile', label: 'Postpaid Mobile', art: 'billMobile' },
-  { key: 'utilities', label: 'Other Utilities', art: 'billUtilities' },
-  // A wallet reload is not a bill, but it is the same transaction: choose who,
-  // say which account, say how much. Here it reuses the whole charged path -
-  // pricing, refund on refusal, the audit trail - instead of growing a service.
-  //
-  // It deliberately is NOT a Recharge operator. Malaysia has prefix detection
-  // for 010-019 and Recharge auto-selects the operator and skips the step, so
-  // somebody entering their TnG number - an ordinary 012 mobile - would be sent
-  // to Hotlink and never offered the choice.
-  { key: 'ewallet', label: 'E-Wallet Reload', art: 'walletTransfer' },
-  { key: 'jompay', label: 'JomPAY Bill', art: 'jompay' },
-  { key: 'tax', label: 'Government / Tax (JomPAY)', art: 'jompay' },
-];
 
 // Only the categories the chosen country actually bills for. Malaysia has no
 // gas biller and Bangladesh no Astro, and offering either led to a category
 // that could only answer "no biller is configured for this yet".
-function categoriesFor(country) {
+function categoriesFor(country, catalogBills = []) {
+  // Malaysia's bills are IIMMPACT's: its categories and every biller it sells,
+  // each carrying its product code. The list below is the fallback for when
+  // the catalogue cannot be loaded, and is still what other countries use.
+  if (country === 'MY' && catalogBills.length) return catalogBills;
   // JomPAY and Touch 'n Go have dedicated homepage tiles. Keep their
   // internal biller mappings for those seeded flows, but don't duplicate them
   // inside the general Bill Payment category picker. Tax/JomPAY likewise
@@ -220,6 +135,8 @@ export default function BillPaymentStep({ step }) {
   // Every hook before the first `return`, without exception. The sidebar once
   // shipped a crash because one sat below an early return, and this component
   // is all early returns.
+  const { catalog } = useIimmpactCatalog({ enabled: serviceData.country === 'MY' });
+  const catalogBills = useMemo(() => billCategories(catalog), [catalog]);
   const [bill, setBill] = useState(null);
   const [billLoading, setBillLoading] = useState(false);
   const askedFor = useRef('');
@@ -275,15 +192,21 @@ export default function BillPaymentStep({ step }) {
 
   if (step === 0) return <View><FormLabel>Select Country</FormLabel><Grid3>{countries.map((c) => <CountrySelectCard key={c.code} code={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr, category: null, provider: null, accountNumber: '', mobileNumber: '', amount: null }); nextStep(); }} />)}</Grid3></View>;
   if (step === 1) {
-    const cats = categoriesFor(serviceData.country);
+    const cats = categoriesFor(serviceData.country, catalogBills);
     return <View><FormLabel>Select Bill Category</FormLabel>{cats.length
       ? <Grid3>{cats.map((item) => <CategoryCard key={item.key} item={item} selected={serviceData.category === item.key} onPress={() => { updateServiceData({ category: item.key, provider: null }); nextStep(); }} />)}</Grid3>
       : <Text style={noneStyles.none}>No bills can be paid for this country yet. Go back and pick another.</Text>}</View>;
   }
   if (step === 2) {
-    const providers = billersFor(serviceData.country, serviceData.category);
+    const fromCatalog = String(serviceData.category || '').startsWith('iimmpact:');
+    const providers = fromCatalog
+      ? (catalogBills.find((c) => c.key === serviceData.category)?.billers || [])
+      : billersFor(serviceData.country, serviceData.category);
+    // A catalogue biller carries IIMMPACT's product code into the order, so the
+    // server charges that exact product instead of matching the biller's name.
+    // A built-in biller clears any code left from an earlier choice.
     return <View><FormLabel>Select Provider</FormLabel>{providers.length
-      ? <Grid3>{providers.map((b) => { const brand = getBillerBrand(b.name); return <OperatorCard key={b.name} name={b.name} logo={brand.logo} color={brand.color} initials={brand.initials} selected={serviceData.provider === b.name} onPress={() => { updateServiceData({ provider: b.name, amount: b.amount != null ? b.amount : null }); nextStep(); }} />; })}</Grid3>
+      ? <Grid3>{providers.map((b) => { const brand = getBillerBrand(b.name); const logo = brand.logo || (b.imageUrl ? { uri: b.imageUrl } : null); return <OperatorCard key={b.code || b.name} name={b.name} logo={logo} color={brand.color} initials={brand.initials} selected={serviceData.provider === b.name} onPress={() => { updateServiceData({ provider: b.name, operatorCode: b.code || '', productCode: b.code || '', productName: b.code ? b.name : '', amount: b.amount != null ? b.amount : null }); nextStep(); }} />; })}</Grid3>
       : <Text style={noneStyles.none}>No biller is configured for this country and category yet.</Text>}</View>;
   }
   if (step === 3) {

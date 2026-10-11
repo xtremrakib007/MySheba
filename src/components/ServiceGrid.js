@@ -12,6 +12,8 @@ import BrandTileLogo, { hasBrandTileLogo } from './BrandTileLogo';
 import PhotoTileIcon, { hasPhotoTileIcon, photoIconFor } from './PhotoTileIcon';
 import ServiceArt, { hasServiceArt } from './ServiceArt';
 import { CUSTOMER_SERVICES, STAFF_ROLES, visibleTiles, groupTilesByCategory } from './serviceTiles';
+import { providerFor, providerHomeTiles, coveredKeys, IIMMPACT } from './providerGrids';
+import { useIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
 
 // `home: true` marks the tiles the customer home shows. Everything else is
 // one tap away on the Services tab, which renders this list in full.
@@ -60,7 +62,10 @@ export function Tile({ s, onPress, disabled }) {
   // showing the old artwork no matter what shipped.
   const photoKey = hasPhotoTileIcon(artKey) ? artKey : (chosenArt ? '' : photoIconFor(artKey));
   return <TouchableOpacity style={[styles.item, { borderColor: `${colors.primary}66`, backgroundColor: colors.card }, disabled && styles.itemDisabled]} activeOpacity={0.82} disabled={!!disabled} onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
-    {imageUrl
+    {/* A bundled brand logo (an operator's), then a provider's own image. */}
+    {s?.logo
+      ? <View style={styles.logoWrap}><Image source={s.logo} style={{ width: tileIcon.wrap, height: tileIcon.wrap }} resizeMode="contain" /></View>
+      : imageUrl
       ? <View style={styles.logoWrap}>
           <Image
             source={{ uri: imageUrl }}
@@ -106,6 +111,12 @@ export function useServiceAction() {
     if (s.kind === 'pinCategory') return setScreen('rechargePinCategory:' + encodeURIComponent(String(s.pinCategory || 'other')));
     if (s.kind === 'iimmpactCatalog') return setScreen('iimmpactCatalog');
     if (s.kind === 'iimmpactCategory') return setScreen('iimmpactCategoryGrid:' + encodeURIComponent(String(s.iimmpactCategory || '')));
+    // A provider group (IIMMPACT's Mobile/Bills/..., or a Success TopUp
+    // service) opens its own grid of categories or operators.
+    if (s.kind === 'providerGroup') return setScreen('providerGroup:' + encodeURIComponent(String(s.provider || '')) + ':' + encodeURIComponent(String(s.groupKey || '')));
+    // A service already part-answered by the tile: Bill Payment on Water
+    // Bills, Recharge with Grameenphone chosen.
+    if (s.kind === 'seededService') return startService(s.service, s.seed || {}, s.startStep || 0);
     // A live catalogue category opens its product form directly.
     if (s.kind === 'iimmpactProducts') return setScreen('iimmpactCategory:' + encodeURIComponent(String(s.iimmpactCategory || s.name || '')));
     if (s.kind === 'moreFeaturesLink') return setScreen('moreFeatures');
@@ -179,7 +190,30 @@ export default function ServiceGrid({ homeOnly }) {
   // thing from the services they also sell, so they get their own block above.
   // What is left is the same twelve. A customer has no management block, so the
   // heading is dropped and the screen's own title does that work.
-  const mergedServices = services;
+  // The home screen leads with the user's provider's own groups - IIMMPACT's
+  // for Malaysia, Success TopUp's services for Bangladesh - and drops the
+  // fixed product tiles those groups now open. Everything that is not a
+  // provider product (Flight, Bus, Train, ...) stays. With no catalogue yet
+  // there are no groups and the fixed grid is drawn exactly as before.
+  const country = gridViewer?.country || '';
+  const { catalog } = useIimmpactCatalog({ enabled: !!homeOnly && providerFor(country) === IIMMPACT });
+  const isActive = (key) => gridManagementService.isGridActive(gridManagement, key, gridViewer);
+  let mergedServices = services;
+  if (homeOnly) {
+    const groups = providerHomeTiles({ country, catalog }).filter((tile) => isActive(tile.key));
+    if (groups.length) {
+      const nativeKeys = visibleTiles({ role, can, webviewPages, tileLabels, viewer: gridViewer, dynamicFeatures: dynamicPlatformFeatures, isActive }).map((tile) => tile.key);
+      const covered = coveredKeys({ country, catalog, nativeKeys });
+      const kept = services.filter((tile) => !covered.has(tile.key));
+      const more = kept.filter((tile) => tile.kind === 'moreFeaturesLink');
+      mergedServices = [
+        ...kept.filter((tile) => tile.cat === 'manage'),
+        ...groups,
+        ...kept.filter((tile) => tile.cat !== 'manage' && tile.kind !== 'moreFeaturesLink'),
+        ...more,
+      ];
+    }
+  }
   const blocks = [];
   const manage = mergedServices.filter((t) => t.cat === 'manage');
   const rest = mergedServices.filter((t) => t.cat !== 'manage');

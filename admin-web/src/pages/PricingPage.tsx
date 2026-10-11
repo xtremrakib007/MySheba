@@ -14,6 +14,7 @@ import {
   type PricingRole,
   type RolePriceKey,
 } from '../services/pricingService';
+import MarkupSection from './MarkupSection';
 
 const ROLE_LABELS: Record<PricingRole, string> = {
   customer: 'Customer',
@@ -133,7 +134,8 @@ export default function PricingPage() {
           <FieldRow label="My Documents (pts/month)" value={pricing.myDocumentsCost} suffix=" pts" onSave={(v) => save('myDocumentsCost', v)} />
           <FieldRow label="Salary & OT (pts/month)" value={pricing.salaryOtCost} suffix=" pts" onSave={(v) => save('salaryOtCost', v)} />
           <FieldRow label="Subscription Cycle Length (days)" value={pricing.moduleSubscriptionDays} suffix=" days" onSave={(v) => save('moduleSubscriptionDays', v)} />
-        </Section>\n        {isSuperadmin ? <Section title="Bills, Vouchers & Marketplace — Product Pricing (superadmin only)">
+        </Section>
+        {isSuperadmin ? <Section title="Bills, Vouchers & Marketplace — Product Pricing (superadmin only)">
           <p className="pb-3 text-xs text-[var(--color-ink-soft)]">Create an independent price for every biller/operator, voucher, Marketplace product, game, eSIM, entertainment package, transportation item, and other catalog product. Each role has its own selling price.</p>
           <div className="grid gap-3 md:grid-cols-4">
             {[
@@ -160,6 +162,9 @@ export default function PricingPage() {
             </div>)}
             {!pricing.catalogProductPricing.length && <p className="text-xs text-[var(--color-ink-soft)]">No product overrides configured yet.</p>}
           </div>
+        </Section> : null}
+        {isSuperadmin ? <Section title="Markups — MySheba price on every service (superadmin only)">
+          <MarkupSection markups={pricing.markups} onSaved={(markups) => setPricing((prev) => ({ ...prev, markups }))} />
         </Section> : null}
         {isSuperadmin ? <Section title="Commission & Fee Rules (superadmin only)">
           <p className="pb-3 text-xs text-[var(--color-ink-soft)]">Provider prices remain unchanged. These rules only determine commissions or the special Touch ’n Go fee.</p>
