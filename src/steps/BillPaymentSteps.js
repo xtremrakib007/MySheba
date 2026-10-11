@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { countries } from '../data/countries';
@@ -12,6 +12,8 @@ import { presentmentRequest, presentmentKey } from '../utils/billPresentmentInpu
 import * as apiProviderService from '../firebase/apiProviderService';
 import ServiceInterruptionNotice from '../components/ServiceInterruptionNotice';
 import { useNetworkStatus } from '../components/useNetworkStatus';
+import { useIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
+import { billCategories } from '../components/iimmpactTiles';
 
 // An entry is a name, or { name, amount } when the denomination IS the
 // product. Prepaid electricity tokens are sold that way - you buy a 50,000
@@ -122,7 +124,11 @@ const CATEGORIES = [
 // Only the categories the chosen country actually bills for. Malaysia has no
 // gas biller and Bangladesh no Astro, and offering either led to a category
 // that could only answer "no biller is configured for this yet".
-function categoriesFor(country) {
+function categoriesFor(country, catalogBills = []) {
+  // Malaysia's bills are IIMMPACT's: its categories and every biller it sells,
+  // each carrying its product code. The list below is the fallback for when
+  // the catalogue cannot be loaded, and is still what other countries use.
+  if (country === 'MY' && catalogBills.length) return catalogBills;
   // JomPAY and Touch 'n Go have dedicated homepage tiles. Keep their
   // internal biller mappings for those seeded flows, but don't duplicate them
   // inside the general Bill Payment category picker. Tax/JomPAY likewise
@@ -220,6 +226,8 @@ export default function BillPaymentStep({ step }) {
   // Every hook before the first `return`, without exception. The sidebar once
   // shipped a crash because one sat below an early return, and this component
   // is all early returns.
+  const { catalog } = useIimmpactCatalog({ enabled: serviceData.country === 'MY' });
+  const catalogBills = useMemo(() => billCategories(catalog), [catalog]);
   const [bill, setBill] = useState(null);
   const [billLoading, setBillLoading] = useState(false);
   const askedFor = useRef('');
@@ -275,15 +283,21 @@ export default function BillPaymentStep({ step }) {
 
   if (step === 0) return <View><FormLabel>Select Country</FormLabel><Grid3>{countries.map((c) => <CountrySelectCard key={c.code} code={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr, category: null, provider: null, accountNumber: '', mobileNumber: '', amount: null }); nextStep(); }} />)}</Grid3></View>;
   if (step === 1) {
-    const cats = categoriesFor(serviceData.country);
+    const cats = categoriesFor(serviceData.country, catalogBills);
     return <View><FormLabel>Select Bill Category</FormLabel>{cats.length
       ? <Grid3>{cats.map((item) => <CategoryCard key={item.key} item={item} selected={serviceData.category === item.key} onPress={() => { updateServiceData({ category: item.key, provider: null }); nextStep(); }} />)}</Grid3>
       : <Text style={noneStyles.none}>No bills can be paid for this country yet. Go back and pick another.</Text>}</View>;
   }
   if (step === 2) {
-    const providers = billersFor(serviceData.country, serviceData.category);
+    const fromCatalog = String(serviceData.category || '').startsWith('iimmpact:');
+    const providers = fromCatalog
+      ? (catalogBills.find((c) => c.key === serviceData.category)?.billers || [])
+      : billersFor(serviceData.country, serviceData.category);
+    // A catalogue biller carries IIMMPACT's product code into the order, so the
+    // server charges that exact product instead of matching the biller's name.
+    // A built-in biller clears any code left from an earlier choice.
     return <View><FormLabel>Select Provider</FormLabel>{providers.length
-      ? <Grid3>{providers.map((b) => { const brand = getBillerBrand(b.name); return <OperatorCard key={b.name} name={b.name} logo={brand.logo} color={brand.color} initials={brand.initials} selected={serviceData.provider === b.name} onPress={() => { updateServiceData({ provider: b.name, amount: b.amount != null ? b.amount : null }); nextStep(); }} />; })}</Grid3>
+      ? <Grid3>{providers.map((b) => { const brand = getBillerBrand(b.name); const logo = brand.logo || (b.imageUrl ? { uri: b.imageUrl } : null); return <OperatorCard key={b.code || b.name} name={b.name} logo={logo} color={brand.color} initials={brand.initials} selected={serviceData.provider === b.name} onPress={() => { updateServiceData({ provider: b.name, operatorCode: b.code || '', productCode: b.code || '', productName: b.code ? b.name : '', amount: b.amount != null ? b.amount : null }); nextStep(); }} />; })}</Grid3>
       : <Text style={noneStyles.none}>No biller is configured for this country and category yet.</Text>}</View>;
   }
   if (step === 3) {

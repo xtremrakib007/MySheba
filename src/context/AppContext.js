@@ -207,7 +207,8 @@ function buildTransactionPayload(service, serviceData, pricing, rates) {
     const amount = amountToPoints(rawAmount, serviceData.country, rates);
     return {
       service: DEALER_LABELS.billpayment,
-      details: `${serviceData.provider || ""} - ${serviceData.category || ""} (${serviceData.accountNumber || ""})`,
+      // A catalogue category is keyed "iimmpact:<name>"; the record shows the name.
+      details: `${serviceData.provider || ""} - ${String(serviceData.category || "").replace(/^iimmpact:/, "")} (${serviceData.accountNumber || ""})`,
       amount,
       total: amount,
       raw: { country: serviceData.country, provider: serviceData.provider, category: serviceData.category, accountNumber: serviceData.accountNumber, mobileNumber: serviceData.mobileNumber },

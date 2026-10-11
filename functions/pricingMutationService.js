@@ -12,8 +12,9 @@ const ALLOWED_KEYS = new Set([
   'rechargePointCostPerUnit','internetPointCostPerUnit','billPaymentPointCostPerUnit',
   'webviewAccessCost','webviewSubmitCost','paymentSuccessCost','notepadCost',
   'myDocumentsCost','salaryOtCost','moduleSubscriptionDays','webviewAccessWindowHours',
-  'rolePricing','catalogProductPricing','commissionRules'
+  'rolePricing','catalogProductPricing','commissionRules','markups'
 ]);
+const { MARKUP_SERVICES, MAX_PERCENT: MARKUP_MAX_PERCENT, MAX_FIXED: MARKUP_MAX_FIXED } = require('./markupService');
 const ROLES = ['customer','retail','dealer','reseller','admin'];
 const MAX_MONEY = 100000;
 const MAX_PERCENT = 100;
@@ -106,7 +107,41 @@ function cleanRolePricing(v) {
   }
   return out;
 }
+// { percent, fixed } with both in range; an all-zero rule is dropped rather
+// than stored, so "no markup" has one spelling.
+function markupRule(v, label) {
+  if (!v || typeof v !== 'object') throw new HttpsError('invalid-argument', label + ' is invalid.');
+  const percent = finite(v.percent || 0, label + ' percent', 0, MARKUP_MAX_PERCENT);
+  const fixed = finite(v.fixed || 0, label + ' fixed amount', 0, MARKUP_MAX_FIXED);
+  return percent || fixed ? { percent, fixed } : null;
+}
+function cleanMarkups(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) throw new HttpsError('invalid-argument', 'Markups are invalid.');
+  const out = { services: {}, countries: {}, products: {} };
+  for (const [service, rule] of Object.entries(v.services || {})) {
+    if (!MARKUP_SERVICES.includes(service)) throw new HttpsError('invalid-argument', 'Unknown markup service: ' + service.slice(0, 40));
+    const clean = markupRule(rule, service + ' markup');
+    if (clean) out.services[service] = clean;
+  }
+  const countries = Object.entries(v.countries || {});
+  const products = Object.entries(v.products || {});
+  if (countries.length > 500 || products.length > 5000) throw new HttpsError('invalid-argument', 'Too many markup rules.');
+  for (const [key, rule] of countries) {
+    const [service, cc] = String(key).split(':');
+    if (!MARKUP_SERVICES.includes(service) || !/^[A-Z]{2}$/.test(String(cc || ''))) throw new HttpsError('invalid-argument', 'Country markup key must look like recharge:ID.');
+    const clean = markupRule(rule, key + ' markup');
+    if (clean) out.countries[service + ':' + cc] = clean;
+  }
+  for (const [code, rule] of products) {
+    const productCode = String(code).trim();
+    if (!/^[A-Za-z0-9_.:-]{1,100}$/.test(productCode)) throw new HttpsError('invalid-argument', 'Product markup code is invalid.');
+    const clean = markupRule(rule, productCode + ' markup');
+    if (clean) out.products[productCode] = clean;
+  }
+  return out;
+}
 function cleanValue(key, value) {
+  if (key === 'markups') return cleanMarkups(value);
   if (key === 'commissionRules') return cleanCommissionRules(value);
   if (key === 'catalogProductPricing') return cleanCatalog(value);
   if (key === 'rolePricing') return cleanRolePricing(value);
@@ -132,7 +167,10 @@ exports.savePricingSettings = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
   const ref=db.collection('settings').doc('pricing');
   const beforeSnap=await ref.get();
   const before=beforeSnap.exists?beforeSnap.data()||{}:{};
-  await ref.set({[key]:value,updatedBy:uid,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
+  // A deep merge would keep a markup rule the admin just deleted, so markups
+  // replace the whole field; the other keys keep their existing merge.
+  const writeOptions = key === 'markups' ? { mergeFields: [key, 'updatedBy', 'updatedAt'] } : { merge: true };
+  await ref.set({[key]:value,updatedBy:uid,updatedAt:admin.firestore.FieldValue.serverTimestamp()},writeOptions);
   await logAudit({action:'pricing_settings_changed',targetUid:null,performedBy:uid,performedByRole:'superadmin',details:{key,before:before[key] ?? null,after:value,reason:String(request.data?.reason||'').slice(0,200)}});
   return {ok:true,key};
 });

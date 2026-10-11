@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import { amountToPoints } from '../data/countries';
 import { resolveCommission } from '../utils/commission';
+import { applyMarkup } from '../utils/markup';
 
 const TITLES = {
   recharge: 'Mobile Recharge', internet: 'Internet Package', offerpacks: 'Offer Pack',
@@ -41,6 +42,11 @@ function getPricing(service, data, pricing, rates, role) {
   }
   if (service === 'mobilebanking') selling = Number(data.myr || 0);
   const fee = service === 'mobilebanking' ? 5 : service === 'remittance' ? Number(data.transferFee || 0) : 0;
+  // MySheba's markup on the provider price, exactly as the server adds it
+  // (src/utils/markup.js mirrors functions/markupService.js). Commission is
+  // still worked out on the provider price, as the server does.
+  const providerPrice = selling;
+  selling = applyMarkup(pricing, { service, country: data.country, productCode: data.productCode || data.operatorCode, amount: providerPrice }).amount;
   // What leaves the wallet when the order is submitted.
   const charged = service === 'remittance' ? Number(data.sendAmt || 0) + fee : selling + fee;
   const providedCost = Number(data.providerCost ?? data.costPrice ?? data.cost ?? data.wholesalePrice);
@@ -51,7 +57,7 @@ function getPricing(service, data, pricing, rates, role) {
   // The commission the server credits back once the provider confirms, by
   // the same rules it uses - not the old rechargeProfitPercent estimate,
   // which could promise a commission that never arrived.
-  const commission = resolveCommission(pricing, { service, amount: selling, role, payload: { raw: data } });
+  const commission = resolveCommission(pricing, { service, amount: providerPrice, role, payload: { raw: data } });
   return { selling, fee, charged, cost, commission, total: Math.round((charged - commission) * 100) / 100 };
 }
 
@@ -62,7 +68,7 @@ function getPricing(service, data, pricing, rates, role) {
 // and the fee - because a payout is checked line by line before it is sent.
 const FULL_LAYOUT = new Set(['remittance', 'mobilebanking']);
 const SUMMARY_FIELDS = {
-  recharge: ['country', 'currency', 'phone', 'operator'],
+  recharge: ['country', 'currency', 'phone', 'operator', 'package'],
   internet: ['country', 'currency', 'phone', 'operator', 'package'],
   offerpacks: ['country', 'currency', 'phone', 'operator', 'package'],
   billpayment: ['country', 'currency', 'provider', 'accountNumber', 'mobileNumber'],
@@ -93,7 +99,9 @@ export default function ConfirmTransactionScreen() {
       .map((key) => [key, key === 'phone' ? (serviceData?.phone || serviceData?.mobileNumber) : serviceData?.[key]])
       .filter(([key, value]) => shown(value) && !(key === 'mobileNumber' && summaryKeys.includes('phone')))
     : generic();
-  const fieldLabel = (key) => (!full && SUMMARY_LABELS[key]) || labelFor(key);
+  // On a recharge the "package" is the amount in the destination's money
+  // (IDR 50,000), so it is labelled as that.
+  const fieldLabel = (key) => (currentService === 'recharge' && key === 'package' ? 'Top-up amount' : '') || (!full && SUMMARY_LABELS[key]) || labelFor(key);
   // What the wallet ends at: net of commission on the short review, the full
   // charge on a payout, which earns none.
   const deduction = full ? summary.charged : summary.total;

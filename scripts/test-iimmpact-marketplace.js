@@ -126,8 +126,11 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     assert.strictEqual(tiles.nativeTileFor({ name: 'Mobile Data' }, NATIVE), 'internet');
     assert.strictEqual(tiles.nativeTileFor({ name: 'Mobile Pin' }, NATIVE), 'rechargePin');
     // A bill is not a prepaid reload, however much the names overlap.
-    assert.strictEqual(tiles.nativeTileFor({ name: 'Mobile Postpaid' }, NATIVE), '');
-    assert.strictEqual(tiles.nativeTileFor({ name: 'International Topup' }, NATIVE), '');
+    // A bill is not a prepaid reload, however much the names overlap: it goes
+    // to Bill Payment, by its group.
+    assert.strictEqual(tiles.nativeTileFor({ name: 'Mobile Postpaid', group: 'Bills' }, NATIVE), 'billpayment');
+    assert.strictEqual(tiles.nativeTileFor({ name: 'Mobile Postpaid' }, ['recharge']), '');
+    assert.strictEqual(tiles.nativeTileFor({ name: 'International Topup' }, NATIVE), 'recharge');
     // No native tile on this grid, nothing to merge into.
     assert.strictEqual(tiles.nativeTileFor({ name: 'Mobile Prepaid' }, ['salary']), '');
   });
@@ -138,8 +141,12 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     for (const gone of ['iimmpact_mobile_prepaid', 'iimmpact_mobile_data', 'iimmpact_mobile_pin']) {
       assert.ok(!keys.includes(gone), gone + ' duplicates a native tile');
     }
-    for (const kept of ['iimmpact_international_topup', 'iimmpact_mobile_postpaid', 'iimmpact_water_bills',
-      'iimmpact_game_credits', 'iimmpact_e_wallets_reload', 'iimmpact_idd']) {
+    // Bills fold into Bill Payment and International Topup into Mobile
+    // Recharge: the native tiles sell exactly those products.
+    for (const merged of ['iimmpact_international_topup', 'iimmpact_mobile_postpaid', 'iimmpact_water_bills']) {
+      assert.ok(!keys.includes(merged), merged + ' duplicates a native tile');
+    }
+    for (const kept of ['iimmpact_game_credits', 'iimmpact_e_wallets_reload', 'iimmpact_idd']) {
       assert.ok(keys.includes(kept), kept + ' missing from ' + keys.join(', '));
     }
     assert.ok(keys.includes('salary'), 'unrelated tiles are untouched');
@@ -210,9 +217,9 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
   });
 
   await test('a catalogue tile opens its product form by category name', () => {
-    const tile = tiles.mergeCatalogTiles([], CATALOG, NATIVE).find((t) => t.key === 'iimmpact_water_bills');
+    const tile = tiles.mergeCatalogTiles([], CATALOG, NATIVE).find((t) => t.key === 'iimmpact_idd');
     assert.strictEqual(tile.kind, 'iimmpactProducts');
-    assert.strictEqual(tile.iimmpactCategory, 'Water Bills');
+    assert.strictEqual(tile.iimmpactCategory, 'IDD');
     assert.ok(tile.art, 'a category without a logo still gets a drawing');
     const grid = fs.readFileSync(path.join(ROOT, 'src/components/ServiceGrid.js'), 'utf8');
     assert.ok(/s\.kind === 'iimmpactProducts'\) return setScreen\('iimmpactCategory:'/.test(grid), 'the tile kind must have a destination');
@@ -267,6 +274,62 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     assert.strictEqual(client.resolveCommission(settings, { service: 'remittance', amount: 500, role: 'customer', payload: { raw: {} } }), 0);
     assert.strictEqual(client.resolveCommission(settings, { service: 'billpayment', amount: 40, role: 'customer', payload: { raw: { provider: "Touch 'n Go eWallet" } } }), 0);
     assert.strictEqual(client.resolveCommission(settings, { service: 'recharge', amount: 50, role: 'customer', payload: { raw: {} } }), 0.5);
+  });
+
+  await test('Bill Payment lists every IIMMPACT biller with its product code', () => {
+    const bills = Array.from(tiles.billCategories(CATALOG));
+    const byLabel = Object.fromEntries(bills.map((c) => [c.label, c]));
+    assert.deepStrictEqual(Object.keys(byLabel).sort(), ['Mobile Postpaid', 'Water Bills'], 'only the bills group, and only categories with billers');
+    assert.deepStrictEqual(Array.from(byLabel['Water Bills'].billers).map((b) => [b.name, b.code]), [['Air Selangor', 'WATER1']]);
+    assert.strictEqual(byLabel['Water Bills'].art, 'billWater');
+    assert.strictEqual(byLabel['Mobile Postpaid'].art, 'billMobile');
+    assert.ok(byLabel['Water Bills'].key.startsWith('iimmpact:'));
+    const steps = fs.readFileSync(path.join(ROOT, 'src/steps/BillPaymentSteps.js'), 'utf8');
+    assert.ok(/operatorCode: b\.code \|\| ''/.test(steps), 'the chosen biller must carry its product code into the order');
+  });
+
+  console.log('\nMarkup');
+
+  await test('the most specific markup wins, and payouts are never marked up', () => {
+    const server = require('../functions/markupService');
+    const pricing = { markups: {
+      services: { recharge: { percent: 2, fixed: 0 }, billpayment: { percent: 0, fixed: 0.5 }, rechargePin: { percent: 10 } },
+      countries: { 'recharge:ID': { percent: 5, fixed: 0.2 } },
+      products: { YESPIN: { percent: 0, fixed: 1 } },
+    } };
+    const at = (service, amount, country, productCode) => server.applyMarkup(pricing, { service, amount, country, productCode });
+    assert.deepStrictEqual(at('recharge', 10, 'MY'), { amount: 10.2, markup: 0.2 });
+    assert.deepStrictEqual(at('recharge', 10, 'ID'), { amount: 10.7, markup: 0.7 }, 'country beats service');
+    assert.deepStrictEqual(at('rechargePin', 10, 'MY', 'YESPIN'), { amount: 11, markup: 1 }, 'product beats service');
+    assert.deepStrictEqual(at('billpayment', 40, 'MY'), { amount: 40.5, markup: 0.5 });
+    assert.deepStrictEqual(at('internet', 35, 'MY'), { amount: 35, markup: 0 }, 'no rule, no markup');
+    assert.deepStrictEqual(at('remittance', 500, 'BD'), { amount: 500, markup: 0 });
+    assert.deepStrictEqual(at('mobilebanking', 100, 'BD'), { amount: 100, markup: 0 });
+    assert.deepStrictEqual(server.applyMarkup({}, { service: 'recharge', amount: 10 }), { amount: 10, markup: 0 }, 'no markups configured changes nothing');
+  });
+
+  await test('the app shows exactly the price the server charges', () => {
+    const client = runEsm('src/utils/markup.js');
+    const server = require('../functions/markupService');
+    const pricing = { markups: { services: { recharge: { percent: 3.5, fixed: 0.1 }, iimmpact: { percent: 1 }, esim: { fixed: 2 } }, countries: { 'recharge:NP': { percent: 7 } }, products: { D: { percent: 0.5, fixed: 0.05 } } } };
+    const cases = [['recharge', 50, 'MY', 'D'], ['recharge', 50, 'MY', 'X'], ['recharge', 33.33, 'NP', ''], ['iimmpact', 9.99, 'MY', ''], ['esim', 20, 'MY', ''], ['remittance', 100, 'NP', '']];
+    for (const [service, amount, country, productCode] of cases) {
+      assert.deepStrictEqual({ ...client.applyMarkup(pricing, { service, amount, country, productCode }) },
+        server.applyMarkup(pricing, { service, amount, country, productCode }), `${service} ${amount} ${country} ${productCode}`);
+    }
+  });
+
+  await test('the wallet charge includes the markup and the provider is still sent its own price', () => {
+    const src = fs.readFileSync(path.join(ROOT, 'functions/walletService.js'), 'utf8');
+    assert.ok(/const customerCharge=Math\.round\(\(baseProviderAmount\+markupAmount\+serviceFee\)\*100\)\/100;/.test(src));
+    assert.ok(/markupAmount=service==='remittance'\|\|service==='mobilebanking'\?0:/.test(src), 'payouts are never marked up');
+    assert.ok(/amount: result\.apiAmount, total: result\.apiTotal/.test(src), 'the provider is dispatched its own amount');
+  });
+
+  await test('superadmin can save markups, and a deleted rule really goes', () => {
+    const src = fs.readFileSync(path.join(ROOT, 'functions/pricingMutationService.js'), 'utf8');
+    assert.ok(/'commissionRules','markups'/.test(src));
+    assert.ok(/key === 'markups' \? \{ mergeFields: \[key, 'updatedBy', 'updatedAt'\] \}/.test(src));
   });
 
   console.log('\nDenominations kept in MySheba');
@@ -388,6 +451,18 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     assert.strictEqual(resolved[0].accountNumber, '01123456789');
   });
 
+  await test('a PIN purchase is charged MySheba\u2019s markup; the provider gets its own denomination', async () => {
+    sent.length = 0;
+    db._store.set('settings/pricing', { rechargePointCostPerUnit: 1, markups: { services: { rechargePin: { percent: 10, fixed: 0 } } } });
+    const before = db._store.get('users/u1').walletBalance;
+    const result = await call({ amount: 10, productCode: 'YESPIN', subproductCode: 'YES10' });
+    const after = db._store.get('users/u1').walletBalance;
+    assert.strictEqual(Math.round((before - after) * 100) / 100, 11, 'RM 10 voucher with a 10% markup costs RM 11');
+    assert.strictEqual(result.cost, 11);
+    assert.strictEqual(sent[0].payload.raw.providerAmount, 10, 'IIMMPACT is still asked for the RM 10 voucher');
+    db._store.set('settings/pricing', { rechargePointCostPerUnit: 1 });
+  });
+
   await test('a price the catalogue no longer agrees with is refused before charging', async () => {
     sent.length = 0;
     await assert.rejects(() => call({ amount: 12, productCode: 'YESPIN', subproductCode: 'YES10' }), /price has changed/);
@@ -422,6 +497,7 @@ function fakeFirestore(seed) {
     add: async (data) => { store.set(name + '/' + Math.random(), data); },
   });
   return {
+    _store: store,
     collection,
     runTransaction: async (fn) => fn({
       get: async (r) => snap(r.path),

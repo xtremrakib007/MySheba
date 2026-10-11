@@ -12,12 +12,13 @@ import ServiceInterruptionNotice from '../components/ServiceInterruptionNotice';
 import { useNetworkStatus } from '../components/useNetworkStatus';
 import * as apiProviderService from '../firebase/apiProviderService';
 import { rechargeProductsFromCatalog } from '../data/iimmpactRecharge';
+import { applyMarkup } from '../utils/markup';
 
 // Recharge flow: country -> operator -> mobile number -> amount.
 // Customer-facing wallet values are always displayed as MYR. The legacy
 // conversion helper remains internal for settlement compatibility.
 export default function RechargeStep({ step }) {
-  const { serviceData, updateServiceData, nextStep, rates } = useApp();
+  const { serviceData, updateServiceData, nextStep, rates, pricing } = useApp();
   const [iimmpactOperators, setIimmpactOperators] = useState([]);
   const [iimmpactOptions, setIimmpactOptions] = useState([]);
   const [optionsLoading, setOptionsLoading] = useState(false);
@@ -118,6 +119,10 @@ export default function RechargeStep({ step }) {
     active: step === 3,
   });
 
+  // What the customer pays for a provider price: MySheba's markup for this
+  // service, destination and product - the same rule the server charges by.
+  const customerPrice = (amount) => applyMarkup(pricing, { service: 'recharge', country: serviceData.country, productCode: serviceData.productCode, amount }).amount;
+
   if (step === 0) {
     return (<View><FormLabel>Select Country</FormLabel><View style={styles.grid3}>{countries.map((c) => (<CountrySelectCard key={c.code} code={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr }); nextStep(); }} />))}</View></View>);
   }
@@ -150,9 +155,9 @@ export default function RechargeStep({ step }) {
         {extraFields.map((field) => <View key={field.id}><FormLabel>{field.label || field.id}</FormLabel><FormInput placeholder={field.placeholder || field.label || field.id} keyboardType={field.input_mode === 'numeric' || field.type === 'number' ? 'numeric' : 'default'} style={styles.phoneInput} value={String(serviceData.fieldValues?.[field.id] ?? '')} onChangeText={(value) => updateServiceData({ fieldValues: { ...(serviceData.fieldValues || {}), [field.id]: value } })} /></View>)}
         {optionsLoading && <Text style={styles.catalogInfo}>Loading live amounts from IIMMPACT…</Text>}
         {optionsUnavailable && !optionsLoading && !!pricingField?.id && <Text style={styles.catalogInfo}>IIMMPACT has no available amount for this product and number. Check its required fields and options in the provider catalog.</Text>}
-        {!!pricingField?.id && <View style={styles.grid3}>{iimmpactOptions.map((option) => { const price = Number(option?.price?.amount ?? option?.price ?? option?.amount); const label = String(option?.label || option?.description || option?.name || option?.code || 'Amount'); return <RechargeAmountButton key={String(option.code)} label={`${label}${Number.isFinite(price) && price > 0 ? ` • RM ${price.toFixed(2)}` : ''}`} selected={String(serviceData.selectedOptions?.[pricingField.id]?.code || '') === String(option.code)} onPress={() => updateServiceData({ selectedOptions: { ...(serviceData.selectedOptions || {}), [pricingField.id]: option }, fieldValues: { ...(serviceData.fieldValues || {}), [accountFieldId]: String(serviceData.phone || ''), phone: String(serviceData.phone || '') }, amount: Number.isFinite(price) && price > 0 ? price : Number(option?.denomination || 0), package: label, subproductCode: String(option.code || '') })} styles={styles} />; })}</View>}
+        {!!pricingField?.id && <View style={styles.grid3}>{iimmpactOptions.map((option) => { const price = Number(option?.price?.amount ?? option?.price ?? option?.amount); const label = localAmountLabel(option, product); const pay = Number.isFinite(price) && price > 0 ? customerPrice(price) : null; return <RechargeAmountButton key={String(option.code)} label={`${label}${pay != null ? `\nPay RM ${pay.toFixed(2)}` : ''}`} selected={String(serviceData.selectedOptions?.[pricingField.id]?.code || '') === String(option.code)} onPress={() => updateServiceData({ selectedOptions: { ...(serviceData.selectedOptions || {}), [pricingField.id]: option }, fieldValues: { ...(serviceData.fieldValues || {}), [accountFieldId]: String(serviceData.phone || ''), phone: String(serviceData.phone || '') }, amount: Number.isFinite(price) && price > 0 ? price : Number(option?.denomination || 0), package: label, subproductCode: String(option.code || '') })} styles={styles} />; })}</View>}
         {!pricingField?.id && <View style={styles.grid3}>{denominations.map((amount) => <RechargeAmountButton key={amount} label={`RM ${amount}`} selected={Number(serviceData.amount) === amount} onPress={() => updateServiceData({ amount, fieldValues: { ...(serviceData.fieldValues || {}), [accountFieldId]: String(serviceData.phone || ''), phone: String(serviceData.phone || ''), amount } })} styles={styles} />)}</View>}
-        {!!(serviceData.amount > 0) && <SummaryCard rows={[{ label: 'Product', value: product?.name || serviceData.operator }, { label: 'Amount', value: `MYR ${Number(serviceData.amount).toFixed(2)}` }]} totalLabel="Wallet deduction" totalValue={`MYR ${Number(serviceData.amount).toFixed(2)}`} />}
+        {!!(serviceData.amount > 0) && <SummaryCard rows={[{ label: 'Product', value: product?.name || serviceData.operator }, { label: 'Amount', value: serviceData.package || `MYR ${Number(serviceData.amount).toFixed(2)}` }]} totalLabel="Wallet deduction" totalValue={`MYR ${customerPrice(Number(serviceData.amount)).toFixed(2)}`} />}
       </View>);
     }
     const isForeign = serviceData.country && serviceData.country !== 'MY';
@@ -161,6 +166,19 @@ export default function RechargeStep({ step }) {
     return (<View><ServiceInterruptionNotice notice={interruption} /><FormLabel>Select Amount ({cur})</FormLabel><View style={styles.grid3}>{amounts.map((a) => <RechargeAmountButton key={a} label={`${cur} ${a}`} selected={serviceData.amount === a} onPress={() => updateServiceData({ amount: a })} styles={styles} />)}</View><FormInput placeholder="Custom amount" keyboardType="numeric" style={styles.phoneInput} value={serviceData.amount != null ? String(serviceData.amount) : ''} onChangeText={(v) => updateServiceData({ amount: parseFloat(v) || 0 })} />{!!(isForeign && serviceData.amount > 0) && <SummaryCard rows={[{ label: 'Amount', value: `${cur} ${Number(serviceData.amount).toFixed(2)}` }]} totalLabel="Wallet deduction" totalValue={`${walletDeductionMyr.toFixed(2)} MYR`} />}</View>);
   }
   return null;
+}
+
+// An international top-up is bought in the destination's money - IDR 50,000,
+// not RM 14.20 - so that leads, from the option's own denomination and the
+// product's denomination currency. A Malaysian option, or one without those
+// fields, keeps IIMMPACT's label.
+function localAmountLabel(option, product) {
+  const label = String(option?.label || option?.description || option?.name || option?.code || 'Amount');
+  const currency = String(option?.denomination_currency || product?.denomination_currency || '').toUpperCase();
+  const face = Number(option?.denomination);
+  if (!currency || currency === 'MYR' || !Number.isFinite(face) || face <= 0) return label;
+  const amount = face.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return `${currency} ${amount}`;
 }
 
 function RechargeOperatorCard({ name, logo, color, initials, selected, onPress, styles, primaryColor }) { return <TouchableOpacity style={[styles.selectCard, styles.operatorCard, selected && styles.selectCardSelected]} onPress={onPress} activeOpacity={0.8}>{logo ? <Image source={logo} style={styles.operatorLogo} resizeMode="contain" /> : <View style={[styles.operatorBadge, { backgroundColor: color || primaryColor }]}><Text style={styles.operatorBadgeText}>{initials}</Text></View>}<Text style={[styles.selectName, styles.operatorName, selected && styles.selectNameSelected]} numberOfLines={2}>{String(name || '')}</Text></TouchableOpacity>; }
@@ -176,6 +194,6 @@ function createStyles(colors, isDark) {
     catalogInfo: { fontSize: 12, color: colors.muted || tileText, marginBottom: 10 },
     selectName: { fontSize: 11, fontWeight: '700', marginTop: 2, textAlign: 'center', color: tileText },
     selectNameSelected: { color: colors.text },
-    operatorCard: { paddingVertical: 14, paddingHorizontal: 8 }, operatorLogo: { width: 44, height: 44 }, operatorBadge: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }, operatorBadgeText: { color: colors.onPrimary, fontSize: 13, fontWeight: '700' }, operatorName: { marginTop: 8 }, phoneInput: { backgroundColor: tileBg, color: tileText, borderColor: colors.border }, amountBtn: { flexBasis: '31%', paddingVertical: 10, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: tileBg, alignItems: 'center', marginBottom: 8 }, amountBtnSelected: { backgroundColor: colors.primary, borderColor: colors.primary }, amountBtnText: { fontWeight: '500', fontSize: 13, color: tileText }, amountBtnTextSelected: { color: colors.onPrimary },
+    operatorCard: { paddingVertical: 14, paddingHorizontal: 8 }, operatorLogo: { width: 44, height: 44 }, operatorBadge: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }, operatorBadgeText: { color: colors.onPrimary, fontSize: 13, fontWeight: '700' }, operatorName: { marginTop: 8 }, phoneInput: { backgroundColor: tileBg, color: tileText, borderColor: colors.border }, amountBtn: { flexBasis: '31%', paddingVertical: 10, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: tileBg, alignItems: 'center', marginBottom: 8 }, amountBtnSelected: { backgroundColor: colors.primary, borderColor: colors.primary }, amountBtnText: { fontWeight: '500', fontSize: 13, color: tileText, textAlign: 'center' }, amountBtnTextSelected: { color: colors.onPrimary },
   });
 }

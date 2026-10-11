@@ -13,6 +13,7 @@ import * as apiProviderService from '../firebase/apiProviderService';
 import { radius, tileGrid } from '../theme/theme';
 import { Tile } from '../components/ServiceGrid';
 import ConfirmReview, { formatMoney } from '../components/ConfirmReview';
+import { applyMarkup } from '../utils/markup';
 import { pinProducts, categorizePinProducts } from '../data/pinCategories';
 
 // Recharge PIN is currently a Malaysia-only product. Keep this list
@@ -242,7 +243,9 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
   if (review) {
     const role = String(profile?.role || 'customer');
     const multiplier = Number(pricing?.rolePricing?.[role]?.rechargePointCostPerUnit ?? pricing?.rechargePointCostPerUnit ?? 1);
-    const deduction = Math.round(review.liveAmount * (Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1) * 100) / 100;
+    // MySheba's markup, then the PIN multiplier, as the server charges it.
+    const marked = applyMarkup(pricing, { service: 'rechargePin', country, productCode: product?.code || operator, amount: review.liveAmount }).amount;
+    const deduction = Math.round(marked * (Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1) * 100) / 100;
     const walletCurrency = profile?.walletCurrency || 'MYR';
     const balance = Number(profile?.walletBalance ?? profile?.balance ?? 0);
     const cost = Number(selectedOption?.cost?.amount);
@@ -259,7 +262,7 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
         ['Delivery', 'PIN shown on screen after payment'],
       ]}
       prices={[
-        ['Selling / transaction amount', formatMoney(review.liveAmount, review.currency)],
+        ['Selling / transaction amount', formatMoney(marked, review.currency)],
         ['Provider cost price', Number.isFinite(cost) && cost > 0 ? formatMoney(cost, review.currency) : 'Not provided by provider'],
         ['Wallet balance before', formatMoney(balance, walletCurrency)],
         ['Wallet balance after (estimated)', formatMoney(balance - deduction, walletCurrency)],
@@ -329,6 +332,15 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
         return <TouchableOpacity key={item.code} onPress={() => { setSelectedOption(item); setAmount(value); setVoucher(null); }} style={[styles.amount, selectedOption?.code === item.code && styles.amountSelected]}>
           <Text style={styles.amountIcon}>💳</Text><Text style={[styles.amountText, selectedOption?.code === item.code && styles.amountTextSelected]}>{currency} {Number.isFinite(value) ? value : item.label || item.code}</Text>
           {!!item.label && <Text style={styles.optionMeta} numberOfLines={2}>{item.label}</Text>}
+          {(() => {
+            // The face value leads; what the wallet pays follows when MySheba's
+            // markup or the PIN multiplier makes it different.
+            const role = String(profile?.role || 'customer');
+            const multiplier = Number(pricing?.rolePricing?.[role]?.rechargePointCostPerUnit ?? pricing?.rechargePointCostPerUnit ?? 1);
+            const marked = Number.isFinite(value) ? applyMarkup(pricing, { service: 'rechargePin', country, productCode: product?.code, amount: value }).amount : NaN;
+            const pay = Math.round(marked * (Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1) * 100) / 100;
+            return Number.isFinite(pay) && Math.abs(pay - value) > 0.001 ? <Text style={styles.optionMeta}>Pay RM {pay.toFixed(2)}</Text> : null;
+          })()}
         </TouchableOpacity>;
       })}</View>}
       {!!product && !loadingOptions && !options.length && <Text style={styles.error}>IIMMPACT returned no active denominations for this product.</Text>}

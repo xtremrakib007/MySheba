@@ -46,6 +46,8 @@ export function catalogTileKey(name) {
 // prepaid reload, and must not be folded into Mobile Recharge.
 export const NATIVE_CATEGORY_MERGES = [
   { tileKey: 'recharge', pattern: /^(mobile )?(prepaid|airtime|reload|top ?up)( reload| top ?up)?$/ },
+  // Mobile Recharge sells other countries' airtime from this category.
+  { tileKey: 'recharge', pattern: /^international (top ?up|recharge|airtime|reload)s?$/ },
   { tileKey: 'internet', pattern: /^(mobile )?(data|internet)( plans?| packages?| bundles?)?$/ },
   { tileKey: 'rechargePin', pattern: /^(mobile |telco )?pins?( vouchers?)?$/ },
 ];
@@ -120,12 +122,56 @@ export function catalogCategories(catalog) {
     .map(({ voucherCodes, ...entry }) => ({ ...entry, vouchersOnly: voucherCodes === entry.codes.length }));
 }
 
+// IIMMPACT's bills group: every category in it is a biller list, which is
+// exactly what Bill Payment's category and biller steps show.
+const BILLS_GROUP = /\b(bills?|utilit(y|ies))\b/;
+
+/** Whether a category belongs to IIMMPACT's bills group. */
+export function isBillCategory(category) {
+  return BILLS_GROUP.test(categoryPhrase(category?.group));
+}
+
 /** The native tile key a category merges into, or '' when it has none. */
 export function nativeTileFor(category, nativeKeys) {
   const phrase = categoryPhrase(category?.name ?? category);
   const keys = nativeKeys instanceof Set ? nativeKeys : new Set(nativeKeys || []);
+  if (isBillCategory(category) && keys.has('billpayment')) return 'billpayment';
   const rule = NATIVE_CATEGORY_MERGES.find((merge) => merge.pattern.test(phrase));
   return rule && keys.has(rule.tileKey) ? rule.tileKey : '';
+}
+
+// The drawing Bill Payment shows for a bill category.
+function billArt(phrase) {
+  if (/water/.test(phrase)) return 'billWater';
+  if (/electric/.test(phrase)) return 'billElectricity';
+  if (/broadband|internet|fibre|fiber/.test(phrase)) return 'billInternet';
+  if (/postpaid|mobile/.test(phrase)) return 'billMobile';
+  if (/entertainment|tv|astro/.test(phrase)) return 'billTv';
+  if (/gas/.test(phrase)) return 'billGas';
+  return 'billUtilities';
+}
+
+/**
+ * Bill Payment's categories and billers, straight from IIMMPACT's bills group:
+ * every biller IIMMPACT sells, under the category IIMMPACT files it in, each
+ * carrying its product code so the order names the product rather than
+ * leaving the server to guess it from a biller's spelling.
+ */
+export function billCategories(catalog) {
+  const products = (catalog && catalog.products) || {};
+  return catalogCategories(catalog)
+    .filter((category) => isBillCategory(category))
+    .map((category) => ({
+      key: 'iimmpact:' + category.phrase,
+      label: category.name,
+      art: billArt(category.phrase),
+      imageUrl: category.imageUrl,
+      billers: category.codes
+        .map((code) => products[code] && { name: String(products[code].name || code).trim(), code: String(products[code].code || code), imageUrl: String(products[code].image_url || '') })
+        .filter(Boolean)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    }))
+    .filter((category) => category.billers.length > 0);
 }
 
 /** One tile per catalogue category that no native tile already sells. */

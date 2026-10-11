@@ -10,6 +10,7 @@ import { purchaseRechargePin } from '../firebase/rechargePinService';
 import { useIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
 import ConfirmReview, { formatMoney } from '../components/ConfirmReview';
 import { catalogCategories } from '../components/iimmpactTiles';
+import { applyMarkup } from '../utils/markup';
 import { radius } from '../theme/theme';
 
 const norm = (v) => String(v || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
@@ -62,11 +63,11 @@ function inputKeyboard(field) {
   return 'default';
 }
 
-function optionLabel(option, showWholesale = false) {
+function optionLabel(option, showWholesale = false, priceFor = (amount) => amount) {
   const parts = [option?.label || option?.description || option?.code];
   if (option?.validity) parts.push(option.validity);
   const price = option?.price?.amount;
-  if (price != null) parts.push('Sell RM ' + Number(price).toFixed(2));
+  if (price != null) parts.push('Sell RM ' + Number(priceFor(Number(price))).toFixed(2));
   const cost = option?.cost?.amount;
   if (showWholesale && cost != null) parts.push('Provider cost RM ' + Number(cost).toFixed(4));
   const rrp = option?.rrp?.amount;
@@ -79,8 +80,18 @@ export default function IimmpactProductScreen({ category }) {
     try { return decodeURIComponent(String(category || '')); } catch { return String(category || ''); }
   }, [category]);
 
-  const { goBackOrHome, profile } = useApp();
+  const { goBackOrHome, profile, pricing } = useApp();
   const isSuperadmin = String(profile?.role || '').toLowerCase() === 'superadmin';
+  // What the customer pays for a provider price: MySheba's markup, and for a
+  // PIN product the PIN multiplier too - the same steps the server takes.
+  const customerPrice = (amount, product = selectedProduct) => {
+    const pin = isPinProduct(product);
+    const marked = applyMarkup(pricing, { service: pin ? 'rechargePin' : 'iimmpact', country: 'MY', productCode: product?.code, amount }).amount;
+    if (!pin) return marked;
+    const role = String(profile?.role || 'customer');
+    const multiplier = Number(pricing?.rolePricing?.[role]?.rechargePointCostPerUnit ?? pricing?.rechargePointCostPerUnit ?? 1);
+    return Math.round(marked * (Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1) * 100) / 100;
+  };
   const { colors, brandGradient } = useTheme();
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedBrand, setSelectedBrand] = useState(null);
@@ -372,7 +383,10 @@ export default function IimmpactProductScreen({ category }) {
   if (reviewing && pendingPurchase) {
     const balance = Number(profile?.walletBalance ?? profile?.balance ?? 0);
     const walletCurrency = profile?.walletCurrency || 'MYR';
-    const sell = Number(pendingPurchase.sellAmount || 0);
+    // The provider's price is what the server re-checks; the customer pays it
+    // with MySheba's markup on top.
+    const providerSell = Number(pendingPurchase.sellAmount || 0);
+    const sell = customerPrice(providerSell);
     const cost = Number(pendingPurchase.pricingOption?.cost?.amount ?? pendingPurchase.amount);
     return <ConfirmReview
       title={'Confirm ' + (pendingPurchase.productName || 'Purchase')}
@@ -555,7 +569,7 @@ export default function IimmpactProductScreen({ category }) {
                           const selected = selectedOptions[id]?.code === option?.code;
                           return (
                             <TouchableOpacity key={String(option?.code || index)} style={[st.option, selected && st.optionSelected]} onPress={() => chooseOption(field, option)}>
-                              <Text style={[st.optionText, selected && st.optionTextSelected]}>{optionLabel(option, isSuperadmin)}</Text>
+                              <Text style={[st.optionText, selected && st.optionTextSelected]}>{optionLabel(option, isSuperadmin, (amount) => customerPrice(amount))}</Text>
                             </TouchableOpacity>
                           );
                         })}
