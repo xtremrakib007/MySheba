@@ -6,9 +6,8 @@ import { radius, tileGrid } from '../theme/theme';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import { useServiceAction, Tile } from '../components/ServiceGrid';
-import { moreFeaturesSections, visibleTiles } from '../components/serviceTiles';
-import { providerFor, coveredKeys, IIMMPACT } from '../components/providerGrids';
-import { useIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
+import { moreFeaturesSections } from '../components/serviceTiles';
+import { coveredKeys } from '../components/providerGrids';
 import * as gridManagementService from '../firebase/gridManagementService';
 
 
@@ -49,14 +48,10 @@ export default function MoreFeaturesScreen() {
   const handlePress = useServiceAction();
   const isActive = (key) => gridManagementService.isGridActive(gridManagement, key, gridViewer);
   const visible = (items) => items.filter((item) => isActive(item.key));
-  // The home screen's provider groups open every catalogue product, so this
-  // screen drops the fixed product tiles they replace and keeps the rest:
-  // features that are not provider products, and All Products. With no
-  // catalogue yet nothing is covered and the fixed overflow is unchanged.
-  const country = gridViewer?.country || '';
-  const { catalog } = useIimmpactCatalog({ enabled: providerFor(country) === IIMMPACT });
-  const nativeKeys = visibleTiles({ role, can, webviewPages, tileLabels, viewer: gridViewer, isActive }).map((tile) => tile.key);
-  const covered = coveredKeys({ country, catalog, nativeKeys });
+  // The home screen's provider groups open every product the fixed product
+  // tiles used to, so those are not repeated here. What remains is everything
+  // that is not a provider product, plus All Products.
+  const covered = coveredKeys({ country: gridViewer?.country || '' });
   const serviceTiles = visible(sections.flatMap((section) => section.tiles)).filter((tile) => !covered.has(tile.key));
   const isCustomer = !profile?.role || profile.role === 'customer';
 

@@ -1,24 +1,33 @@
 // MySheba's grids, drawn from the provider that serves the user's country.
 //
-// A Malaysian user's home screen leads with IIMMPACT's own groups (Mobile,
-// Bills, Vouchers, Games, ...): each opens a native grid of that group's
-// categories, and each category opens the flow that sells it - Mobile Prepaid
-// is Mobile Recharge already on its number step, Water Bills is Bill Payment
-// already on its biller step, a voucher category is its product grid.
+// Malaysia (IIMMPACT) has five home groups, each a native grid one level down:
 //
-// A Bangladeshi user's is drawn from Success TopUp. It has no category tree,
-// so its groups are the services it sells - Mobile Recharge, Internet, Offer
-// Packs, Bill Payment - and the tiles inside are its own operators and
-// billers, each opening that flow with the operator or bill category chosen.
+//   Mobile    Prepaid Reload, PIN, Internet, International Reload
+//   Bills     Postpaid, Electric, Water, Streaming/TV, Loan, Local Council,
+//             Broadband, JomPAY, International Bills
+//   Vouchers  IIMMPACT's voucher categories -> products -> denomination
+//   Games     IIMMPACT's game categories    -> products -> denomination
+//   E-Wallet  Touch 'n Go PIN, Touch 'n Go Pinless, TrueMoney... -> denomination
+//
+// Each tile opens the flow that sells it, already past what the tile answers:
+// Water Bill is Bill Payment on its biller step, Prepaid Reload is Recharge on
+// its number step. Bills, vouchers, games and wallets come from IIMMPACT's
+// live catalogue; Mobile and the fixed bill types are always there.
+//
+// Bangladesh (Success TopUp) has no category tree, so its groups are the
+// services it sells - Mobile Recharge, Internet, Offer Packs, Bill Payment -
+// with its own operators and bill categories inside.
 //
 // The fixed product tiles these groups replace are dropped (coveredKeys), so
-// nothing is offered twice. Everything that is not a provider product -
-// Flight, Bus, Train, Visa, Remittance, Salary - is untouched.
+// nothing is offered twice. Flight, Bus, Train, Visa, Remittance, Salary and
+// the rest are untouched.
+//
+// Every tile carries a picture: the provider's own image where it has one,
+// otherwise one of the app's tile photos, named in `art`.
 //
 // Pure: data in, tiles out.
 
-import { catalogCategories, catalogTileKey, categoryPhrase, nativeTileFor } from './iimmpactTiles';
-import { PIN_CATEGORY_TILE_KEYS } from './iimmpactTiles';
+import { billCategories, catalogCategories, categoryPhrase, PIN_CATEGORY_TILE_KEYS } from './iimmpactTiles';
 import { rechargeOperators, internetOperators } from '../data/countries';
 import { BILLERS, BILL_CATEGORIES } from '../data/billers';
 
@@ -30,84 +39,137 @@ export function providerFor(country) {
   return String(country || '').trim().toUpperCase() === 'BD' ? SUCCESS_TOPUP : IIMMPACT;
 }
 
-// The drawing a group shows when the provider has no icon for it.
-function groupArt(name) {
-  const p = categoryPhrase(name);
-  if (/\bbills?\b|utilit/.test(p)) return 'billpayment';
-  if (/vouchers?|gift|pin/.test(p)) return 'rechargePin';
-  if (/games?|gaming|entertainment/.test(p)) return 'entertainment';
-  if (/wallet/.test(p)) return 'walletTransfer';
-  if (/\be ?sim|travel/.test(p)) return 'esim';
-  if (/internet|data/.test(p)) return 'internet';
-  if (/mobile|top ?up|recharge|prepaid/.test(p)) return 'recharge';
-  return 'more';
+const MY = { country: 'MY', currency: 'MYR' };
+const slug = (value) => categoryPhrase(value).replace(/ /g, '_') || 'item';
+
+// ---------------------------------------------------------------- Malaysia --
+
+const MY_GROUPS = [
+  { key: 'grp_mobile', name: 'Mobile', art: 'photoRecharge' },
+  { key: 'grp_bills', name: 'Bills', art: 'photoBillpayment' },
+  { key: 'grp_vouchers', name: 'Vouchers', art: 'photoRechargePin' },
+  { key: 'grp_games', name: 'Games', art: 'photoEntertainment' },
+  { key: 'grp_ewallet', name: 'E-Wallet', art: 'photoTngewallet' },
+];
+
+function mobileTiles() {
+  return [
+    { key: 'mobile_prepaid', name: 'Prepaid Reload', art: 'photoRecharge', kind: 'seededService', service: 'recharge', seed: MY, startStep: 1 },
+    { key: 'mobile_pin', name: 'PIN', art: 'photoRechargePin', kind: 'pinCategory', pinCategory: 'mobile' },
+    { key: 'mobile_internet', name: 'Internet', art: 'photoInternet', kind: 'seededService', service: 'internet', seed: MY, startStep: 1 },
+    // Starts at the country: the destination is the first thing it asks.
+    { key: 'mobile_international', name: 'International Reload', art: 'photoRemittance', kind: 'seededService', service: 'recharge', seed: {}, startStep: 0 },
+  ];
 }
 
-const groupKey = (name) => 'grp_' + (categoryPhrase(name).replace(/ /g, '_') || 'other');
+// The bill types, in this order. `match` finds IIMMPACT's own category for it;
+// `fallback` is the built-in Bill Payment category used when the catalogue
+// has none (or has not loaded), so the type still opens a biller list.
+const BILL_TYPES = [
+  { key: 'bill_postpaid', name: 'Postpaid Bill', art: 'photoBillMobile', match: /postpaid|mobile/, fallback: 'mobile' },
+  { key: 'bill_electric', name: 'Electric Bill', art: 'photoBillElectricity', match: /electric/, fallback: 'electricity' },
+  { key: 'bill_water', name: 'Water Bill', art: 'photoBillWater', match: /water/, fallback: 'water' },
+  { key: 'bill_tv', name: 'Streaming / TV Bill', art: 'photoBillTv', match: /stream|tv|astro|entertainment/, fallback: 'tv' },
+  { key: 'bill_loan', name: 'Loan', art: 'photoBillUtilities', match: /loan|financ/, fallback: '' },
+  { key: 'bill_council', name: 'Local Council', art: 'photoBillUtilities', match: /council|majlis|municipal|assessment/, fallback: '' },
+  { key: 'bill_broadband', name: 'Broadband Bill', art: 'photoBillInternet', match: /broadband|fibre|fiber|internet/, fallback: 'internet' },
+];
 
-/**
- * IIMMPACT's groups in its own order, each with its categories. A category in
- * no group (Other Products) gets a group of its own rather than vanishing.
- */
-export function iimmpactGroups(catalog) {
-  const icons = new Map();
-  for (const group of Array.isArray(catalog?.tree?.groups) ? catalog.tree.groups : []) {
-    if (group?.name && !icons.has(categoryPhrase(group.name))) icons.set(categoryPhrase(group.name), String(group.icon_url || ''));
+function billTiles(catalog) {
+  const fromCatalog = billCategories(catalog);
+  const tiles = [];
+  for (const type of BILL_TYPES) {
+    const found = fromCatalog.find((category) => type.match.test(category.key.replace(/^iimmpact:/, '')));
+    const category = found ? found.key : (type.fallback && (BILLERS.MY?.[type.fallback] || []).length ? type.fallback : '');
+    if (!category) continue;
+    tiles.push({
+      key: type.key,
+      name: type.name,
+      imageUrl: (found && found.imageUrl) || '',
+      art: type.art,
+      kind: 'seededService',
+      service: 'billpayment',
+      seed: { ...MY, category },
+      startStep: 2,
+    });
   }
-  const groups = new Map();
-  for (const category of catalogCategories(catalog)) {
-    const name = category.group || category.name;
-    const key = groupKey(name);
-    if (!groups.has(key)) {
-      groups.set(key, { key, name, imageUrl: icons.get(categoryPhrase(name)) || '', art: groupArt(name), categories: [] });
-    }
-    groups.get(key).categories.push(category);
-  }
-  return [...groups.values()];
+  tiles.push(
+    // JomPAY's own flow: biller code, Ref-1 and IC are asked on the next step.
+    { key: 'bill_jompay', name: 'JomPAY', art: 'photoJompay', kind: 'seededService', service: 'billpayment', seed: { ...MY, category: 'jompay', provider: 'JomPAY' }, startStep: 3 },
+    // Other countries' billers start at the country.
+    { key: 'bill_international', name: 'International Bills', art: 'photoBillpayment', kind: 'seededService', service: 'billpayment', seed: {}, startStep: 0 },
+  );
+  return tiles;
 }
 
-/**
- * The tile a catalogue category is inside its group: the native flow that
- * sells it, started at the step after what the category already answers, or
- * its product grid when no native flow does.
- */
-export function categoryTile(category, nativeKeys) {
-  const base = {
-    key: catalogTileKey(category.name),
+// IIMMPACT categories whose group or name says what they are.
+function categoriesWhere(catalog, test) {
+  return catalogCategories(catalog).filter((category) => test(categoryPhrase(category.group), category.phrase, category));
+}
+
+const isWallet = (group, name) => /\bwallets?\b|ewallet/.test(`${group} ${name}`);
+const isGame = (group, name) => /\b(games?|gaming|console|app stores?)\b/.test(`${group} ${name}`);
+const isMobilePin = (group, name) => /^(mobile |telco )?pins?( vouchers?)?$/.test(name);
+const isVoucher = (group, name, category) =>
+  !isWallet(group, name) && !isGame(group, name) && !isMobilePin(group, name)
+  && (/\b(vouchers?|gift cards?)\b/.test(group) || category.vouchersOnly);
+
+function categoryTiles(categories) {
+  return categories.map((category) => ({
+    key: 'cat_' + slug(category.name),
     name: category.name,
     imageUrl: category.imageUrl || '',
-    art: category.imageUrl ? undefined : groupArt(category.group || category.name),
-  };
-  const malaysia = { country: 'MY', currency: 'MYR' };
-  switch (nativeTileFor(category, nativeKeys)) {
-    case 'billpayment':
-      return { ...base, kind: 'seededService', service: 'billpayment', seed: { ...malaysia, category: 'iimmpact:' + category.phrase }, startStep: 2 };
-    case 'recharge':
-      // International top-up starts at the country; Malaysian airtime is
-      // already in Malaysia and starts at the number.
-      return /international/.test(category.phrase)
-        ? { ...base, kind: 'seededService', service: 'recharge', seed: {}, startStep: 0 }
-        : { ...base, kind: 'seededService', service: 'recharge', seed: malaysia, startStep: 1 };
-    case 'internet':
-      return { ...base, kind: 'seededService', service: 'internet', seed: malaysia, startStep: 1 };
-    case 'esim':
-      return { ...base, kind: 'seededService', service: 'esim', seed: {}, startStep: 0 };
-    case 'rechargePin':
-      return { ...base, kind: 'pinCategory', pinCategory: 'mobile' };
-    default:
-      return { ...base, kind: 'iimmpactProducts', iimmpactCategory: category.name };
-  }
+    art: 'photoRechargePin',
+    kind: 'iimmpactProducts',
+    iimmpactCategory: category.name,
+  }));
 }
 
-// Success TopUp's groups: the services it sells, each with its own operators
-// or bill categories as the tiles inside.
+// Each wallet product is its own tile and opens straight on its amounts.
+function walletTiles(catalog) {
+  const products = (catalog && catalog.products) || {};
+  const tiles = [];
+  for (const category of categoriesWhere(catalog, isWallet)) {
+    for (const code of category.codes) {
+      const product = products[code];
+      if (!product) continue;
+      const name = String(product.name || code).trim();
+      tiles.push({
+        key: 'wallet_' + slug(code),
+        name,
+        imageUrl: String(product.image_url || ''),
+        art: /touch\W*n\W*go|\btng\b/i.test(name) ? 'photoTngewallet' : 'photoWalletTransfer',
+        kind: 'iimmpactProduct',
+        productCode: String(product.code || code),
+      });
+    }
+  }
+  return tiles;
+}
+
+function malaysiaGroup(key, catalog) {
+  const group = MY_GROUPS.find((item) => item.key === key);
+  if (!group) return null;
+  const tiles = {
+    grp_mobile: () => mobileTiles(),
+    grp_bills: () => billTiles(catalog),
+    grp_vouchers: () => categoryTiles(categoriesWhere(catalog, isVoucher)),
+    grp_games: () => categoryTiles(categoriesWhere(catalog, isGame)).map((tile) => ({ ...tile, art: 'photoEntertainment' })),
+    grp_ewallet: () => walletTiles(catalog),
+  }[key]();
+  return { ...group, tiles };
+}
+
+// -------------------------------------------------------------- Bangladesh --
+
 function successTopUpGroupList() {
   const bd = { country: 'BD', currency: 'BDT' };
   const operatorTiles = (service, operators) => operators.map((operator) => ({
-    key: `${service}_bd_${categoryPhrase(operator).replace(/ /g, '_')}`,
+    key: `${service}_bd_${slug(operator)}`,
     name: operator,
     // The screen draws the operator's own logo from this name.
     operator,
+    art: service === 'internet' ? 'photoInternet' : service === 'offerpacks' ? 'photoOfferpacks' : 'photoRecharge',
     kind: 'seededService',
     service,
     seed: { ...bd, operator },
@@ -118,37 +180,36 @@ function successTopUpGroupList() {
     .map((category) => ({
       key: `billpayment_bd_${category.key}`,
       name: category.label,
-      art: category.art,
+      art: 'photo' + category.art.charAt(0).toUpperCase() + category.art.slice(1),
       kind: 'seededService',
       service: 'billpayment',
       seed: { ...bd, category: category.key },
       startStep: 2,
     }));
   return [
-    { key: 'grp_bd_recharge', name: 'Mobile Recharge', art: 'recharge', tiles: operatorTiles('recharge', rechargeOperators.BD || []) },
-    { key: 'grp_bd_internet', name: 'Internet Packages', art: 'internet', tiles: operatorTiles('internet', internetOperators.BD || []) },
-    { key: 'grp_bd_offerpacks', name: 'Offer Packs', art: 'offerpacks', tiles: operatorTiles('offerpacks', rechargeOperators.BD || []) },
-    { key: 'grp_bd_bills', name: 'Bill Payment', art: 'billpayment', tiles: billTiles },
+    { key: 'grp_bd_recharge', name: 'Mobile Recharge', art: 'photoRecharge', tiles: operatorTiles('recharge', rechargeOperators.BD || []) },
+    { key: 'grp_bd_internet', name: 'Internet Packages', art: 'photoInternet', tiles: operatorTiles('internet', internetOperators.BD || []) },
+    { key: 'grp_bd_offerpacks', name: 'Offer Packs', art: 'photoOfferpacks', tiles: operatorTiles('offerpacks', rechargeOperators.BD || []) },
+    { key: 'grp_bd_bills', name: 'Bill Payment', art: 'photoBillpayment', tiles: billTiles },
   ].filter((group) => group.tiles.length > 0);
 }
 
+// ------------------------------------------------------------------ public --
+
 /** One provider group with the tiles drawn inside it, or null. */
-export function providerGroup({ provider, groupKey: key, catalog, nativeKeys }) {
-  if (provider === SUCCESS_TOPUP) return successTopUpGroupList().find((group) => group.key === key) || null;
-  const group = iimmpactGroups(catalog).find((item) => item.key === key);
-  if (!group) return null;
-  return { ...group, tiles: group.categories.map((category) => categoryTile(category, nativeKeys)) };
+export function providerGroup({ provider, groupKey, catalog }) {
+  if (provider === SUCCESS_TOPUP) return successTopUpGroupList().find((group) => group.key === groupKey) || null;
+  return malaysiaGroup(groupKey, catalog);
 }
 
 /** The group tiles a home screen leads with, for this country. */
-export function providerHomeTiles({ country, catalog }) {
+export function providerHomeTiles({ country }) {
   const provider = providerFor(country);
-  const groups = provider === SUCCESS_TOPUP ? successTopUpGroupList() : iimmpactGroups(catalog);
+  const groups = provider === SUCCESS_TOPUP ? successTopUpGroupList() : MY_GROUPS;
   return groups.map((group) => ({
     key: group.key,
     name: group.name,
-    imageUrl: group.imageUrl || '',
-    art: group.imageUrl ? undefined : group.art,
+    art: group.art,
     kind: 'providerGroup',
     provider,
     groupKey: group.key,
@@ -157,23 +218,15 @@ export function providerHomeTiles({ country, catalog }) {
   }));
 }
 
+// The fixed product tiles the Malaysian groups replace.
+const MY_COVERED = ['recharge', 'rechargePin', 'internet', 'billpayment', 'tngewallet', 'jompay', ...PIN_CATEGORY_TILE_KEYS];
 // Malaysian product tiles a Bangladeshi user's provider does not sell.
 const IIMMPACT_ONLY = ['tngewallet', 'jompay', 'esim', 'rechargePin', 'iimmpactCatalog', 'entertainment'];
 
-/**
- * The fixed tiles the provider groups replace, so they are not drawn again
- * beside them. Empty when there is nothing to draw groups from, which keeps
- * the fixed grid exactly as it was while the catalogue has never loaded.
- */
-export function coveredKeys({ country, catalog, nativeKeys }) {
+/** The fixed tiles the provider groups replace, so they are not drawn again. */
+export function coveredKeys({ country }) {
   if (providerFor(country) === SUCCESS_TOPUP) {
     return new Set(['recharge', 'internet', 'offerpacks', 'billpayment', ...IIMMPACT_ONLY, ...PIN_CATEGORY_TILE_KEYS]);
   }
-  const categories = catalogCategories(catalog);
-  if (!categories.length) return new Set();
-  const covered = new Set(categories.map((category) => nativeTileFor(category, nativeKeys)).filter(Boolean));
-  // The PIN Generator's own category tiles are views over IIMMPACT's voucher
-  // categories, which the Vouchers group now shows under IIMMPACT's names.
-  if (categories.some((category) => category.vouchersOnly)) PIN_CATEGORY_TILE_KEYS.forEach((key) => covered.add(key));
-  return covered;
+  return new Set(MY_COVERED);
 }

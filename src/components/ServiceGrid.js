@@ -117,6 +117,8 @@ export function useServiceAction() {
     // A service already part-answered by the tile: Bill Payment on Water
     // Bills, Recharge with Grameenphone chosen.
     if (s.kind === 'seededService') return startService(s.service, s.seed || {}, s.startStep || 0);
+    // One catalogue product (an E-Wallet), straight on its amounts.
+    if (s.kind === 'iimmpactProduct') return setScreen('iimmpactProduct:' + encodeURIComponent(String(s.productCode || '')));
     // A live catalogue category opens its product form directly.
     if (s.kind === 'iimmpactProducts') return setScreen('iimmpactCategory:' + encodeURIComponent(String(s.iimmpactCategory || s.name || '')));
     if (s.kind === 'moreFeaturesLink') return setScreen('moreFeatures');
@@ -190,29 +192,26 @@ export default function ServiceGrid({ homeOnly }) {
   // thing from the services they also sell, so they get their own block above.
   // What is left is the same twelve. A customer has no management block, so the
   // heading is dropped and the screen's own title does that work.
-  // The home screen leads with the user's provider's own groups - IIMMPACT's
-  // for Malaysia, Success TopUp's services for Bangladesh - and drops the
-  // fixed product tiles those groups now open. Everything that is not a
-  // provider product (Flight, Bus, Train, ...) stays. With no catalogue yet
-  // there are no groups and the fixed grid is drawn exactly as before.
+  // The home screen leads with the user's provider's groups - Mobile, Bills,
+  // Vouchers, Games and E-Wallet for Malaysia (IIMMPACT), Success TopUp's
+  // services for Bangladesh - and drops the fixed product tiles those groups
+  // replace. Everything that is not a provider product (Flight, Bus, Train,
+  // ...) stays, and More Features stays last. See providerGrids.js.
   const country = gridViewer?.country || '';
-  const { catalog } = useIimmpactCatalog({ enabled: !!homeOnly && providerFor(country) === IIMMPACT });
   const isActive = (key) => gridManagementService.isGridActive(gridManagement, key, gridViewer);
+  // Warm the catalogue the group screens draw from, so they open instantly.
+  useIimmpactCatalog({ enabled: !!homeOnly && providerFor(country) === IIMMPACT });
   let mergedServices = services;
   if (homeOnly) {
-    const groups = providerHomeTiles({ country, catalog }).filter((tile) => isActive(tile.key));
-    if (groups.length) {
-      const nativeKeys = visibleTiles({ role, can, webviewPages, tileLabels, viewer: gridViewer, dynamicFeatures: dynamicPlatformFeatures, isActive }).map((tile) => tile.key);
-      const covered = coveredKeys({ country, catalog, nativeKeys });
-      const kept = services.filter((tile) => !covered.has(tile.key));
-      const more = kept.filter((tile) => tile.kind === 'moreFeaturesLink');
-      mergedServices = [
-        ...kept.filter((tile) => tile.cat === 'manage'),
-        ...groups,
-        ...kept.filter((tile) => tile.cat !== 'manage' && tile.kind !== 'moreFeaturesLink'),
-        ...more,
-      ];
-    }
+    const groups = providerHomeTiles({ country }).filter((tile) => isActive(tile.key));
+    const covered = coveredKeys({ country });
+    const kept = services.filter((tile) => !covered.has(tile.key));
+    mergedServices = [
+      ...kept.filter((tile) => tile.cat === 'manage'),
+      ...groups,
+      ...kept.filter((tile) => tile.cat !== 'manage' && tile.kind !== 'moreFeaturesLink'),
+      ...kept.filter((tile) => tile.kind === 'moreFeaturesLink'),
+    ];
   }
   const blocks = [];
   const manage = mergedServices.filter((t) => t.cat === 'manage');

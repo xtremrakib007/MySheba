@@ -75,7 +75,7 @@ function optionLabel(option, showWholesale = false, priceFor = (amount) => amoun
   return parts.filter(Boolean).join(' • ');
 }
 
-export default function IimmpactProductScreen({ category }) {
+export default function IimmpactProductScreen({ category, productCode = '' }) {
   const decodedCategory = useMemo(() => {
     try { return decodeURIComponent(String(category || '')); } catch { return String(category || ''); }
   }, [category]);
@@ -151,6 +151,19 @@ export default function IimmpactProductScreen({ category }) {
     setOptionBusy({});
     setError('');
   }, [decodedCategory]);
+
+  // Opened on one product (an E-Wallet tile): go straight to its amounts once
+  // the catalogue has it, and leave the screen when backing out of it.
+  const directCode = String(productCode || '');
+  const directProduct = directCode && products[directCode] ? { ...products[directCode], code: String(products[directCode].code || directCode) } : null;
+  useEffect(() => {
+    if (!directProduct || selectedProduct) return;
+    setSelectedProduct(directProduct);
+    setValues(isPinProduct(directProduct) ? { __account: malaysianNational(profile?.phone) } : {});
+    setSelectedOptions({});
+    setOptions({});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [directProduct?.code]);
 
   const fields = useMemo(() => Array.isArray(selectedProduct?.fields)
     ? [...selectedProduct.fields].sort((a, b) => Number(a?.order || 0) - Number(b?.order || 0))
@@ -434,8 +447,8 @@ export default function IimmpactProductScreen({ category }) {
     <View style={st.screen}>
       <LinearGradient colors={brandGradient} style={st.head}>
         <HeaderDecor />
-        <TouchableOpacity onPress={selectedProduct ? () => { setSelectedProduct(null); setValues({}); setSelectedOptions({}); } : selectedBrand ? () => setSelectedBrand(null) : goBackOrHome}><Text style={st.back}>←</Text></TouchableOpacity>
-        <View style={{flex:1}}><Text style={st.ht}>{decodedCategory || 'Marketplace'}</Text><Text style={st.hs}>IIMMPACT • live catalogue</Text></View>
+        <TouchableOpacity onPress={directCode ? goBackOrHome : selectedProduct ? () => { setSelectedProduct(null); setValues({}); setSelectedOptions({}); } : selectedBrand ? () => setSelectedBrand(null) : goBackOrHome}><Text style={st.back}>←</Text></TouchableOpacity>
+        <View style={{flex:1}}><Text style={st.ht}>{(directCode && selectedProduct?.name) || decodedCategory || 'Marketplace'}</Text><Text style={st.hs}>IIMMPACT • live catalogue</Text></View>
       </LinearGradient>
 
       <ScrollView contentContainerStyle={st.body} keyboardShouldPersistTaps="handled">
@@ -486,7 +499,8 @@ export default function IimmpactProductScreen({ category }) {
                 </View>
               </>
             )}
-            {!productList.length && <Text style={st.empty}>No active products are currently published in this category.</Text>}
+            {!productList.length && !directCode && <Text style={st.empty}>No active products are currently published in this category.</Text>}
+            {!!directCode && !directProduct && <Text style={st.empty}>This product is not available right now.</Text>}
           </>
         ) : (
           <>
