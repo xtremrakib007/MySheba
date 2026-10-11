@@ -6,12 +6,9 @@ import { useTheme } from '../theme/ThemeContext';
 import HeaderDecor from '../components/HeaderDecor';
 import { radius, tileGrid } from '../theme/theme';
 import { Tile, useServiceAction } from '../components/ServiceGrid';
-import { CUSTOMER_SERVICES } from '../components/serviceTiles';
 import { providerGroup, SUCCESS_TOPUP } from '../components/providerGrids';
 import { useIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
 import { getOperatorBrand } from '../data/operatorBrand';
-
-const NATIVE_KEYS = CUSTOMER_SERVICES.map((tile) => tile.key);
 
 // One provider group opened from the home screen: IIMMPACT's categories in
 // that group, or a Success TopUp service's operators and bill types, each as
@@ -25,7 +22,7 @@ export default function ProviderGroupScreen({ provider, groupKey }) {
   const styles = makeStyles(colors);
 
   const group = useMemo(
-    () => providerGroup({ provider, groupKey, catalog, nativeKeys: NATIVE_KEYS }),
+    () => providerGroup({ provider, groupKey, catalog }),
     [provider, groupKey, catalog],
   );
   const tiles = (group?.tiles || []).map((tile) => {
