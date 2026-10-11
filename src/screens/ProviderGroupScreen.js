@@ -42,7 +42,7 @@ export default function ProviderGroupScreen({ provider, groupKey }) {
         </View>
       </LinearGradient>
       <ScrollView contentContainerStyle={styles.content}>
-        {isIimmpact && loading && !group && (
+        {isIimmpact && loading && !catalog && (
           <View style={styles.state}><ActivityIndicator color={colors.primary} /><Text style={styles.info}>Loading…</Text></View>
         )}
         {!!group && (

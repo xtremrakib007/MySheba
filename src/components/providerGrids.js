@@ -62,17 +62,17 @@ function mobileTiles() {
   ];
 }
 
-// The bill types, in this order. `match` finds IIMMPACT's own category for it;
-// `fallback` is the built-in Bill Payment category used when the catalogue
-// has none (or has not loaded), so the type still opens a biller list.
+// The bill types, in this order. `match` finds IIMMPACT's own category for it.
+// A type IIMMPACT has no category for is left out: the old built-in biller
+// list it used to fall back to named billers IIMMPACT does not sell.
 const BILL_TYPES = [
-  { key: 'bill_postpaid', name: 'Postpaid Bill', art: 'photoBillMobile', match: /postpaid|mobile/, fallback: 'mobile' },
-  { key: 'bill_electric', name: 'Electric Bill', art: 'photoBillElectricity', match: /electric/, fallback: 'electricity' },
-  { key: 'bill_water', name: 'Water Bill', art: 'photoBillWater', match: /water/, fallback: 'water' },
-  { key: 'bill_tv', name: 'Streaming / TV Bill', art: 'photoBillTv', match: /stream|tv|astro|entertainment/, fallback: 'tv' },
-  { key: 'bill_loan', name: 'Loan', art: 'photoBillUtilities', match: /loan|financ/, fallback: '' },
-  { key: 'bill_council', name: 'Local Council', art: 'photoBillUtilities', match: /council|majlis|municipal|assessment/, fallback: '' },
-  { key: 'bill_broadband', name: 'Broadband Bill', art: 'photoBillInternet', match: /broadband|fibre|fiber|internet/, fallback: 'internet' },
+  { key: 'bill_postpaid', name: 'Postpaid Bill', art: 'photoBillMobile', match: /postpaid|mobile/ },
+  { key: 'bill_electric', name: 'Electric Bill', art: 'photoBillElectricity', match: /electric/ },
+  { key: 'bill_water', name: 'Water Bill', art: 'photoBillWater', match: /water/ },
+  { key: 'bill_tv', name: 'Streaming / TV Bill', art: 'photoBillTv', match: /stream|tv|astro|entertainment/ },
+  { key: 'bill_loan', name: 'Loan', art: 'photoBillUtilities', match: /loan|financ/ },
+  { key: 'bill_council', name: 'Local Council', art: 'photoBillUtilities', match: /council|majlis|municipal|assessment/ },
+  { key: 'bill_broadband', name: 'Broadband Bill', art: 'photoBillInternet', match: /broadband|fibre|fiber|internet/ },
 ];
 
 function billTiles(catalog) {
@@ -80,12 +80,12 @@ function billTiles(catalog) {
   const tiles = [];
   for (const type of BILL_TYPES) {
     const found = fromCatalog.find((category) => type.match.test(category.key.replace(/^iimmpact:/, '')));
-    const category = found ? found.key : (type.fallback && (BILLERS.MY?.[type.fallback] || []).length ? type.fallback : '');
-    if (!category) continue;
+    if (!found) continue;
+    const category = found.key;
     tiles.push({
       key: type.key,
       name: type.name,
-      imageUrl: (found && found.imageUrl) || '',
+      imageUrl: found.imageUrl || '',
       art: type.art,
       kind: 'seededService',
       service: 'billpayment',
