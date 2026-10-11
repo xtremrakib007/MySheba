@@ -266,7 +266,6 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
       ]}
       prices={[
         ['Selling / transaction amount', formatMoney(review.liveAmount, review.currency)],
-        ['Service fee', formatMoney(0, review.currency)],
         ['Provider cost price', Number.isFinite(cost) && cost > 0 ? formatMoney(cost, review.currency) : 'Not provided by provider'],
         ['Wallet balance before', formatMoney(balance, walletCurrency)],
         ['Wallet balance after (estimated)', formatMoney(balance - deduction, walletCurrency)],
