@@ -10,6 +10,8 @@ import { FormLabel, Grid3, OperatorCard, FormInput, SummaryCard } from '../compo
 import PackagePicker from '../components/PackagePicker';
 import CountrySelectCard from '../components/CountrySelectCard';
 import * as apiProviderService from '../firebase/apiProviderService';
+import { useIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
+import { extraDataOperators } from '../data/iimmpactRecharge';
 import ServiceInterruptionNotice from '../components/ServiceInterruptionNotice';
 import { useNetworkStatus } from '../components/useNetworkStatus';
 
@@ -18,7 +20,13 @@ import { useNetworkStatus } from '../components/useNetworkStatus';
 // conversion helper remains internal for settlement compatibility.
 export default function InternetStep({ step }) {
   const { serviceData, updateServiceData, nextStep, internetPricing } = useApp();
-  const OPERATOR_LIST = internetOperators[serviceData.country] || [];
+  // Malaysia's list also carries any data operator IIMMPACT sells beyond the
+  // built-in names, so every Mobile Data product can be reached.
+  const { catalog: iimmpactCatalog } = useIimmpactCatalog({ enabled: serviceData.country === 'MY' });
+  const builtInOperators = internetOperators[serviceData.country] || [];
+  const OPERATOR_LIST = serviceData.country === 'MY'
+    ? [...builtInOperators, ...extraDataOperators(iimmpactCatalog, builtInOperators)]
+    : builtInOperators;
 
   // The number is collected first so the operator can be read off it. A
   // detected operator is selected and its step skipped, as asked. Prefixes are
@@ -109,7 +117,7 @@ export default function InternetStep({ step }) {
   }
 
   if (step === 2) {
-    const list = internetOperators[serviceData.country] || [];
+    const list = OPERATOR_LIST;
     return <View><FormLabel>Select Operator</FormLabel><Grid3>{list.map((o) => { const brand = getOperatorBrand(o); return <OperatorCard key={o} name={o} logo={brand.logo} color={brand.color} initials={brand.initials} selected={serviceData.operator === o} onPress={() => { updateServiceData({ operator: o, package: null, amount: null }); nextStep(); }} />; })}</Grid3></View>;
   }
 

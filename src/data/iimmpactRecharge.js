@@ -105,3 +105,41 @@ export function rechargeProductsFromCatalog(catalog, { country = 'MY', countryNa
   }
   return out;
 }
+
+// Short operator names IIMMPACT spells differently in product names.
+const OPERATOR_ALIASES = {
+  hotlink: ['hotlink'], tunetalk: ['tunetalk', 'tune talk'], yes: ['yes'], xox: ['xox', 'onexox'],
+  celcom: ['celcom', 'celcomdigi'], digi: ['digi', 'celcomdigi'], umobile: ['umobile', 'u mobile'],
+};
+const DATA_CATEGORY = /^(mobile )?(data|internet)( plans?| packages?| bundles?)?$/;
+
+/**
+ * Data operators IIMMPACT sells that the built-in list has no entry for.
+ *
+ * The Internet step offers a fixed operator list per country, and a "Mobile
+ * Data" product for any operator not on it (Unifi Mobile, say) could not be
+ * reached at all. The built-in names are kept - they carry logos and number
+ * detection - and anything IIMMPACT adds beyond them is appended under the
+ * product's own name, which the server's data-plan lookup matches exactly.
+ */
+export function extraDataOperators(catalog, staticOperators = []) {
+  const products = catalog && catalog.products && typeof catalog.products === 'object' ? catalog.products : {};
+  const groups = Array.isArray(catalog && catalog.tree && catalog.tree.groups) ? catalog.tree.groups : [];
+  const known = staticOperators.flatMap((name) => OPERATOR_ALIASES[norm(name)] || [name]).map(norm).filter(Boolean);
+  const out = [];
+  for (const group of groups) {
+    for (const category of (Array.isArray(group && group.categories) ? group.categories : [])) {
+      const label = String((category && category.name) || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      if (!DATA_CATEGORY.test(label)) continue;
+      for (const code of (Array.isArray(category.product_codes) ? category.product_codes : [])) {
+        const p = products[String(code)];
+        if (!p || p.is_active === false) continue;
+        const name = String(p.name || p.label || code).trim();
+        const n = norm(name);
+        if (!n || known.some((k) => n.includes(k)) || out.includes(name)) continue;
+        out.push(name);
+      }
+    }
+  }
+  return out;
+}

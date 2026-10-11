@@ -21,9 +21,12 @@
 // Nothing here touches React or the network: it is data in, tiles out, so the
 // merge can be computed in a test.
 
-import { categorizePinProducts, isVoucherProduct, PIN_CATEGORIES } from '../data/pinCategories';
+import { categorizePinProducts, isPinServed, PIN_CATEGORIES } from '../data/pinCategories';
 
 export const IIMMPACT_CATALOG_CACHE_KEY = '@mysheba/iimmpact-catalog/MY/v1';
+
+/** The category holding products IIMMPACT lists under none of its own. */
+export const OTHER_PRODUCTS = 'Other Products';
 
 /** A category name as a comparable phrase: "Food & Beverage" -> "food and beverage". */
 export function categoryPhrase(value) {
@@ -93,11 +96,24 @@ export function catalogCategories(catalog) {
       }
       const entry = byPhrase.get(phrase);
       for (const code of active) if (!entry.codes.includes(code)) entry.codes.push(code);
-      if (active.length && active.every((code) => isVoucherProduct(products[code]))) entry.voucherCodes += active.length;
+      if (active.length && active.every((code) => isPinServed(products[code], name))) entry.voucherCodes += active.length;
       if (!entry.imageUrl) {
         entry.imageUrl = String(category?.icon_url || group?.icon_url || products[active[0]]?.image_url || '');
       }
     }
+  }
+  // A product IIMMPACT lists under no category would otherwise be in no grid
+  // at all. They are gathered into one more category rather than dropped.
+  const listed = new Set([...byPhrase.values()].flatMap((entry) => entry.codes));
+  const unlisted = Object.entries(products)
+    .filter(([code, product]) => product && product.is_active !== false && !listed.has(String(product.code || code)))
+    .map(([code, product]) => String(product.code || code));
+  if (unlisted.length) {
+    byPhrase.set(categoryPhrase(OTHER_PRODUCTS), {
+      id: 'unlisted', name: OTHER_PRODUCTS, phrase: categoryPhrase(OTHER_PRODUCTS), group: '',
+      imageUrl: '', codes: unlisted,
+      voucherCodes: unlisted.filter((code) => isPinServed(products[code])).length,
+    });
   }
   return [...byPhrase.values()]
     .filter((entry) => entry.codes.length > 0)

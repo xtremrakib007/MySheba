@@ -28,6 +28,8 @@ export const SERVICE_EMOJI = {
   // the rest of the catalogue, in the same spirit
   billpayment: '🧾',
   rechargePin: '🎟️',
+  pinCategoryFuel: '⛽',
+  iimmpactCatalog: '🛍️',
   offerpacks: '🎁',
   entertainment: '🎬',
   salary: '💰',

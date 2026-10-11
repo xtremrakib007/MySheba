@@ -1,4 +1,5 @@
 import { httpsCallable } from 'firebase/functions';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { functions } from './config';
 
 const listFn = httpsCallable(functions, 'listApiProviders');
@@ -66,8 +67,13 @@ export async function listSuccessTopUpDrives(operator, type, service = 'Internet
  * different things to tell somebody.
  */
 export async function listProviderDataPlans({ service = 'Internet', country, operator, phone }) {
-  const { data } = await dataPlansFn({ service, country, operator, phone });
-  return { plans: data?.plans || [], supported: data?.supported === true };
+  // Kept like denominations (see getIimmpactOptions): per number, since the
+  // plans are personalised to it, and re-checked by the server on confirm.
+  const key = ['plans', service, country, operator, String(phone || '').replace(/\D/g, '')].join('|');
+  return keptProviderAnswer(key, String(operator || ''), async () => {
+    const { data } = await dataPlansFn({ service, country, operator, phone });
+    return { plans: data?.plans || [], supported: data?.supported === true };
+  }, (result) => result.supported && result.plans.length > 0);
 }
 
 /**
@@ -100,11 +106,100 @@ export async function getIimmpactFullCatalogForUser(country = 'MY') {
 }
 
 export async function chargeIimmpactProduct(payload, customer = {}) {
-  return (await chargeIimmpactProductFn({ payload, customer })).data || {};
+  try {
+    return (await chargeIimmpactProductFn({ payload, customer })).data || {};
+  } catch (error) {
+    forgetIimmpactOptionsOn(error, payload?.raw?.productCode);
+    throw error;
+  }
+}
+
+// Denominations and plans, kept in MySheba.
+//
+// Every amount screen asked IIMMPACT for its options each time it opened, so
+// browsing - open Digi Pin, go back, open it again - was a provider call per
+// tap, and a slow or rate-limited answer left the amounts blank. Options are
+// now kept on the device for OPTIONS_TTL_MS: a screen draws them instantly and
+// IIMMPACT is not asked again until they expire.
+//
+// This never decides a price. Every purchase is re-checked against IIMMPACT on
+// the server when the customer confirms; if a kept amount has gone stale the
+// server refuses it ("price has changed", "no longer available") and
+// forgetIimmpactOptionsOn() drops the copy so the next open is fresh.
+const OPTIONS_TTL_MS = 12 * 60 * 60 * 1000;
+const OPTIONS_STORE_KEY = '@mysheba/iimmpact-options/v1';
+const OPTIONS_MAX_ENTRIES = 300;
+let optionsMemory = null;
+const optionsInflight = new Map();
+
+async function optionsStore() {
+  if (optionsMemory) return optionsMemory;
+  try {
+    const saved = await AsyncStorage.getItem(OPTIONS_STORE_KEY);
+    const parsed = saved ? JSON.parse(saved) : null;
+    optionsMemory = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch (_) {
+    optionsMemory = {};
+  }
+  return optionsMemory;
+}
+
+async function saveOptionsStore() {
+  try {
+    const entries = Object.entries(optionsMemory || {}).sort((a, b) => b[1].at - a[1].at).slice(0, OPTIONS_MAX_ENTRIES);
+    optionsMemory = Object.fromEntries(entries);
+    await AsyncStorage.setItem(OPTIONS_STORE_KEY, JSON.stringify(optionsMemory));
+  } catch (_) {}
+}
+
+// A provider answer from the device when one is kept and fresh, otherwise
+// from the provider - once, however many screens ask at the same moment.
+// `worthKeeping` rejects empty answers: those are more often a hiccup than a
+// product with nothing to sell, and keeping one would hide amounts for hours.
+async function keptProviderAnswer(key, product, fetch, worthKeeping) {
+  const store = await optionsStore();
+  const kept = store[key];
+  if (kept && Date.now() - kept.at < OPTIONS_TTL_MS) return kept.data;
+  if (optionsInflight.has(key)) return optionsInflight.get(key);
+  const request = fetch()
+    .then(async (data) => {
+      if (worthKeeping(data)) {
+        store[key] = { at: Date.now(), product, data };
+        await saveOptionsStore();
+      }
+      return data;
+    })
+    .finally(() => { optionsInflight.delete(key); });
+  optionsInflight.set(key, request);
+  return request;
 }
 
 export async function getIimmpactOptions({ providerId = '', productCode, fieldId, accountNumber = '', billerCode = '', page = 1, limit = 100, service = 'Recharge', country = '' }) {
-  return (await iimmpactOptionsFn({ providerId, productCode, fieldId, accountNumber, billerCode, page, limit, service, country })).data || {};
+  // Keyed by everything that changes the answer: per-number plans are kept per
+  // number, a biller's options per biller.
+  const key = [service, country, providerId, productCode, fieldId, accountNumber, billerCode, page, limit].map((v) => String(v ?? '')).join('|');
+  return keptProviderAnswer(key, String(productCode || ''), async () => (
+    (await iimmpactOptionsFn({ providerId, productCode, fieldId, accountNumber, billerCode, page, limit, service, country })).data || {}
+  ), (data) => Array.isArray(data.items) && data.items.length > 0);
+}
+
+/** Drop kept options: one product's, or all of them. */
+export async function forgetIimmpactOptions(productCode = '') {
+  const store = await optionsStore();
+  for (const [key, entry] of Object.entries(store)) {
+    if (!productCode || entry.product === String(productCode)) delete store[key];
+  }
+  await saveOptionsStore();
+}
+
+/**
+ * After a purchase fails, drop kept options if the failure says a kept amount
+ * was stale, so the customer sees IIMMPACT's current amounts when they retry.
+ */
+export function forgetIimmpactOptionsOn(error, productCode = '') {
+  if (/price has changed|no longer available|reload the product|choose it again|amount is no longer/i.test(String(error?.message || ''))) {
+    forgetIimmpactOptions(productCode).catch(() => {});
+  }
 }
 
 /**

@@ -2,6 +2,7 @@ import { httpsCallable } from 'firebase/functions';
 import * as Crypto from 'expo-crypto';
 import { functions } from './config';
 import { getSessionProof } from './deviceSessionService';
+import { forgetIimmpactOptionsOn } from './apiProviderService';
 
 const purchaseFn = httpsCallable(functions, 'purchaseRechargePin');
 
@@ -16,11 +17,18 @@ function requestId() {
 // fieldValues/selectedOptions answer any other field the product declares.
 export async function purchaseRechargePin({ operator = '', amount, country = 'MY', productCode = '', subproductCode = '', productName = '', accountNumber = '', fieldValues = {}, selectedOptions = {} }) {
   const session = await getSessionProof();
-  const { data } = await purchaseFn({
-    operator, amount, country, productCode, subproductCode, productName, accountNumber, fieldValues, selectedOptions,
-    requestId: requestId(), ...session
-  });
-  return data;
+  try {
+    const { data } = await purchaseFn({
+      operator, amount, country, productCode, subproductCode, productName, accountNumber, fieldValues, selectedOptions,
+      requestId: requestId(), ...session
+    });
+    return data;
+  } catch (error) {
+    // A kept denomination the server now refuses is dropped, so the retry
+    // shows IIMMPACT's current amounts.
+    forgetIimmpactOptionsOn(error, productCode);
+    throw error;
+  }
 }
 
 export async function getRechargePin(transactionId) {
