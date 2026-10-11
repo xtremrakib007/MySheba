@@ -11,6 +11,7 @@ import { useTheme } from '../theme/ThemeContext';
 import ServiceInterruptionNotice from '../components/ServiceInterruptionNotice';
 import { useNetworkStatus } from '../components/useNetworkStatus';
 import * as apiProviderService from '../firebase/apiProviderService';
+import { rechargeProductsFromCatalog } from '../data/iimmpactRecharge';
 
 // Recharge flow: country -> operator -> mobile number -> amount.
 // Customer-facing wallet values are always displayed as MYR. The legacy
@@ -27,6 +28,7 @@ export default function RechargeStep({ step }) {
   const OPERATOR_LIST = String(serviceData.country || '').toUpperCase() === 'BD' ? staticOperators : iimmpactOperators.map((product) => product.name);
   const selectedIimmpactProduct = iimmpactOperators.find((product) => String(product.code) === String(serviceData.productCode || '')) || null;
 
+  const wantCatalog = step >= 2;
   // In API-routed countries, use the active provider's own recharge products.
   // Static country lists can include unsupported operators and miss new ones.
   useEffect(() => {
@@ -34,7 +36,10 @@ export default function RechargeStep({ step }) {
     const country = String(serviceData.country || '').trim().toUpperCase();
     setIimmpactOperators([]);
     setCatalogUnavailable(false);
-    if (!country || country === 'BD' || step !== 2) {
+    // Kept after the operator step too: the amount step finds the chosen
+    // product in this list, and clearing it on leaving step 2 left that step
+    // with no product and so no IIMMPACT amounts to offer.
+    if (!country || country === 'BD' || !wantCatalog) {
       setCatalogLoading(false);
       return () => { alive = false; };
     }
@@ -42,84 +47,21 @@ export default function RechargeStep({ step }) {
     apiProviderService.getIimmpactCatalogForUser('', 'Recharge', country)
       .then((catalog) => {
         if (!alive) return;
-        const products = catalog && catalog.products && typeof catalog.products === 'object' ? catalog.products : {};
-        const groups = Array.isArray(catalog && catalog.tree && catalog.tree.groups) ? catalog.tree.groups : [];
-        const rechargeCodes = new Set();
-        const billCodes = new Set();
-        const billCategory = /post.?paid|bill.?payment|bill.?pay|biller|utility|electricity|water bill|gas bill|invoice|jom.?pay/i;
-        for (const group of groups) {
-          for (const category of (Array.isArray(group && group.categories) ? group.categories : [])) {
-            const taxonomy = String(group.name || '') + ' ' + String(category.name || '');
-            const codes = (Array.isArray(category.product_codes) ? category.product_codes : []).map(String);
-            // A broad group can contain both airtime and postpaid bill categories.
-            // Record bill codes independently so they can never enter Recharge
-            // merely because the parent group contains the word "recharge".
-            if (billCategory.test(taxonomy)) {
-              for (const code of codes) billCodes.add(code);
-              continue;
-            }
-            if (/recharge|airtime|top.?up|prepaid reload|mobile reload/i.test(taxonomy)) {
-              for (const code of codes) rechargeCodes.add(code);
-            }
-          }
-        }
-        const isDataPlan = (p) => Array.isArray(p && p.fields) && p.fields.some((field) => field && field.type === 'select' && field.data_source);
-        const knownNames = staticOperators.map((name) => String(name).toLowerCase().replace(/[^a-z0-9]/g, '')).filter(Boolean);
-        const countryNames = new Set(countries.map((item) => String(item.name || '').toLowerCase().replace(/[^a-z0-9]/g, '')).filter(Boolean));
-        const entries = Object.entries(products)
-          .filter(([code, p]) => {
-            if (!p || p.is_active === false || !p.code) return false;
-            const rawName = String(p.name || p.label || code).trim();
-            const name = rawName.toLowerCase();
-            const normalizedName = name.replace(/[^a-z0-9]/g, '');
-            const normalizedCode = String(p.code || code).toLowerCase().replace(/[^a-z0-9]/g, '');
-            const productCode = String(p.code || code);
-            const searchable = [name, p.description, p.label, p.note, p.processing_time, productCode]
-              .map((value) => String(value || '')).join(' ').toLowerCase();
-            // Bills, postpaid accounts and utility billers must never be treated
-            // as airtime. This guard wins even if a mixed provider taxonomy lists
-            // the same product code under a broad "Recharge" parent group.
-            if (billCodes.has(productCode) ||
-                /\b(post.?paid|bill.?payment|bill.?pay|biller|utility bill|electricity bill|water bill|gas bill|invoice|jom.?pay)\b/i.test(searchable)) return false;
-            // The catalog can contain country-level/category labels. Never render
-            // a country as an operator tile, even if its product code says "recharge".
-            if (countryNames.has(normalizedName)) return false;
-            const belongsToRechargeCategory = rechargeCodes.has(productCode);
-            const hasRechargeLabel = /recharge|airtime|top.?up|prepaid|reload|mobile.?credit|mobile.?balance|cellular.?credit/i.test(searchable);
-            const looksLikeMobileProduct = /mobile|telecom|telco|cellular|msisdn|phone.?number/i.test(searchable);
-            const matchesKnownOperator = knownNames.some((known) =>
-              normalizedName.includes(known) || known.includes(normalizedName) ||
-              normalizedCode.includes(known) || known.includes(normalizedCode));
-            // Category membership is authoritative when the provider supplies
-            // recharge taxonomy. Name-based fallback is only for catalogues with
-            // no usable recharge categories and still requires a phone/account field.
-            const fields = Array.isArray(p.fields) ? p.fields : [];
-            const hasAccountField = fields.some((field) => field && (
-              field.role === 'account' ||
-              /phone|mobile|msisdn|accountnumber/i.test(String(field.id || '') + ' ' + String(field.label || ''))
-            ));
-            const hasRechargeTaxonomy = rechargeCodes.size > 0;
-            return hasRechargeTaxonomy
-              ? belongsToRechargeCategory
-              : ((hasRechargeLabel || matchesKnownOperator || looksLikeMobileProduct) && hasAccountField);
-          })
-          .filter(([, p]) => String(p.processing_time || '').toLowerCase() !== 'pin')
-          .filter(([code, p]) => rechargeCodes.has(String(p.code || code)) || !isDataPlan(p))
-          .map(([code, p]) => ({ ...p, code: String(p.code || code), name: String(p.name || p.label || code).trim() }))
-          .filter((product) => product.name && product.code);
-        const seen = new Set();
-        const productsUnique = entries.filter((product) => {
-          const key = product.code.toLowerCase();
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
+        // Every operator IIMMPACT sells for this country: Mobile Prepaid for
+        // Malaysia, International Topup for everywhere else. See
+        // data/iimmpactRecharge.js for why category names decide this.
+        const productsUnique = rechargeProductsFromCatalog(catalog, {
+          country,
+          countryName: (countries.find((item) => item.code === country) || {}).name || '',
+          staticOperators,
+          countryNames: countries.map((item) => item.name),
         });
         setIimmpactOperators(productsUnique);
       })
       .catch(() => { if (alive) setCatalogUnavailable(true); })
       .finally(() => { if (alive) setCatalogLoading(false); });
     return () => { alive = false; };
-  }, [serviceData.country, step]);
+  }, [serviceData.country, wantCatalog]);
 
   useEffect(() => {
     let alive = true;
@@ -189,7 +131,7 @@ export default function RechargeStep({ step }) {
       {catalogLoading && <Text style={styles.catalogInfo}>Loading available operators from IIMMPACT…</Text>}
       {!catalogLoading && catalogUnavailable && serviceData.country !== 'BD' && <Text style={styles.catalogInfo}>Could not load IIMMPACT's live catalog. No static operators are shown because they may not be supported by the provider. Please retry or check the active IIMMPACT provider configuration.</Text>}
       {!catalogLoading && !catalogUnavailable && !list.length && <Text style={styles.catalogInfo}>IIMMPACT returned no active recharge products for this country. Add or enable the operator product in the IIMMPACT catalog before offering it here.</Text>}
-      <View style={styles.grid3}>{list.map((o) => { const brand = getOperatorBrand(o); return <RechargeOperatorCard key={o} name={o} logo={brand.logo} color={brand.color} initials={brand.initials} selected={serviceData.operator === o} onPress={() => { const product = String(serviceData.country || '').toUpperCase() === 'BD' ? null : iimmpactOperators.find((item) => item.name === o); const accountFieldId = String((product?.fields || []).find((field) => field && (field.role === 'account' || /phone|mobile|msisdn|accountnumber/i.test(String(field.id || '') + ' ' + String(field.label || ''))))?.id || 'phone'); updateServiceData(product ? { operator: product.name, operatorCode: product.code, productCode: product.code, productName: product.name, iimmpactCatalog: true, iimmpactFields: product.fields || [], iimmpactDenomination: product.denomination || '', iimmpactProcessingTime: product.processing_time || '', amount: null, package: '', subproductCode: '', selectedOptions: {}, fieldValues: { [accountFieldId]: String(serviceData.phone || ''), phone: String(serviceData.phone || '') } } : { operator: o, iimmpactCatalog: false, productCode: '', amount: null, selectedOptions: {}, fieldValues: {} }); nextStep(); }} styles={styles} primaryColor={colors.primary} />; })}</View>
+      <View style={styles.grid3}>{list.map((o) => { const brand = getOperatorBrand(o); const remote = iimmpactOperators.find((item) => item.name === o)?.image_url; return <RechargeOperatorCard key={o} name={o} logo={brand.logo || (remote ? { uri: remote } : null)} color={brand.color} initials={brand.initials} selected={serviceData.operator === o} onPress={() => { const product = String(serviceData.country || '').toUpperCase() === 'BD' ? null : iimmpactOperators.find((item) => item.name === o); const accountFieldId = String((product?.fields || []).find((field) => field && (field.role === 'account' || /phone|mobile|msisdn|accountnumber/i.test(String(field.id || '') + ' ' + String(field.label || ''))))?.id || 'phone'); updateServiceData(product ? { operator: product.name, operatorCode: product.code, productCode: product.code, productName: product.name, iimmpactCatalog: true, iimmpactFields: product.fields || [], iimmpactDenomination: product.denomination || '', iimmpactProcessingTime: product.processing_time || '', amount: null, package: '', subproductCode: '', selectedOptions: {}, fieldValues: { [accountFieldId]: String(serviceData.phone || ''), phone: String(serviceData.phone || '') } } : { operator: o, iimmpactCatalog: false, productCode: '', amount: null, selectedOptions: {}, fieldValues: {} }); nextStep(); }} styles={styles} primaryColor={colors.primary} />; })}</View>
     </View>);
   }
   if (step === 3) {

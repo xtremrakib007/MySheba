@@ -145,15 +145,19 @@ test('confirmation back returns to the previous screen only', () => {
 test('recharge loads active operator products from IIMMPACT', () => {
   const recharge = read('src/steps/RechargeSteps.js');
   assert.ok(recharge.includes("getIimmpactCatalogForUser('', 'Recharge', country)"));
-  assert.ok(recharge.includes('category.product_codes'), 'catalog category product codes must scope recharge products');
-  assert.ok(recharge.includes('p.is_active !== false'), 'inactive products must not be shown');
+  assert.ok(recharge.includes('rechargeProductsFromCatalog(catalog'), 'the operator list must come from the shared catalogue filter');
   assert.ok(recharge.includes("String(serviceData.country || '').toUpperCase() !== 'BD'"),
     'non-Bangladesh IIMMPACT recharge must keep the dynamic operator picker visible');
-  assert.ok(recharge.includes('const billCodes = new Set()'),
+  // The filter itself is exercised against a real catalogue shape in
+  // scripts/test-iimmpact-marketplace.js; these keep its guards in place.
+  const filter = read('src/data/iimmpactRecharge.js');
+  assert.ok(filter.includes('category.product_codes'), 'catalog category product codes must scope recharge products');
+  assert.ok(filter.includes('p.is_active === false'), 'inactive products must not be shown');
+  assert.ok(filter.includes('const billCodes = new Set()'),
     'bill/postpaid catalog codes must be tracked separately from recharge');
-  assert.ok(recharge.includes('if (billCodes.has(productCode)'),
+  assert.ok(filter.includes('if (billCodes.has(code)'),
     'postpaid bill products must be excluded even if the provider taxonomy overlaps');
-  assert.ok(recharge.includes('const hasRechargeTaxonomy = rechargeCodes.size > 0'),
+  assert.ok(filter.includes('const hasTaxonomy = scope.size > 0'),
     'when recharge taxonomy exists, do not fall back to loose name matching');
 });
 
@@ -163,13 +167,13 @@ test('IIMMPACT PIN purchases are gated by provider reach and API mode, not Malay
     'PIN service must defer country eligibility to provider reach and service mode');
   assert.ok(!pinService.includes("country !== 'MY') throw new HttpsError('failed-precondition', 'Recharge PIN is currently supported only in Malaysia."),
     'catalog-backed PIN products must not be rejected solely because country is not MY');
-  const pinScreen = read('src/screens/RechargePinScreen.js');
+  const pinScreen = read('src/data/pinCategories.js');
   assert.ok(pinScreen.includes('product.name, product.description, product.note'),
     'voucher classification must use public IIMMPACT product description as well as name');
 });
 
 test('PIN category routing keeps commerce vouchers out of Mobile Operator PIN', () => {
-  const pin = read('src/screens/RechargePinScreen.js');
+  const pin = read('src/data/pinCategories.js');
   assert.ok(/function classifyPinProduct\(product\)/.test(pin), 'one classifier must decide each PIN product category');
   assert.ok(/const exclusions = \[/.test(pin), 'specific non-telecom categories must be checked before telco matching');
   assert.ok(/touch\.?n\.?go|\\btng\\b/.test(pin), 'Touch n Go must be classified as transport before mobile PIN');

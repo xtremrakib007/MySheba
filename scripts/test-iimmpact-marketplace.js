@@ -32,8 +32,9 @@ async function test(name, fn) {
   catch (error) { failed += 1; console.error('  FAIL  ' + name + '\n        ' + (error && error.message)); }
 }
 
+// Bundled, so a module's own imports (pinCategories) come along with it.
 function runEsm(relPath) {
-  const code = esbuild.transformSync(fs.readFileSync(path.join(ROOT, relPath), 'utf8'), { loader: 'js', format: 'cjs' }).code;
+  const code = esbuild.buildSync({ entryPoints: [path.join(ROOT, relPath)], bundle: true, format: 'cjs', write: false, logLevel: 'silent' }).outputFiles[0].text;
   const box = { module: { exports: {} }, exports: {}, require: (id) => { throw new Error('unexpected require: ' + id); } };
   box.module.exports = box.exports;
   vm.createContext(box);
@@ -42,21 +43,30 @@ function runEsm(relPath) {
 }
 
 const tiles = runEsm('src/components/iimmpactTiles.js');
+const pins = runEsm('src/data/pinCategories.js');
+const recharge = runEsm('src/data/iimmpactRecharge.js');
 
 // Shaped like the production Malaysia catalogue: the same group and category
-// names the Marketplace screen lists.
-function product(code, extra = {}) { return { code, name: code, is_active: true, ...extra }; }
+// names the Marketplace screen lists, with vouchers sold as PINs.
+const PIN = { processing_time: 'pin' };
+const SPEC = {
+  PRE1: ['Celcom'], PRE2: ['Digi'], PRE3: ['Hotlink'], DATA1: ['Digi Internet'], PIN1: ['Yes Pin', PIN],
+  IDT1: ['Indonesia'], IDT2: ['Nepal'], POST1: ['Maxis Postpaid'], WATER1: ['Air Selangor'],
+  FNB1: ['Starbucks', PIN], FNB2: ['Tealive', PIN], FOOD1: ['Foodpanda Voucher', PIN], RET1: ['Shopee Voucher', PIN],
+  DV1: ['Razer Gold', PIN], GROC1: ['Lotus Grocery Voucher', PIN], TRN1: ['Touch n Go Card', PIN],
+  WELL1: ['Watsons Voucher', PIN], APP1: ['Apple Gift Card', PIN], GAMEPIN1: ['Steam Wallet Code', PIN],
+  GAME1: ['PUBG Mobile UC'], EW1: ['DuitNow QR'], IDD1: ['IDD Call Credit'],
+};
+function product(code, name, extra = {}) { return { code, name, is_active: true, ...extra }; }
 const CATALOG = {
-  products: Object.fromEntries([
-    'PRE1', 'DATA1', 'PIN1', 'IDT1', 'POST1', 'WATER1', 'FNB1', 'FNB2', 'RET1', 'DV1', 'GROC1', 'TRN1',
-    'GAME1', 'WELL1', 'APP1', 'EW1', 'IDD1',
-  ].map((code) => [code, product(code)]).concat([['DEAD1', product('DEAD1', { is_active: false })]])),
+  products: Object.fromEntries(Object.entries(SPEC).map(([code, [name, extra]]) => [code, product(code, name, extra)])
+    .concat([['DEAD1', product('DEAD1', 'Old loan', { is_active: false })]])),
   tree: {
     groups: [
       { name: 'Mobile', categories: [
-        { name: 'International Topup', product_codes: ['IDT1'] },
+        { name: 'International Topup', product_codes: ['IDT1', 'IDT2'] },
         { name: 'Mobile Data', product_codes: ['DATA1'] },
-        { name: 'Mobile Prepaid', product_codes: ['PRE1'] },
+        { name: 'Mobile Prepaid', product_codes: ['PRE1', 'PRE2', 'PRE3'] },
         { name: 'Mobile Pin', product_codes: ['PIN1'] },
         { name: 'IDD', product_codes: ['IDD1'] },
       ] },
@@ -66,7 +76,7 @@ const CATALOG = {
         { name: 'Loans', product_codes: ['DEAD1'] },
       ] },
       { name: 'Vouchers', categories: [
-        { name: 'Food & Beverage', product_codes: ['FNB1'], icon_url: 'https://cdn.example/fnb.png' },
+        { name: 'Food & Beverage', product_codes: ['FNB1', 'FOOD1'], icon_url: 'https://cdn.example/fnb.png' },
         { name: 'Retail & Shopping', product_codes: ['RET1'] },
         { name: 'Digital Voucher', product_codes: ['DV1'] },
         { name: 'Grocery', product_codes: ['GROC1'] },
@@ -75,7 +85,7 @@ const CATALOG = {
       ] },
       { name: 'Games', categories: [
         { name: 'Game Credits', product_codes: ['GAME1'] },
-        { name: 'Console & App Stores', product_codes: ['APP1'] },
+        { name: 'Console & App Stores', product_codes: ['APP1', 'GAMEPIN1'] },
       ] },
       { name: 'E-Wallet Reloads', categories: [{ name: 'E-Wallets Reload', product_codes: ['EW1'] }] },
       // The same category under a second group is one tile, not two.
@@ -84,10 +94,10 @@ const CATALOG = {
   },
 };
 
-const NATIVE = ['recharge', 'rechargePin', 'internet', 'billpayment', 'tngewallet', 'esim', 'moreFeaturesTile',
-  'pinCategoryMobile', 'pinCategoryCoffee', 'pinCategoryWellness', 'pinCategoryTransport', 'pinCategoryApple',
-  'pinCategoryShopping', 'pinCategoryGrocery', 'pinCategoryOther', 'salary'];
-const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key === 'salary').map((key) => ({ key, name: key, kind: 'pinCategory' }));
+const PIN_TILES = Array.from(pins.PIN_CATEGORIES).map((c) => c.tileKey);
+const NATIVE = ['recharge', 'rechargePin', 'internet', 'billpayment', 'tngewallet', 'esim', 'moreFeaturesTile', 'salary', ...PIN_TILES];
+const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key === 'salary')
+  .map((key) => ({ key, name: key, kind: key.startsWith('pinCategory') ? 'pinCategory' : 'salary' }));
 
 (async () => {
   console.log('\nCatalogue tiles');
@@ -98,8 +108,10 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     assert.ok(!names.includes('Loans'), 'a category whose only product is inactive must not be drawn');
     assert.strictEqual(names.filter((n) => n === 'Food & Beverage').length, 1, 'a repeated category name is one category');
     const fnb = categories.find((c) => c.name === 'Food & Beverage');
-    assert.deepStrictEqual(Array.from(fnb.codes).sort(), ['FNB1', 'FNB2'], 'its products from both groups are combined');
+    assert.deepStrictEqual(Array.from(fnb.codes).sort(), ['FNB1', 'FNB2', 'FOOD1'], 'its products from both groups are combined');
     assert.strictEqual(fnb.imageUrl, 'https://cdn.example/fnb.png');
+    assert.strictEqual(fnb.vouchersOnly, true);
+    assert.strictEqual(categories.find((c) => c.name === 'Game Credits').vouchersOnly, false);
   });
 
   await test('a category a native tile already sells is merged into it', () => {
@@ -114,31 +126,45 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
   });
 
   await test('the merged grid has each destination once', () => {
-    const merged = tiles.mergeCatalogTiles(overflow, CATALOG, NATIVE);
-    const keys = merged.map((t) => t.key);
+    const keys = tiles.mergeCatalogTiles(overflow, CATALOG, NATIVE).map((t) => t.key);
     assert.strictEqual(new Set(keys).size, keys.length, 'duplicate keys: ' + keys.join(', '));
     for (const gone of ['iimmpact_mobile_prepaid', 'iimmpact_mobile_data', 'iimmpact_mobile_pin']) {
       assert.ok(!keys.includes(gone), gone + ' duplicates a native tile');
     }
     for (const kept of ['iimmpact_international_topup', 'iimmpact_mobile_postpaid', 'iimmpact_water_bills',
-      'iimmpact_food_and_beverage', 'iimmpact_game_credits', 'iimmpact_e_wallets_reload', 'iimmpact_idd']) {
+      'iimmpact_game_credits', 'iimmpact_e_wallets_reload', 'iimmpact_idd']) {
       assert.ok(keys.includes(kept), kept + ' missing from ' + keys.join(', '));
     }
     assert.ok(keys.includes('salary'), 'unrelated tiles are untouched');
   });
 
-  await test('hand-made voucher tiles give way to the live category that replaces them', () => {
+  await test('every PIN Generator category is a native tile, and voucher categories fold into them', () => {
     const keys = tiles.mergeCatalogTiles(overflow, CATALOG, NATIVE).map((t) => t.key);
-    for (const key of Object.keys(tiles.SUPERSEDED_PIN_TILES)) {
-      assert.ok(!keys.includes(key), key + ' is still drawn beside its live category');
+    for (const key of ['pinCategoryMobile', 'pinCategoryCoffee', 'pinCategoryWellness', 'pinCategoryTransport',
+      'pinCategoryApple', 'pinCategoryShopping', 'pinCategoryGrocery', 'pinCategoryFood', 'pinCategoryGaming', 'pinCategoryOther']) {
+      assert.ok(keys.includes(key), key + ' missing from ' + keys.join(', '));
+    }
+    for (const folded of ['iimmpact_food_and_beverage', 'iimmpact_retail_and_shopping', 'iimmpact_digital_voucher',
+      'iimmpact_grocery', 'iimmpact_transportation', 'iimmpact_wellness_and_beauty', 'iimmpact_console_and_app_stores']) {
+      assert.ok(!keys.includes(folded), folded + ' is drawn beside the PIN tiles that already sell it');
     }
   });
 
-  await test('a voucher tile with no live counterpart stays', () => {
-    const partial = { ...CATALOG, tree: { groups: [{ name: 'Vouchers', categories: [{ name: 'Grocery', product_codes: ['GROC1'] }] }] } };
-    const keys = tiles.mergeCatalogTiles(overflow, partial, NATIVE).map((t) => t.key);
-    assert.ok(!keys.includes('pinCategoryGrocery'));
-    assert.ok(keys.includes('pinCategoryCoffee'), 'Coffee has no live category here, so it must stay reachable');
+  await test('the PIN tiles and the PIN screen sort products the same way', () => {
+    const byId = Object.fromEntries(Array.from(pins.categorizePinProducts(CATALOG)).map((c) => [c.id, Array.from(c.products).map((p) => p.code).sort()]));
+    assert.deepStrictEqual(byId.mobile, ['PIN1'], 'Yes Pin is a mobile operator PIN');
+    assert.deepStrictEqual(byId.coffee, ['FNB1', 'FNB2']);
+    assert.deepStrictEqual(byId.food, ['FOOD1']);
+    assert.deepStrictEqual(byId.gaming, ['GAMEPIN1']);
+    assert.deepStrictEqual(byId.apple, ['APP1']);
+    assert.ok(!Object.values(byId).flat().includes('GAME1'), 'a live game top-up is not a voucher');
+  });
+
+  await test('a PIN category with no products is not drawn once the catalogue is known', () => {
+    const noGaming = { ...CATALOG, products: Object.fromEntries(Object.entries(CATALOG.products).filter(([code]) => code !== 'GAMEPIN1')) };
+    const keys = tiles.mergeCatalogTiles(overflow, noGaming, NATIVE).map((t) => t.key);
+    assert.ok(!keys.includes('pinCategoryGaming'));
+    assert.ok(keys.includes('pinCategoryCoffee'));
   });
 
   await test('with no catalogue the grid is returned exactly as it was', () => {
@@ -153,6 +179,30 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     assert.ok(tile.art, 'a category without a logo still gets a drawing');
     const grid = fs.readFileSync(path.join(ROOT, 'src/components/ServiceGrid.js'), 'utf8');
     assert.ok(/s\.kind === 'iimmpactProducts'\) return setScreen\('iimmpactCategory:'/.test(grid), 'the tile kind must have a destination');
+  });
+
+  await test('Food & Delivery and Gaming are declared tiles that open their PIN category', () => {
+    const declared = fs.readFileSync(path.join(ROOT, 'src/components/serviceTiles.js'), 'utf8');
+    assert.ok(/key: 'pinCategoryFood'[^\n]*kind: 'pinCategory', pinCategory: 'food'/.test(declared));
+    assert.ok(/key: 'pinCategoryGaming'[^\n]*kind: 'pinCategory', pinCategory: 'gaming'/.test(declared));
+  });
+
+  console.log('\nRecharge operators');
+
+  const COUNTRIES = ['Malaysia', 'Indonesia', 'Nepal', 'Bangladesh'];
+  await test('Malaysia lists every operator IIMMPACT files under Mobile Prepaid', () => {
+    const names = Array.from(recharge.rechargeProductsFromCatalog(CATALOG, { country: 'MY', countryName: 'Malaysia', countryNames: COUNTRIES })).map((p) => p.name);
+    assert.deepStrictEqual(names, ['Celcom', 'Digi', 'Hotlink']);
+  });
+
+  await test('another country lists its own International Topup products', () => {
+    const names = Array.from(recharge.rechargeProductsFromCatalog(CATALOG, { country: 'ID', countryName: 'Indonesia', countryNames: COUNTRIES })).map((p) => p.name);
+    assert.deepStrictEqual(names, ['Indonesia'], 'a product named after its country is how international top-up is sold');
+  });
+
+  await test('bills, data, PINs, IDD, wallets and games never appear as airtime', () => {
+    const codes = Array.from(recharge.rechargeProductsFromCatalog(CATALOG, { country: 'MY', countryName: 'Malaysia', countryNames: COUNTRIES })).map((p) => p.code);
+    for (const code of ['POST1', 'WATER1', 'DATA1', 'PIN1', 'IDD1', 'EW1', 'GAME1', 'IDT1']) assert.ok(!codes.includes(code), code);
   });
 
   console.log('\nPIN Generator dispatch');

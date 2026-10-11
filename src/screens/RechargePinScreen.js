@@ -10,7 +10,9 @@ import { rechargePinBrands } from '../data/countries';
 import { getOperatorBrand } from '../data/operatorBrand';
 import { purchaseRechargePin } from '../firebase/rechargePinService';
 import * as apiProviderService from '../firebase/apiProviderService';
-import { radius } from '../theme/theme';
+import { radius, tileGrid } from '../theme/theme';
+import { Tile } from '../components/ServiceGrid';
+import { FEATURED_PIN_ORDER, isVoucherProduct, categorizePinProducts } from '../data/pinCategories';
 
 // Recharge PIN is currently a Malaysia-only product. Keep this list
 // intentionally limited so the screen cannot show unrelated country products.
@@ -18,24 +20,6 @@ const IIMMPACT_COUNTRIES = [['MY', 'Malaysia']];
 const CURRENCY_BY_COUNTRY = { MY: 'MYR', SG: 'SGD', ID: 'IDR', IN: 'INR', PH: 'PHP', NP: 'NPR', PK: 'PKR', MM: 'MMK', KH: 'KHR' };
 const MALAYSIA_OPERATORS = rechargePinBrands.MY || ['Celcom', 'CelcomDigi', 'U Mobile', 'Hotlink', 'XOX', 'Tunetalk', 'Unifi', 'Yes', "Touch 'n Go eWallet"];
 const AMOUNTS = [10, 20, 30, 50, 100];
-const PIN_CATEGORIES = [
-  { id: 'mobile', title: 'Mobile Operator PIN', pattern: /digi|celcom|hotlink|maxis|u mobile|umobile|xox|tunetalk|unifi mobile|yes telco|hello sim|mobile.*pin|telco/i },
-  { id: 'coffee', title: 'Coffee & Tea', pattern: /coffee|cafe|tea|tealive|starbucks|zuss|oldtown|kenangan/i },
-  { id: 'wellness', title: 'Health & Wellness', pattern: /health|wellness|beauty|guardian|watsons|pharmacy|fitness|spa/i },
-  { id: 'transport', title: 'Transport', pattern: /grab|transport|ride|taxi|bus|train|rapid|myrapid|touch.?n.?go|tng|travel pass/i },
-  { id: 'apple', title: 'Apple & iTunes', pattern: /apple|itunes|app store/i },
-  { id: 'shopping', title: 'Shopping PIN', pattern: /shopping|retail|shopee|lazada|mall|fashion|e-commerce|ecommerce/i },
-  { id: 'grocery', title: 'Grocery & GrabMart', pattern: /grocery|grabmart|grab mart|supermarket|foodpanda|pandamart/i },
-  { id: 'food', title: 'Food & Delivery', pattern: /food|restaurant|meal|delivery|dining|restaurant/i },
-  { id: 'gaming', title: 'Gaming & Entertainment', pattern: /game|gaming|playstation|xbox|steam|roblox|pubg|mobile legends|netflix|spotify|movie|music|stream/i },
-  { id: 'other', title: 'Other PIN & Vouchers', pattern: /.*/ },
-];
-const FEATURED_PIN_ORDER = [
-  /digi.*internet.*pin|internet.*pin.*digi/i,
-  /digipin|digi.*pin/i,
-  /hello.*sim.*pin|hello.*pin/i,
-];
-
 // Keep the last successful catalogue in memory so reopening PIN Generator or
 // switching back from a category never waits on the network to draw its grid.
 // Refresh in the background so provider updates still appear without a cold wait.
@@ -49,37 +33,9 @@ function writeCachedPinCatalog(country, data) {
   pinCatalogCache.set(country, data);
 }
 
-function isVoucherProduct(product) {
-  if (!product || product.is_active === false || !product.code) return false;
-  const text = [
-    product.name, product.description, product.note, product.category,
-    product.subcategory, product.product_group, product.label,
-  ].map((value) => String(value || '')).join(' ');
-  return String(product.processing_time || '').toLowerCase() === 'pin'
-    || /voucher|gift card|giftcard|digital code|gaming code/i.test(text);
-}
-
 function pricingField(product) {
   const fields = Array.isArray(product?.fields) ? product.fields : [];
   return fields.find((f) => f && (f.role === 'pricing' || f.type === 'select')) || null;
-}
-
-// Every catalogue tile gets a recognizable visual when IIMMPACT has no image.
-function pinCategoryIcon(category) {
-  const text = `${category?.title || ''} ${category?.id || ''}`.toLowerCase();
-  if (/mobile|operator|telecom|telco|recharge|sim/.test(text)) return '📱';
-  if (/game|gaming|playstation|xbox|steam/.test(text)) return '🎮';
-  if (/coffee|tea|cafe/.test(text)) return '☕';
-  if (/wellness|health|medical|beauty/.test(text)) return '💆';
-  if (/transport|train|bus|ride|travel/.test(text)) return '🚆';
-  if (/apple|itunes|app store/.test(text)) return '🍎';
-  if (/shopping|retail|fashion|mall/.test(text)) return '🛍️';
-  if (/grocery|supermarket|market/.test(text)) return '🛒';
-  if (/food|restaurant|meal|delivery/.test(text)) return '🍔';
-  if (/entertainment|movie|music|stream/.test(text)) return '🎬';
-  if (/esim|data plan|internet/.test(text)) return '📶';
-  if (/wallet|payment|cash/.test(text)) return '💳';
-  return '🎁';
 }
 
 function pinProductIcon(product) {
@@ -97,55 +53,6 @@ function pinProductIcon(product) {
   if (/esim|data plan|internet/.test(text)) return '📶';
   if (/wallet|payment|cash/.test(text)) return '💳';
   return '🎁';
-}
-
-function brandForPinProduct(product) {
-  const name = String(product?.name || '');
-  const match = MALAYSIA_OPERATORS.find((operatorName) =>
-    name.toLowerCase().includes(operatorName.toLowerCase())
-  );
-  return match ? getOperatorBrand(match) : null;
-}
-
-// Classify using specific non-telecom categories first. IIMMPACT may attach
-// a generic "mobile PIN" product-group label to unrelated voucher products,
-// so that label alone must never put a shopping/food/transport product in
-// Mobile Operator PIN. Only a recognizable Malaysian telco product qualifies.
-function classifyPinProduct(product) {
-  const name = String(product?.name || '');
-  const taxonomy = [product?.category, product?.subcategory, product?.product_group, product?.label]
-    .map((value) => String(value || '')).join(' ');
-  const text = [name, product?.description, product?.note, taxonomy]
-    .map((value) => String(value || '')).join(' ');
-  const category = (id) => PIN_CATEGORIES.find((item) => item.id === id);
-
-  const exclusions = [
-    ['transport', /grab|transport|ride|taxi|bus|train|rapid|myrapid|touch.?n.?go|\btng\b|travel pass/i],
-    ['coffee', /coffee|cafe|tea|tealive|starbucks|zuss|oldtown|kenangan/i],
-    ['grocery', /grocery|grabmart|grab mart|supermarket|pandamart/i],
-    ['shopping', /shopping|retail|shopee|lazada|mall|fashion|e-commerce|ecommerce/i],
-    ['wellness', /health|wellness|beauty|guardian|watsons|pharmacy|fitness|spa/i],
-    ['food', /food|restaurant|meal|delivery|dining|foodpanda/i],
-    ['apple', /apple|itunes|app store/i],
-    ['gaming', /game|gaming|playstation|xbox|steam|roblox|pubg|mobile legends|netflix|spotify|movie|music|stream/i],
-  ];
-  // The product's own name decides first. Description text is free prose,
-  // and loose words in it ("instead", "business", "provider") used to match
-  // tea, bus and ride and file a telco PIN under coffee or transport.
-  for (const [id, pattern] of exclusions) {
-    if (pattern.test(name)) return category(id);
-  }
-
-  const operatorPattern = /celcomdigi|celcom|digi(?!tal)|hotlink|maxis|u.?mobile|xox|tune.?talk|unifi|\byes\b|hello\s?sim|red.?one|altel/i;
-  const explicitTelco = /mobile operator|mobile top.?up|telco|telecom|sim card|airtime|prepaid reload|internet pin/i.test(`${name} ${taxonomy}`);
-  // The operator must be named by the product or by its own taxonomy - never
-  // only by free description text, which mentions telcos in passing.
-  if (operatorPattern.test(name) || (explicitTelco && operatorPattern.test(taxonomy))) return category('mobile');
-  for (const [id, pattern] of exclusions) {
-    if (pattern.test(text)) return category(id);
-  }
-  if (/gift card|voucher|digital code|giftcard/i.test(text)) return category('shopping');
-  return category('other');
 }
 
 
@@ -256,24 +163,7 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
     return () => { alive = false; };
   }, [product?.code, catalog?.providerId, country]);
 
-  // Build categories from the product itself, preferring specific commerce
-  // categories over generic provider taxonomy. Generic "mobile PIN" metadata
-  // must not contaminate the mobile operator grid.
-  const categorizedProducts = useMemo(() => {
-    const grouped = new Map(PIN_CATEGORIES.map((category) => [category.id, { ...category, products: [] }]));
-    for (const product of dynamicProducts) {
-      const category = classifyPinProduct(product) || PIN_CATEGORIES.find((item) => item.id === 'other');
-      grouped.get(category.id).products.push(product);
-    }
-    return PIN_CATEGORIES
-      .map((category) => grouped.get(category.id))
-      .filter((category) => category.products.length > 0)
-      .map((category) => ({
-        id: category.id,
-        title: category.title,
-        products: category.products.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))),
-      }));
-  }, [dynamicProducts]);
+  const categorizedProducts = useMemo(() => categorizePinProducts(dynamicProducts), [dynamicProducts]);
 
   const selectProduct = (p) => {
     setProduct(p); setVoucher(null); setOperator(''); setSelectedOption(null); setAmount(null); setFieldValues({});
@@ -370,24 +260,23 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
 
       {!loadingCatalog && dynamicProducts.length > 0 && !selectedCategory && !product && <>
         <Text style={styles.label}>Choose PIN Category</Text>
-        <View style={styles.grid}>{categorizedProducts.map((category) =>
-          <TouchableOpacity key={category.id} onPress={() => setSelectedCategory(category.id)} style={styles.option}>
-            <View style={styles.badge}><Text style={styles.badgeIcon}>{pinCategoryIcon(category)}</Text></View>
-            <Text style={styles.optionText} numberOfLines={3}>{category.title}</Text>
-            <Text style={styles.optionMeta}>{category.products.length} products</Text>
-          </TouchableOpacity>
+        <View style={styles.tileGrid}>{categorizedProducts.map((category) =>
+          <Tile key={category.id} s={{ key: category.tileKey, name: category.title, art: category.art, emoji: category.art ? '' : category.emoji }} onPress={() => setSelectedCategory(category.id)} />
         )}</View>
       </>}
 
       {!!selectedCategory && !product && <>
         <TouchableOpacity onPress={() => setSelectedCategory(null)} style={styles.backCategory}><Text style={styles.backCategoryText}>← All PIN Categories</Text></TouchableOpacity>
         <Text style={styles.label}>{categorizedProducts.find((item) => item.id === selectedCategory)?.title || 'PIN Products'}</Text>
-        <View style={styles.grid}>{(categorizedProducts.find((item) => item.id === selectedCategory)?.products || []).map((p) =>
-          <TouchableOpacity key={p.code} onPress={() => selectProduct(p)} style={styles.option}>
-            {p.image_url ? <View style={styles.logoWrap}><Image source={{ uri: p.image_url }} style={styles.logo} resizeMode="contain" /></View> : (brandForPinProduct(p)?.logo ? <View style={styles.logoWrap}><Image source={brandForPinProduct(p).logo} style={styles.logo} resizeMode="contain" /></View> : <View style={styles.badge}><Text style={styles.badgeIcon}>{pinProductIcon(p)}</Text></View>)}
-            <Text style={styles.optionText} numberOfLines={3}>{p.name}</Text>
-          </TouchableOpacity>
-        )}</View>
+        {(() => {
+          const items = categorizedProducts.find((item) => item.id === selectedCategory)?.products || [];
+          if (!items.length) return loadingCatalog ? null : <Text style={styles.info}>No vouchers are available in this category right now.</Text>;
+          // The same native tile as the home grid; a product with no logo of
+          // its own falls back to its brand drawing, then to its emoji.
+          return <View style={styles.tileGrid}>{items.map((p) =>
+            <Tile key={p.code} s={{ key: 'pinProduct_' + String(p.code), name: String(p.name || p.code), imageUrl: p.image_url || '', art: '', emoji: pinProductIcon(p) }} onPress={() => selectProduct(p)} />
+          )}</View>;
+        })()}
       </>}
 
       {!!product && <TouchableOpacity onPress={() => { setProduct(null); setSelectedOption(null); setAmount(null); setVoucher(null); }} style={styles.backCategory}><Text style={styles.backCategoryText}>← Back to {(categorizedProducts.find((item) => item.id === selectedCategory)?.title) || 'PIN Categories'}</Text></TouchableOpacity>}
@@ -428,7 +317,9 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
         <View style={styles.grid}>{AMOUNTS.map((item) => <TouchableOpacity key={item} onPress={() => { setAmount(item); setVoucher(null); }} style={[styles.amount, amount === item && styles.amountSelected]}><Text style={styles.amountIcon}>💳</Text><Text style={[styles.amountText, amount === item && styles.amountTextSelected]}>MYR {item}</Text></TouchableOpacity>)}</View>
       </>}
 
-      <TouchableOpacity disabled={busy || (product ? !selectedOption : (!operator && !(amount > 0)))} onPress={buy} style={styles.buy}><Text style={styles.buyText}>{busy ? 'Processing…' : 'Next'}</Text></TouchableOpacity>
+      {/* Only once there is something to buy: on a category or product grid the
+          tiles are the action, and an inert Next under them read as broken. */}
+      {(!!product || !!operator) && <TouchableOpacity disabled={busy || (product ? !selectedOption : !(amount > 0))} onPress={buy} style={styles.buy}><Text style={styles.buyText}>{busy ? 'Processing…' : 'Next'}</Text></TouchableOpacity>}
 
       {!!(voucher?.pin || voucher?.deliveryLink) && <View style={styles.voucher}>
         <Text style={styles.voucherTitle}>Voucher Ready</Text>
@@ -448,7 +339,7 @@ function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, (ch)
 function createStyles(colors) { return StyleSheet.create({
   screen:{flex:1,backgroundColor:colors.bg}, header:{flexDirection:'row',alignItems:'center',padding:12,gap:10,overflow:'hidden'}, back:{padding:4},backText:{color:'#fff',fontSize:22},headerTitle:{color:'#fff',fontSize:17,fontWeight:'800',marginLeft:8},
   content:{padding:16,paddingBottom:40}, intro:{backgroundColor:colors.card,borderRadius:radius.lg,borderWidth:1,borderColor:colors.border,padding:16,marginBottom:16}, title:{fontSize:21,fontWeight:'800',color:colors.text}, subtitle:{fontSize:12,lineHeight:18,color:colors.textSecondary,marginTop:6}, label:{fontSize:14,fontWeight:'800',color:colors.text,marginTop:8,marginBottom:8},
-  grid:{flexDirection:'row',flexWrap:'wrap',gap:9,marginBottom:14}, country:{width:'31%',minHeight:52,alignItems:'center',justifyContent:'center',borderWidth:1,borderColor:colors.border,borderRadius:radius.md,backgroundColor:colors.card,padding:6}, countrySelected:{backgroundColor:colors.primary,borderColor:colors.primary}, countryCode:{fontSize:12,fontWeight:'900',color:colors.primary}, countryName:{fontSize:9,fontWeight:'700',color:colors.text,textAlign:'center',marginTop:2}, countryTextSelected:{color:colors.onPrimary},
+  grid:{flexDirection:'row',flexWrap:'wrap',gap:9,marginBottom:14}, tileGrid:{flexDirection:'row',flexWrap:'wrap',justifyContent:'flex-start',columnGap:tileGrid.gap,marginBottom:14}, country:{width:'31%',minHeight:52,alignItems:'center',justifyContent:'center',borderWidth:1,borderColor:colors.border,borderRadius:radius.md,backgroundColor:colors.card,padding:6}, countrySelected:{backgroundColor:colors.primary,borderColor:colors.primary}, countryCode:{fontSize:12,fontWeight:'900',color:colors.primary}, countryName:{fontSize:9,fontWeight:'700',color:colors.text,textAlign:'center',marginTop:2}, countryTextSelected:{color:colors.onPrimary},
   option:{width:'31%',minHeight:82,alignItems:'center',justifyContent:'center',padding:7,borderWidth:1,borderColor:colors.border,borderRadius:radius.md,backgroundColor:colors.card}, optionSelected:{borderColor:colors.primary,borderWidth:2,backgroundColor:colors.surfaceElevated || colors.card}, logoWrap:{width:'90%',height:34,borderRadius:7,backgroundColor:'#fff',alignItems:'center',justifyContent:'center',paddingHorizontal:4,marginBottom:7}, logo:{width:'100%',height:27}, badge:{width:32,height:32,borderRadius:16,alignItems:'center',justifyContent:'center',marginBottom:7,backgroundColor:colors.primary}, badgeText:{color:colors.onPrimary,fontWeight:'900'},badgeIcon:{fontSize:21,lineHeight:27},amountIcon:{fontSize:17,marginBottom:2}, optionText:{fontSize:10,fontWeight:'700',textAlign:'center',color:colors.text}, optionTextSelected:{color:colors.primary},
   amount:{width:'31%',minHeight:54,alignItems:'center',justifyContent:'center',borderWidth:1,borderColor:colors.border,borderRadius:radius.md,backgroundColor:colors.card,padding:5}, amountSelected:{backgroundColor:colors.primary,borderColor:colors.primary}, amountText:{fontSize:12,fontWeight:'900',color:colors.text},amountTextSelected:{color:colors.onPrimary},optionMeta:{fontSize:9,color:colors.textSecondary,textAlign:'center',marginTop:2}, backCategory:{paddingVertical:10,marginBottom:8},backCategoryText:{fontSize:13,fontWeight:'800',color:colors.primary},
   info:{padding:12,color:colors.textSecondary,fontSize:12},input:{backgroundColor:colors.card,borderWidth:1,borderColor:colors.border,borderRadius:radius.md,padding:12,color:colors.text,minHeight:44,marginBottom:10},error:{padding:12,color:colors.danger || colors.text,fontSize:12},buy:{marginTop:6,backgroundColor:colors.primary,borderRadius:radius.md,paddingVertical:14,alignItems:'center'},buyText:{color:colors.onPrimary,fontWeight:'800',fontSize:14},voucher:{marginTop:18,backgroundColor:colors.card,borderRadius:radius.lg,borderWidth:1.5,borderColor:colors.primary,padding:18,alignItems:'center'},voucherTitle:{fontSize:18,fontWeight:'800',color:colors.text},voucherMeta:{marginTop:5,color:colors.textSecondary,fontSize:12,textAlign:'center'},pin:{marginVertical:18,fontSize:27,fontWeight:'900',letterSpacing:4,color:colors.primary,textAlign:'center'},link:{marginVertical:15,fontSize:12,color:colors.primary,textAlign:'center'},warning:{marginTop:8,fontSize:11,lineHeight:16,textAlign:'center',color:colors.textSecondary},print:{marginTop:14,borderRadius:radius.md,borderWidth:1,borderColor:colors.primary,paddingVertical:11,paddingHorizontal:20},printText:{color:colors.primary,fontWeight:'800'},balance:{marginTop:18,textAlign:'center',fontSize:11,color:colors.textSecondary}
