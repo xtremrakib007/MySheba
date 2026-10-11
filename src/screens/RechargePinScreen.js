@@ -109,7 +109,10 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
       setAmount(null);
       return;
     }
-    if (selectedCategory) { setSelectedCategory(null); return; }
+    // Opened on one category from a grid tile: that category is where this
+    // screen starts, so Back returns to the grid rather than to every PIN
+    // category, which is the flow the tile replaced.
+    if (selectedCategory && selectedCategory !== initialCategory) { setSelectedCategory(null); return; }
     goBackOrHome();
   };
 
@@ -119,7 +122,7 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
       return true;
     });
     return () => sub.remove();
-  }, [review, busy, voucher, product, selectedCategory, goBackOrHome]);
+  }, [review, busy, voucher, product, selectedCategory, initialCategory, goBackOrHome]);
 
   useEffect(() => {
     let alive = true;
@@ -300,7 +303,7 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
       </>}
 
       {!!selectedCategory && !product && <>
-        <TouchableOpacity onPress={() => setSelectedCategory(null)} style={styles.backCategory}><Text style={styles.backCategoryText}>← All PIN Categories</Text></TouchableOpacity>
+        {selectedCategory !== initialCategory && <TouchableOpacity onPress={() => setSelectedCategory(null)} style={styles.backCategory}><Text style={styles.backCategoryText}>← All PIN Categories</Text></TouchableOpacity>}
         <Text style={styles.label}>{categorizedProducts.find((item) => item.id === selectedCategory)?.title || 'PIN Products'}</Text>
         {(() => {
           const items = categorizedProducts.find((item) => item.id === selectedCategory)?.products || [];

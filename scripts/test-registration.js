@@ -127,8 +127,8 @@ test('the homepage tile opens Touch n Go directly; PIN Generate stays separate',
     'PIN back clears the voucher result before leaving its product');
   assert.ok(/if \(product\) \{[\s\S]{0,160}setProduct\(null\)/.test(pinScreen),
     'PIN back returns from the amount/product view to the product list');
-  assert.ok(/if \(selectedCategory\) \{ setSelectedCategory\(null\); return; \}/.test(pinScreen),
-    'PIN back returns from a category to all PIN categories');
+  assert.ok(/if \(selectedCategory && selectedCategory !== initialCategory\) \{ setSelectedCategory\(null\); return; \}/.test(pinScreen),
+    'PIN back returns from a category to all PIN categories, unless a grid tile opened that category');
   assert.ok(/BackHandler\.addEventListener\('hardwareBackPress'/.test(pinScreen),
     'Android back follows the same one-level PIN navigation');
 });
