@@ -6,7 +6,9 @@ import { radius, tileGrid } from '../theme/theme';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import { useServiceAction, Tile } from '../components/ServiceGrid';
-import { moreFeaturesSections } from '../components/serviceTiles';
+import { moreFeaturesSections, visibleTiles } from '../components/serviceTiles';
+import { mergeCatalogTiles } from '../components/iimmpactTiles';
+import { useIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
 import * as gridManagementService from '../firebase/gridManagementService';
 
 
@@ -45,7 +47,15 @@ export default function MoreFeaturesScreen() {
     isActive: (key) => gridManagementService.isGridActive(gridManagement, key, gridViewer),
   });
   const handlePress = useServiceAction();
-  const visible = (items) => items.filter((item) => gridManagementService.isGridActive(gridManagement, item.key, gridViewer));
+  const isActive = (key) => gridManagementService.isGridActive(gridManagement, key, gridViewer);
+  const visible = (items) => items.filter((item) => isActive(item.key));
+  // Every live IIMMPACT category is a tile here too. A category that a native
+  // tile already sells (Mobile Prepaid -> Mobile Recharge, Mobile Pin -> PIN
+  // Generate) is merged into that tile rather than drawn twice, which is why
+  // the merge is told about this role's whole catalogue, home screen included.
+  const { catalog } = useIimmpactCatalog();
+  const nativeKeys = visibleTiles({ role, can, webviewPages, tileLabels, viewer: gridViewer, isActive }).map((tile) => tile.key);
+  const serviceTiles = visible(mergeCatalogTiles(sections.flatMap((section) => section.tiles), catalog, nativeKeys));
   const isCustomer = !profile?.role || profile.role === 'customer';
 
   return (
@@ -63,7 +73,7 @@ export default function MoreFeaturesScreen() {
             home-style grid instead of dividing the overflow into categories. */}
         <View style={styles.gridCanvas}>
           <View style={styles.grid}>
-            {[...sections.flatMap((section) => section.tiles), ...visible(account)].map((item) => (
+            {[...serviceTiles, ...visible(account)].map((item) => (
               <Tile key={item.key} s={item} onPress={() => handlePress(item)} />
             ))}
           </View>

@@ -1272,7 +1272,10 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     throw new HttpsError('aborted','This API request is already being processed.');
   }
   let requestSent = false;
-  if (service === 'Recharge PIN' && !provider.responsePinPath) throw new Error('Recharge PIN provider is missing responsePinPath configuration.');
+  // IIMMPACT states where a voucher comes back (data.pin, or a voucher link),
+  // and that is read below whatever the record says, so only a provider we
+  // know nothing about has to name the path itself.
+  if (service === 'Recharge PIN' && !provider.responsePinPath && provider.authType !== 'iimmpactHmac') throw new Error('Recharge PIN provider is missing responsePinPath configuration.');
   const raw = payload?.raw || {};
   const isSuccessTopUpBill = service === 'Bill Payment' && String(provider.name || '').trim().toLowerCase() === 'success topup';
   const isSuccessTopUp = String(provider.name || '').trim().toLowerCase() === 'success topup' && String(raw.country || '').toUpperCase() === 'BD';
@@ -1544,9 +1547,18 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
       };
     }
     const secretPath = options.extractPath || (service === 'Recharge PIN' ? provider.responsePinPath : '');
-    if (secretPath) { const secret = getPath(data, secretPath); if (typeof secret !== 'string' || !secret.trim() || secret.length > 500) throw new Error('Provider did not return a valid recharge PIN.'); result.secret = secret.trim(); }
+    if (secretPath || service === 'Recharge PIN') {
+      const configured = secretPath ? getPath(data, secretPath) : null;
+      // The configured path first; then what the provider documents. A voucher
+      // the provider issued is never thrown away because the record pointed
+      // one level off - that left the customer charged with nothing to show.
+      const secret = [configured, result.providerPin, result.deliveryLink]
+        .find((value) => typeof value === 'string' && value.trim() && value.length <= 2000);
+      if (secret) result.secret = secret.trim();
+      else if (!(service === 'Recharge PIN' && isProcessing)) throw new Error('Provider did not return a valid recharge PIN.');
+    }
     const { secret: _secret, ...safeResult } = result;
-    await executionRef.set({status:isProcessing ? 'processing' : 'completed',result:service === 'Recharge PIN' ? { ...safeResult, secret: result.secret } : safeResult,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
+    await executionRef.set({status:isProcessing ? 'processing' : 'completed',result:service === 'Recharge PIN' && result.secret ? { ...safeResult, secret: result.secret } : safeResult,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
     return result;
   } catch(e) {
     const rawMessage = String(e?.message || 'Provider execution failed');
@@ -2439,7 +2451,17 @@ async function resolveIimmpactMarketplaceProduct(db, raw) {
   if (product.is_active === false) return { error: 'product-inactive' };
   const fields = Array.isArray(product.fields) ? product.fields : [];
   const values = raw?.fieldValues && typeof raw.fieldValues === 'object' && !Array.isArray(raw.fieldValues) ? raw.fieldValues : {};
-  const selected = raw?.selectedOptions && typeof raw.selectedOptions === 'object' && !Array.isArray(raw.selectedOptions) ? raw.selectedOptions : {};
+  const selected = raw?.selectedOptions && typeof raw.selectedOptions === 'object' && !Array.isArray(raw.selectedOptions) ? { ...raw.selectedOptions } : {};
+  // A caller that knows only the chosen denomination's code (PIN Generator
+  // sends the option it listed, not the whole form) still names the pricing
+  // option. It is looked up in the live options below like any other, so the
+  // code is a pointer, never a price.
+  const pricingCode = cleanString(raw?.optionCode || raw?.subproductCode, 200);
+  const pricingSelect = fields.find((field) => field && field.role === 'pricing' && field.type === 'select')
+    || fields.find((field) => field && field.type === 'select');
+  if (pricingCode && pricingSelect?.id && !(selected[pricingSelect.id] && typeof selected[pricingSelect.id] === 'object' && selected[pricingSelect.id].code)) {
+    selected[pricingSelect.id] = { code: pricingCode };
+  }
   const resolvedOptions = {};
 
   for (const field of fields) {
@@ -2506,7 +2528,7 @@ async function resolveIimmpactMarketplaceProduct(db, raw) {
   const providerAmount = Number(amountValue);
   if (!accountNumber || !Number.isFinite(providerAmount) || providerAmount <= 0) return { error: 'fulfillment-invalid' };
 
-  const pricingField = fields.find((field) => field.role === 'pricing' && field.type === 'select');
+  const pricingField = pricingSelect;
   const pricingOption = pricingField ? resolvedOptions[pricingField.id] : null;
   const sellAmount = Number(pricingOption?.price?.amount);
   const customerAmount = Number.isFinite(sellAmount) && sellAmount > 0

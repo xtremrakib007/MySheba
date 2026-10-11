@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BackHandler, View, Text, TouchableOpacity, ScrollView, StyleSheet, Image } from 'react-native';
+import { BackHandler, View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Image } from 'react-native';
 import * as Print from 'expo-print';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
@@ -107,6 +107,60 @@ function brandForPinProduct(product) {
   return match ? getOperatorBrand(match) : null;
 }
 
+// Classify using specific non-telecom categories first. IIMMPACT may attach
+// a generic "mobile PIN" product-group label to unrelated voucher products,
+// so that label alone must never put a shopping/food/transport product in
+// Mobile Operator PIN. Only a recognizable Malaysian telco product qualifies.
+function classifyPinProduct(product) {
+  const name = String(product?.name || '');
+  const taxonomy = [product?.category, product?.subcategory, product?.product_group, product?.label]
+    .map((value) => String(value || '')).join(' ');
+  const text = [name, product?.description, product?.note, taxonomy]
+    .map((value) => String(value || '')).join(' ');
+  const category = (id) => PIN_CATEGORIES.find((item) => item.id === id);
+
+  const exclusions = [
+    ['transport', /grab|transport|ride|taxi|bus|train|rapid|myrapid|touch.?n.?go|\btng\b|travel pass/i],
+    ['coffee', /coffee|cafe|tea|tealive|starbucks|zuss|oldtown|kenangan/i],
+    ['grocery', /grocery|grabmart|grab mart|supermarket|pandamart/i],
+    ['shopping', /shopping|retail|shopee|lazada|mall|fashion|e-commerce|ecommerce/i],
+    ['wellness', /health|wellness|beauty|guardian|watsons|pharmacy|fitness|spa/i],
+    ['food', /food|restaurant|meal|delivery|dining|foodpanda/i],
+    ['apple', /apple|itunes|app store/i],
+    ['gaming', /game|gaming|playstation|xbox|steam|roblox|pubg|mobile legends|netflix|spotify|movie|music|stream/i],
+  ];
+  // The product's own name decides first. Description text is free prose,
+  // and loose words in it ("instead", "business", "provider") used to match
+  // tea, bus and ride and file a telco PIN under coffee or transport.
+  for (const [id, pattern] of exclusions) {
+    if (pattern.test(name)) return category(id);
+  }
+
+  const operatorPattern = /celcomdigi|celcom|digi(?!tal)|hotlink|maxis|u.?mobile|xox|tune.?talk|unifi|\byes\b|hello\s?sim|red.?one|altel/i;
+  const explicitTelco = /mobile operator|mobile top.?up|telco|telecom|sim card|airtime|prepaid reload|internet pin/i.test(`${name} ${taxonomy}`);
+  // The operator must be named by the product or by its own taxonomy - never
+  // only by free description text, which mentions telcos in passing.
+  if (operatorPattern.test(name) || (explicitTelco && operatorPattern.test(taxonomy))) return category('mobile');
+  for (const [id, pattern] of exclusions) {
+    if (pattern.test(text)) return category(id);
+  }
+  if (/gift card|voucher|digital code|giftcard/i.test(text)) return category('shopping');
+  return category('other');
+}
+
+
+// IIMMPACT validates a voucher order against a Malaysian mobile number, in
+// national form. The customer's own number is the default when it is one;
+// anything else (a Bangladeshi number, say) leaves the field for them to fill.
+function malaysianNational(phone) {
+  let digits = String(phone || '').replace(/\D/g, '');
+  if (digits.startsWith('0060')) digits = digits.slice(4);
+  else if (digits.startsWith('60') && digits.length > 8) digits = digits.slice(2);
+  if (!digits) return '';
+  const national = digits.startsWith('0') ? digits : '0' + digits;
+  return /^01\d{7,9}$/.test(national) ? national : '';
+}
+
 export default function RechargePinScreen({ initialCategory = null } = {}) {
   const { colors, brandGradient } = useTheme();
   const { goBackOrHome, profile } = useApp();
@@ -124,6 +178,8 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
   const [busy, setBusy] = useState(false);
   const [voucher, setVoucher] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
+  const [account, setAccount] = useState(() => malaysianNational(profile?.phone));
+  const [fieldValues, setFieldValues] = useState({});
 
   // Back should unwind the current PIN task one level at a time. Previously
   // this header always delegated to app-level navigation, whose feature
@@ -200,39 +256,6 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
     return () => { alive = false; };
   }, [product?.code, catalog?.providerId, country]);
 
-// Classify using specific non-telecom categories first. IIMMPACT may attach
-// a generic "mobile PIN" product-group label to unrelated voucher products,
-// so that label alone must never put a shopping/food/transport product in
-// Mobile Operator PIN. Only a recognizable Malaysian telco product qualifies.
-function classifyPinProduct(product) {
-  const name = String(product?.name || '');
-  const taxonomy = [product?.category, product?.subcategory, product?.product_group, product?.label]
-    .map((value) => String(value || '')).join(' ');
-  const text = [name, product?.description, product?.note, taxonomy]
-    .map((value) => String(value || '')).join(' ');
-  const category = (id) => PIN_CATEGORIES.find((item) => item.id === id);
-
-  const exclusions = [
-    ['transport', /grab|transport|ride|taxi|bus|train|rapid|myrapid|touch.?n.?go|\btng\b|travel pass/i],
-    ['coffee', /coffee|cafe|tea|tealive|starbucks|zuss|oldtown|kenangan/i],
-    ['grocery', /grocery|grabmart|grab mart|supermarket|pandamart/i],
-    ['shopping', /shopping|retail|shopee|lazada|mall|fashion|e-commerce|ecommerce/i],
-    ['wellness', /health|wellness|beauty|guardian|watsons|pharmacy|fitness|spa/i],
-    ['food', /food|restaurant|meal|delivery|dining|foodpanda/i],
-    ['apple', /apple|itunes|app store/i],
-    ['gaming', /game|gaming|playstation|xbox|steam|roblox|pubg|mobile legends|netflix|spotify|movie|music|stream/i],
-  ];
-  for (const [id, pattern] of exclusions) {
-    if (pattern.test(text)) return category(id);
-  }
-
-  const operatorPattern = /celcomdigi|celcom|digi|hotlink|maxis|u.?mobile|xox|tune.?talk|unifi|\\byes\\b|hello\\s?sim|red.?one|altel/i;
-  const explicitTelco = /mobile operator|mobile top.?up|telco|telecom|sim card|airtime|prepaid reload|internet pin/i.test(`${name} ${taxonomy}`);
-  if (operatorPattern.test(name) || (explicitTelco && operatorPattern.test(text))) return category('mobile');
-  if (/gift card|voucher|digital code|giftcard/i.test(text)) return category('shopping');
-  return category('other');
-}
-
   // Build categories from the product itself, preferring specific commerce
   // categories over generic provider taxonomy. Generic "mobile PIN" metadata
   // must not contaminate the mobile operator grid.
@@ -253,18 +276,31 @@ function classifyPinProduct(product) {
   }, [dynamicProducts]);
 
   const selectProduct = (p) => {
-    setProduct(p); setVoucher(null); setOperator(''); setSelectedOption(null); setAmount(null);
+    setProduct(p); setVoucher(null); setOperator(''); setSelectedOption(null); setAmount(null); setFieldValues({});
   };
+
+  // The fields this product declares besides its denomination list. The one
+  // the catalogue names as the order's account is the mobile number below;
+  // the rest are drawn as inputs, because the server refuses an order with a
+  // required field left empty.
+  const accountFieldId = String(product?.fulfillment?.account?.from_field || '');
+  const pinPricingId = String(pricingField(product)?.id || '');
+  const extraFields = (Array.isArray(product?.fields) ? product.fields : [])
+    .filter((f) => f && f.id && String(f.id) !== pinPricingId && String(f.id) !== accountFieldId && f.type !== 'select')
+    .sort((a, b) => Number(a?.order || 0) - Number(b?.order || 0));
+  const missingField = extraFields.find((f) => f.required && !String(fieldValues[f.id] || '').trim());
 
   const buy = async () => {
     if (busy) return;
     const liveAmount = Number(selectedOption?.price?.amount ?? selectedOption?.denomination ?? amount);
     if (!product) return showAlert('Voucher', 'Please select a voucher product.');
     if (!(liveAmount > 0)) return showAlert('Voucher', 'Please select a denomination.');
+    if (!/^01\d{7,9}$/.test(account.trim())) return showAlert('Voucher', 'Enter a valid Malaysian mobile number, e.g. 0123456789.');
+    if (missingField) return showAlert('Voucher', 'Please complete: ' + (missingField.label || missingField.name || missingField.id));
     const currency = selectedOption?.price?.currency || product?.denomination_currency || 'MYR';
     showAlert(
       'Confirm PIN Purchase',
-      'Product: ' + String(product.name || '') + '\\nAmount: ' + currency + ' ' + liveAmount.toFixed(2) + '\\nPayment will be taken from your MySheba wallet. Continue?',
+      'Product: ' + String(product.name || '') + '\nAmount: ' + currency + ' ' + liveAmount.toFixed(2) + '\nMobile: ' + account.trim() + '\nPayment will be taken from your MySheba wallet. Continue?',
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Confirm & Pay', onPress: async () => { await completePurchase(liveAmount); } },
@@ -283,7 +319,14 @@ function classifyPinProduct(product) {
         productCode: String(product?.code || ''),
         subproductCode: String(selectedOption?.code || ''),
         productName: String(product?.name || operator || ''),
+        accountNumber: account.trim(),
+        fieldValues: { ...fieldValues, ...(accountFieldId ? { [accountFieldId]: account.trim() } : {}) },
+        selectedOptions: pinPricingId && selectedOption?.code ? { [pinPricingId]: { code: String(selectedOption.code) } } : {},
       });
+      if (result?.pending) {
+        showAlert('Voucher', 'Your order ' + String(result.id || '') + ' was accepted and the voucher is being issued. It will appear in History once the provider releases it.');
+        return;
+      }
       setVoucher(result);
     } catch (err) {
       showAlert('Voucher', err?.message || 'Could not purchase the voucher.');
@@ -371,12 +414,21 @@ function classifyPinProduct(product) {
       })}</View>}
       {!!product && !loadingOptions && !options.length && <Text style={styles.error}>IIMMPACT returned no active denominations for this product.</Text>}
 
+      {!!product && <>
+        <Text style={styles.label}>Malaysian mobile number</Text>
+        <TextInput style={styles.input} value={account} onChangeText={(v) => setAccount(v.replace(/[^\d]/g, '').slice(0, 11))} placeholder="0123456789" placeholderTextColor={colors.textSecondary} keyboardType="phone-pad" />
+        {extraFields.map((f) => <View key={String(f.id)}>
+          <Text style={styles.label}>{(f.label || f.name || f.id) + (f.required ? ' *' : '')}</Text>
+          <TextInput style={styles.input} value={String(fieldValues[f.id] || '')} onChangeText={(v) => setFieldValues((x) => ({ ...x, [f.id]: v }))} placeholder={f.placeholder || ''} placeholderTextColor={colors.textSecondary} autoCapitalize="none" />
+        </View>)}
+      </>}
+
       {!product && !dynamicProducts.length && country === 'MY' && !catalog?.providerId && !!operator && <>
         <Text style={styles.label}>Legacy Denomination</Text>
         <View style={styles.grid}>{AMOUNTS.map((item) => <TouchableOpacity key={item} onPress={() => { setAmount(item); setVoucher(null); }} style={[styles.amount, amount === item && styles.amountSelected]}><Text style={styles.amountIcon}>💳</Text><Text style={[styles.amountText, amount === item && styles.amountTextSelected]}>MYR {item}</Text></TouchableOpacity>)}</View>
       </>}
 
-      <TouchableOpacity disabled={busy || (!operator && (!product || !selectedOption) && !(amount > 0))} onPress={buy} style={styles.buy}><Text style={styles.buyText}>{busy ? 'Processing…' : 'Next'}</Text></TouchableOpacity>
+      <TouchableOpacity disabled={busy || (product ? !selectedOption : (!operator && !(amount > 0)))} onPress={buy} style={styles.buy}><Text style={styles.buyText}>{busy ? 'Processing…' : 'Next'}</Text></TouchableOpacity>
 
       {!!(voucher?.pin || voucher?.deliveryLink) && <View style={styles.voucher}>
         <Text style={styles.voucherTitle}>Voucher Ready</Text>
@@ -399,5 +451,5 @@ function createStyles(colors) { return StyleSheet.create({
   grid:{flexDirection:'row',flexWrap:'wrap',gap:9,marginBottom:14}, country:{width:'31%',minHeight:52,alignItems:'center',justifyContent:'center',borderWidth:1,borderColor:colors.border,borderRadius:radius.md,backgroundColor:colors.card,padding:6}, countrySelected:{backgroundColor:colors.primary,borderColor:colors.primary}, countryCode:{fontSize:12,fontWeight:'900',color:colors.primary}, countryName:{fontSize:9,fontWeight:'700',color:colors.text,textAlign:'center',marginTop:2}, countryTextSelected:{color:colors.onPrimary},
   option:{width:'31%',minHeight:82,alignItems:'center',justifyContent:'center',padding:7,borderWidth:1,borderColor:colors.border,borderRadius:radius.md,backgroundColor:colors.card}, optionSelected:{borderColor:colors.primary,borderWidth:2,backgroundColor:colors.surfaceElevated || colors.card}, logoWrap:{width:'90%',height:34,borderRadius:7,backgroundColor:'#fff',alignItems:'center',justifyContent:'center',paddingHorizontal:4,marginBottom:7}, logo:{width:'100%',height:27}, badge:{width:32,height:32,borderRadius:16,alignItems:'center',justifyContent:'center',marginBottom:7,backgroundColor:colors.primary}, badgeText:{color:colors.onPrimary,fontWeight:'900'},badgeIcon:{fontSize:21,lineHeight:27},amountIcon:{fontSize:17,marginBottom:2}, optionText:{fontSize:10,fontWeight:'700',textAlign:'center',color:colors.text}, optionTextSelected:{color:colors.primary},
   amount:{width:'31%',minHeight:54,alignItems:'center',justifyContent:'center',borderWidth:1,borderColor:colors.border,borderRadius:radius.md,backgroundColor:colors.card,padding:5}, amountSelected:{backgroundColor:colors.primary,borderColor:colors.primary}, amountText:{fontSize:12,fontWeight:'900',color:colors.text},amountTextSelected:{color:colors.onPrimary},optionMeta:{fontSize:9,color:colors.textSecondary,textAlign:'center',marginTop:2}, backCategory:{paddingVertical:10,marginBottom:8},backCategoryText:{fontSize:13,fontWeight:'800',color:colors.primary},
-  info:{padding:12,color:colors.textSecondary,fontSize:12},error:{padding:12,color:colors.danger || colors.text,fontSize:12},buy:{marginTop:6,backgroundColor:colors.primary,borderRadius:radius.md,paddingVertical:14,alignItems:'center'},buyText:{color:colors.onPrimary,fontWeight:'800',fontSize:14},voucher:{marginTop:18,backgroundColor:colors.card,borderRadius:radius.lg,borderWidth:1.5,borderColor:colors.primary,padding:18,alignItems:'center'},voucherTitle:{fontSize:18,fontWeight:'800',color:colors.text},voucherMeta:{marginTop:5,color:colors.textSecondary,fontSize:12,textAlign:'center'},pin:{marginVertical:18,fontSize:27,fontWeight:'900',letterSpacing:4,color:colors.primary,textAlign:'center'},link:{marginVertical:15,fontSize:12,color:colors.primary,textAlign:'center'},warning:{marginTop:8,fontSize:11,lineHeight:16,textAlign:'center',color:colors.textSecondary},print:{marginTop:14,borderRadius:radius.md,borderWidth:1,borderColor:colors.primary,paddingVertical:11,paddingHorizontal:20},printText:{color:colors.primary,fontWeight:'800'},balance:{marginTop:18,textAlign:'center',fontSize:11,color:colors.textSecondary}
+  info:{padding:12,color:colors.textSecondary,fontSize:12},input:{backgroundColor:colors.card,borderWidth:1,borderColor:colors.border,borderRadius:radius.md,padding:12,color:colors.text,minHeight:44,marginBottom:10},error:{padding:12,color:colors.danger || colors.text,fontSize:12},buy:{marginTop:6,backgroundColor:colors.primary,borderRadius:radius.md,paddingVertical:14,alignItems:'center'},buyText:{color:colors.onPrimary,fontWeight:'800',fontSize:14},voucher:{marginTop:18,backgroundColor:colors.card,borderRadius:radius.lg,borderWidth:1.5,borderColor:colors.primary,padding:18,alignItems:'center'},voucherTitle:{fontSize:18,fontWeight:'800',color:colors.text},voucherMeta:{marginTop:5,color:colors.textSecondary,fontSize:12,textAlign:'center'},pin:{marginVertical:18,fontSize:27,fontWeight:'900',letterSpacing:4,color:colors.primary,textAlign:'center'},link:{marginVertical:15,fontSize:12,color:colors.primary,textAlign:'center'},warning:{marginTop:8,fontSize:11,lineHeight:16,textAlign:'center',color:colors.textSecondary},print:{marginTop:14,borderRadius:radius.md,borderWidth:1,borderColor:colors.primary,paddingVertical:11,paddingHorizontal:20},printText:{color:colors.primary,fontWeight:'800'},balance:{marginTop:18,textAlign:'center',fontSize:11,color:colors.textSecondary}
 });}

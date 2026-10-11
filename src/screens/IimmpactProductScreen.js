@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, Alert, ActivityIndicator, Image, Modal, Share } from 'react-native';
 import { printTransactionReceipt } from '../utils/printService';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,6 +6,8 @@ import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import HeaderDecor from '../components/HeaderDecor';
 import * as api from '../firebase/apiProviderService';
+import { purchaseRechargePin } from '../firebase/rechargePinService';
+import { useIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
 import { radius } from '../theme/theme';
 
 const norm = (v) => String(v || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
@@ -32,12 +33,29 @@ function brandLabel(product) {
   // Catalogue names often repeat the merchant for each denomination. Remove
   // only clear denomination/price suffixes so the merchant becomes one tile.
   name = name
-    .replace(/\\s*[-–—|:]?\\s*(?:RM|MYR)\\s*\\d+(?:[.,]\\d{1,2})?\\s*$/i, '')
-    .replace(/\\s*[-–—|:]?\\s*\\d+(?:[.,]\\d{1,2})?\\s*(?:RM|MYR)\\s*$/i, '')
-    .replace(/\\s*[-–—|:]?\\s*(?:RM|MYR)?\\s*\\d+(?:[.,]\\d{1,2})?\\s*(?:voucher|gift card|e voucher|evoucher|top up|top-up)\\s*$/i, '')
-    .replace(/\\s*\\([^)]*(?:RM|MYR|\\d+)[^)]*\\)\\s*$/i, '')
+    .replace(/\s*[-–—|:]?\s*(?:RM|MYR)\s*\d+(?:[.,]\d{1,2})?\s*$/i, '')
+    .replace(/\s*[-–—|:]?\s*\d+(?:[.,]\d{1,2})?\s*(?:RM|MYR)\s*$/i, '')
+    .replace(/\s*[-–—|:]?\s*(?:RM|MYR)?\s*\d+(?:[.,]\d{1,2})?\s*(?:voucher|gift card|e voucher|evoucher|top up|top-up)\s*$/i, '')
+    .replace(/\s*\([^)]*(?:RM|MYR|\d+)[^)]*\)\s*$/i, '')
     .trim();
   return name || String(product?.name || product?.code || 'Other');
+}
+
+// A product fulfilled as a PIN or voucher code. These go through the PIN
+// purchase, which hands the code back to show on screen; the generic charge
+// only records the order, and a voucher bought that way had no code to show.
+function isPinProduct(product) {
+  return String(product?.processing_time || '').toLowerCase() === 'pin';
+}
+
+// The customer's number in Malaysian national form, when it is one.
+function malaysianNational(phone) {
+  let digits = String(phone || '').replace(/\D/g, '');
+  if (digits.startsWith('0060')) digits = digits.slice(4);
+  else if (digits.startsWith('60') && digits.length > 8) digits = digits.slice(2);
+  if (!digits) return '';
+  const national = digits.startsWith('0') ? digits : '0' + digits;
+  return /^01\d{7,9}$/.test(national) ? national : '';
 }
 
 function inputKeyboard(field) {
@@ -68,7 +86,6 @@ export default function IimmpactProductScreen({ category }) {
   const { goBackOrHome, profile } = useApp();
   const isSuperadmin = String(profile?.role || '').toLowerCase() === 'superadmin';
   const { colors, brandGradient } = useTheme();
-  const [catalog, setCatalog] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedBrand, setSelectedBrand] = useState(null);
   const [values, setValues] = useState({});
@@ -82,35 +99,23 @@ export default function IimmpactProductScreen({ category }) {
   const [search, setSearch] = useState({});
   const styles = makeStyles(colors);
 
-  useEffect(() => {
-    let alive = true;
-    const cacheKey = '@mysheba/iimmpact-catalog/MY/v1';
-    (async () => {
-      try {
-        const saved = await AsyncStorage.getItem(cacheKey);
-        if (alive && saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed && typeof parsed === 'object') setCatalog(parsed);
-        }
-      } catch (_) {}
-      try {
-        const data = await api.getIimmpactFullCatalogForUser('MY');
-        if (alive && data && typeof data === 'object') {
-          setCatalog(data);
-          setError('');
-          try { await AsyncStorage.setItem(cacheKey, JSON.stringify(data)); } catch (_) {}
-        }
-      } catch (e) {
-        if (alive && !catalog) setError(e?.message || 'IIMMPACT catalogue unavailable.');
-      }
-    })();
-    return () => { alive = false; };
-  }, []);
+  const { catalog, error: loadError } = useIimmpactCatalog();
+  const [voucher, setVoucher] = useState(null);
+
+  // A refresh that fails while a saved catalogue is drawn is not an error.
+  useEffect(() => { if (!catalog && loadError) setError(loadError); }, [catalog, loadError]);
 
   const products = catalog?.products || {};
   const match = useMemo(() => {
     const wanted = norm(decodedCategory);
-    return flattenGroups(catalog?.tree?.groups || []).find((x) => norm(x.name) === wanted || norm(x.name).includes(wanted) || wanted.includes(norm(x.name)));
+    if (!wanted) return null;
+    const all = flattenGroups(catalog?.tree?.groups || []);
+    // Exact first: "Entertainment" is a bills category and also a substring of
+    // nothing else, but "Mobile" is part of five names, and the first loose
+    // match used to open whichever category happened to be listed first.
+    const exact = all.filter((x) => norm(x.name) === wanted);
+    if (exact.length) return { name: exact[0].name, codes: [...new Set(exact.flatMap((x) => x.codes))] };
+    return all.find((x) => norm(x.name).includes(wanted) || wanted.includes(norm(x.name)));
   }, [catalog, decodedCategory]);
 
   const productList = useMemo(() => (match?.codes || [])
@@ -286,6 +291,34 @@ export default function IimmpactProductScreen({ category }) {
     if (!pendingPurchase || busy) return;
     const purchase = pendingPurchase;
     setBusy(true);
+    if (isPinProduct(selectedProduct)) {
+      try {
+        const result = await purchaseRechargePin({
+          country: 'MY',
+          amount: purchase.sellAmount,
+          productCode: purchase.productCode,
+          subproductCode: String(purchase.pricingOption?.code || ''),
+          productName: purchase.productName,
+          accountNumber: purchase.accountNumber,
+          fieldValues: purchase.selectedFields,
+          selectedOptions: Object.fromEntries(Object.entries(selectedOptions)
+            .filter(([, option]) => option && option.code)
+            .map(([key, option]) => [key, { code: String(option.code) }])),
+        });
+        setReviewing(false);
+        setPendingPurchase(null);
+        if (result?.pending) {
+          Alert.alert('Order accepted', 'Order ' + String(result.id || '') + ' was accepted and the voucher is being issued. It will appear in History once the provider releases it.', [{ text: 'OK', onPress: goBackOrHome }]);
+        } else {
+          setVoucher({ ...result, productName: result?.productName || purchase.productName });
+        }
+      } catch (e) {
+        Alert.alert('Order failed', e?.message || 'Unable to complete this purchase.');
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     try {
       const requestId = 'ms_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 12);
       const result = await api.chargeIimmpactProduct({
@@ -364,6 +397,20 @@ export default function IimmpactProductScreen({ category }) {
       </LinearGradient>
 
       <ScrollView contentContainerStyle={st.body} keyboardShouldPersistTaps="handled">
+        {!!voucher && (voucher.pin || voucher.deliveryLink) && (
+          <View style={st.voucher}>
+            <Text style={st.voucherTitle}>Voucher Ready</Text>
+            <Text style={st.muted}>{voucher.productName} • MYR {Number(voucher.amount || 0).toFixed(2)}</Text>
+            {!!voucher.pin && <Text selectable style={st.voucherPin}>{voucher.pin}</Text>}
+            {!!voucher.deliveryLink && <Text selectable style={st.voucherLink}>{voucher.deliveryLink}</Text>}
+            {!!voucher.expiry && <Text style={st.muted}>Expires: {voucher.expiry}</Text>}
+            {!!voucher.deliveryNote && <Text style={st.muted}>{voucher.deliveryNote}</Text>}
+            <Text style={st.muted}>Keep this voucher private. Transaction {String(voucher.id || '')}</Text>
+            <TouchableOpacity style={st.voucherShare} onPress={() => Share.share({ title: 'MySheba Voucher', message: [voucher.productName, voucher.pin || '', voucher.deliveryLink || ''].filter(Boolean).join('\n') }).catch(() => {})}>
+              <Text style={st.buySmall}>Share voucher</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         {!selectedProduct ? (
           <>
             {!selectedBrand ? (
@@ -387,7 +434,7 @@ export default function IimmpactProductScreen({ category }) {
                 <Text style={st.muted}>{selectedBrand.products.length} product/denomination options.</Text>
                 <View style={st.productGrid}>
               {selectedBrand.products.map((product) => (
-                <TouchableOpacity key={product.code} style={st.productCard} onPress={() => { setSelectedProduct(product); setValues({}); setSelectedOptions({}); setOptions({}); }}>
+                <TouchableOpacity key={product.code} style={st.productCard} onPress={() => { setSelectedProduct(product); setValues(isPinProduct(product) ? { __account: malaysianNational(profile?.phone) } : {}); setSelectedOptions({}); setOptions({}); setVoucher(null); }}>
                   {product.image_url ? <Image source={{uri: product.image_url}} style={st.productLogo} resizeMode="contain" /> : <View style={st.productFallback}><Text style={st.productFallbackText}>I</Text></View>}
                   <Text style={st.productName} numberOfLines={3}>{product.name || product.code}</Text>
                   {!!product.processing_time && <Text style={st.processing}>{String(product.processing_time).replace(/_/g, ' ')}</Text>}
@@ -546,5 +593,6 @@ const makeStyles = (c) => StyleSheet.create({
   productHero:{backgroundColor:c.card,borderWidth:1,borderColor:c.border,borderRadius:radius.lg,padding:14,flexDirection:'row',gap:12,alignItems:'center',marginBottom:6},heroLogo:{width:50,height:45},
   field:{marginTop:14},label:{fontSize:12,fontWeight:'800',color:c.text,marginBottom:6},input:{backgroundColor:c.card,borderWidth:1,borderColor:c.border,borderRadius:radius.md,padding:12,color:c.text,minHeight:44},
   optionLoading:{flexDirection:'row',alignItems:'center',gap:8,paddingVertical:8},optionRow:{paddingVertical:4,gap:8},option:{borderWidth:1,borderColor:c.border,borderRadius:radius.md,padding:10,maxWidth:250,backgroundColor:c.card},optionSelected:{backgroundColor:c.primary,borderColor:c.primary},optionText:{fontSize:10,color:c.text,fontWeight:'700'},optionTextSelected:{color:c.onPrimary},
+  voucher:{backgroundColor:c.card,borderWidth:1.5,borderColor:c.primary,borderRadius:radius.lg,padding:16,alignItems:'center',marginBottom:14,gap:4},voucherTitle:{fontSize:18,fontWeight:'900',color:c.text},voucherPin:{marginVertical:12,fontSize:24,fontWeight:'900',letterSpacing:3,color:c.primary,textAlign:'center'},voucherLink:{marginVertical:8,fontSize:12,color:c.primary,textAlign:'center'},voucherShare:{marginTop:8,padding:8},
   buy:{marginTop:24,backgroundColor:c.primary,borderRadius:radius.lg,padding:15,alignItems:'center'},buyText:{color:c.onPrimary,fontWeight:'900',fontSize:14},empty:{padding:20,textAlign:'center',color:c.textSecondary},
 });

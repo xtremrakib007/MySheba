@@ -106,6 +106,8 @@ export function useServiceAction() {
     if (s.kind === 'pinCategory') return setScreen('rechargePinCategory:' + encodeURIComponent(String(s.pinCategory || 'other')));
     if (s.kind === 'iimmpactCatalog') return setScreen('iimmpactCatalog');
     if (s.kind === 'iimmpactCategory') return setScreen('iimmpactCategoryGrid:' + encodeURIComponent(String(s.iimmpactCategory || '')));
+    // A live catalogue category opens its product form directly.
+    if (s.kind === 'iimmpactProducts') return setScreen('iimmpactCategory:' + encodeURIComponent(String(s.iimmpactCategory || s.name || '')));
     if (s.kind === 'moreFeaturesLink') return setScreen('moreFeatures');
     if (s.kind === 'walletTransfer') return setScreen('transferPoints');
     if (s.kind === 'kyc') return setScreen('verifyIdentity');
