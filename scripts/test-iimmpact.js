@@ -315,8 +315,14 @@ const providerService = require('../functions/apiProviderService');
 
 test('iimmpactHmac is an accepted authentication type', () => {
   const validate = providerService._test.validate;
+  // Specific countries, not ALL. An iimmpact record scoped to ALL is refused
+  // outright now (see "isolate Success TopUp to Bangladesh and scope
+  // IIMMPACT"), because ALL includes Bangladesh and iimmpact does not serve
+  // it - a BD top-up would be dispatched to a provider that cannot fulfil it.
+  // This fixture said ALL and so tested nothing but that refusal, which is
+  // not what the check is called.
   const base = {
-    name: 'iimmpact', country: 'ALL', service: 'Recharge',
+    name: 'iimmpact', country: 'MY', countries: ['MY', 'ID'], service: 'Recharge',
     baseUrl: 'https://api.iimmpact.com', endpointPath: '/v2/topup', method: 'POST',
     authType: 'iimmpactHmac', apiKey: 'pk_live', secretKey: SECRET,
   };
@@ -327,6 +333,27 @@ test('iimmpactHmac is an accepted authentication type', () => {
   assert.throws(() => validate({ ...base, secretKey: '' }), /API key and an HMAC secret/);
   assert.throws(() => validate({ ...base, apiKey: '' }), /API key and an HMAC secret/);
   assert.throws(() => validate({ ...base, secretKey: 'not base64!!' }), /base64/);
+});
+
+test('an iimmpact record cannot be scoped to ALL, or to Bangladesh', () => {
+  // iimmpact's country list does not include Bangladesh. Scoped to ALL it
+  // would be selected for a BD top-up and refuse every one of them, so the
+  // scope is narrowed on save rather than discovered at dispatch.
+  const validate = providerService._test.validate;
+  const base = {
+    name: 'iimmpact', service: 'Recharge',
+    baseUrl: 'https://api.iimmpact.com', endpointPath: '/v2/topup', method: 'POST',
+    authType: 'iimmpactHmac', apiKey: 'pk_live', secretKey: SECRET,
+  };
+  assert.throws(() => validate({ ...base, country: 'ALL', countries: ['ALL'] }), /cannot be scoped to ALL/);
+  assert.throws(() => validate({ ...base, country: 'BD', countries: ['BD'] }), /cannot be scoped to ALL/);
+  // A mixed scope keeps the countries it may serve rather than being refused.
+  const mixed = validate({ ...base, country: 'MY', countries: ['MY', 'BD', 'ID'] });
+  assert.ok(!mixed.countries.includes('BD'), 'Bangladesh survived on an iimmpact record');
+  assert.ok(mixed.countries.includes('MY') && mixed.countries.includes('ID'));
+  // It is keyed on the NAME as well as the auth type, so a record that has not
+  // had its credentials set yet is still scoped.
+  assert.throws(() => validate({ ...base, name: 'IIMMPACT Recharge', authType: 'apiKey', apiKey: 'k', country: 'ALL', countries: ['ALL'] }), /cannot be scoped to ALL/);
 });
 
 test('the signature is not emitted as a static header', () => {
