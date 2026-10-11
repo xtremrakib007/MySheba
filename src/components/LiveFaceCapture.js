@@ -34,6 +34,28 @@ export default function LiveFaceCapture({ onCaptured, onCancel }) {
 
   const failures = useRef(0);
 
+  // The callbacks are held in refs, and deliberately NOT in the capture loop's
+  // dependency array below.
+  //
+  // VerifyIdentityScreen declares handleLiveFace in its component body, so it
+  // is a new function on every render - and that screen calls useApp(), so it
+  // re-renders whenever ANYTHING in the app context changes: a notification
+  // arriving, a profile write landing, any of the live Firestore listeners
+  // firing. With onCaptured in the dependency array, every one of those tore
+  // the loop down (active = false, clearTimeout) and started a fresh timer.
+  // The loop samples every SAMPLE_INTERVAL_MS, so on an account busy enough to
+  // re-render more often than that, no cycle ever finished and the photo was
+  // never taken - a camera that previews perfectly and never captures.
+  //
+  // Fixed here rather than by wrapping handleLiveFace in useCallback, because
+  // this component must not break when a future caller forgets to.
+  const onCapturedRef = useRef(onCaptured);
+  const onCancelRef = useRef(onCancel);
+  useEffect(() => {
+    onCapturedRef.current = onCaptured;
+    onCancelRef.current = onCancel;
+  }, [onCaptured, onCancel]);
+
   useEffect(() => {
     if (permission && !permission.granted && permission.canAskAgain) requestPermission();
   }, [permission?.granted, permission?.canAskAgain, requestPermission]);
@@ -131,7 +153,7 @@ export default function LiveFaceCapture({ onCaptured, onCancel }) {
         }
         if (!active) return discard(photo.uri);
         active = false;
-        onCaptured?.(photo.uri, 'image/jpeg', {
+        onCapturedRef.current?.(photo.uri, 'image/jpeg', {
           method: 'native_face_recognition',
           livenessPassed: true,
         });
@@ -151,7 +173,7 @@ export default function LiveFaceCapture({ onCaptured, onCancel }) {
       active = false;
       if (timer) clearTimeout(timer);
     };
-  }, [permission?.granted, ready, error, attempt, discard, onCaptured]);
+  }, [permission?.granted, ready, error, attempt, discard]);
 
   const retry = () => {
     failures.current = 0;

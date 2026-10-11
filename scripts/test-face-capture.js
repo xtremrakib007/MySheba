@@ -174,6 +174,40 @@ check(
   /deleteAsync/.test(component)
 );
 
+console.log('\nThe capture loop survives a re-render');
+// THE BUG THIS CATCHES: the loop restarted whenever its effect re-ran, and
+// onCaptured was in the dependency array. VerifyIdentityScreen declares
+// handleLiveFace in its component body - a new function every render - and
+// that screen calls useApp(), so it re-renders whenever ANYTHING in the app
+// context changes: a notification, a profile write, any live listener firing.
+// Each of those tore the loop down and started a fresh timer, so on a busy
+// account no sampling cycle ever finished and the camera previewed perfectly
+// and never took the photo.
+const captureEffect = /const tick = async \(\) => \{[\s\S]*?\n  \}, \[([^\]]*)\]\);/.exec(component);
+check('the capture loop effect is findable', !!captureEffect);
+if (captureEffect) {
+  const deps = captureEffect[1];
+  check(
+    'the capture loop does not depend on its callbacks',
+    !/onCaptured|onCancel/.test(deps),
+    'deps: ' + deps.replace(/\s+/g, ' ').trim(),
+  );
+}
+check(
+  'it reads the latest callback through a ref instead',
+  /onCapturedRef\.current\?\.\(/.test(component),
+);
+check(
+  'and the ref is kept up to date',
+  /onCapturedRef\.current = onCaptured;/.test(component),
+);
+// Fixed in the component, not by asking the caller to remember useCallback -
+// the next caller will not.
+check(
+  'the component does not rely on the parent memoising anything',
+  !/useCallback/.test(fs.readFileSync(path.join(root, 'src', 'screens', 'VerifyIdentityScreen.js'), 'utf8').match(/const handleLiveFace[\s\S]{0,200}/)?.[0] || ''),
+);
+
 console.log('');
 if (failed) {
   console.error(`${failed} check(s) failed.`);
