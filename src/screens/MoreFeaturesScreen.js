@@ -7,7 +7,7 @@ import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import { useServiceAction, Tile } from '../components/ServiceGrid';
 import { moreFeaturesSections, visibleTiles } from '../components/serviceTiles';
-import { mergeCatalogTiles } from '../components/iimmpactTiles';
+import { providerFor, coveredKeys, IIMMPACT } from '../components/providerGrids';
 import { useIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
 import * as gridManagementService from '../firebase/gridManagementService';
 
@@ -49,13 +49,15 @@ export default function MoreFeaturesScreen() {
   const handlePress = useServiceAction();
   const isActive = (key) => gridManagementService.isGridActive(gridManagement, key, gridViewer);
   const visible = (items) => items.filter((item) => isActive(item.key));
-  // Every live IIMMPACT category is a tile here too. A category that a native
-  // tile already sells (Mobile Prepaid -> Mobile Recharge, Mobile Pin -> PIN
-  // Generate) is merged into that tile rather than drawn twice, which is why
-  // the merge is told about this role's whole catalogue, home screen included.
-  const { catalog } = useIimmpactCatalog();
+  // The home screen's provider groups open every catalogue product, so this
+  // screen drops the fixed product tiles they replace and keeps the rest:
+  // features that are not provider products, and All Products. With no
+  // catalogue yet nothing is covered and the fixed overflow is unchanged.
+  const country = gridViewer?.country || '';
+  const { catalog } = useIimmpactCatalog({ enabled: providerFor(country) === IIMMPACT });
   const nativeKeys = visibleTiles({ role, can, webviewPages, tileLabels, viewer: gridViewer, isActive }).map((tile) => tile.key);
-  const serviceTiles = visible(mergeCatalogTiles(sections.flatMap((section) => section.tiles), catalog, nativeKeys));
+  const covered = coveredKeys({ country, catalog, nativeKeys });
+  const serviceTiles = visible(sections.flatMap((section) => section.tiles)).filter((tile) => !covered.has(tile.key));
   const isCustomer = !profile?.role || profile.role === 'customer';
 
   return (

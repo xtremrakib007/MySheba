@@ -63,7 +63,8 @@ function adminHubArt() {
 
 /** The Bill Payment category picker: the other place a picture is drawn. */
 function billCategoryArt() {
-  const src = read('src/steps/BillPaymentSteps.js');
+  // The categories live in src/data/billers.js, shared with the provider grids.
+  const src = read('src/data/billers.js');
   const found = [...src.matchAll(/\{ key: '[a-z]+', label: '[^']+', art: '([A-Za-z]+)' \}/g)].map((m) => m[1]);
   assert.ok(found.length >= 8, 'expected the bill categories, saw ' + found.length);
   return found;
@@ -338,7 +339,7 @@ test('every bill category has a picture too', () => {
   assert.ok(/: hasServiceArt\(item\.art\)\n\s*\? <ServiceArt name=\{item\.art\}/.test(step),
     'and must fall back to the drawing');
   // JomPAY's own mark, on the category called JomPAY Bill.
-  assert.ok(/\{ key: 'jompay', label: 'JomPAY Bill', art: 'jompay' \}/.test(step),
+  assert.ok(/\{ key: 'jompay', label: 'JomPAY Bill', art: 'jompay' \}/.test(read('src/data/billers.js')),
     'the JomPAY category must carry the JomPAY mark');
 });
 

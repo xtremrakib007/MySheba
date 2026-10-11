@@ -46,6 +46,7 @@ export function catalogTileKey(name) {
 // prepaid reload, and must not be folded into Mobile Recharge.
 export const NATIVE_CATEGORY_MERGES = [
   { tileKey: 'recharge', pattern: /^(mobile )?(prepaid|airtime|reload|top ?up)( reload| top ?up)?$/ },
+  { tileKey: 'esim', pattern: /\be ?sims?\b/ },
   // Mobile Recharge sells other countries' airtime from this category.
   { tileKey: 'recharge', pattern: /^international (top ?up|recharge|airtime|reload)s?$/ },
   { tileKey: 'internet', pattern: /^(mobile )?(data|internet)( plans?| packages?| bundles?)?$/ },

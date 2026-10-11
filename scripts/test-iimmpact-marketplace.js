@@ -45,6 +45,7 @@ function runEsm(relPath) {
 const tiles = runEsm('src/components/iimmpactTiles.js');
 const pins = runEsm('src/data/pinCategories.js');
 const recharge = runEsm('src/data/iimmpactRecharge.js');
+const grids = runEsm('src/components/providerGrids.js');
 
 // Shaped like the production Malaysia catalogue: the same group and category
 // names the Marketplace screen lists, with vouchers sold as PINs.
@@ -286,6 +287,59 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     assert.ok(byLabel['Water Bills'].key.startsWith('iimmpact:'));
     const steps = fs.readFileSync(path.join(ROOT, 'src/steps/BillPaymentSteps.js'), 'utf8');
     assert.ok(/operatorCode: b\.code \|\| ''/.test(steps), 'the chosen biller must carry its product code into the order');
+  });
+
+  console.log('\nProvider grids');
+
+  await test('a Malaysian home leads with IIMMPACT\u2019s own groups, in its order', () => {
+    const home = Array.from(grids.providerHomeTiles({ country: 'MY', catalog: CATALOG }));
+    // Promotions only repeats Food & Beverage, which is one category and lives
+    // under Vouchers, so it has nothing of its own to show.
+    assert.deepStrictEqual(home.map((t) => t.name), ['Mobile', 'Bills', 'Vouchers', 'Games', 'E-Wallet Reloads', 'Other Products']);
+    assert.ok(home.every((t) => t.kind === 'providerGroup' && t.provider === 'iimmpact'));
+  });
+
+  await test('each IIMMPACT category opens the flow that sells it, already past what it answers', () => {
+    const tile = (group, name) => Array.from(grids.providerGroup({ provider: 'iimmpact', groupKey: group, catalog: CATALOG, nativeKeys: NATIVE }).tiles).find((t) => t.name === name);
+    const water = tile('grp_bills', 'Water Bills');
+    assert.deepStrictEqual([water.kind, water.service, water.startStep, water.seed.country, water.seed.category], ['seededService', 'billpayment', 2, 'MY', 'iimmpact:water bills']);
+    const prepaid = tile('grp_mobile', 'Mobile Prepaid');
+    assert.deepStrictEqual([prepaid.service, prepaid.startStep, prepaid.seed.country], ['recharge', 1, 'MY']);
+    const intl = tile('grp_mobile', 'International Topup');
+    assert.deepStrictEqual([intl.service, intl.startStep], ['recharge', 0], 'international top-up starts at the country');
+    assert.deepStrictEqual([tile('grp_mobile', 'Mobile Data').service, tile('grp_mobile', 'Mobile Data').startStep], ['internet', 1]);
+    assert.deepStrictEqual([tile('grp_mobile', 'Mobile Pin').kind, tile('grp_mobile', 'Mobile Pin').pinCategory], ['pinCategory', 'mobile']);
+    assert.deepStrictEqual([tile('grp_vouchers', 'Fuel').kind, tile('grp_vouchers', 'Fuel').iimmpactCategory], ['iimmpactProducts', 'Fuel']);
+    assert.strictEqual(tile('grp_mobile', 'IDD').kind, 'iimmpactProducts');
+  });
+
+  await test('the fixed tiles the groups replace are not drawn again; non-provider features stay', () => {
+    const covered = grids.coveredKeys({ country: 'MY', catalog: CATALOG, nativeKeys: NATIVE });
+    for (const key of ['recharge', 'internet', 'rechargePin', 'billpayment', 'pinCategoryCoffee']) assert.ok(covered.has(key), key);
+    for (const key of ['salary', 'tngewallet', 'esim', 'iimmpactCatalog']) assert.ok(!covered.has(key), key + ' is not replaced by any group here');
+    assert.strictEqual(grids.coveredKeys({ country: 'MY', catalog: null, nativeKeys: NATIVE }).size, 0, 'no catalogue, no change');
+  });
+
+  await test('a Bangladeshi home is built from Success TopUp\u2019s services, operators and billers', () => {
+    const home = Array.from(grids.providerHomeTiles({ country: 'BD', catalog: CATALOG }));
+    assert.deepStrictEqual(home.map((t) => t.name), ['Mobile Recharge', 'Internet Packages', 'Offer Packs', 'Bill Payment']);
+    const recharge = grids.providerGroup({ provider: 'successtopup', groupKey: 'grp_bd_recharge' });
+    const gp = Array.from(recharge.tiles).find((t) => t.name === 'Grameenphone');
+    assert.deepStrictEqual([gp.service, gp.startStep, gp.seed.country, gp.seed.operator], ['recharge', 1, 'BD', 'Grameenphone']);
+    const bills = Array.from(grids.providerGroup({ provider: 'successtopup', groupKey: 'grp_bd_bills' }).tiles);
+    assert.deepStrictEqual(bills.map((t) => t.seed.category).sort(), ['electricity', 'gas', 'internet', 'mobile', 'water']);
+    assert.ok(bills.every((t) => t.service === 'billpayment' && t.startStep === 2 && t.seed.country === 'BD'));
+    const covered = grids.coveredKeys({ country: 'BD', catalog: null, nativeKeys: NATIVE });
+    for (const key of ['recharge', 'billpayment', 'tngewallet', 'jompay', 'rechargePin', 'esim']) assert.ok(covered.has(key), key);
+    assert.ok(!covered.has('salary'));
+  });
+
+  await test('the new tile kinds have destinations', () => {
+    const grid = fs.readFileSync(path.join(ROOT, 'src/components/ServiceGrid.js'), 'utf8');
+    assert.ok(/s\.kind === 'providerGroup'\) return setScreen\('providerGroup:'/.test(grid));
+    assert.ok(/s\.kind === 'seededService'\) return startService\(s\.service, s\.seed \|\| \{\}, s\.startStep \|\| 0\)/.test(grid));
+    const app = fs.readFileSync(path.join(ROOT, 'App.js'), 'utf8');
+    assert.ok(/renderedScreen\.startsWith\('providerGroup:'\) && .*<ProviderGroupScreen/.test(app));
   });
 
   console.log('\nMarkup');
