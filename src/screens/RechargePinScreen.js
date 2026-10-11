@@ -85,7 +85,10 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
   const [busy, setBusy] = useState(false);
   const [voucher, setVoucher] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
-  const [account, setAccount] = useState(() => malaysianNational(profile?.phone));
+  const profileAccount = malaysianNational(profile?.phone);
+  const [account, setAccount] = useState(profileAccount);
+  // The profile can finish loading after this screen opens.
+  useEffect(() => { if (profileAccount && !account) setAccount(profileAccount); }, [profileAccount]);
   const [fieldValues, setFieldValues] = useState({});
 
   // Back should unwind the current PIN task one level at a time. Previously
@@ -190,7 +193,7 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
     const currency = selectedOption?.price?.currency || product?.denomination_currency || 'MYR';
     showAlert(
       'Confirm PIN Purchase',
-      'Product: ' + String(product.name || '') + '\nAmount: ' + currency + ' ' + liveAmount.toFixed(2) + '\nMobile: ' + account.trim() + '\nPayment will be taken from your MySheba wallet. Continue?',
+      'Product: ' + String(product.name || '') + '\nAmount: ' + currency + ' ' + liveAmount.toFixed(2) + (profileAccount ? '' : '\nMobile: ' + account.trim()) + '\nPayment will be taken from your MySheba wallet. Continue?',
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Confirm & Pay', onPress: async () => { await completePurchase(liveAmount); } },
@@ -304,8 +307,14 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
       {!!product && !loadingOptions && !options.length && <Text style={styles.error}>IIMMPACT returned no active denominations for this product.</Text>}
 
       {!!product && <>
-        <Text style={styles.label}>Malaysian mobile number</Text>
-        <TextInput style={styles.input} value={account} onChangeText={(v) => setAccount(v.replace(/[^\d]/g, '').slice(0, 11))} placeholder="0123456789" placeholderTextColor={colors.textSecondary} keyboardType="phone-pad" />
+        {/* The PIN comes back on this screen, not by SMS. IIMMPACT still needs a
+            Malaysian number on every order, so the customer's own is used
+            silently, and the field appears only when the profile has none. */}
+        {!profileAccount && <>
+          <Text style={styles.label}>Malaysian mobile number</Text>
+          <Text style={styles.info}>Required by the provider for this order. Your PIN is shown here, not sent to this number.</Text>
+          <TextInput style={styles.input} value={account} onChangeText={(v) => setAccount(v.replace(/[^\d]/g, '').slice(0, 11))} placeholder="0123456789" placeholderTextColor={colors.textSecondary} keyboardType="phone-pad" />
+        </>}
         {extraFields.map((f) => <View key={String(f.id)}>
           <Text style={styles.label}>{(f.label || f.name || f.id) + (f.required ? ' *' : '')}</Text>
           <TextInput style={styles.input} value={String(fieldValues[f.id] || '')} onChangeText={(v) => setFieldValues((x) => ({ ...x, [f.id]: v }))} placeholder={f.placeholder || ''} placeholderTextColor={colors.textSecondary} autoCapitalize="none" />
