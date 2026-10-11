@@ -13,6 +13,8 @@ import { useNetworkStatus } from '../components/useNetworkStatus';
 import * as apiProviderService from '../firebase/apiProviderService';
 import { rechargeProductsFromCatalog } from '../data/iimmpactRecharge';
 import { applyMarkup } from '../utils/markup';
+import DenominationGrid from '../components/DenominationGrid';
+import { denominationItems, amountItems, optionPrice } from '../utils/denominations';
 
 // Recharge flow: country -> operator -> mobile number -> amount.
 // Customer-facing wallet values are always displayed as MYR. The legacy
@@ -155,34 +157,34 @@ export default function RechargeStep({ step }) {
         {extraFields.map((field) => <View key={field.id}><FormLabel>{field.label || field.id}</FormLabel><FormInput placeholder={field.placeholder || field.label || field.id} keyboardType={field.input_mode === 'numeric' || field.type === 'number' ? 'numeric' : 'default'} style={styles.phoneInput} value={String(serviceData.fieldValues?.[field.id] ?? '')} onChangeText={(value) => updateServiceData({ fieldValues: { ...(serviceData.fieldValues || {}), [field.id]: value } })} /></View>)}
         {optionsLoading && <Text style={styles.catalogInfo}>Loading live amounts from IIMMPACT…</Text>}
         {optionsUnavailable && !optionsLoading && !!pricingField?.id && <Text style={styles.catalogInfo}>IIMMPACT has no available amount for this product and number. Check its required fields and options in the provider catalog.</Text>}
-        {!!pricingField?.id && <View style={styles.grid3}>{iimmpactOptions.map((option) => { const price = Number(option?.price?.amount ?? option?.price ?? option?.amount); const label = localAmountLabel(option, product); const pay = Number.isFinite(price) && price > 0 ? customerPrice(price) : null; return <RechargeAmountButton key={String(option.code)} label={`${label}${pay != null ? `\nPay RM ${pay.toFixed(2)}` : ''}`} selected={String(serviceData.selectedOptions?.[pricingField.id]?.code || '') === String(option.code)} onPress={() => updateServiceData({ selectedOptions: { ...(serviceData.selectedOptions || {}), [pricingField.id]: option }, fieldValues: { ...(serviceData.fieldValues || {}), [accountFieldId]: String(serviceData.phone || ''), phone: String(serviceData.phone || '') }, amount: Number.isFinite(price) && price > 0 ? price : Number(option?.denomination || 0), package: label, subproductCode: String(option.code || '') })} styles={styles} />; })}</View>}
-        {!pricingField?.id && <View style={styles.grid3}>{denominations.map((amount) => <RechargeAmountButton key={amount} label={`RM ${amount}`} selected={Number(serviceData.amount) === amount} onPress={() => updateServiceData({ amount, fieldValues: { ...(serviceData.fieldValues || {}), [accountFieldId]: String(serviceData.phone || ''), phone: String(serviceData.phone || ''), amount } })} styles={styles} />)}</View>}
-        {!!(serviceData.amount > 0) && <SummaryCard rows={[{ label: 'Product', value: product?.name || serviceData.operator }, { label: 'Amount', value: serviceData.package || `MYR ${Number(serviceData.amount).toFixed(2)}` }]} totalLabel="Wallet deduction" totalValue={`MYR ${customerPrice(Number(serviceData.amount)).toFixed(2)}`} />}
+        {!!pricingField?.id && <DenominationGrid
+          items={denominationItems(iimmpactOptions, { product, payFor: customerPrice })}
+          selectedKey={serviceData.selectedOptions?.[pricingField.id]?.code}
+          onSelect={({ option, value }) => updateServiceData({ selectedOptions: { ...(serviceData.selectedOptions || {}), [pricingField.id]: option }, fieldValues: { ...(serviceData.fieldValues || {}), [accountFieldId]: String(serviceData.phone || ''), phone: String(serviceData.phone || '') }, amount: optionPrice(option) > 0 ? optionPrice(option) : Number(option?.denomination || 0), package: value, subproductCode: String(option.code || '') })}
+        />}
+        {!pricingField?.id && <DenominationGrid
+          items={amountItems(denominations, { payFor: customerPrice })}
+          selectedKey={serviceData.amount > 0 ? String(Number(serviceData.amount)) : ''}
+          onSelect={({ amount }) => updateServiceData({ amount, package: '', fieldValues: { ...(serviceData.fieldValues || {}), [accountFieldId]: String(serviceData.phone || ''), phone: String(serviceData.phone || ''), amount } })}
+        />}
+        {!!(serviceData.amount > 0) && <SummaryCard rows={[{ label: 'Product', value: product?.name || serviceData.operator }, { label: 'Amount', value: serviceData.package || `RM ${Number(serviceData.amount).toFixed(2)}` }]} totalLabel="You pay" totalValue={`MYR ${customerPrice(Number(serviceData.amount)).toFixed(2)}`} />}
       </View>);
     }
-    const isForeign = serviceData.country && serviceData.country !== 'MY';
-    const walletDeductionMyr = isForeign ? amountToPoints(serviceData.amount || 0, serviceData.country, rates) : (serviceData.amount || 0);
-    const amounts = cur === 'MYR' ? [10, 20, 30, 50, 100] : cur === 'BDT' ? [50, 100, 200, 500, 1000] : [50, 100, 200, 500];
-    return (<View><ServiceInterruptionNotice notice={interruption} /><FormLabel>Select Amount ({cur})</FormLabel><View style={styles.grid3}>{amounts.map((a) => <RechargeAmountButton key={a} label={`${cur} ${a}`} selected={serviceData.amount === a} onPress={() => updateServiceData({ amount: a })} styles={styles} />)}</View><FormInput placeholder="Custom amount" keyboardType="numeric" style={styles.phoneInput} value={serviceData.amount != null ? String(serviceData.amount) : ''} onChangeText={(v) => updateServiceData({ amount: parseFloat(v) || 0 })} />{!!(isForeign && serviceData.amount > 0) && <SummaryCard rows={[{ label: 'Amount', value: `${cur} ${Number(serviceData.amount).toFixed(2)}` }]} totalLabel="Wallet deduction" totalValue={`${walletDeductionMyr.toFixed(2)} MYR`} />}</View>);
+    // Only Bangladesh is sold without IIMMPACT's catalogue: Success TopUp takes
+    // any amount. Everywhere else the amounts are the provider's own, above;
+    // the old fixed RM 10/20/30 list and free amount are gone, because
+    // IIMMPACT refuses an amount it does not list.
+    if (String(serviceData.country || '').toUpperCase() !== 'BD') {
+      return (<View><ServiceInterruptionNotice notice={interruption} /><Text style={styles.catalogInfo}>{catalogLoading ? 'Loading amounts…' : 'This operator has no amounts available right now. Go back and choose the operator again.'}</Text></View>);
+    }
+    const amounts = [50, 100, 200, 500, 1000];
+    const walletDeductionMyr = amountToPoints(serviceData.amount || 0, serviceData.country, rates);
+    return (<View><ServiceInterruptionNotice notice={interruption} /><FormLabel>Select Amount ({cur})</FormLabel><DenominationGrid items={amounts.map((a) => ({ key: String(a), value: `${cur} ${a}`, caption: '', amount: a }))} selectedKey={serviceData.amount > 0 ? String(serviceData.amount) : ''} onSelect={({ amount }) => updateServiceData({ amount })} /><FormInput placeholder="Custom amount" keyboardType="numeric" style={styles.phoneInput} value={serviceData.amount != null ? String(serviceData.amount) : ''} onChangeText={(v) => updateServiceData({ amount: parseFloat(v) || 0 })} />{!!(serviceData.amount > 0) && <SummaryCard rows={[{ label: 'Amount', value: `${cur} ${Number(serviceData.amount).toFixed(2)}` }]} totalLabel="Wallet deduction" totalValue={`${walletDeductionMyr.toFixed(2)} MYR`} />}</View>);
   }
   return null;
 }
 
-// An international top-up is bought in the destination's money - IDR 50,000,
-// not RM 14.20 - so that leads, from the option's own denomination and the
-// product's denomination currency. A Malaysian option, or one without those
-// fields, keeps IIMMPACT's label.
-function localAmountLabel(option, product) {
-  const label = String(option?.label || option?.description || option?.name || option?.code || 'Amount');
-  const currency = String(option?.denomination_currency || product?.denomination_currency || '').toUpperCase();
-  const face = Number(option?.denomination);
-  if (!currency || currency === 'MYR' || !Number.isFinite(face) || face <= 0) return label;
-  const amount = face.toLocaleString('en-US', { maximumFractionDigits: 2 });
-  return `${currency} ${amount}`;
-}
-
 function RechargeOperatorCard({ name, logo, color, initials, selected, onPress, styles, primaryColor }) { return <TouchableOpacity style={[styles.selectCard, styles.operatorCard, selected && styles.selectCardSelected]} onPress={onPress} activeOpacity={0.8}>{logo ? <Image source={logo} style={styles.operatorLogo} resizeMode="contain" /> : <View style={[styles.operatorBadge, { backgroundColor: color || primaryColor }]}><Text style={styles.operatorBadgeText}>{initials}</Text></View>}<Text style={[styles.selectName, styles.operatorName, selected && styles.selectNameSelected]} numberOfLines={2}>{String(name || '')}</Text></TouchableOpacity>; }
-function RechargeAmountButton({ label, selected, onPress, styles }) { return <TouchableOpacity style={[styles.amountBtn, selected && styles.amountBtnSelected]} onPress={onPress} activeOpacity={0.8}><Text style={[styles.amountBtnText, selected && styles.amountBtnTextSelected]}>{label}</Text></TouchableOpacity>; }
 export function validateStep(step, serviceData) { if (step === 0 && !serviceData.country) return 'Please select a country.'; if (step === 2 && !serviceData.operator) return 'Please select an operator.'; if (step === 1 && !(serviceData.phone || '').trim()) return 'Please enter a mobile number.'; if (step === 3 && serviceData.iimmpactCatalog === true) { const fields = Array.isArray(serviceData.iimmpactFields) ? serviceData.iimmpactFields : []; const pricing = fields.find((field) => field && field.type === 'select' && field.role === 'pricing') || fields.find((field) => field && field.type === 'select'); if (pricing?.required && !serviceData.selectedOptions?.[pricing.id]) return 'Please select an amount returned by IIMMPACT.'; for (const field of fields.filter((field) => field && field.required && field.type !== 'select' && field.role !== 'account')) if (!String(serviceData.fieldValues?.[field.id] ?? '').trim()) return `Please enter ${field.label || field.id}.`; } if (step === 3 && !(serviceData.amount > 0)) return 'Please select or enter an amount.'; return null; }
 function createStyles(colors, isDark) {
   const tileBg = colors.surface;

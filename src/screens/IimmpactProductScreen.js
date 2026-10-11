@@ -7,6 +7,8 @@ import { useTheme } from '../theme/ThemeContext';
 import HeaderDecor from '../components/HeaderDecor';
 import * as api from '../firebase/apiProviderService';
 import { purchaseRechargePin } from '../firebase/rechargePinService';
+import DenominationGrid from '../components/DenominationGrid';
+import { denominationItems } from '../utils/denominations';
 import { useIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
 import ConfirmReview, { formatMoney } from '../components/ConfirmReview';
 import { catalogCategories } from '../components/iimmpactTiles';
@@ -578,6 +580,13 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
                       )}
                       {busyField && <View style={st.optionLoading}><ActivityIndicator color={colors.primary} /><Text style={st.muted}>Loading options…</Text></View>}
                       {!busyField && !list.length && <Text style={st.muted}>Enter the required information above to load options.</Text>}
+                      {field.role === 'pricing' ? (
+                        <DenominationGrid
+                          items={denominationItems(filtered, { product: selectedProduct, payFor: (amount) => customerPrice(amount), keyOf: (option, index) => String(option?.code || index) })}
+                          selectedKey={selectedOptions[id]?.code}
+                          onSelect={({ option }) => chooseOption(field, option)}
+                        />
+                      ) : (
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.optionRow}>
                         {filtered.map((option, index) => {
                           const selected = selectedOptions[id]?.code === option?.code;
@@ -588,6 +597,7 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
                           );
                         })}
                       </ScrollView>
+                      )}
                       {list.length > 100 && <Text style={st.muted}>Showing first 100 matches. Search to narrow the list.</Text>}
                     </>
                   ) : (

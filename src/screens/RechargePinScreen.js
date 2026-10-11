@@ -12,6 +12,8 @@ import { purchaseRechargePin } from '../firebase/rechargePinService';
 import * as apiProviderService from '../firebase/apiProviderService';
 import { radius, tileGrid } from '../theme/theme';
 import { Tile } from '../components/ServiceGrid';
+import DenominationGrid from '../components/DenominationGrid';
+import { denominationItems } from '../utils/denominations';
 import ConfirmReview, { formatMoney } from '../components/ConfirmReview';
 import { applyMarkup } from '../utils/markup';
 import { pinProducts, categorizePinProducts } from '../data/pinCategories';
@@ -21,7 +23,6 @@ import { pinProducts, categorizePinProducts } from '../data/pinCategories';
 const IIMMPACT_COUNTRIES = [['MY', 'Malaysia']];
 const CURRENCY_BY_COUNTRY = { MY: 'MYR', SG: 'SGD', ID: 'IDR', IN: 'INR', PH: 'PHP', NP: 'NPR', PK: 'PKR', MM: 'MMK', KH: 'KHR' };
 const MALAYSIA_OPERATORS = rechargePinBrands.MY || ['Celcom', 'CelcomDigi', 'U Mobile', 'Hotlink', 'XOX', 'Tunetalk', 'Unifi', 'Yes', "Touch 'n Go eWallet"];
-const AMOUNTS = [10, 20, 30, 50, 100];
 // Keep the last successful catalogue in memory so reopening PIN Generator or
 // switching back from a category never waits on the network to draw its grid.
 // Refresh in the background so provider updates still appear without a cold wait.
@@ -108,7 +109,10 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
       setAmount(null);
       return;
     }
-    if (selectedCategory) { setSelectedCategory(null); return; }
+    // Opened on one category from a grid tile: that category is where this
+    // screen starts, so Back returns to the grid rather than to every PIN
+    // category, which is the flow the tile replaced.
+    if (selectedCategory && selectedCategory !== initialCategory) { setSelectedCategory(null); return; }
     goBackOrHome();
   };
 
@@ -118,7 +122,7 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
       return true;
     });
     return () => sub.remove();
-  }, [review, busy, voucher, product, selectedCategory, goBackOrHome]);
+  }, [review, busy, voucher, product, selectedCategory, initialCategory, goBackOrHome]);
 
   useEffect(() => {
     let alive = true;
@@ -263,7 +267,7 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
       ]}
       prices={[
         ['Selling / transaction amount', formatMoney(marked, review.currency)],
-        ['Provider cost price', Number.isFinite(cost) && cost > 0 ? formatMoney(cost, review.currency) : 'Not provided by provider'],
+        ['Provider cost price', String(profile?.role || '').toLowerCase() === 'superadmin' && Number.isFinite(cost) && cost > 0 ? formatMoney(cost, review.currency) : ''],
         ['Wallet balance before', formatMoney(balance, walletCurrency)],
         ['Wallet balance after (estimated)', formatMoney(balance - deduction, walletCurrency)],
       ]}
@@ -299,7 +303,7 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
       </>}
 
       {!!selectedCategory && !product && <>
-        <TouchableOpacity onPress={() => setSelectedCategory(null)} style={styles.backCategory}><Text style={styles.backCategoryText}>← All PIN Categories</Text></TouchableOpacity>
+        {selectedCategory !== initialCategory && <TouchableOpacity onPress={() => setSelectedCategory(null)} style={styles.backCategory}><Text style={styles.backCategoryText}>← All PIN Categories</Text></TouchableOpacity>}
         <Text style={styles.label}>{categorizedProducts.find((item) => item.id === selectedCategory)?.title || 'PIN Products'}</Text>
         {(() => {
           const items = categorizedProducts.find((item) => item.id === selectedCategory)?.products || [];
@@ -326,23 +330,18 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
 
       {!!product && <Text style={styles.label}>{product.name} — Select Amount</Text>}
       {!!product && loadingOptions && <Text style={styles.info}>Loading live denominations…</Text>}
-      {!!product && !loadingOptions && options.length > 0 && <View style={styles.grid}>{options.map((item) => {
-        const value = Number(item?.price?.amount ?? item?.denomination);
-        const currency = item?.price?.currency || product?.denomination_currency || CURRENCY_BY_COUNTRY[country] || '';
-        return <TouchableOpacity key={item.code} onPress={() => { setSelectedOption(item); setAmount(value); setVoucher(null); }} style={[styles.amount, selectedOption?.code === item.code && styles.amountSelected]}>
-          <Text style={styles.amountIcon}>💳</Text><Text style={[styles.amountText, selectedOption?.code === item.code && styles.amountTextSelected]}>{currency} {Number.isFinite(value) ? value : item.label || item.code}</Text>
-          {!!item.label && <Text style={styles.optionMeta} numberOfLines={2}>{item.label}</Text>}
-          {(() => {
-            // The face value leads; what the wallet pays follows when MySheba's
-            // markup or the PIN multiplier makes it different.
-            const role = String(profile?.role || 'customer');
-            const multiplier = Number(pricing?.rolePricing?.[role]?.rechargePointCostPerUnit ?? pricing?.rechargePointCostPerUnit ?? 1);
-            const marked = Number.isFinite(value) ? applyMarkup(pricing, { service: 'rechargePin', country, productCode: product?.code, amount: value }).amount : NaN;
-            const pay = Math.round(marked * (Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1) * 100) / 100;
-            return Number.isFinite(pay) && Math.abs(pay - value) > 0.001 ? <Text style={styles.optionMeta}>Pay RM {pay.toFixed(2)}</Text> : null;
-          })()}
-        </TouchableOpacity>;
-      })}</View>}
+      {!!product && !loadingOptions && options.length > 0 && <DenominationGrid
+        items={denominationItems(options, { product, payFor: (value) => {
+          // The face value leads; what the wallet pays follows when MySheba's
+          // markup or the PIN multiplier makes it different.
+          const role = String(profile?.role || 'customer');
+          const multiplier = Number(pricing?.rolePricing?.[role]?.rechargePointCostPerUnit ?? pricing?.rechargePointCostPerUnit ?? 1);
+          const marked = applyMarkup(pricing, { service: 'rechargePin', country, productCode: product?.code, amount: value }).amount;
+          return marked * (Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1);
+        } })}
+        selectedKey={selectedOption?.code}
+        onSelect={({ option }) => { setSelectedOption(option); setAmount(Number(option?.price?.amount ?? option?.denomination)); setVoucher(null); }}
+      />}
       {!!product && !loadingOptions && !options.length && <Text style={styles.error}>IIMMPACT returned no active denominations for this product.</Text>}
 
       {!!product && <>
@@ -360,10 +359,6 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
         </View>)}
       </>}
 
-      {!product && !dynamicProducts.length && country === 'MY' && !catalog?.providerId && !!operator && <>
-        <Text style={styles.label}>Legacy Denomination</Text>
-        <View style={styles.grid}>{AMOUNTS.map((item) => <TouchableOpacity key={item} onPress={() => { setAmount(item); setVoucher(null); }} style={[styles.amount, amount === item && styles.amountSelected]}><Text style={styles.amountIcon}>💳</Text><Text style={[styles.amountText, amount === item && styles.amountTextSelected]}>MYR {item}</Text></TouchableOpacity>)}</View>
-      </>}
 
       {/* Only once there is something to buy: on a category or product grid the
           tiles are the action, and an inert Next under them read as broken. */}

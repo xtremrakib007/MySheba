@@ -87,6 +87,7 @@ export default function ConfirmTransactionScreen() {
   const { currentService, serviceData, pricing, rates, profile, submitService, setScreen, goBack, submitting } = useApp();
   const styles = createStyles(colors);
   const title = TITLES[currentService] || currentService || 'Transaction';
+  const isSuperadmin = String(profile?.role || '').toLowerCase() === 'superadmin';
   const summary = useMemo(() => getPricing(currentService, serviceData || {}, pricing, rates, profile?.role), [currentService, serviceData, pricing, rates, profile?.role]);
   const shown = (value) => value !== undefined && value !== null && String(value).trim() !== '';
   const full = FULL_LAYOUT.has(currentService);
@@ -175,7 +176,10 @@ export default function ConfirmTransactionScreen() {
             <View style={styles.row}><Text style={styles.label}>Expected profit / loss</Text><Text style={[styles.value, { color: colors.text }]}>{payout.profit == null ? 'Not available' : money(payout.profit)}</Text></View>
           </>}
           {!full && <>
-            <View style={styles.row}><Text style={styles.label}>Provider cost price</Text><Text style={[styles.value, { color: colors.text }]}>{summary.cost == null ? 'Not provided by provider' : money(summary.cost)}</Text></View>
+            {/* What MySheba pays the provider is MySheba's business, not the
+                customer's: shown beside a RM 5.00 charge, a RM 4.94 cost read
+                as an overcharge. Superadmin still sees it. */}
+            {isSuperadmin && summary.cost != null && <View style={styles.row}><Text style={styles.label}>Provider cost price (MySheba pays)</Text><Text style={[styles.value, { color: colors.text }]}>{money(summary.cost)}</Text></View>}
             <View style={styles.row}><Text style={styles.label}>Commission amount</Text><Text style={[styles.value, { color: colors.text }]}>{summary.commission > 0 ? '- ' + money(summary.commission) : money(0)}</Text></View>
           </>}
           <View style={styles.row}><Text style={styles.label}>Wallet balance before</Text><Text style={[styles.value, { color: colors.text }]}>{money(balance, walletCurrency)}</Text></View>

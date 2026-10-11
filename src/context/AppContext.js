@@ -774,6 +774,11 @@ export function AppProvider({ children }) {
   // ---- service wizard state (mirrors currentService/currentStep/totalSteps/serviceData) ----
   const [currentService, setCurrentService] = useState("");
   const [currentStep, setCurrentStep] = useState(0);
+  // The step a flow was opened on. A tile that answers the earlier steps
+  // (Water Bill is Bill Payment with country, category already chosen) opens
+  // past them, and those steps are not the customer's to go back to: Back
+  // from here leaves the flow for the grid that opened it.
+  const [firstStep, setFirstStep] = useState(0);
   const [serviceData, setServiceData] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
@@ -2006,8 +2011,8 @@ export function AppProvider({ children }) {
       // before ever touching the outer screen history - otherwise
       // hardware back would skip every step and jump straight to
       // whatever screen opened the wizard.
-      if (screen === "service" && currentStep > 0) {
-        setCurrentStep((s) => Math.max(0, s - 1));
+      if (screen === "service" && currentStep > firstStep) {
+        setCurrentStep((s) => Math.max(firstStep, s - 1));
         return true;
       }
       // A home screen (Customer/Dealer/Reseller/Admin) is the app's
@@ -2045,7 +2050,7 @@ export function AppProvider({ children }) {
     };
     const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
     return () => sub.remove();
-  }, [screen, sidebarVisible, goBack, closeSidebar, currentStep]);
+  }, [screen, sidebarVisible, goBack, closeSidebar, currentStep, firstStep]);
 
   const goHome = useCallback(() => {
     const r = profile ? profile.role : "";
@@ -2546,7 +2551,9 @@ export function AppProvider({ children }) {
       return;
     }
     setCurrentService(service);
-    setCurrentStep(Number.isInteger(startStep) && startStep > 0 ? startStep : 0);
+    const opening = Number.isInteger(startStep) && startStep > 0 ? startStep : 0;
+    setCurrentStep(opening);
+    setFirstStep(opening);
     setServiceData(seed && typeof seed === 'object' ? { ...seed } : {});
     setScreen("service");
   }, [gridManagement, gridViewer, showAlert]);
@@ -2781,8 +2788,8 @@ export function AppProvider({ children }) {
   }, [totalSteps]);
 
   const prevStep = useCallback(() => {
-    setCurrentStep((s) => Math.max(0, s - 1));
-  }, []);
+    setCurrentStep((s) => Math.max(firstStep, s - 1));
+  }, [firstStep]);
 
   const updateServiceData = useCallback((patch) => {
     setServiceData((d) => ({ ...d, ...patch }));
@@ -2892,6 +2899,7 @@ export function AppProvider({ children }) {
     // wizard
     currentService,
     currentStep,
+    firstStep,
     totalSteps,
     serviceData,
     submitting,

@@ -92,7 +92,7 @@ export default function ServiceScreen() {
   } = useTheme();
 
   const styles = createStyles(colors);
-  const { currentService, currentStep, totalSteps, serviceData, goBackOrHome, nextStep, prevStep, setScreen, submitting } = useApp();
+  const { currentService, currentStep, firstStep = 0, totalSteps, serviceData, goBackOrHome, nextStep, prevStep, setScreen, submitting } = useApp();
 
   const StepComponent = STEP_COMPONENTS[currentService];
   const title = SERVICE_TITLES[currentService] || 'Service';
@@ -114,9 +114,10 @@ export default function ServiceScreen() {
     : 'Submit';
 
   // Same step-at-a-time behaviour as the "← Back" button in the nav bar
-  // below - only leaves the wizard entirely once we're already on step 1.
+  // below - only leaves the wizard once we're on the step it was opened on,
+  // so a tile that skipped country and operator never shows them on Back.
   const onHeaderBack = () => {
-    if (currentStep > 0) prevStep();
+    if (currentStep > firstStep) prevStep();
     else goBackOrHome();
   };
 
@@ -143,7 +144,7 @@ export default function ServiceScreen() {
         <Text style={styles.headerTitle}>{title}</Text>
       </LinearGradient>
 
-      <StepBar totalSteps={totalSteps} currentStep={currentStep} />
+      <StepBar totalSteps={totalSteps - firstStep} currentStep={currentStep - firstStep} />
 
       <ScrollView style={styles.content} contentContainerStyle={{ padding: 16 }}>
         {!!adSlot && <SmartAd placement={adSlot.top} feature={adSlot.feature} height={100} style={{ marginBottom: 12 }} />}
@@ -154,7 +155,7 @@ export default function ServiceScreen() {
 
       <View style={styles.navBar}>
         <View style={styles.btnGroup}>
-          {currentStep > 0 && <OutlineButton label="← Back" onPress={prevStep} />}
+          {currentStep > firstStep && <OutlineButton label="← Back" onPress={prevStep} />}
           <PrimaryButton
             label={isLast ? (submitting ? 'Processing...' : finalButtonLabel) : 'Next →'}
             onPress={onNext}

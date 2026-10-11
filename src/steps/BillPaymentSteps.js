@@ -16,6 +16,8 @@ import { BILLERS, BILL_CATEGORIES as CATEGORIES } from '../data/billers';
 import { useIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
 import { billCategories } from '../components/iimmpactTiles';
 import { billForm, fieldValue, accountStepError, amountStepError, optionAmount } from '../utils/iimmpactBillForm';
+import DenominationGrid from '../components/DenominationGrid';
+import { denominationItems } from '../utils/denominations';
 
 /** Billers for a country and category, every entry in { name, amount } form. */
 function billersFor(country, category) {
@@ -36,9 +38,11 @@ function fixedAmountFor(serviceData) {
 // that could only answer "no biller is configured for this yet".
 function categoriesFor(country, catalogBills = []) {
   // Malaysia's bills are IIMMPACT's: its categories and every biller it sells,
-  // each carrying its product code. The list below is the fallback for when
-  // the catalogue cannot be loaded, and is still what other countries use.
-  if (country === 'MY' && catalogBills.length) return catalogBills;
+  // each carrying its product code. The list below is what other countries
+  // use. There is no built-in fallback for Malaysia any more: a biller IIMMPACT
+  // does not list cannot be paid through it, so the old fixed list only led to
+  // refused orders. Until the catalogue loads the step says so.
+  if (country === 'MY') return catalogBills;
   // JomPAY and Touch 'n Go have dedicated homepage tiles. Keep their
   // internal biller mappings for those seeded flows, but don't duplicate them
   // inside the general Bill Payment category picker. Tax/JomPAY likewise
@@ -136,7 +140,7 @@ export default function BillPaymentStep({ step }) {
   // Every hook before the first `return`, without exception. The sidebar once
   // shipped a crash because one sat below an early return, and this component
   // is all early returns.
-  const { catalog } = useIimmpactCatalog({ enabled: serviceData.country === 'MY' });
+  const { catalog, loading: catalogLoading } = useIimmpactCatalog({ enabled: serviceData.country === 'MY' });
   const catalogBills = useMemo(() => billCategories(catalog), [catalog]);
   const [bill, setBill] = useState(null);
   const [billLoading, setBillLoading] = useState(false);
@@ -196,7 +200,7 @@ export default function BillPaymentStep({ step }) {
     const cats = categoriesFor(serviceData.country, catalogBills);
     return <View><FormLabel>Select Bill Category</FormLabel>{cats.length
       ? <Grid3>{cats.map((item) => <CategoryCard key={item.key} item={item} selected={serviceData.category === item.key} onPress={() => { updateServiceData({ category: item.key, provider: null }); nextStep(); }} />)}</Grid3>
-      : <Text style={noneStyles.none}>No bills can be paid for this country yet. Go back and pick another.</Text>}</View>;
+      : <Text style={noneStyles.none}>{serviceData.country === 'MY' && catalogLoading ? 'Loading billers…' : 'No bills can be paid for this country yet. Go back and pick another.'}</Text>}</View>;
   }
   if (step === 2) {
     const fromCatalog = String(serviceData.category || '').startsWith('iimmpact:');
@@ -208,7 +212,7 @@ export default function BillPaymentStep({ step }) {
     // A built-in biller clears any code left from an earlier choice.
     return <View><FormLabel>Select Provider</FormLabel>{providers.length
       ? <Grid3>{providers.map((b) => { const brand = getBillerBrand(b.name); const logo = brand.logo || (b.imageUrl ? { uri: b.imageUrl } : null); return <OperatorCard key={b.code || b.name} name={b.name} logo={logo} color={brand.color} initials={brand.initials} selected={serviceData.provider === b.name} onPress={() => { const product = b.code ? catalog?.products?.[b.code] : null; updateServiceData({ provider: b.name, operatorCode: b.code || '', productCode: b.code || '', productName: b.code ? b.name : '', amount: b.amount != null ? b.amount : null, iimmpactFields: Array.isArray(product?.fields) ? product.fields : [], iimmpactFulfillment: product?.fulfillment || null, fieldValues: {}, selectedOptions: {} }); nextStep(); }} />; })}</Grid3>
-      : <Text style={noneStyles.none}>No biller is configured for this country and category yet.</Text>}</View>;
+      : <Text style={noneStyles.none}>{fromCatalog && catalogLoading ? 'Loading billers…' : 'No biller is configured for this country and category yet.'}</Text>}</View>;
   }
   if (step === 3) {
     // JomPAY asks for what is printed on the bill - Biller Code, Ref-1, and
@@ -343,16 +347,17 @@ function BillField({ field, serviceData, updateServiceData, asAmount = false }) 
     {!ready && <Text style={[noneStyles.none, { color: colors.textSecondary }]}>Fill in the details above to see the choices.</Text>}
     {ready && loading && <Text style={[noneStyles.none, { color: colors.textSecondary }]}>Loading choices…</Text>}
     {ready && !loading && !options.length && <Text style={[noneStyles.none, { color: colors.textSecondary }]}>No choices are available for these details.</Text>}
-    <View style={fieldStyles.options}>
+    {asAmount
+      ? <DenominationGrid items={denominationItems(options.slice(0, 100))} selectedKey={chosen?.code} onSelect={({ option }) => choose(option)} columns={2} />
+      : <View style={fieldStyles.options}>
       {options.slice(0, 100).map((option) => {
         const selected = String(chosen?.code || '') === String(option.code);
-        const amount = optionAmount(option);
         const label = String(option.label || option.description || option.code);
         return <TouchableOpacity key={String(option.code)} onPress={() => choose(option)} style={[fieldStyles.option, { borderColor: selected ? colors.primary : colors.border, backgroundColor: selected ? colors.primary : colors.card }]}>
-          <Text style={[fieldStyles.optionText, { color: selected ? colors.onPrimary : colors.text }]}>{asAmount && amount ? `${label}\nRM ${amount.toFixed(2)}` : label}</Text>
+          <Text style={[fieldStyles.optionText, { color: selected ? colors.onPrimary : colors.text }]}>{label}</Text>
         </TouchableOpacity>;
       })}
-    </View>
+    </View>}
   </View>;
 }
 

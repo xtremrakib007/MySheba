@@ -46,6 +46,7 @@ const tiles = runEsm('src/components/iimmpactTiles.js');
 const pins = runEsm('src/data/pinCategories.js');
 const recharge = runEsm('src/data/iimmpactRecharge.js');
 const grids = runEsm('src/components/providerGrids.js');
+const denoms = runEsm('src/utils/denominations.js');
 
 // Shaped like the production Malaysia catalogue: the same group and category
 // names the Marketplace screen lists, with vouchers sold as PINs.
@@ -330,22 +331,21 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     assert.deepStrictEqual([intl.service, intl.startStep], ['recharge', 0], 'international reload starts at the country');
   });
 
-  await test('Bills: every bill type, IIMMPACT’s category when it has one, JomPAY and international', () => {
-    assert.deepStrictEqual(names('grp_bills'), ['Postpaid Bill', 'Electric Bill', 'Water Bill', 'Streaming / TV Bill', 'Loan', 'Local Council', 'Broadband Bill', 'JomPAY', 'International Bills']);
+  await test('Bills: every bill type IIMMPACT has a category for, JomPAY and international', () => {
+    assert.deepStrictEqual(names('grp_bills'), ['Postpaid Bill', 'Water Bill', 'Loan', 'Local Council', 'JomPAY', 'International Bills']);
     const tile = (name) => Array.from(group('grp_bills').tiles).find((t) => t.name === name);
     assert.deepStrictEqual([tile('Water Bill').seed.category, tile('Water Bill').startStep, tile('Water Bill').imageUrl], ['iimmpact:water bills', 2, 'https://cdn.example/water.png'], 'IIMMPACT’s own billers and logo');
     assert.strictEqual(tile('Loan').seed.category, 'iimmpact:loans');
     assert.strictEqual(tile('Local Council').seed.category, 'iimmpact:local councils');
-    assert.strictEqual(tile('Electric Bill').seed.category, 'electricity', 'no IIMMPACT category here, so the built-in billers');
+    assert.strictEqual(tile('Electric Bill'), undefined, 'no IIMMPACT category, so no tile - the old built-in billers are gone');
     assert.deepStrictEqual([tile('JomPAY').seed.category, tile('JomPAY').startStep], ['jompay', 3]);
     assert.deepStrictEqual([tile('International Bills').service, tile('International Bills').startStep], ['billpayment', 0]);
     assert.ok(Array.from(group('grp_bills').tiles).every((t) => t.service === 'billpayment' && /^photo/.test(t.art)));
   });
 
-  await test('Bills without a catalogue still offer every type the built-in list has', () => {
+  await test('Bills without a catalogue offer no old built-in biller lists', () => {
     const offline = Array.from(grids.providerGroup({ provider: 'iimmpact', groupKey: 'grp_bills', catalog: null }).tiles).map((t) => t.name);
-    assert.deepStrictEqual(offline, ['Postpaid Bill', 'Electric Bill', 'Water Bill', 'Streaming / TV Bill', 'Broadband Bill', 'JomPAY', 'International Bills'],
-      'Loan and Local Council exist only in IIMMPACT, so they wait for it');
+    assert.deepStrictEqual(offline, ['JomPAY', 'International Bills'], 'the bill types wait for IIMMPACT');
   });
 
   await test('Vouchers and Games: IIMMPACT categories, opening products then amounts', () => {
@@ -548,6 +548,33 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     await new Promise((resolve) => setTimeout(resolve, 0));
     await ask('YESPIN');
     assert.strictEqual(count(), 5, 'after the server refuses a stale price, the next open asks IIMMPACT afresh');
+  });
+
+  console.log('\nDenomination cards');
+
+  await test('a ringgit option leads with its face value and hides a pay line that says the same', () => {
+    const items = Array.from(denoms.denominationItems([
+      { code: 'D5', label: 'RM5', denomination: 5, price: { amount: 5 } },
+      { code: 'D10', label: 'Unlimited 7 days', denomination: 10, price: { amount: 10 }, validity: '7 days' },
+    ]));
+    assert.deepStrictEqual(items.map((i) => [i.key, i.value, i.caption, i.face, i.pay]), [
+      ['D5', 'RM 5', '', 5, 5],
+      ['D10', 'RM 10', 'Unlimited 7 days • 7 days', 10, 10],
+    ]);
+  });
+
+  await test('MySheba’s markup shows as the amount the wallet pays', () => {
+    const [item] = Array.from(denoms.denominationItems([{ code: 'D5', denomination: 5, price: { amount: 5 } }], { payFor: (p) => p * 1.02 }));
+    assert.deepStrictEqual([item.value, item.face, item.pay], ['RM 5', 5, 5.1]);
+  });
+
+  await test('an international option is shown in the destination’s currency, with the ringgit it costs', () => {
+    const [item] = Array.from(denoms.denominationItems([{ code: 'ID50', label: 'IDR 50000', denomination: 50000, denomination_currency: 'IDR', price: { amount: 14.2 } }]));
+    assert.deepStrictEqual([item.value, item.face, item.pay], ['IDR 50,000', undefined, 14.2]);
+  });
+
+  await test('a product’s fixed amounts become cards too', () => {
+    assert.deepStrictEqual(Array.from(denoms.amountItems([5, '10', 0, 'x'])).map((i) => i.value), ['RM 5', 'RM 10']);
   });
 
   console.log('\nPIN Generator dispatch');
