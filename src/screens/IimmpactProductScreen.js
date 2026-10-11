@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, Alert, ActivityIndicator, Image, Modal, Share } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, Alert, ActivityIndicator, Image, Share } from 'react-native';
 import { printTransactionReceipt } from '../utils/printService';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
@@ -8,6 +8,7 @@ import HeaderDecor from '../components/HeaderDecor';
 import * as api from '../firebase/apiProviderService';
 import { purchaseRechargePin } from '../firebase/rechargePinService';
 import { useIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
+import ConfirmReview, { formatMoney } from '../components/ConfirmReview';
 import { radius } from '../theme/theme';
 
 const norm = (v) => String(v || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
@@ -370,6 +371,38 @@ export default function IimmpactProductScreen({ category }) {
 
   const st = styles;
 
+  // The same full review page as every other purchase: what identifies the
+  // order, the price, and what it leaves in the wallet. Provider cost stays
+  // superadmin-only here, as it was in the dialog this replaces.
+  if (reviewing && pendingPurchase) {
+    const balance = Number(profile?.walletBalance ?? profile?.balance ?? 0);
+    const walletCurrency = profile?.walletCurrency || 'MYR';
+    const sell = Number(pendingPurchase.sellAmount || 0);
+    const cost = Number(pendingPurchase.pricingOption?.cost?.amount ?? pendingPurchase.amount);
+    return <ConfirmReview
+      title={'Confirm ' + (pendingPurchase.productName || 'Purchase')}
+      details={[
+        ['Country', 'MY'],
+        ['Currency', 'MYR'],
+        [isPinProduct(selectedProduct) ? 'Mobile number' : 'Account / recipient', pendingPurchase.accountNumber],
+        ['Product', pendingPurchase.productName],
+        ['Package', pendingPurchase.pricingOption ? (pendingPurchase.pricingOption.label || pendingPurchase.pricingOption.description || '') : ''],
+      ]}
+      prices={[
+        ['Selling / transaction amount', formatMoney(sell)],
+        ['Provider cost price', isSuperadmin && Number.isFinite(cost) ? formatMoney(cost) : ''],
+        ['Commission amount', formatMoney(0)],
+        ['Wallet balance before', formatMoney(balance, walletCurrency)],
+        ['Wallet balance after (estimated)', formatMoney(balance - sell, walletCurrency)],
+      ]}
+      total={formatMoney(sell, walletCurrency)}
+      note="Final charges and provider results are validated by the server. Printed and shared receipts include customer-facing details only."
+      busy={busy}
+      onEdit={() => { if (!busy) setReviewing(false); }}
+      onConfirm={confirmBuy}
+    />;
+  }
+
   if (error) {
     return (
       <View style={st.screen}>
@@ -555,35 +588,11 @@ export default function IimmpactProductScreen({ category }) {
           </>
         )}
       </ScrollView>
-      <Modal visible={reviewing && !!pendingPurchase} transparent animationType="slide" onRequestClose={() => setReviewing(false)}>
-        <View style={st.confirmOverlay}>
-          <View style={st.confirmCard}>
-            <Text style={st.confirmTitle}>Confirm {pendingPurchase?.productName || 'Purchase'}</Text>
-            <ScrollView style={{ maxHeight: 360 }}>
-              <View style={st.confirmRow}><Text style={st.confirmLabel}>Product</Text><Text style={st.confirmValue}>{pendingPurchase?.productName}</Text></View>
-              <View style={st.confirmRow}><Text style={st.confirmLabel}>Account / recipient</Text><Text style={st.confirmValue}>{pendingPurchase?.accountNumber}</Text></View>
-              {Object.entries(pendingPurchase?.selectedFields || {}).filter(([k,v]) => v && !/(pin|password|token|secret|otp)/i.test(k)).map(([k,v]) => <View key={k} style={st.confirmRow}><Text style={st.confirmLabel}>{k.replace(/([A-Z])/g, ' $1')}</Text><Text style={st.confirmValue}>{v}</Text></View>)}
-              <View style={st.confirmRow}><Text style={st.confirmLabel}>Selling price</Text><Text style={st.confirmValue}>MYR {Number(pendingPurchase?.sellAmount || 0).toFixed(2)}</Text></View>
-              {isSuperadmin && <>
-                <View style={st.confirmRow}><Text style={st.confirmLabel}>Provider cost price</Text><Text style={st.confirmValue}>MYR {Number(pendingPurchase?.pricingOption?.cost?.amount ?? pendingPurchase?.amount ?? 0).toFixed(4)}</Text></View>
-                <View style={st.confirmRow}><Text style={st.confirmLabel}>Commission / margin</Text><Text style={st.confirmValue}>MYR {(Number(pendingPurchase?.sellAmount || 0) - Number(pendingPurchase?.pricingOption?.cost?.amount ?? pendingPurchase?.amount ?? 0)).toFixed(2)}</Text></View>
-              </>}
-              <View style={st.confirmRow}><Text style={st.confirmLabel}>Total wallet deduction</Text><Text style={st.confirmTotal}>MYR {Number(pendingPurchase?.sellAmount || 0).toFixed(2)}</Text></View>
-            </ScrollView>
-            <View style={st.confirmActions}>
-              <TouchableOpacity style={[st.confirmBtn, st.cancelBtn]} onPress={() => setReviewing(false)} disabled={busy}><Text style={st.cancelText}>Cancel</Text></TouchableOpacity>
-              <TouchableOpacity style={[st.confirmBtn, st.payBtn, busy && {opacity:0.6}]} onPress={confirmBuy} disabled={busy}><Text style={st.payText}>{busy ? 'Submitting…' : 'Confirm & Pay'}</Text></TouchableOpacity>
-            </View>
-            <Text style={st.confirmHint}>Printed and shared receipts include customer-facing details only, never provider cost or commission.</Text>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
 
 const makeStyles = (c) => StyleSheet.create({
-  confirmOverlay:{flex:1,backgroundColor:'rgba(0,0,0,0.58)',justifyContent:'center',padding:18},confirmCard:{backgroundColor:c.card,borderRadius:16,padding:16,maxHeight:'88%',borderWidth:1,borderColor:c.border},confirmTitle:{fontSize:18,fontWeight:'900',color:c.text,marginBottom:12},confirmRow:{flexDirection:'row',justifyContent:'space-between',gap:12,paddingVertical:9,borderBottomWidth:StyleSheet.hairlineWidth,borderBottomColor:c.border},confirmLabel:{flex:1,fontSize:12,color:c.textSecondary},confirmValue:{flex:1,fontSize:12,fontWeight:'700',color:c.text,textAlign:'right'},confirmTotal:{fontSize:15,fontWeight:'900',color:c.primary},confirmActions:{flexDirection:'row',gap:10,marginTop:14},confirmBtn:{flex:1,minHeight:44,borderRadius:9,alignItems:'center',justifyContent:'center'},cancelBtn:{borderWidth:1,borderColor:c.primary},payBtn:{backgroundColor:c.primary},cancelText:{fontWeight:'800',color:c.primary},payText:{fontWeight:'900',color:c.onPrimary},confirmHint:{fontSize:10,color:c.textSecondary,marginTop:10,lineHeight:15},
   screen:{flex:1,backgroundColor:c.bg},head:{flexDirection:'row',alignItems:'center',padding:12,gap:10,overflow:'hidden'},
   back:{color:'#fff',fontSize:22},ht:{color:'#fff',fontSize:17,fontWeight:'900'},hs:{color:'#ffffffcc',fontSize:10,marginTop:2},
   body:{padding:14,paddingBottom:50},h:{fontSize:20,fontWeight:'900',color:c.text,marginBottom:4},muted:{fontSize:11,color:c.textSecondary,lineHeight:17},

@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-nati
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import { amountToPoints } from '../data/countries';
+import { resolveCommission } from '../utils/commission';
 
 const TITLES = {
   recharge: 'Mobile Recharge', internet: 'Internet Package', offerpacks: 'Offer Pack',
@@ -32,7 +33,7 @@ const money = (value, currency = 'MYR') => {
 const labelFor = (key) => LABELS[key] || key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase());
 const isPrivateKey = (key) => /(secret|token|password|security.?pin|collection.?pin|otp|authorization|receipt.?url|api.?key|selectedOptions|fieldValues|iimmpactCatalog|iimmpactFields|iimmpactDenomination|iimmpactProcessingTime|providerId)/i.test(key);
 
-function getPricing(service, data, pricing, rates) {
+function getPricing(service, data, pricing, rates, role) {
   const raw = Number(data.amount ?? data.myr ?? data.sendAmt ?? 0);
   let selling = raw;
   if (['recharge', 'internet', 'offerpacks', 'entertainment', 'billpayment'].includes(service)) {
@@ -40,38 +41,76 @@ function getPricing(service, data, pricing, rates) {
   }
   if (service === 'mobilebanking') selling = Number(data.myr || 0);
   const fee = service === 'mobilebanking' ? 5 : service === 'remittance' ? Number(data.transferFee || 0) : 0;
-  const total = service === 'remittance' ? Number(data.sendAmt || 0) + fee : selling + fee;
-  const cost = Number(data.providerCost ?? data.costPrice ?? data.cost ?? data.wholesalePrice);
-  const commission = Number(data.commissionAmount ?? data.commission ?? data.providerCommission);
-  const profit = Number(data.profitAmount ?? data.profit);
-  if (service === 'recharge') {
-    const costPercent = Number(pricing?.rechargeCostPercent) || 0;
-    const profitPercent = Number(pricing?.rechargeProfitPercent) || 0;
-    return {
-      selling, fee, total,
-      cost: Number.isFinite(cost) && cost > 0 ? cost : Math.round(selling * costPercent) / 100,
-      commission: Number.isFinite(commission) ? commission : Math.round(selling * profitPercent) / 100,
-      profit: Number.isFinite(profit) ? profit : Math.round(selling * profitPercent) / 100,
-    };
-  }
-  return {
-    selling, fee, total,
-    cost: Number.isFinite(cost) && cost >= 0 ? cost : null,
-    commission: Number.isFinite(commission) && commission >= 0 ? commission : (Number.isFinite(cost) && cost >= 0 ? Math.round((selling - cost) * 100) / 100 : null),
-    profit: Number.isFinite(profit) ? profit : (Number.isFinite(cost) && cost >= 0 ? Math.round((selling - cost - fee) * 100) / 100 : null),
-  };
+  // What leaves the wallet when the order is submitted.
+  const charged = service === 'remittance' ? Number(data.sendAmt || 0) + fee : selling + fee;
+  const providedCost = Number(data.providerCost ?? data.costPrice ?? data.cost ?? data.wholesalePrice);
+  const costPercent = Number(pricing?.rechargeCostPercent) || 0;
+  const cost = Number.isFinite(providedCost) && providedCost > 0
+    ? providedCost
+    : (service === 'recharge' && costPercent > 0 ? Math.round(selling * costPercent) / 100 : null);
+  // The commission the server credits back once the provider confirms, by
+  // the same rules it uses - not the old rechargeProfitPercent estimate,
+  // which could promise a commission that never arrived.
+  const commission = resolveCommission(pricing, { service, amount: selling, role, payload: { raw: data } });
+  return { selling, fee, charged, cost, commission, total: Math.round((charged - commission) * 100) / 100 };
 }
+
+// Every service except remittance and mobile banking gets the short review:
+// the few fields that identify the order, in this order, and a price
+// breakdown without fee/profit rows whose total is net of commission.
+// Remittance and mobile banking keep the full layout - every recipient field
+// and the fee - because a payout is checked line by line before it is sent.
+const FULL_LAYOUT = new Set(['remittance', 'mobilebanking']);
+const SUMMARY_FIELDS = {
+  recharge: ['country', 'currency', 'phone', 'operator'],
+  internet: ['country', 'currency', 'phone', 'operator', 'package'],
+  offerpacks: ['country', 'currency', 'phone', 'operator', 'package'],
+  billpayment: ['country', 'currency', 'provider', 'accountNumber', 'mobileNumber'],
+  entertainment: ['country', 'currency', 'game', 'playerId', 'serverId', 'package'],
+  esim: ['country', 'currency', 'product', 'package', 'email'],
+  flight: ['from', 'to', 'date', 'time', 'passengers', 'pName', 'pPhone'],
+  bus: ['from', 'to', 'date', 'time', 'passengers', 'pName', 'pPhone'],
+  train: ['from', 'to', 'date', 'time', 'passengers', 'pName', 'pPhone'],
+};
+// Names that read better in the short review than the generic labels.
+const SUMMARY_LABELS = { provider: 'Biller', accountNumber: 'Account number', game: 'Game', playerId: 'Player ID', serverId: 'Server' };
 
 export default function ConfirmTransactionScreen() {
   const { colors } = useTheme();
   const { currentService, serviceData, pricing, rates, profile, submitService, setScreen, goBack, submitting } = useApp();
   const styles = createStyles(colors);
   const title = TITLES[currentService] || currentService || 'Transaction';
-  const summary = useMemo(() => getPricing(currentService, serviceData || {}, pricing, rates), [currentService, serviceData, pricing, rates]);
-  const fields = Object.entries(serviceData || {}).filter(([key, value]) =>
-    !isPrivateKey(key) && value !== undefined && value !== null && String(value).trim() !== '' &&
+  const summary = useMemo(() => getPricing(currentService, serviceData || {}, pricing, rates, profile?.role), [currentService, serviceData, pricing, rates, profile?.role]);
+  const shown = (value) => value !== undefined && value !== null && String(value).trim() !== '';
+  const full = FULL_LAYOUT.has(currentService);
+  const generic = () => Object.entries(serviceData || {}).filter(([key, value]) =>
+    !isPrivateKey(key) && shown(value) &&
     !['cost', 'costPrice', 'providerCost', 'wholesalePrice', 'commission', 'commissionAmount', 'providerCommission', 'profit', 'profitAmount'].includes(key)
   );
+  const summaryKeys = !full && SUMMARY_FIELDS[currentService];
+  const fields = summaryKeys
+    ? summaryKeys
+      .map((key) => [key, key === 'phone' ? (serviceData?.phone || serviceData?.mobileNumber) : serviceData?.[key]])
+      .filter(([key, value]) => shown(value) && !(key === 'mobileNumber' && summaryKeys.includes('phone')))
+    : generic();
+  const fieldLabel = (key) => (!full && SUMMARY_LABELS[key]) || labelFor(key);
+  // What the wallet ends at: net of commission on the short review, the full
+  // charge on a payout, which earns none.
+  const deduction = full ? summary.charged : summary.total;
+  // A payout's commission and profit, as the page always showed them: only
+  // when the order carries them, or derived from a cost it carries.
+  const payout = (() => {
+    const d = serviceData || {};
+    const commission = Number(d.commissionAmount ?? d.commission ?? d.providerCommission);
+    const profit = Number(d.profitAmount ?? d.profit);
+    const cost = summary.cost;
+    return {
+      commission: Number.isFinite(commission) && commission >= 0 ? commission : (cost != null ? Math.round((summary.selling - cost) * 100) / 100 : null),
+      profit: Number.isFinite(profit) ? profit : (cost != null ? Math.round((summary.selling - cost - summary.fee) * 100) / 100 : null),
+    };
+  })();
+  const balance = Number(profile?.walletBalance ?? profile?.balance ?? 0);
+  const walletCurrency = profile?.walletCurrency || 'MYR';
 
   // Return to the screen that actually opened this confirmation. The wizard is a safe fallback.
   const returnToPrevious = () => { if (!goBack()) setScreen('service'); };
@@ -97,7 +136,7 @@ export default function ConfirmTransactionScreen() {
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Transaction details</Text>
           {fields.map(([key, value]) => (
             <View key={key} style={styles.row}>
-              <Text style={styles.label}>{labelFor(key)}</Text>
+              <Text style={styles.label}>{fieldLabel(key)}</Text>
               <Text selectable style={[styles.value, { color: colors.text }]}>{String(value)}</Text>
             </View>
           ))}
@@ -105,15 +144,26 @@ export default function ConfirmTransactionScreen() {
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border || '#E4E7EC' }]}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Price breakdown</Text>
           <View style={styles.row}><Text style={styles.label}>Selling / transaction amount</Text><Text style={[styles.value, { color: colors.text }]}>{money(summary.selling)}</Text></View>
-          <View style={styles.row}><Text style={styles.label}>Service fee</Text><Text style={[styles.value, { color: colors.text }]}>{money(summary.fee)}</Text></View>
-          <View style={styles.row}><Text style={styles.label}>Provider cost price</Text><Text style={[styles.value, { color: colors.text }]}>{summary.cost == null ? 'Not provided by provider' : money(summary.cost)}</Text></View>
-          <View style={styles.row}><Text style={styles.label}>Commission amount</Text><Text style={[styles.value, { color: colors.text }]}>{summary.commission == null ? 'Not provided by provider' : money(summary.commission)}</Text></View>
-          <View style={styles.row}><Text style={styles.label}>Expected profit / loss</Text><Text style={[styles.value, { color: colors.text }]}>{summary.profit == null ? 'Not available' : money(summary.profit)}</Text></View>
-          <View style={styles.row}><Text style={styles.label}>Wallet balance before</Text><Text style={[styles.value, { color: colors.text }]}>{money(profile?.walletBalance ?? profile?.balance ?? 0, profile?.walletCurrency || 'MYR')}</Text></View>
-          <View style={styles.row}><Text style={styles.label}>Wallet balance after (estimated)</Text><Text style={[styles.value, { color: colors.text }]}>{money(Number(profile?.walletBalance ?? profile?.balance ?? 0) - summary.total, profile?.walletCurrency || 'MYR')}</Text></View>
-          <View style={[styles.totalRow, { borderTopColor: colors.border || '#E4E7EC' }]}><Text style={[styles.totalLabel, { color: colors.text }]}>Total wallet deduction</Text><Text style={[styles.totalValue, { color: colors.primary }]}>{money(summary.total)}</Text></View>
+          {/* The fee is listed on a payout always, and elsewhere only when there
+              is one (Touch 'n Go); airtime, data and bills carry none. */}
+          {(full || summary.fee > 0) && <View style={styles.row}><Text style={styles.label}>Service fee</Text><Text style={[styles.value, { color: colors.text }]}>{money(summary.fee)}</Text></View>}
+          {full && <>
+            {/* The original payout rows, unchanged. */}
+            <View style={styles.row}><Text style={styles.label}>Provider cost price</Text><Text style={[styles.value, { color: colors.text }]}>{summary.cost == null ? 'Not provided by provider' : money(summary.cost)}</Text></View>
+            <View style={styles.row}><Text style={styles.label}>Commission amount</Text><Text style={[styles.value, { color: colors.text }]}>{payout.commission == null ? 'Not provided by provider' : money(payout.commission)}</Text></View>
+            <View style={styles.row}><Text style={styles.label}>Expected profit / loss</Text><Text style={[styles.value, { color: colors.text }]}>{payout.profit == null ? 'Not available' : money(payout.profit)}</Text></View>
+          </>}
+          {!full && <>
+            <View style={styles.row}><Text style={styles.label}>Provider cost price</Text><Text style={[styles.value, { color: colors.text }]}>{summary.cost == null ? 'Not provided by provider' : money(summary.cost)}</Text></View>
+            <View style={styles.row}><Text style={styles.label}>Commission amount</Text><Text style={[styles.value, { color: colors.text }]}>{summary.commission > 0 ? '- ' + money(summary.commission) : money(0)}</Text></View>
+          </>}
+          <View style={styles.row}><Text style={styles.label}>Wallet balance before</Text><Text style={[styles.value, { color: colors.text }]}>{money(balance, walletCurrency)}</Text></View>
+          <View style={styles.row}><Text style={styles.label}>Wallet balance after (estimated)</Text><Text style={[styles.value, { color: colors.text }]}>{money(balance - deduction, walletCurrency)}</Text></View>
+          <View style={[styles.totalRow, { borderTopColor: colors.border || '#E4E7EC' }]}><Text style={[styles.totalLabel, { color: colors.text }]}>Total wallet deduction</Text><Text style={[styles.totalValue, { color: colors.primary }]}>{money(deduction)}</Text></View>
         </View>
-        <Text style={styles.note}>Internal cost and commission are shown only when the app has reliable pricing data. Final charges and provider results are validated by the server.</Text>
+        <Text style={styles.note}>{!full && summary.commission > 0
+          ? `${money(summary.charged)} is taken when you submit, and the ${money(summary.commission)} commission is credited back to your wallet as soon as the provider confirms. Final charges are validated by the server.`
+          : 'Final charges and provider results are validated by the server.'}</Text>
       </ScrollView>
       <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border || '#E4E7EC' }]}>
         <TouchableOpacity style={[styles.cancel, { borderColor: colors.primary }]} onPress={returnToPrevious} disabled={submitting}>

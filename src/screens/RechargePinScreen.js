@@ -12,6 +12,7 @@ import { purchaseRechargePin } from '../firebase/rechargePinService';
 import * as apiProviderService from '../firebase/apiProviderService';
 import { radius, tileGrid } from '../theme/theme';
 import { Tile } from '../components/ServiceGrid';
+import ConfirmReview, { formatMoney } from '../components/ConfirmReview';
 import { FEATURED_PIN_ORDER, isVoucherProduct, categorizePinProducts } from '../data/pinCategories';
 
 // Recharge PIN is currently a Malaysia-only product. Keep this list
@@ -70,7 +71,7 @@ function malaysianNational(phone) {
 
 export default function RechargePinScreen({ initialCategory = null } = {}) {
   const { colors, brandGradient } = useTheme();
-  const { goBackOrHome, profile } = useApp();
+  const { goBackOrHome, profile, pricing } = useApp();
   const styles = createStyles(colors);
   const [country, setCountry] = useState('MY');
   const [catalog, setCatalog] = useState(null);
@@ -85,6 +86,8 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
   const [busy, setBusy] = useState(false);
   const [voucher, setVoucher] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
+  // The purchase being reviewed on the full confirmation page, or null.
+  const [review, setReview] = useState(null);
   const profileAccount = malaysianNational(profile?.phone);
   const [account, setAccount] = useState(profileAccount);
   // The profile can finish loading after this screen opens.
@@ -95,6 +98,7 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
   // this header always delegated to app-level navigation, whose feature
   // boundary intentionally clears screen history and sent PIN users home.
   const handlePinBack = () => {
+    if (review) { if (!busy) setReview(null); return; }
     if (voucher) { setVoucher(null); return; }
     if (product) {
       setProduct(null);
@@ -113,7 +117,7 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
       return true;
     });
     return () => sub.remove();
-  }, [voucher, product, selectedCategory, goBackOrHome]);
+  }, [review, busy, voucher, product, selectedCategory, goBackOrHome]);
 
   useEffect(() => {
     let alive = true;
@@ -191,14 +195,9 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
     if (!/^01\d{7,9}$/.test(account.trim())) return showAlert('Voucher', 'Enter a valid Malaysian mobile number, e.g. 0123456789.');
     if (missingField) return showAlert('Voucher', 'Please complete: ' + (missingField.label || missingField.name || missingField.id));
     const currency = selectedOption?.price?.currency || product?.denomination_currency || 'MYR';
-    showAlert(
-      'Confirm PIN Purchase',
-      'Product: ' + String(product.name || '') + '\nAmount: ' + currency + ' ' + liveAmount.toFixed(2) + (profileAccount ? '' : '\nMobile: ' + account.trim()) + '\nPayment will be taken from your MySheba wallet. Continue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Confirm & Pay', onPress: async () => { await completePurchase(liveAmount); } },
-      ],
-    );
+    // The same full review page as a top-up, not a dialog: what is being
+    // bought, for how much, and what it leaves in the wallet.
+    setReview({ liveAmount, currency });
   };
 
   const completePurchase = async (liveAmount) => {
@@ -216,6 +215,7 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
         fieldValues: { ...fieldValues, ...(accountFieldId ? { [accountFieldId]: account.trim() } : {}) },
         selectedOptions: pinPricingId && selectedOption?.code ? { [pinPricingId]: { code: String(selectedOption.code) } } : {},
       });
+      setReview(null);
       if (result?.pending) {
         showAlert('Voucher', 'Your order ' + String(result.id || '') + ' was accepted and the voucher is being issued. It will appear in History once the provider releases it.');
         return;
@@ -244,6 +244,39 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
       });
     } catch (err) { showAlert('Printer', err?.message || 'Could not open the system printer.'); }
   };
+
+  if (review) {
+    const role = String(profile?.role || 'customer');
+    const multiplier = Number(pricing?.rolePricing?.[role]?.rechargePointCostPerUnit ?? pricing?.rechargePointCostPerUnit ?? 1);
+    const deduction = Math.round(review.liveAmount * (Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1) * 100) / 100;
+    const walletCurrency = profile?.walletCurrency || 'MYR';
+    const balance = Number(profile?.walletBalance ?? profile?.balance ?? 0);
+    const cost = Number(selectedOption?.cost?.amount);
+    const categoryTitle = categorizedProducts.find((item) => item.id === selectedCategory)?.title || '';
+    return <ConfirmReview
+      title="Confirm PIN Purchase"
+      details={[
+        ['Country', country],
+        ['Category', categoryTitle],
+        ['Product', String(product?.name || '')],
+        ['Denomination', selectedOption?.label || formatMoney(review.liveAmount, review.currency)],
+        ['Currency', review.currency],
+        ['Mobile number', profileAccount ? '' : account.trim()],
+        ['Delivery', 'PIN shown on screen after payment'],
+      ]}
+      prices={[
+        ['Selling / transaction amount', formatMoney(review.liveAmount, review.currency)],
+        ['Provider cost price', Number.isFinite(cost) && cost > 0 ? formatMoney(cost, review.currency) : 'Not provided by provider'],
+        ['Wallet balance before', formatMoney(balance, walletCurrency)],
+        ['Wallet balance after (estimated)', formatMoney(balance - deduction, walletCurrency)],
+      ]}
+      total={formatMoney(deduction, walletCurrency)}
+      note="Tier discounts and the final charge are applied by the server. If the provider refuses the order, the amount is returned to your wallet."
+      busy={busy}
+      onEdit={() => { if (!busy) setReview(null); }}
+      onConfirm={() => completePurchase(review.liveAmount)}
+    />;
+  }
 
   return <View style={styles.screen}>
     <LinearGradient colors={brandGradient} start={{x:0,y:0}} end={{x:1,y:0}} style={styles.header}>

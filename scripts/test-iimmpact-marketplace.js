@@ -205,6 +205,33 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     for (const code of ['POST1', 'WATER1', 'DATA1', 'PIN1', 'IDD1', 'EW1', 'GAME1', 'IDT1']) assert.ok(!codes.includes(code), code);
   });
 
+  console.log('\nCommission on the confirmation page');
+
+  await test('the page shows the commission the server will actually credit', () => {
+    const client = runEsm('src/utils/commission.js');
+    const server = require('../functions/commissionService');
+    const settings = {
+      commissionRules: { recharge: { type: 'percent', value: 1 }, internet: { type: 'fixed', value: 0.3 } },
+      catalogProductPricing: [{ productId: 'PKG9', service: '', commissions: { dealer: { type: 'fixed', value: 2 } } }],
+    };
+    const cases = [
+      ['recharge', 50, 'customer', { raw: { operator: 'Digi Prepaid' } }],
+      ['internet', 35, 'customer', { raw: { operator: 'Digi' } }],
+      ['billpayment', 40, 'customer', { raw: {} }],
+      ['billpayment', 120, 'customer', { raw: {} }],
+      ['entertainment', 20, 'customer', { raw: {} }],
+      ['internet', 35, 'dealer', { raw: { packageId: 'PKG9' } }],
+    ];
+    for (const [service, amount, role, payload] of cases) {
+      assert.strictEqual(client.resolveCommission(settings, { service, amount, role, payload }),
+        server.resolveCommission(settings, { service, amount, role, payload }), `${service} ${amount} ${role}`);
+    }
+    // walletService pays none on these, so the page must not promise any.
+    assert.strictEqual(client.resolveCommission(settings, { service: 'remittance', amount: 500, role: 'customer', payload: { raw: {} } }), 0);
+    assert.strictEqual(client.resolveCommission(settings, { service: 'billpayment', amount: 40, role: 'customer', payload: { raw: { provider: "Touch 'n Go eWallet" } } }), 0);
+    assert.strictEqual(client.resolveCommission(settings, { service: 'recharge', amount: 50, role: 'customer', payload: { raw: {} } }), 0.5);
+  });
+
   console.log('\nPIN Generator dispatch');
 
   const sent = [];
