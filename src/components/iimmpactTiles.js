@@ -11,13 +11,17 @@
 // a category a native tile already sells is MERGED into it: no second tile, and
 // the native flow - which reads the same catalogue - is where it opens.
 //
-// The hand-made voucher tiles (Coffee & Tea, Transport, ...) were regex views
-// over these same products, written before the catalogue had categories of its
-// own. Each is retired once the live catalogue carries the category it
-// approximated, and stays as a fallback while it does not.
+// Vouchers are the PIN Generator's: its category tiles (Coffee & Tea,
+// Transport, Food & Delivery, ...) are the native grid for every product sold
+// as a PIN or voucher code, and open the PIN screen, which shows the code. A
+// catalogue category holding only such products is therefore folded into
+// those tiles rather than drawn again, and a PIN category tile is drawn only
+// while the catalogue has something in it.
 //
 // Nothing here touches React or the network: it is data in, tiles out, so the
 // merge can be computed in a test.
+
+import { categorizePinProducts, isVoucherProduct, PIN_CATEGORIES } from '../data/pinCategories';
 
 export const IIMMPACT_CATALOG_CACHE_KEY = '@mysheba/iimmpact-catalog/MY/v1';
 
@@ -43,17 +47,8 @@ export const NATIVE_CATEGORY_MERGES = [
   { tileKey: 'rechargePin', pattern: /^(mobile |telco )?pins?( vouchers?)?$/ },
 ];
 
-// Hand-made PIN tiles, and the live category phrase that replaces each.
-export const SUPERSEDED_PIN_TILES = {
-  pinCategoryMobile: /^(mobile |telco )?pins?( vouchers?)?$/,
-  pinCategoryCoffee: /\b(coffee|tea|food|beverage|dining)\b/,
-  pinCategoryWellness: /\b(wellness|health|beauty)\b/,
-  pinCategoryTransport: /\btransport(ation)?\b/,
-  pinCategoryApple: /\b(apple|itunes|app stores?)\b/,
-  pinCategoryShopping: /\b(shopping|retail)\b/,
-  pinCategoryGrocery: /\bgrocer(y|ies)\b/,
-  pinCategoryOther: /\b(digital vouchers?|gift cards?)\b/,
-};
+// The PIN category tiles, by key.
+export const PIN_CATEGORY_TILE_KEYS = PIN_CATEGORIES.map((category) => category.tileKey);
 
 // Drawing used when IIMMPACT has no logo for a category, by its group.
 function fallbackArt(group, name) {
@@ -93,16 +88,20 @@ export function catalogCategories(catalog) {
           group: String(group?.name || ''),
           imageUrl: '',
           codes: [],
+          voucherCodes: 0,
         });
       }
       const entry = byPhrase.get(phrase);
       for (const code of active) if (!entry.codes.includes(code)) entry.codes.push(code);
+      if (active.length && active.every((code) => isVoucherProduct(products[code]))) entry.voucherCodes += active.length;
       if (!entry.imageUrl) {
         entry.imageUrl = String(category?.icon_url || group?.icon_url || products[active[0]]?.image_url || '');
       }
     }
   }
-  return [...byPhrase.values()].filter((entry) => entry.codes.length > 0);
+  return [...byPhrase.values()]
+    .filter((entry) => entry.codes.length > 0)
+    .map(({ voucherCodes, ...entry }) => ({ ...entry, vouchersOnly: voucherCodes === entry.codes.length }));
 }
 
 /** The native tile key a category merges into, or '' when it has none. */
@@ -115,8 +114,11 @@ export function nativeTileFor(category, nativeKeys) {
 
 /** One tile per catalogue category that no native tile already sells. */
 export function catalogTiles(catalog, nativeKeys = []) {
+  const keys = new Set(nativeKeys || []);
+  const hasPinGrid = PIN_CATEGORY_TILE_KEYS.some((key) => keys.has(key));
   return catalogCategories(catalog)
-    .filter((category) => !nativeTileFor(category, nativeKeys))
+    .filter((category) => !nativeTileFor(category, keys))
+    .filter((category) => !(hasPinGrid && category.vouchersOnly))
     .map((category) => ({
       key: catalogTileKey(category.name),
       name: category.name,
@@ -144,11 +146,9 @@ export function mergeCatalogTiles(tiles, catalog, nativeKeys) {
   const categories = catalogCategories(catalog);
   if (!categories.length) return list;
   const native = new Set(nativeKeys || list.map((tile) => tile.key));
-  const superseded = (tile) => {
-    const pattern = SUPERSEDED_PIN_TILES[tile?.key];
-    return !!pattern && categories.some((category) => pattern.test(category.phrase));
-  };
-  const kept = list.filter((tile) => !superseded(tile));
+  // A PIN category with nothing in it opens onto an empty screen.
+  const stocked = new Set(categorizePinProducts(catalog).map((category) => category.tileKey));
+  const kept = list.filter((tile) => tile?.kind !== 'pinCategory' || stocked.has(tile.key));
   const taken = new Set(kept.map((tile) => tile.key));
   const added = catalogTiles(catalog, native).filter((tile) => !taken.has(tile.key));
   return [...kept, ...added];

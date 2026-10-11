@@ -98,6 +98,8 @@ const CUSTOMER_SERVICES = [
   { key: 'pinCategoryApple', icon: 'appleVoucher', art: 'appleVoucher', name: 'Apple & iTunes', kind: 'pinCategory', pinCategory: 'apple', cat: 'iimmpact' },
   { key: 'pinCategoryShopping', icon: 'shoppingVoucher', art: 'shoppingVoucher', name: 'Shopping PIN', kind: 'pinCategory', pinCategory: 'shopping', cat: 'iimmpact' },
   { key: 'pinCategoryGrocery', icon: 'groceryVoucher', art: 'groceryVoucher', name: 'Grocery & GrabMart', kind: 'pinCategory', pinCategory: 'grocery', cat: 'iimmpact' },
+  { key: 'pinCategoryFood', icon: 'rechargePin', emoji: '\uD83C\uDF54', art: '', name: 'Food & Delivery', kind: 'pinCategory', pinCategory: 'food', cat: 'iimmpact' },
+  { key: 'pinCategoryGaming', icon: 'entertainment', art: 'entertainment', name: 'Gaming & Entertainment', kind: 'pinCategory', pinCategory: 'gaming', cat: 'iimmpact' },
   { key: 'pinCategoryOther', icon: 'rechargePin', art: 'rechargePin', name: 'Other PIN & Vouchers', kind: 'pinCategory', pinCategory: 'other', cat: 'iimmpact' },
 
   // Everything else is reached through More Features.
