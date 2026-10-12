@@ -840,6 +840,15 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     assert.ok(/if \(!answer\.available\) updateServiceData\(\{ jompayBillerName: '', jompayBillerUnknown: false \}\)/.test(src), 'no directory: no verdict');
   });
 
+  await test('a JomPAY payment is sent as IIMMPACT\u2019s JomPAY product, never without one', () => {
+    const api = require(path.join(ROOT, 'functions/apiProviderService.js'));
+    assert.strictEqual(api._test_isJompayOrder({ category: 'jompay', provider: 'JomPAY' }), true);
+    assert.strictEqual(api._test_isJompayOrder({ category: 'tax' }), true);
+    assert.strictEqual(api._test_isJompayOrder({ category: 'iimmpact:water bills', provider: 'Air Selangor' }), false);
+    const src = fs.readFileSync(path.join(ROOT, 'functions/apiProviderService.js'), 'utf8');
+    assert.ok(/service === 'Bill Payment' && isJompayOrder\(raw\)\) \{[\s\S]{0,400}DEFAULT_BILLER_PRODUCT_CODES/.test(src), 'falls back to the JOMPAY default');
+  });
+
   console.log('\nPIN Generator dispatch');
 
   const sent = [];
