@@ -153,6 +153,12 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
   }, [product?.code, catalog?.providerId, country]);
 
   const categorizedProducts = useMemo(() => categorizePinProducts(catalog || {}), [catalog]);
+  // The amounts of the category on screen load in the background, so the
+  // product tapped draws its denominations at once.
+  useEffect(() => {
+    const inCategory = categorizedProducts.find((item) => item.id === selectedCategory)?.products || [];
+    apiProviderService.prefetchIimmpactOptions(inCategory);
+  }, [categorizedProducts, selectedCategory]);
 
   const selectProduct = (p) => {
     setProduct(p); setVoucher(null); setOperator(''); setSelectedOption(null); setAmount(null); setFieldValues({});

@@ -1,6 +1,7 @@
 import { httpsCallable } from 'firebase/functions';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { functions } from './config';
+import { doc, getDoc } from 'firebase/firestore';
+import { functions, db } from './config';
 
 const listFn = httpsCallable(functions, 'listApiProviders');
 const saveFn = httpsCallable(functions, 'saveApiProvider');
@@ -174,13 +175,72 @@ async function keptProviderAnswer(key, product, fetch, worthKeeping) {
   return request;
 }
 
+// MySheba's saved copy of one amount list (functions/iimmpactOptionsMirror.js
+// writes it; the document id is built the same way). Null when there is none
+// or it is too old - the caller then asks the server.
+const OPTIONS_MIRROR = 'iimmpactOptionsMirror';
+const OPTIONS_MIRROR_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+export function optionsMirrorId(productCode, fieldId) {
+  const clean = (v) => String(v || '').trim().replace(/[/\s]+/g, '_').slice(0, 200);
+  return `${clean(productCode)}__${clean(fieldId)}`;
+}
+async function readOptionsMirror(productCode, fieldId) {
+  try {
+    const snap = await getDoc(doc(db, OPTIONS_MIRROR, optionsMirrorId(productCode, fieldId)));
+    if (!snap.exists()) return null;
+    const data = snap.data() || {};
+    const savedAt = data.savedAt && typeof data.savedAt.toMillis === 'function' ? data.savedAt.toMillis() : 0;
+    if (!savedAt || Date.now() - savedAt > OPTIONS_MIRROR_MAX_AGE_MS || typeof data.json !== 'string') return null;
+    const answer = JSON.parse(data.json);
+    return answer && Array.isArray(answer.items) && answer.items.length ? answer : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 export async function getIimmpactOptions({ providerId = '', productCode, fieldId, accountNumber = '', billerCode = '', page = 1, limit = 100, service = 'Recharge', country = '' }) {
+  // A list that is the same for every customer - no account, no biller, the
+  // first page - is one list whichever screen asks, so it is kept once and
+  // read first from the phone, then from MySheba's Firestore copy; only when
+  // neither has it does the server (and IIMMPACT) get asked.
+  const shareable = !accountNumber && !billerCode && Number(page) === 1;
+  if (shareable) {
+    const key = ['shared', productCode, fieldId].map((v) => String(v ?? '')).join('|');
+    return keptProviderAnswer(key, String(productCode || ''), async () => (
+      (await readOptionsMirror(productCode, fieldId))
+      || (await iimmpactOptionsFn({ providerId, productCode, fieldId, accountNumber, billerCode, page, limit, service, country })).data
+      || {}
+    ), (data) => Array.isArray(data.items) && data.items.length > 0);
+  }
   // Keyed by everything that changes the answer: per-number plans are kept per
   // number, a biller's options per biller.
   const key = [service, country, providerId, productCode, fieldId, accountNumber, billerCode, page, limit].map((v) => String(v ?? '')).join('|');
   return keptProviderAnswer(key, String(productCode || ''), async () => (
     (await iimmpactOptionsFn({ providerId, productCode, fieldId, accountNumber, billerCode, page, limit, service, country })).data || {}
   ), (data) => Array.isArray(data.items) && data.items.length > 0);
+}
+
+/**
+ * Fetches, in the background, the amount lists of products a customer is
+ * looking at, so the one they tap is already on the phone. Only lists that
+ * are the same for everyone (see getIimmpactOptions); a failure is ignored.
+ */
+export function prefetchIimmpactOptions(products, { max = 24 } = {}) {
+  const list = (Array.isArray(products) ? products : []).slice(0, max);
+  for (const product of list) {
+    for (const field of (Array.isArray(product?.fields) ? product.fields : [])) {
+      if (!field || field.type !== 'select' || !field.id) continue;
+      const source = field.data_source || {};
+      if (Array.isArray(source.depends_on) && source.depends_on.length) continue;
+      const params = source.params || {};
+      if (Object.values(params).some((spec) => spec && typeof spec === 'object' && spec.from_field)) continue;
+      const staticOf = (spec) => (spec && typeof spec === 'object' && spec.static !== undefined ? String(spec.static) : '');
+      getIimmpactOptions({
+        productCode: staticOf(params.product_code) || String(product.code || ''),
+        fieldId: staticOf(params.field_id) || String(field.id),
+      }).catch(() => {});
+    }
+  }
 }
 
 /** Drop kept options: one product's, or all of them. */

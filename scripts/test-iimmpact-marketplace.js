@@ -558,12 +558,23 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
           return { data: {} };
         } };
       }
-      if (id === './config') return { functions: {} };
+      if (id === './config') return { functions: {}, db: {} };
+      if (id === 'firebase/firestore') {
+        // MySheba's saved amount lists (iimmpactOptionsMirror), by document id.
+        return {
+          doc: (_db, collection, docId) => ({ collection, docId }),
+          getDoc: async (ref) => {
+            const saved = mirror.get(ref.docId);
+            return { exists: () => !!saved, data: () => saved };
+          },
+        };
+      }
       if (id === '@react-native-async-storage/async-storage') {
         return { __esModule: true, default: { getItem: async (k) => storage.get(k) ?? null, setItem: async (k, v) => { storage.set(k, v); } } };
       }
       throw new Error('unexpected require: ' + id);
     };
+    const mirror = new Map([['SAVED__amount', { json: JSON.stringify({ items: [{ code: 'S5', price: { amount: 5 } }] }), savedAt: { toMillis: () => Date.now() } }]]);
     vm.createContext(box);
     vm.runInContext(code, box);
     const api = box.module.exports;
@@ -579,6 +590,9 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     await ask('EMPTY'); await ask('EMPTY');
     assert.strictEqual(count(), 4, 'an empty answer is not kept');
     assert.ok(storage.has('@mysheba/iimmpact-options/v1'), 'kept amounts survive an app restart');
+    const before = count();
+    assert.strictEqual((await ask('SAVED')).items[0].code, 'S5', 'a list MySheba has saved is read from Firestore');
+    assert.strictEqual(count(), before, 'without calling the server or IIMMPACT');
 
     await api.listProviderDataPlans({ service: 'Internet', country: 'MY', operator: 'Digi', phone: '0123456789' });
     await api.listProviderDataPlans({ service: 'Internet', country: 'MY', operator: 'Digi', phone: '012-345 6789' });
@@ -714,6 +728,43 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     const src = fs.readFileSync(path.join(ROOT, 'src/screens/IimmpactProductScreen.js'), 'utf8');
     assert.ok(!/>View products<|selectedBrand|brandGroups/.test(src), 'no brand step');
     assert.ok(/productList\]\.sort\([\s\S]{0,200}setSelectedProduct\(product\)/.test(src), 'products listed directly');
+  });
+
+  console.log('\nAmount lists kept in MySheba');
+
+  const optMirror = require(path.join(ROOT, 'functions/iimmpactOptionsMirror.js'));
+
+  await test('only lists that are the same for everyone are shared', () => {
+    const product = { code: 'DIGI', fields: [
+      { id: 'amount', type: 'select', role: 'pricing', data_source: { type: 'options', params: { product_code: { static: 'DIGI' }, field_id: { static: 'amount' } } } },
+      { id: 'district', type: 'select', data_source: { depends_on: ['state'] } },
+      { id: 'plan', type: 'select', data_source: { params: { account_number: { from_field: 'phone' } } } },
+      { id: 'phone', type: 'text' },
+    ] };
+    assert.deepStrictEqual(Array.from(optMirror.shareableOptionFields(product)).map((f) => [f.productCode, f.fieldId]), [['DIGI', 'amount']]);
+  });
+
+  await test('a saved list reads back, an old one does not, and an oversized one is not saved', async () => {
+    const db = fakeDb();
+    const answer = { items: [{ code: 'D5', price: { amount: 5 } }] };
+    assert.strictEqual(await optMirror.write(db, 'DIGI', 'amount', answer), true);
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(await optMirror.read(db, 'DIGI', 'amount'))), answer);
+    assert.strictEqual(await optMirror.read(db, 'DIGI', 'amount', { now: Date.now() + 7 * 3600 * 1000 }), null);
+    assert.strictEqual(await optMirror.write(db, 'BIG', 'list', { items: [{ x: 'y'.repeat(300000) }] }), false);
+  });
+
+  await test('the app reads the same Firestore document the server writes', () => {
+    const src = fs.readFileSync(path.join(ROOT, 'src/firebase/apiProviderService.js'), 'utf8');
+    const body = src.match(/export function optionsMirrorId\(productCode, fieldId\) \{([\s\S]*?)\n\}/)[1];
+    const appId = new Function('productCode', 'fieldId', body);
+    for (const [code, field] of [['DIGI', 'amount'], ['A/B C', 'f/x'], [' sp ', 'plan id']]) {
+      assert.strictEqual(appId(code, field), optMirror.docId(code, field), code);
+    }
+  });
+
+  await test('the amounts function stays warm', () => {
+    const src = fs.readFileSync(path.join(ROOT, 'functions/apiProviderService.js'), 'utf8');
+    assert.ok(/exports\.getIimmpactOptions = onCall\(\{ enforceAppCheck: ENFORCE_APP_CHECK, minInstances: 1 \}/.test(src));
   });
 
   console.log('\nPIN Generator dispatch');
