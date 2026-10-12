@@ -144,7 +144,7 @@ test('confirmation back returns to the previous screen only', () => {
 
 test('recharge loads active operator products from IIMMPACT', () => {
   const recharge = read('src/steps/RechargeSteps.js');
-  assert.ok(recharge.includes("getIimmpactCatalogForUser('', 'Recharge', country)"));
+  assert.ok(recharge.includes('getIimmpactCatalog()'), 'operators come from the shared catalogue (MySheba\'s saved copy), not a fresh IIMMPACT call');
   assert.ok(recharge.includes('rechargeProductsFromCatalog(catalog'), 'the operator list must come from the shared catalogue filter');
   assert.ok(recharge.includes("String(serviceData.country || '').toUpperCase() !== 'BD'"),
     'non-Bangladesh IIMMPACT recharge must keep the dynamic operator picker visible');

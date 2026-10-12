@@ -43,7 +43,7 @@ export default function ProviderGroupScreen({ provider, groupKey }) {
       </LinearGradient>
       <ScrollView contentContainerStyle={styles.content}>
         {isIimmpact && loading && !catalog && (
-          <View style={styles.state}><ActivityIndicator color={colors.primary} /><Text style={styles.info}>Loading…</Text></View>
+          <View style={styles.state}><ActivityIndicator color={colors.primary} /><Text style={styles.info}>Loading MySheba catalogue…</Text></View>
         )}
         {!!group && (
           <View style={styles.gridCanvas}>

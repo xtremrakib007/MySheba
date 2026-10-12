@@ -24,6 +24,7 @@ exports.manageUser = userManagement.manageUser;
 exports.refreshWalletExchangeRates = require('./walletExchangeRateService').refreshWalletExchangeRates;
 exports.setRemittanceRateMode = require('./walletExchangeRateService').setRemittanceRateMode;
 exports.refreshRemittanceRatesAutomatically = require('./remittanceRateScheduler').refreshRemittanceRatesAutomatically;
+exports.refreshIimmpactCatalogAutomatically = require('./iimmpactCatalogScheduler').refreshIimmpactCatalogAutomatically;
 exports.setRoleDefaults = require('./accessControl').setRoleDefaults;
 exports.setUserAccessOverride = require('./accessControl').setUserAccessOverride;
 exports.respondToWebSignIn = require('./deviceSessionService').respondToWebSignIn;

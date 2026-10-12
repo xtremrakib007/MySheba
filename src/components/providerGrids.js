@@ -58,7 +58,8 @@ function mobileTiles() {
     { key: 'mobile_pin', name: 'PIN', art: 'photoRechargePin', kind: 'pinCategory', pinCategory: 'mobile' },
     { key: 'mobile_internet', name: 'Internet', art: 'photoInternet', kind: 'seededService', service: 'internet', seed: MY, startStep: 1 },
     // Starts at the country: the destination is the first thing it asks.
-    { key: 'mobile_international', name: 'International Reload', art: 'photoRemittance', kind: 'seededService', service: 'recharge', seed: {}, startStep: 0 },
+    // Malaysia is not a destination here - it is Prepaid Reload.
+    { key: 'mobile_international', name: 'International Reload', art: 'photoRemittance', kind: 'seededService', service: 'recharge', seed: { internationalOnly: true }, startStep: 0 },
   ];
 }
 

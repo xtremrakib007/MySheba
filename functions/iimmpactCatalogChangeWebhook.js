@@ -108,6 +108,9 @@ exports.iimmpactCatalogChangeWebhook = onRequest({
         receivedAt: admin.firestore.FieldValue.serverTimestamp(),
         processingStatus: 'accepted',
       });
+      // MySheba's saved catalogue no longer matches IIMMPACT's: the next
+      // request or the hourly schedule refreshes it.
+      await db.collection('iimmpactCatalogMirror').doc('MY').set({ staleSince: new Date() }, { merge: true }).catch(() => {});
       return res.status(200).json({ ok: true, duplicate: false });
     } catch (error) {
       if (error.code === 6 || error.code === 'already-exists') {
