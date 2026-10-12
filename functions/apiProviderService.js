@@ -2291,6 +2291,14 @@ function publicIimmpactCatalog(catalog) {
       // Face denomination is safe for customer display and is needed for
       // eSIM products that accept a direct amount instead of a pricing select.
       denomination: safeIimmpactMoney(product.denomination ?? null),
+      // What a typed amount costs in ringgit: the face amount is in
+      // denomination_currency (BDT 100), and the selling price is it times
+      // denomination_unit_price, then IIMMPACT's adjustment - exactly
+      // iimmpactCustomerPrice. The app needs these to show and send that
+      // price; they are the selling price, never MySheba's cost.
+      denomination_currency: cleanString(product.denomination_currency, 8),
+      denomination_unit_price: Number.isFinite(Number(product.denomination_unit_price)) ? Number(product.denomination_unit_price) : null,
+      pricing: safeIimmpactPricing(product.pricing),
       description: String(product.description || '').slice(0, 1000),
       fields: Array.isArray(product.fields)
         ? scrubIimmpactPublicValue(product.fields)
@@ -2430,6 +2438,7 @@ function iimmpactCustomerPrice(faceAmount, product) {
   }
   return Math.round(price * 100) / 100;
 }
+exports._test_iimmpactCustomerPrice = iimmpactCustomerPrice;
 
 /**
  * Resolve a Marketplace purchase against the live IIMMPACT Catalog + Options

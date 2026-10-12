@@ -38,7 +38,10 @@ const isPrivateKey = (key) => /(secret|token|password|security.?pin|collection.?
 function getPricing(service, data, pricing, rates, role) {
   const raw = Number(data.amount ?? data.myr ?? data.sendAmt ?? 0);
   let selling = raw;
-  if (['recharge', 'internet', 'offerpacks', 'entertainment', 'billpayment'].includes(service)) {
+  // An IIMMPACT recharge already carries its price in ringgit (the server
+  // charges it as it is), so only the other routes convert a local amount.
+  const pricedInMyr = service === 'recharge' && data.iimmpactCatalog === true;
+  if (['recharge', 'internet', 'offerpacks', 'entertainment', 'billpayment'].includes(service) && !pricedInMyr) {
     selling = amountToPoints(raw, data.country, rates);
   }
   if (service === 'mobilebanking') selling = Number(data.myr || 0);
