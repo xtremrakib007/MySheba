@@ -1074,6 +1074,23 @@ async function discoverIimmpactProductCodes(provider, operatorName, service) {
   return scored.filter((x) => x.score === best).slice(0, 8).map((x) => x.code);
 }
 
+/** Whether a bill order is a JomPAY payment (by its category or biller). */
+function isJompayOrder(raw = {}) {
+  return /^jompay$|^tax$/i.test(String(raw.category || '').trim()) || /jom\s*pay/i.test(String(raw.provider || ''));
+}
+
+exports._test_isJompayOrder = isJompayOrder;
+
+/** IIMMPACT's JomPAY product code from the saved catalogue, or ''. */
+async function iimmpactJompayProductCode(provider) {
+  const db = admin.firestore();
+  const catalog = await liveOrSavedIimmpactCatalog(db, 'MY').catch(() => null);
+  const products = Object.values((catalog && catalog.products) || {}).filter((p) => p && p.is_active !== false && p.code);
+  const match = products.find((p) => /^jompay$/i.test(String(p.code)))
+    || products.find((p) => /jom\s*pay/i.test(`${p.code} ${p.name}`));
+  return match ? String(match.code) : '';
+}
+
 async function resolveIimmpactCatalogProductCode(provider, service, subject, raw = {}) {
   const key = [provider.id || provider.name || 'iimmpact', service, subject, raw.operator || '', raw.provider || ''].join('|').toLowerCase();
   const cached = IIMMPACT_PRODUCT_CODE_CACHE.get(key);
@@ -1320,6 +1337,15 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
   // are not known when MySheba is released.
   if (!mappedOperatorCode && provider.authType === 'iimmpactHmac') {
     mappedOperatorCode = await resolveIimmpactCatalogProductCode(provider, service, codeSubject, raw);
+  }
+  // JomPAY is one product for every biller - the biller travels as
+  // extras.biller_code - and its tile opens straight on the payment form, so
+  // the order names no product. When neither the provider's list nor a name
+  // match found one, use IIMMPACT's JomPAY product from the catalogue, else
+  // the code bill presentment already defaults to.
+  if (!raw.operatorCode && !mappedOperatorCode && service === 'Bill Payment' && isJompayOrder(raw)) {
+    mappedOperatorCode = (provider.authType === 'iimmpactHmac' ? await iimmpactJompayProductCode(provider).catch(() => '') : '')
+      || billerProductCodeFor({ billerProductCodes: { ...DEFAULT_BILLER_PRODUCT_CODES, ...(provider.billerProductCodes || {}) } }, 'JomPAY');
   }
   const providerOperatorCode = raw.operatorCode || mappedOperatorCode;
   // A fixed product's amount is the provider's to state. Ours is the
