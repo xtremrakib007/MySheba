@@ -35,6 +35,8 @@ const DEFAULT_LIMITS = {
   // account number - so it is looser than a charge and still bounded.
   getBillPresentment: { max: 60, windowMinutes: 10 },
   lookupJompayBiller: { max: 60, windowMinutes: 10 },
+  // Superadmin cost check: one live catalogue read per call.
+  getIimmpactCostCheck: { max: 60, windowMinutes: 10 },
   // Cached for a minute per product before it ever reaches this, so the limit
   // only catches somebody working around the cache.
   getNetworkStatus: { max: 60, windowMinutes: 10 },

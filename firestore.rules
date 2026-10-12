@@ -103,6 +103,8 @@ service cloud.firestore {
     match /iimmpactCatalogMirror/{country} { allow read: if activeProfile(); allow write: if false; }
     match /iimmpactCatalogMirror/{country}/chunks/{chunkId} { allow read: if activeProfile(); allow write: if false; }
     match /iimmpactOptionsCache/{id} { allow read, write: if false; }
+    // IIMMPACT's wholesale cost per order: server-only, read through getIimmpactCostCheck.
+    match /iimmpactCostLog/{id} { allow read, write: if false; }
     // Each product's amount list, the same for every customer (lists that
     // depend on an account stay live). Written by Cloud Functions only.
     match /iimmpactOptionsMirror/{id} { allow read: if activeProfile(); allow write: if false; }

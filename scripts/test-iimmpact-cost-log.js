@@ -1,0 +1,39 @@
+'use strict';
+// IIMMPACT's recorded wholesale cost: read from a reply or callback, kept per
+// order, and summarised for the superadmin's cost check.
+const assert = require('assert');
+const log = require('../functions/iimmpactCostLog');
+
+function fakeDb() {
+  const store = new Map();
+  return {
+    store,
+    collection: (name) => ({
+      doc: (id) => ({ set: async (data, opts) => { const key = name + '/' + id; store.set(key, opts && opts.merge ? { ...(store.get(key) || {}), ...data } : data); } }),
+      where: (field, op, value) => ({
+        limit: () => ({
+          get: async () => ({ docs: [...store.entries()].filter(([k, v]) => k.startsWith(name + '/') && v[field] === value).map(([, v]) => ({ data: () => v })) }),
+        }),
+      }),
+    }),
+  };
+}
+
+(async () => {
+  assert.strictEqual(log.costFrom({ data: { cost: '58.1234' } }), 58.1234);
+  assert.strictEqual(log.costFrom({ cost: 12 }), 12);
+  assert.strictEqual(log.costFrom({ data: { status: 'Succesful' } }), null);
+  assert.strictEqual(log.costFrom(null), null);
+
+  const db = fakeDb();
+  assert.strictEqual(await log.record(db, { refid: 'r1', productCode: 'NPL', face: 5000, cost: 55 }, new Date(1000)), true);
+  assert.strictEqual(await log.record(db, { refid: 'r2', productCode: 'NPL', face: 1000, cost: 11.5 }, new Date(2000)), true);
+  assert.strictEqual(await log.record(db, { refid: 'r3', productCode: 'NPL', face: 2000, cost: 22 }, new Date(3000)), true);
+  assert.strictEqual(await log.record(db, { refid: 'r4', productCode: 'NPL', face: 0, cost: 22 }), false, 'no face, no record');
+  assert.strictEqual(await log.record(db, { refid: '', productCode: 'NPL', face: 10, cost: 1 }), false, 'no refid, no record');
+
+  const { rows, medianRate } = await log.recent(db, 'NPL');
+  assert.deepStrictEqual(rows.map((r) => r.face), [2000, 1000, 5000], 'newest first');
+  assert.strictEqual(medianRate, 0.011);
+  console.log('iimmpactCostLog tests: PASS');
+})().catch((e) => { console.error(e); process.exit(1); });

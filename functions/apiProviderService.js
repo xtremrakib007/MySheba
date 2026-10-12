@@ -20,6 +20,7 @@ const networkStatus = require('./networkStatus');
 const productCodes = require('./productCodes');
 const providerReach = require('./providerReach');
 const catalogMirror = require('./iimmpactCatalogMirror');
+const costLog = require('./iimmpactCostLog');
 const optionsMirror = require('./iimmpactOptionsMirror');
 const jompayBillers = require('./jompayBillers');
 
@@ -1227,11 +1228,14 @@ async function resolveIimmpactCatalogProductCode(provider, service, subject, raw
  * family. The provider uses the same envelope for airtime, mobile data, JomPAY,
  * eSIM and vouchers; only the account and documented extras vary.
  */
-function buildIimmpactTopupBody({ raw = {}, requestId, productCode, amount, customer }) {
+/** The refid IIMMPACT is sent for one of our request ids (at most 50 characters). */
+function iimmpactRefid(requestId) {
   const ref = String(requestId || '').trim();
-  const refid = ref.length <= 50
-    ? ref
-    : crypto.createHash('sha256').update(ref).digest('hex').slice(0, 40);
+  return ref.length <= 50 ? ref : crypto.createHash('sha256').update(ref).digest('hex').slice(0, 40);
+}
+
+function buildIimmpactTopupBody({ raw = {}, requestId, productCode, amount, customer }) {
+  const refid = iimmpactRefid(requestId);
   const product = String(productCode || '').trim();
   // A voucher's account is exactly what the server resolved, empty included:
   // falling back to the customer's own phone sent a Bangladeshi number, which
@@ -1639,6 +1643,19 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
         account: String(raw.accountNumber || raw.billNumber || raw.phone || raw.mobileNumber || raw.playerId || '').slice(0, 200),
         amount: Number(providerAmount),
       };
+      // What IIMMPACT charged for this order, when the reply says. Kept for
+      // the superadmin's cost check; never shown to a customer.
+      const providerCost = costLog.costFrom(data);
+      if (providerCost !== null) {
+        result.providerCost = providerCost;
+        await costLog.record(admin.firestore(), {
+          refid: iimmpactRefid(vars.requestId),
+          productCode: providerOperatorCode,
+          face: Number(providerAmount),
+          cost: providerCost,
+          country: raw.country || '',
+        });
+      }
     }
     const secretPath = options.extractPath || (service === 'Recharge PIN' ? provider.responsePinPath : '');
     if (secretPath || service === 'Recharge PIN') {
@@ -3104,6 +3121,58 @@ exports.refreshIimmpactOptionsMirror = refreshIimmpactOptionsMirror;
  * Superadmin-only package options with provider cost.
  * The customer-facing getIimmpactOptions callable remains sanitized.
  */
+/**
+ * Superadmin: what one IIMMPACT product really costs MySheba.
+ *
+ * The catalogue's rate is IIMMPACT's selling rate, and it is what the app
+ * prices a typed amount at - but MySheba's balance is debited the wholesale
+ * cost, which IIMMPACT reports only with each result. This answers, for a
+ * product and a face amount:
+ *
+ *   catalogue   the rate and adjustment IIMMPACT's catalogue states, read
+ *               live for this one product, with any cost field it carries;
+ *   salePrice   what the app charges before MySheba's markup;
+ *   recent      the cost IIMMPACT recorded on MySheba's last orders of this
+ *               product, and the median cost per unit of face value;
+ *   estimate    face x that median rate - the cost to expect.
+ */
+exports.getIimmpactCostCheck = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  const db = admin.firestore();
+  await assertSuperadmin(db, request);
+  await checkVelocity(db, request.auth.uid, 'getIimmpactCostCheck', { ip: getClientIp(request) });
+  const productCode = cleanString(request.data?.productCode, 100);
+  if (!productCode) throw new HttpsError('invalid-argument', 'A product code is required.');
+  const face = Number(request.data?.amount);
+  const hasFace = Number.isFinite(face) && face > 0 && face < 1e9;
+
+  const provider = await findActiveIimmpactProviderForCountry(db, 'MY');
+  if (!provider || provider.authType !== 'iimmpactHmac') throw new HttpsError('failed-precondition', 'No active IIMMPACT provider is configured.');
+  const url = iimmpactUrl(provider, '/v2/catalog');
+  url.searchParams.set('product_code', productCode);
+  const { ok, status, json } = await signedProviderRequest(url, { method: 'GET', headers: { accept: 'application/json' } }, provider);
+  const raw = ok && json?.products?.[productCode] && typeof json.products[productCode] === 'object' ? json.products[productCode] : null;
+  if (!raw) throw new HttpsError('not-found', `IIMMPACT has no product ${productCode}${ok ? '' : ` (HTTP ${status})`}.`);
+
+  const recent = await costLog.recent(db, productCode, 10);
+  const round = (n, places = 2) => (Number.isFinite(n) ? Math.round(n * 10 ** places) / 10 ** places : null);
+  return {
+    productCode,
+    name: String(raw.name || productCode).slice(0, 200),
+    currency: cleanString(raw.denomination_currency, 8) || 'MYR',
+    catalogue: {
+      denominationUnitPrice: Number.isFinite(Number(raw.denomination_unit_price)) ? Number(raw.denomination_unit_price) : null,
+      pricing: safeIimmpactPricing(raw.pricing),
+      cost: safeIimmpactMoney(raw.cost ?? raw.cost_price ?? raw.provider_cost ?? null),
+      rrp: safeIimmpactMoney(raw.rrp ?? raw.recommended_retail_price ?? null),
+    },
+    face: hasFace ? face : null,
+    salePrice: hasFace ? iimmpactCustomerPrice(face, raw) : null,
+    recent: recent.rows.map((row) => ({ face: row.face, cost: round(row.cost, 4), rate: round(row.rate, 8), at: row.at })),
+    medianRate: recent.medianRate === null ? null : round(recent.medianRate, 8),
+    estimatedCost: hasFace && recent.medianRate !== null ? round(face * recent.medianRate) : null,
+  };
+});
+
 exports.getIimmpactOptionsForSuperadmin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);

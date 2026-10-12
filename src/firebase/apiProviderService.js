@@ -332,3 +332,19 @@ export async function listSuccessTopUpCatalogForAdmin({ operator, operatorName, 
     driveWindowLabel: data?.driveWindowLabel || '',
   };
 }
+
+const pricingSaveFn = httpsCallable(functions, 'savePricingSettings');
+const costCheckFn = httpsCallable(functions, 'getIimmpactCostCheck');
+
+/** Superadmin: replaces MySheba's markup rules (settings/pricing.markups). */
+export async function saveMarkups(markups) {
+  await pricingSaveFn({ key: 'markups', value: markups });
+}
+
+/**
+ * Superadmin: one IIMMPACT product's catalogue rate, its sale price for
+ * `amount`, and the wholesale cost IIMMPACT recorded on recent orders.
+ */
+export async function getIimmpactCostCheck({ productCode, amount }) {
+  return (await costCheckFn({ productCode, amount })).data;
+}
