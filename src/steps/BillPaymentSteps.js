@@ -227,8 +227,7 @@ export default function BillPaymentStep({ step }) {
     // that the person paying confirms whose number it is.
     if (['jompay', 'tax'].includes(serviceData.category)) {
       return <View>
-        <FormLabel>JomPAY Biller Code</FormLabel>
-        <FormInput placeholder='e.g. 818625' keyboardType='number-pad' value={serviceData.billerCode || ''} onChangeText={(v) => updateServiceData({ billerCode: v.replace(/\D/g, '').slice(0, 6) })} />
+        <JompayBillerField serviceData={serviceData} updateServiceData={updateServiceData} />
         <FormLabel>Ref-1 (account / bill number)</FormLabel>
         <FormInput placeholder='As printed on your bill' autoCapitalize='characters' value={serviceData.accountNumber || ''} onChangeText={(v) => updateServiceData({ accountNumber: v })} />
         <FormLabel>Ref-2 (only if your bill shows one)</FormLabel>
@@ -268,7 +267,7 @@ export default function BillPaymentStep({ step }) {
       <BillDetails bill={bill} loading={billLoading} />
       <SummaryCard rows={serviceData.category === 'jompay'
         ? [
-            { label: 'Biller Code', value: serviceData.billerCode || '' },
+            { label: 'Biller Code', value: serviceData.jompayBillerName ? `${serviceData.billerCode} · ${serviceData.jompayBillerName}` : (serviceData.billerCode || '') },
             { label: 'Ref-1', value: serviceData.accountNumber || '' },
             ...(String(serviceData.ref2 || '').trim() ? [{ label: 'Ref-2', value: serviceData.ref2 }] : []),
             // Last four only. The full number goes to the provider because
@@ -280,6 +279,73 @@ export default function BillPaymentStep({ step }) {
   }
   return null;
 }
+
+/**
+ * The JomPAY biller code, checked against JomPAY's own directory as it is
+ * typed: the biller's name when the code is known, a warning when it is not,
+ * and nothing when the directory cannot be reached (a valid code is never
+ * doubted for want of a list). A name search fills the code in for somebody
+ * who has the biller's name but not the code.
+ */
+function JompayBillerField({ serviceData, updateServiceData }) {
+  const { colors } = useTheme();
+  const code = String(serviceData.billerCode || '');
+  const [checking, setChecking] = useState(false);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    if (!/^\d{4,6}$/.test(code)) {
+      if (serviceData.jompayBillerName || serviceData.jompayBillerUnknown) updateServiceData({ jompayBillerName: '', jompayBillerUnknown: false });
+      return () => { alive = false; };
+    }
+    setChecking(true);
+    const timer = setTimeout(() => {
+      apiProviderService.lookupJompayBiller(code)
+        .then((answer) => {
+          if (!alive) return;
+          if (!answer.available) updateServiceData({ jompayBillerName: '', jompayBillerUnknown: false });
+          else updateServiceData({ jompayBillerName: answer.biller?.name || '', jompayBillerUnknown: !answer.biller });
+        })
+        .catch(() => { if (alive) updateServiceData({ jompayBillerName: '', jompayBillerUnknown: false }); })
+        .finally(() => { if (alive) setChecking(false); });
+    }, 400);
+    return () => { alive = false; clearTimeout(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code]);
+  useEffect(() => {
+    let alive = true;
+    if (query.trim().length < 2) { setResults([]); return () => { alive = false; }; }
+    const timer = setTimeout(() => {
+      apiProviderService.searchJompayBillers(query)
+        .then((answer) => { if (alive) setResults(answer.results || []); })
+        .catch(() => { if (alive) setResults([]); });
+    }, 350);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [query]);
+  return <View>
+    <FormLabel>JomPAY Biller Code</FormLabel>
+    <FormInput placeholder='e.g. 818625' keyboardType='number-pad' value={code} onChangeText={(v) => updateServiceData({ billerCode: v.replace(/\D/g, '').slice(0, 6) })} />
+    {checking && <Text style={[jompayStyles.note, { color: colors.textSecondary }]}>Checking biller…</Text>}
+    {!checking && !!serviceData.jompayBillerName && <Text style={[jompayStyles.note, { color: colors.success }]}>✓ {serviceData.jompayBillerName}</Text>}
+    {!checking && !!serviceData.jompayBillerUnknown && <Text style={[jompayStyles.note, { color: colors.error }]}>No JomPAY biller has this code. Check the code on your bill.</Text>}
+    <FormLabel>Don't know the code? Find the biller</FormLabel>
+    <FormInput placeholder='Biller name, e.g. Syabas' value={query} onChangeText={setQuery} autoCapitalize='none' />
+    {results.map((b) => (
+      <TouchableOpacity key={b.code} onPress={() => { updateServiceData({ billerCode: b.code, jompayBillerName: b.name, jompayBillerUnknown: false }); setQuery(''); setResults([]); }} style={[jompayStyles.result, { borderColor: colors.border, backgroundColor: colors.card }]}>
+        <Text style={[jompayStyles.resultName, { color: colors.text }]} numberOfLines={2}>{b.name}</Text>
+        <Text style={[jompayStyles.resultCode, { color: colors.textSecondary }]}>{b.code}</Text>
+      </TouchableOpacity>
+    ))}
+  </View>;
+}
+
+const jompayStyles = StyleSheet.create({
+  note: { fontSize: 12.5, fontWeight: '700', marginTop: -4, marginBottom: 8 },
+  result: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 6, gap: 10 },
+  resultName: { flex: 1, fontSize: 13, fontWeight: '700' },
+  resultCode: { fontSize: 12, fontWeight: '700' },
+});
 
 function keyboardFor(field) {
   const mode = String(field?.input_mode || '').toLowerCase();
@@ -372,6 +438,9 @@ const fieldStyles = StyleSheet.create({
 function validateAccountStep(serviceData) {
   if (serviceData.category === 'jompay') {
     if (!/^\d{4,6}$/.test(String(serviceData.billerCode || '').trim())) return 'Please enter the JomPAY Biller Code printed on your bill.';
+    // Only when JomPAY's directory answered and does not know the code; an
+    // unreachable directory never blocks a payment.
+    if (serviceData.jompayBillerUnknown === true) return 'No JomPAY biller has this code. Check the Biller Code printed on your bill.';
     if (!(serviceData.accountNumber || '').trim()) return 'Please enter Ref-1, the account or bill number on your bill.';
     // Length only - the shape of a passport number is not ours to decide, and
     // rejecting a valid one would stop a legitimate payment.

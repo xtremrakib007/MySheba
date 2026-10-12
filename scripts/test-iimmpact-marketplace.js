@@ -810,6 +810,36 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     assert.ok(/const productCode = \(\/\^\[A-Za-z0-9_\.-\]\{1,100\}\$\/\.test\(sentCode\) \? sentCode : ''\) \|\| billerProductCodeFor\(provider, billerName\);/.test(src), 'the server prefers it, then the name list');
   });
 
+  console.log('\nJomPAY biller lookup');
+
+  const jp = require(path.join(ROOT, 'functions/jompayBillers.js'));
+
+  await test('the biller directory is read whatever shape IIMMPACT wraps it in', () => {
+    for (const json of [
+      { data: [{ biller_code: '818625', biller_name: 'Syabas' }] },
+      { data: { billers: [{ code: '818625', name: 'Syabas' }] } },
+      { billers: [{ billerCode: ' 818625 ', billerName: 'Syabas' }] },
+      [{ id: 818625, description: 'Syabas' }],
+    ]) {
+      assert.deepStrictEqual(jp.normalizeBillers(json), [{ code: '818625', name: 'Syabas' }], JSON.stringify(json));
+    }
+    assert.deepStrictEqual(jp.normalizeBillers({ data: [{ biller_code: 'abc', biller_name: 'X' }, { biller_code: '1234' }] }), [], 'junk and nameless entries dropped');
+  });
+
+  await test('a code finds its biller, and a name search finds codes', () => {
+    const list = [{ code: '818625', name: 'Syabas' }, { code: '5454', name: 'Indah Water Konsortium' }, { code: '4200', name: 'Air Selangor' }];
+    assert.strictEqual(jp.findBiller(list, '5454').name, 'Indah Water Konsortium');
+    assert.strictEqual(jp.findBiller(list, '9999'), null);
+    assert.deepStrictEqual(jp.searchBillers(list, 'water').map((b) => b.code), ['5454']);
+    assert.deepStrictEqual(jp.searchBillers(list, 'air sel').map((b) => b.code), ['4200']);
+  });
+
+  await test('an unknown code blocks the JomPAY step; an unreachable directory never does', () => {
+    const src = fs.readFileSync(path.join(ROOT, 'src/steps/BillPaymentSteps.js'), 'utf8');
+    assert.ok(/if \(serviceData\.jompayBillerUnknown === true\) return 'No JomPAY biller has this code/.test(src));
+    assert.ok(/if \(!answer\.available\) updateServiceData\(\{ jompayBillerName: '', jompayBillerUnknown: false \}\)/.test(src), 'no directory: no verdict');
+  });
+
   console.log('\nPIN Generator dispatch');
 
   const sent = [];

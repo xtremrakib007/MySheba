@@ -17,6 +17,7 @@ const iimmpactCatalogFn = httpsCallable(functions, 'getIimmpactCatalog');
 const iimmpactUserCatalogFn = httpsCallable(functions, 'getIimmpactCatalogForUser');
 const iimmpactFullCatalogFn = httpsCallable(functions, 'getIimmpactFullCatalogForUser');
 const iimmpactOptionsFn = httpsCallable(functions, 'getIimmpactOptions');
+const jompayBillerFn = httpsCallable(functions, 'lookupJompayBiller');
 const chargeIimmpactProductFn = httpsCallable(functions, 'chargeIimmpactProduct');
 const testFn = httpsCallable(functions, 'testApiProvider');
 const adminCatalogFn = httpsCallable(functions, 'listSuccessTopUpCatalogForAdmin');
@@ -241,6 +242,39 @@ export function prefetchIimmpactOptions(products, { max = 24 } = {}) {
       }).catch(() => {});
     }
   }
+}
+
+// JomPAY's biller directory, through MySheba (which keeps IIMMPACT's list for
+// a day). Answers are kept for the session: a code's biller does not change
+// while somebody is typing it in again.
+const jompayAnswers = new Map();
+
+/**
+ * The JomPAY biller for a code: { available, biller } - biller null when the
+ * directory has no such code, available false when the directory could not be
+ * had (the app then says nothing rather than doubt a valid code).
+ */
+export async function lookupJompayBiller(billerCode) {
+  const code = String(billerCode || '').replace(/\D/g, '');
+  if (!code) return { available: false, biller: null };
+  const key = 'code:' + code;
+  if (jompayAnswers.has(key)) return jompayAnswers.get(key);
+  const { data } = await jompayBillerFn({ billerCode: code });
+  const answer = { available: data?.available === true, biller: data?.biller || null };
+  if (answer.available) jompayAnswers.set(key, answer);
+  return answer;
+}
+
+/** Billers whose name contains every word typed: { available, results }. */
+export async function searchJompayBillers(query) {
+  const q = String(query || '').trim().toLowerCase();
+  if (q.length < 2) return { available: true, results: [] };
+  const key = 'q:' + q;
+  if (jompayAnswers.has(key)) return jompayAnswers.get(key);
+  const { data } = await jompayBillerFn({ query: q });
+  const answer = { available: data?.available === true, results: Array.isArray(data?.results) ? data.results : [] };
+  if (answer.available) jompayAnswers.set(key, answer);
+  return answer;
 }
 
 /** Drop kept options: one product's, or all of them. */

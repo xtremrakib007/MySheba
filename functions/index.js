@@ -146,6 +146,7 @@ exports.getIimmpactCatalog = require('./apiProviderService').getIimmpactCatalog;
 exports.getIimmpactCatalogForUser = require('./apiProviderService').getIimmpactCatalogForUser;
 exports.getIimmpactFullCatalogForUser = require('./apiProviderService').getIimmpactFullCatalogForUser;
 exports.getIimmpactOptions = require('./apiProviderService').getIimmpactOptions;
+exports.lookupJompayBiller = require('./apiProviderService').lookupJompayBiller;
 exports.getIimmpactFullCatalogForSuperadmin = require('./apiProviderService').getIimmpactFullCatalogForSuperadmin;
 exports.getIimmpactOptionsForSuperadmin = require('./apiProviderService').getIimmpactOptionsForSuperadmin;
 exports.listSuccessTopUpCatalogForAdmin = require('./apiProviderService').listSuccessTopUpCatalogForAdmin;

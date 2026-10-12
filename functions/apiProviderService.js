@@ -21,6 +21,7 @@ const productCodes = require('./productCodes');
 const providerReach = require('./providerReach');
 const catalogMirror = require('./iimmpactCatalogMirror');
 const optionsMirror = require('./iimmpactOptionsMirror');
+const jompayBillers = require('./jompayBillers');
 
 const COLLECTION = 'api_providers';
 // Server-only cache of IIMMPACT option lists (see getIimmpactOptions).
@@ -2661,6 +2662,48 @@ async function refreshIimmpactCatalogMirror(db, country = 'MY') {
   return catalogMirror.write(db, country, live);
 }
 exports.refreshIimmpactCatalogMirror = refreshIimmpactCatalogMirror;
+
+// JomPAY's biller directory, kept in MySheba for a day
+// (iimmpactJompayBillers/MY), so a lookup never waits on IIMMPACT.
+const JOMPAY_BILLERS = 'iimmpactJompayBillers';
+async function jompayBillerDirectory(db) {
+  const saved = await catalogMirror.cachedCatalog(db, 'MY', async () => {
+    const provider = await findActiveIimmpactProviderForCountry(db, 'MY');
+    if (!provider) throw new HttpsError('failed-precondition', 'No active IIMMPACT provider is configured for Malaysia.');
+    const url = iimmpactUrl(provider, '/v1/jompay/billers');
+    const { ok, status, json } = await signedProviderRequest(url, { method: 'GET', headers: { accept: 'application/json' } }, provider);
+    if (!ok || !json || typeof json !== 'object') throw new HttpsError('unavailable', `IIMMPACT JomPAY billers request failed: HTTP ${status}`);
+    const billers = jompayBillers.normalizeBillers(json);
+    if (!billers.length) throw new HttpsError('unavailable', 'IIMMPACT returned no JomPAY billers.');
+    return { billers };
+  }, { collection: JOMPAY_BILLERS, maxAgeMs: 24 * 60 * 60 * 1000 });
+  return Array.isArray(saved?.billers) ? saved.billers : [];
+}
+
+/**
+ * A JomPAY biller by code ({ billerCode }) or by name ({ query }).
+ *
+ * Answers { available, biller } for a code - `available: false` when the
+ * directory could not be had, so the app stays quiet instead of calling a
+ * valid code unknown - and { available, results } for a search.
+ */
+exports.lookupJompayBiller = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  const db = admin.firestore();
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
+  await checkVelocity(db, request.auth.uid, 'lookupJompayBiller', { ip: getClientIp(request) });
+  const code = cleanString(request.data?.billerCode, 20).replace(/\D/g, '');
+  const query = cleanString(request.data?.query, 80);
+  let billers = [];
+  try {
+    billers = await jompayBillerDirectory(db);
+  } catch (error) {
+    console.warn('JomPAY billers unavailable', String(error?.message || error).slice(0, 200));
+    return { available: false, biller: null, results: [] };
+  }
+  if (!billers.length) return { available: false, biller: null, results: [] };
+  if (code) return { available: true, biller: jompayBillers.findBiller(billers, code) };
+  return { available: true, results: jompayBillers.searchBillers(billers, query, 20) };
+});
 
 exports.getIimmpactFullCatalogForUser = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
