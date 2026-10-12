@@ -12,6 +12,7 @@ import { useApp } from '../context/AppContext';
 import { buildReceiptHtml } from './RemittanceReceipt';
 import { receiptDocument, receiptRows, imageBlock, highlightBlock } from '../utils/receiptHtml';
 import { statusBadge } from '../theme/statusBadges';
+import { txFailureReason } from '../utils/txFailure';
 
 
 const TYPE_ICON = { flight: '✈️', bus: '🚌', train: '🚂' };
@@ -235,6 +236,11 @@ function TxBody({ item, showCost, pinOverride }) {
       {!!raw.receiverWalletProvider && <Row label="Wallet Provider" value={raw.receiverWalletProvider} />}
       {!!raw.receiverWalletNumber && <Row label="Wallet Number" value={raw.receiverWalletNumber} />}
       <Row label="Amount" value={txAmount(item.total, currency)} />
+      {/* Why a failed or unresolved order did not go through, in words the
+          customer can act on, and whether the money is back. Staff also see
+          the provider's own message. */}
+      {!!txFailureReason(item) && <Row label="Reason" value={txFailureReason(item)} />}
+      {!!(showCost && (item.apiError || item.apiExecution?.error)) && <Row label="Provider message" value={String(item.apiError || item.apiExecution?.error)} />}
       {!!(showCost && !!(item.cost || item.profit)) && (
         <>
           <Row label="Cost" value={txAmount(item.cost, currency)} />

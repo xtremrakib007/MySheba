@@ -767,6 +767,32 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     assert.ok(/exports\.getIimmpactOptions = onCall\(\{ enforceAppCheck: ENFORCE_APP_CHECK, minInstances: 1 \}/.test(src));
   });
 
+  console.log('\nFailed orders say so');
+
+  const txf = runEsm('src/utils/txFailure.js');
+
+  await test('a failed order is labelled Failed, not Pending, and says it was refunded', () => {
+    assert.strictEqual(txf.txStatusLabel('failed'), 'Failed');
+    assert.strictEqual(txf.txStatusLabel('unknown'), 'Under review');
+    assert.strictEqual(txf.txStatusLabel(undefined), 'Pending');
+    const reason = txf.txFailureReason({ status: 'failed', apiRefunded: true, apiError: 'Provider HTTP 403: Forbidden' });
+    assert.ok(/could not complete/.test(reason) && /refunded to your wallet/.test(reason), reason);
+    assert.ok(!/403|Forbidden|HTTP/.test(reason), 'the provider\u2019s own wording is for staff');
+  });
+
+  await test('a reason the customer can act on is named', () => {
+    assert.ok(/did not accept this number/.test(txf.txFailureReason({ status: 'failed', apiError: 'Invalid mobile number' })));
+    assert.ok(/price or package changed/.test(txf.txFailureReason({ status: 'failed', apiError: 'This recharge price has changed.' })));
+    assert.strictEqual(txf.txFailureReason({ status: 'completed' }), '');
+    assert.ok(/refunded automatically/.test(txf.txFailureReason({ status: 'unknown' })));
+  });
+
+  await test('History draws every status from the shared badge table', () => {
+    const src = fs.readFileSync(path.join(ROOT, 'src/screens/HistoryScreen.js'), 'utf8');
+    assert.ok(!/getTxStatusStyle/.test(src), 'the three-status table is gone');
+    assert.ok(/statusBadge\(shown\)/.test(src) && /txFailureReason\(item\)/.test(src));
+  });
+
   console.log('\nPIN Generator dispatch');
 
   const sent = [];
