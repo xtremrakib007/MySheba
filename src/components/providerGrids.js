@@ -15,8 +15,8 @@
 // live catalogue; Mobile and the fixed bill types are always there.
 //
 // Bangladesh (Success TopUp) has no category tree, so its groups are the
-// services it sells - Mobile Recharge, Internet, Offer Packs, Bill Payment -
-// with its own operators and bill categories inside.
+// services it sells - Mobile Recharge, Internet (with Offer Packs inside),
+// Bill Payment - with its own operators and bill categories inside.
 //
 // The fixed product tiles these groups replace are dropped (coveredKeys), so
 // nothing is offered twice. Flight, Bus, Train, Visa, Remittance, Salary and
@@ -97,8 +97,9 @@ function billTiles(catalog) {
   tiles.push(
     // JomPAY's own flow: biller code, Ref-1 and IC are asked on the next step.
     { key: 'bill_jompay', name: 'JomPAY', art: 'photoJompay', kind: 'seededService', service: 'billpayment', seed: { ...MY, category: 'jompay', provider: 'JomPAY' }, startStep: 3 },
-    // Other countries' billers start at the country.
-    { key: 'bill_international', name: 'International Bills', art: 'photoBillpayment', kind: 'seededService', service: 'billpayment', seed: {}, startStep: 0 },
+    // Other countries' billers start at the country. Malaysia is not listed:
+    // its bills are the bill types above.
+    { key: 'bill_international', name: 'International Bills', art: 'photoBillpayment', kind: 'seededService', service: 'billpayment', seed: { internationalOnly: true }, startStep: 0 },
   );
   return tiles;
 }
@@ -189,8 +190,12 @@ function successTopUpGroupList() {
     }));
   return [
     { key: 'grp_bd_recharge', name: 'Mobile Recharge', art: 'photoRecharge', tiles: operatorTiles('recharge', rechargeOperators.BD || []) },
-    { key: 'grp_bd_internet', name: 'Internet Packages', art: 'photoInternet', tiles: operatorTiles('internet', internetOperators.BD || []) },
-    { key: 'grp_bd_offerpacks', name: 'Offer Packs', art: 'photoOfferpacks', tiles: operatorTiles('offerpacks', rechargeOperators.BD || []) },
+    // Offer Packs lives inside Internet: one tile after the operators, opening
+    // on the number (the operator is read off it), like the operator tiles.
+    { key: 'grp_bd_internet', name: 'Internet Packages', art: 'photoInternet', tiles: [
+      ...operatorTiles('internet', internetOperators.BD || []),
+      { key: 'offerpacks_bd', name: 'Offer Packs', art: 'photoOfferpacks', kind: 'seededService', service: 'offerpacks', seed: { ...bd }, startStep: 1 },
+    ] },
     { key: 'grp_bd_bills', name: 'Bill Payment', art: 'photoBillpayment', tiles: billTiles },
   ].filter((group) => group.tiles.length > 0);
 }

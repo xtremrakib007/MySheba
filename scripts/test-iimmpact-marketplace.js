@@ -374,7 +374,12 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
 
   await test('a Bangladeshi home is built from Success TopUp\u2019s services, operators and billers', () => {
     const home = Array.from(grids.providerHomeTiles({ country: 'BD', catalog: CATALOG }));
-    assert.deepStrictEqual(home.map((t) => t.name), ['Mobile Recharge', 'Internet Packages', 'Offer Packs', 'Bill Payment']);
+    assert.deepStrictEqual(home.map((t) => t.name), ['Mobile Recharge', 'Internet Packages', 'Bill Payment']);
+    const internet = Array.from(grids.providerGroup({ provider: 'successtopup', groupKey: 'grp_bd_internet' }).tiles);
+    const offers = internet.find((t) => t.key === 'offerpacks_bd');
+    assert.ok(offers, 'Offer Packs is inside Internet');
+    assert.deepStrictEqual([offers.service, offers.startStep, offers.seed.country, internet[internet.length - 1].key], ['offerpacks', 1, 'BD', 'offerpacks_bd']);
+    assert.ok(grids.coveredKeys({ country: 'BD' }).has('offerpacks'), 'and the old Offer Packs tile is not drawn again');
     const recharge = grids.providerGroup({ provider: 'successtopup', groupKey: 'grp_bd_recharge' });
     const gp = Array.from(recharge.tiles).find((t) => t.name === 'Grameenphone');
     assert.deepStrictEqual([gp.service, gp.startStep, gp.seed.country, gp.seed.operator], ['recharge', 1, 'BD', 'Grameenphone']);
@@ -384,6 +389,15 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     const covered = grids.coveredKeys({ country: 'BD' });
     for (const key of ['recharge', 'billpayment', 'tngewallet', 'jompay', 'rechargePin', 'esim']) assert.ok(covered.has(key), key);
     assert.ok(!covered.has('salary'));
+  });
+
+  await test('every role gets the provider groups, not only a customer’s home', () => {
+    const grid = fs.readFileSync(path.join(ROOT, 'src/components/ServiceGrid.js'), 'utf8');
+    assert.ok(!/if \(homeOnly\) \{\s*const groups/.test(grid), 'grouping is not limited to homeOnly');
+    assert.ok(/const groups = providerHomeTiles\(\{ country \}\)/.test(grid));
+    const admin = fs.readFileSync(path.join(ROOT, 'src/screens/AdminFeaturesScreen.js'), 'utf8');
+    assert.ok(/providerHomeTiles\(\{ country: adminCountry \}\)/.test(admin), 'admin landing draws the groups');
+    assert.ok(/adminHomeList\.filter\(\(item\) => !covered\.has\(item\.key\)\)/.test(admin), 'and drops the tiles they replace');
   });
 
   await test('the new tile kinds have destinations', () => {
@@ -662,6 +676,19 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     assert.strictEqual(intl.seed.internationalOnly, true);
     const src = fs.readFileSync(path.join(ROOT, 'src/steps/RechargeSteps.js'), 'utf8');
     assert.ok(/internationalOnly \? countries\.filter\(\(c\) => c\.code !== 'MY'\)/.test(src), 'the country step leaves Malaysia out');
+  });
+
+  await test('International Bills does not offer Malaysia', () => {
+    const intl = Array.from(grids.providerGroup({ provider: 'iimmpact', groupKey: 'grp_bills', catalog: null }).tiles).find((t) => t.key === 'bill_international');
+    assert.strictEqual(intl.seed.internationalOnly, true);
+    const src = fs.readFileSync(path.join(ROOT, 'src/steps/BillPaymentSteps.js'), 'utf8');
+    assert.ok(/serviceData\.internationalOnly \? countries\.filter\(\(c\) => c\.code !== 'MY'\)/.test(src));
+  });
+
+  await test('a voucher or game category opens straight on its products, with no brand page between', () => {
+    const src = fs.readFileSync(path.join(ROOT, 'src/screens/IimmpactProductScreen.js'), 'utf8');
+    assert.ok(!/>View products<|selectedBrand|brandGroups/.test(src), 'no brand step');
+    assert.ok(/productList\]\.sort\([\s\S]{0,200}setSelectedProduct\(product\)/.test(src), 'products listed directly');
   });
 
   console.log('\nPIN Generator dispatch');
