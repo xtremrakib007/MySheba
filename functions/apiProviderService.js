@@ -965,15 +965,63 @@ async function signedProviderRequest(url, init, provider) {
   return { ok: response.ok, status: response.status, json };
 }
 
+/** The provider's own words for a refused request, when it gave any. */
+function providerErrorText(json) {
+  if (!json || typeof json !== 'object') return '';
+  const error = json.error && typeof json.error === 'object' ? json.error : {};
+  const text = [json.message, error.message, typeof json.error === 'string' ? json.error : '', error.code]
+    .find((value) => typeof value === 'string' && value.trim());
+  return text ? text.trim().replace(/[\x00-\x1F\x7F]+/g, ' ').slice(0, 200) : '';
+}
+
 async function catalogHttpsRequest(url, init, config, provider) {
-  const { ok, json } = await signedProviderRequest(url, init, provider);
-  if (!ok) throw new Error(`${config.errorLabel} catalogue request failed.`);
+  const { ok, status, json } = await signedProviderRequest(url, init, provider);
+  // The provider's status and message, not just "failed": a number that is
+  // not on this operator, a field the product does not have and an outage
+  // all looked the same on screen, and only one of them is ours to fix.
+  if (!ok) {
+    const said = providerErrorText(json);
+    throw new Error(`${config.errorLabel} catalogue request failed (HTTP ${status}${said ? `: ${said}` : ''}).`);
+  }
   if (json === null) throw new Error(`${config.errorLabel} returned invalid catalogue data.`);
   return json;
 }
+/**
+ * The select field an IIMMPACT product's per-number plans are listed under.
+ *
+ * Asked as `plan` for every product, which is only IIMMPACT's usual name: a
+ * product that calls its list anything else answered /v2/options with an
+ * error and no plans loaded. The catalogue says which field it is - the one
+ * marked for pricing, or the one whose list reads the account number.
+ */
+function iimmpactPlanFieldId(product) {
+  const fields = Array.isArray(product?.fields) ? product.fields : [];
+  const selects = fields.filter((field) => field && field.type === 'select' && field.id);
+  const readsAccount = (field) => {
+    const params = field?.data_source?.params;
+    return !!params && typeof params === 'object' && Object.values(params).some((spec) => spec && typeof spec === 'object' && spec.from_field);
+  };
+  const pick = selects.find((field) => String(field.id) === 'plan')
+    || selects.find((field) => field.role === 'pricing')
+    || selects.find(readsAccount)
+    || selects[0];
+  if (!pick) return '';
+  const fieldParam = pick.data_source?.params?.field_id;
+  const named = fieldParam && typeof fieldParam === 'object' && fieldParam.static !== undefined ? String(fieldParam.static) : '';
+  return (named || String(pick.id)).slice(0, 100);
+}
+exports._test_iimmpactPlanFieldId = iimmpactPlanFieldId;
+
 /** Fetch any provider's catalogue, normalised. */
-function fetchProviderCatalog(provider, operator, type, account) {
-  return providerCatalog.fetchCatalog(provider, { operator, type, account }, { request: catalogHttpsRequest });
+async function fetchProviderCatalog(provider, operator, type, account) {
+  let fieldId;
+  if (provider && provider.authType === 'iimmpactHmac' && operator) {
+    // MySheba's saved catalogue (Malaysia's - the only one IIMMPACT's
+    // per-number plans exist for): no IIMMPACT call when it is current.
+    const catalog = await liveOrSavedIimmpactCatalog(admin.firestore(), 'MY').catch(() => null);
+    fieldId = iimmpactPlanFieldId(catalog?.products?.[String(operator)]) || undefined;
+  }
+  return providerCatalog.fetchCatalog(provider, { operator, type, account, fieldId }, { request: catalogHttpsRequest });
 }
 
 // Success TopUp's operator codes are still validated here, because they are

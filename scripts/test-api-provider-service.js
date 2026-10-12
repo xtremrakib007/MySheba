@@ -45,6 +45,16 @@ assert.strictEqual(api.render('order-{{requestId}}-{{missing}}', { requestId: 'a
 // at the end of this file for why. This used to assert the string '10'.
 assert.deepStrictEqual(api.render({ amount: '{{amount}}' }, { amount: 10 }), { amount: 10 });
 
+// Per-number plans are asked under the field the catalogue declares, not a
+// hardcoded `plan`.
+{
+  const pick = require('../functions/apiProviderService')._test_iimmpactPlanFieldId;
+  assert.strictEqual(pick({ fields: [{ id: 'phone', type: 'text' }, { id: 'plan', type: 'select' }] }), 'plan');
+  assert.strictEqual(pick({ fields: [{ id: 'phone', type: 'text' }, { id: 'package', type: 'select', role: 'pricing' }] }), 'package');
+  assert.strictEqual(pick({ fields: [{ id: 'x', type: 'select', data_source: { params: { field_id: { static: 'plans' }, account_number: { from_field: 'phone' } } } }] }), 'plans');
+  assert.strictEqual(pick(null), '');
+}
+
 // IIMMPACT uses one documented /v2/topup envelope for all service types.
 {
   const build = api.buildIimmpactTopupBody;

@@ -522,7 +522,7 @@ function parseCatalogResponse(config, data) {
  * one place that owns them, apiProviderService, and so this module can be
  * tested without a network.
  */
-async function fetchCatalog(provider, { operator, type, account } = {}, { request } = {}) {
+async function fetchCatalog(provider, { operator, type, account, fieldId } = {}, { request } = {}) {
   const config = catalogConfigFor(provider);
   if (!config) throw new Error('This provider does not publish a package catalogue.');
   if (typeof request !== 'function') throw new Error('No HTTPS transport was provided.');
@@ -551,7 +551,9 @@ async function fetchCatalog(provider, { operator, type, account } = {}, { reques
     operator: String(operator || 'ALL'),
     type: safeType,
     account: accountNumber,
-    fieldId: config.fieldId || 'plan',
+    // The field the catalogue declares for this product, when the caller knows
+    // it; otherwise the preset's.
+    fieldId: String(fieldId || config.fieldId || 'plan'),
     apiKey: provider.apiKey || '',
     secretKey: provider.secretKey || '',
   };
