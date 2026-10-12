@@ -58,11 +58,14 @@ export function rechargeProductsFromCatalog(catalog, { country = 'MY', countryNa
     return wantedName.length >= 3 && norm([p.name, p.label, p.description, p.note].join(' ')).includes(wantedName);
   };
   // Malaysia sells from the domestic categories; anywhere else from the
-  // international one, narrowed to products naming that country when any do.
+  // international one, narrowed to the products for that country. A country
+  // with none gets none: falling back to every international product offered
+  // a customer who picked India the Bangladesh and Nepal top-ups as
+  // "operators", and recharged a different country from the one chosen.
   let scope = rechargeCodes;
   if (!domestic) {
-    const matching = [...internationalCodes].filter((code) => products[code] && mentionsCountry(products[code]));
-    scope = new Set(matching.length ? matching : internationalCodes);
+    scope = new Set([...internationalCodes].filter((code) => products[code] && mentionsCountry(products[code])));
+    if (!scope.size) return [];
   }
   const hasTaxonomy = scope.size > 0;
 
@@ -142,4 +145,20 @@ export function extraDataOperators(catalog, staticOperators = []) {
     }
   }
   return out;
+}
+
+/**
+ * The countries International Reload can sell to: those IIMMPACT has a top-up
+ * product for, as codes from `countryList` ([{ code, name }]). Malaysia is
+ * never one of them - it is Prepaid Reload.
+ */
+export function internationalRechargeCountries(catalog, countryList = []) {
+  return countryList
+    .filter((c) => c && c.code && String(c.code).toUpperCase() !== 'MY')
+    .filter((c) => rechargeProductsFromCatalog(catalog, {
+      country: c.code,
+      countryName: c.name,
+      countryNames: countryList.map((item) => item.name),
+    }).length > 0)
+    .map((c) => String(c.code).toUpperCase());
 }

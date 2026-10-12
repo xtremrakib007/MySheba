@@ -11,8 +11,9 @@ import { useTheme } from '../theme/ThemeContext';
 import ServiceInterruptionNotice from '../components/ServiceInterruptionNotice';
 import { useNetworkStatus } from '../components/useNetworkStatus';
 import * as apiProviderService from '../firebase/apiProviderService';
-import { rechargeProductsFromCatalog } from '../data/iimmpactRecharge';
-import { getIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
+import { rechargeProductsFromCatalog, internationalRechargeCountries } from '../data/iimmpactRecharge';
+import { getIimmpactCatalog, useIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
+import { iimmpactCustomerPrice, canPriceTypedAmount } from '../utils/iimmpactPrice';
 import { applyMarkup } from '../utils/markup';
 import DenominationGrid from '../components/DenominationGrid';
 import { denominationItems, amountItems, optionPrice } from '../utils/denominations';
@@ -131,6 +132,34 @@ export default function RechargeStep({ step }) {
     active: step === 3,
   });
 
+  // International Reload offers only the countries IIMMPACT sells a top-up
+  // for (plus Bangladesh, which is Success TopUp's), read from the shared
+  // catalogue the country step can draw at once.
+  const { catalog: sharedCatalog } = useIimmpactCatalog({ enabled: !!serviceData.internationalOnly });
+  const soldAbroad = sharedCatalog ? new Set(internationalRechargeCountries(sharedCatalog, countries)) : null;
+
+  // Choosing an IIMMPACT product: what the tile tap and the automatic pick
+  // below both do.
+  const chooseIimmpactProduct = (product) => {
+    const accountFieldId = String((product?.fields || []).find((field) => field && (field.role === 'account' || /phone|mobile|msisdn|accountnumber/i.test(String(field.id || '') + ' ' + String(field.label || ''))))?.id || 'phone');
+    updateServiceData({ operator: product.name, operatorCode: product.code, productCode: product.code, productName: product.name, iimmpactCatalog: true, iimmpactFields: product.fields || [], iimmpactDenomination: product.denomination || '', iimmpactProcessingTime: product.processing_time || '', amount: null, package: '', subproductCode: '', selectedOptions: {}, fieldValues: { [accountFieldId]: String(serviceData.phone || ''), phone: String(serviceData.phone || '') } });
+  };
+
+  // An international top-up is one product per country ("Bangladesh",
+  // "Nepal"), so once the country is chosen there is nothing to pick: the
+  // product is selected and the operator step passed. Once per country and
+  // number, so Back can still open the step.
+  const autoPickedFor = useRef('');
+  useEffect(() => {
+    const country = String(serviceData.country || '').toUpperCase();
+    if (step !== 2 || country === 'MY' || country === 'BD' || catalogLoading || iimmpactOperators.length !== 1) return;
+    const key = country + '|' + String(serviceData.phone || '');
+    if (autoPickedFor.current === key) return;
+    autoPickedFor.current = key;
+    chooseIimmpactProduct(iimmpactOperators[0]);
+    nextStep();
+  });
+
   // What the customer pays for a provider price: MySheba's markup for this
   // service, destination and product - the same rule the server charges by.
   const customerPrice = (amount) => applyMarkup(pricing, { service: 'recharge', country: serviceData.country, productCode: serviceData.productCode, amount }).amount;
@@ -138,7 +167,9 @@ export default function RechargeStep({ step }) {
   if (step === 0) {
     // International Reload lists destinations abroad only; Malaysian numbers
     // are Prepaid Reload's.
-    const destinations = serviceData.internationalOnly ? countries.filter((c) => c.code !== 'MY') : countries;
+    const destinations = serviceData.internationalOnly
+      ? countries.filter((c) => c.code !== 'MY' && (!soldAbroad || c.code === 'BD' || soldAbroad.has(c.code)))
+      : countries;
     return (<View><FormLabel>Select Country</FormLabel><View style={styles.grid3}>{destinations.map((c) => (<CountrySelectCard key={c.code} code={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr }); nextStep(); }} />))}</View></View>);
   }
   if (step === 1) {
@@ -151,7 +182,7 @@ export default function RechargeStep({ step }) {
       {catalogLoading && <Text style={styles.catalogInfo}>Loading MySheba catalogue…</Text>}
       {!catalogLoading && catalogUnavailable && serviceData.country !== 'BD' && <Text style={styles.catalogInfo}>Could not load the MySheba catalogue. Please check your connection and try again.</Text>}
       {!catalogLoading && !catalogUnavailable && !list.length && <Text style={styles.catalogInfo}>No operators are available for this country right now.</Text>}
-      <View style={styles.grid3}>{list.map((o) => { const brand = getOperatorBrand(o); const remote = iimmpactOperators.find((item) => item.name === o)?.image_url; return <RechargeOperatorCard key={o} name={o} logo={brand.logo || (remote ? { uri: remote } : null)} color={brand.color} initials={brand.initials} selected={serviceData.operator === o} onPress={() => { const product = String(serviceData.country || '').toUpperCase() === 'BD' ? null : iimmpactOperators.find((item) => item.name === o); const accountFieldId = String((product?.fields || []).find((field) => field && (field.role === 'account' || /phone|mobile|msisdn|accountnumber/i.test(String(field.id || '') + ' ' + String(field.label || ''))))?.id || 'phone'); updateServiceData(product ? { operator: product.name, operatorCode: product.code, productCode: product.code, productName: product.name, iimmpactCatalog: true, iimmpactFields: product.fields || [], iimmpactDenomination: product.denomination || '', iimmpactProcessingTime: product.processing_time || '', amount: null, package: '', subproductCode: '', selectedOptions: {}, fieldValues: { [accountFieldId]: String(serviceData.phone || ''), phone: String(serviceData.phone || '') } } : { operator: o, iimmpactCatalog: false, productCode: '', amount: null, selectedOptions: {}, fieldValues: {} }); nextStep(); }} styles={styles} primaryColor={colors.primary} />; })}</View>
+      <View style={styles.grid3}>{list.map((o) => { const brand = getOperatorBrand(o); const remote = iimmpactOperators.find((item) => item.name === o)?.image_url; return <RechargeOperatorCard key={o} name={o} logo={brand.logo || (remote ? { uri: remote } : null)} color={brand.color} initials={brand.initials} selected={serviceData.operator === o} onPress={() => { const product = String(serviceData.country || '').toUpperCase() === 'BD' ? null : iimmpactOperators.find((item) => item.name === o); if (product) chooseIimmpactProduct(product); else updateServiceData({ operator: o, iimmpactCatalog: false, productCode: '', amount: null, selectedOptions: {}, fieldValues: {} }); nextStep(); }} styles={styles} primaryColor={colors.primary} />; })}</View>
     </View>);
   }
   if (step === 3) {
@@ -162,12 +193,48 @@ export default function RechargeStep({ step }) {
       const pricingField = fields.find((field) => field && field.type === 'select' && field.role === 'pricing') || fields.find((field) => field && field.type === 'select');
       const accountFieldId = String(fields.find((field) => field && (field.role === 'account' || /phone|mobile|msisdn|accountnumber/i.test(String(field.id || '') + ' ' + String(field.label || ''))))?.id || 'phone');
       const denominations = String(product?.denomination || '').split(',').map((value) => Number(value.trim())).filter((value) => Number.isFinite(value) && value > 0);
-      const extraFields = fields.filter((field) => field && field.id && field.id !== pricingField?.id && field.id !== accountFieldId && field.required && field.type !== 'select');
+      // A typed amount: the field IIMMPACT's fulfillment takes the amount from,
+      // when it is not a list. Its face value is in the product's currency
+      // (BDT 100) and costs that times the product's unit price in ringgit -
+      // the server's own formula - so both are shown before paying.
+      const amountFieldId = String(product?.fulfillment?.amount?.from_field || '');
+      const typedAmountField = !pricingField?.id
+        ? fields.find((field) => field && field.type !== 'select' && (String(field.id) === amountFieldId || field.role === 'amount'))
+        : null;
+      const extraFields = fields.filter((field) => field && field.id && field.id !== pricingField?.id && field.id !== accountFieldId && field.id !== typedAmountField?.id && field.required && field.type !== 'select');
+      const domestic = String(serviceData.country || '').toUpperCase() === 'MY';
+      const faceCurrency = String(product?.denomination_currency || (domestic ? 'MYR' : '')).toUpperCase();
+      const priceable = domestic || canPriceTypedAmount(product);
+      const typedFace = typedAmountField ? Number(serviceData.fieldValues?.[typedAmountField.id]) : NaN;
+      const typedRule = typedAmountField?.validation || {};
+      const typedError = !typedAmountField || !(typedFace > 0) ? ''
+        : (typedRule.min != null && typedFace < Number(typedRule.min)) ? `The amount must be at least ${faceCurrency} ${typedRule.min}.`
+        : (typedRule.max != null && typedFace > Number(typedRule.max)) ? `The amount must be at most ${faceCurrency} ${typedRule.max}.`
+        : '';
+      const setTypedAmount = (value) => {
+        const clean = String(value).replace(/[^0-9.]/g, '');
+        const face = Number(clean);
+        const rule = typedAmountField.validation || {};
+        const inRange = face > 0 && !(rule.min != null && face < Number(rule.min)) && !(rule.max != null && face > Number(rule.max));
+        const price = inRange && priceable ? iimmpactCustomerPrice(face, product) : 0;
+        updateServiceData({
+          fieldValues: { ...(serviceData.fieldValues || {}), [typedAmountField.id]: clean, [accountFieldId]: String(serviceData.phone || ''), phone: String(serviceData.phone || '') },
+          amount: price > 0 ? price : null,
+          package: face > 0 ? `${faceCurrency || 'MYR'} ${face.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '',
+        });
+      };
       return (<View>
         <ServiceInterruptionNotice notice={interruption} />
         <FormLabel>{product?.name || serviceData.operator || 'Recharge'} — choose a live amount</FormLabel>
         {!!product?.processing_time && <Text style={styles.catalogInfo}>Processing: {String(product.processing_time).replace(/_/g, ' ')}</Text>}
         {extraFields.map((field) => <View key={field.id}><FormLabel>{field.label || field.id}</FormLabel><FormInput placeholder={field.placeholder || field.label || field.id} keyboardType={field.input_mode === 'numeric' || field.type === 'number' ? 'numeric' : 'default'} style={styles.phoneInput} value={String(serviceData.fieldValues?.[field.id] ?? '')} onChangeText={(value) => updateServiceData({ fieldValues: { ...(serviceData.fieldValues || {}), [field.id]: value } })} /></View>)}
+        {!!typedAmountField && <View>
+          <FormLabel>{`Amount${faceCurrency ? ` (${faceCurrency})` : ''}`}</FormLabel>
+          <FormInput placeholder={typedRule.min != null && typedRule.max != null ? `${typedRule.min} – ${typedRule.max}` : 'Amount'} keyboardType="decimal-pad" style={styles.phoneInput} value={String(serviceData.fieldValues?.[typedAmountField.id] ?? '')} onChangeText={setTypedAmount} />
+          {!priceable && <Text style={styles.catalogInfo}>Prices for this country are being updated. Please try again a little later.</Text>}
+          {!!typedError && <Text style={styles.catalogInfo}>{typedError}</Text>}
+          {priceable && !typedError && serviceData.amount > 0 && <SummaryCard rows={[{ label: 'Top-up amount', value: serviceData.package }]} totalLabel="You pay" totalValue={`MYR ${customerPrice(Number(serviceData.amount)).toFixed(2)}`} />}
+        </View>}
         {optionsLoading && <Text style={styles.catalogInfo}>Loading amounts…</Text>}
         {optionsUnavailable && !optionsLoading && !!pricingField?.id && <Text style={styles.catalogInfo}>No amounts are available for this operator right now. Please try again shortly.</Text>}
         {!!pricingField?.id && <DenominationGrid
@@ -175,12 +242,12 @@ export default function RechargeStep({ step }) {
           selectedKey={serviceData.selectedOptions?.[pricingField.id]?.code}
           onSelect={({ option, value }) => updateServiceData({ selectedOptions: { ...(serviceData.selectedOptions || {}), [pricingField.id]: option }, fieldValues: { ...(serviceData.fieldValues || {}), [accountFieldId]: String(serviceData.phone || ''), phone: String(serviceData.phone || '') }, amount: optionPrice(option) > 0 ? optionPrice(option) : Number(option?.denomination || 0), package: value, subproductCode: String(option.code || '') })}
         />}
-        {!pricingField?.id && <DenominationGrid
+        {!pricingField?.id && !typedAmountField && <DenominationGrid
           items={amountItems(denominations, { payFor: customerPrice })}
           selectedKey={serviceData.amount > 0 ? String(Number(serviceData.amount)) : ''}
           onSelect={({ amount }) => updateServiceData({ amount, package: '', fieldValues: { ...(serviceData.fieldValues || {}), [accountFieldId]: String(serviceData.phone || ''), phone: String(serviceData.phone || ''), amount } })}
         />}
-        {!!(serviceData.amount > 0) && <SummaryCard rows={[{ label: 'Product', value: product?.name || serviceData.operator }, { label: 'Amount', value: serviceData.package || `RM ${Number(serviceData.amount).toFixed(2)}` }]} totalLabel="You pay" totalValue={`MYR ${customerPrice(Number(serviceData.amount)).toFixed(2)}`} />}
+        {!typedAmountField && !!(serviceData.amount > 0) && <SummaryCard rows={[{ label: 'Product', value: product?.name || serviceData.operator }, { label: 'Amount', value: serviceData.package || `RM ${Number(serviceData.amount).toFixed(2)}` }]} totalLabel="You pay" totalValue={`MYR ${customerPrice(Number(serviceData.amount)).toFixed(2)}`} />}
       </View>);
     }
     // Only Bangladesh is sold without IIMMPACT's catalogue: Success TopUp takes
@@ -198,7 +265,7 @@ export default function RechargeStep({ step }) {
 }
 
 function RechargeOperatorCard({ name, logo, color, initials, selected, onPress, styles, primaryColor }) { return <TouchableOpacity style={[styles.selectCard, styles.operatorCard, selected && styles.selectCardSelected]} onPress={onPress} activeOpacity={0.8}>{logo ? <Image source={logo} style={styles.operatorLogo} resizeMode="contain" /> : <View style={[styles.operatorBadge, { backgroundColor: color || primaryColor }]}><Text style={styles.operatorBadgeText}>{initials}</Text></View>}<Text style={[styles.selectName, styles.operatorName, selected && styles.selectNameSelected]} numberOfLines={2}>{String(name || '')}</Text></TouchableOpacity>; }
-export function validateStep(step, serviceData) { if (step === 0 && !serviceData.country) return 'Please select a country.'; if (step === 0 && serviceData.internationalOnly && String(serviceData.country).toUpperCase() === 'MY') return 'Malaysian numbers are reloaded from Prepaid Reload.'; if (step === 2 && !serviceData.operator) return 'Please select an operator.'; if (step === 1 && !(serviceData.phone || '').trim()) return 'Please enter a mobile number.'; if (step === 3 && serviceData.iimmpactCatalog === true) { const fields = Array.isArray(serviceData.iimmpactFields) ? serviceData.iimmpactFields : []; const pricing = fields.find((field) => field && field.type === 'select' && field.role === 'pricing') || fields.find((field) => field && field.type === 'select'); if (pricing?.required && !serviceData.selectedOptions?.[pricing.id]) return 'Please select an amount.'; for (const field of fields.filter((field) => field && field.required && field.type !== 'select' && field.role !== 'account')) if (!String(serviceData.fieldValues?.[field.id] ?? '').trim()) return `Please enter ${field.label || field.id}.`; } if (step === 3 && !(serviceData.amount > 0)) return 'Please select or enter an amount.'; return null; }
+export function validateStep(step, serviceData) { if (step === 0 && !serviceData.country) return 'Please select a country.'; if (step === 0 && serviceData.internationalOnly && String(serviceData.country).toUpperCase() === 'MY') return 'Malaysian numbers are reloaded from Prepaid Reload.'; if (step === 2 && !serviceData.operator) return 'Please select an operator.'; if (step === 1 && !(serviceData.phone || '').trim()) return 'Please enter a mobile number.'; if (step === 3 && serviceData.iimmpactCatalog === true) { const fields = Array.isArray(serviceData.iimmpactFields) ? serviceData.iimmpactFields : []; const pricing = fields.find((field) => field && field.type === 'select' && field.role === 'pricing') || fields.find((field) => field && field.type === 'select'); if (pricing?.required && !serviceData.selectedOptions?.[pricing.id]) return 'Please select an amount.'; for (const field of fields.filter((field) => field && field.required && field.type !== 'select' && field.role !== 'account')) if (!String(serviceData.fieldValues?.[field.id] ?? '').trim()) return `Please enter ${field.label || field.id}.`; } if (step === 3 && !(serviceData.amount > 0)) return 'Please choose or enter a valid amount.'; return null; }
 function createStyles(colors, isDark) {
   const tileBg = colors.surface;
   const tileText = colors.text;

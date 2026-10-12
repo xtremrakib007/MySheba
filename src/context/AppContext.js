@@ -138,7 +138,11 @@ function buildTransactionPayload(service, serviceData, pricing, rates) {
     // Recharge/Internet rate (separate from Mobile Banking's rate) before
     // this becomes the amount shown/charged everywhere else in the app.
     // Malaysia orders are already in MYR, so this is a no-op for them.
-    const amount = amountToPoints(rawAmount, serviceData.country, rates);
+    // An IIMMPACT recharge is priced in MYR already (the server charges it
+    // as it is), whatever the destination.
+    const amount = serviceData.iimmpactCatalog === true
+      ? Math.round(Number(rawAmount) * 100) / 100
+      : amountToPoints(rawAmount, serviceData.country, rates);
     // Cost/profit split is for admin/dealer reporting only (see
     // TransactionDetailModal's cost/profit rows, Admin > Pricing for the
     // editable %) - it never changes what the customer pays, which stays
@@ -151,7 +155,9 @@ function buildTransactionPayload(service, serviceData, pricing, rates) {
     const profit = Math.round(amount * (profitPercent / 100) * 100) / 100;
     return {
       service: DEALER_LABELS.recharge,
-      details: `${serviceData.operator || ""} - ${serviceData.currency || "MYR"} ${rawAmount}`,
+      details: serviceData.iimmpactCatalog === true && serviceData.package
+        ? `${serviceData.operator || ""} - ${serviceData.package}`
+        : `${serviceData.operator || ""} - ${serviceData.currency || "MYR"} ${rawAmount}`,
       amount,
       total: amount,
       cost,

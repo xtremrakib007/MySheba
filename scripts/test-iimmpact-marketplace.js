@@ -247,6 +247,31 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     assert.deepStrictEqual(names, ['Indonesia'], 'a product named after its country is how international top-up is sold');
   });
 
+  await test('a country IIMMPACT has no top-up for gets none, not every other country’s', () => {
+    const names = Array.from(recharge.rechargeProductsFromCatalog(CATALOG, { country: 'IN', countryName: 'India', countryNames: [...COUNTRIES, 'India'] })).map((p) => p.name);
+    assert.deepStrictEqual(names, [], 'picking India used to offer the Indonesia and Nepal top-ups as operators');
+  });
+
+  await test('International Reload lists only the countries IIMMPACT sells, never Malaysia', () => {
+    const list = [{ code: 'MY', name: 'Malaysia' }, { code: 'ID', name: 'Indonesia' }, { code: 'NP', name: 'Nepal' }, { code: 'IN', name: 'India' }];
+    assert.deepStrictEqual(Array.from(recharge.internationalRechargeCountries(CATALOG, list)), ['ID', 'NP']);
+  });
+
+  await test('the app prices a typed amount exactly as the server charges it', () => {
+    const server = require(path.join(ROOT, 'functions/apiProviderService.js'))._test_iimmpactCustomerPrice;
+    const app = runEsm('src/utils/iimmpactPrice.js');
+    const cases = [
+      [100, { denomination_currency: 'BDT', denomination_unit_price: 0.0385 }],
+      [50000, { denomination_currency: 'IDR', denomination_unit_price: 0.00029, pricing: { unit_price: 1.02 } }],
+      [10, { denomination_currency: 'MYR' }],
+      [20, { denomination_currency: 'NPR', denomination_unit_price: 0.033, pricing: { price_adjustment: { type: 'fixed', value: 0.5 } } }],
+      [20, { denomination_currency: 'PKR', denomination_unit_price: 0.016, pricing: { unit_price: -0.2, price_adjustment: { type: 'percentage', value: 1.01 } } }],
+    ];
+    for (const [amount, product] of cases) assert.strictEqual(app.iimmpactCustomerPrice(amount, product), server(amount, product), JSON.stringify(product));
+    assert.strictEqual(app.canPriceTypedAmount({ denomination_currency: 'BDT' }), false, 'no unit price yet: cannot price');
+    assert.strictEqual(app.canPriceTypedAmount({ denomination_currency: 'BDT', denomination_unit_price: 0.04 }), true);
+  });
+
   await test('bills, data, PINs, IDD, wallets and games never appear as airtime', () => {
     const codes = Array.from(recharge.rechargeProductsFromCatalog(CATALOG, { country: 'MY', countryName: 'Malaysia', countryNames: COUNTRIES })).map((p) => p.code);
     for (const code of ['POST1', 'WATER1', 'DATA1', 'PIN1', 'IDD1', 'EW1', 'GAME1', 'IDT1']) assert.ok(!codes.includes(code), code);
@@ -675,7 +700,7 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     const intl = Array.from(grids.providerGroup({ provider: 'iimmpact', groupKey: 'grp_mobile', catalog: null }).tiles).find((t) => t.key === 'mobile_international');
     assert.strictEqual(intl.seed.internationalOnly, true);
     const src = fs.readFileSync(path.join(ROOT, 'src/steps/RechargeSteps.js'), 'utf8');
-    assert.ok(/internationalOnly \? countries\.filter\(\(c\) => c\.code !== 'MY'\)/.test(src), 'the country step leaves Malaysia out');
+    assert.ok(/internationalOnly\s*\?\s*countries\.filter\(\(c\) => c\.code !== 'MY'/.test(src), 'the country step leaves Malaysia out');
   });
 
   await test('International Bills does not offer Malaysia', () => {
