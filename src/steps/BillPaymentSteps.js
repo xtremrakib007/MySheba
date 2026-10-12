@@ -195,7 +195,9 @@ export default function BillPaymentStep({ step }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestKey, onBillSteps]);
 
-  if (step === 0) return <View><FormLabel>Select Country</FormLabel><Grid3>{countries.map((c) => <CountrySelectCard key={c.code} code={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr, category: null, provider: null, accountNumber: '', mobileNumber: '', amount: null }); nextStep(); }} />)}</Grid3></View>;
+  // International Bills lists countries abroad only; Malaysian bills are
+  // the Bills group's own tiles.
+  if (step === 0) return <View><FormLabel>Select Country</FormLabel><Grid3>{(serviceData.internationalOnly ? countries.filter((c) => c.code !== 'MY') : countries).map((c) => <CountrySelectCard key={c.code} code={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr, category: null, provider: null, accountNumber: '', mobileNumber: '', amount: null }); nextStep(); }} />)}</Grid3></View>;
   if (step === 1) {
     const cats = categoriesFor(serviceData.country, catalogBills);
     return <View><FormLabel>Select Bill Category</FormLabel>{cats.length
@@ -383,6 +385,7 @@ function validateAccountStep(serviceData) {
 
 export function validateStep(step, serviceData) {
   if (step === 0 && !serviceData.country) return 'Please select a country.';
+  if (step === 0 && serviceData.internationalOnly && String(serviceData.country).toUpperCase() === 'MY') return 'Malaysian bills are paid from the Bills tiles.';
   if (step === 1 && !serviceData.category) return 'Please select a bill category.';
   if (step === 2 && !serviceData.provider) return 'Please select a bill provider.';
   if (step === 3) {

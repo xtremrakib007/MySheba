@@ -664,6 +664,19 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     assert.ok(/internationalOnly \? countries\.filter\(\(c\) => c\.code !== 'MY'\)/.test(src), 'the country step leaves Malaysia out');
   });
 
+  await test('International Bills does not offer Malaysia', () => {
+    const intl = Array.from(grids.providerGroup({ provider: 'iimmpact', groupKey: 'grp_bills', catalog: null }).tiles).find((t) => t.key === 'bill_international');
+    assert.strictEqual(intl.seed.internationalOnly, true);
+    const src = fs.readFileSync(path.join(ROOT, 'src/steps/BillPaymentSteps.js'), 'utf8');
+    assert.ok(/serviceData\.internationalOnly \? countries\.filter\(\(c\) => c\.code !== 'MY'\)/.test(src));
+  });
+
+  await test('a voucher or game category opens straight on its products, with no brand page between', () => {
+    const src = fs.readFileSync(path.join(ROOT, 'src/screens/IimmpactProductScreen.js'), 'utf8');
+    assert.ok(!/>View products<|selectedBrand|brandGroups/.test(src), 'no brand step');
+    assert.ok(/productList\]\.sort\([\s\S]{0,200}setSelectedProduct\(product\)/.test(src), 'products listed directly');
+  });
+
   console.log('\nPIN Generator dispatch');
 
   const sent = [];

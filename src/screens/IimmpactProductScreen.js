@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, Alert, ActivityIndicator, Image, Share } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, Alert, ActivityIndicator, Image, Share, BackHandler } from 'react-native';
 import { printTransactionReceipt } from '../utils/printService';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
@@ -24,21 +24,6 @@ const displayValue = (value) => {
   return String(value);
 };
 
-
-function brandLabel(product) {
-  const explicit = product?.brand_name || product?.brand || product?.merchant_name || product?.merchant || product?.provider_name || product?.provider;
-  if (typeof explicit === 'string' && explicit.trim()) return explicit.trim();
-  let name = String(product?.name || product?.code || 'Other').trim();
-  // Catalogue names often repeat the merchant for each denomination. Remove
-  // only clear denomination/price suffixes so the merchant becomes one tile.
-  name = name
-    .replace(/\s*[-–—|:]?\s*(?:RM|MYR)\s*\d+(?:[.,]\d{1,2})?\s*$/i, '')
-    .replace(/\s*[-–—|:]?\s*\d+(?:[.,]\d{1,2})?\s*(?:RM|MYR)\s*$/i, '')
-    .replace(/\s*[-–—|:]?\s*(?:RM|MYR)?\s*\d+(?:[.,]\d{1,2})?\s*(?:voucher|gift card|e voucher|evoucher|top up|top-up)\s*$/i, '')
-    .replace(/\s*\([^)]*(?:RM|MYR|\d+)[^)]*\)\s*$/i, '')
-    .trim();
-  return name || String(product?.name || product?.code || 'Other');
-}
 
 // A product fulfilled as a PIN or voucher code. These go through the PIN
 // purchase, which hands the code back to show on screen; the generic charge
@@ -96,7 +81,6 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
   };
   const { colors, brandGradient } = useTheme();
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [selectedBrand, setSelectedBrand] = useState(null);
   const [values, setValues] = useState({});
   const [selectedOptions, setSelectedOptions] = useState({});
   const [options, setOptions] = useState({});
@@ -131,28 +115,26 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
     .map((code) => (products[code] ? { ...products[code], code: String(products[code].code || code) } : null))
     .filter((p) => p && p.is_active !== false), [match, products]);
 
-  const brandGroups = useMemo(() => {
-    const map = new Map();
-    productList.forEach((product) => {
-      const label = brandLabel(product);
-      const key = norm(label);
-      if (!map.has(key)) map.set(key, { key, name: label, products: [], imageUrl: product.image_url || '' });
-      const item = map.get(key);
-      item.products.push(product);
-      if (!item.imageUrl && product.image_url) item.imageUrl = product.image_url;
-    });
-    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }, [productList]);
-
   useEffect(() => {
     setSelectedProduct(null);
-    setSelectedBrand(null);
     setValues({});
     setSelectedOptions({});
     setOptions({});
     setOptionBusy({});
     setError('');
   }, [decodedCategory]);
+
+  // The phone's back button steps back like the header arrow: out of the
+  // review, then from a product to the category's products, and only then
+  // off this screen.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (reviewing) { if (!busy) setReviewing(false); return true; }
+      if (selectedProduct && !productCode) { setSelectedProduct(null); setValues({}); setSelectedOptions({}); return true; }
+      return false;
+    });
+    return () => sub.remove();
+  }, [reviewing, busy, selectedProduct, productCode]);
 
   // Opened on one product (an E-Wallet tile): go straight to its amounts once
   // the catalogue has it, and leave the screen when backing out of it.
@@ -449,7 +431,7 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
     <View style={st.screen}>
       <LinearGradient colors={brandGradient} style={st.head}>
         <HeaderDecor />
-        <TouchableOpacity onPress={directCode ? goBackOrHome : selectedProduct ? () => { setSelectedProduct(null); setValues({}); setSelectedOptions({}); } : selectedBrand ? () => setSelectedBrand(null) : goBackOrHome}><Text style={st.back}>←</Text></TouchableOpacity>
+        <TouchableOpacity onPress={directCode ? goBackOrHome : selectedProduct ? () => { setSelectedProduct(null); setValues({}); setSelectedOptions({}); } : goBackOrHome}><Text style={st.back}>←</Text></TouchableOpacity>
         <View style={{flex:1}}><Text style={st.ht}>{(directCode && selectedProduct?.name) || decodedCategory || 'Marketplace'}</Text><Text style={st.hs}>MySheba catalogue</Text></View>
       </LinearGradient>
 
@@ -470,37 +452,19 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
         )}
         {!selectedProduct ? (
           <>
-            {!selectedBrand ? (
-              <>
-                <Text style={st.h}>Brands & providers</Text>
-                <Text style={st.muted}>{brandGroups.length} brand/provider tiles. Products with the same merchant name are grouped together.</Text>
-                <View style={st.productGrid}>
-                  {brandGroups.map((brand) => (
-                    <TouchableOpacity key={brand.key} style={st.productCard} onPress={() => setSelectedBrand(brand)}>
-                      {brand.imageUrl ? <Image source={{uri: brand.imageUrl}} style={st.productLogo} resizeMode="contain" /> : <View style={st.productFallback}><Text style={st.productFallbackText}>{String(brand.name || 'I').slice(0,1).toUpperCase()}</Text></View>}
-                      <Text style={st.productName} numberOfLines={3}>{brand.name}</Text>
-                      <Text style={st.processing}>{brand.products.length} product{brand.products.length === 1 ? '' : 's'}</Text>
-                      <Text style={st.buySmall}>View products</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </>
-            ) : (
-              <>
-                <Text style={st.h}>{selectedBrand.name}</Text>
-                <Text style={st.muted}>{selectedBrand.products.length} product/denomination options.</Text>
-                <View style={st.productGrid}>
-              {selectedBrand.products.map((product) => (
+            {/* A category opens straight on its products: the brand page
+                that used to sit in between ("View products") was one more tap
+                to the same list. */}
+            <View style={st.productGrid}>
+              {[...productList].sort((x, y) => String(x.name || x.code).localeCompare(String(y.name || y.code))).map((product) => (
                 <TouchableOpacity key={product.code} style={st.productCard} onPress={() => { setSelectedProduct(product); setValues(isPinProduct(product) ? { __account: malaysianNational(profile?.phone) } : {}); setSelectedOptions({}); setOptions({}); setVoucher(null); }}>
-                  {product.image_url ? <Image source={{uri: product.image_url}} style={st.productLogo} resizeMode="contain" /> : <View style={st.productFallback}><Text style={st.productFallbackText}>I</Text></View>}
+                  {product.image_url ? <Image source={{uri: product.image_url}} style={st.productLogo} resizeMode="contain" /> : <View style={st.productFallback}><Text style={st.productFallbackText}>{String(product.name || product.code || 'P').slice(0, 1).toUpperCase()}</Text></View>}
                   <Text style={st.productName} numberOfLines={3}>{product.name || product.code}</Text>
                   {!!product.processing_time && <Text style={st.processing}>{String(product.processing_time).replace(/_/g, ' ')}</Text>}
                   <Text style={st.buySmall}>Select</Text>
                 </TouchableOpacity>
               ))}
-                </View>
-              </>
-            )}
+            </View>
             {!productList.length && !directCode && <Text style={st.empty}>No active products are currently published in this category.</Text>}
             {!!directCode && !directProduct && <Text style={st.empty}>This product is not available right now.</Text>}
           </>

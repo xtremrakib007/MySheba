@@ -97,8 +97,9 @@ function billTiles(catalog) {
   tiles.push(
     // JomPAY's own flow: biller code, Ref-1 and IC are asked on the next step.
     { key: 'bill_jompay', name: 'JomPAY', art: 'photoJompay', kind: 'seededService', service: 'billpayment', seed: { ...MY, category: 'jompay', provider: 'JomPAY' }, startStep: 3 },
-    // Other countries' billers start at the country.
-    { key: 'bill_international', name: 'International Bills', art: 'photoBillpayment', kind: 'seededService', service: 'billpayment', seed: {}, startStep: 0 },
+    // Other countries' billers start at the country. Malaysia is not listed:
+    // its bills are the bill types above.
+    { key: 'bill_international', name: 'International Bills', art: 'photoBillpayment', kind: 'seededService', service: 'billpayment', seed: { internationalOnly: true }, startStep: 0 },
   );
   return tiles;
 }
