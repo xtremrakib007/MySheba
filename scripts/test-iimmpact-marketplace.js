@@ -801,6 +801,15 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     }
   });
 
+  await test('a catalogue biller is looked up by its own product code', () => {
+    const inputs = runEsm('src/utils/billPresentmentInputs.js');
+    const req = inputs.presentmentRequest({ country: 'MY', provider: 'Air Selangor', accountNumber: '123456', category: 'iimmpact:water bills', productCode: 'WATER1' });
+    assert.strictEqual(req.productCode, 'WATER1');
+    assert.strictEqual(inputs.presentmentRequest({ country: 'MY', provider: 'TNB', accountNumber: '1' }).productCode, undefined, 'none sent when the biller has none');
+    const src = fs.readFileSync(path.join(ROOT, 'functions/apiProviderService.js'), 'utf8');
+    assert.ok(/const productCode = \(\/\^\[A-Za-z0-9_\.-\]\{1,100\}\$\/\.test\(sentCode\) \? sentCode : ''\) \|\| billerProductCodeFor\(provider, billerName\);/.test(src), 'the server prefers it, then the name list');
+  });
+
   console.log('\nPIN Generator dispatch');
 
   const sent = [];

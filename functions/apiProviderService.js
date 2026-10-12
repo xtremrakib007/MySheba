@@ -1989,7 +1989,10 @@ exports.getBillPresentment = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asyn
 
   const provider = await providerCatalog.readProvider(db, 'Bill Payment', { country, strictCountry: true });
   if (!provider || !provider.apiKey || !provider.secretKey) return nothing;
-  const productCode = billerProductCodeFor(provider, billerName);
+  // The biller's own IIMMPACT product code when the app sends one (every
+  // catalogue biller has it); otherwise the provider's name -> code list.
+  const sentCode = cleanString(request.data?.productCode, 100);
+  const productCode = (/^[A-Za-z0-9_.-]{1,100}$/.test(sentCode) ? sentCode : '') || billerProductCodeFor(provider, billerName);
   if (!productCode) return nothing;
 
   await checkVelocity(db, request.auth.uid, 'getBillPresentment', { ip: getClientIp(request) });
