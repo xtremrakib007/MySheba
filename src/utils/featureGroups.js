@@ -17,8 +17,17 @@
 export const FEATURE_GROUPS = {
   home: ['customerHome', 'dealerHome', 'resellerHome', 'adminHome', 'staffHome'],
 
-  // The service wizard and everything it can open mid-flow.
-  service: ['service', 'webview', 'buspicker', 'rechargePin'],
+  // The service wizard, everything it can open mid-flow, and the provider
+  // grids that lead into it: Bills -> Water Bill -> the bill flow is one
+  // trail, so Back walks it a page at a time instead of jumping Home.
+  // Catalogue screens carry their subject after a colon
+  // (providerGroup:iimmpact:grp_bills); featureOf matches them by the name
+  // before it.
+  service: [
+    'service', 'confirmTransaction', 'webview', 'buspicker', 'rechargePin',
+    'providerGroup', 'rechargePinCategory', 'iimmpactCatalog', 'iimmpactCategory',
+    'iimmpactCategoryGrid', 'iimmpactProduct',
+  ],
 
   money: ['topup', 'transferPoints'],
 
@@ -59,7 +68,8 @@ const SCREEN_TO_FEATURE = Object.entries(FEATURE_GROUPS).reduce((acc, [feature, 
 
 /** The feature a screen belongs to. An unlisted screen is its own feature. */
 export function featureOf(screen) {
-  return SCREEN_TO_FEATURE[screen] || screen || '';
+  const name = String(screen || '');
+  return SCREEN_TO_FEATURE[name] || SCREEN_TO_FEATURE[name.split(':')[0]] || name;
 }
 
 /** True when moving between these two screens leaves one feature for another. */
