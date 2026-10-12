@@ -45,6 +45,16 @@ assert.strictEqual(api.render('order-{{requestId}}-{{missing}}', { requestId: 'a
 // at the end of this file for why. This used to assert the string '10'.
 assert.deepStrictEqual(api.render({ amount: '{{amount}}' }, { amount: 10 }), { amount: 10 });
 
+// Per-number plans are asked under the field the catalogue declares, not a
+// hardcoded `plan`.
+{
+  const pick = require('../functions/apiProviderService')._test_iimmpactPlanFieldId;
+  assert.strictEqual(pick({ fields: [{ id: 'phone', type: 'text' }, { id: 'plan', type: 'select' }] }), 'plan');
+  assert.strictEqual(pick({ fields: [{ id: 'phone', type: 'text' }, { id: 'package', type: 'select', role: 'pricing' }] }), 'package');
+  assert.strictEqual(pick({ fields: [{ id: 'x', type: 'select', data_source: { params: { field_id: { static: 'plans' }, account_number: { from_field: 'phone' } } } }] }), 'plans');
+  assert.strictEqual(pick(null), '');
+}
+
 // IIMMPACT uses one documented /v2/topup envelope for all service types.
 {
   const build = api.buildIimmpactTopupBody;
@@ -63,6 +73,22 @@ assert.deepStrictEqual(api.render({ amount: '{{amount}}' }, { amount: 10 }), { a
     remarks: '',
     extras: { subproduct_code: 'HI-30' },
   });
+  // A voucher's account is what the server resolved, empty included - never
+  // the customer's own (possibly Bangladeshi) phone.
+  assert.strictEqual(build({
+    raw: { accountNumber: '', accountOptional: true, phone: '+8801712345678' },
+    requestId: 'pin-123456789012',
+    productCode: 'GOOGLEPLAY',
+    amount: 10,
+    customer: { phone: '+8801712345678' },
+  }).account, '');
+  assert.throws(() => build({
+    raw: { accountNumber: '' },
+    requestId: 'reload-123456789012',
+    productCode: 'HI',
+    amount: 10,
+    customer: {},
+  }), /requires the recipient/);
   assert.deepStrictEqual(build({
     raw: { accountNumber: 'REF1-123', billerCode: '818625', ref2: 'REF2', icNumber: '941123045001' },
     requestId: 'bill-123456789012',

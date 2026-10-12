@@ -98,10 +98,15 @@ function cleanFormMap(value) {
 // account as a Malaysian mobile number, so the customer's own number goes in
 // national form ("0123456789"). Sending "+60..." or a Bangladeshi number is
 // what came back as "Select a supported Malaysian mobile operator. [400]".
+//
+// The customer is no longer asked for a number. One that is not a Malaysian
+// mobile in national form is not sent at all: the account goes empty, which
+// IIMMPACT accepts for a product that does not need one.
+const MY_MOBILE = /^01\d{7,9}$/;
 function pinAccountFor(input, user, country) {
   const typed = typeof input.accountNumber === 'string' ? input.accountNumber.trim().slice(0, 200) : '';
-  if (typed) return /^[+\d\s-]+$/.test(typed) ? nationalAccountNumber(typed, country) : typed;
-  return nationalAccountNumber(user?.phone || '', country);
+  const candidates = [typed, user?.phone || ''].map((value) => (/^[+\d\s-]+$/.test(value) ? nationalAccountNumber(value, country) : value));
+  return candidates.find((value) => MY_MOBILE.test(value)) || '';
 }
 
 function requestIdOf(request) {
@@ -170,7 +175,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
     if (['product-missing', 'product-not-found', 'product-inactive'].includes(found.error)) throw new HttpsError('failed-precondition', 'That voucher is no longer available.');
     if (['option-required', 'option-not-found'].includes(found.error)) throw new HttpsError('failed-precondition', 'That voucher amount is no longer available. Please choose it again.');
     if (['field-required', 'field-dependency-missing'].includes(found.error)) throw new HttpsError('invalid-argument', 'Please complete every required voucher detail.');
-    if (found.error === 'fulfillment-invalid') throw new HttpsError('invalid-argument', 'A valid Malaysian mobile number is required for this voucher.');
+    if (found.error === 'fulfillment-invalid') throw new HttpsError('failed-precondition', 'That voucher could not be confirmed. Please choose it again.');
     if (found.error === 'options-unavailable') throw new HttpsError('unavailable', 'Voucher amounts could not be confirmed just now. Please try again.');
     if (found.error) throw new HttpsError('failed-precondition', 'That voucher could not be confirmed. Please review it and try again.');
     if (Math.abs(found.sellAmount - denomination) > 0.01) throw new HttpsError('failed-precondition', 'This voucher price has changed. Please review the amount.');
@@ -180,7 +185,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
   const dispatchRaw = catalogProduct ? {
     requestId, country, operator, productCode: catalogProduct.productCode, operatorCode: catalogProduct.productCode,
     subproductCode: catalogProduct.subproductCode || catalogProduct.optionCode || '', optionCode: catalogProduct.optionCode || '',
-    productName: catalogProduct.productName, accountNumber: catalogProduct.accountNumber, amount: denomination,
+    productName: catalogProduct.productName, accountNumber: catalogProduct.accountNumber, accountOptional: true, amount: denomination,
     providerAmount: catalogProduct.providerAmount, packageCostAmount: catalogProduct.providerAmount,
     extras: catalogProduct.extras || {}, iimmpactCatalog: true, packageCode: catalogProduct.productCode,
   } : { requestId, country, operator, productCode, subproductCode, productName, amount: denomination, packageCode: productCode || String(denomination) };
@@ -286,7 +291,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
     const voucherPin = api.providerPin || (api.secret && api.secret !== api.deliveryLink ? api.secret : null);
     providerSucceeded = true;
     await txRef.update({
-      apiExecution: { status: 'accepted', providerId: api.providerId, providerName: api.providerName, responseId: api.responseId || null, message: api.message || null, providerSucceeded: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+      apiExecution: { status: 'accepted', providerId: api.providerId, providerName: api.providerName, responseId: api.responseId || null, message: api.message || null, serialNumber: api.serialNumber || null, providerSucceeded: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     await db.collection('rechargePins').doc(txRef.id).set({
@@ -295,7 +300,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
     });
     await txRef.update({
       status: 'completed', rechargePinAvailable: true,
-      apiExecution: { status: 'accepted', providerId: api.providerId, providerName: api.providerName, responseId: api.responseId || null, message: api.message || null, providerSucceeded: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+      apiExecution: { status: 'accepted', providerId: api.providerId, providerName: api.providerName, responseId: api.responseId || null, message: api.message || null, serialNumber: api.serialNumber || null, providerSucceeded: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
     return { id: txRef.id, cost: walletCost, baseCostMyr: reserved.baseCostMyr, pin: voucherPin, deliveryLink: api.deliveryLink || null, deliveryNote: api.deliveryNote || null, expiry: api.expiry || null, operator, productCode: dispatchRaw.productCode, subproductCode: dispatchRaw.subproductCode, productName: displayName, country, amount: denomination, currency: walletFx.currency, fxRate: walletFx.sellRate };

@@ -20,6 +20,7 @@ const networkStatus = require('./networkStatus');
 const productCodes = require('./productCodes');
 const providerReach = require('./providerReach');
 const catalogMirror = require('./iimmpactCatalogMirror');
+const costLog = require('./iimmpactCostLog');
 const optionsMirror = require('./iimmpactOptionsMirror');
 const jompayBillers = require('./jompayBillers');
 
@@ -965,15 +966,63 @@ async function signedProviderRequest(url, init, provider) {
   return { ok: response.ok, status: response.status, json };
 }
 
+/** The provider's own words for a refused request, when it gave any. */
+function providerErrorText(json) {
+  if (!json || typeof json !== 'object') return '';
+  const error = json.error && typeof json.error === 'object' ? json.error : {};
+  const text = [json.message, error.message, typeof json.error === 'string' ? json.error : '', error.code]
+    .find((value) => typeof value === 'string' && value.trim());
+  return text ? text.trim().replace(/[\x00-\x1F\x7F]+/g, ' ').slice(0, 200) : '';
+}
+
 async function catalogHttpsRequest(url, init, config, provider) {
-  const { ok, json } = await signedProviderRequest(url, init, provider);
-  if (!ok) throw new Error(`${config.errorLabel} catalogue request failed.`);
+  const { ok, status, json } = await signedProviderRequest(url, init, provider);
+  // The provider's status and message, not just "failed": a number that is
+  // not on this operator, a field the product does not have and an outage
+  // all looked the same on screen, and only one of them is ours to fix.
+  if (!ok) {
+    const said = providerErrorText(json);
+    throw new Error(`${config.errorLabel} catalogue request failed (HTTP ${status}${said ? `: ${said}` : ''}).`);
+  }
   if (json === null) throw new Error(`${config.errorLabel} returned invalid catalogue data.`);
   return json;
 }
+/**
+ * The select field an IIMMPACT product's per-number plans are listed under.
+ *
+ * Asked as `plan` for every product, which is only IIMMPACT's usual name: a
+ * product that calls its list anything else answered /v2/options with an
+ * error and no plans loaded. The catalogue says which field it is - the one
+ * marked for pricing, or the one whose list reads the account number.
+ */
+function iimmpactPlanFieldId(product) {
+  const fields = Array.isArray(product?.fields) ? product.fields : [];
+  const selects = fields.filter((field) => field && field.type === 'select' && field.id);
+  const readsAccount = (field) => {
+    const params = field?.data_source?.params;
+    return !!params && typeof params === 'object' && Object.values(params).some((spec) => spec && typeof spec === 'object' && spec.from_field);
+  };
+  const pick = selects.find((field) => String(field.id) === 'plan')
+    || selects.find((field) => field.role === 'pricing')
+    || selects.find(readsAccount)
+    || selects[0];
+  if (!pick) return '';
+  const fieldParam = pick.data_source?.params?.field_id;
+  const named = fieldParam && typeof fieldParam === 'object' && fieldParam.static !== undefined ? String(fieldParam.static) : '';
+  return (named || String(pick.id)).slice(0, 100);
+}
+exports._test_iimmpactPlanFieldId = iimmpactPlanFieldId;
+
 /** Fetch any provider's catalogue, normalised. */
-function fetchProviderCatalog(provider, operator, type, account) {
-  return providerCatalog.fetchCatalog(provider, { operator, type, account }, { request: catalogHttpsRequest });
+async function fetchProviderCatalog(provider, operator, type, account) {
+  let fieldId;
+  if (provider && provider.authType === 'iimmpactHmac' && operator) {
+    // MySheba's saved catalogue (Malaysia's - the only one IIMMPACT's
+    // per-number plans exist for): no IIMMPACT call when it is current.
+    const catalog = await liveOrSavedIimmpactCatalog(admin.firestore(), 'MY').catch(() => null);
+    fieldId = iimmpactPlanFieldId(catalog?.products?.[String(operator)]) || undefined;
+  }
+  return providerCatalog.fetchCatalog(provider, { operator, type, account, fieldId }, { request: catalogHttpsRequest });
 }
 
 // Success TopUp's operator codes are still validated here, because they are
@@ -1179,16 +1228,24 @@ async function resolveIimmpactCatalogProductCode(provider, service, subject, raw
  * family. The provider uses the same envelope for airtime, mobile data, JomPAY,
  * eSIM and vouchers; only the account and documented extras vary.
  */
-function buildIimmpactTopupBody({ raw = {}, requestId, productCode, amount, customer }) {
+/** The refid IIMMPACT is sent for one of our request ids (at most 50 characters). */
+function iimmpactRefid(requestId) {
   const ref = String(requestId || '').trim();
-  const refid = ref.length <= 50
-    ? ref
-    : crypto.createHash('sha256').update(ref).digest('hex').slice(0, 40);
+  return ref.length <= 50 ? ref : crypto.createHash('sha256').update(ref).digest('hex').slice(0, 40);
+}
+
+function buildIimmpactTopupBody({ raw = {}, requestId, productCode, amount, customer }) {
+  const refid = iimmpactRefid(requestId);
   const product = String(productCode || '').trim();
-  const account = String(raw.accountNumber || raw.phone || raw.email || raw.billNumber || raw.customerId || customer?.phone || '').trim();
+  // A voucher's account is exactly what the server resolved, empty included:
+  // falling back to the customer's own phone sent a Bangladeshi number, which
+  // IIMMPACT refuses as an unsupported Malaysian operator.
+  const account = raw.accountOptional === true
+    ? String(raw.accountNumber || '').trim()
+    : String(raw.accountNumber || raw.phone || raw.email || raw.billNumber || raw.customerId || customer?.phone || '').trim();
   const providerAmount = Number(raw.providerAmount ?? amount);
   if (!refid || !product) throw new Error('IIMMPACT requires a transaction reference and product code.');
-  if (!account) throw new Error('IIMMPACT requires the recipient phone number, bill account, or identifier.');
+  if (!account && raw.accountOptional !== true) throw new Error('IIMMPACT requires the recipient phone number, bill account, or identifier.');
   if (!Number.isFinite(providerAmount) || providerAmount <= 0) throw new Error('IIMMPACT requires a valid provider amount.');
 
   // Only documented IIMMPACT extras are forwarded. In particular, plan codes
@@ -1538,7 +1595,13 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
       // wrong - "Invalid product", "Insufficient balance". Throwing only the
       // status discarded it, which is how a real order came back as
       // "Provider HTTP 400 [400]": a number, twice, and nothing to act on.
-      const reason=String(getPath(data,'error.message')||getPath(data,'message')||'').trim().slice(0,300);
+      // IIMMPACT refuses with HTTP 400 and `data.status: Failed`, its reason
+      // in `data.remarks` and a numeric `data.status_code` - 43 is our own
+      // IIMMPACT balance running low, which is not the customer's to read.
+      const statusCode = Number(getPath(data,'data.status_code') ?? getPath(data,'data.statusCode'));
+      const reason=(provider.authType === 'iimmpactHmac' && statusCode === 43)
+        ? 'Service temporarily unavailable (43).'
+        : String(getPath(data,'data.remarks')||getPath(data,'error.message')||getPath(data,'message')||'').trim().slice(0,300);
       const failure=new Error(reason?`Provider HTTP ${response.status}: ${reason}`:`Provider HTTP ${response.status}`);
       // A 4xx is the provider replying and refusing, so no top-up can have
       // happened and the charge is safe to refund. That used to be decided by
@@ -1578,6 +1641,10 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
       if (typeof expiry === 'string' && expiry.trim()) result.expiry = expiry.trim().slice(0, 32);
     }
     if (provider.authType === 'iimmpactHmac') {
+      // The serial number IIMMPACT documents for every product (`sn`), shown
+      // on the receipt with a copy button when it is returned.
+      const serial = getPath(data, 'data.sn') || getPath(data, 'sn');
+      if ((typeof serial === 'string' || typeof serial === 'number') && String(serial).trim()) result.serialNumber = String(serial).trim().slice(0, 200);
       // IIMMPACT explicitly recommends matching product, account and amount
       // in addition to refid before accepting a callback. Keep only the
       // non-secret request values needed for that server-side comparison.
@@ -1586,6 +1653,19 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
         account: String(raw.accountNumber || raw.billNumber || raw.phone || raw.mobileNumber || raw.playerId || '').slice(0, 200),
         amount: Number(providerAmount),
       };
+      // What IIMMPACT charged for this order, when the reply says. Kept for
+      // the superadmin's cost check; never shown to a customer.
+      const providerCost = costLog.costFrom(data);
+      if (providerCost !== null) {
+        result.providerCost = providerCost;
+        await costLog.record(admin.firestore(), {
+          refid: iimmpactRefid(vars.requestId),
+          productCode: providerOperatorCode,
+          face: Number(providerAmount),
+          cost: providerCost,
+          country: raw.country || '',
+        });
+      }
     }
     const secretPath = options.extractPath || (service === 'Recharge PIN' ? provider.responsePinPath : '');
     if (secretPath || service === 'Recharge PIN') {
@@ -2516,9 +2596,14 @@ async function resolveIimmpactMarketplaceProduct(db, raw) {
     selected[pricingSelect.id] = { code: pricingCode };
   }
   const resolvedOptions = {};
+  // A voucher's PIN comes back in the reply, so its account is never asked of
+  // the customer: their own Malaysian number when they have one, otherwise
+  // empty, which IIMMPACT accepts for a product whose account is optional.
+  const isPin = String(product.processing_time || '').toLowerCase() === 'pin';
+  const pinAccountFieldId = isPin ? String(product.fulfillment?.account?.from_field || '') : '';
 
   for (const field of fields) {
-    if (field?.required) {
+    if (field?.required && !(pinAccountFieldId && String(field.id) === pinAccountFieldId)) {
       const submittedValue = selected[field.id] !== undefined ? selected[field.id] : values[field.id];
       const shown = submittedValue && typeof submittedValue === 'object'
         ? (submittedValue.code || submittedValue.account_number || submittedValue.value || submittedValue.label || '')
@@ -2570,7 +2655,7 @@ async function resolveIimmpactMarketplaceProduct(db, raw) {
   }
 
   const fulfillment = product.fulfillment || {};
-  const accountRaw = iimmpactResolvedFieldValue(fulfillment.account, values, resolvedOptions) || raw?.accountNumber || raw?.phone || '';
+  const accountRaw = iimmpactResolvedFieldValue(fulfillment.account, values, resolvedOptions) || raw?.accountNumber || (isPin ? '' : raw?.phone) || '';
   const amountRaw = iimmpactResolvedFieldValue(fulfillment.amount, values, resolvedOptions) || raw?.providerAmount || raw?.amount || '';
   const accountNumber = typeof accountRaw === 'object'
     ? String(accountRaw.account_number || accountRaw.code || accountRaw.value || '').trim()
@@ -2579,7 +2664,7 @@ async function resolveIimmpactMarketplaceProduct(db, raw) {
     ? (amountRaw.amount ?? amountRaw.denomination ?? amountRaw.value ?? amountRaw.price?.amount ?? '')
     : amountRaw;
   const providerAmount = Number(amountValue);
-  if (!accountNumber || !Number.isFinite(providerAmount) || providerAmount <= 0) return { error: 'fulfillment-invalid' };
+  if ((!accountNumber && !isPin) || !Number.isFinite(providerAmount) || providerAmount <= 0) return { error: 'fulfillment-invalid' };
 
   const pricingField = pricingSelect;
   const pricingOption = pricingField ? resolvedOptions[pricingField.id] : null;
@@ -3046,6 +3131,58 @@ exports.refreshIimmpactOptionsMirror = refreshIimmpactOptionsMirror;
  * Superadmin-only package options with provider cost.
  * The customer-facing getIimmpactOptions callable remains sanitized.
  */
+/**
+ * Superadmin: what one IIMMPACT product really costs MySheba.
+ *
+ * The catalogue's rate is IIMMPACT's selling rate, and it is what the app
+ * prices a typed amount at - but MySheba's balance is debited the wholesale
+ * cost, which IIMMPACT reports only with each result. This answers, for a
+ * product and a face amount:
+ *
+ *   catalogue   the rate and adjustment IIMMPACT's catalogue states, read
+ *               live for this one product, with any cost field it carries;
+ *   salePrice   what the app charges before MySheba's markup;
+ *   recent      the cost IIMMPACT recorded on MySheba's last orders of this
+ *               product, and the median cost per unit of face value;
+ *   estimate    face x that median rate - the cost to expect.
+ */
+exports.getIimmpactCostCheck = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  const db = admin.firestore();
+  await assertSuperadmin(db, request);
+  await checkVelocity(db, request.auth.uid, 'getIimmpactCostCheck', { ip: getClientIp(request) });
+  const productCode = cleanString(request.data?.productCode, 100);
+  if (!productCode) throw new HttpsError('invalid-argument', 'A product code is required.');
+  const face = Number(request.data?.amount);
+  const hasFace = Number.isFinite(face) && face > 0 && face < 1e9;
+
+  const provider = await findActiveIimmpactProviderForCountry(db, 'MY');
+  if (!provider || provider.authType !== 'iimmpactHmac') throw new HttpsError('failed-precondition', 'No active IIMMPACT provider is configured.');
+  const url = iimmpactUrl(provider, '/v2/catalog');
+  url.searchParams.set('product_code', productCode);
+  const { ok, status, json } = await signedProviderRequest(url, { method: 'GET', headers: { accept: 'application/json' } }, provider);
+  const raw = ok && json?.products?.[productCode] && typeof json.products[productCode] === 'object' ? json.products[productCode] : null;
+  if (!raw) throw new HttpsError('not-found', `IIMMPACT has no product ${productCode}${ok ? '' : ` (HTTP ${status})`}.`);
+
+  const recent = await costLog.recent(db, productCode, 10);
+  const round = (n, places = 2) => (Number.isFinite(n) ? Math.round(n * 10 ** places) / 10 ** places : null);
+  return {
+    productCode,
+    name: String(raw.name || productCode).slice(0, 200),
+    currency: cleanString(raw.denomination_currency, 8) || 'MYR',
+    catalogue: {
+      denominationUnitPrice: Number.isFinite(Number(raw.denomination_unit_price)) ? Number(raw.denomination_unit_price) : null,
+      pricing: safeIimmpactPricing(raw.pricing),
+      cost: safeIimmpactMoney(raw.cost ?? raw.cost_price ?? raw.provider_cost ?? null),
+      rrp: safeIimmpactMoney(raw.rrp ?? raw.recommended_retail_price ?? null),
+    },
+    face: hasFace ? face : null,
+    salePrice: hasFace ? iimmpactCustomerPrice(face, raw) : null,
+    recent: recent.rows.map((row) => ({ face: row.face, cost: round(row.cost, 4), rate: round(row.rate, 8), at: row.at })),
+    medianRate: recent.medianRate === null ? null : round(recent.medianRate, 8),
+    estimatedCost: hasFace && recent.medianRate !== null ? round(face * recent.medianRate) : null,
+  };
+});
+
 exports.getIimmpactOptionsForSuperadmin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);

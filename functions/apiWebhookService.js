@@ -6,6 +6,7 @@ const { matchesStatus } = require('./statusMatch');
 const { parseAllowedIps, isAllowedSource, callbackSourceIp } = require('./webhookSource');
 const { matchesCallbackRequest } = require('./callbackMatch');
 const { webhookProviderId, webhookPayload, webhookEndpointUrl } = require('./webhookRequest');
+const costLog = require('./iimmpactCostLog');
 
 const COLLECTION = 'api_webhooks';
 const PROVIDERS = 'api_providers';
@@ -311,6 +312,7 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
       providerTransactionId: transactionId,
       providerStatus: status,
       providerMessage: message,
+      ...(provider.authType === 'iimmpactHmac' && safeText(pathGet(body, 'data.sn'), 200) ? { serialNumber: safeText(pathGet(body, 'data.sn'), 200) } : {}),
       webhookReceivedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
@@ -374,6 +376,21 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
       lastTransactionId: transactionId, lastStatus: status, lastMatched: false,
     });
     return res.status(202).json({ ok: true, matched: false });
+  }
+  // IIMMPACT's recorded cost for this order, when the callback carries it:
+  // the superadmin's cost check reads it. Only for a callback that matched
+  // the order it names.
+  if (!duplicate && provider.authType === 'iimmpactHmac' && matchesStatus(status, config.successStatus)) {
+    const data = pathGet(body, 'data') || {};
+    const cost = costLog.costFrom(body);
+    if (cost !== null) {
+      await costLog.record(db, {
+        refid: transactionId,
+        productCode: String(data.product || ''),
+        face: Number(data.amount),
+        cost,
+      });
+    }
   }
   await recordDelivery(db, providerId, {
     matchedCount: admin.firestore.FieldValue.increment(duplicate ? 0 : 1),

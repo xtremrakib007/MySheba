@@ -33,10 +33,18 @@ function normalizeBillers(json) {
   for (const entry of listOf(json)) {
     if (!entry || typeof entry !== 'object') continue;
     const code = text(entry.biller_code ?? entry.billerCode ?? entry.code ?? entry.id).replace(/\s+/g, '');
-    const name = text(entry.biller_name ?? entry.billerName ?? entry.name ?? entry.description).slice(0, 200);
+    // IIMMPACT names the biller in `display_name`.
+    const name = text(entry.display_name ?? entry.displayName ?? entry.biller_name ?? entry.billerName ?? entry.name ?? entry.description).slice(0, 200);
     if (!/^\d{3,10}$/.test(code) || !name || seen.has(code)) continue;
     seen.add(code);
-    out.push({ code, name });
+    const amount = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : null; };
+    const biller = { code, name };
+    // Each biller's own payment limits and IIMMPACT's (advisory) category.
+    if (amount(entry.min) !== null) biller.min = amount(entry.min);
+    if (amount(entry.max) !== null) biller.max = amount(entry.max);
+    const category = text(entry.suggested_category).slice(0, 60);
+    if (category) biller.category = category;
+    out.push(biller);
   }
   return out;
 }

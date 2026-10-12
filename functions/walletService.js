@@ -462,6 +462,7 @@ tx.set(txref,{service:serviceLabel || service,customerRole:d.role,commissionAmou
           responseId: api.responseId || null,
           message: api.message || null,
           ...(api.requestCheck ? { requestCheck: api.requestCheck } : {}),
+          ...(api.serialNumber ? { serialNumber: api.serialNumber } : {}),
           updatedAt: admin.firestore.FieldValue.serverTimestamp()
         },
         updatedAt: admin.firestore.FieldValue.serverTimestamp()

@@ -141,7 +141,7 @@ function Row({ label, value }) {
   return (
     <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={styles.rowValue}>{value}</Text>
+      <Text style={styles.rowValue} selectable>{value}</Text>
     </View>
   );
 }
@@ -239,6 +239,8 @@ function TxBody({ item, showCost, pinOverride }) {
       {/* Why a failed or unresolved order did not go through, in words the
           customer can act on, and whether the money is back. Staff also see
           the provider's own message. */}
+      {/* The serial number the provider returned, long-press to copy. */}
+      {!!item.apiExecution?.serialNumber && <Row label="Serial number" value={String(item.apiExecution.serialNumber)} />}
       {!!txFailureReason(item) && <Row label="Reason" value={txFailureReason(item)} />}
       {!!(showCost && (item.apiError || item.apiExecution?.error)) && <Row label="Provider message" value={String(item.apiError || item.apiExecution?.error)} />}
       {!!(showCost && !!(item.cost || item.profit)) && (

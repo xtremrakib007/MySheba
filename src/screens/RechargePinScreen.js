@@ -47,9 +47,10 @@ function pinProductIcon(product) {
 }
 
 
-// IIMMPACT validates a voucher order against a Malaysian mobile number, in
-// national form. The customer's own number is the default when it is one;
-// anything else (a Bangladeshi number, say) leaves the field for them to fill.
+// A voucher order names the customer's own Malaysian number, in national
+// form, when they have one. Anything else (a Bangladeshi number, say) is sent
+// as an empty account: the PIN comes back on screen, never by SMS, so the
+// customer is not asked to type a number at all.
 function malaysianNational(phone) {
   let digits = String(phone || '').replace(/\D/g, '');
   if (digits.startsWith('0060')) digits = digits.slice(4);
@@ -78,10 +79,7 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
   // The purchase being reviewed on the full confirmation page, or null.
   const [review, setReview] = useState(null);
-  const profileAccount = malaysianNational(profile?.phone);
-  const [account, setAccount] = useState(profileAccount);
-  // The profile can finish loading after this screen opens.
-  useEffect(() => { if (profileAccount && !account) setAccount(profileAccount); }, [profileAccount]);
+  const account = malaysianNational(profile?.phone);
   const [fieldValues, setFieldValues] = useState({});
 
   // Back should unwind the current PIN task one level at a time. Previously
@@ -165,7 +163,7 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
   };
 
   // The fields this product declares besides its denomination list. The one
-  // the catalogue names as the order's account is the mobile number below;
+  // the catalogue names as the order's account is filled from the profile;
   // the rest are drawn as inputs, because the server refuses an order with a
   // required field left empty.
   const accountFieldId = String(product?.fulfillment?.account?.from_field || '');
@@ -180,7 +178,6 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
     const liveAmount = Number(selectedOption?.price?.amount ?? selectedOption?.denomination ?? amount);
     if (!product) return showAlert('Voucher', 'Please select a voucher product.');
     if (!(liveAmount > 0)) return showAlert('Voucher', 'Please select a denomination.');
-    if (!/^01\d{7,9}$/.test(account.trim())) return showAlert('Voucher', 'Enter a valid Malaysian mobile number, e.g. 0123456789.');
     if (missingField) return showAlert('Voucher', 'Please complete: ' + (missingField.label || missingField.name || missingField.id));
     const currency = selectedOption?.price?.currency || product?.denomination_currency || 'MYR';
     // The same full review page as a top-up, not a dialog: what is being
@@ -199,8 +196,8 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
         productCode: String(product?.code || ''),
         subproductCode: String(selectedOption?.code || ''),
         productName: String(product?.name || operator || ''),
-        accountNumber: account.trim(),
-        fieldValues: { ...fieldValues, ...(accountFieldId ? { [accountFieldId]: account.trim() } : {}) },
+        accountNumber: account,
+        fieldValues: { ...fieldValues, ...(accountFieldId ? { [accountFieldId]: account } : {}) },
         selectedOptions: pinPricingId && selectedOption?.code ? { [pinPricingId]: { code: String(selectedOption.code) } } : {},
       });
       setReview(null);
@@ -250,7 +247,6 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
         ['Product', String(product?.name || '')],
         ['Denomination', selectedOption?.label || formatMoney(review.liveAmount, review.currency)],
         ['Currency', review.currency],
-        ['Mobile number', profileAccount ? '' : account.trim()],
         ['Delivery', 'PIN shown on screen after payment'],
       ]}
       prices={[
@@ -332,14 +328,8 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
       {!!product && !loadingOptions && !options.length && <Text style={styles.error}>No amounts are available for this product right now.</Text>}
 
       {!!product && <>
-        {/* The PIN comes back on this screen, not by SMS. IIMMPACT still needs a
-            Malaysian number on every order, so the customer's own is used
-            silently, and the field appears only when the profile has none. */}
-        {!profileAccount && <>
-          <Text style={styles.label}>Malaysian mobile number</Text>
-          <Text style={styles.info}>Required by the provider for this order. Your PIN is shown here, not sent to this number.</Text>
-          <TextInput style={styles.input} value={account} onChangeText={(v) => setAccount(v.replace(/[^\d]/g, '').slice(0, 11))} placeholder="0123456789" placeholderTextColor={colors.textSecondary} keyboardType="phone-pad" />
-        </>}
+        {/* The PIN comes back on this screen, not by SMS, so no number is
+            asked for: the customer's own is sent when they have one. */}
         {extraFields.map((f) => <View key={String(f.id)}>
           <Text style={styles.label}>{(f.label || f.name || f.id) + (f.required ? ' *' : '')}</Text>
           <TextInput style={styles.input} value={String(fieldValues[f.id] || '')} onChangeText={(v) => setFieldValues((x) => ({ ...x, [f.id]: v }))} placeholder={f.placeholder || ''} placeholderTextColor={colors.textSecondary} autoCapitalize="none" />

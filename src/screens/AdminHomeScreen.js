@@ -25,6 +25,7 @@ import * as supportContactService from '../firebase/supportContactService';
 import * as paymentSettingsService from '../firebase/paymentSettingsService';
 import * as internetPricingService from '../firebase/internetPricingService';
 import ApiPackagePricingCard from '../components/ApiPackagePricingCard';
+import MarkupSettingsCard from '../components/MarkupSettingsCard';
 import * as bannerService from '../firebase/bannerService';
 import * as announcementService from '../firebase/announcementService';
 import * as topupService from '../firebase/topupService';
@@ -811,6 +812,7 @@ export default function AdminHomeScreen() {
 
         {adminTab === 'pricing' && (
           <View>
+            {profile?.role === 'superadmin' && <MarkupSettingsCard pricing={pricing} />}
             <View style={styles.card}>
               <Text style={styles.cardTitle}>🏷️ Earning &amp; Margin Settings</Text>
               {PRICING_FIELDS.map((r) => (
