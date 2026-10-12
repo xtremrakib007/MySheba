@@ -103,6 +103,9 @@ service cloud.firestore {
     match /iimmpactCatalogMirror/{country} { allow read: if activeProfile(); allow write: if false; }
     match /iimmpactCatalogMirror/{country}/chunks/{chunkId} { allow read: if activeProfile(); allow write: if false; }
     match /iimmpactOptionsCache/{id} { allow read, write: if false; }
+    // Each product's amount list, the same for every customer (lists that
+    // depend on an account stay live). Written by Cloud Functions only.
+    match /iimmpactOptionsMirror/{id} { allow read: if activeProfile(); allow write: if false; }
     match /securityPins/{uid} { allow read, write: if false; } match /userIds/{id} { allow read, write: if false; } match /otps/{phone} { allow read, write: if false; } match /mergeOtps/{uid} { allow read, write: if false; }
     match /activityLog/{id} { allow create: if activeProfile() && request.resource.data.userId == request.auth.uid; allow read: if activeProfile() && isSuperadmin(); allow update, delete: if false; }
     match /userAuditLog/{id} { allow read: if activeProfile() && isSuperadmin(); allow write: if false; }

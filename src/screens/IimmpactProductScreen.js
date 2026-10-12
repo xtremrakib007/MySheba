@@ -140,6 +140,13 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
   // the catalogue has it, and leave the screen when backing out of it.
   const directCode = String(productCode || '');
   const directProduct = directCode && products[directCode] ? { ...products[directCode], code: String(products[directCode].code || directCode) } : null;
+
+  // The amounts of the products on screen load in the background, so the one
+  // tapped draws at once.
+  useEffect(() => {
+    api.prefetchIimmpactOptions(directProduct ? [directProduct] : productList);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productList, directProduct?.code]);
   useEffect(() => {
     if (!directProduct || selectedProduct) return;
     setSelectedProduct(directProduct);

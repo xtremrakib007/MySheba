@@ -64,6 +64,9 @@ export default function RechargeStep({ step }) {
           countryNames: countries.map((item) => item.name),
         });
         setIimmpactOperators(productsUnique);
+        // Their reload amounts load in the background, so the amount step
+        // draws at once once an operator is picked.
+        apiProviderService.prefetchIimmpactOptions(productsUnique);
       })
       .catch(() => { if (alive) setCatalogUnavailable(true); })
       .finally(() => { if (alive) setCatalogLoading(false); });

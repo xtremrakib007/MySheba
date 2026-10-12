@@ -556,4 +556,15 @@ test('every provider call carries a User-Agent', () => {
   assert.ok(!/headers: options\.headers,/.test(source), 'the bare pass-through must be gone');
 });
 
+test('the purchase carries the same X-API-Version as every other IIMMPACT call', () => {
+  // The catalogue and options calls sent it and worked; /v2/topup alone went
+  // without it and IIMMPACT's gateway answered the order "Forbidden" [403].
+  const source = require('fs').readFileSync(require('path').join(__dirname, '..', 'functions/apiProviderService.js'), 'utf8');
+  const dispatch = source.slice(source.indexOf("if (provider.authType === 'iimmpactHmac') {\n      // The version header"));
+  assert.ok(dispatch.length > 0, 'the dispatch sets the header');
+  assert.ok(/headers\['X-API-Version'\] = String\(provider\.iimmpactApiVersion \|\| '2026-09-16'\);\s*const signed = signIimmpactRequest/.test(dispatch),
+    'set before signing, with the same default as signedProviderRequest');
+  assert.strictEqual((source.match(/provider\.iimmpactApiVersion \|\| '2026-09-16'/g) || []).length, 2, 'one version for every call');
+});
+
 console.log(`\n${passed} checks passed.\n`);

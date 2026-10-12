@@ -20,6 +20,7 @@ const networkStatus = require('./networkStatus');
 const productCodes = require('./productCodes');
 const providerReach = require('./providerReach');
 const catalogMirror = require('./iimmpactCatalogMirror');
+const optionsMirror = require('./iimmpactOptionsMirror');
 
 const COLLECTION = 'api_providers';
 // Server-only cache of IIMMPACT option lists (see getIimmpactOptions).
@@ -1471,6 +1472,14 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     // name: a leftover x-signature in a provider's header template would
     // otherwise be sent instead of the real one and fail every call.
     if (provider.authType === 'iimmpactHmac') {
+      // The version header every other IIMMPACT call sends (signedProviderRequest).
+      // The purchase alone went without it, and IIMMPACT's gateway answered the
+      // order with a bare 403 "Forbidden" while the catalogue and options calls,
+      // same key and host, succeeded.
+      for (const existing of Object.keys(headers)) {
+        if (existing.toLowerCase() === 'x-api-version') delete headers[existing];
+      }
+      headers['X-API-Version'] = String(provider.iimmpactApiVersion || '2026-09-16');
       const signed = signIimmpactRequest({
         apiKey: provider.apiKey,
         secretKey: provider.secretKey,
@@ -2812,7 +2821,9 @@ exports.getIimmpactCatalogForUser = onCall({ enforceAppCheck: ENFORCE_APP_CHECK 
   }
 });
 
-exports.getIimmpactOptions = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+// One instance is kept warm: this answers the amounts a customer waits on
+// after tapping a product, and a cold start added seconds to every first tap.
+exports.getIimmpactOptions = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, minInstances: 1 }, async (request) => {
   const db = admin.firestore();
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
   await checkVelocity(db, request.auth.uid, 'getIimmpactOptions', { ip: getClientIp(request) });
@@ -2846,11 +2857,22 @@ exports.getIimmpactOptions = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asyn
   const limit = Math.max(1, Math.min(25000, Number(request.data?.limit) || 100));
   const accountNumber = cleanString(request.data?.accountNumber, 200);
   const billerCode = cleanString(request.data?.billerCode, 100);
-  // Amount and plan lists change rarely, and the same list is asked for by
-  // every customer buying that product. One answer is kept for a few hours,
-  // keyed by everything that shapes it, so only the first ask waits on
-  // IIMMPACT. A list asked for one account (a bill's outstanding amounts) is
-  // that account's live state and is never kept.
+
+  // A list that is the same for every customer (no account, no biller, first
+  // page) is served from MySheba's saved copy and refreshed into it when it
+  // has to be asked for - see iimmpactOptionsMirror.js.
+  const shareable = !accountNumber && !billerCode && page === 1;
+  if (shareable) {
+    const saved = await optionsMirror.read(db, productCode, fieldId).catch(() => null);
+    if (saved) return saved;
+    const answer = await liveIimmpactOptions(provider, { productCode, fieldId, page: 1, limit: Math.max(limit, 1000) });
+    await optionsMirror.write(db, productCode, fieldId, answer).catch(() => {});
+    return answer;
+  }
+
+  // A biller's list is shared by everyone paying that biller: kept for a few
+  // hours by everything that shapes it. A list asked for one account (a
+  // bill's outstanding amounts) is that account's live state and is never kept.
   const cacheable = !accountNumber;
   const cacheKey = crypto.createHash('sha256')
     .update(JSON.stringify([provider.id || '', productCode, fieldId, page, limit, accountNumber, billerCode]))
@@ -2866,6 +2888,16 @@ exports.getIimmpactOptions = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asyn
       }
     } catch (_) { /* a cache miss is only slower */ }
   }
+  const answer = await liveIimmpactOptions(provider, { productCode, fieldId, page, limit, accountNumber, billerCode });
+  const text = JSON.stringify(answer);
+  if (cacheable && text.length < OPTIONS_CACHE_MAX_CHARS) {
+    await cacheRef.set({ json: text, productCode, savedAt: admin.firestore.FieldValue.serverTimestamp() }).catch(() => {});
+  }
+  return answer;
+});
+
+/** One option list from IIMMPACT, live, in the customer-safe shape. */
+async function liveIimmpactOptions(provider, { productCode, fieldId, page = 1, limit = 100, accountNumber = '', billerCode = '' }) {
   const url = iimmpactUrl(provider, '/v2/options');
   url.searchParams.set('product_code', productCode);
   url.searchParams.set('field_id', fieldId);
@@ -2873,7 +2905,6 @@ exports.getIimmpactOptions = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asyn
   url.searchParams.set('limit', String(limit));
   if (accountNumber) url.searchParams.set('account_number', accountNumber);
   if (billerCode) url.searchParams.set('biller_code', billerCode);
-
   try {
     const { ok, status, json } = await signedProviderRequest(url, {
       method: 'GET',
@@ -2883,17 +2914,59 @@ exports.getIimmpactOptions = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asyn
       const reason = String(getPath(json, 'message') || getPath(json, 'error.message') || `HTTP ${status}`);
       throw new HttpsError('unavailable', `IIMMPACT options request failed: ${reason.slice(0, 300)}`);
     }
-    const answer = publicIimmpactOptions(json);
-    const text = JSON.stringify(answer);
-    if (cacheable && text.length < OPTIONS_CACHE_MAX_CHARS) {
-      await cacheRef.set({ json: text, productCode, savedAt: admin.firestore.FieldValue.serverTimestamp() }).catch(() => {});
-    }
-    return answer;
+    return publicIimmpactOptions(json);
   } catch (error) {
     if (error instanceof HttpsError) throw error;
     throw new HttpsError('unavailable', String(error?.message || 'Unable to load IIMMPACT options.').slice(0, 500));
   }
-});
+}
+
+/**
+ * Refills MySheba's saved amount lists for every product whose list is the
+ * same for everyone. Runs a few at a time and stops before `budgetMs`, so a
+ * large catalogue is finished over consecutive runs (oldest lists first).
+ */
+async function refreshIimmpactOptionsMirror(db, country = 'MY', { budgetMs = 420000, concurrency = 6 } = {}) {
+  const started = Date.now();
+  const provider = await findActiveIimmpactProviderForCountry(db, country);
+  if (!provider) throw new Error('No active IIMMPACT provider is configured for this country.');
+  const catalog = await liveOrSavedIimmpactCatalog(db, country);
+  const seen = new Set();
+  const tasks = [];
+  for (const product of Object.values(catalog?.products || {})) {
+    if (!product || product.is_active === false) continue;
+    for (const item of optionsMirror.shareableOptionFields(product)) {
+      const key = optionsMirror.docId(item.productCode, item.fieldId);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      tasks.push(item);
+    }
+  }
+  // Oldest (or missing) first, so a run cut short by the budget picks up
+  // where the last one stopped.
+  const ages = await Promise.all(tasks.map((item) => db.collection(optionsMirror.MIRROR).doc(optionsMirror.docId(item.productCode, item.fieldId)).get()
+    .then((snap) => (snap.exists && snap.data()?.savedAt && typeof snap.data().savedAt.toMillis === 'function' ? snap.data().savedAt.toMillis() : 0))
+    .catch(() => 0)));
+  const order = tasks.map((item, i) => ({ item, at: ages[i] })).sort((x, y) => x.at - y.at).map((x) => x.item);
+  let saved = 0;
+  let failed = 0;
+  let next = 0;
+  const worker = async () => {
+    while (next < order.length && Date.now() - started < budgetMs) {
+      const item = order[next];
+      next += 1;
+      try {
+        const answer = await liveIimmpactOptions(provider, { productCode: item.productCode, fieldId: item.fieldId, page: 1, limit: 1000 });
+        if (await optionsMirror.write(db, item.productCode, item.fieldId, answer)) saved += 1;
+      } catch (_) {
+        failed += 1;
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, concurrency) }, worker));
+  return { lists: order.length, saved, failed, remaining: Math.max(0, order.length - next) };
+}
+exports.refreshIimmpactOptionsMirror = refreshIimmpactOptionsMirror;
 
 
 
