@@ -1472,6 +1472,14 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     // name: a leftover x-signature in a provider's header template would
     // otherwise be sent instead of the real one and fail every call.
     if (provider.authType === 'iimmpactHmac') {
+      // The version header every other IIMMPACT call sends (signedProviderRequest).
+      // The purchase alone went without it, and IIMMPACT's gateway answered the
+      // order with a bare 403 "Forbidden" while the catalogue and options calls,
+      // same key and host, succeeded.
+      for (const existing of Object.keys(headers)) {
+        if (existing.toLowerCase() === 'x-api-version') delete headers[existing];
+      }
+      headers['X-API-Version'] = String(provider.iimmpactApiVersion || '2026-09-16');
       const signed = signIimmpactRequest({
         apiKey: provider.apiKey,
         secretKey: provider.secretKey,
