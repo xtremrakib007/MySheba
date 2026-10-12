@@ -13,6 +13,7 @@ import * as ratesService from '../firebase/ratesService';
 import * as gridManagementService from '../firebase/gridManagementService';
 import { hasServiceArt } from '../components/ServiceArt';
 import { adminLandingTiles } from '../components/serviceTiles';
+import { coveredKeys, providerHomeTiles } from '../components/providerGrids';
 
 const CATEGORIES = [
   { key: 'operations', icon: '⚙️', bg: '#E3F2FD', name: 'Operations' },
@@ -168,7 +169,7 @@ export default function AdminFeaturesScreen() {
     // the static list, so looking there made its tile do nothing when tapped.
     // Declared below this line, which is safe because nothing calls this until
     // a press, long after the render that initialises it.
-    const item = adminHomeList.find((x) => x.key === key);
+    const item = groupedHomeList.find((x) => x.key === key);
     if (!item) return;
     if (item.section) { setSection(item.section); return; }
     if (item.screen) { setScreen(item.screen); return; }
@@ -242,7 +243,17 @@ export default function AdminFeaturesScreen() {
   // configuration has to be applied to this list too - see serviceTiles.
   const adminHomeList = adminLandingTiles(webviewPages, hasServiceArt, tileLabels, { uid: profile?.uid, role: profile?.role, country: profile?.countryCode || profile?.country }, dynamicPlatformFeatures);
 
-  const homeItems = adminHomeList.filter((item) => {
+  // The provider groups replace the fixed product tiles here too, in the
+  // place the first of them stood, so admins buy the way every other role
+  // does (Mobile, Bills, Vouchers, Games, E-Wallet - or Bangladesh's groups).
+  const adminCountry = gridViewer?.country || profile?.countryCode || profile?.country || '';
+  const covered = coveredKeys({ country: adminCountry });
+  const groupItems = providerHomeTiles({ country: adminCountry }).map((tile) => ({ key: tile.key, name: tile.name, art: tile.art, icon: '', service: tile }));
+  const firstCovered = adminHomeList.findIndex((item) => covered.has(item.key));
+  const groupedHomeList = adminHomeList.filter((item) => !covered.has(item.key));
+  groupedHomeList.splice(firstCovered < 0 ? groupedHomeList.length : firstCovered, 0, ...groupItems);
+
+  const homeItems = groupedHomeList.filter((item) => {
     if (item.section === 'system' && !isSuperadmin) return false;
     if (!gridManagementService.isGridActive(gridManagement, item.key, gridViewer)) return false;
     const need = CAPABILITY_FOR[item.key];

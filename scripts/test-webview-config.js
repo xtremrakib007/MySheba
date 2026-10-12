@@ -249,7 +249,10 @@ const gridSrc = read('src/components/ServiceGrid.js');
 const featureGrid = read('src/components/FeatureGrid.js');
 yes('the admin landing uses the shared builder', /adminLandingTiles\(webviewPages, hasServiceArt, tileLabels, [^)]*dynamicPlatformFeatures\)/.test(admin));
 // Looking the tapped key up in the static list made an added tile inert.
-yes('a tapped tile is looked up in the live list', /adminHomeList\.find\(\(x\) => x\.key === key\)/.test(admin));
+// groupedHomeList is that live list with the provider groups in place of the
+// product tiles they replace.
+yes('a tapped tile is looked up in the live list', /(adminHomeList|groupedHomeList)\.find\(\(x\) => x\.key === key\)/.test(admin)
+  && /const groupedHomeList = adminHomeList\.filter/.test(admin));
 // `it.emoji ? '' : it.key` so a superadmin's chosen emoji beats the drawing the
 // key would otherwise pick - see test:tilelabels.
 yes('FeatureGrid can draw a tile whose key names no art', /hasServiceArt\(it\.art \|\| \(it\.emoji \? '' : it\.key\)\)/.test(featureGrid));

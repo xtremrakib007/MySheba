@@ -200,19 +200,18 @@ export default function ServiceGrid({ homeOnly }) {
   const country = gridViewer?.country || '';
   const isActive = (key) => gridManagementService.isGridActive(gridManagement, key, gridViewer);
   // Warm the catalogue the group screens draw from, so they open instantly.
-  useIimmpactCatalog({ enabled: !!homeOnly && providerFor(country) === IIMMPACT });
-  let mergedServices = services;
-  if (homeOnly) {
-    const groups = providerHomeTiles({ country }).filter((tile) => isActive(tile.key));
-    const covered = coveredKeys({ country });
-    const kept = services.filter((tile) => !covered.has(tile.key));
-    mergedServices = [
-      ...kept.filter((tile) => tile.cat === 'manage'),
-      ...groups,
-      ...kept.filter((tile) => tile.cat !== 'manage' && tile.kind !== 'moreFeaturesLink'),
-      ...kept.filter((tile) => tile.kind === 'moreFeaturesLink'),
-    ];
-  }
+  useIimmpactCatalog({ enabled: providerFor(country) === IIMMPACT });
+  // Every role's grid, not only a customer's home: dealers, resellers and
+  // staff sell the same products and get the same groups.
+  const groups = providerHomeTiles({ country }).filter((tile) => isActive(tile.key));
+  const covered = coveredKeys({ country });
+  const kept = services.filter((tile) => !covered.has(tile.key));
+  const mergedServices = [
+    ...kept.filter((tile) => tile.cat === 'manage'),
+    ...groups,
+    ...kept.filter((tile) => tile.cat !== 'manage' && tile.kind !== 'moreFeaturesLink'),
+    ...kept.filter((tile) => tile.kind === 'moreFeaturesLink'),
+  ];
   const blocks = [];
   const manage = mergedServices.filter((t) => t.cat === 'manage');
   const rest = mergedServices.filter((t) => t.cat !== 'manage');
