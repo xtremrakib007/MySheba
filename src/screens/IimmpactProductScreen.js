@@ -50,15 +50,11 @@ function inputKeyboard(field) {
   return 'default';
 }
 
-function optionLabel(option, showWholesale = false, priceFor = (amount) => amount) {
+function optionLabel(option, priceFor = (amount) => amount) {
   const parts = [option?.label || option?.description || option?.code];
   if (option?.validity) parts.push(option.validity);
   const price = option?.price?.amount;
-  if (price != null) parts.push('Sell RM ' + Number(priceFor(Number(price))).toFixed(2));
-  const cost = option?.cost?.amount;
-  if (showWholesale && cost != null) parts.push('Provider cost RM ' + Number(cost).toFixed(4));
-  const rrp = option?.rrp?.amount;
-  if (showWholesale && rrp != null) parts.push('RRP RM ' + Number(rrp).toFixed(2));
+  if (price != null) parts.push('RM ' + Number(priceFor(Number(price))).toFixed(2));
   return parts.filter(Boolean).join(' • ');
 }
 
@@ -68,7 +64,6 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
   }, [category]);
 
   const { goBackOrHome, profile, pricing } = useApp();
-  const isSuperadmin = String(profile?.role || '').toLowerCase() === 'superadmin';
   // What the customer pays for a provider price: MySheba's markup, and for a
   // PIN product the PIN multiplier too - the same steps the server takes.
   const customerPrice = (amount, product = selectedProduct) => {
@@ -382,8 +377,8 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
   const st = styles;
 
   // The same full review page as every other purchase: what identifies the
-  // order, the price, and what it leaves in the wallet. Provider cost stays
-  // superadmin-only here, as it was in the dialog this replaces.
+  // order, the price, and what it leaves in the wallet. What MySheba pays the
+  // provider is never shown on a purchase page.
   if (reviewing && pendingPurchase) {
     const balance = Number(profile?.walletBalance ?? profile?.balance ?? 0);
     const walletCurrency = profile?.walletCurrency || 'MYR';
@@ -391,7 +386,6 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
     // with MySheba's markup on top.
     const providerSell = Number(pendingPurchase.sellAmount || 0);
     const sell = customerPrice(providerSell);
-    const cost = Number(pendingPurchase.pricingOption?.cost?.amount ?? pendingPurchase.amount);
     return <ConfirmReview
       title={'Confirm ' + (pendingPurchase.productName || 'Purchase')}
       details={[
@@ -403,7 +397,6 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
       ]}
       prices={[
         ['Selling / transaction amount', formatMoney(sell)],
-        ['Provider cost price', isSuperadmin && Number.isFinite(cost) ? formatMoney(cost) : ''],
         ['Commission amount', formatMoney(0)],
         ['Wallet balance before', formatMoney(balance, walletCurrency)],
         ['Wallet balance after (estimated)', formatMoney(balance - sell, walletCurrency)],
@@ -563,7 +556,7 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
                           const selected = selectedOptions[id]?.code === option?.code;
                           return (
                             <TouchableOpacity key={String(option?.code || index)} style={[st.option, selected && st.optionSelected]} onPress={() => chooseOption(field, option)}>
-                              <Text style={[st.optionText, selected && st.optionTextSelected]}>{optionLabel(option, isSuperadmin, (amount) => customerPrice(amount))}</Text>
+                              <Text style={[st.optionText, selected && st.optionTextSelected]}>{optionLabel(option, (amount) => customerPrice(amount))}</Text>
                             </TouchableOpacity>
                           );
                         })}

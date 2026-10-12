@@ -793,6 +793,14 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     assert.ok(/statusBadge\(shown\)/.test(src) && /txFailureReason\(item\)/.test(src));
   });
 
+  await test('no purchase page shows what MySheba pays the provider, or its profit', () => {
+    for (const file of ['src/screens/ConfirmTransactionScreen.js', 'src/screens/IimmpactProductScreen.js', 'src/screens/RechargePinScreen.js', 'src/steps/RechargeSteps.js']) {
+      const src = fs.readFileSync(path.join(ROOT, file), 'utf8');
+      assert.ok(!/['>]Provider cost(?! and commission are not included)/.test(src), file + ' shows provider cost');
+      assert.ok(!/profit \/ loss/i.test(src), file + ' shows profit / loss');
+    }
+  });
+
   console.log('\nPIN Generator dispatch');
 
   const sent = [];
