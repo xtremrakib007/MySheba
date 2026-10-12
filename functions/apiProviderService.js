@@ -1185,10 +1185,15 @@ function buildIimmpactTopupBody({ raw = {}, requestId, productCode, amount, cust
     ? ref
     : crypto.createHash('sha256').update(ref).digest('hex').slice(0, 40);
   const product = String(productCode || '').trim();
-  const account = String(raw.accountNumber || raw.phone || raw.email || raw.billNumber || raw.customerId || customer?.phone || '').trim();
+  // A voucher's account is exactly what the server resolved, empty included:
+  // falling back to the customer's own phone sent a Bangladeshi number, which
+  // IIMMPACT refuses as an unsupported Malaysian operator.
+  const account = raw.accountOptional === true
+    ? String(raw.accountNumber || '').trim()
+    : String(raw.accountNumber || raw.phone || raw.email || raw.billNumber || raw.customerId || customer?.phone || '').trim();
   const providerAmount = Number(raw.providerAmount ?? amount);
   if (!refid || !product) throw new Error('IIMMPACT requires a transaction reference and product code.');
-  if (!account) throw new Error('IIMMPACT requires the recipient phone number, bill account, or identifier.');
+  if (!account && raw.accountOptional !== true) throw new Error('IIMMPACT requires the recipient phone number, bill account, or identifier.');
   if (!Number.isFinite(providerAmount) || providerAmount <= 0) throw new Error('IIMMPACT requires a valid provider amount.');
 
   // Only documented IIMMPACT extras are forwarded. In particular, plan codes
@@ -2516,9 +2521,14 @@ async function resolveIimmpactMarketplaceProduct(db, raw) {
     selected[pricingSelect.id] = { code: pricingCode };
   }
   const resolvedOptions = {};
+  // A voucher's PIN comes back in the reply, so its account is never asked of
+  // the customer: their own Malaysian number when they have one, otherwise
+  // empty, which IIMMPACT accepts for a product whose account is optional.
+  const isPin = String(product.processing_time || '').toLowerCase() === 'pin';
+  const pinAccountFieldId = isPin ? String(product.fulfillment?.account?.from_field || '') : '';
 
   for (const field of fields) {
-    if (field?.required) {
+    if (field?.required && !(pinAccountFieldId && String(field.id) === pinAccountFieldId)) {
       const submittedValue = selected[field.id] !== undefined ? selected[field.id] : values[field.id];
       const shown = submittedValue && typeof submittedValue === 'object'
         ? (submittedValue.code || submittedValue.account_number || submittedValue.value || submittedValue.label || '')
@@ -2570,7 +2580,7 @@ async function resolveIimmpactMarketplaceProduct(db, raw) {
   }
 
   const fulfillment = product.fulfillment || {};
-  const accountRaw = iimmpactResolvedFieldValue(fulfillment.account, values, resolvedOptions) || raw?.accountNumber || raw?.phone || '';
+  const accountRaw = iimmpactResolvedFieldValue(fulfillment.account, values, resolvedOptions) || raw?.accountNumber || (isPin ? '' : raw?.phone) || '';
   const amountRaw = iimmpactResolvedFieldValue(fulfillment.amount, values, resolvedOptions) || raw?.providerAmount || raw?.amount || '';
   const accountNumber = typeof accountRaw === 'object'
     ? String(accountRaw.account_number || accountRaw.code || accountRaw.value || '').trim()
@@ -2579,7 +2589,7 @@ async function resolveIimmpactMarketplaceProduct(db, raw) {
     ? (amountRaw.amount ?? amountRaw.denomination ?? amountRaw.value ?? amountRaw.price?.amount ?? '')
     : amountRaw;
   const providerAmount = Number(amountValue);
-  if (!accountNumber || !Number.isFinite(providerAmount) || providerAmount <= 0) return { error: 'fulfillment-invalid' };
+  if ((!accountNumber && !isPin) || !Number.isFinite(providerAmount) || providerAmount <= 0) return { error: 'fulfillment-invalid' };
 
   const pricingField = pricingSelect;
   const pricingOption = pricingField ? resolvedOptions[pricingField.id] : null;

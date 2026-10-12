@@ -63,6 +63,22 @@ assert.deepStrictEqual(api.render({ amount: '{{amount}}' }, { amount: 10 }), { a
     remarks: '',
     extras: { subproduct_code: 'HI-30' },
   });
+  // A voucher's account is what the server resolved, empty included - never
+  // the customer's own (possibly Bangladeshi) phone.
+  assert.strictEqual(build({
+    raw: { accountNumber: '', accountOptional: true, phone: '+8801712345678' },
+    requestId: 'pin-123456789012',
+    productCode: 'GOOGLEPLAY',
+    amount: 10,
+    customer: { phone: '+8801712345678' },
+  }).account, '');
+  assert.throws(() => build({
+    raw: { accountNumber: '' },
+    requestId: 'reload-123456789012',
+    productCode: 'HI',
+    amount: 10,
+    customer: {},
+  }), /requires the recipient/);
   assert.deepStrictEqual(build({
     raw: { accountNumber: 'REF1-123', billerCode: '818625', ref2: 'REF2', icNumber: '941123045001' },
     requestId: 'bill-123456789012',

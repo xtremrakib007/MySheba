@@ -32,6 +32,14 @@ function isPinProduct(product) {
   return String(product?.processing_time || '').toLowerCase() === 'pin';
 }
 
+// A voucher's PIN comes back on screen, so the customer is never asked for a
+// number. The field the catalogue names as the order's account is filled with
+// their own Malaysian number when they have one, and sent empty otherwise -
+// IIMMPACT accepts an empty account for products that do not need one.
+function hiddenAccountFieldId(product) {
+  return isPinProduct(product) ? String(product?.fulfillment?.account?.from_field || '') : '';
+}
+
 // The customer's number in Malaysian national form, when it is one.
 function malaysianNational(phone) {
   let digits = String(phone || '').replace(/\D/g, '');
@@ -223,7 +231,9 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
   };
 
   const validate = () => {
+    const hiddenAccount = hiddenAccountFieldId(selectedProduct);
     for (const field of fields) {
+      if (hiddenAccount && String(field.id) === hiddenAccount) continue;
       const value = rawValue(values, selectedOptions, field.id);
       const shown = displayValue(value).trim();
       if (field.required && !shown) return 'Please complete: ' + (field.label || field.id);
@@ -260,16 +270,17 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
       if (spec.path) return pathValue(value, spec.path);
       return value;
     };
-    const accountValue = fulfillmentValue(fulfillment.account);
+    const pin = isPinProduct(selectedProduct);
+    const accountValue = pin ? '' : fulfillmentValue(fulfillment.account);
     const amountValue = fulfillmentValue(fulfillment.amount);
-    const fallbackAccount = String(values.__account || '').trim();
+    const fallbackAccount = pin ? malaysianNational(profile?.phone) : String(values.__account || '').trim();
     const fallbackAmount = Number(values.__amount);
     const accountNumber = (typeof accountValue === 'object'
       ? String(accountValue.account_number || accountValue.code || '').trim()
       : String(accountValue || '').trim()) || fallbackAccount;
     const amount = Number.isFinite(Number(amountValue)) && Number(amountValue) > 0 ? Number(amountValue) : fallbackAmount;
     if (!selectedProduct?.code) return;
-    if (!accountNumber) return Alert.alert('Account required', 'Enter the account, phone, player ID or reference required for this product.');
+    if (!accountNumber && !pin) return Alert.alert('Account required', 'Enter the account, phone, player ID or reference required for this product.');
     if (!Number.isFinite(amount) || amount <= 0) return Alert.alert('Amount required', 'Select a package or enter a valid amount.');
     const extras = {};
     for (const [key, spec] of Object.entries(fulfillment.extras || {})) {
@@ -306,7 +317,9 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
           subproductCode: String(purchase.pricingOption?.code || ''),
           productName: purchase.productName,
           accountNumber: purchase.accountNumber,
-          fieldValues: purchase.selectedFields,
+          fieldValues: hiddenAccountFieldId(selectedProduct)
+            ? { ...purchase.selectedFields, [hiddenAccountFieldId(selectedProduct)]: purchase.accountNumber }
+            : purchase.selectedFields,
           selectedOptions: Object.fromEntries(Object.entries(selectedOptions)
             .filter(([, option]) => option && option.code)
             .map(([key, option]) => [key, { code: String(option.code) }])),
@@ -391,7 +404,7 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
       details={[
         ['Country', 'MY'],
         ['Currency', 'MYR'],
-        [isPinProduct(selectedProduct) ? 'Mobile number' : 'Account / recipient', pendingPurchase.accountNumber],
+        isPinProduct(selectedProduct) ? ['Delivery', 'PIN shown on screen after payment'] : ['Account / recipient', pendingPurchase.accountNumber],
         ['Product', pendingPurchase.productName],
         ['Package', pendingPurchase.pricingOption ? (pendingPurchase.pricingOption.label || pendingPurchase.pricingOption.description || '') : ''],
       ]}
@@ -487,9 +500,8 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
               const hasAmountField = amountFieldId && fields.some((field) => String(field.id) === amountFieldId);
               return (
                 <>
-                  {/* A PIN product with the customer's own Malaysian number already
-                      filled in needs nothing typed: the code is shown on screen. */}
-                  {!hasAccountField && !(isPinProduct(selectedProduct) && malaysianNational(profile?.phone)) && (
+                  {/* A PIN product needs nothing typed: the code is shown on screen. */}
+                  {!hasAccountField && !isPinProduct(selectedProduct) && (
                     <View style={st.field}>
                       <Text style={st.label}>Account / Recipient *</Text>
                       <TextInput
@@ -520,6 +532,7 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
             })()}
             {fields.map((field) => {
               const id = String(field.id || field.name || '');
+              if (id && id === hiddenAccountFieldId(selectedProduct)) return null;
               const value = rawValue(values, selectedOptions, id);
               const list = options[id] || [];
               const busyField = optionBusy[id];
