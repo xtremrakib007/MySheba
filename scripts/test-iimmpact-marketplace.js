@@ -47,6 +47,7 @@ const pins = runEsm('src/data/pinCategories.js');
 const recharge = runEsm('src/data/iimmpactRecharge.js');
 const grids = runEsm('src/components/providerGrids.js');
 const denoms = runEsm('src/utils/denominations.js');
+const featureGroups = runEsm('src/utils/featureGroups.js');
 
 // Shaped like the production Malaysia catalogue: the same group and category
 // names the Marketplace screen lists, with vouchers sold as PINs.
@@ -575,6 +576,24 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
 
   await test('a product’s fixed amounts become cards too', () => {
     assert.deepStrictEqual(Array.from(denoms.amountItems([5, '10', 0, 'x'])).map((i) => i.value), ['RM 5', 'RM 10']);
+  });
+
+  console.log('\nBack inside the provider grids');
+
+  await test('a grid and everything opened from it are one trail, so Back walks it a page at a time', () => {
+    const keeps = (a, b) => !featureGroups.crossesFeature(a, b);
+    assert.ok(keeps('providerGroup:iimmpact:grp_bills', 'service'), 'Bills -> Water Bill');
+    assert.ok(keeps('service', 'confirmTransaction'), 'flow -> confirm');
+    assert.ok(keeps('providerGroup:iimmpact:grp_vouchers', 'iimmpactCategory:Food%20%26%20Beverage'), 'Vouchers -> a category');
+    assert.ok(keeps('iimmpactCategory:Food', 'iimmpactProduct:FNB1'));
+    assert.ok(keeps('providerGroup:iimmpact:grp_mobile', 'rechargePinCategory:mobile'), 'Mobile -> PIN');
+    assert.ok(keeps('providerGroup:iimmpact:grp_ewallet', 'iimmpactProduct:EW1'), 'E-Wallet -> a wallet');
+  });
+
+  await test('Home is never part of that trail, so Back from Home cannot step into a grid', () => {
+    assert.ok(featureGroups.crossesFeature('customerHome', 'providerGroup:iimmpact:grp_bills'));
+    assert.ok(featureGroups.crossesFeature('service', 'customerHome'));
+    assert.strictEqual(featureGroups.featureOf('salaryDashboard'), 'salary', 'other features are unchanged');
   });
 
   console.log('\nPIN Generator dispatch');
