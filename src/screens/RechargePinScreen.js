@@ -13,6 +13,7 @@ import * as apiProviderService from '../firebase/apiProviderService';
 import { radius, tileGrid } from '../theme/theme';
 import { Tile } from '../components/ServiceGrid';
 import DenominationGrid from '../components/DenominationGrid';
+import { getIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
 import { denominationItems } from '../utils/denominations';
 import ConfirmReview, { formatMoney } from '../components/ConfirmReview';
 import { applyMarkup } from '../utils/markup';
@@ -23,19 +24,6 @@ import { pinProducts, categorizePinProducts } from '../data/pinCategories';
 const IIMMPACT_COUNTRIES = [['MY', 'Malaysia']];
 const CURRENCY_BY_COUNTRY = { MY: 'MYR', SG: 'SGD', ID: 'IDR', IN: 'INR', PH: 'PHP', NP: 'NPR', PK: 'PKR', MM: 'MMK', KH: 'KHR' };
 const MALAYSIA_OPERATORS = rechargePinBrands.MY || ['Celcom', 'CelcomDigi', 'U Mobile', 'Hotlink', 'XOX', 'Tunetalk', 'Unifi', 'Yes', "Touch 'n Go eWallet"];
-// Keep the last successful catalogue in memory so reopening PIN Generator or
-// switching back from a category never waits on the network to draw its grid.
-// Refresh in the background so provider updates still appear without a cold wait.
-const pinCatalogCache = new Map();
-
-function readCachedPinCatalog(country) {
-  return pinCatalogCache.has(country) ? pinCatalogCache.get(country) : null;
-}
-
-function writeCachedPinCatalog(country, data) {
-  pinCatalogCache.set(country, data);
-}
-
 function pricingField(product) {
   const fields = Array.isArray(product?.fields) ? product.fields : [];
   return fields.find((f) => f && (f.role === 'pricing' || f.type === 'select')) || null;
@@ -126,20 +114,15 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
 
   useEffect(() => {
     let alive = true;
-    const cached = readCachedPinCatalog(country);
-    setCatalog(cached);
     setCatalogError('');
     setProduct(null); setOptions([]);
     setSelectedOption(null); setOperator(''); setAmount(null); setVoucher(null); setSelectedCategory(initialCategory);
-    // Cached categories render immediately; only a first-ever load blocks on the network.
-    setLoadingCatalog(!cached);
-    apiProviderService.getIimmpactCatalogForUser('', 'Recharge PIN', country)
-      .then((data) => {
-        const next = data || {};
-        writeCachedPinCatalog(country, next);
-        if (alive) { setCatalog(next); setCatalogError(''); }
-      })
-      .catch((e) => { if (alive && !cached) setCatalogError(e?.message || 'IIMMPACT voucher catalogue is unavailable.'); })
+    // The app's shared catalogue: drawn at once from MySheba's saved copy, so
+    // opening PIN never waits on IIMMPACT.
+    setLoadingCatalog(true);
+    getIimmpactCatalog()
+      .then((data) => { if (alive) { setCatalog(data || {}); setCatalogError(''); } })
+      .catch((e) => { if (alive) setCatalogError(e?.message || 'The MySheba voucher catalogue is unavailable right now.'); })
       .finally(() => { if (alive) setLoadingCatalog(false); });
     return () => { alive = false; };
   }, [country]);
@@ -292,7 +275,7 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
 
       {/* PIN Generator is Malaysia-only; country is fixed to MY and not selectable. */}
 
-      {loadingCatalog && <Text style={styles.info}>Loading live IIMMPACT voucher products…</Text>}
+      {loadingCatalog && <Text style={styles.info}>Loading MySheba catalogue…</Text>}
       {!!catalogError && !loadingCatalog && <Text style={styles.error}>{catalogError}</Text>}
 
       {!loadingCatalog && dynamicProducts.length > 0 && !selectedCategory && !product && <>
@@ -342,7 +325,7 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
         selectedKey={selectedOption?.code}
         onSelect={({ option }) => { setSelectedOption(option); setAmount(Number(option?.price?.amount ?? option?.denomination)); setVoucher(null); }}
       />}
-      {!!product && !loadingOptions && !options.length && <Text style={styles.error}>IIMMPACT returned no active denominations for this product.</Text>}
+      {!!product && !loadingOptions && !options.length && <Text style={styles.error}>No amounts are available for this product right now.</Text>}
 
       {!!product && <>
         {/* The PIN comes back on this screen, not by SMS. IIMMPACT still needs a

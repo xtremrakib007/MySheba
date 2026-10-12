@@ -97,6 +97,12 @@ service cloud.firestore {
     // Clients must use the protected callable API; never allow direct Firestore access.
     match /api_providers/{id} { allow read, write: if false; }
     match /apiExecutions/{id} { allow read, write: if false; }
+    // MySheba's saved copy of the IIMMPACT catalogue: the customer-safe
+    // catalogue only (no costs, no credentials), written by Cloud Functions and
+    // read straight from Firestore so pages load without calling IIMMPACT.
+    match /iimmpactCatalogMirror/{country} { allow read: if activeProfile(); allow write: if false; }
+    match /iimmpactCatalogMirror/{country}/chunks/{chunkId} { allow read: if activeProfile(); allow write: if false; }
+    match /iimmpactOptionsCache/{id} { allow read, write: if false; }
     match /securityPins/{uid} { allow read, write: if false; } match /userIds/{id} { allow read, write: if false; } match /otps/{phone} { allow read, write: if false; } match /mergeOtps/{uid} { allow read, write: if false; }
     match /activityLog/{id} { allow create: if activeProfile() && request.resource.data.userId == request.auth.uid; allow read: if activeProfile() && isSuperadmin(); allow update, delete: if false; }
     match /userAuditLog/{id} { allow read: if activeProfile() && isSuperadmin(); allow write: if false; }

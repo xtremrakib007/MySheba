@@ -30,8 +30,8 @@
 export const TILE_CATEGORIES = [
   { key: 'manage', label: 'Management', subtitle: 'Transactions, accounts and operations', home: true },
   { key: 'recharge', label: 'Recharge & Bills', subtitle: 'Mobile top-ups, data and bills', home: true },
-  { key: 'pin', label: 'PIN Generate', subtitle: 'IIMMPACT PIN and voucher categories', home: true },
-  { key: 'entertainment', label: 'Entertainment', subtitle: 'IIMMPACT game and entertainment products', home: true },
+  { key: 'pin', label: 'PIN Generate', subtitle: 'PIN and voucher categories', home: true },
+  { key: 'entertainment', label: 'Entertainment', subtitle: 'Game and entertainment products', home: true },
   { key: 'esim', label: 'eSIM', subtitle: 'Travel eSIM products and data plans', home: true },
   { key: 'iimmpact', label: 'MySheba More Services', subtitle: 'Shopping, food and other vouchers', home: false },
   { key: 'tng', label: "Touch'n Go eWallet", subtitle: 'Direct eWallet top-up', home: true },

@@ -19,8 +19,13 @@ const billPresentment = require('./billPresentment');
 const networkStatus = require('./networkStatus');
 const productCodes = require('./productCodes');
 const providerReach = require('./providerReach');
+const catalogMirror = require('./iimmpactCatalogMirror');
 
 const COLLECTION = 'api_providers';
+// Server-only cache of IIMMPACT option lists (see getIimmpactOptions).
+const OPTIONS_CACHE = 'iimmpactOptionsCache';
+const OPTIONS_CACHE_MS = 6 * 60 * 60 * 1000;
+const OPTIONS_CACHE_MAX_CHARS = 250000;
 
 async function getProfile(db, uid) {
   const snap = await db.collection('users').doc(uid).get();
@@ -2604,20 +2609,11 @@ async function findActiveIimmpactProviderForCountry(db, country) {
   return provider;
 }
 
-exports.getIimmpactFullCatalogForUser = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
-  const db = admin.firestore();
-  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
-  await checkVelocity(db, request.auth.uid, 'getIimmpactFullCatalogForUser', { ip: getClientIp(request) });
-  const country = cleanString(request.data?.country, 2).toUpperCase() || 'MY';
-  const snap = await db.collection(COLLECTION).where('active', '==', true).limit(100).get();
-  const candidates = snap.docs
-    .map((d) => ({ id: d.id, ...(d.data() || {}) }))
-    .filter((p) => p.authType === 'iimmpactHmac')
-    .filter((p) => providerReach.servesCountry(p, country))
-    .sort((a, b) => Number(b.priority || 0) - Number(a.priority || 0));
-  if (!candidates.length) throw new HttpsError('failed-precondition', 'No active IIMMPACT provider is configured for this country.');
-  const provider = candidates[0];
-  Object.assign(provider, await providerSecretService.getCredentials(provider));
+// IIMMPACT's whole active catalogue, live. Slow (10-15 s), so callers go
+// through liveOrSavedIimmpactCatalog, which serves MySheba's saved copy.
+async function liveIimmpactCatalog(db, country) {
+  const provider = await findActiveIimmpactProviderForCountry(db, country);
+  if (!provider) throw new HttpsError('failed-precondition', 'No active IIMMPACT provider is configured for this country.');
   const url = iimmpactUrl(provider, '/v2/catalog');
   url.searchParams.set('is_active', 'true');
   try {
@@ -2631,6 +2627,26 @@ exports.getIimmpactFullCatalogForUser = onCall({ enforceAppCheck: ENFORCE_APP_CH
     if (error instanceof HttpsError) throw error;
     throw new HttpsError('unavailable', String(error?.message || 'Unable to load the full IIMMPACT catalog.').slice(0, 500));
   }
+}
+
+/** The catalogue from MySheba's saved copy, refreshed from IIMMPACT only when it is old. */
+function liveOrSavedIimmpactCatalog(db, country, options = {}) {
+  return catalogMirror.cachedCatalog(db, country, () => liveIimmpactCatalog(db, country), options);
+}
+
+/** Refreshes the saved copy now. Used by the hourly schedule. */
+async function refreshIimmpactCatalogMirror(db, country = 'MY') {
+  const live = await liveIimmpactCatalog(db, country);
+  return catalogMirror.write(db, country, live);
+}
+exports.refreshIimmpactCatalogMirror = refreshIimmpactCatalogMirror;
+
+exports.getIimmpactFullCatalogForUser = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  const db = admin.firestore();
+  if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
+  await checkVelocity(db, request.auth.uid, 'getIimmpactFullCatalogForUser', { ip: getClientIp(request) });
+  const country = cleanString(request.data?.country, 2).toUpperCase() || 'MY';
+  return liveOrSavedIimmpactCatalog(db, country);
 });
 
 
@@ -2762,28 +2778,14 @@ exports.getIimmpactCatalogForUser = onCall({ enforceAppCheck: ENFORCE_APP_CHECK 
   const db = admin.firestore();
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
   await checkVelocity(db, request.auth.uid, 'getIimmpactCatalogForUser', { ip: getClientIp(request) });
-  let provider;
   const requestedId = cleanString(request.data?.providerId, 100);
-  if (requestedId) {
-    provider = await loadIimmpactProvider(db, requestedId);
-  } else {
-    const service = cleanString(request.data?.service, 60) || 'Recharge';
-    const country = cleanString(request.data?.country, 2).toUpperCase() || 'MY';
-    provider = await providerCatalog.readProvider(db, service, {
-      country,
-      strictCountry: Boolean(country),
-    });
-    // IIMMPACT is the shared catalogue provider. Its live /v2/catalog and
-    // /v2/options endpoints are not limited to one MySheba service label, so
-    // eSIM/voucher/catalog categories must still resolve the active IIMMPACT
-    // account when the provider record's legacy `services` list is incomplete.
-    if ((!provider || provider.authType !== 'iimmpactHmac') && country) {
-      provider = await findActiveIimmpactProviderForCountry(db, country);
-    }
-    if (!provider || provider.authType !== 'iimmpactHmac') {
-      throw new HttpsError('failed-precondition', 'No active IIMMPACT provider is configured for this service and country.');
-    }
+  // Every service draws on the same IIMMPACT account's catalogue, so without
+  // a named provider the answer is MySheba's saved copy - instant, instead of
+  // a 10-15 second round trip to IIMMPACT on every screen.
+  if (!requestedId) {
+    return liveOrSavedIimmpactCatalog(db, 'MY');
   }
+  const provider = await loadIimmpactProvider(db, requestedId);
   const url = iimmpactUrl(provider, '/v2/catalog');
   try {
     const { ok, status, json } = await signedProviderRequest(url, {
@@ -2835,6 +2837,26 @@ exports.getIimmpactOptions = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asyn
   const limit = Math.max(1, Math.min(25000, Number(request.data?.limit) || 100));
   const accountNumber = cleanString(request.data?.accountNumber, 200);
   const billerCode = cleanString(request.data?.billerCode, 100);
+  // Amount and plan lists change rarely, and the same list is asked for by
+  // every customer buying that product. One answer is kept for a few hours,
+  // keyed by everything that shapes it, so only the first ask waits on
+  // IIMMPACT. A list asked for one account (a bill's outstanding amounts) is
+  // that account's live state and is never kept.
+  const cacheable = !accountNumber;
+  const cacheKey = crypto.createHash('sha256')
+    .update(JSON.stringify([provider.id || '', productCode, fieldId, page, limit, accountNumber, billerCode]))
+    .digest('hex');
+  const cacheRef = db.collection(OPTIONS_CACHE).doc(cacheKey);
+  if (cacheable) {
+    try {
+      const saved = await cacheRef.get();
+      const savedAt = saved.exists ? saved.data()?.savedAt : null;
+      const age = savedAt && typeof savedAt.toMillis === 'function' ? Date.now() - savedAt.toMillis() : Infinity;
+      if (saved.exists && age < OPTIONS_CACHE_MS && typeof saved.data()?.json === 'string') {
+        return JSON.parse(saved.data().json);
+      }
+    } catch (_) { /* a cache miss is only slower */ }
+  }
   const url = iimmpactUrl(provider, '/v2/options');
   url.searchParams.set('product_code', productCode);
   url.searchParams.set('field_id', fieldId);
@@ -2852,7 +2874,12 @@ exports.getIimmpactOptions = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asyn
       const reason = String(getPath(json, 'message') || getPath(json, 'error.message') || `HTTP ${status}`);
       throw new HttpsError('unavailable', `IIMMPACT options request failed: ${reason.slice(0, 300)}`);
     }
-    return publicIimmpactOptions(json);
+    const answer = publicIimmpactOptions(json);
+    const text = JSON.stringify(answer);
+    if (cacheable && text.length < OPTIONS_CACHE_MAX_CHARS) {
+      await cacheRef.set({ json: text, productCode, savedAt: admin.firestore.FieldValue.serverTimestamp() }).catch(() => {});
+    }
+    return answer;
   } catch (error) {
     if (error instanceof HttpsError) throw error;
     throw new HttpsError('unavailable', String(error?.message || 'Unable to load IIMMPACT options.').slice(0, 500));

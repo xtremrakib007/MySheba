@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { FormLabel, FormInput } from '../components/ui';
 import PackagePicker from '../components/PackagePicker';
 import * as apiProviderService from '../firebase/apiProviderService';
+import { getIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
 
 // IIMMPACT's /v2/catalog is shared across service types; the service argument
 // selects the provider, not necessarily a product subset. Prefer category-tree
@@ -23,7 +24,7 @@ export default function ESimStep({ step }) {
  const { serviceData, updateServiceData } = useApp();
  const [products,setProducts]=useState([]),[options,setOptions]=useState([]),[loading,setLoading]=useState(false),[optionsLoading,setOptionsLoading]=useState(false),[error,setError]=useState('');
  useEffect(()=>{ if(step!==0)return; let alive=true; setLoading(true); setError('');
-  apiProviderService.getIimmpactCatalogForUser('', 'eSIM', serviceData.country || 'MY')
+  getIimmpactCatalog()
    .then(c=>{ if(!alive)return; const categoryCodes=esimProductCodes(c); const list=Object.values(c?.products||{}).filter(p=>p&&p.is_active!==false&&p.code&&(categoryCodes.has(String(p.code))||isExplicitEsim(p))); setProducts(list); if(!serviceData.productCode&&list.length===1) updateServiceData({productCode:list[0].code,product:list[0].name}); })
    .catch(e=>alive&&setError(e?.message||'Unable to load eSIM plans.')).finally(()=>alive&&setLoading(false));
   return()=>{alive=false};

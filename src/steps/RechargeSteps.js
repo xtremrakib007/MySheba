@@ -12,6 +12,7 @@ import ServiceInterruptionNotice from '../components/ServiceInterruptionNotice';
 import { useNetworkStatus } from '../components/useNetworkStatus';
 import * as apiProviderService from '../firebase/apiProviderService';
 import { rechargeProductsFromCatalog } from '../data/iimmpactRecharge';
+import { getIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
 import { applyMarkup } from '../utils/markup';
 import DenominationGrid from '../components/DenominationGrid';
 import { denominationItems, amountItems, optionPrice } from '../utils/denominations';
@@ -47,7 +48,9 @@ export default function RechargeStep({ step }) {
       return () => { alive = false; };
     }
     setCatalogLoading(true);
-    apiProviderService.getIimmpactCatalogForUser('', 'Recharge', country)
+    // The app's shared catalogue - MySheba's saved copy, drawn at once - not
+    // a fresh 10-15 second request to IIMMPACT on every reload.
+    getIimmpactCatalog()
       .then((catalog) => {
         if (!alive) return;
         // Every operator IIMMPACT sells for this country: Mobile Prepaid for
@@ -78,9 +81,16 @@ export default function RechargeStep({ step }) {
       return () => { alive = false; };
     }
     setOptionsLoading(true);
+    // The number goes along only when IIMMPACT says this list depends on it
+    // (its data_source names the account). An operator's reload amounts are
+    // the same for every number, and asking per number made each new number
+    // wait on IIMMPACT again instead of using the saved list.
+    const deps = Array.isArray(pricingField.data_source?.depends_on) ? pricingField.data_source.depends_on.map(String) : [];
+    const accountParam = pricingField.data_source?.params?.account_number;
+    const perNumber = deps.length > 0 || !!accountParam?.from_field;
     apiProviderService.getIimmpactOptions({
       productCode: product.code, fieldId: pricingField.id,
-      accountNumber: String(serviceData.phone || ''), service: 'Recharge',
+      accountNumber: perNumber ? String(serviceData.phone || '') : '', service: 'Recharge',
       country: String(serviceData.country || '').toUpperCase(), page: 1, limit: 25000,
     }).then((result) => {
       if (!alive) return;
@@ -126,7 +136,10 @@ export default function RechargeStep({ step }) {
   const customerPrice = (amount) => applyMarkup(pricing, { service: 'recharge', country: serviceData.country, productCode: serviceData.productCode, amount }).amount;
 
   if (step === 0) {
-    return (<View><FormLabel>Select Country</FormLabel><View style={styles.grid3}>{countries.map((c) => (<CountrySelectCard key={c.code} code={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr }); nextStep(); }} />))}</View></View>);
+    // International Reload lists destinations abroad only; Malaysian numbers
+    // are Prepaid Reload's.
+    const destinations = serviceData.internationalOnly ? countries.filter((c) => c.code !== 'MY') : countries;
+    return (<View><FormLabel>Select Country</FormLabel><View style={styles.grid3}>{destinations.map((c) => (<CountrySelectCard key={c.code} code={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr }); nextStep(); }} />))}</View></View>);
   }
   if (step === 1) {
     return (<View><FormLabel>Enter Mobile Number</FormLabel><FormInput placeholder="Enter number" placeholderTextColor={isDark ? '#9AA6BA' : '#777777'} keyboardType="phone-pad" value={serviceData.phone || ''} onChangeText={(v) => updateServiceData({ phone: v })} style={styles.phoneInput} /></View>);
@@ -135,9 +148,9 @@ export default function RechargeStep({ step }) {
     const list = OPERATOR_LIST;
     return (<View>
       <FormLabel>Select Operator</FormLabel>
-      {catalogLoading && <Text style={styles.catalogInfo}>Loading available operators from IIMMPACT…</Text>}
-      {!catalogLoading && catalogUnavailable && serviceData.country !== 'BD' && <Text style={styles.catalogInfo}>Could not load IIMMPACT's live catalog. No static operators are shown because they may not be supported by the provider. Please retry or check the active IIMMPACT provider configuration.</Text>}
-      {!catalogLoading && !catalogUnavailable && !list.length && <Text style={styles.catalogInfo}>IIMMPACT returned no active recharge products for this country. Add or enable the operator product in the IIMMPACT catalog before offering it here.</Text>}
+      {catalogLoading && <Text style={styles.catalogInfo}>Loading MySheba catalogue…</Text>}
+      {!catalogLoading && catalogUnavailable && serviceData.country !== 'BD' && <Text style={styles.catalogInfo}>Could not load the MySheba catalogue. Please check your connection and try again.</Text>}
+      {!catalogLoading && !catalogUnavailable && !list.length && <Text style={styles.catalogInfo}>No operators are available for this country right now.</Text>}
       <View style={styles.grid3}>{list.map((o) => { const brand = getOperatorBrand(o); const remote = iimmpactOperators.find((item) => item.name === o)?.image_url; return <RechargeOperatorCard key={o} name={o} logo={brand.logo || (remote ? { uri: remote } : null)} color={brand.color} initials={brand.initials} selected={serviceData.operator === o} onPress={() => { const product = String(serviceData.country || '').toUpperCase() === 'BD' ? null : iimmpactOperators.find((item) => item.name === o); const accountFieldId = String((product?.fields || []).find((field) => field && (field.role === 'account' || /phone|mobile|msisdn|accountnumber/i.test(String(field.id || '') + ' ' + String(field.label || ''))))?.id || 'phone'); updateServiceData(product ? { operator: product.name, operatorCode: product.code, productCode: product.code, productName: product.name, iimmpactCatalog: true, iimmpactFields: product.fields || [], iimmpactDenomination: product.denomination || '', iimmpactProcessingTime: product.processing_time || '', amount: null, package: '', subproductCode: '', selectedOptions: {}, fieldValues: { [accountFieldId]: String(serviceData.phone || ''), phone: String(serviceData.phone || '') } } : { operator: o, iimmpactCatalog: false, productCode: '', amount: null, selectedOptions: {}, fieldValues: {} }); nextStep(); }} styles={styles} primaryColor={colors.primary} />; })}</View>
     </View>);
   }
@@ -155,8 +168,8 @@ export default function RechargeStep({ step }) {
         <FormLabel>{product?.name || serviceData.operator || 'Recharge'} — choose a live amount</FormLabel>
         {!!product?.processing_time && <Text style={styles.catalogInfo}>Processing: {String(product.processing_time).replace(/_/g, ' ')}</Text>}
         {extraFields.map((field) => <View key={field.id}><FormLabel>{field.label || field.id}</FormLabel><FormInput placeholder={field.placeholder || field.label || field.id} keyboardType={field.input_mode === 'numeric' || field.type === 'number' ? 'numeric' : 'default'} style={styles.phoneInput} value={String(serviceData.fieldValues?.[field.id] ?? '')} onChangeText={(value) => updateServiceData({ fieldValues: { ...(serviceData.fieldValues || {}), [field.id]: value } })} /></View>)}
-        {optionsLoading && <Text style={styles.catalogInfo}>Loading live amounts from IIMMPACT…</Text>}
-        {optionsUnavailable && !optionsLoading && !!pricingField?.id && <Text style={styles.catalogInfo}>IIMMPACT has no available amount for this product and number. Check its required fields and options in the provider catalog.</Text>}
+        {optionsLoading && <Text style={styles.catalogInfo}>Loading amounts…</Text>}
+        {optionsUnavailable && !optionsLoading && !!pricingField?.id && <Text style={styles.catalogInfo}>No amounts are available for this operator right now. Please try again shortly.</Text>}
         {!!pricingField?.id && <DenominationGrid
           items={denominationItems(iimmpactOptions, { product, payFor: customerPrice })}
           selectedKey={serviceData.selectedOptions?.[pricingField.id]?.code}
@@ -185,7 +198,7 @@ export default function RechargeStep({ step }) {
 }
 
 function RechargeOperatorCard({ name, logo, color, initials, selected, onPress, styles, primaryColor }) { return <TouchableOpacity style={[styles.selectCard, styles.operatorCard, selected && styles.selectCardSelected]} onPress={onPress} activeOpacity={0.8}>{logo ? <Image source={logo} style={styles.operatorLogo} resizeMode="contain" /> : <View style={[styles.operatorBadge, { backgroundColor: color || primaryColor }]}><Text style={styles.operatorBadgeText}>{initials}</Text></View>}<Text style={[styles.selectName, styles.operatorName, selected && styles.selectNameSelected]} numberOfLines={2}>{String(name || '')}</Text></TouchableOpacity>; }
-export function validateStep(step, serviceData) { if (step === 0 && !serviceData.country) return 'Please select a country.'; if (step === 2 && !serviceData.operator) return 'Please select an operator.'; if (step === 1 && !(serviceData.phone || '').trim()) return 'Please enter a mobile number.'; if (step === 3 && serviceData.iimmpactCatalog === true) { const fields = Array.isArray(serviceData.iimmpactFields) ? serviceData.iimmpactFields : []; const pricing = fields.find((field) => field && field.type === 'select' && field.role === 'pricing') || fields.find((field) => field && field.type === 'select'); if (pricing?.required && !serviceData.selectedOptions?.[pricing.id]) return 'Please select an amount returned by IIMMPACT.'; for (const field of fields.filter((field) => field && field.required && field.type !== 'select' && field.role !== 'account')) if (!String(serviceData.fieldValues?.[field.id] ?? '').trim()) return `Please enter ${field.label || field.id}.`; } if (step === 3 && !(serviceData.amount > 0)) return 'Please select or enter an amount.'; return null; }
+export function validateStep(step, serviceData) { if (step === 0 && !serviceData.country) return 'Please select a country.'; if (step === 0 && serviceData.internationalOnly && String(serviceData.country).toUpperCase() === 'MY') return 'Malaysian numbers are reloaded from Prepaid Reload.'; if (step === 2 && !serviceData.operator) return 'Please select an operator.'; if (step === 1 && !(serviceData.phone || '').trim()) return 'Please enter a mobile number.'; if (step === 3 && serviceData.iimmpactCatalog === true) { const fields = Array.isArray(serviceData.iimmpactFields) ? serviceData.iimmpactFields : []; const pricing = fields.find((field) => field && field.type === 'select' && field.role === 'pricing') || fields.find((field) => field && field.type === 'select'); if (pricing?.required && !serviceData.selectedOptions?.[pricing.id]) return 'Please select an amount.'; for (const field of fields.filter((field) => field && field.required && field.type !== 'select' && field.role !== 'account')) if (!String(serviceData.fieldValues?.[field.id] ?? '').trim()) return `Please enter ${field.label || field.id}.`; } if (step === 3 && !(serviceData.amount > 0)) return 'Please select or enter an amount.'; return null; }
 function createStyles(colors, isDark) {
   const tileBg = colors.surface;
   const tileText = colors.text;

@@ -596,6 +596,74 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     assert.strictEqual(featureGroups.featureOf('salaryDashboard'), 'salary', 'other features are unchanged');
   });
 
+  console.log('\nMySheba keeps its own copy of the catalogue');
+
+  const mirror = require(path.join(ROOT, 'functions/iimmpactCatalogMirror.js'));
+  function fakeDb() {
+    const store = new Map();
+    const ref = (p) => ({
+      path: p,
+      get: async () => ({ exists: store.has(p), data: () => store.get(p) }),
+      set: async (data, opts) => { store.set(p, opts && opts.merge ? { ...(store.get(p) || {}), ...data } : { ...data }); },
+      collection: (name) => ({ doc: (id) => ref(p + '/' + name + '/' + id) }),
+    });
+    return {
+      store,
+      collection: (name) => ({ doc: (id) => ref(name + '/' + id) }),
+      batch: () => {
+        const ops = [];
+        return { set: (r, d) => ops.push(() => store.set(r.path, { ...d })), delete: (r) => ops.push(() => store.delete(r.path)), commit: async () => ops.forEach((op) => op()) };
+      },
+    };
+  }
+
+  await test('a catalogue larger than one Firestore document is saved in pieces and read back whole', async () => {
+    const db = fakeDb();
+    const big = { providerId: 'p1', products: {} };
+    for (let i = 0; i < 4000; i += 1) big.products['P' + i] = { code: 'P' + i, name: 'Product ' + i + ' '.repeat(100) };
+    const written = await mirror.write(db, 'MY', big);
+    assert.ok(written.chunkCount > 1, 'split into chunks');
+    const back = await mirror.read(db, 'MY');
+    assert.strictEqual(JSON.stringify(back.catalog), JSON.stringify(big));
+  });
+
+  await test('a new save replaces the old one and leaves no stray pieces', async () => {
+    const db = fakeDb();
+    const one = { products: {} };
+    for (let i = 0; i < 3000; i += 1) one.products['A' + i] = { name: 'x'.repeat(120) };
+    await mirror.write(db, 'MY', one);
+    await mirror.write(db, 'MY', { products: { B: { name: 'only' } } });
+    const chunks = [...db.store.keys()].filter((k) => k.includes('/chunks/'));
+    assert.strictEqual(chunks.length, 1);
+    assert.deepStrictEqual(JSON.parse(JSON.stringify((await mirror.read(db, 'MY')).catalog)), { products: { B: { name: 'only' } } });
+  });
+
+  await test('the saved copy is served while fresh, so IIMMPACT is not asked', async () => {
+    const db = fakeDb();
+    await mirror.write(db, 'MY', { products: { S: {} } });
+    let asked = 0;
+    const got = await mirror.cachedCatalog(db, 'MY', async () => { asked += 1; return { products: { L: {} } }; });
+    assert.strictEqual(asked, 0);
+    assert.ok(got.products.S);
+  });
+
+  await test('an old or stale-marked copy is refreshed, and kept when IIMMPACT fails', async () => {
+    const db = fakeDb();
+    await mirror.write(db, 'MY', { products: { S: {} } }, { now: new Date(Date.now() - 7 * 3600 * 1000) });
+    const fresh = await mirror.cachedCatalog(db, 'MY', async () => ({ products: { L: {} } }));
+    assert.ok(fresh.products.L, 'old copy refreshed');
+    await mirror.markStale(db, 'MY', new Date(Date.now() + 1000));
+    const kept = await mirror.cachedCatalog(db, 'MY', async () => { throw new Error('IIMMPACT down'); });
+    assert.ok(kept.products.L, 'IIMMPACT failing still serves the saved copy');
+  });
+
+  await test('International Reload does not offer Malaysia', () => {
+    const intl = Array.from(grids.providerGroup({ provider: 'iimmpact', groupKey: 'grp_mobile', catalog: null }).tiles).find((t) => t.key === 'mobile_international');
+    assert.strictEqual(intl.seed.internationalOnly, true);
+    const src = fs.readFileSync(path.join(ROOT, 'src/steps/RechargeSteps.js'), 'utf8');
+    assert.ok(/internationalOnly \? countries\.filter\(\(c\) => c\.code !== 'MY'\)/.test(src), 'the country step leaves Malaysia out');
+  });
+
   console.log('\nPIN Generator dispatch');
 
   const sent = [];

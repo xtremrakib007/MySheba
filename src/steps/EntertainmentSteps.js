@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { FormLabel, Grid3, OperatorCard, FormInput, PackageCard, SummaryCard } from '../components/ui';
 import { GAME_TOP_UPS, gameByKey, packById } from '../data/gameTopUps';
 import * as apiProviderService from '../firebase/apiProviderService';
+import { getIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
 
 // Entertainment is game top-ups: PUBG UC, Free Fire diamonds, ML diamonds.
 //
@@ -29,9 +30,9 @@ export default function EntertainmentStep({ step }) {
   const [optionsLoading, setOptionsLoading] = useState(false);
   const [optionsError, setOptionsError] = useState('');
 
-  // Fetch the live IIMMPACT catalogue directly. The backend resolves the active
-  // IIMMPACT provider for Malaysia, so this does not depend on the provider's
-  // legacy services[] list containing the exact label "Entertainment".
+  // The app's shared catalogue - MySheba's saved copy of IIMMPACT's - so this
+  // draws at once instead of waiting on IIMMPACT, and does not depend on the
+  // provider's legacy services[] list containing the label "Entertainment".
   useEffect(() => {
     let alive = true;
     setCatalog(null);
@@ -40,11 +41,11 @@ export default function EntertainmentStep({ step }) {
     const load = async () => {
       setCatalogLoading(true);
       try {
-        const data = await apiProviderService.getIimmpactCatalogForUser('', 'Entertainment', 'MY');
+        const data = await getIimmpactCatalog();
         if (alive) setCatalog(data?.providerId ? data : null);
-        if (alive && !data?.providerId) setCatalogError('No active IIMMPACT provider is configured for Malaysia.');
+        if (alive && !data?.providerId) setCatalogError('The MySheba catalogue has no games for Malaysia right now.');
       } catch (e) {
-        if (alive) setCatalogError(e?.message || 'IIMMPACT Entertainment catalog is unavailable.');
+        if (alive) setCatalogError(e?.message || 'The MySheba game catalogue is unavailable right now.');
       } finally {
         if (alive) setCatalogLoading(false);
       }
@@ -108,7 +109,7 @@ export default function EntertainmentStep({ step }) {
     }).then((data) => {
       if (alive) setOptions(Array.isArray(data?.items) ? data.items : []);
     }).catch((e) => {
-      if (alive) setOptionsError(e?.message || 'Unable to load IIMMPACT packages.');
+      if (alive) setOptionsError(e?.message || 'Unable to load packages.');
     }).finally(() => {
       if (alive) setOptionsLoading(false);
     });
@@ -116,9 +117,9 @@ export default function EntertainmentStep({ step }) {
   }, [usingDynamic, selectedProduct?.code, catalog?.providerId]);
 
   if (step === 0) {
-    if (catalogLoading) return <FormLabel>Loading IIMMPACT Games & Entertainment…</FormLabel>;
+    if (catalogLoading) return <FormLabel>Loading MySheba catalogue…</FormLabel>;
     if (catalog?.providerId) {
-      if (!usingDynamic) return <FormLabel>{catalogError || 'IIMMPACT has no matching game or entertainment products for Malaysia. Other IIMMPACT products are kept out of this grid.'}</FormLabel>;
+      if (!usingDynamic) return <FormLabel>{catalogError || 'There are no game or entertainment products in the MySheba catalogue for Malaysia right now.'}</FormLabel>;
       return (
         <View>
           <FormLabel>Choose a Game / Entertainment Product</FormLabel>
@@ -166,7 +167,7 @@ export default function EntertainmentStep({ step }) {
   if (step === 1) {
     if (usingDynamic) {
       if (!selectedProduct) return <FormLabel>Please choose a product first.</FormLabel>;
-      if (optionsLoading) return <FormLabel>Loading live IIMMPACT packages…</FormLabel>;
+      if (optionsLoading) return <FormLabel>Loading packages…</FormLabel>;
       if (optionsError) return <FormLabel>{optionsError}</FormLabel>;
       return (
         <View>
@@ -189,7 +190,7 @@ export default function EntertainmentStep({ step }) {
               />
             );
           })}
-          {!options.length && <FormLabel>No live IIMMPACT packages are available right now.</FormLabel>}
+          {!options.length && <FormLabel>No packages are available right now.</FormLabel>}
         </View>
       );
     }
@@ -217,7 +218,7 @@ export default function EntertainmentStep({ step }) {
             keyboardType={accountField?.input_mode === 'numeric' ? 'number-pad' : 'default'}
           />
           <Text style={{ fontSize: 11.5, lineHeight: 17, opacity: 0.7, marginBottom: 12 }}>
-            Check the ID before you continue. IIMMPACT fulfils the selected product for this account.
+            Check the ID before you continue. The selected product is delivered to this account.
           </Text>
           <SummaryCard title={selectedProduct.name}
             rows={[{ label: 'Package', value: serviceData.package || '—' }, { label: accountField?.label || 'Account', value: serviceData.playerId || '—' }]}

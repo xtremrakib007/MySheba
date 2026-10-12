@@ -200,7 +200,7 @@ export default function BillPaymentStep({ step }) {
     const cats = categoriesFor(serviceData.country, catalogBills);
     return <View><FormLabel>Select Bill Category</FormLabel>{cats.length
       ? <Grid3>{cats.map((item) => <CategoryCard key={item.key} item={item} selected={serviceData.category === item.key} onPress={() => { updateServiceData({ category: item.key, provider: null }); nextStep(); }} />)}</Grid3>
-      : <Text style={noneStyles.none}>{serviceData.country === 'MY' && catalogLoading ? 'Loading billers…' : 'No bills can be paid for this country yet. Go back and pick another.'}</Text>}</View>;
+      : <Text style={noneStyles.none}>{serviceData.country === 'MY' && catalogLoading ? 'Loading MySheba catalogue…' : 'No bills can be paid for this country yet. Go back and pick another.'}</Text>}</View>;
   }
   if (step === 2) {
     const fromCatalog = String(serviceData.category || '').startsWith('iimmpact:');
@@ -212,7 +212,7 @@ export default function BillPaymentStep({ step }) {
     // A built-in biller clears any code left from an earlier choice.
     return <View><FormLabel>Select Provider</FormLabel>{providers.length
       ? <Grid3>{providers.map((b) => { const brand = getBillerBrand(b.name); const logo = brand.logo || (b.imageUrl ? { uri: b.imageUrl } : null); return <OperatorCard key={b.code || b.name} name={b.name} logo={logo} color={brand.color} initials={brand.initials} selected={serviceData.provider === b.name} onPress={() => { const product = b.code ? catalog?.products?.[b.code] : null; updateServiceData({ provider: b.name, operatorCode: b.code || '', productCode: b.code || '', productName: b.code ? b.name : '', amount: b.amount != null ? b.amount : null, iimmpactFields: Array.isArray(product?.fields) ? product.fields : [], iimmpactFulfillment: product?.fulfillment || null, fieldValues: {}, selectedOptions: {} }); nextStep(); }} />; })}</Grid3>
-      : <Text style={noneStyles.none}>{fromCatalog && catalogLoading ? 'Loading billers…' : 'No biller is configured for this country and category yet.'}</Text>}</View>;
+      : <Text style={noneStyles.none}>{fromCatalog && catalogLoading ? 'Loading MySheba catalogue…' : 'No biller is configured for this country and category yet.'}</Text>}</View>;
   }
   if (step === 3) {
     // JomPAY asks for what is printed on the bill - Biller Code, Ref-1, and

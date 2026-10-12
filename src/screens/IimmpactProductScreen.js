@@ -440,7 +440,7 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
     return (
       <View style={st.screen}>
         <LinearGradient colors={brandGradient} style={st.head}><HeaderDecor /><TouchableOpacity onPress={goBackOrHome}><Text style={st.back}>←</Text></TouchableOpacity><Text style={st.ht}>Marketplace</Text></LinearGradient>
-        <View style={st.loading}><ActivityIndicator color={colors.primary} /><Text style={st.muted}>Loading catalogue…</Text></View>
+        <View style={st.loading}><ActivityIndicator color={colors.primary} /><Text style={st.muted}>Loading MySheba catalogue…</Text></View>
       </View>
     );
   }
@@ -450,7 +450,7 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
       <LinearGradient colors={brandGradient} style={st.head}>
         <HeaderDecor />
         <TouchableOpacity onPress={directCode ? goBackOrHome : selectedProduct ? () => { setSelectedProduct(null); setValues({}); setSelectedOptions({}); } : selectedBrand ? () => setSelectedBrand(null) : goBackOrHome}><Text style={st.back}>←</Text></TouchableOpacity>
-        <View style={{flex:1}}><Text style={st.ht}>{(directCode && selectedProduct?.name) || decodedCategory || 'Marketplace'}</Text><Text style={st.hs}>IIMMPACT • live catalogue</Text></View>
+        <View style={{flex:1}}><Text style={st.ht}>{(directCode && selectedProduct?.name) || decodedCategory || 'Marketplace'}</Text><Text style={st.hs}>MySheba catalogue</Text></View>
       </LinearGradient>
 
       <ScrollView contentContainerStyle={st.body} keyboardShouldPersistTaps="handled">

@@ -40,7 +40,7 @@ export default function IimmpactCatalogScreen() {
         <TouchableOpacity onPress={goBackOrHome} style={styles.back}><Text style={styles.backText}>←</Text></TouchableOpacity>
         <View style={styles.headerCopy}>
           <Text style={styles.headerTitle}>MySheba Marketplace</Text>
-          <Text style={styles.headerSub}>IIMMPACT full catalogue</Text>
+          <Text style={styles.headerSub}>MySheba catalogue</Text>
         </View>
       </LinearGradient>
 
@@ -48,14 +48,14 @@ export default function IimmpactCatalogScreen() {
         <View style={styles.hero}>
           <Text style={styles.title}>Marketplace</Text>
           <Text style={styles.subtitle}>
-            Browse IIMMPACT categories using the saved catalogue. It opens instantly from cache and refreshes in the background. Purchases are submitted only after you review and confirm them.
+            Browse every category in the MySheba catalogue. Purchases are submitted only after you review and confirm them.
           </Text>
           {!!catalog?.last_updated && <Text style={styles.updated}>Catalog updated: {String(catalog.last_updated)}</Text>}
           {refreshing && <Text style={styles.updated}>Refreshing catalogue in background…</Text>}
         </View>
 
         {loading && (
-          <View style={styles.state}><ActivityIndicator color={colors.primary} /><Text style={styles.info}>Loading the live IIMMPACT catalogue…</Text></View>
+          <View style={styles.state}><ActivityIndicator color={colors.primary} /><Text style={styles.info}>Loading MySheba catalogue…</Text></View>
         )}
         {!!error && !loading && <Text style={styles.error}>{error}</Text>}
 
@@ -77,7 +77,7 @@ export default function IimmpactCatalogScreen() {
         )}
 
         {!loading && !error && !categories.length && (
-          <Text style={styles.empty}>IIMMPACT returned no active marketplace categories for Malaysia.</Text>
+          <Text style={styles.empty}>There are no categories in the MySheba catalogue right now.</Text>
         )}
       </ScrollView>
     </View>

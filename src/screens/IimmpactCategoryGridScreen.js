@@ -69,7 +69,7 @@ export default function IimmpactCategoryGridScreen({ category }) {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.hero}>
           <Text style={styles.title}>{title}</Text>
-          <Text style={styles.subtitle}>Select a subcategory below. Available products and logos are loaded from the IIMMPACT catalogue. No purchase is submitted from this screen.</Text>
+          <Text style={styles.subtitle}>Select a subcategory below.</Text>
         </View>
         {loading && <View style={styles.state}><ActivityIndicator color={colors.primary} /><Text style={styles.info}>Loading service subcategories…</Text></View>}
         {!!error && !loading && <Text style={styles.info}>{error}</Text>}
@@ -88,7 +88,7 @@ export default function IimmpactCategoryGridScreen({ category }) {
         {!loading && !subcategories.length && (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>No matching subcategories found</Text>
-            <Text style={styles.info}>The current Malaysia catalogue did not return active products under this tile. Open the full catalogue to browse all available IIMMPACT categories.</Text>
+            <Text style={styles.info}>There are no products under this tile right now. Open the full catalogue to browse every category.</Text>
             <TouchableOpacity style={styles.button} onPress={() => setScreen('iimmpactCatalog')}><Text style={styles.buttonText}>Open full catalogue</Text></TouchableOpacity>
           </View>
         )}
