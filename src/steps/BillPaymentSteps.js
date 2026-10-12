@@ -296,7 +296,7 @@ function JompayBillerField({ serviceData, updateServiceData }) {
   useEffect(() => {
     let alive = true;
     if (!/^\d{4,6}$/.test(code)) {
-      if (serviceData.jompayBillerName || serviceData.jompayBillerUnknown) updateServiceData({ jompayBillerName: '', jompayBillerUnknown: false });
+      if (serviceData.jompayBillerName || serviceData.jompayBillerUnknown) updateServiceData({ jompayBillerName: '', jompayBillerUnknown: false, jompayBillerMin: null, jompayBillerMax: null });
       return () => { alive = false; };
     }
     setChecking(true);
@@ -305,7 +305,7 @@ function JompayBillerField({ serviceData, updateServiceData }) {
         .then((answer) => {
           if (!alive) return;
           if (!answer.available) updateServiceData({ jompayBillerName: '', jompayBillerUnknown: false });
-          else updateServiceData({ jompayBillerName: answer.biller?.name || '', jompayBillerUnknown: !answer.biller });
+          else updateServiceData({ jompayBillerName: answer.biller?.name || '', jompayBillerUnknown: !answer.biller, jompayBillerMin: answer.biller?.min ?? null, jompayBillerMax: answer.biller?.max ?? null });
         })
         .catch(() => { if (alive) updateServiceData({ jompayBillerName: '', jompayBillerUnknown: false }); })
         .finally(() => { if (alive) setChecking(false); });
@@ -332,7 +332,7 @@ function JompayBillerField({ serviceData, updateServiceData }) {
     <FormLabel>Don't know the code? Find the biller</FormLabel>
     <FormInput placeholder='Biller name, e.g. Syabas' value={query} onChangeText={setQuery} autoCapitalize='none' />
     {results.map((b) => (
-      <TouchableOpacity key={b.code} onPress={() => { updateServiceData({ billerCode: b.code, jompayBillerName: b.name, jompayBillerUnknown: false }); setQuery(''); setResults([]); }} style={[jompayStyles.result, { borderColor: colors.border, backgroundColor: colors.card }]}>
+      <TouchableOpacity key={b.code} onPress={() => { updateServiceData({ billerCode: b.code, jompayBillerName: b.name, jompayBillerUnknown: false, jompayBillerMin: b.min ?? null, jompayBillerMax: b.max ?? null }); setQuery(''); setResults([]); }} style={[jompayStyles.result, { borderColor: colors.border, backgroundColor: colors.card }]}>
         <Text style={[jompayStyles.resultName, { color: colors.text }]} numberOfLines={2}>{b.name}</Text>
         <Text style={[jompayStyles.resultCode, { color: colors.textSecondary }]}>{b.code}</Text>
       </TouchableOpacity>
@@ -468,6 +468,14 @@ export function validateStep(step, serviceData) {
     const amountError = amountStepError(serviceData);
     if (amountError) return amountError;
     if (!(Number(serviceData.amount) > 0)) return 'Please enter a valid amount.';
+    // The JomPAY biller's own limits, from IIMMPACT's directory.
+    if (serviceData.category === 'jompay') {
+      const amount = Number(serviceData.amount);
+      const min = Number(serviceData.jompayBillerMin);
+      const max = Number(serviceData.jompayBillerMax);
+      if (min > 0 && amount < min) return `This biller accepts at least RM ${min.toFixed(2)}.`;
+      if (max > 0 && amount > max) return `This biller accepts at most RM ${max.toFixed(2)}.`;
+    }
   }
   // The single provider answer that stops a payment: this account number is
   // not theirs. Checked AFTER the field rules so an empty form complains about

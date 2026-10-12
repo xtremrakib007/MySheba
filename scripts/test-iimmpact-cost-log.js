@@ -37,3 +37,16 @@ function fakeDb() {
   assert.strictEqual(medianRate, 0.011);
   console.log('iimmpactCostLog tests: PASS');
 })().catch((e) => { console.error(e); process.exit(1); });
+
+// JomPAY's directory names the biller in display_name, with its own limits.
+{
+  const { normalizeBillers, findBiller } = require('../functions/jompayBillers');
+  const billers = normalizeBillers({ message: 'success', data: [
+    { biller_code: '818625', display_name: 'TADIKA DIDIKAN SOLEH PLT.', min: '1.00', max: '30000.00', suggested_category: 'Education', description: null },
+    { biller_code: '779264', display_name: 'RIM PRO AUTOMOTIVE.', min: '1.00', max: '30000.00', suggested_category: null },
+  ] });
+  assert.strictEqual(billers.length, 2);
+  assert.deepStrictEqual(findBiller(billers, '818625'), { code: '818625', name: 'TADIKA DIDIKAN SOLEH PLT.', min: 1, max: 30000, category: 'Education' });
+  assert.strictEqual(findBiller(billers, '779264').category, undefined);
+  console.log('JomPAY biller names: PASS');
+}

@@ -291,7 +291,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
     const voucherPin = api.providerPin || (api.secret && api.secret !== api.deliveryLink ? api.secret : null);
     providerSucceeded = true;
     await txRef.update({
-      apiExecution: { status: 'accepted', providerId: api.providerId, providerName: api.providerName, responseId: api.responseId || null, message: api.message || null, providerSucceeded: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+      apiExecution: { status: 'accepted', providerId: api.providerId, providerName: api.providerName, responseId: api.responseId || null, message: api.message || null, serialNumber: api.serialNumber || null, providerSucceeded: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     await db.collection('rechargePins').doc(txRef.id).set({
@@ -300,7 +300,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
     });
     await txRef.update({
       status: 'completed', rechargePinAvailable: true,
-      apiExecution: { status: 'accepted', providerId: api.providerId, providerName: api.providerName, responseId: api.responseId || null, message: api.message || null, providerSucceeded: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+      apiExecution: { status: 'accepted', providerId: api.providerId, providerName: api.providerName, responseId: api.responseId || null, message: api.message || null, serialNumber: api.serialNumber || null, providerSucceeded: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
     return { id: txRef.id, cost: walletCost, baseCostMyr: reserved.baseCostMyr, pin: voucherPin, deliveryLink: api.deliveryLink || null, deliveryNote: api.deliveryNote || null, expiry: api.expiry || null, operator, productCode: dispatchRaw.productCode, subproductCode: dispatchRaw.subproductCode, productName: displayName, country, amount: denomination, currency: walletFx.currency, fxRate: walletFx.sellRate };

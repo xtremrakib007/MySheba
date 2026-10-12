@@ -312,6 +312,7 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
       providerTransactionId: transactionId,
       providerStatus: status,
       providerMessage: message,
+      ...(provider.authType === 'iimmpactHmac' && safeText(pathGet(body, 'data.sn'), 200) ? { serialNumber: safeText(pathGet(body, 'data.sn'), 200) } : {}),
       webhookReceivedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 

@@ -1595,7 +1595,13 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
       // wrong - "Invalid product", "Insufficient balance". Throwing only the
       // status discarded it, which is how a real order came back as
       // "Provider HTTP 400 [400]": a number, twice, and nothing to act on.
-      const reason=String(getPath(data,'error.message')||getPath(data,'message')||'').trim().slice(0,300);
+      // IIMMPACT refuses with HTTP 400 and `data.status: Failed`, its reason
+      // in `data.remarks` and a numeric `data.status_code` - 43 is our own
+      // IIMMPACT balance running low, which is not the customer's to read.
+      const statusCode = Number(getPath(data,'data.status_code') ?? getPath(data,'data.statusCode'));
+      const reason=(provider.authType === 'iimmpactHmac' && statusCode === 43)
+        ? 'Service temporarily unavailable (43).'
+        : String(getPath(data,'data.remarks')||getPath(data,'error.message')||getPath(data,'message')||'').trim().slice(0,300);
       const failure=new Error(reason?`Provider HTTP ${response.status}: ${reason}`:`Provider HTTP ${response.status}`);
       // A 4xx is the provider replying and refusing, so no top-up can have
       // happened and the charge is safe to refund. That used to be decided by
@@ -1635,6 +1641,10 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
       if (typeof expiry === 'string' && expiry.trim()) result.expiry = expiry.trim().slice(0, 32);
     }
     if (provider.authType === 'iimmpactHmac') {
+      // The serial number IIMMPACT documents for every product (`sn`), shown
+      // on the receipt with a copy button when it is returned.
+      const serial = getPath(data, 'data.sn') || getPath(data, 'sn');
+      if ((typeof serial === 'string' || typeof serial === 'number') && String(serial).trim()) result.serialNumber = String(serial).trim().slice(0, 200);
       // IIMMPACT explicitly recommends matching product, account and amount
       // in addition to refid before accepting a callback. Keep only the
       // non-secret request values needed for that server-side comparison.
