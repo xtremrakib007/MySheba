@@ -90,7 +90,6 @@ export default function ConfirmTransactionScreen() {
   const { currentService, serviceData, pricing, rates, profile, submitService, setScreen, goBack, submitting } = useApp();
   const styles = createStyles(colors);
   const title = TITLES[currentService] || currentService || 'Transaction';
-  const isSuperadmin = String(profile?.role || '').toLowerCase() === 'superadmin';
   const summary = useMemo(() => getPricing(currentService, serviceData || {}, pricing, rates, profile?.role), [currentService, serviceData, pricing, rates, profile?.role]);
   const shown = (value) => value !== undefined && value !== null && String(value).trim() !== '';
   const full = FULL_LAYOUT.has(currentService);
@@ -122,17 +121,13 @@ export default function ConfirmTransactionScreen() {
   // What the wallet ends at: net of commission on the short review, the full
   // charge on a payout, which earns none.
   const deduction = full ? summary.charged : summary.total;
-  // A payout's commission and profit, as the page always showed them: only
-  // when the order carries them, or derived from a cost it carries.
+  // A payout's commission: only one the order actually carries. It used to
+  // fall back to selling price minus provider cost, which is MySheba's margin
+  // shown under another name.
   const payout = (() => {
     const d = serviceData || {};
     const commission = Number(d.commissionAmount ?? d.commission ?? d.providerCommission);
-    const profit = Number(d.profitAmount ?? d.profit);
-    const cost = summary.cost;
-    return {
-      commission: Number.isFinite(commission) && commission >= 0 ? commission : (cost != null ? Math.round((summary.selling - cost) * 100) / 100 : null),
-      profit: Number.isFinite(profit) ? profit : (cost != null ? Math.round((summary.selling - cost - summary.fee) * 100) / 100 : null),
-    };
+    return { commission: Number.isFinite(commission) && commission >= 0 ? commission : null };
   })();
   const balance = Number(profile?.walletBalance ?? profile?.balance ?? 0);
   const walletCurrency = profile?.walletCurrency || 'MYR';
@@ -172,19 +167,13 @@ export default function ConfirmTransactionScreen() {
           {/* The fee is listed on a payout always, and elsewhere only when there
               is one (Touch 'n Go); airtime, data and bills carry none. */}
           {(full || summary.fee > 0) && <View style={styles.row}><Text style={styles.label}>Service fee</Text><Text style={[styles.value, { color: colors.text }]}>{money(summary.fee)}</Text></View>}
-          {full && <>
-            {/* The original payout rows, unchanged. */}
-            <View style={styles.row}><Text style={styles.label}>Provider cost price</Text><Text style={[styles.value, { color: colors.text }]}>{summary.cost == null ? 'Not provided by provider' : money(summary.cost)}</Text></View>
-            <View style={styles.row}><Text style={styles.label}>Commission amount</Text><Text style={[styles.value, { color: colors.text }]}>{payout.commission == null ? 'Not provided by provider' : money(payout.commission)}</Text></View>
-            <View style={styles.row}><Text style={styles.label}>Expected profit / loss</Text><Text style={[styles.value, { color: colors.text }]}>{payout.profit == null ? 'Not available' : money(payout.profit)}</Text></View>
-          </>}
-          {!full && <>
-            {/* What MySheba pays the provider is MySheba's business, not the
-                customer's: shown beside a RM 5.00 charge, a RM 4.94 cost read
-                as an overcharge. Superadmin still sees it. */}
-            {isSuperadmin && summary.cost != null && <View style={styles.row}><Text style={styles.label}>Provider cost price (MySheba pays)</Text><Text style={[styles.value, { color: colors.text }]}>{money(summary.cost)}</Text></View>}
-            <View style={styles.row}><Text style={styles.label}>Commission amount</Text><Text style={[styles.value, { color: colors.text }]}>{summary.commission > 0 ? '- ' + money(summary.commission) : money(0)}</Text></View>
-          </>}
+          {/* What MySheba pays the provider, and its profit or loss, are
+              MySheba's business and are never shown on a purchase page - not
+              to a customer, and not to staff buying in front of one (a RM 4.94
+              cost beside a RM 5.00 charge reads as an overcharge). Staff see
+              them in the transaction details. */}
+          {full && <View style={styles.row}><Text style={styles.label}>Commission amount</Text><Text style={[styles.value, { color: colors.text }]}>{payout.commission == null ? money(0) : money(payout.commission)}</Text></View>}
+          {!full && <View style={styles.row}><Text style={styles.label}>Commission amount</Text><Text style={[styles.value, { color: colors.text }]}>{summary.commission > 0 ? '- ' + money(summary.commission) : money(0)}</Text></View>}
           <View style={styles.row}><Text style={styles.label}>Wallet balance before</Text><Text style={[styles.value, { color: colors.text }]}>{money(balance, walletCurrency)}</Text></View>
           <View style={styles.row}><Text style={styles.label}>Wallet balance after (estimated)</Text><Text style={[styles.value, { color: colors.text }]}>{money(balance - deduction, walletCurrency)}</Text></View>
           <View style={[styles.totalRow, { borderTopColor: colors.border || '#E4E7EC' }]}><Text style={[styles.totalLabel, { color: colors.text }]}>Total wallet deduction</Text><Text style={[styles.totalValue, { color: colors.primary }]}>{money(deduction)}</Text></View>

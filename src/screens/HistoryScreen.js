@@ -9,14 +9,8 @@ import * as inquiryService from '../firebase/inquiryService';
 import * as topupService from '../firebase/topupService';
 import TransactionDetailModal from '../components/TransactionDetailModal';
 import HeaderDecor from '../components/HeaderDecor';
-
-function getTxStatusStyle(colors) {
-  return {
-    pending: { label: 'Pending', color: colors.warning, bg: '#FFF8E1' },
-    processing: { label: 'Processing', color: colors.primary, bg: '#E8F0FE' },
-    completed: { label: 'Completed', color: colors.success, bg: '#E8F5E9' },
-  };
-}
+import { statusBadge } from '../theme/statusBadges';
+import { txStatusLabel, txFailureReason } from '../utils/txFailure';
 
 function getInquiryStatusStyle(colors) {
   return {
@@ -49,11 +43,15 @@ function TxRow({ item, onPress }) {
     colors
   } = useTheme();
 
-  const TX_STATUS_STYLE = getTxStatusStyle(colors);
   const styles = createStyles(colors);
-  const style = TX_STATUS_STYLE[item.status] || TX_STATUS_STYLE.pending;
+  // Every status the server writes, from the shared table. This list used to
+  // know only pending/processing/completed, so a failed (and refunded) order
+  // fell back to the Pending badge and looked like it was still waiting.
   const showRejected = item.status === 'completed' && item.rejected;
-  const badge = showRejected ? { label: 'Rejected', color: colors.error, bg: '#FDECEA' } : style;
+  const shown = showRejected ? 'rejected' : (item.status || 'pending');
+  const colours = statusBadge(shown);
+  const badge = { label: txStatusLabel(shown), color: colours.text, bg: colours.bg };
+  const reason = txFailureReason(item);
 
   return (
     <TouchableOpacity style={styles.card} activeOpacity={0.7} onPress={onPress}>
@@ -71,6 +69,7 @@ function TxRow({ item, onPress }) {
       {!!(showRejected && !!item.rejectReason) && (
         <Text style={styles.rejectReason}>Reason: {item.rejectReason}</Text>
       )}
+      {!!reason && <Text style={styles.rejectReason}>{reason}</Text>}
     </TouchableOpacity>
   );
 }

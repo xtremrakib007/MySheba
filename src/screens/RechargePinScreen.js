@@ -241,7 +241,6 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
     const deduction = Math.round(marked * (Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1) * 100) / 100;
     const walletCurrency = profile?.walletCurrency || 'MYR';
     const balance = Number(profile?.walletBalance ?? profile?.balance ?? 0);
-    const cost = Number(selectedOption?.cost?.amount);
     const categoryTitle = categorizedProducts.find((item) => item.id === selectedCategory)?.title || '';
     return <ConfirmReview
       title="Confirm PIN Purchase"
@@ -256,7 +255,6 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
       ]}
       prices={[
         ['Selling / transaction amount', formatMoney(marked, review.currency)],
-        ['Provider cost price', String(profile?.role || '').toLowerCase() === 'superadmin' && Number.isFinite(cost) && cost > 0 ? formatMoney(cost, review.currency) : ''],
         ['Wallet balance before', formatMoney(balance, walletCurrency)],
         ['Wallet balance after (estimated)', formatMoney(balance - deduction, walletCurrency)],
       ]}

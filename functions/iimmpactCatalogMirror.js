@@ -18,6 +18,10 @@
 // MAX_AGE_MS, and marked stale when IIMMPACT reports a catalogue change.
 //
 // Only what publicIimmpactCatalog returns is stored - no costs, no secrets.
+//
+// The same storage serves other large provider lists under their own
+// collection (the `collection` option): the JomPAY biller directory is kept
+// in iimmpactJompayBillers/MY this way.
 
 const crypto = require('crypto');
 
@@ -55,13 +59,13 @@ function isFresh(meta, now = Date.now(), maxAgeMs = MAX_AGE_MS) {
 }
 
 /** Saves a catalogue. Chunks first, meta last, so a reader never sees a half-written copy. */
-async function write(db, country, catalog, { now = new Date() } = {}) {
+async function write(db, country, catalog, { now = new Date(), collection = MIRROR } = {}) {
   const key = countryKey(country);
   const text = JSON.stringify(catalog || {});
   const parts = chunk(text);
   if (parts.length > MAX_CHUNKS) throw new Error(`IIMMPACT catalogue too large to mirror (${text.length} characters).`);
   const hash = crypto.createHash('sha256').update(text).digest('hex').slice(0, 32);
-  const ref = db.collection(MIRROR).doc(key);
+  const ref = db.collection(collection).doc(key);
   const previous = await ref.get();
   const previousMeta = previous.exists ? { ...(previous.data() || {}) } : {};
   const previousCount = Number(previousMeta.chunkCount || 0);
@@ -95,8 +99,8 @@ async function write(db, country, catalog, { now = new Date() } = {}) {
 }
 
 /** The saved catalogue and its meta, or null when there is none (or it is damaged). */
-async function read(db, country) {
-  const ref = db.collection(MIRROR).doc(countryKey(country));
+async function read(db, country, { collection = MIRROR } = {}) {
+  const ref = db.collection(collection).doc(countryKey(country));
   const snap = await ref.get();
   if (!snap.exists) return null;
   const meta = snap.data() || {};
@@ -121,12 +125,12 @@ async function markStale(db, country, now = new Date()) {
  * is asked and its answer saved; if that fails, an older copy still beats an
  * error.
  */
-async function cachedCatalog(db, country, fetchLive, { maxAgeMs = MAX_AGE_MS, force = false, now = Date.now() } = {}) {
-  const saved = await read(db, country).catch(() => null);
+async function cachedCatalog(db, country, fetchLive, { maxAgeMs = MAX_AGE_MS, force = false, now = Date.now(), collection = MIRROR } = {}) {
+  const saved = await read(db, country, { collection }).catch(() => null);
   if (!force && saved && isFresh(saved.meta, now, maxAgeMs)) return saved.catalog;
   try {
     const live = await fetchLive();
-    await write(db, country, live).catch((error) => console.error('IIMMPACT catalogue mirror write failed', String(error?.message || error)));
+    await write(db, country, live, { collection }).catch((error) => console.error('IIMMPACT catalogue mirror write failed', String(error?.message || error)));
     return live;
   } catch (error) {
     if (saved) return saved.catalog;

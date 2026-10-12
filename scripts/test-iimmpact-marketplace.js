@@ -767,6 +767,79 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     assert.ok(/exports\.getIimmpactOptions = onCall\(\{ enforceAppCheck: ENFORCE_APP_CHECK, minInstances: 1 \}/.test(src));
   });
 
+  console.log('\nFailed orders say so');
+
+  const txf = runEsm('src/utils/txFailure.js');
+
+  await test('a failed order is labelled Failed, not Pending, and says it was refunded', () => {
+    assert.strictEqual(txf.txStatusLabel('failed'), 'Failed');
+    assert.strictEqual(txf.txStatusLabel('unknown'), 'Under review');
+    assert.strictEqual(txf.txStatusLabel(undefined), 'Pending');
+    const reason = txf.txFailureReason({ status: 'failed', apiRefunded: true, apiError: 'Provider HTTP 403: Forbidden' });
+    assert.ok(/could not complete/.test(reason) && /refunded to your wallet/.test(reason), reason);
+    assert.ok(!/403|Forbidden|HTTP/.test(reason), 'the provider\u2019s own wording is for staff');
+  });
+
+  await test('a reason the customer can act on is named', () => {
+    assert.ok(/did not accept this number/.test(txf.txFailureReason({ status: 'failed', apiError: 'Invalid mobile number' })));
+    assert.ok(/price or package changed/.test(txf.txFailureReason({ status: 'failed', apiError: 'This recharge price has changed.' })));
+    assert.strictEqual(txf.txFailureReason({ status: 'completed' }), '');
+    assert.ok(/refunded automatically/.test(txf.txFailureReason({ status: 'unknown' })));
+  });
+
+  await test('History draws every status from the shared badge table', () => {
+    const src = fs.readFileSync(path.join(ROOT, 'src/screens/HistoryScreen.js'), 'utf8');
+    assert.ok(!/getTxStatusStyle/.test(src), 'the three-status table is gone');
+    assert.ok(/statusBadge\(shown\)/.test(src) && /txFailureReason\(item\)/.test(src));
+  });
+
+  await test('no purchase page shows what MySheba pays the provider, or its profit', () => {
+    for (const file of ['src/screens/ConfirmTransactionScreen.js', 'src/screens/IimmpactProductScreen.js', 'src/screens/RechargePinScreen.js', 'src/steps/RechargeSteps.js']) {
+      const src = fs.readFileSync(path.join(ROOT, file), 'utf8');
+      assert.ok(!/['>]Provider cost(?! and commission are not included)/.test(src), file + ' shows provider cost');
+      assert.ok(!/profit \/ loss/i.test(src), file + ' shows profit / loss');
+    }
+  });
+
+  await test('a catalogue biller is looked up by its own product code', () => {
+    const inputs = runEsm('src/utils/billPresentmentInputs.js');
+    const req = inputs.presentmentRequest({ country: 'MY', provider: 'Air Selangor', accountNumber: '123456', category: 'iimmpact:water bills', productCode: 'WATER1' });
+    assert.strictEqual(req.productCode, 'WATER1');
+    assert.strictEqual(inputs.presentmentRequest({ country: 'MY', provider: 'TNB', accountNumber: '1' }).productCode, undefined, 'none sent when the biller has none');
+    const src = fs.readFileSync(path.join(ROOT, 'functions/apiProviderService.js'), 'utf8');
+    assert.ok(/const productCode = \(\/\^\[A-Za-z0-9_\.-\]\{1,100\}\$\/\.test\(sentCode\) \? sentCode : ''\) \|\| billerProductCodeFor\(provider, billerName\);/.test(src), 'the server prefers it, then the name list');
+  });
+
+  console.log('\nJomPAY biller lookup');
+
+  const jp = require(path.join(ROOT, 'functions/jompayBillers.js'));
+
+  await test('the biller directory is read whatever shape IIMMPACT wraps it in', () => {
+    for (const json of [
+      { data: [{ biller_code: '818625', biller_name: 'Syabas' }] },
+      { data: { billers: [{ code: '818625', name: 'Syabas' }] } },
+      { billers: [{ billerCode: ' 818625 ', billerName: 'Syabas' }] },
+      [{ id: 818625, description: 'Syabas' }],
+    ]) {
+      assert.deepStrictEqual(jp.normalizeBillers(json), [{ code: '818625', name: 'Syabas' }], JSON.stringify(json));
+    }
+    assert.deepStrictEqual(jp.normalizeBillers({ data: [{ biller_code: 'abc', biller_name: 'X' }, { biller_code: '1234' }] }), [], 'junk and nameless entries dropped');
+  });
+
+  await test('a code finds its biller, and a name search finds codes', () => {
+    const list = [{ code: '818625', name: 'Syabas' }, { code: '5454', name: 'Indah Water Konsortium' }, { code: '4200', name: 'Air Selangor' }];
+    assert.strictEqual(jp.findBiller(list, '5454').name, 'Indah Water Konsortium');
+    assert.strictEqual(jp.findBiller(list, '9999'), null);
+    assert.deepStrictEqual(jp.searchBillers(list, 'water').map((b) => b.code), ['5454']);
+    assert.deepStrictEqual(jp.searchBillers(list, 'air sel').map((b) => b.code), ['4200']);
+  });
+
+  await test('an unknown code blocks the JomPAY step; an unreachable directory never does', () => {
+    const src = fs.readFileSync(path.join(ROOT, 'src/steps/BillPaymentSteps.js'), 'utf8');
+    assert.ok(/if \(serviceData\.jompayBillerUnknown === true\) return 'No JomPAY biller has this code/.test(src));
+    assert.ok(/if \(!answer\.available\) updateServiceData\(\{ jompayBillerName: '', jompayBillerUnknown: false \}\)/.test(src), 'no directory: no verdict');
+  });
+
   console.log('\nPIN Generator dispatch');
 
   const sent = [];

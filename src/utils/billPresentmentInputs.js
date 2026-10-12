@@ -35,7 +35,11 @@ export function presentmentRequest(serviceData) {
   // Everything else is read from the account number alone. The amount is
   // deliberately NOT sent: it is what we are hoping to be told, and sending a
   // half-typed one invites "The provided amount is invalid" instead of a bill.
-  return { country, provider, accountNumber };
+  // A catalogue biller carries IIMMPACT's product code, which is what the
+  // presentment endpoint asks about; without it only billers in the
+  // provider's hand-kept name list (TNB, JomPAY) could be looked up.
+  const productCode = String(d.productCode || '').trim();
+  return { country, provider, accountNumber, ...(productCode ? { productCode } : {}) };
 }
 
 /** A stable key for one request, so the same question is not asked twice. */
