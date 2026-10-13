@@ -570,7 +570,10 @@ test('the purchase carries the same X-API-Version as every other IIMMPACT call',
   // HMAC by default; a JWT purchase (usesIimmpactJwt) carries the same header.
   assert.ok(/headers\['X-API-Version'\] = String\(provider\.iimmpactApiVersion \|\| '2026-09-16'\);[\s\S]{0,400}const signed = usesIimmpactJwt\(provider\)[\s\S]{0,200}: signIimmpactRequest/.test(dispatch),
     'set before signing, with the same default as signedProviderRequest');
-  assert.strictEqual((source.match(/provider\.iimmpactApiVersion \|\| '2026-09-16'/g) || []).length, 2, 'one version for every call');
+  // One version for every call: wherever the header is set (calls, purchase,
+  // the purchase-access probe), it has the same default and no other.
+  assert.ok((source.match(/provider\.iimmpactApiVersion \|\| '2026-09-16'/g) || []).length >= 2, 'one version for every call');
+  assert.strictEqual((source.match(/provider\.iimmpactApiVersion \|\| '(?!2026-09-16')/g) || []).length, 0, 'no other default version');
 });
 
 console.log(`\n${passed} checks passed.\n`);

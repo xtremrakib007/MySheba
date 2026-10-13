@@ -106,6 +106,16 @@ export default function ApiProviderManagementScreen() {
     catch(e){Alert.alert('Unmatched callbacks',e.message||'Could not read unmatched callbacks.');return [];}
   };
   const remove=(id)=>Alert.alert('Delete API','Remove this API provider?',[{text:'Cancel'},{text:'Delete',style:'destructive',onPress:async()=>{await apiService.deleteApiProvider(id);await webhookService.deleteApiWebhook(id).catch(()=>{});load();}}]);
+  // IIMMPACT only: a purchase for a product that does not exist, so nothing
+  // is bought, answered raw - why real purchases are refused.
+  const probePurchase=async(item)=>{
+    try{
+      Alert.alert('Testing purchase access','Sending IIMMPACT a purchase for a product that does not exist. Nothing is bought or charged.');
+      const r=await apiService.probeIimmpactPurchase(item.id);
+      const lines=(r?.results||[]).map((x)=>`${x.label}\n→ HTTP ${x.status}${x.message?`: ${x.message}`:''}${x.body?`\n${x.body}`:''}${Object.keys(x.headers||{}).length?`\n${Object.entries(x.headers).map(([k,v])=>`${k}: ${v}`).join('\n')}`:''}`);
+      Alert.alert('Purchase access',[r?.verdict||'',...lines].filter(Boolean).join('\n\n'));
+    }catch(e){Alert.alert('Purchase access test failed',e.message||'Unable to run the test.');}
+  };
   const testApi=async(item)=>{
     try{
       Alert.alert('Testing API','Checking the saved credentials and provider connection. No recharge, bill payment, or wallet charge will be created.');
@@ -211,6 +221,7 @@ export default function ApiProviderManagementScreen() {
           </View>
           <View>
             <TouchableOpacity onPress={()=>testApi(item)}><Text style={styles.action}>Test</Text></TouchableOpacity>
+            {item.authType==='iimmpactHmac'&&<TouchableOpacity onPress={()=>probePurchase(item)}><Text style={styles.action}>Test purchase</Text></TouchableOpacity>}
             {isSuccessTopUp(item)?<TouchableOpacity onPress={checkBalance} disabled={balanceBusy}>
               <Text style={styles.action}>{balanceBusy?'…':'Balance'}</Text>
             </TouchableOpacity>:null}
