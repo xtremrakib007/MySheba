@@ -21,6 +21,7 @@ const productCodes = require('./productCodes');
 const providerReach = require('./providerReach');
 const catalogMirror = require('./iimmpactCatalogMirror');
 const costLog = require('./iimmpactCostLog');
+const iimmpactJwt = require('./iimmpactJwt');
 const optionsMirror = require('./iimmpactOptionsMirror');
 const jompayBillers = require('./jompayBillers');
 
@@ -678,10 +679,17 @@ function validate(data) {
     try { decodeIimmpactSecret(secretKey); }
     catch (error) { throw new HttpsError('invalid-argument', String(error?.message || 'The iimmpact HMAC secret is not valid.')); }
   }
+  if (authType === 'iimmpactHmac' && data.iimmpactPurchaseAuth === 'jwt' && (!cleanString(data.username, 200) || !cleanString(data.password, 1000))) {
+    throw new HttpsError('invalid-argument', 'JWT purchases need the IIMMPACT username and password.');
+  }
   if (!ALLOWED_METHODS.includes(method)) throw new HttpsError('invalid-argument', 'Invalid HTTP method.');
   return {
     service, services, name, country, countries, excludedCountries: excludedCountries.filter((c) => c !== 'ALL'), baseUrl, endpointPath, method, authType, apiKey, secretKey,
     username: cleanString(data.username, 200), password: cleanString(data.password, 1000),
+    // IIMMPACT only: how purchases authenticate. 'jwt' for an account whose
+    // API key is enabled for the catalogue but not /v2/topup.
+    iimmpactPurchaseAuth: authType === 'iimmpactHmac' && data.iimmpactPurchaseAuth === 'jwt' ? 'jwt' : 'hmac',
+    iimmpactTokenPath: authType === 'iimmpactHmac' && /^\/[A-Za-z0-9/_-]{1,100}$/.test(cleanString(data.iimmpactTokenPath, 120)) ? cleanString(data.iimmpactTokenPath, 120) : '/v2/token',
     active: data.active !== false, priority: Math.max(0, Math.min(9999, Number(priority) || 0)),
     timeoutMs: Math.max(3000, Math.min(60000, Number(data.timeoutMs) || 15000)), notes: cleanString(data.notes, 1000),
     headers: validateHeaders(headers), queryTemplate: validateTemplate(queryTemplate, 'Query template'),
@@ -1228,6 +1236,23 @@ async function resolveIimmpactCatalogProductCode(provider, service, subject, raw
  * family. The provider uses the same envelope for airtime, mobile data, JomPAY,
  * eSIM and vouchers; only the account and documented extras vary.
  */
+/** Whether this IIMMPACT provider buys with a JWT login rather than HMAC. */
+function usesIimmpactJwt(provider) {
+  return provider?.authType === 'iimmpactHmac' && provider?.iimmpactPurchaseAuth === 'jwt';
+}
+
+/** A current IIMMPACT login token for purchases (POST /v2/token). */
+function iimmpactPurchaseToken(provider, options = {}) {
+  return iimmpactJwt.getToken(admin.firestore(), provider, async (credentials) => {
+    const url = iimmpactUrl(provider, String(provider.iimmpactTokenPath || '/v2/token'));
+    return signedProviderRequest(url, {
+      method: 'POST',
+      headers: { accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify(credentials),
+    }, null);
+  }, options);
+}
+
 /** The refid IIMMPACT is sent for one of our request ids (at most 50 characters). */
 function iimmpactRefid(requestId) {
   const ref = String(requestId || '').trim();
@@ -1564,13 +1589,18 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
         if (existing.toLowerCase() === 'x-api-version') delete headers[existing];
       }
       headers['X-API-Version'] = String(provider.iimmpactApiVersion || '2026-09-16');
-      const signed = signIimmpactRequest({
-        apiKey: provider.apiKey,
-        secretKey: provider.secretKey,
-        method,
-        url,
-        body,
-      });
+      // An account on IIMMPACT's older JWT integration buys with a login
+      // token instead (see iimmpactJwt). Logged in before requestSent, so a
+      // failed login is still a cleanly refundable order.
+      const signed = usesIimmpactJwt(provider)
+        ? { authorization: `Bearer ${await iimmpactPurchaseToken(provider)}` }
+        : signIimmpactRequest({
+          apiKey: provider.apiKey,
+          secretKey: provider.secretKey,
+          method,
+          url,
+          body,
+        });
       // Case-insensitively, because HTTP header names are and a stored
       // `X-Signature` would otherwise ride along beside our `x-signature`.
       const signedNames = new Set(Object.keys(signed));
@@ -1586,7 +1616,17 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     // charge is always safe to refund. Only once it is sent can an outcome be
     // genuinely unknown.
     requestSent = true;
-    let response; try { response=await requestHttpsPinned(url,{method,headers,body,signal:ctl.signal},pinnedAddress); } finally { clearTimeout(timer); }
+    let response; try {
+      response=await requestHttpsPinned(url,{method,headers,body,signal:ctl.signal},pinnedAddress);
+      // An expired or revoked token is refused before anything is processed,
+      // and /v2/topup is idempotent by refid: log in again and send the same
+      // request once.
+      if (response.status === 401 && usesIimmpactJwt(provider)) {
+        await iimmpactJwt.forget(admin.firestore(), provider);
+        headers.authorization = `Bearer ${await iimmpactPurchaseToken(provider, { force: true })}`;
+        response=await requestHttpsPinned(url,{method,headers,body,signal:ctl.signal},pinnedAddress);
+      }
+    } finally { clearTimeout(timer); }
     const responseText=await response.text();
     if(Buffer.byteLength(responseText,'utf8')>1000000) throw new Error('Provider response is too large.');
     let data={}; try { data=responseText?JSON.parse(responseText):{}; } catch { data={raw:responseText.slice(0,5000)}; }
@@ -3382,6 +3422,8 @@ exports.listApiProviders = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async 
       hasSecretKey: Boolean(x.secretKeySecretName),
       hasUsername: Boolean(x.username),
       hasPassword: Boolean(x.passwordSecretName),
+      iimmpactPurchaseAuth: x.iimmpactPurchaseAuth === 'jwt' ? 'jwt' : 'hmac',
+      iimmpactTokenPath: x.iimmpactTokenPath || '/v2/token',
       hasCustomHeaders: Boolean(x.headers && Object.keys(x.headers).length),
       hasQueryTemplate: Boolean(x.queryTemplate && Object.keys(x.queryTemplate).length),
       hasRequestTemplate: Boolean(x.requestTemplate && Object.keys(x.requestTemplate).length),

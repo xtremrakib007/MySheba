@@ -51,8 +51,8 @@ const SECTIONS = [
     fields: [
       { key: 'apiKey', label: 'API key', secret: true, has: 'hasApiKey' },
       { key: 'secretKey', label: 'API secret', secret: true, has: 'hasSecretKey' },
-      { key: 'username', label: 'Username (basic auth)', has: 'hasUsername' },
-      { key: 'password', label: 'Password (basic auth)', secret: true, has: 'hasPassword' },
+      { key: 'username', label: 'Username (basic auth / IIMMPACT JWT)', has: 'hasUsername' },
+      { key: 'password', label: 'Password (basic auth / IIMMPACT JWT)', secret: true, has: 'hasPassword' },
     ],
   },
   {
@@ -510,6 +510,27 @@ export default function ApiProviderFormModal({ visible, provider, successTopUp =
                     section and no header template is needed. Paste the secret exactly as the dashboard
                     shows it - it is base64 and a re-typed or hex version fails every call with a 401.
                   </Text>
+                )}
+                {form.authType === 'iimmpactHmac' && (
+                  <>
+                    {/* For an account whose API key opens the catalogue but
+                        gets 403 on purchases: buy with IIMMPACT's JWT login. */}
+                    <Text style={styles.sectionTitle}>Purchase authentication</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      {[['hmac', 'API key (HMAC)'], ['jwt', 'Login token (JWT)']].map(([value, label]) => (
+                        <TouchableOpacity key={value} onPress={() => set('iimmpactPurchaseAuth', value)} style={[styles.chip, (form.iimmpactPurchaseAuth || 'hmac') === value && styles.chipOn]}>
+                          <Text style={(form.iimmpactPurchaseAuth || 'hmac') === value ? styles.chipOnText : null}>{label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                    {form.iimmpactPurchaseAuth === 'jwt' && (
+                      <Text style={styles.fieldHint}>
+                        Purchases log in at IIMMPACT&apos;s /v2/token with the Username and Password in Credentials (your IIMMPACT
+                        API login) and send the token as a Bearer header. Catalogue, amounts and balance keep using the API key.
+                        Use this only when IIMMPACT says your purchases still use JWT.
+                      </Text>
+                    )}
+                  </>
                 )}
 
                 <Text style={styles.help}>{HELP_TEXT}</Text>
