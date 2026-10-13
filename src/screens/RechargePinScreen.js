@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BackHandler, View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Image } from 'react-native';
+import { BackHandler, View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Image, Linking } from 'react-native';
 import * as Print from 'expo-print';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
@@ -341,11 +341,12 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
           tiles are the action, and an inert Next under them read as broken. */}
       {(!!product || !!operator) && <TouchableOpacity disabled={busy || (product ? !selectedOption : !(amount > 0))} onPress={buy} style={styles.buy}><Text style={styles.buyText}>{busy ? 'Processing…' : 'Next'}</Text></TouchableOpacity>}
 
-      {!!(voucher?.pin || voucher?.deliveryLink) && <View style={styles.voucher}>
+      {!!(voucher?.pin || voucher?.deliveryLink || voucher?.serialNumber) && <View style={styles.voucher}>
         <Text style={styles.voucherTitle}>Voucher Ready</Text>
         <Text style={styles.voucherMeta}>{voucher.productName || product?.name} • {CURRENCY_BY_COUNTRY[voucher.country || country] || ''} {Number(voucher.amount || amount).toFixed(2)}</Text>
         {!!voucher.pin && <Text selectable style={styles.pin}>{voucher.pin}</Text>}
-        {!!voucher.deliveryLink && <Text selectable style={styles.link}>{voucher.deliveryLink}</Text>}
+        {!!voucher.serialNumber && voucher.serialNumber !== voucher.pin && <Text selectable style={styles.warning}>Serial no: {voucher.serialNumber}</Text>}
+        {!!voucher.deliveryLink && <Text selectable style={styles.link} onPress={() => Linking.openURL(voucher.deliveryLink).catch(() => {})}>{voucher.deliveryLink}</Text>}
         {!!voucher.expiry && <Text style={styles.warning}>Expires: {voucher.expiry}</Text>}{!!voucher.deliveryNote && <Text style={styles.warning}>{voucher.deliveryNote}</Text>}
         <Text style={styles.warning}>Keep this voucher private. It is shown only after successful provider fulfillment.</Text>
         <TouchableOpacity onPress={printVoucher} style={styles.print}><Text style={styles.printText}>🖨 Print Voucher</Text></TouchableOpacity>
