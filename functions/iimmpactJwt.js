@@ -15,9 +15,10 @@
 // iimmpactTokens/{providerId} (server-only) until shortly before it expires,
 // so a purchase does not log in each time.
 //
-// IIMMPACT's response is read defensively - the token may be called IdToken,
-// AccessToken, access_token, token, under `data` or not - so a renamed field
-// fails as "no token in the reply", not as a wrong token sent.
+// IIMMPACT documents the reply as { AuthenticationResult: { IdToken,
+// AccessToken, ExpiresIn, RefreshToken, TokenType } } and the ID token as
+// the one to send. It is read a little defensively (top level or `data` too),
+// so a moved field fails as "no token in the reply", never as a wrong token.
 
 const TOKENS = 'iimmpactTokens';
 const EARLY_MS = 2 * 60 * 1000;
@@ -41,7 +42,9 @@ function tokenFrom(json) {
   let refresh = '';
   let seconds = 0;
   for (const layer of layers) {
-    token = token || pick(layer, ['IdToken', 'idToken', 'id_token', 'AccessToken', 'accessToken', 'access_token', 'token', 'jwt']);
+    // The ID token: IIMMPACT documents that its AccessToken is NOT accepted
+    // by the API, so it is never a fallback.
+    token = token || pick(layer, ['IdToken', 'idToken', 'id_token', 'token', 'jwt']);
     refresh = refresh || pick(layer, ['RefreshToken', 'refreshToken', 'refresh_token']);
     const life = Number(layer.ExpiresIn ?? layer.expiresIn ?? layer.expires_in);
     if (!seconds && Number.isFinite(life) && life > 0) seconds = life;
