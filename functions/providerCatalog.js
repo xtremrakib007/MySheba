@@ -128,7 +128,7 @@ const PRESETS = {
       product_code: '{{operator}}',
       field_id: '{{fieldId}}',
       account_number: '{{account}}',
-      limit: '25000',
+      limit: '1000',
     },
     // Options API returns selectable package items in `items`.
     // It replaces the deprecated /v2/subproducts endpoint and uses the
@@ -261,7 +261,7 @@ function catalogConfigFor(provider) {
     method: String(provider.catalogMethod || (preset && preset.method) || 'POST').toUpperCase(),
     requestTemplate: asObject(provider.catalogRequestTemplate) || (preset && preset.requestTemplate) || {},
     queryTemplate: legacyIimmpact
-      ? { product_code: '{{operator}}', field_id: '{{fieldId}}', account_number: '{{account}}', limit: '25000' }
+      ? { product_code: '{{operator}}', field_id: '{{fieldId}}', account_number: '{{account}}', limit: '1000' }
       : (asObject(provider.catalogQueryTemplate) || (preset && preset.queryTemplate) || {}),
     // A per-account catalogue is personalised to one phone number: it may not
     // be fetched without one, and its answer is never reusable for another.
@@ -543,7 +543,7 @@ async function fetchCatalog(provider, { operator, type, account, fieldId } = {},
     || String(provider.name || '').trim().toLowerCase() === 'iimmpact';
   const useIimmpactOptions = config.dynamicProductDiscovery && config.perAccount && isIimmpact;
   const requestPath = useIimmpactOptions ? '/v2/options' : config.path;
-  const requestQueryTemplate = useIimmpactOptions ? { product_code: '{{operator}}', field_id: '{{fieldId}}', account_number: '{{account}}', limit: '25000' } : config.queryTemplate;
+  const requestQueryTemplate = useIimmpactOptions ? { product_code: '{{operator}}', field_id: '{{fieldId}}', account_number: '{{account}}', limit: '1000' } : config.queryTemplate;
   const requestListPath = useIimmpactOptions ? 'items' : config.listPath;
   const requestItemMap = useIimmpactOptions ? PRESETS['iimmpact-options'].itemMap : config.itemMap;
   const url = new URL(requestPath, config.baseUrl.endsWith('/') ? config.baseUrl : `${config.baseUrl}/`);
