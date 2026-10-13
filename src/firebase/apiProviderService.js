@@ -348,3 +348,14 @@ export async function saveMarkups(markups) {
 export async function getIimmpactCostCheck({ productCode, amount }) {
   return (await costCheckFn({ productCode, amount })).data;
 }
+
+const probePurchaseFn = httpsCallable(functions, 'probeIimmpactPurchase');
+
+/**
+ * Superadmin: sends IIMMPACT a purchase for a product that does not exist
+ * (nothing can be charged) and returns its raw answers, to see why real
+ * purchases are refused.
+ */
+export async function probeIimmpactPurchase(id) {
+  return (await probePurchaseFn({ id })).data;
+}

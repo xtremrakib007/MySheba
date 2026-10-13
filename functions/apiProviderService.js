@@ -304,6 +304,7 @@ function requestHttpsPinned(url, options, pinnedAddress) {
       response.on('end', () => resolve({
         status: response.statusCode || 0,
         ok: (response.statusCode || 0) >= 200 && (response.statusCode || 0) < 300,
+        headers: response.headers || {},
         text: () => Promise.resolve(Buffer.concat(chunks).toString('utf8')),
       }));
       response.on('error', reject);
@@ -1771,6 +1772,66 @@ exports.resolveExecutionMode = resolveExecutionMode;
 exports.providersForService = providersForService;
 exports.COUNTRY_CODES = COUNTRY_CODES;
 exports._test = { isPrivateIp, resolveExecutionMode, pinnedLookup, validateBaseUrl, validateHeaders, validateTemplate, getPath, render, providerAuth, validate, matchesStatus, classifyResponse, providerAmountFor, buildIimmpactTopupBody, _test_autoCountryModes: autoCountryModes };
+
+/**
+ * Superadmin: why does IIMMPACT refuse purchases?
+ *
+ * Sends POST /v2/topup, signed exactly as a purchase is, for a product code
+ * that does not exist - IIMMPACT validates the product before creating any
+ * transaction, so nothing can be bought or charged (HTTP 400, no
+ * transaction). Then the same with parts of the request taken away, and a
+ * signed GET /v2/balance for comparison. Each answer comes back raw: status,
+ * IIMMPACT's message, and the gateway's response headers, which say whether
+ * the refusal is the API (a 400 means the key may buy), the key or account
+ * (403 from the API), or a gateway/WAF in front of it.
+ */
+exports.probeIimmpactPurchase = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, timeoutSeconds: 60 }, async (request) => {
+  const db = admin.firestore();
+  await assertSuperadmin(db, request);
+  await checkVelocity(db, request.auth.uid, 'getIimmpactCostCheck', { ip: getClientIp(request) });
+  const provider = await loadIimmpactProvider(db, request.data?.id);
+  const base = new URL(provider.baseUrl);
+  if (base.protocol !== 'https:') throw new HttpsError('failed-precondition', 'IIMMPACT base URL must use HTTPS.');
+  const pinned = await resolvePublicAddress(base.hostname);
+  const KEEP = ['x-amzn-errortype', 'x-amzn-requestid', 'x-amz-apigw-id', 'x-amz-cf-id', 'x-cache', 'via', 'server', 'cf-ray', 'x-request-id', 'content-type'];
+  const send = async (label, { method = 'POST', path = '/v2/topup', version = true, minimal = false } = {}) => {
+    const url = new URL(path, base);
+    const refid = `probe-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+    const body = method === 'GET' ? undefined : JSON.stringify(minimal
+      ? { refid, product: 'MYSHEBAPROBE', account: '0123456789', amount: 1 }
+      : { refid, product: 'MYSHEBAPROBE', account: '0123456789', amount: 1, remarks: '', extras: {} });
+    const headers = { accept: 'application/json' };
+    if (body) headers['content-type'] = 'application/json';
+    if (version) headers['X-API-Version'] = String(provider.iimmpactApiVersion || '2026-09-16');
+    Object.assign(headers, signIimmpactRequest({ apiKey: provider.apiKey, secretKey: provider.secretKey, method, url, body }));
+    try {
+      const response = await requestHttpsPinned(url, { method, headers, body }, pinned);
+      const text = (await response.text()).slice(0, 600);
+      let json = null; try { json = JSON.parse(text); } catch (_) { /* not JSON: kept as text */ }
+      const picked = {};
+      for (const name of KEEP) if (response.headers[name]) picked[name] = String(response.headers[name]).slice(0, 200);
+      return { label, status: response.status, message: json ? providerErrorText(json) || providerErrorText(json.data || {}) : '', body: json ? '' : text.replace(/\s+/g, ' ').slice(0, 300), headers: picked };
+    } catch (error) {
+      return { label, status: 0, message: String(error?.message || error).slice(0, 300), body: '', headers: {} };
+    }
+  };
+  const results = [];
+  results.push(await send('GET /v2/balance (should be 200)', { method: 'GET', path: '/v2/balance' }));
+  results.push(await send('POST /v2/topup as a purchase (fake product)'));
+  results.push(await send('POST /v2/topup without X-API-Version', { version: false }));
+  results.push(await send('POST /v2/topup with only refid/product/account/amount', { minimal: true }));
+  const topup = results[1];
+  const verdict = topup.status === 400 || topup.status === 422 || topup.status === 404
+    ? 'The key IS allowed to buy: IIMMPACT rejected only the fake product. Real purchases should work - redeploy the purchase functions and retry.'
+    : topup.status === 403 && results.slice(2).some((r) => r.status !== 403)
+      ? 'A variant got through where the purchase did not - see which one: that part of the request is what IIMMPACT refuses.'
+      : topup.status === 403
+        ? 'IIMMPACT refuses POST /v2/topup for this key/account whatever the request looks like. Only IIMMPACT can enable it - send them these results.'
+        : topup.status === 401
+          ? 'IIMMPACT does not accept the signature/key for /v2/topup.'
+          : 'Unexpected answer - send these results.';
+  return { verdict, results, checkedAt: Date.now() };
+});
 
 exports.testApiProvider = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const db = admin.firestore();
