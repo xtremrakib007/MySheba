@@ -30,6 +30,11 @@ const COLLECTION = 'api_providers';
 const OPTIONS_CACHE = 'iimmpactOptionsCache';
 const OPTIONS_CACHE_MS = 6 * 60 * 60 * 1000;
 const OPTIONS_CACHE_MAX_CHARS = 250000;
+// The most /v2/options lists in one page. IIMMPACT validates `limit`, and
+// a limit of 25000 was answered "The given data was invalid." [400]: every
+// per-number plan list and every purchase's option check failed with it.
+// The amount lists, asked at 1000, always loaded.
+const IIMMPACT_OPTIONS_LIMIT = 1000;
 
 async function getProfile(db, uid) {
   const snap = await db.collection('users').doc(uid).get();
@@ -980,7 +985,13 @@ function providerErrorText(json) {
   const error = json.error && typeof json.error === 'object' ? json.error : {};
   const text = [json.message, error.message, typeof json.error === 'string' ? json.error : '', error.code]
     .find((value) => typeof value === 'string' && value.trim());
-  return text ? text.trim().replace(/[\x00-\x1F\x7F]+/g, ' ').slice(0, 200) : '';
+  // A validation refusal ("The given data was invalid.") names the fields it
+  // refused in `errors`; without them the message says nothing to act on.
+  const fieldErrors = json.errors && typeof json.errors === 'object' && !Array.isArray(json.errors)
+    ? Object.entries(json.errors).slice(0, 3).map(([field, list]) => `${field}: ${[].concat(list)[0] || 'invalid'}`).join('; ')
+    : '';
+  const said = [text, fieldErrors].filter(Boolean).join(' ');
+  return said ? said.trim().replace(/[\x00-\x1F\x7F]+/g, ' ').slice(0, 300) : '';
 }
 
 async function catalogHttpsRequest(url, init, config, provider) {
@@ -2541,7 +2552,7 @@ async function resolveIimmpactEsimPackage(db, raw) {
   const optionUrl = iimmpactUrl(provider, '/v2/options');
   optionUrl.searchParams.set('product_code', productCode);
   optionUrl.searchParams.set('field_id', fieldId);
-  optionUrl.searchParams.set('limit', '25000');
+  optionUrl.searchParams.set('limit', String(IIMMPACT_OPTIONS_LIMIT));
   const accountNumber = cleanString(raw?.accountNumber || raw?.email, 200);
   if (accountNumber) optionUrl.searchParams.set('account_number', accountNumber);
   const optionsResponse = await signedProviderRequest(optionUrl, { method: 'GET', headers: { accept: 'application/json' } }, provider);
@@ -2693,7 +2704,7 @@ async function resolveIimmpactMarketplaceProduct(db, raw) {
     const optionsUrl = iimmpactUrl(provider, '/v2/options');
     optionsUrl.searchParams.set('product_code', productCode);
     optionsUrl.searchParams.set('field_id', fieldId);
-    optionsUrl.searchParams.set('limit', '25000');
+    optionsUrl.searchParams.set('limit', String(IIMMPACT_OPTIONS_LIMIT));
     if (accountNumber) optionsUrl.searchParams.set('account_number', accountNumber);
     if (billerCode) optionsUrl.searchParams.set('biller_code', billerCode);
 
@@ -3061,7 +3072,7 @@ exports.getIimmpactOptions = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, minIns
   if (!productCode || !fieldId) throw new HttpsError('invalid-argument', 'productCode and fieldId are required.');
 
   const page = Math.max(1, Math.min(100000, Number(request.data?.page) || 1));
-  const limit = Math.max(1, Math.min(25000, Number(request.data?.limit) || 100));
+  const limit = Math.max(1, Math.min(IIMMPACT_OPTIONS_LIMIT, Number(request.data?.limit) || 100));
   const accountNumber = cleanString(request.data?.accountNumber, 200);
   const billerCode = cleanString(request.data?.billerCode, 100);
 
@@ -3249,7 +3260,7 @@ exports.getIimmpactOptionsForSuperadmin = onCall({ enforceAppCheck: ENFORCE_APP_
   }
 
   const page = Math.max(1, Math.min(100000, Number(request.data?.page) || 1));
-  const limit = Math.max(1, Math.min(25000, Number(request.data?.limit) || 25000));
+  const limit = Math.max(1, Math.min(IIMMPACT_OPTIONS_LIMIT, Number(request.data?.limit) || IIMMPACT_OPTIONS_LIMIT));
   const url = iimmpactUrl(provider, '/v2/options');
   url.searchParams.set('product_code', productCode);
   url.searchParams.set('field_id', fieldId);
