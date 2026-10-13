@@ -22,6 +22,7 @@ const providerReach = require('./providerReach');
 const catalogMirror = require('./iimmpactCatalogMirror');
 const costLog = require('./iimmpactCostLog');
 const iimmpactJwt = require('./iimmpactJwt');
+const { egressOptions } = require('./egress');
 const optionsMirror = require('./iimmpactOptionsMirror');
 const jompayBillers = require('./jompayBillers');
 
@@ -1785,7 +1786,7 @@ exports._test = { isPrivateIp, resolveExecutionMode, pinnedLookup, validateBaseU
  * the refusal is the API (a 400 means the key may buy), the key or account
  * (403 from the API), or a gateway/WAF in front of it.
  */
-exports.probeIimmpactPurchase = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, timeoutSeconds: 60 }, async (request) => {
+exports.probeIimmpactPurchase = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, timeoutSeconds: 60, ...egressOptions() }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   await checkVelocity(db, request.auth.uid, 'getIimmpactCostCheck', { ip: getClientIp(request) });

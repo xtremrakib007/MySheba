@@ -1,4 +1,5 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { egressOptions } = require('./egress');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 const admin = require('firebase-admin');
 const { assertWalletUnfrozen } = require('./walletFreeze');
@@ -522,13 +523,13 @@ async function runChargeProduct(request, service) {
   return chargeProduct(request, service, data.payload, data.customer);
 }
 exports.runChargeProduct = runChargeProduct;
-exports.chargeRecharge=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>chargeProduct(r,'recharge',r.data?.payload,r.data?.customer));
-exports.chargeInternetPackage=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>chargeProduct(r,'internet',r.data?.payload,r.data?.customer));
-exports.chargeOfferPacks=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>chargeProduct(r,'offerpacks',r.data?.payload,r.data?.customer));
-exports.chargeEntertainment=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>chargeProduct(r,'entertainment',r.data?.payload,r.data?.customer));
-exports.chargeEsim=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>chargeProduct(r,'esim',r.data?.payload,r.data?.customer));
-exports.chargeIimmpactProduct=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>chargeProduct(r,'iimmpact',r.data?.payload,r.data?.customer));
-exports.chargeBillPayment=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>chargeProduct(r,'billpayment',r.data?.payload,r.data?.customer));
+exports.chargeRecharge=onCall({ enforceAppCheck: ENFORCE_APP_CHECK, ...egressOptions() },async r=>chargeProduct(r,'recharge',r.data?.payload,r.data?.customer));
+exports.chargeInternetPackage=onCall({ enforceAppCheck: ENFORCE_APP_CHECK, ...egressOptions() },async r=>chargeProduct(r,'internet',r.data?.payload,r.data?.customer));
+exports.chargeOfferPacks=onCall({ enforceAppCheck: ENFORCE_APP_CHECK, ...egressOptions() },async r=>chargeProduct(r,'offerpacks',r.data?.payload,r.data?.customer));
+exports.chargeEntertainment=onCall({ enforceAppCheck: ENFORCE_APP_CHECK, ...egressOptions() },async r=>chargeProduct(r,'entertainment',r.data?.payload,r.data?.customer));
+exports.chargeEsim=onCall({ enforceAppCheck: ENFORCE_APP_CHECK, ...egressOptions() },async r=>chargeProduct(r,'esim',r.data?.payload,r.data?.customer));
+exports.chargeIimmpactProduct=onCall({ enforceAppCheck: ENFORCE_APP_CHECK, ...egressOptions() },async r=>chargeProduct(r,'iimmpact',r.data?.payload,r.data?.customer));
+exports.chargeBillPayment=onCall({ enforceAppCheck: ENFORCE_APP_CHECK, ...egressOptions() },async r=>chargeProduct(r,'billpayment',r.data?.payload,r.data?.customer));
 exports.chargeMobileBanking=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>chargeProduct(r,'mobilebanking',r.data?.payload,r.data?.customer));
 exports.chargeRemittance=onCall({ enforceAppCheck: ENFORCE_APP_CHECK },async r=>chargeProduct(r,'remittance',r.data?.payload,r.data?.customer));
 

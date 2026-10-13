@@ -1,4 +1,5 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { egressOptions } = require('./egress');
 const admin = require('firebase-admin');
 const { assertWalletUnfrozen } = require('./walletFreeze');
 const crypto = require('crypto');
@@ -115,7 +116,7 @@ function requestIdOf(request) {
   return id;
 }
 
-exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, ...egressOptions() }, async (request) => {
   const uid = requireAuth(request);
   const requestId = requestIdOf(request);
   const db = admin.firestore();
