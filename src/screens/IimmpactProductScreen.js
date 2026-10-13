@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, Alert, ActivityIndicator, Image, Share, BackHandler } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, Alert, ActivityIndicator, Image, Share, BackHandler, Linking } from 'react-native';
 import { printTransactionReceipt } from '../utils/printService';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
@@ -12,6 +12,7 @@ import { denominationItems } from '../utils/denominations';
 import { useIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
 import ConfirmReview, { formatMoney } from '../components/ConfirmReview';
 import { catalogCategories } from '../components/iimmpactTiles';
+import { isPinServed, treeCategoryIndex } from '../data/pinCategories';
 import { applyMarkup } from '../utils/markup';
 import { radius } from '../theme/theme';
 
@@ -28,16 +29,33 @@ const displayValue = (value) => {
 // A product fulfilled as a PIN or voucher code. These go through the PIN
 // purchase, which hands the code back to show on screen; the generic charge
 // only records the order, and a voucher bought that way had no code to show.
-function isPinProduct(product) {
-  return String(product?.processing_time || '').toLowerCase() === 'pin';
+//
+// The same rule the voucher list uses: IIMMPACT's "pin" processing time, or
+// a product filed under a voucher category (Fuel, Shopping, ...). Shell is
+// sold as a code but processed "instant", and was charged as a top-up that
+// asked for an account it does not have.
+function isPinProduct(product, catalog) {
+  if (String(product?.processing_time || '').toLowerCase() === 'pin') return true;
+  if (!product?.code) return false;
+  return isPinServed(product, treeCategoryIndex(catalog).get(String(product.code)) || '');
+}
+
+// Whether a catalogue field is a phone number - the only account a voucher
+// has no use for. An email or player ID a voucher declares is still asked.
+function isPhoneField(field) {
+  const text = [field?.id, field?.name, field?.label, field?.input_mode, field?.type].map((v) => String(v || '').toLowerCase()).join(' ');
+  return /phone|mobile|msisdn|\btel\b/.test(text);
 }
 
 // A voucher's PIN comes back on screen, so the customer is never asked for a
 // number. The field the catalogue names as the order's account is filled with
 // their own Malaysian number when they have one, and sent empty otherwise -
 // IIMMPACT accepts an empty account for products that do not need one.
-function hiddenAccountFieldId(product) {
-  return isPinProduct(product) ? String(product?.fulfillment?.account?.from_field || '') : '';
+function hiddenAccountFieldId(product, catalog) {
+  if (!isPinProduct(product, catalog)) return '';
+  const id = String(product?.fulfillment?.account?.from_field || '');
+  const field = (Array.isArray(product?.fields) ? product.fields : []).find((f) => String(f?.id) === id);
+  return id && (!field || isPhoneField(field)) ? id : '';
 }
 
 // The customer's number in Malaysian national form, when it is one.
@@ -72,10 +90,12 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
   }, [category]);
 
   const { goBackOrHome, profile, pricing } = useApp();
+  // Read at call time: the catalogue arrives below.
+  const isPin = (product) => isPinProduct(product, catalog);
   // What the customer pays for a provider price: MySheba's markup, and for a
   // PIN product the PIN multiplier too - the same steps the server takes.
   const customerPrice = (amount, product = selectedProduct) => {
-    const pin = isPinProduct(product);
+    const pin = isPin(product);
     const marked = applyMarkup(pricing, { service: pin ? 'rechargePin' : 'iimmpact', country: 'MY', productCode: product?.code, amount }).amount;
     if (!pin) return marked;
     const role = String(profile?.role || 'customer');
@@ -153,7 +173,7 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
   useEffect(() => {
     if (!directProduct || selectedProduct) return;
     setSelectedProduct(directProduct);
-    setValues(isPinProduct(directProduct) ? { __account: malaysianNational(profile?.phone) } : {});
+    setValues(isPin(directProduct) ? { __account: malaysianNational(profile?.phone) } : {});
     setSelectedOptions({});
     setOptions({});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -231,7 +251,7 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
   };
 
   const validate = () => {
-    const hiddenAccount = hiddenAccountFieldId(selectedProduct);
+    const hiddenAccount = hiddenAccountFieldId(selectedProduct, catalog);
     for (const field of fields) {
       if (hiddenAccount && String(field.id) === hiddenAccount) continue;
       const value = rawValue(values, selectedOptions, field.id);
@@ -270,8 +290,10 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
       if (spec.path) return pathValue(value, spec.path);
       return value;
     };
-    const pin = isPinProduct(selectedProduct);
-    const accountValue = pin ? '' : fulfillmentValue(fulfillment.account);
+    const pin = isPin(selectedProduct);
+    // A voucher's phone-number account is filled for the customer; any other
+    // account a voucher declares (an email, say) is what they typed.
+    const accountValue = pin && hiddenAccountFieldId(selectedProduct, catalog) ? '' : fulfillmentValue(fulfillment.account);
     const amountValue = fulfillmentValue(fulfillment.amount);
     const fallbackAccount = pin ? malaysianNational(profile?.phone) : String(values.__account || '').trim();
     const fallbackAmount = Number(values.__amount);
@@ -308,7 +330,7 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
     if (!pendingPurchase || busy) return;
     const purchase = pendingPurchase;
     setBusy(true);
-    if (isPinProduct(selectedProduct)) {
+    if (isPin(selectedProduct)) {
       try {
         const result = await purchaseRechargePin({
           country: 'MY',
@@ -317,8 +339,8 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
           subproductCode: String(purchase.pricingOption?.code || ''),
           productName: purchase.productName,
           accountNumber: purchase.accountNumber,
-          fieldValues: hiddenAccountFieldId(selectedProduct)
-            ? { ...purchase.selectedFields, [hiddenAccountFieldId(selectedProduct)]: purchase.accountNumber }
+          fieldValues: hiddenAccountFieldId(selectedProduct, catalog)
+            ? { ...purchase.selectedFields, [hiddenAccountFieldId(selectedProduct, catalog)]: purchase.accountNumber }
             : purchase.selectedFields,
           selectedOptions: Object.fromEntries(Object.entries(selectedOptions)
             .filter(([, option]) => option && option.code)
@@ -404,7 +426,7 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
       details={[
         ['Country', 'MY'],
         ['Currency', 'MYR'],
-        isPinProduct(selectedProduct) ? ['Delivery', 'PIN shown on screen after payment'] : ['Account / recipient', pendingPurchase.accountNumber],
+        isPin(selectedProduct) ? ['Delivery', 'PIN shown on screen after payment'] : ['Account / recipient', pendingPurchase.accountNumber],
         ['Product', pendingPurchase.productName],
         ['Package', pendingPurchase.pricingOption ? (pendingPurchase.pricingOption.label || pendingPurchase.pricingOption.description || '') : ''],
       ]}
@@ -449,16 +471,17 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
       </LinearGradient>
 
       <ScrollView contentContainerStyle={st.body} keyboardShouldPersistTaps="handled">
-        {!!voucher && (voucher.pin || voucher.deliveryLink) && (
+        {!!voucher && (voucher.pin || voucher.deliveryLink || voucher.serialNumber) && (
           <View style={st.voucher}>
             <Text style={st.voucherTitle}>Voucher Ready</Text>
             <Text style={st.muted}>{voucher.productName} • MYR {Number(voucher.amount || 0).toFixed(2)}</Text>
             {!!voucher.pin && <Text selectable style={st.voucherPin}>{voucher.pin}</Text>}
-            {!!voucher.deliveryLink && <Text selectable style={st.voucherLink}>{voucher.deliveryLink}</Text>}
+            {!!voucher.serialNumber && voucher.serialNumber !== voucher.pin && <Text selectable style={st.muted}>Serial no: {voucher.serialNumber}</Text>}
+            {!!voucher.deliveryLink && <Text selectable style={st.voucherLink} onPress={() => Linking.openURL(voucher.deliveryLink).catch(() => {})}>{voucher.deliveryLink}</Text>}
             {!!voucher.expiry && <Text style={st.muted}>Expires: {voucher.expiry}</Text>}
             {!!voucher.deliveryNote && <Text style={st.muted}>{voucher.deliveryNote}</Text>}
             <Text style={st.muted}>Keep this voucher private. Transaction {String(voucher.id || '')}</Text>
-            <TouchableOpacity style={st.voucherShare} onPress={() => Share.share({ title: 'MySheba Voucher', message: [voucher.productName, voucher.pin || '', voucher.deliveryLink || ''].filter(Boolean).join('\n') }).catch(() => {})}>
+            <TouchableOpacity style={st.voucherShare} onPress={() => Share.share({ title: 'MySheba Voucher', message: [voucher.productName, voucher.pin || '', voucher.serialNumber && voucher.serialNumber !== voucher.pin ? 'Serial no: ' + voucher.serialNumber : '', voucher.deliveryLink || ''].filter(Boolean).join('\n') }).catch(() => {})}>
               <Text style={st.buySmall}>Share voucher</Text>
             </TouchableOpacity>
           </View>
@@ -470,7 +493,7 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
                 to the same list. */}
             <View style={st.productGrid}>
               {[...productList].sort((x, y) => String(x.name || x.code).localeCompare(String(y.name || y.code))).map((product) => (
-                <TouchableOpacity key={product.code} style={st.productCard} onPress={() => { setSelectedProduct(product); setValues(isPinProduct(product) ? { __account: malaysianNational(profile?.phone) } : {}); setSelectedOptions({}); setOptions({}); setVoucher(null); }}>
+                <TouchableOpacity key={product.code} style={st.productCard} onPress={() => { setSelectedProduct(product); setValues(isPin(product) ? { __account: malaysianNational(profile?.phone) } : {}); setSelectedOptions({}); setOptions({}); setVoucher(null); }}>
                   {product.image_url ? <Image source={{uri: product.image_url}} style={st.productLogo} resizeMode="contain" /> : <View style={st.productFallback}><Text style={st.productFallbackText}>{String(product.name || product.code || 'P').slice(0, 1).toUpperCase()}</Text></View>}
                   <Text style={st.productName} numberOfLines={3}>{product.name || product.code}</Text>
                   {!!product.processing_time && <Text style={st.processing}>{String(product.processing_time).replace(/_/g, ' ')}</Text>}
@@ -501,7 +524,7 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
               return (
                 <>
                   {/* A PIN product needs nothing typed: the code is shown on screen. */}
-                  {!hasAccountField && !isPinProduct(selectedProduct) && (
+                  {!hasAccountField && !isPin(selectedProduct) && (
                     <View style={st.field}>
                       <Text style={st.label}>Account / Recipient *</Text>
                       <TextInput
@@ -532,7 +555,7 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
             })()}
             {fields.map((field) => {
               const id = String(field.id || field.name || '');
-              if (id && id === hiddenAccountFieldId(selectedProduct)) return null;
+              if (id && id === hiddenAccountFieldId(selectedProduct, catalog)) return null;
               const value = rawValue(values, selectedOptions, id);
               const list = options[id] || [];
               const busyField = optionBusy[id];

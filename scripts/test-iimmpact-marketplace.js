@@ -938,7 +938,16 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
   await test('the dispatcher reads data.pin for an IIMMPACT PIN without a configured path', () => {
     const src = fs.readFileSync(path.join(ROOT, 'functions/apiProviderService.js'), 'utf8');
     assert.ok(/!provider\.responsePinPath && provider\.authType !== 'iimmpactHmac'/.test(src));
-    assert.ok(/\[configured, result\.providerPin, result\.deliveryLink\]/.test(src));
+    assert.ok(/\[configured, result\.providerPin, result\.deliveryLink, result\.serialNumber\]/.test(src));
+  });
+
+  await test('a voucher filed by category (Shell) is a voucher, and its phone account is waived', () => {
+    const screen = fs.readFileSync(path.join(ROOT, 'src/screens/IimmpactProductScreen.js'), 'utf8');
+    assert.ok(/isPinServed\(product, treeCategoryIndex\(catalog\)/.test(screen), 'product screen uses the voucher list rule');
+    const pinService = fs.readFileSync(path.join(ROOT, 'functions/rechargePinService.js'), 'utf8');
+    assert.ok(/voucherOrder: true/.test(pinService), 'the voucher purchase marks its order');
+    const src = fs.readFileSync(path.join(ROOT, 'functions/apiProviderService.js'), 'utf8');
+    assert.ok(/raw\?\.voucherOrder === true/.test(src), 'the resolver treats a voucher order as a voucher');
   });
 
   console.log(`\n${passed} passed, ${failed} failed.\n`);

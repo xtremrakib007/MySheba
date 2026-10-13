@@ -167,6 +167,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
       optionCode: subproductCode,
       accountNumber,
       phone: accountNumber,
+      voucherOrder: true,
       amount: denomination,
       fieldValues: cleanFormMap(input.fieldValues),
       selectedOptions: cleanFormMap(input.selectedOptions),
@@ -296,14 +297,14 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
     });
     await db.collection('rechargePins').doc(txRef.id).set({
       transactionId: txRef.id, customerId: uid, operator, country, productCode: dispatchRaw.productCode || null, subproductCode: dispatchRaw.subproductCode || null, productName: displayName || null, amount: denomination,
-      currency: 'MYR', pin: voucherPin || voucherSecret, deliveryLink: api.deliveryLink || null, deliveryNote: api.deliveryNote || null, expiry: api.expiry || null, createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      currency: 'MYR', pin: voucherPin || voucherSecret, deliveryLink: api.deliveryLink || null, deliveryNote: api.deliveryNote || null, expiry: api.expiry || null, serialNumber: api.serialNumber || null, createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
     await txRef.update({
       status: 'completed', rechargePinAvailable: true,
       apiExecution: { status: 'accepted', providerId: api.providerId, providerName: api.providerName, responseId: api.responseId || null, message: api.message || null, serialNumber: api.serialNumber || null, providerSucceeded: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
-    return { id: txRef.id, cost: walletCost, baseCostMyr: reserved.baseCostMyr, pin: voucherPin, deliveryLink: api.deliveryLink || null, deliveryNote: api.deliveryNote || null, expiry: api.expiry || null, operator, productCode: dispatchRaw.productCode, subproductCode: dispatchRaw.subproductCode, productName: displayName, country, amount: denomination, currency: walletFx.currency, fxRate: walletFx.sellRate };
+    return { id: txRef.id, cost: walletCost, baseCostMyr: reserved.baseCostMyr, pin: voucherPin, deliveryLink: api.deliveryLink || null, deliveryNote: api.deliveryNote || null, expiry: api.expiry || null, serialNumber: api.serialNumber || null, operator, productCode: dispatchRaw.productCode, subproductCode: dispatchRaw.subproductCode, productName: displayName, country, amount: denomination, currency: walletFx.currency, fxRate: walletFx.sellRate };
   } catch (e) {
     const unavailable = String(e?.code || '') === 'unavailable';
     if (unavailable || providerSucceeded) {

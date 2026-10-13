@@ -1673,7 +1673,9 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
       // The configured path first; then what the provider documents. A voucher
       // the provider issued is never thrown away because the record pointed
       // one level off - that left the customer charged with nothing to show.
-      const secret = [configured, result.providerPin, result.deliveryLink]
+      // A voucher that answers with only a serial number (some e-vouchers
+      // carry their code there) still has something to hand the customer.
+      const secret = [configured, result.providerPin, result.deliveryLink, result.serialNumber]
         .find((value) => typeof value === 'string' && value.trim() && value.length <= 2000);
       if (secret) result.secret = secret.trim();
       else if (!(service === 'Recharge PIN' && isProcessing)) throw new Error('Provider did not return a valid recharge PIN.');
@@ -2599,8 +2601,16 @@ async function resolveIimmpactMarketplaceProduct(db, raw) {
   // A voucher's PIN comes back in the reply, so its account is never asked of
   // the customer: their own Malaysian number when they have one, otherwise
   // empty, which IIMMPACT accepts for a product whose account is optional.
-  const isPin = String(product.processing_time || '').toLowerCase() === 'pin';
-  const pinAccountFieldId = isPin ? String(product.fulfillment?.account?.from_field || '') : '';
+  // A voucher is IIMMPACT's "pin" processing time, or any product bought
+  // through the voucher purchase (raw.voucherOrder): Shell and the other
+  // category-filed vouchers are processed "instant" but sold as a code.
+  const isPin = String(product.processing_time || '').toLowerCase() === 'pin' || raw?.voucherOrder === true;
+  // Only a phone-number account is waived; an email or ID a voucher declares
+  // is still required.
+  const accountFieldSpec = String(product.fulfillment?.account?.from_field || '');
+  const accountField = fields.find((field) => field && String(field.id) === accountFieldSpec);
+  const phoneLike = (field) => /phone|mobile|msisdn|\btel\b/i.test([field?.id, field?.name, field?.label, field?.input_mode, field?.type].map((v) => String(v || '')).join(' '));
+  const pinAccountFieldId = isPin && accountFieldSpec && (!accountField || phoneLike(accountField)) ? accountFieldSpec : '';
 
   for (const field of fields) {
     if (field?.required && !(pinAccountFieldId && String(field.id) === pinAccountFieldId)) {
