@@ -1517,7 +1517,16 @@ async function executeConfiguredApi(service, payload, customer, requestId, optio
     const method = provider.authType === 'iimmpactHmac' ? 'POST' : String(provider.method||'POST').toUpperCase();
     if (!ALLOWED_METHODS.includes(method)) throw new Error('Provider HTTP method is not allowed.');
     if (url.search.length > 8000) throw new Error('Provider query string is too large.');
-    const headers = { accept:'application/json', ...render(asObject(provider.headers),vars), ...providerAuth(provider) };
+    // An IIMMPACT purchase carries exactly what the catalogue and balance
+    // calls carry - accept, content type, version and the signature - and
+    // none of the provider's stored header template. A leftover
+    // `Authorization: Bearer ...` from the account's old JWT setup rode along
+    // on purchases only, and with IIMMPACT's "API Key-only for topup"
+    // setting on, a topup carrying one is treated as legacy JWT and answered
+    // 403 Forbidden - while every other call, without it, worked.
+    const headers = provider.authType === 'iimmpactHmac'
+      ? { accept:'application/json' }
+      : { accept:'application/json', ...render(asObject(provider.headers),vars), ...providerAuth(provider) };
     for (const [key, value] of Object.entries(headers)) {
       if (typeof value === 'string' && /[\x00-\x1F\x7F]/.test(value)) throw new Error('Rendered API header contains invalid control characters.');
       if (String(value).length > 4000) throw new Error('Rendered API header value is too large.');
