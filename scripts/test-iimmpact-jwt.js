@@ -20,7 +20,12 @@ function fakeDb() {
 (async () => {
   assert.strictEqual(jwt.tokenFrom({ IdToken: 'a.b.c', ExpiresIn: 3600 }).token, 'a.b.c');
   assert.strictEqual(jwt.tokenFrom({ IdToken: 'a.b.c', ExpiresIn: 3600 }).lifeMs, 3600000);
-  assert.strictEqual(jwt.tokenFrom({ data: { access_token: 'tok', expires_in: 60 } }).token, 'tok');
+  // IIMMPACT's documented reply: the ID token, never the access token.
+  const documented = jwt.tokenFrom({ AuthenticationResult: { AccessToken: 'access', ExpiresIn: 3600, TokenType: 'Bearer', RefreshToken: 'r', IdToken: 'id.token.sig' } });
+  assert.strictEqual(documented.token, 'id.token.sig');
+  assert.strictEqual(documented.lifeMs, 3600000);
+  assert.strictEqual(jwt.tokenFrom({ AuthenticationResult: { AccessToken: 'access', ExpiresIn: 3600 } }), null, 'an AccessToken alone is not usable');
+  assert.strictEqual(jwt.tokenFrom({ data: { token: 'tok', expires_in: 60 } }).token, 'tok');
   assert.strictEqual(jwt.tokenFrom({ AuthenticationResult: { IdToken: 'x.y.z' } }).token, 'x.y.z');
   assert.strictEqual(jwt.tokenFrom({ message: 'Unauthorized' }), null);
   assert.strictEqual(jwt.tokenFrom({ token: 'has space' }), null, 'never a token with whitespace');
