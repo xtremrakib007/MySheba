@@ -212,16 +212,25 @@ export function providerGroup({ provider, groupKey, catalog }) {
 export function providerHomeTiles({ country }) {
   const provider = providerFor(country);
   const groups = provider === SUCCESS_TOPUP ? successTopUpGroupList() : MY_GROUPS;
-  return groups.map((group) => ({
-    key: group.key,
-    name: group.name,
-    art: group.art,
-    kind: 'providerGroup',
-    provider,
-    groupKey: group.key,
-    cat: 'recharge',
-    home: true,
-  }));
+  return groups.flatMap((group) => {
+    // Mobile's four (Prepaid Reload, PIN, Internet, International Reload)
+    // sit on the home page itself rather than one tap away inside a Mobile
+    // tile. parentKey keeps the superadmin's grid switch for Mobile in force
+    // over all four.
+    if (provider !== SUCCESS_TOPUP && group.key === 'grp_mobile') {
+      return mobileTiles().map((tile) => ({ ...tile, provider, parentKey: group.key, cat: 'recharge', home: true }));
+    }
+    return [{
+      key: group.key,
+      name: group.name,
+      art: group.art,
+      kind: 'providerGroup',
+      provider,
+      groupKey: group.key,
+      cat: 'recharge',
+      home: true,
+    }];
+  });
 }
 
 // The fixed product tiles the Malaysian groups replace.

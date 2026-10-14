@@ -79,9 +79,14 @@ export function subscribeMyTransactions(uid, callback, onError) { const q = quer
 // matches subscribeMyTransactions rather than adding firestore.indexes.json
 // entries for an admin screen.
 export function subscribeUnknownTransactions(callback, onError) {
-  const q = query(collection(db, COLLECTION), where('status', '==', 'unknown'), limit(100));
+  // Stuck `processing` orders too - the provider's final result never came
+  // (functions/transactionService.js reconcileUnknownTransaction). An `in`
+  // on one field needs no composite index.
+  const q = query(collection(db, COLLECTION), where('status', 'in', ['unknown', 'processing']), limit(100));
   return onSnapshot(q, (snap) => {
-    const list = snap.docs.map(mapTransactionDoc);
+    // A processing order a dealer is fulfilling by hand is not stuck: only
+    // one that went to a provider API waits on a provider's answer.
+    const list = snap.docs.map(mapTransactionDoc).filter((t) => t.status === 'unknown' || !!t.apiExecution);
     list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
     callback(list);
   }, onError);

@@ -258,6 +258,8 @@ export default function AdminFeaturesScreen() {
   const homeItems = groupedHomeList.filter((item) => {
     if (item.section === 'system' && !isSuperadmin) return false;
     if (!gridManagementService.isGridActive(gridManagement, item.key, gridViewer)) return false;
+    // Mobile's four tiles follow the Mobile switch as well as their own.
+    if (item.service?.parentKey && !gridManagementService.isGridActive(gridManagement, item.service.parentKey, gridViewer)) return false;
     const need = CAPABILITY_FOR[item.key];
     // A service tile is not a management capability - every role may use it.
     if (!need) return !item.section || isSuperadmin || item.service || item.screen;

@@ -211,7 +211,16 @@ function slug(value) {
 function presetKeyFor(provider) {
   const explicit = slug(provider && provider.catalogPreset);
   if (explicit) return explicit;
-  return slug(provider && provider.name);
+  const byName = slug(provider && provider.name);
+  if (PRESETS[byName]) return byName;
+  // An IIMMPACT provider saved without a catalogue preset (its name is just
+  // "IIMMPACT", which matches none) had no catalogue config at all, so
+  // Internet answered "no per-number plans" for every operator and the step
+  // was blank - while recharges through the same provider worked. IIMMPACT's
+  // per-number plans are always /v2/options, with the documented Malaysian
+  // operator codes, so that is its default.
+  if (provider && provider.authType === 'iimmpactHmac') return 'iimmpact-options';
+  return byName;
 }
 
 function asObject(value) {
