@@ -87,3 +87,17 @@ export async function approveTopup(topup) { try { await httpsCallable(functions,
 export async function rejectTopup(id, reason) { try { await httpsCallable(functions, 'rejectTopup')({ topupId: id, reason }); logActivity('topup_rejected', { topupId: id }); } catch (e) { logError('topupService.rejectTopup', e); throw e; } }
 export async function createSelfTopup(payload, requestId = createRequestId('selftopup')) { const session = await getSessionProof(); const { data } = await httpsCallable(functions, 'createSelfTopup')({ ...payload, requestId, ...session }); return data?.id; }
 export function subscribeMySelfTopups(uid, callback, onError) { const q = query(collection(db, 'selfTopups'), where('userId', '==', uid), limit(100)); return onSnapshot(q, snap => { const list = snap.docs.map(d => ({ id: d.id, ...d.data() })); list.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)); callback(list); }, onError); }
+
+// Superadmin only: record a real bank deposit into the superadmin wallet -
+// the one place money enters MySheba (functions/superadminDepositService.js).
+// One requestId per form, so a retried tap is recorded once.
+export function newDepositRequestId() { return createRequestId('deposit'); }
+export async function recordSuperadminDeposit(payload, requestId) {
+  const session = await getSessionProof();
+  const { data } = await httpsCallable(functions, 'recordSuperadminDeposit')({
+    amount: payload.amount, bankName: payload.bankName, refNo: payload.refNo,
+    receiptUrl: payload.receiptUrl, note: payload.note || '', requestId, ...session,
+  });
+  logActivity('superadmin_deposit_recorded', { amount: Number(payload.amount) || 0 });
+  return data;
+}

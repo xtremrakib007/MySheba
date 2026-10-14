@@ -1127,11 +1127,17 @@ async function discoverIimmpactProductCodes(provider, operatorName, service) {
   const base = new URL(provider.baseUrl);
   const url = new URL('/v2/catalog', base);
   url.searchParams.set('is_active', 'true');
-  const { ok, json } = await signedProviderRequest(url, {
+  const { ok, status, json } = await signedProviderRequest(url, {
     method: 'GET',
     headers: { accept: 'application/json' },
   }, provider);
-  if (!ok || !json || typeof json !== 'object') return [];
+  // A failed catalogue is IIMMPACT being unreachable, not the operator having
+  // no plans. Returning [] here made the two look the same, and the Internet
+  // step showed a blank page with nothing to say why.
+  if (!ok || !json || typeof json !== 'object') {
+    const said = providerErrorText(json);
+    throw new HttpsError('unavailable', `IIMMPACT catalogue request failed (HTTP ${status}${said ? `: ${said}` : ''}).`);
+  }
 
   const operatorAliases = {
     hotlink: ['hotlink', 'hotlink malaysia', 'hotlink prepaid'],
@@ -2129,9 +2135,18 @@ exports.listProviderDataPlans = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, a
     // resolve without a MySheba release.
     codes = await discoverIimmpactProductCodes(provider, operatorName, service);
   }
-  // Not an error: most country/operator pairs have no per-number catalogue and
-  // the screen simply keeps the package list it already had.
-  if (!provider || !codes.length) return { plans: [], supported: false };
+  // Not an error: most country/operator pairs have no per-number catalogue.
+  // The reason is returned so the screen can say which - outside Bangladesh
+  // there is no other list to fall back to, and a bare "not supported" drew
+  // an empty page.
+  if (!provider) {
+    console.warn('listProviderDataPlans: no provider', { service, country, operator: operatorName });
+    return { plans: [], supported: false, reason: 'no-provider' };
+  }
+  if (!codes.length) {
+    console.warn('listProviderDataPlans: no product', { service, country, operator: operatorName, provider: provider.id });
+    return { plans: [], supported: false, reason: 'no-product' };
+  }
   if (!provider.apiKey || !provider.secretKey) throw new HttpsError('failed-precondition', 'The package provider is not configured.');
 
   const account = nationalAccountNumber(request.data?.phone, country);

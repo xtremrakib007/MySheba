@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Keyboard } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
@@ -64,6 +64,15 @@ export default function BottomNav() {
   const { goHome, screen, setScreen, profile, setAdminTab, setAdminViewingSection, adminTab, adminViewingSection } = useApp();
   const role = profile?.role;
   const tabs = tabsFor(role);
+  // The bar is on every signed-in screen now (App.js), forms included. While
+  // the keyboard is up it would ride on top of it and squeeze the field being
+  // typed into, so it steps aside until the keyboard closes.
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardOpen(true));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardOpen(false));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
   const onPressTab = (key) => {
     if (key === 'home') return goHome();
@@ -80,6 +89,8 @@ export default function BottomNav() {
     const target = screenFor(key, role);
     if (target) setScreen(target);
   };
+
+  if (keyboardOpen) return null;
 
   return (
     <View style={styles.nav}>

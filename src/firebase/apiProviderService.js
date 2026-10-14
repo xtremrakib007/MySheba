@@ -74,7 +74,7 @@ export async function listProviderDataPlans({ service = 'Internet', country, ope
   const key = ['plans', service, country, operator, String(phone || '').replace(/\D/g, '')].join('|');
   return keptProviderAnswer(key, String(operator || ''), async () => {
     const { data } = await dataPlansFn({ service, country, operator, phone });
-    return { plans: data?.plans || [], supported: data?.supported === true };
+    return { plans: data?.plans || [], supported: data?.supported === true, reason: String(data?.reason || '') };
   }, (result) => result.supported && result.plans.length > 0);
 }
 

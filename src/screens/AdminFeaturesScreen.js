@@ -6,6 +6,7 @@ import { useTheme } from '../theme/ThemeContext';
 import HeaderDecor from '../components/HeaderDecor';
 import AppHeader from '../components/AppHeader';
 import WalletCard from '../components/WalletCard';
+import SuperadminDepositModal from '../components/SuperadminDepositModal';
 import FeatureGrid from '../components/FeatureGrid';
 import { useServiceAction } from '../components/ServiceGrid';
 import PromptModal from '../components/PromptModal';
@@ -121,6 +122,7 @@ export default function AdminFeaturesScreen() {
   const [section, setSection] = useState(null);
   const [rateView, setRateView] = useState(false);
   const [editRateKey, setEditRateKey] = useState(null);
+  const [depositOpen, setDepositOpen] = useState(false);
   const isSuperadmin = profile?.role === 'superadmin';
 
   // Both views below are local state, not screens, so the hardware back button
@@ -265,13 +267,16 @@ export default function AdminFeaturesScreen() {
   return <View style={styles.screen}>
     <AppHeader onPressMenu={openSidebar} />
     <ScrollView contentContainerStyle={styles.homeContent}>
-      <WalletCard balance={balance} variant="surface" onAddMoney={() => profile?.role === 'admin' ? setScreen('walletFunding') : undefined} onTransfer={() => setScreen('transferPoints')} />
+      {/* Add Money: an admin asks superadmin for funding; the superadmin, who
+          has nobody above to ask, records a real bank deposit. */}
+      <WalletCard balance={balance} variant="surface" onAddMoney={() => (isSuperadmin ? setDepositOpen(true) : profile?.role === 'admin' ? setScreen('walletFunding') : undefined)} onTransfer={() => setScreen('transferPoints')} />
       <FeatureGrid
         title={isSuperadmin ? 'Superadmin Control Center' : 'Admin Control Center'}
         items={homeItems}
         onPress={openHomeItem}
       />
     </ScrollView>
+    {!!isSuperadmin && <SuperadminDepositModal visible={depositOpen} onClose={() => setDepositOpen(false)} />}
   </View>;
 }
 
