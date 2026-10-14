@@ -15,6 +15,7 @@
 // Only IIMMPACT hosts use it; every other provider is untouched.
 
 const http = require('http');
+const https = require('https');
 const tls = require('tls');
 
 const IIMMPACT_HOST = /(^|\.)iimmpact\.com$/i;
@@ -68,4 +69,29 @@ function tunnelConnection(hostname, port = 443, env = process.env) {
   };
 }
 
-module.exports = { proxyConfig, usesProxy, tunnelConnection, IIMMPACT_HOST };
+// A warm instance keeps its tunnel open between read-only calls. Each new
+// tunnel is a TCP connect to the proxy, the CONNECT, and a TLS handshake with
+// IIMMPACT - several round trips between us-central1 and Singapore - and an
+// order makes two GETs (catalogue, options) before its purchase. Only GETs
+// use this: a POST /v2/topup always opens a fresh tunnel, so a socket that
+// went stale while idle can never turn a purchase into an unknown outcome.
+// Idle tunnels close after IDLE_MS, well under the proxy's and IIMMPACT's
+// own idle limits.
+const IDLE_MS = 20000;
+let keepAlive = null;
+let keepAliveFor = '';
+function keepAliveAgent(env = process.env) {
+  const proxyKey = String(env.IIMMPACT_PROXY_URL || '');
+  if (keepAlive && keepAliveFor === proxyKey) return keepAlive;
+  if (keepAlive) keepAlive.destroy();
+  const agent = new https.Agent({ keepAlive: true, maxSockets: 8, maxFreeSockets: 4, timeout: IDLE_MS, scheduling: 'lifo' });
+  agent.createConnection = (options, done) => {
+    const host = options.servername || options.host;
+    tunnelConnection(host, Number(options.port) || 443, env)(options, done);
+  };
+  keepAlive = agent;
+  keepAliveFor = proxyKey;
+  return agent;
+}
+
+module.exports = { proxyConfig, usesProxy, tunnelConnection, keepAliveAgent, IIMMPACT_HOST, IDLE_MS };
