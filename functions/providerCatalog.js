@@ -236,6 +236,7 @@ function asObject(value) {
  */
 function catalogConfigFor(provider) {
   if (!provider) return null;
+  if (provider.authType === 'iimmpactHmac') return iimmpactPlansConfig(provider);
   let path = String(provider.catalogPath || '').trim();
   const legacyIimmpact =
     path === '/v2/subproducts' &&
@@ -303,6 +304,48 @@ function catalogConfigFor(provider) {
     types,
     window: windowSpec,
     errorLabel: String(provider.catalogErrorLabel || (preset && preset.errorLabel) || provider.name || 'The provider'),
+  };
+}
+
+/**
+ * IIMMPACT's per-number plans, whatever catalogue settings its record holds.
+ *
+ * The only IIMMPACT endpoint that answers "which plans can THIS number buy"
+ * is /v2/options. The provider form saves catalogPreset 'iimmpact-catalog'
+ * with catalogPath /v2/catalog - the product list, which cannot - and that
+ * preset carries no operator codes. A record saved that way had no codes and
+ * no usable path, so every Malaysian Internet operator answered "no
+ * provider". Only the base URL and explicit operator-code overrides are
+ * taken from the record; the marketplace catalogue does not come through
+ * here (it has its own callables).
+ */
+function iimmpactPlansConfig(provider) {
+  const preset = PRESETS['iimmpact-options'];
+  const baseUrl = String(provider.catalogBaseUrl || provider.baseUrl || '').trim();
+  if (!baseUrl) return null;
+  const recordCodes = asObject(provider.catalogOperatorCodes);
+  const operatorCodes = { ...asObject(preset.operatorCodes), ...(recordCodes || {}) };
+  return {
+    baseUrl,
+    path: preset.path,
+    method: preset.method,
+    requestTemplate: {},
+    queryTemplate: preset.queryTemplate,
+    perAccount: true,
+    fieldId: preset.fieldId,
+    operatorCodes: Object.keys(operatorCodes).length ? operatorCodes : null,
+    // Kept as the record and its preset say: discovery is the fallback for an
+    // operator the code map does not name.
+    dynamicProductDiscovery: provider.catalogDynamicProductDiscovery !== undefined
+      ? provider.catalogDynamicProductDiscovery === true
+      : Boolean(PRESETS[presetKeyFor(provider)]?.dynamicProductDiscovery),
+    successPath: preset.successPath,
+    successValue: preset.successValue,
+    listPath: preset.listPath,
+    itemMap: preset.itemMap || DEFAULT_ITEM_MAP,
+    types: preset.types || ['regular'],
+    window: preset.window || null,
+    errorLabel: preset.errorLabel || 'iimmpact',
   };
 }
 
