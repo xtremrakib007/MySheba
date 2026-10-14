@@ -23,6 +23,7 @@ const catalogMirror = require('./iimmpactCatalogMirror');
 const costLog = require('./iimmpactCostLog');
 const iimmpactJwt = require('./iimmpactJwt');
 const { egressOptions } = require('./egress');
+const iimmpactProxy = require('./iimmpactProxy');
 const optionsMirror = require('./iimmpactOptionsMirror');
 const jompayBillers = require('./jompayBillers');
 
@@ -286,14 +287,23 @@ const USER_AGENT = 'MySheba/1.0';
 
 function requestHttpsPinned(url, options, pinnedAddress) {
   return new Promise((resolve, reject) => {
+    const target = typeof url === 'string' ? new URL(url) : url;
+    // IIMMPACT refuses topup from US source IPs; with a fixed-IP proxy
+    // configured, every IIMMPACT call is tunnelled through it (end-to-end TLS,
+    // see iimmpactProxy.js). Other providers keep the pinned direct path.
+    const route = iimmpactProxy.usesProxy(target.hostname)
+      // No `agent` key: Node only honours createConnection when the request
+      // has no agent (agent:false would build one and connect directly).
+      ? { createConnection: iimmpactProxy.tunnelConnection(target.hostname, Number(target.port) || 443) }
+      // Pin the already-validated DNS result for this request. TLS still uses
+      // the original hostname, so certificate/SNI validation is preserved.
+      : { lookup: pinnedLookup(pinnedAddress) };
     const request = https.request(url, {
       method: options.method,
       // Ours first, so an explicit header from a caller still wins.
       headers: { 'user-agent': USER_AGENT, ...options.headers },
       signal: options.signal,
-      // Pin the already-validated DNS result for this request. TLS still uses
-      // the original hostname, so certificate/SNI validation is preserved.
-      lookup: pinnedLookup(pinnedAddress),
+      ...route,
     }, (response) => {
       let bytes = 0;
       const chunks = [];
@@ -1772,7 +1782,7 @@ exports.resolveIimmpactEsimPackage = resolveIimmpactEsimPackage;
 exports.resolveExecutionMode = resolveExecutionMode;
 exports.providersForService = providersForService;
 exports.COUNTRY_CODES = COUNTRY_CODES;
-exports._test = { isPrivateIp, resolveExecutionMode, pinnedLookup, validateBaseUrl, validateHeaders, validateTemplate, getPath, render, providerAuth, validate, matchesStatus, classifyResponse, providerAmountFor, buildIimmpactTopupBody, _test_autoCountryModes: autoCountryModes };
+exports._test = { requestHttpsPinned, isPrivateIp, resolveExecutionMode, pinnedLookup, validateBaseUrl, validateHeaders, validateTemplate, getPath, render, providerAuth, validate, matchesStatus, classifyResponse, providerAmountFor, buildIimmpactTopupBody, _test_autoCountryModes: autoCountryModes };
 
 /**
  * Superadmin: why does IIMMPACT refuse purchases?
