@@ -2718,7 +2718,25 @@ exports._test_iimmpactCustomerPrice = iimmpactCustomerPrice;
  * product codes, plan codes, denomination, account mapping and extras out of
  * client trust.
  */
+/**
+ * The live-checked product behind an IIMMPACT order, or { error }.
+ *
+ * A network failure while asking IIMMPACT (the proxy refusing the tunnel,
+ * a timeout, DNS) used to escape as a plain Error, which a callable reports
+ * only as "INTERNAL [500]". It now says what failed, as `unavailable`, before
+ * anything is charged.
+ */
 async function resolveIimmpactMarketplaceProduct(db, raw) {
+  try {
+    return await resolveIimmpactMarketplaceProductUnsafe(db, raw);
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    console.error('IIMMPACT product check failed', String(error?.message || error).slice(0, 300));
+    throw new HttpsError('unavailable', `IIMMPACT could not be reached: ${String(error?.message || 'network error').slice(0, 200)}`);
+  }
+}
+
+async function resolveIimmpactMarketplaceProductUnsafe(db, raw) {
   const country = cleanString(raw?.country, 2).toUpperCase() || 'MY';
   const provider = await findActiveIimmpactProviderForCountry(db, country);
   if (!provider || provider.authType !== 'iimmpactHmac') return { error: 'provider-unconfigured' };
