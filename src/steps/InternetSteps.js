@@ -74,6 +74,9 @@ export default function InternetStep({ step }) {
   const [perNumberPlans, setPerNumberPlans] = useState(null);
   const [plansLoading, setPlansLoading] = useState(false);
   const [plansError, setPlansError] = useState('');
+  // Why the provider has no per-number plans here ('no-provider',
+  // 'no-product'), so the step can say so instead of drawing nothing.
+  const [plansReason, setPlansReason] = useState('');
   const phone = String(serviceData.phone || '').trim();
   const operator = serviceData.operator || '';
   useEffect(() => {
@@ -82,9 +85,9 @@ export default function InternetStep({ step }) {
       setPerNumberPlans(null);
       return () => { alive = false; };
     }
-    setPlansLoading(true); setPlansError('');
+    setPlansLoading(true); setPlansError(''); setPlansReason('');
     apiProviderService.listProviderDataPlans({ service: 'Internet', country: serviceData.country, operator, phone })
-      .then(({ plans, supported }) => { if (alive) setPerNumberPlans(supported ? plans : null); })
+      .then(({ plans, supported, reason }) => { if (alive) { setPerNumberPlans(supported ? plans : null); setPlansReason(supported ? '' : (reason || 'unsupported')); } })
       // A failure here must NOT fall through to the built-in list: that list is
       // not what this number was quoted from, and the server would refuse the
       // order anyway once a per-number catalogue is configured. Saying so is
@@ -153,6 +156,9 @@ export default function InternetStep({ step }) {
         {!!plansError && <FormLabel>{plansError}</FormLabel>}
         {!packageLoading && !packageError && serviceData.country === 'BD' && packages.length === 0 && <FormLabel>No internet packages are available for this operator right now. Try another operator, or use Recharge for a plain top-up.</FormLabel>}
         {!plansLoading && !!source.emptyForNumber && <FormLabel>This number has no data plans available right now. Try Recharge for a plain top-up.</FormLabel>}
+        {/* Blocked with no error: the provider answered that it has no
+            per-number plans for this operator. Said, never a blank page. */}
+        {!plansLoading && !plansError && !!source.blocked && <FormLabel>{noPlansMessage(plansReason, operator, phone)}</FormLabel>}
         {!packageLoading && !packageError && !plansLoading && !source.blocked && (
           <>
             {!!source.perNumber && packages.length > 0 && <FormLabel>Plans available on {phone}</FormLabel>}
@@ -177,6 +183,14 @@ export default function InternetStep({ step }) {
   }
 
   return null;
+}
+
+// What to say when there are no per-number plans and nothing went wrong.
+export function noPlansMessage(reason, operator, phone) {
+  if (!phone || !operator) return 'Enter the mobile number and choose the operator to see its plans.';
+  if (reason === 'no-provider') return 'Internet plans are not set up for this country yet. Please use Recharge for a plain top-up.';
+  if (reason === 'no-product') return `Internet plans for ${operator} are not available right now. Try another operator, or use Recharge for a plain top-up.`;
+  return `Internet plans for ${operator} could not be loaded. Go Back and try again.`;
 }
 
 export function validateStep(step, serviceData) {
