@@ -22,7 +22,7 @@ import { denominationItems, amountItems, optionPrice } from '../utils/denominati
 // Customer-facing wallet values are always displayed as MYR. The legacy
 // conversion helper remains internal for settlement compatibility.
 export default function RechargeStep({ step }) {
-  const { serviceData, updateServiceData, nextStep, rates, pricing } = useApp();
+  const { serviceData, updateServiceData, nextStep, rates, pricing, profile } = useApp();
   const [iimmpactOperators, setIimmpactOperators] = useState([]);
   const [iimmpactOptions, setIimmpactOptions] = useState([]);
   const [optionsLoading, setOptionsLoading] = useState(false);
@@ -165,7 +165,7 @@ export default function RechargeStep({ step }) {
 
   // What the customer pays for a provider price: MySheba's markup for this
   // service, destination and product - the same rule the server charges by.
-  const customerPrice = (amount) => applyMarkup(pricing, { service: 'recharge', country: serviceData.country, productCode: serviceData.productCode, amount }).amount;
+  const customerPrice = (amount) => applyMarkup(pricing, { service: 'recharge', country: serviceData.country, productCode: serviceData.productCode, amount, role: profile?.role }).amount;
 
   if (step === 0) {
     // International Reload lists destinations abroad only; Malaysian numbers

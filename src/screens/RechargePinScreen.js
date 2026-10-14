@@ -234,8 +234,10 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
     const role = String(profile?.role || 'customer');
     const multiplier = Number(pricing?.rolePricing?.[role]?.rechargePointCostPerUnit ?? pricing?.rechargePointCostPerUnit ?? 1);
     // MySheba's markup, then the PIN multiplier, as the server charges it.
-    const marked = applyMarkup(pricing, { service: 'rechargePin', country, productCode: product?.code || operator, amount: review.liveAmount }).amount;
-    const deduction = Math.round(marked * (Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1) * 100) / 100;
+    const priced = applyMarkup(pricing, { service: 'rechargePin', country, productCode: product?.code || operator, amount: review.liveAmount, role });
+    const marked = priced.amount;
+    // A set price for this role is the whole price, as the server charges it.
+    const deduction = priced.fixedPrice ? marked : Math.round(marked * (Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1) * 100) / 100;
     const walletCurrency = profile?.walletCurrency || 'MYR';
     const balance = Number(profile?.walletBalance ?? profile?.balance ?? 0);
     const categoryTitle = categorizedProducts.find((item) => item.id === selectedCategory)?.title || '';
@@ -319,8 +321,8 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
           // markup or the PIN multiplier makes it different.
           const role = String(profile?.role || 'customer');
           const multiplier = Number(pricing?.rolePricing?.[role]?.rechargePointCostPerUnit ?? pricing?.rechargePointCostPerUnit ?? 1);
-          const marked = applyMarkup(pricing, { service: 'rechargePin', country, productCode: product?.code, amount: value }).amount;
-          return marked * (Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1);
+          const priced = applyMarkup(pricing, { service: 'rechargePin', country, productCode: product?.code, amount: value, role });
+          return priced.fixedPrice ? priced.amount : priced.amount * (Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1);
         } })}
         selectedKey={selectedOption?.code}
         onSelect={({ option }) => { setSelectedOption(option); setAmount(Number(option?.price?.amount ?? option?.denomination)); setVoucher(null); }}

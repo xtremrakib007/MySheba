@@ -14,7 +14,7 @@ const ALLOWED_KEYS = new Set([
   'myDocumentsCost','salaryOtCost','moduleSubscriptionDays','webviewAccessWindowHours',
   'rolePricing','catalogProductPricing','commissionRules','markups'
 ]);
-const { MARKUP_SERVICES, MAX_PERCENT: MARKUP_MAX_PERCENT, MAX_FIXED: MARKUP_MAX_FIXED } = require('./markupService');
+const { MARKUP_SERVICES, PRICE_ROLES, MAX_PERCENT: MARKUP_MAX_PERCENT, MAX_FIXED: MARKUP_MAX_FIXED } = require('./markupService');
 const ROLES = ['customer','retail','dealer','reseller','admin'];
 const MAX_MONEY = 100000;
 const MAX_PERCENT = 100;
@@ -138,6 +138,21 @@ function cleanMarkups(v) {
     const clean = markupRule(rule, productCode + ' markup');
     if (clean) out.products[productCode] = clean;
   }
+  // Set prices per product, face amount and buyer role (markupService.setPriceFor).
+  const prices = Object.entries(v.prices || {});
+  if (prices.length > 5000) throw new HttpsError('invalid-argument', 'Too many set prices.');
+  out.prices = {};
+  for (const [key, byRole] of prices) {
+    const m = /^([A-Za-z0-9_.:-]{1,100})\|(\d{1,7}\.\d{2})$/.exec(String(key));
+    if (!m || !byRole || typeof byRole !== 'object' || Array.isArray(byRole)) throw new HttpsError('invalid-argument', 'Set price key must look like DI|5.00.');
+    const row = {};
+    for (const [role, value] of Object.entries(byRole)) {
+      if (!PRICE_ROLES.includes(role)) throw new HttpsError('invalid-argument', 'Unknown price role: ' + String(role).slice(0, 20));
+      if (value === null || value === '' || value === undefined) continue;
+      row[role] = finite(value, key + ' ' + role + ' price', 0.01, MAX_MONEY);
+    }
+    if (Object.keys(row).length) out.prices[m[1] + '|' + m[2]] = row;
+  }
   return out;
 }
 function cleanValue(key, value) {
@@ -185,3 +200,4 @@ exports.savePricingSettings = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
   await logAudit({action:'pricing_settings_changed',targetUid:null,performedBy:uid,performedByRole:'superadmin',details:{key,before:before[key] ?? null,after:value,reason:String(request.data?.reason||'').slice(0,200)}});
   return {ok:true,key};
 });
+exports._test = { cleanMarkups };

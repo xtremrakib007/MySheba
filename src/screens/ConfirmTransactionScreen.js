@@ -50,7 +50,7 @@ function getPricing(service, data, pricing, rates, role) {
   // (src/utils/markup.js mirrors functions/markupService.js). Commission is
   // still worked out on the provider price, as the server does.
   const providerPrice = selling;
-  selling = applyMarkup(pricing, { service, country: data.country, productCode: data.productCode || data.operatorCode, amount: providerPrice }).amount;
+  selling = applyMarkup(pricing, { service, country: data.country, productCode: data.productCode || data.operatorCode, amount: providerPrice, role }).amount;
   // What leaves the wallet when the order is submitted.
   const charged = service === 'remittance' ? Number(data.sendAmt || 0) + fee : selling + fee;
   const providedCost = Number(data.providerCost ?? data.costPrice ?? data.cost ?? data.wholesalePrice);
