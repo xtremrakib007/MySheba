@@ -56,7 +56,11 @@ async function main() {
     catalogPath: '/v2/catalog',
   };
   check('IIMMPACT uses live product discovery', pc.dynamicProductDiscoveryFor(dynamicIimmpact) === true);
-  check('IIMMPACT has no hardcoded operator map', pc.productCodesFor(dynamicIimmpact, 'Digi').length === 0);
+  // A record saved with the catalogue preset still gets the documented
+  // per-number codes: without them every Malaysian Internet operator had
+  // "no provider" (providerCatalog.iimmpactPlansConfig).
+  check('IIMMPACT plans use the documented operator codes', pc.productCodesFor(dynamicIimmpact, 'Digi').join() === 'DI');
+  check('and /v2/options, never the /v2/catalog path the record saved', pc.catalogConfigFor(dynamicIimmpact).path === '/v2/options');
   check('a plain recharge provider does not', pc.supportsCatalog(plainRecharge) === false);
   check('and asking for its types gives nothing', pc.catalogTypesFor(plainRecharge).length === 0);
   check(
