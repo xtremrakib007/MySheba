@@ -85,8 +85,10 @@ function applyIimmpact(f:FormState):FormState {
     excludedCountries:['BD'],
     services:['Recharge','Internet','Bill Payment','Recharge PIN','Entertainment','eSIM'],
     service:'Recharge',
-    countries:['ALL'],
-    country:'ALL',
+    // saveApiProvider refuses an IIMMPACT record scoped to ALL (or BD);
+    // Malaysia is what it serves. Add other countries before saving.
+    countries:['MY'],
+    country:'MY',
     active:true,
   };
 }

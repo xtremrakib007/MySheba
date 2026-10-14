@@ -43,6 +43,8 @@ export interface AnnouncementLogEntry {
   audience: string;
   matchedCount: number;
   sentCount: number;
+  deliveredCount: number | null;
+  failedCount: number | null;
   sentByName: string;
   createdAt: string | null;
 }
@@ -66,6 +68,11 @@ export function subscribeAnnouncements(
             audience: data.audience ?? 'all',
             matchedCount: data.matchedCount ?? 0,
             sentCount: data.sentCount ?? 0,
+            // What the push service actually accepted and refused
+            // (functions/announcements.js). sentCount is only how many were
+            // queued; older records have no delivered/failed counts.
+            deliveredCount: typeof data.deliveredCount === 'number' ? data.deliveredCount : null,
+            failedCount: typeof data.failedCount === 'number' ? data.failedCount : null,
             sentByName: data.sentByName ?? '',
             createdAt: data.createdAt?.toDate?.().toLocaleString() ?? null,
           };

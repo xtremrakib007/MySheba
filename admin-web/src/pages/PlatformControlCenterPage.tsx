@@ -13,6 +13,11 @@ const ROLE_OPTIONS = [
 ];
 function csv(v: string[] | undefined){ return (v||[]).join(', '); }
 
+// The only fields updateGoogleAdsControls accepts. The loaded ads document also
+// holds placementControls, updatedBy and updatedAt; sending it whole was
+// refused ("Unknown ads control") on every save after the first.
+const AD_KEYS=['adsEnabled','bannerAdsEnabled','nativeAdsEnabled','interstitialAdsEnabled','directAdsEnabled','admobEnabled','admobBannerEnabled'];
+
 export default function PlatformControlCenterPage(){
   const { profile } = useAuth();
   const [tab,setTab]=useState<'features'|'grid'|'countries'|'operators'|'webviews'|'ads'>('features');
@@ -141,7 +146,7 @@ export default function PlatformControlCenterPage(){
           <h2 className="font-extrabold text-[#0b2447]">Global Advertising Controls</h2>
           <p className="mt-1 text-xs text-slate-500">Superadmin controls the ad system independently from MySheba features. Turning ads off never disables the underlying service.</p>
           <div className="mt-5 grid gap-3 md:grid-cols-2">{['adsEnabled','bannerAdsEnabled','nativeAdsEnabled','interstitialAdsEnabled','directAdsEnabled','admobEnabled','admobBannerEnabled'].map(k=><label key={k} className="flex items-center justify-between rounded-xl border border-slate-200 p-4"><span className="text-sm font-bold">{k}</span><input type="checkbox" checked={ads[k]!==false} onChange={e=>setAds({...ads,[k]:e.target.checked})}/></label>)}</div>
-          <button disabled={busy} onClick={()=>run(()=>service.updateAds(ads))} className="mt-4 rounded-xl bg-[#00a99d] px-4 py-2 text-sm font-bold text-white"><Save size={15} className="mr-2 inline"/>Save Global Controls</button>
+          <button disabled={busy} onClick={()=>run(()=>service.updateAds(Object.fromEntries(AD_KEYS.map(k=>[k,(ads as any)[k]!==false]))))} className="mt-4 rounded-xl bg-[#00a99d] px-4 py-2 text-sm font-bold text-white"><Save size={15} className="mr-2 inline"/>Save Global Controls</button>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

@@ -4,7 +4,9 @@ import type { ConfigField } from '../services/configService';
 const fields: ConfigField[] = [
   { key: 'title', label: 'Title', type: 'text' },
   { key: 'imageUrl', label: 'Image URL', type: 'text', placeholder: 'https://…' },
-  { key: 'linkUrl', label: 'Link URL', type: 'text', placeholder: 'https://… (optional)' },
+  // linkTo, as the mobile app and firestore.rules name it: a feature key the
+  // banner opens, not a URL. linkUrl was refused by the rules on every save.
+  { key: 'linkTo', label: 'Opens', type: 'select', options: ['none', 'recharge', 'mobilebanking', 'internet', 'remittance', 'bus', 'train', 'flight', 'fomema', 'visa'] },
   { key: 'order', label: 'Order', type: 'number' },
   { key: 'active', label: 'Status', type: 'boolean' },
 ];

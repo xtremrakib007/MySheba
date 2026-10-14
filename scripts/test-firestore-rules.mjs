@@ -60,6 +60,8 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(db, 'categories/services'), { items: ['Cleaning'] });
   await setDoc(doc(db, 'topups/tp1'), { userId: 'customer1', points: 100, status: 'pending' });
   await setDoc(doc(db, 'pointTopUps/pt1'), { targetUid: 'customer1', amount: 10 });
+  await setDoc(doc(db, 'chatReports/cr1'), { status: 'open', createdAt: 1 });
+  await setDoc(doc(db, 'contactMessages/cm1'), { status: 'new', createdAt: 1 });
 });
 
 const as = (uid) => env.authenticatedContext(uid).firestore();
@@ -197,6 +199,21 @@ await check('signed-in user with no profile is blocked', 'deny', () => getDoc(do
 
 for (const [status, label] of results) console.log(`${status}  ${label}`);
 const failed = results.filter(([s]) => s === 'FAIL').length;
+// ---- admin web configuration lists and support queues ----
+// These had no rule at all, so every admin web page using them was denied.
+await check('admin saves a biller', 'allow', () => setDoc(doc(as('admin1'), 'billers/b1'), { billerId: 'my-tnb', country: 'MY', name: 'TNB', category: 'electricity', accountLabel: 'Account', order: 1, active: true, createdAt: serverTimestamp() }));
+await check('customer CANNOT save a biller', 'deny', () => setDoc(doc(as('customer1'), 'billers/b2'), { name: 'x' }));
+await check('a biller with an unknown field is refused', 'deny', () => setDoc(doc(as('admin1'), 'billers/b3'), { name: 'TNB', price: 1 }));
+await check('admin saves a salary tier', 'allow', () => setDoc(doc(as('admin1'), 'salaryTiers/s1'), { role: 'dealer', tierName: 'Tier 1', minVolume: 100, salaryAmount: 50, active: true, createdAt: serverTimestamp() }));
+await check('support CANNOT save a salary tier', 'deny', () => setDoc(doc(as('support1'), 'salaryTiers/s2'), { role: 'dealer' }));
+await check('admin saves a module subscription', 'allow', () => setDoc(doc(as('admin1'), 'moduleSubscriptions/m1'), { moduleKey: 'notepad', planName: 'Pro', price: 5, active: true, createdAt: serverTimestamp() }));
+await check('admin saves a category record', 'allow', () => setDoc(doc(as('admin1'), 'categories/c1'), { name: 'Mobile', slug: 'mobile', icon: 'x', order: 1, active: true, createdAt: serverTimestamp() }));
+await check('support reads chat reports', 'allow', () => getDocs(collection(as('support1'), 'chatReports')));
+await check('support marks a chat report reviewed', 'allow', () => updateDoc(doc(as('support1'), 'chatReports/cr1'), { status: 'reviewed', reviewedBy: 'support1', reviewedAt: serverTimestamp() }));
+await check('customer CANNOT read chat reports', 'deny', () => getDocs(collection(as('customer1'), 'chatReports')));
+await check('support marks a contact message handled', 'allow', () => updateDoc(doc(as('support1'), 'contactMessages/cm1'), { status: 'handled', handledBy: 'support1', handledAt: serverTimestamp() }));
+await check('support CANNOT rewrite a contact message', 'deny', () => updateDoc(doc(as('support1'), 'contactMessages/cm1'), { body: 'changed' }));
+
 console.log(`\n${results.length - failed}/${results.length} rule behaviours correct`);
 await env.cleanup();
 process.exit(failed ? 1 : 0);

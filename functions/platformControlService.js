@@ -342,7 +342,11 @@ exports.updateGridManagement = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, as
   const docData = { ...clean.global, byRole: clean.byRole, byCountry: clean.byCountry, byUser: clean.byUser, updatedBy: uid, updatedAt: admin.firestore.FieldValue.serverTimestamp() };
   const ref = db().collection('settings').doc('gridManagement');
   const old = await ref.get();
-  await ref.set(docData, { merge: true });
+  // The override maps are written whole when sent: with a plain merge a key
+  // the page removed ("Default") survived inside the stored map, so a cleared
+  // override came back on reload. A map the caller did not send is kept.
+  const mapFields = ['byRole', 'byCountry', 'byUser'].filter((k) => payload[k] && typeof payload[k] === 'object');
+  await ref.set(docData, { mergeFields: [...Object.keys(clean.global), ...mapFields, 'updatedBy', 'updatedAt'] });
   await logAudit({ action:'grid_management_changed', targetUid:null, performedBy:uid, performedByRole:'superadmin', details:{ before:old.exists ? old.data() : null, after:clean } });
   return { ok:true, ...clean };
 });

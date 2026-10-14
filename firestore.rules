@@ -73,7 +73,17 @@ service cloud.firestore {
     // Per-person grants/revokes, written only by the setUserAccessOverride callable.
     match /accessOverrides/{uid} { allow read: if activeProfile() && (request.auth.uid == uid || isSuperadmin()); allow write: if false; }
     // Admin-edited category lists, one doc per module: { items: string[] }.
-    match /categories/{module} { allow read: if activeProfile(); allow create, update: if can('settings') && request.resource.data.keys().hasOnly(['items','updatedAt']) && request.resource.data.items is list; allow delete: if false; }
+    // Two shapes: the original per-module item list, and the admin web's
+    // Categories page, which keeps one record per category.
+    match /categories/{module} { allow read: if activeProfile(); allow create, update: if can('settings') && ((request.resource.data.keys().hasOnly(['items','updatedAt']) && request.resource.data.items is list) || request.resource.data.keys().hasOnly(['name','slug','icon','order','active','createdAt','updatedAt'])); allow delete: if can('settings'); }
+    // Admin web configuration lists (ConfigListPage). Written only from the
+    // admin web by staff with the matching capability; nothing else writes them.
+    match /billers/{id} { allow read: if activeProfile(); allow create, update: if can('settings') && request.resource.data.keys().hasOnly(['billerId','country','name','category','accountLabel','order','active','createdAt','updatedAt']); allow delete: if can('settings'); }
+    match /moduleSubscriptions/{id} { allow read: if can('settings'); allow create, update: if can('settings') && request.resource.data.keys().hasOnly(['moduleKey','planName','price','active','createdAt','updatedAt']); allow delete: if can('settings'); }
+    match /salaryTiers/{id} { allow read: if can('finance') || can('settings'); allow create, update: if can('settings') && request.resource.data.keys().hasOnly(['role','tierName','minVolume','salaryAmount','active','createdAt','updatedAt']); allow delete: if can('settings'); }
+    // Support queues read by the admin web; staff may only change their status.
+    match /chatReports/{id} { allow read: if can('support'); allow create, delete: if false; allow update: if can('support') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','reviewedBy','reviewedAt']); }
+    match /contactMessages/{id} { allow read: if can('support'); allow create, delete: if false; allow update: if can('support') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','handledBy','handledAt']); }
     // Audit trail written by adminTopUpPoints.
     match /pointTopUps/{id} { allow read: if can('finance'); allow write: if false; }
     match /verificationRequests/{uid} { allow read: if activeProfile() && (request.auth.uid == uid || can('users')); allow create, update, delete: if false; }

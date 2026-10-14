@@ -1,5 +1,6 @@
 import { collection, onSnapshot, orderBy, query, where, limit } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import { getSessionProof } from './sessionProof';
 import { db, functions } from '../firebase/config';
 
 const COLLECTION = 'pointTransfers';
@@ -29,9 +30,11 @@ export async function transferPoints(
   // one is stopped here rather than spent on the server.
   if (!SECURITY_PIN_RE.test(input.securityPin)) throw new Error('Enter your 4-8 digit security PIN.');
   const requestId = createRequestId();
-  const fn = httpsCallable<{ requestId: string; toUid: string; amount: number; note: string; securityPin: string }, TransferResult>(functions, 'transferPoints');
+  const fn = httpsCallable<{ requestId: string; toUid: string; amount: number; note: string; securityPin: string; sessionId: string; deviceId: string }, TransferResult>(functions, 'transferPoints');
   try {
-    const { data } = await fn({ requestId, toUid: input.toUid, amount: input.amount, note: input.note || '', securityPin: input.securityPin });
+    // transferPoints refuses a call without this browser's session proof.
+    const session = await getSessionProof();
+    const { data } = await fn({ requestId, toUid: input.toUid, amount: input.amount, note: input.note || '', securityPin: input.securityPin, ...session });
     return data;
   } catch (err) {
     throw new Error((err as Error).message || 'Could not complete the transfer.');
@@ -45,7 +48,9 @@ export function subscribeTransferRecipients(
   onUpdate: (list: RecipientOption[]) => void,
   onError: (err: Error) => void
 ) {
-  const roles = role === 'superadmin' ? ['admin', 'dealer', 'reseller', 'customer'] : ['dealer', 'reseller', 'customer'];
+  // As functions/secureTransfer.js canTransferTo allows: a superadmin may send
+  // to any account, an admin to dealers only.
+  const roles = role === 'superadmin' ? ['admin', 'finance', 'support', 'dealer', 'reseller', 'customer'] : ['dealer'];
   const q = query(collection(db, 'users'), where('role', 'in', roles), limit(500));
   return onSnapshot(q, (snap) => {
     const list = snap.docs.map((d) => ({ id: d.id, name: (d.data().name as string) ?? '', phone: (d.data().phone as string) ?? '', role: (d.data().role as string) ?? '' }));

@@ -46,7 +46,8 @@ function FieldRow({ label, value, suffix, onSave }: { label: string; value: numb
     const num = Number(draft);
     if (!Number.isFinite(num) || num < 0) return;
     setSaving(true);
-    try { await onSave(num); setEditing(false); } finally { setSaving(false); }
+    // A refused save stays open for another try; the page shows the reason.
+    try { await onSave(num); setEditing(false); } catch { /* reported by the page */ } finally { setSaving(false); }
   }
   return (
     <div className="flex items-center justify-between py-2.5">
@@ -97,18 +98,31 @@ export default function PricingPage() {
     try { const next = await fetchPricing(); setPricing(next); setCommissionDraft(next.commissionRules); } catch (err) { console.error(err); setError('Could not load pricing settings.'); } finally { setLoading(false); }
   }
   useEffect(() => { load(); }, []);
-  async function save(key: keyof PricingSettings, value: number) { await updatePricing(key, value); setPricing((prev) => ({ ...prev, [key]: value })); }
-  async function saveRolePrice(role: PricingRole, key: RolePriceKey, value: number) { await updateRolePrice(role, key, value); setPricing((prev) => ({ ...prev, rolePricing: { ...prev.rolePricing, [role]: { ...prev.rolePricing?.[role], [key]: value } } })); }
+  // Every save goes through savePricingSettings, which refuses with a reason
+  // (not a superadmin, or a sign-in older than 15 minutes). Those used to be
+  // swallowed, so a save looked like it did nothing.
+  async function guarded(run: () => Promise<void>) {
+    setError(null);
+    try { await run(); } catch (err) {
+      const msg = String((err as Error)?.message || '');
+      setError(/recent authentication/i.test(msg)
+        ? 'For your security, pricing changes need a sign-in from the last 15 minutes. Sign out, sign in again, then save.'
+        : msg || 'Could not save this pricing change.');
+      throw err;
+    }
+  }
+  async function save(key: keyof PricingSettings, value: number) { await guarded(async () => { await updatePricing(key, value); setPricing((prev) => ({ ...prev, [key]: value })); }); }
+  async function saveRolePrice(role: PricingRole, key: RolePriceKey, value: number) { await guarded(async () => { await updateRolePrice(role, key, value); setPricing((prev) => ({ ...prev, rolePricing: { ...prev.rolePricing, [role]: { ...prev.rolePricing?.[role], [key]: value } } })); }); }
   async function saveCatalog() {
     if (!isSuperadmin || !catalogDraft.operator.trim() || !catalogDraft.productId.trim() || !catalogDraft.productName.trim()) return;
     const entry = { ...catalogDraft, id: catalogDraft.id || `catalog-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` };
-    await saveCatalogProductPrice(entry);
+    try { await guarded(() => saveCatalogProductPrice(entry)); } catch { return; }
     setPricing((prev) => ({ ...prev, catalogProductPricing: [...prev.catalogProductPricing.filter((x) => x.id !== entry.id), entry] }));
     setCatalogDraft({ id: '', service: catalogDraft.service, country: catalogDraft.country, operator: '', productId: '', productName: '', costPrice: 0, currency: catalogDraft.currency, active: true, prices: { customer: 0, retail: 0, reseller: 0, dealer: 0, admin: 0 }, commissions: { customer: { type: 'fixed', value: 0 }, retail: { type: 'fixed', value: 0 }, reseller: { type: 'fixed', value: 0 }, dealer: { type: 'fixed', value: 0 }, admin: { type: 'fixed', value: 0 } } });
   }
-  async function saveCommissionRules() { await updatePricing('commissionRules' as keyof PricingSettings, commissionDraft as any); setPricing((prev) => ({ ...prev, commissionRules: commissionDraft })); }
+  async function saveCommissionRules() { try { await guarded(() => updatePricing('commissionRules' as keyof PricingSettings, commissionDraft as any)); } catch { return; } setPricing((prev) => ({ ...prev, commissionRules: commissionDraft })); }
   async function removeCatalog(id: string) {
-    await deleteCatalogProductPrice(id);
+    try { await guarded(() => deleteCatalogProductPrice(id)); } catch { return; }
     setPricing((prev) => ({ ...prev, catalogProductPricing: prev.catalogProductPricing.filter((x) => x.id !== id) }));
   }
   if (loading) return <p className="text-sm text-[var(--color-ink-soft)]">Loading…</p>;

@@ -115,7 +115,7 @@ export default function DashboardPage() {
   const filteredFeatures = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return visibleFeatures;
-    return visibleFeatures.filter((feature) => feature.label.replaceAll('\\n', ' ').toLowerCase().includes(normalized));
+    return visibleFeatures.filter((feature) => feature.label.replaceAll('\n', ' ').toLowerCase().includes(normalized));
   }, [query, isSuperadmin]);
 
   const attentionItems = [

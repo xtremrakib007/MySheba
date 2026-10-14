@@ -3714,6 +3714,9 @@ exports.saveApiProvider = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (
     if (!Object.keys(incoming.headers || {}).length && current.headers) incoming.headers = current.headers;
     if (!Object.keys(incoming.queryTemplate || {}).length && current.queryTemplate) incoming.queryTemplate = current.queryTemplate;
     if (!Object.keys(incoming.requestTemplate || {}).length && current.requestTemplate) incoming.requestTemplate = current.requestTemplate;
+    // listApiProviders sends only hasCatalogRequestTemplate, so the form never
+    // holds the template; without this every save erased it.
+    if (!Object.keys(incoming.catalogRequestTemplate || {}).length && current.catalogRequestTemplate) incoming.catalogRequestTemplate = current.catalogRequestTemplate;
   }
 
   const data = validate(incoming);

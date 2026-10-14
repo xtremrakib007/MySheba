@@ -16,6 +16,8 @@ const UserManagementPage = lazy(() => import('./pages/UserManagementPage'));
 const FeatureAccessPage = lazy(() => import('./pages/FeatureAccessPage'));
 const IdentityVerificationPage = lazy(() => import('./pages/IdentityVerificationPage'));
 const KycOperationsPage = lazy(() => import('./pages/KycOperationsPage'));
+const OperationsCenterPage = lazy(() => import('./pages/OperationsCenterPage'));
+const RechargePinsPage = lazy(() => import('./pages/RechargePinsPage'));
 const FraudRiskPage = lazy(() => import('./pages/FraudRiskPage'));
 const CommunicationsCenterPage = lazy(() => import('./pages/CommunicationsCenterPage'));
 const ServiceOperationsPage = lazy(() => import('./pages/ServiceOperationsPage'));
@@ -78,6 +80,9 @@ function AdminRoutes() {
         <Route path="/support/messages" element={<SupportMessagesPage />} />
         <Route path="/support/messages/:chatId" element={<SupportMessagesPage />} />
         <Route path="/support-operations" element={<SupportOperationsPage />} />
+        {/* Listed in navConfig PATH_ACCESS but never routed: the URL fell to
+            the catch-all and showed the login page. */}
+        <Route path="/operations" element={<OperationsCenterPage />} />
         <Route path="/service-operations" element={<ServiceOperationsPage />} />
         <Route path="/announcements" element={<AnnouncementsPage />} />
         <Route path="/communications" element={<CommunicationsCenterPage />} />
@@ -109,6 +114,9 @@ function AdminRoutes() {
           <Route path="/activity-center" element={<AdminActivityCenterPage />} />
           <Route path="/system-health" element={<SystemHealthPage />} />
           <Route path="/devices" element={<DeviceSessionsPage />} />
+          {/* PIN stock and uploads (rechargePinStock / uploadRechargePins,
+              superadmin-only callables) had a page and no route. */}
+          <Route path="/recharge-pins" element={<RechargePinsPage />} />
         </Route>
       </Route>
       <Route path="*" element={<LoginPage />} />
