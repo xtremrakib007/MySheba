@@ -180,6 +180,15 @@ exports.completeTransaction = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
 
 
 
+const STUCK_PROCESSING_MS = 15 * 60 * 1000;
+function millisOf(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  if (value._seconds !== undefined) return value._seconds * 1000;
+  const n = new Date(value).getTime();
+  return Number.isFinite(n) ? n : 0;
+}
+
 exports.reconcileUnknownTransaction = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   requireAuth(request);
   const uid = request.auth.uid;
@@ -223,15 +232,26 @@ exports.reconcileUnknownTransaction = onCall({ enforceAppCheck: ENFORCE_APP_CHEC
     const snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError('not-found', 'That transaction no longer exists.');
     const order = snap.data() || {};
-    if (order.status !== 'unknown') {
+    // `processing` too: the provider accepted the order and its final result
+    // never arrived (a callback that was not configured, refused or lost), so
+    // the order sat on Processing with the money taken and nobody able to
+    // settle it. Only once it has waited STUCK_PROCESSING_MS, and only an
+    // order that was actually sent to a provider, so this never races the
+    // provider's own answer.
+    const stuckProcessing = order.status === 'processing' && !!order.apiExecution
+      && Date.now() - millisOf(order.updatedAt || order.createdAt) >= STUCK_PROCESSING_MS;
+    if (order.status !== 'unknown' && !stuckProcessing) {
       if (order.status === outcome && order.providerReference === providerReference) {
         result = { ok: true, transactionId: id, outcome, alreadyReconciled: true };
         return;
       }
-      throw new HttpsError('failed-precondition', 'Only unknown transactions can be reconciled.');
+      if (order.status === 'processing') {
+        throw new HttpsError('failed-precondition', 'This order is still waiting for the provider. It can be settled after it has been processing for 15 minutes.');
+      }
+      throw new HttpsError('failed-precondition', 'Only unknown or stuck processing transactions can be reconciled.');
     }
     const service = String(order.service || order.chargedServiceKind || '').trim();
-    if (!['Recharge', 'Internet', 'Bill Payment', 'Mobile Banking', 'Remittance'].includes(service)) {
+    if (!['Recharge', 'Internet', 'Bill Payment', 'Mobile Banking', 'Remittance', 'IIMMPACT'].includes(service)) {
       throw new HttpsError('failed-precondition', 'This transaction type cannot be reconciled here.');
     }
     const customerId = typeof order.customerId === 'string' ? order.customerId : '';

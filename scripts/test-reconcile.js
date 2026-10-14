@@ -40,8 +40,9 @@ check(
   /callWithSessionProof\('reconcileUnknownTransaction'/.test(clientService)
 );
 check(
-  'and can list the transactions needing it',
-  /where\('status', '==', 'unknown'\)/.test(clientService)
+  'and can list the transactions needing it (unknown, and processing ones a provider never answered)',
+  /where\('status', 'in', \['unknown', 'processing'\]\)/.test(clientService)
+    && /t\.status === 'unknown' \|\| !!t\.apiExecution/.test(clientService)
 );
 
 const sidebar = read('src/components/Sidebar.js');
@@ -62,7 +63,9 @@ check('finance, admin and superadmin may settle',
 // And no further: a dealer or a reseller settling their own uncertain order
 // would be marking their own homework against the customer's wallet.
 check('and nobody else', !/RECONCILE_ROLES = \[[^\]]*(dealer|reseller|support|customer)/.test(backend));
-check('only an unknown transaction may be settled', /Only unknown transactions can be reconciled/.test(backend));
+check('only an unknown, or a stuck provider order, may be settled', /Only unknown or stuck processing transactions can be reconciled/.test(backend));
+check('a processing order only once a provider had it and it has waited', /order\.status === 'processing' && !!order\.apiExecution/.test(backend)
+  && /STUCK_PROCESSING_MS = 15 \* 60 \* 1000/.test(backend));
 check('the outcome is limited to completed or failed', /\['completed', 'failed'\]\.includes\(outcome\)/.test(backend));
 check('a provider reference is required', /Provider confirmation\/reference is required/.test(backend));
 check(

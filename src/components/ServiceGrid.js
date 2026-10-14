@@ -203,7 +203,7 @@ export default function ServiceGrid({ homeOnly }) {
   useIimmpactCatalog({ enabled: providerFor(country) === IIMMPACT });
   // Every role's grid, not only a customer's home: dealers, resellers and
   // staff sell the same products and get the same groups.
-  const groups = providerHomeTiles({ country }).filter((tile) => isActive(tile.key));
+  const groups = providerHomeTiles({ country }).filter((tile) => isActive(tile.key) && (!tile.parentKey || isActive(tile.parentKey)));
   const covered = coveredKeys({ country });
   const kept = services.filter((tile) => !covered.has(tile.key));
   const mergedServices = [
