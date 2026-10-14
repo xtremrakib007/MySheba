@@ -40,7 +40,9 @@ export default function MarkupSection({ markups, onSaved }: { markups: Markups; 
   const [message, setMessage] = useState('');
 
   async function save() {
-    const next: Markups = { services: {}, countries: {}, products: {} };
+    // Set prices are kept as they are: the markups field is saved whole, so
+    // leaving them out here would delete every one.
+    const next: Markups = { services: {}, countries: {}, products: {}, prices: markups.prices || {} };
     for (const s of MARKUP_SERVICES) next.services[s as MarkupService] = toRule(services[s]?.percent || '0', services[s]?.fixed || '0');
     for (const r of countries) if (r.key.trim()) next.countries[r.key.trim()] = toRule(r.percent, r.fixed);
     for (const r of products) if (r.key.trim()) next.products[r.key.trim()] = toRule(r.percent, r.fixed);

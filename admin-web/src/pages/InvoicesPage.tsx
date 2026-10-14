@@ -266,7 +266,8 @@ export default function InvoicesPage() {
                   >
                     Print / Download
                   </button>
-                  {access.role === 'superadmin' && (
+                  {/* An archived invoice is cancelled; archiving it again only errors. */}
+                  {access.role === 'superadmin' && String(invoice.status) !== 'cancelled' && (
                     <button
                       type="button"
                       disabled={!!busyId}

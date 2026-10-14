@@ -39,7 +39,8 @@ export async function assignTicket(id: string, staff: { id: string; name?: strin
 export async function unassignTicket(id: string): Promise<void> { await unassignSupportTicketFn({ ticketId: id }); }
 
 export interface AssignableStaff { id: string; name: string; role: string; }
+// Who functions/supportTicketService.js and firestore.rules accept as an assignee.
 export function subscribeAssignableStaff(onUpdate: (staff: AssignableStaff[]) => void, onError: (err: Error) => void) {
-  const q = query(collection(db, 'users'), where('role', 'in', ['admin', 'superadmin', 'dealer', 'reseller']));
+  const q = query(collection(db, 'users'), where('role', 'in', ['admin', 'superadmin', 'support']));
   return onSnapshot(q, (snap) => { const list = snap.docs.map((d) => ({ id: d.id, name: (d.data().name as string) ?? '', role: (d.data().role as string) ?? '' })); list.sort((a, b) => a.name.localeCompare(b.name)); onUpdate(list); }, (err) => onError(err as Error));
 }

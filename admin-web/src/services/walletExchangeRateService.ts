@@ -28,11 +28,17 @@ export async function saveWalletFxPair(currency: string, values: { buyRate: numb
   if (!uid) throw new Error('You must be signed in to change rates.');
   const profileSnap = await getDoc(doc(db, 'users', uid));
   const role = profileSnap.exists() ? profileSnap.data()?.role : null;
-  if (!['admin', 'superadmin'].includes(role)) throw new Error('Only Admin or Superadmin can change wallet rates.');
+  // firestore.rules lets only a superadmin write this document.
+  if (role !== 'superadmin') throw new Error('Only a Superadmin can change wallet rates.');
+  // A nested map, not a `pairs.BDT` key: setDoc does not read dots as a path,
+  // so that wrote a top-level field literally named "pairs.BDT", which the
+  // rules' key allowlist refused on every save. merge:true still merges
+  // pairs field by field, so the other currencies are kept.
   await setDoc(doc(db, 'settings', 'walletExchangeRates'), {
     baseCurrency: 'MYR',
-    [`pairs.${currency}`]: { buyRate: values.buyRate, sellRate: values.sellRate, active: values.active, manuallyUpdatedAt: serverTimestamp() },
+    pairs: { [currency]: { buyRate: values.buyRate, sellRate: values.sellRate, active: values.active, manuallyUpdatedAt: serverTimestamp() } },
     updatedAt: serverTimestamp(),
+    updatedBy: uid,
   }, { merge: true });
 }
 export async function refreshWalletFx() {

@@ -102,7 +102,10 @@ export default function TransactionsPage() {
                 {tx.claimedByName && <p className="mt-1 text-xs">👤 Operator: {tx.claimedByName} ({tx.claimedByRole || 'staff'})</p>}
                 {tx.completedByName && <p className="mt-1 text-xs">✓ Completed By: {tx.completedByName}</p>}
 
-                {!tx.dealerId && (
+                {/* assignDealer accepts only a pending Mobile Banking order
+                    (functions/transactionService.js DEALER_SERVICES); on any
+                    other order the button could only fail. */}
+                {!tx.dealerId && tx.status === 'pending' && tx.service === 'Mobile Banking' && (
                   <div className="mt-3 flex items-center justify-between gap-2 rounded-lg bg-[var(--color-danger)]/5 px-3 py-2">
                     <span className="text-xs text-[var(--color-danger)]">⚠️ No dealer assigned</span>
                     <button onClick={() => setAssigningId(tx.id)} className="rounded-lg border border-[var(--color-danger)]/40 px-3 py-1 text-xs font-semibold text-[var(--color-danger)]">🧑‍💼 Appoint Dealer</button>

@@ -96,9 +96,11 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
   // PIN product the PIN multiplier too - the same steps the server takes.
   const customerPrice = (amount, product = selectedProduct) => {
     const pin = isPin(product);
-    const marked = applyMarkup(pricing, { service: pin ? 'rechargePin' : 'iimmpact', country: 'MY', productCode: product?.code, amount }).amount;
-    if (!pin) return marked;
     const role = String(profile?.role || 'customer');
+    const result = applyMarkup(pricing, { service: pin ? 'rechargePin' : 'iimmpact', country: 'MY', productCode: product?.code, amount, role });
+    const marked = result.amount;
+    // A set price for this role is the whole price, as the server charges it.
+    if (!pin || result.fixedPrice) return marked;
     const multiplier = Number(pricing?.rolePricing?.[role]?.rechargePointCostPerUnit ?? pricing?.rechargePointCostPerUnit ?? 1);
     return Math.round(marked * (Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1) * 100) / 100;
   };

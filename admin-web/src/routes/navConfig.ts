@@ -81,7 +81,8 @@ export const PATH_ACCESS: Record<string, Requirement> = {
 
   // Settings
   '/config/rates': ['settings'],
-  '/config/pricing': ['settings'],
+  // savePricingSettings accepts only a superadmin (functions/pricingMutationService.js).
+  '/config/pricing': SUPERADMIN,
   '/config/payments': ['settings'],
   '/config/api-providers': SUPERADMIN,
   '/config/iimmpact-costs': SUPERADMIN,
@@ -90,6 +91,7 @@ export const PATH_ACCESS: Record<string, Requirement> = {
   '/config/categories': ['settings'],
   '/config/modules': ['settings'],
   '/config/wallet-exchange': SUPERADMIN,
+  '/recharge-pins': SUPERADMIN,
 
   // Reports
   '/reports': ['reports'],
@@ -195,6 +197,7 @@ export const navGroups: NavGroup[] = [
   { label: 'Support & Communications', accent: 'danger', items: [
     { label: 'Support Tickets', path: '/support', icon: LifeBuoy, allowedRoles: ['admin','superadmin','support'], enabled: true },
     { label: 'Support Messages', path: '/support/messages', icon: MessageCircle, allowedRoles: ['admin','superadmin','support'], enabled: true },
+    { label: 'Operations Center', path: '/operations', icon: Activity, allowedRoles: ['admin','superadmin','support'], enabled: true },
     { label: 'Announcements', path: '/announcements', icon: BellRing, enabled: true },
     { label: 'Communications Center', path: '/communications', icon: Megaphone, enabled: true },
     { label: 'Notification Delivery', path: '/notification-delivery', icon: Activity, enabled: true },
@@ -202,12 +205,13 @@ export const navGroups: NavGroup[] = [
   { label: 'Analytics & Reports', accent: 'primary', items: [
     { label: 'Reports', path: '/reports', icon: BarChart3, allowedRoles: ['admin','superadmin','finance','support'], enabled: true },
     { label: 'Analytics', path: '/analytics', icon: LineChart, allowedRoles: ['admin','superadmin','finance'], enabled: true },
-    { label: 'Growth Center', path: '/growth', icon: TrendingUp, enabled: true },
+    // growthService.js staff() admits admin and superadmin only.
+    { label: 'Growth Center', path: '/growth', icon: TrendingUp, allowedRoles: ['admin','superadmin'], enabled: true },
   ] },
   { label: 'Platform Configuration', accent: 'success', items: [
     { label: 'Rates & Pricing', path: '/config/rates', icon: Tag, enabled: true },
     { label: 'Wallet Exchange Rates', path: '/config/wallet-exchange', icon: Coins, superadminOnly: true, enabled: true },
-    { label: 'Pricing', path: '/config/pricing', icon: PercentCircle, enabled: true },
+    { label: 'Pricing', path: '/config/pricing', icon: PercentCircle, superadminOnly: true, enabled: true },
     { label: 'Payment Settings', path: '/config/payments', icon: CreditCard, enabled: true },
     { label: 'API Providers', path: '/config/api-providers', icon: Wifi, superadminOnly: true, enabled: true },
     { label: 'Salary Settings', path: '/config/salary', icon: Wallet, enabled: true },
@@ -225,5 +229,6 @@ export const navGroups: NavGroup[] = [
     { label: 'Activity Center', path: '/activity-center', icon: Activity, superadminOnly: true, enabled: true },
     { label: 'System Health', path: '/system-health', icon: Activity, superadminOnly: true, enabled: true },
     { label: 'Device Sessions', path: '/devices', icon: Smartphone, superadminOnly: true, enabled: true },
+    { label: 'Recharge PIN Stock', path: '/recharge-pins', icon: Coins, superadminOnly: true, enabled: true },
   ] },
 ];

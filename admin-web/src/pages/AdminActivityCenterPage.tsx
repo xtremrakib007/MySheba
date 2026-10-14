@@ -34,7 +34,7 @@ export default function AdminActivityCenterPage() {
       ...errors.map((x) => ({ ...x, _type: 'errors' })),
     ];
     const needle = query.trim().toLowerCase();
-    return all.filter((x) => (tab === 'all' || x._type === tab) && (!needle || `${titleOf(x, x._type)} ${detailOf(x)} ${textOf(x.uid || x.userId || x.email)}`.toLowerCase().includes(needle))).sort((a, b) => textOf(b.createdAt).localeCompare(textOf(a.createdAt))).slice(0, 150);
+    return all.filter((x) => (tab === 'all' || x._type === tab) && (!needle || `${titleOf(x, x._type)} ${detailOf(x)} ${textOf(x.uid || x.userId || x.email)}`.toLowerCase().includes(needle))).sort((a, b) => (Date.parse(textOf(b.createdAt)) || 0) - (Date.parse(textOf(a.createdAt)) || 0)) /* by time, not as text: "10/1" sorted before "9/30" */.slice(0, 150);
   }, [activity, audit, errors, tab, query]);
 
   const stats = { activity: activity.length, audit: audit.length, errors: errors.length };

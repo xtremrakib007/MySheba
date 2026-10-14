@@ -218,8 +218,9 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, ...eg
   const discount = progressionService.discountPercentFromSettings(tierSettings, userSnap.data().tier);
   // MySheba's markup on the provider price, then the role multiplier and tier
   // discount as before. The provider is still sent its own denomination.
-  const marked = applyMarkup(pricing, { service: 'rechargePin', country, productCode: dispatchRaw.productCode || operator, amount: denomination });
-  const cost = Math.round(marked.amount * priceMultiplier * (1 - discount / 100) * 100) / 100;
+  const marked = applyMarkup(pricing, { service: 'rechargePin', country, productCode: dispatchRaw.productCode || operator, amount: denomination, role: callerRole });
+  // A set price for this role is the whole price: no multiplier or discount.
+  const cost = marked.fixedPrice ? marked.amount : Math.round(marked.amount * priceMultiplier * (1 - discount / 100) * 100) / 100;
   let walletFx;
   try { walletFx = await getWalletCurrencyAndFx(db, userSnap.data()); } catch (fxErr) { throw new HttpsError('failed-precondition', fxErr.message || 'Wallet currency is not configured.'); }
   const walletCost = baseToWallet(cost, walletFx);

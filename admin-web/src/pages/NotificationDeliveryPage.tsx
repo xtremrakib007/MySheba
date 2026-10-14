@@ -18,8 +18,10 @@ export default function NotificationDeliveryPage() {
 
   const stats = useMemo(() => {
     const matched = items.reduce((n, x) => n + Number(x.matchedCount || 0), 0);
-    const sent = items.reduce((n, x) => n + Number(x.sentCount || 0), 0);
-    const failed = Math.max(0, matched - sent);
+    // Delivered/failed are the push service's own answer where recorded;
+    // older records only know how many were queued.
+    const sent = items.reduce((n, x) => n + Number(x.deliveredCount ?? x.sentCount ?? 0), 0);
+    const failed = items.reduce((n, x) => n + (x.failedCount != null ? Number(x.failedCount) : Math.max(0, Number(x.matchedCount || 0) - Number(x.sentCount || 0))), 0);
     const rate = matched ? Math.round((sent / matched) * 100) : 0;
     return { matched, sent, failed, rate };
   }, [items]);
@@ -61,7 +63,7 @@ export default function NotificationDeliveryPage() {
         <div className="border-b border-slate-100 p-5"><h2 className="font-semibold text-[#0b2447]">Recent broadcasts</h2><p className="mt-1 text-sm text-slate-500">Latest 30 announcement delivery records.</p></div>
         <div className="divide-y divide-slate-100">
           {items.length === 0 ? <div className="p-8 text-center text-sm text-slate-500">No announcement delivery records found.</div> : items.map((item) => {
-            const matched = Number(item.matchedCount || 0); const sent = Number(item.sentCount || 0); const success = matched === 0 ? true : sent >= matched;
+            const matched = Number(item.matchedCount || 0); const sent = Number(item.deliveredCount ?? item.sentCount ?? 0); const success = item.failedCount != null ? item.failedCount === 0 : (matched === 0 ? true : sent >= matched);
             return <div key={item.id} className="p-5"><div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-[#0b2447]">{item.title || 'Untitled announcement'}</h3><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">{audienceLabel[item.audience] || item.audience}</span></div><p className="mt-1 line-clamp-2 text-sm text-slate-500">{item.body}</p><p className="mt-2 text-xs text-slate-400">{item.createdAt || 'Time unavailable'} · {item.sentByName || 'Unknown sender'}</p></div><div className="flex shrink-0 items-center gap-4 text-sm"><span><strong>{sent.toLocaleString()}</strong> / {matched.toLocaleString()} sent</span>{success ? <CheckCircle2 size={19} /> : <XCircle size={19} />}</div></div></div>;
           })}
         </div>

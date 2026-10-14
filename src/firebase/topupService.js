@@ -63,7 +63,9 @@ const isMissingCallable = (e) => NOT_DEPLOYED.has(String(e?.code || '').toLowerC
 
 export async function verifyTopup(topup) {
   try {
-    await httpsCallable(functions, 'verifyTopup')({ topupId: topup.id });
+    // Every review call carries this device's session proof: the server
+    // (functions/secureTopupReview.js) refuses one without it.
+    await httpsCallable(functions, 'verifyTopup')({ topupId: topup.id, ...(await getSessionProof()) });
     logActivity('topup_verified', { topupId: topup.id });
   } catch (e) {
     if (isMissingCallable(e)) return approveTopup(topup);
@@ -74,7 +76,7 @@ export async function verifyTopup(topup) {
 
 export async function completeTopup(topup) {
   try {
-    await httpsCallable(functions, 'completeTopup')({ topupId: topup.id });
+    await httpsCallable(functions, 'completeTopup')({ topupId: topup.id, ...(await getSessionProof()) });
     logActivity('topup_completed', { topupId: topup.id });
   } catch (e) {
     if (isMissingCallable(e)) return approveTopup(topup);
@@ -83,8 +85,8 @@ export async function completeTopup(topup) {
   }
 }
 
-export async function approveTopup(topup) { try { await httpsCallable(functions, 'approveTopup')({ topupId: topup.id }); logActivity('topup_approved', { topupId: topup.id }); } catch (e) { logError('topupService.approveTopup', e); throw e; } }
-export async function rejectTopup(id, reason) { try { await httpsCallable(functions, 'rejectTopup')({ topupId: id, reason }); logActivity('topup_rejected', { topupId: id }); } catch (e) { logError('topupService.rejectTopup', e); throw e; } }
+export async function approveTopup(topup) { try { await httpsCallable(functions, 'approveTopup')({ topupId: topup.id, ...(await getSessionProof()) }); logActivity('topup_approved', { topupId: topup.id }); } catch (e) { logError('topupService.approveTopup', e); throw e; } }
+export async function rejectTopup(id, reason) { try { await httpsCallable(functions, 'rejectTopup')({ topupId: id, reason, ...(await getSessionProof()) }); logActivity('topup_rejected', { topupId: id }); } catch (e) { logError('topupService.rejectTopup', e); throw e; } }
 export async function createSelfTopup(payload, requestId = createRequestId('selftopup')) { const session = await getSessionProof(); const { data } = await httpsCallable(functions, 'createSelfTopup')({ ...payload, requestId, ...session }); return data?.id; }
 export function subscribeMySelfTopups(uid, callback, onError) { const q = query(collection(db, 'selfTopups'), where('userId', '==', uid), limit(100)); return onSnapshot(q, snap => { const list = snap.docs.map(d => ({ id: d.id, ...d.data() })); list.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)); callback(list); }, onError); }
 

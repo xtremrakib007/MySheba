@@ -30,7 +30,10 @@ export default function GrowthCenterPage(){
  useEffect(()=>{load()},[]);
  const saveConfig=async()=>{setSaving(true);try{await call('saveGrowthConfig',config);setMessage('Growth settings saved.')}catch(e:any){setMessage(e?.message||'Only the superadmin can change growth settings.')}finally{setSaving(false)}};
  const saveCampaign=async()=>{if(!form.name.trim()){setMessage('Campaign name is required.');return}setSaving(true);try{await call('saveGrowthCampaign',form);setMessage('Campaign saved.');setForm({id:'',name:'',code:'',type:'promo',active:true,rewardAmount:0,minimumTransaction:0,service:'',audience:'all',budget:0,startAt:'',endAt:''});await load()}catch(e:any){setMessage(e?.message||'Could not save campaign.')}finally{setSaving(false)}};
- const edit=(c:Campaign)=>setForm({...form,...c,startAt:c.startAt?.toDate?c.startAt.toDate().toISOString().slice(0,16):(c.startAt||''),endAt:c.endAt?.toDate?c.endAt.toDate().toISOString().slice(0,16):(c.endAt||'')});
+ // A callable returns a Timestamp as plain {_seconds,_nanoseconds}, not an
+ // object with toDate(); sent back unchanged it was "start date is invalid".
+ const asInput=(v:any):string=>{if(!v)return '';if(typeof v==='string')return v;const secs=v?._seconds??v?.seconds;if(typeof secs==='number')return new Date(secs*1000).toISOString().slice(0,16);if(v?.toDate)return v.toDate().toISOString().slice(0,16);return ''};
+ const edit=(c:Campaign)=>setForm({...form,...c,startAt:asInput(c.startAt),endAt:asInput(c.endAt)});
  const remove=async(id:string)=>{if(!confirm('Delete this campaign?'))return;try{await call('deleteGrowthCampaign',{id});await load()}catch(_){setMessage('Could not delete campaign.')}}
  const money=(key:keyof GrowthConfig)=><input type="number" min="0" step="0.01" value={Number(config[key])||0} onChange={e=>setConfig(p=>({...p,[key]:Number(e.target.value)||0}))} className="mt-2 w-full rounded-xl border border-[var(--color-line)] bg-[var(--color-card)] px-3 py-2 text-sm"/>;
  const f=(key:string)=>(e:any)=>setForm(p=>({...p,[key]:e.target.type==='checkbox'?e.target.checked:e.target.value}));
