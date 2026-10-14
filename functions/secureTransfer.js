@@ -49,7 +49,9 @@ function active(account) {
 function canTransferTo(role, caller, recipient) {
   if (role === 'dealer') return recipient.role === 'customer' && recipient.dealerId === caller.id;
   if (role === 'admin') return recipient.role === 'dealer';
-  if (role === 'superadmin') return ['admin', 'dealer'].includes(recipient.role);
+  // A superadmin funds any active account - customers included - from their
+  // own balance; nothing is created, it moves.
+  if (role === 'superadmin') return !!recipient.role;
   return false;
 }
 function validBalance(value) {
