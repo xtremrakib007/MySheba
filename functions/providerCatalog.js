@@ -660,15 +660,36 @@ async function readPricingDoc(db, operatorName) {
  * takes the highest-priority active provider for the service, which is the same
  * rule the charge path uses.
  */
+// Features an active IIMMPACT provider serves whether or not they are ticked
+// on its record. IIMMPACT sells Malaysian Internet plans under documented
+// codes (iimmpact-options), but Internet was only found on a provider whose
+// feature list named it - so the box going unticked on one save left every
+// Internet order "not set up for this country" while Recharge through the
+// same provider worked. Listing, pricing and dispatch all ask through
+// readProvider / providersForService, so they still agree on the provider.
+const IIMMPACT_IMPLICIT_SERVICES = ['Internet'];
+function servesImplicitly(provider, service) {
+  return !!provider && provider.authType === 'iimmpactHmac' && IIMMPACT_IMPLICIT_SERVICES.includes(service);
+}
+
 async function readProvider(db, service, { name, country, strictCountry } = {}) {
   const queries = [];
   let primary = db.collection(PROVIDER_COLLECTION).where('service', '==', service).where('active', '==', true);
   if (name) primary = primary.where('name', '==', name);
   queries.push(primary.limit(name ? 1 : 20).get());
   if (!name) queries.push(db.collection(PROVIDER_COLLECTION).where('services', 'array-contains', service).where('active', '==', true).limit(20).get());
+  const implicit = !name && IIMMPACT_IMPLICIT_SERVICES.includes(service);
+  if (implicit) queries.push(db.collection(PROVIDER_COLLECTION).where('active', '==', true).limit(100).get());
   const snaps = await Promise.all(queries);
   const byId = new Map();
-  for (const snap of snaps) for (const d of snap.docs) byId.set(d.id, { id: d.id, ...(d.data() || {}) });
+  for (const [index, snap] of snaps.entries()) {
+    for (const d of snap.docs) {
+      const doc = { id: d.id, ...(d.data() || {}) };
+      // The third query is every active provider; only IIMMPACT ones count.
+      if (implicit && index === 2 && !servesImplicitly(doc, service)) continue;
+      byId.set(d.id, doc);
+    }
+  }
   if (!byId.size) return null;
   const docs = [...byId.values()];
   const wanted = String(country || '').toUpperCase();
@@ -787,6 +808,7 @@ async function resolveOrderPackage({
 }
 
 module.exports = {
+  IIMMPACT_IMPLICIT_SERVICES, servesImplicitly,
   PRESETS,
   DEFAULT_ITEM_MAP,
   PRICING_COLLECTION,

@@ -1104,12 +1104,20 @@ exports.fetchProviderCatalog = fetchProviderCatalog;
  * mode worth accepting for one saved read.
  */
 async function providersForService(db, service) {
-  const [legacy, multi] = await Promise.all([
+  const implicit = providerCatalog.IIMMPACT_IMPLICIT_SERVICES.includes(service);
+  const [legacy, multi, all] = await Promise.all([
     db.collection(COLLECTION).where('service', '==', service).where('active', '==', true).limit(100).get(),
     db.collection(COLLECTION).where('services', 'array-contains', service).where('active', '==', true).limit(100).get(),
+    // An active IIMMPACT provider serves Internet even unticked; see
+    // providerCatalog.IIMMPACT_IMPLICIT_SERVICES.
+    implicit ? db.collection(COLLECTION).where('active', '==', true).limit(100).get() : Promise.resolve({ docs: [] }),
   ]);
   const byId = new Map();
   for (const d of [...legacy.docs, ...multi.docs]) byId.set(d.id, { id: d.id, ...d.data() });
+  for (const d of all.docs) {
+    const doc = { id: d.id, ...d.data() };
+    if (providerCatalog.servesImplicitly(doc, service)) byId.set(d.id, doc);
+  }
   return [...byId.values()];
 }
 exports._providersForService = providersForService;
