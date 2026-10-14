@@ -157,3 +157,4 @@ exports.submitTopupRequest = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asyn
     throw new HttpsError('internal', 'Could not submit the top-up request.');
   }
 });
+exports.validateReceiptUrl = validateReceiptUrl;

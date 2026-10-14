@@ -105,6 +105,8 @@ service cloud.firestore {
     match /iimmpactOptionsCache/{id} { allow read, write: if false; }
     // IIMMPACT's wholesale cost per order: server-only, read through getIimmpactCostCheck.
     match /iimmpactCostLog/{id} { allow read, write: if false; }
+    // Bank references already recorded as superadmin deposits (superadminDepositService.js). Server only.
+    match /depositReferences/{id} { allow read, write: if false; }
     // IIMMPACT purchase login tokens (JWT): server-only.
     match /iimmpactTokens/{id} { allow read, write: if false; }
     // Each product's amount list, the same for every customer (lists that
