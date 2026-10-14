@@ -286,25 +286,42 @@ function pinnedLookup(pinnedAddress) {
 const USER_AGENT = 'MySheba/1.0';
 
 function requestHttpsPinned(url, options, pinnedAddress) {
+  const target = typeof url === 'string' ? new URL(url) : url;
+  const method = String(options.method || 'GET').toUpperCase();
+  // Read-only IIMMPACT calls through the proxy reuse a kept-alive tunnel
+  // (iimmpactProxy.keepAliveAgent). A reused socket the far end had already
+  // closed fails before anything is answered; a GET is safe to send again,
+  // so that one case is retried once on a fresh tunnel.
+  const reuse = method === 'GET' && options.body == null && iimmpactProxy.usesProxy(target.hostname);
+  if (!reuse) return requestHttpsOnce(target, options, pinnedAddress, false);
+  return requestHttpsOnce(target, options, pinnedAddress, true).catch((error) => {
+    if (!error?.reusedSocket || options.signal?.aborted) throw error;
+    return requestHttpsOnce(target, options, pinnedAddress, false);
+  });
+}
+function requestHttpsOnce(target, options, pinnedAddress, keepAlive) {
   return new Promise((resolve, reject) => {
-    const target = typeof url === 'string' ? new URL(url) : url;
     // IIMMPACT refuses topup from US source IPs; with a fixed-IP proxy
     // configured, every IIMMPACT call is tunnelled through it (end-to-end TLS,
     // see iimmpactProxy.js). Other providers keep the pinned direct path.
-    const route = iimmpactProxy.usesProxy(target.hostname)
-      // No `agent` key: Node only honours createConnection when the request
-      // has no agent (agent:false would build one and connect directly).
-      ? { createConnection: iimmpactProxy.tunnelConnection(target.hostname, Number(target.port) || 443) }
+    const route = !iimmpactProxy.usesProxy(target.hostname)
       // Pin the already-validated DNS result for this request. TLS still uses
       // the original hostname, so certificate/SNI validation is preserved.
-      : { lookup: pinnedLookup(pinnedAddress) };
-    const request = https.request(url, {
+      ? { lookup: pinnedLookup(pinnedAddress) }
+      : keepAlive
+        ? { agent: iimmpactProxy.keepAliveAgent() }
+        // No `agent` key: Node only honours createConnection when the request
+        // has no agent (agent:false would build one and connect directly).
+        : { createConnection: iimmpactProxy.tunnelConnection(target.hostname, Number(target.port) || 443) };
+    let answered = false;
+    const request = https.request(target, {
       method: options.method,
       // Ours first, so an explicit header from a caller still wins.
       headers: { 'user-agent': USER_AGENT, ...options.headers },
       signal: options.signal,
       ...route,
     }, (response) => {
+      answered = true;
       let bytes = 0;
       const chunks = [];
       response.on('data', (chunk) => {
@@ -320,7 +337,10 @@ function requestHttpsPinned(url, options, pinnedAddress) {
       }));
       response.on('error', reject);
     });
-    request.on('error', reject);
+    request.on('error', (error) => {
+      if (!answered && request.reusedSocket && error && typeof error === 'object') error.reusedSocket = true;
+      reject(error);
+    });
     if (options.body != null) request.write(options.body);
     request.end();
   });
@@ -2718,7 +2738,25 @@ exports._test_iimmpactCustomerPrice = iimmpactCustomerPrice;
  * product codes, plan codes, denomination, account mapping and extras out of
  * client trust.
  */
+/**
+ * The live-checked product behind an IIMMPACT order, or { error }.
+ *
+ * A network failure while asking IIMMPACT (the proxy refusing the tunnel,
+ * a timeout, DNS) used to escape as a plain Error, which a callable reports
+ * only as "INTERNAL [500]". It now says what failed, as `unavailable`, before
+ * anything is charged.
+ */
 async function resolveIimmpactMarketplaceProduct(db, raw) {
+  try {
+    return await resolveIimmpactMarketplaceProductUnsafe(db, raw);
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    console.error('IIMMPACT product check failed', String(error?.message || error).slice(0, 300));
+    throw new HttpsError('unavailable', `IIMMPACT could not be reached: ${String(error?.message || 'network error').slice(0, 200)}`);
+  }
+}
+
+async function resolveIimmpactMarketplaceProductUnsafe(db, raw) {
   const country = cleanString(raw?.country, 2).toUpperCase() || 'MY';
   const provider = await findActiveIimmpactProviderForCountry(db, country);
   if (!provider || provider.authType !== 'iimmpactHmac') return { error: 'provider-unconfigured' };

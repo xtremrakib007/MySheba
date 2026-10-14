@@ -41,6 +41,7 @@ async function ensure(name) {
 }
 async function put(name, value) {
   if (!value || value === MASK) return;
+  credentialCache.clear();
   try {
     await ensure(name);
     await request(`${encodeURI(resource(name))}:addVersion`, {
@@ -68,6 +69,7 @@ async function read(name) {
 }
 async function remove(name) {
   if (!name) return;
+  credentialCache.clear();
   try { await request(encodeURI(resource(name)), { method: 'DELETE' }); }
   catch (e) { if (e.code !== 5) throw e; }
 }
@@ -93,14 +95,40 @@ function secretError(e, action, role) {
       : 'Check the Secret Manager API is enabled for this project and try again.'));
 }
 
-async function getCredentials(provider) {
+// Decrypted credentials, kept briefly per warm instance. Reading them is
+// three Secret Manager round trips, and a purchase used to make them twice
+// (price check, then dispatch) - a noticeable part of every order's wait.
+// The key includes the secret names and the provider's updatedAt, so saving
+// a provider (which bumps updatedAt) is picked up at once by every instance;
+// put()/remove() also clear this instance outright. Failures are never kept.
+const CREDENTIAL_TTL_MS = 5 * 60 * 1000;
+const credentialCache = new Map();
+function stamp(value) {
+  if (!value) return '';
+  if (typeof value.toMillis === 'function') return String(value.toMillis());
+  if (value._seconds !== undefined) return `${value._seconds}.${value._nanoseconds || 0}`;
+  const n = new Date(value).getTime();
+  return Number.isFinite(n) ? String(n) : '';
+}
+function credentialKey(provider) {
+  return [provider.id || '', provider.apiKeySecretName || '', provider.secretKeySecretName || '',
+    provider.passwordSecretName || '', stamp(provider.updatedAt)].join('|');
+}
+async function getCredentials(provider, now = Date.now()) {
+  const key = credentialKey(provider);
+  const hit = credentialCache.get(key);
+  if (hit && hit.expiresAt > now) return { ...hit.value, username: String(provider.username || '') };
   try {
-    return {
-      apiKey: provider.apiKeySecretName ? await read(provider.apiKeySecretName) : '',
-      secretKey: provider.secretKeySecretName ? await read(provider.secretKeySecretName) : '',
-      password: provider.passwordSecretName ? await read(provider.passwordSecretName) : '',
-      username: String(provider.username || ''),
-    };
+    // Independent reads, so in parallel.
+    const [apiKey, secretKey, password] = await Promise.all([
+      provider.apiKeySecretName ? read(provider.apiKeySecretName) : '',
+      provider.secretKeySecretName ? read(provider.secretKeySecretName) : '',
+      provider.passwordSecretName ? read(provider.passwordSecretName) : '',
+    ]);
+    const value = { apiKey, secretKey, password };
+    if (credentialCache.size > 50) credentialCache.clear();
+    credentialCache.set(key, { value, expiresAt: now + CREDENTIAL_TTL_MS });
+    return { ...value, username: String(provider.username || '') };
   } catch (e) {
     throw secretError(e, "read this provider's stored credentials", 'the Secret Manager Secret Accessor role');
   }
@@ -155,5 +183,5 @@ async function cleanupUnreferenced(db, names) {
 module.exports = {
   MASK, secretName, getCredentials, migrateDocument, cleanupUnreferenced,
   put, remove,
-  _test: { secretError },
+  _test: { secretError, credentialCache, credentialKey },
 };

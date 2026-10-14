@@ -31,5 +31,14 @@ const proxy = require('../functions/iimmpactProxy');
   server.close();
   assert.ok(/refused the tunnel \(HTTP 407\)/.test(String(error && error.message)), String(error && error.message));
   assert.deepStrictEqual(seen, { url: 'api.iimmpact.com:443', auth: 'Basic ' + Buffer.from('mysheba:secret').toString('base64') });
+
+  // The kept-alive agent (read-only calls) is one per proxy URL, and is
+  // rebuilt when the URL changes.
+  const a1 = proxy.keepAliveAgent(local);
+  assert.strictEqual(proxy.keepAliveAgent(local), a1, 'reused while the proxy is unchanged');
+  assert.strictEqual(a1.keepAlive, true);
+  const a2 = proxy.keepAliveAgent({ IIMMPACT_PROXY_URL: 'http://u:p@127.0.0.1:1' });
+  assert.notStrictEqual(a2, a1, 'a new proxy URL gets a new agent');
+  a2.destroy();
   console.log('iimmpactProxy tests: PASS');
 })().catch((e) => { console.error(e); process.exit(1); });
