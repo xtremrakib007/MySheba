@@ -214,6 +214,12 @@ await check('customer CANNOT read chat reports', 'deny', () => getDocs(collectio
 await check('support marks a contact message handled', 'allow', () => updateDoc(doc(as('support1'), 'contactMessages/cm1'), { status: 'handled', handledBy: 'support1', handledAt: serverTimestamp() }));
 await check('support CANNOT rewrite a contact message', 'deny', () => updateDoc(doc(as('support1'), 'contactMessages/cm1'), { body: 'changed' }));
 
+// Provider costs are kept out of the world-readable pricing document.
+await check('customer CANNOT read private pricing costs', 'deny', () => getDoc(doc(as('customer1'), 'settings/pricingPrivate')));
+await check('admin CANNOT read private pricing costs', 'deny', () => getDoc(doc(as('admin1'), 'settings/pricingPrivate')));
+await check('superadmin reads private pricing costs', 'allow', () => getDoc(doc(as('super1'), 'settings/pricingPrivate')));
+await check('superadmin CANNOT write private pricing costs from a client', 'deny', () => setDoc(doc(as('super1'), 'settings/pricingPrivate'), { catalogCosts: {} }));
+
 console.log(`\n${results.length - failed}/${results.length} rule behaviours correct`);
 await env.cleanup();
 process.exit(failed ? 1 : 0);

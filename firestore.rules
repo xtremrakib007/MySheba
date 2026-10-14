@@ -51,6 +51,8 @@ service cloud.firestore {
     match /settings/walletExchangeRates { allow read: if activeProfile(); allow create, update: if isSuperadmin() && request.resource.data.keys().hasOnly(['baseCurrency','provider','providerUrl','liveRates','pairs','liveUpdatedAt','updatedAt','updatedBy']); allow delete: if false; }
     // Public wallet funding is fail-closed until a licensed/authorised partner and compliance approval are configured.
     match /settings/walletCompliance { allow read: if activeProfile(); allow create, update: if isSuperadmin() && request.resource.data.keys().hasOnly(['policyVersion','partnerConfigured','publicFundingEnabled','p2pEnabled','updatedAt','updatedBy']); allow delete: if false; }
+    // Provider cost prices, kept out of the world-readable settings/pricing.
+    match /settings/pricingPrivate { allow read: if isSuperadmin(); allow write: if false; }
     match /settings/pricing { allow read: if activeProfile(); allow create, update, delete: if false; }
     match /settings/paymentMethods { allow read: if activeProfile(); allow create, update: if isSuperadmin() && request.resource.data.keys().hasOnly(['jompayBillerId','jompayRefNo','duitnowQrUrl','bankAccounts','updatedAt']); allow delete: if false; }
     match /settings/featureAccess { allow read: if activeProfile(); allow create, update: if isSuperadmin() && request.resource.data.keys().hasOnly(['userManagement','transferPoints','verificationManagement','adminAnalytics','userOverrides','updatedAt']); allow delete: if false; }

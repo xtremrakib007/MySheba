@@ -170,7 +170,18 @@ exports.savePricingSettings = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
   // A deep merge would keep a markup rule the admin just deleted, so markups
   // replace the whole field; the other keys keep their existing merge.
   const writeOptions = key === 'markups' ? { mergeFields: [key, 'updatedBy', 'updatedAt'] } : { merge: true };
-  await ref.set({[key]:value,updatedBy:uid,updatedAt:admin.firestore.FieldValue.serverTimestamp()},writeOptions);
+  let publicValue = value;
+  if (key === 'catalogProductPricing') {
+    // settings/pricing is readable by every signed-in user (the app prices
+    // from it), so MySheba's provider cost stays out of it: costs are kept in
+    // settings/pricingPrivate, which only the server and a superadmin read.
+    // The list is written whole, so a cost left behind by an older save is
+    // removed from the public document here too.
+    const costs = {};
+    publicValue = value.map(({ costPrice, ...entry }) => { costs[entry.id] = Number(costPrice) || 0; return entry; });
+    await db.collection('settings').doc('pricingPrivate').set({ catalogCosts: costs, updatedBy: uid, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { mergeFields: ['catalogCosts', 'updatedBy', 'updatedAt'] });
+  }
+  await ref.set({[key]:publicValue,updatedBy:uid,updatedAt:admin.firestore.FieldValue.serverTimestamp()},key === 'catalogProductPricing' ? { mergeFields: [key, 'updatedBy', 'updatedAt'] } : writeOptions);
   await logAudit({action:'pricing_settings_changed',targetUid:null,performedBy:uid,performedByRole:'superadmin',details:{key,before:before[key] ?? null,after:value,reason:String(request.data?.reason||'').slice(0,200)}});
   return {ok:true,key};
 });

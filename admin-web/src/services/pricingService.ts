@@ -130,6 +130,11 @@ export const DEFAULT_PRICING: PricingSettings = {
 export async function fetchPricing(): Promise<PricingSettings> {
   const snap = await getDoc(SETTINGS_DOC);
   const data = snap.exists() ? (snap.data() as Partial<PricingSettings>) : {};
+  // Provider costs live in settings/pricingPrivate (superadmin-only); a
+  // record saved before the split still carries its own costPrice.
+  let costs: Record<string, number> = {};
+  try { const priv = await getDoc(doc(db, 'settings', 'pricingPrivate')); costs = (priv.exists() ? priv.data()?.catalogCosts : null) || {}; } catch { /* not a superadmin */ }
+  if (Array.isArray(data.catalogProductPricing)) data.catalogProductPricing = data.catalogProductPricing.map((x) => ({ ...x, costPrice: costs[x.id] ?? x.costPrice ?? 0 }));
   const markups = data.markups || DEFAULT_PRICING.markups;
   return { ...DEFAULT_PRICING, ...data, markups: { services: markups.services || {}, countries: markups.countries || {}, products: markups.products || {} }, catalogProductPricing: Array.isArray(data.catalogProductPricing) ? data.catalogProductPricing : [], commissionRules: { ...DEFAULT_PRICING.commissionRules, ...(data.commissionRules || {}), recharge: { ...DEFAULT_PRICING.commissionRules.recharge, ...(data.commissionRules?.recharge || {}) }, internet: { ...DEFAULT_PRICING.commissionRules.internet, ...(data.commissionRules?.internet || {}) }, billTiers: Array.isArray(data.commissionRules?.billTiers) ? data.commissionRules.billTiers : DEFAULT_PRICING.commissionRules.billTiers, remittanceTiers: Array.isArray(data.commissionRules?.remittanceTiers) ? data.commissionRules.remittanceTiers : DEFAULT_PRICING.commissionRules.remittanceTiers } };
 }
