@@ -5,6 +5,7 @@ import * as authService from '../firebase/authService';
 import * as apiProviderService from '../firebase/apiProviderService';
 import { getIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
 import { MARKUP_SERVICES, applyMarkup } from '../utils/markup';
+import { countries as COUNTRY_LIST } from '../data/countries';
 
 // MySheba's markup on top of the provider's price, set from the superadmin
 // app - the same rules the web dashboard's Pricing > Markups edits, saved
@@ -30,6 +31,14 @@ const LABELS = {
 const text = (v) => (v === undefined || v === null ? '0' : String(v));
 const toRule = (row) => ({ percent: Number(row.percent) || 0, fixed: Number(row.fixed) || 0 });
 const rowsOf = (rules) => Object.entries(rules || {}).map(([key, r]) => ({ key, percent: text(r?.percent), fixed: text(r?.fixed) }));
+const SHORT = {
+  recharge: 'Recharge', internet: 'Internet', offerpacks: 'Offer Packs', entertainment: 'Games',
+  billpayment: 'Bills', esim: 'eSIM', iimmpact: 'Marketplace', rechargePin: 'Vouchers',
+};
+const countryName = (cc) => {
+  const c = COUNTRY_LIST.find((x) => x.code === cc);
+  return c ? `${c.flag} ${c.name}` : cc;
+};
 const money = (n, currency = 'MYR') => (Number.isFinite(Number(n)) ? `${currency} ${Number(n).toFixed(2)}` : '-');
 
 export default function MarkupSettingsCard({ pricing }) {
@@ -42,6 +51,9 @@ export default function MarkupSettingsCard({ pricing }) {
   const [message, setMessage] = useState('');
   const [needPin, setNeedPin] = useState(false);
   const [pin, setPin] = useState('');
+  const [catalog, setCatalog] = useState(null);
+
+  useEffect(() => { getIimmpactCatalog().then(setCatalog).catch(() => {}); }, []);
 
   // Fill the form from the saved rules once they arrive, and again only if
   // they change underneath (another device saved).
@@ -95,24 +107,36 @@ export default function MarkupSettingsCard({ pricing }) {
     }
   };
 
-  const ruleRows = (rows, setRows, placeholder) => (
-    <View>
-      {rows.map((row, index) => (
-        <View key={index} style={styles.ruleRow}>
-          <TextInput style={[styles.input, styles.keyInput]} value={row.key} placeholder={placeholder} autoCapitalize="none"
-            onChangeText={(v) => setRows(rows.map((r, i) => (i === index ? { ...r, key: v.trim() } : r)))} />
-          <TextInput style={styles.input} value={row.percent} keyboardType="decimal-pad" placeholder="%"
-            onChangeText={(v) => setRows(rows.map((r, i) => (i === index ? { ...r, percent: v } : r)))} />
-          <TextInput style={styles.input} value={row.fixed} keyboardType="decimal-pad" placeholder="RM"
-            onChangeText={(v) => setRows(rows.map((r, i) => (i === index ? { ...r, fixed: v } : r)))} />
-          <TouchableOpacity onPress={() => setRows(rows.filter((_, i) => i !== index))} style={styles.removeBtn}><Text style={styles.removeText}>✕</Text></TouchableOpacity>
-        </View>
-      ))}
-      <TouchableOpacity onPress={() => setRows([...rows, { key: '', percent: '0', fixed: '0' }])}>
-        <Text style={styles.addText}>+ Add rule</Text>
-      </TouchableOpacity>
+  // A rule row: what it applies to as a label (picked, never typed), then
+  // its % and RM.
+  const ruleRows = (rows, setRows, labelOf) => rows.map((row, index) => (
+    <View key={row.key} style={styles.ruleRow}>
+      <View style={{ flex: 1 }}>{labelOf(row.key)}</View>
+      <TextInput style={styles.input} value={row.percent} keyboardType="decimal-pad" placeholder="%"
+        onChangeText={(v) => setRows(rows.map((r, i) => (i === index ? { ...r, percent: v } : r)))} />
+      <TextInput style={styles.input} value={row.fixed} keyboardType="decimal-pad" placeholder="RM"
+        onChangeText={(v) => setRows(rows.map((r, i) => (i === index ? { ...r, fixed: v } : r)))} />
+      <TouchableOpacity onPress={() => setRows(rows.filter((_, i) => i !== index))} style={styles.removeBtn}><Text style={styles.removeText}>✕</Text></TouchableOpacity>
     </View>
-  );
+  ));
+  // Adding the same target twice would make two rows with one key, and only
+  // one of them could be saved; the existing row is kept instead.
+  const addRule = (rows, setRows, key) => {
+    if (!key || rows.some((r) => r.key === key)) return;
+    setRows([...rows, { key, percent: '0', fixed: '0' }]);
+  };
+  const productName = (code) => {
+    const p = catalog?.products?.[code] || Object.values(catalog?.products || {}).find((x) => x?.code === code);
+    return (
+      <Text style={styles.ruleLabel} numberOfLines={2}>
+        {p?.name || code}{p?.name ? <Text style={styles.dimText}>{`\n${code}`}</Text> : null}
+      </Text>
+    );
+  };
+  const countryRuleName = (key) => {
+    const [service, cc] = key.split(':');
+    return <Text style={styles.ruleLabel}>{SHORT[service] || service} · {countryName(cc)}</Text>;
+  };
 
   return (
     <View style={styles.card}>
@@ -137,12 +161,14 @@ export default function MarkupSettingsCard({ pricing }) {
       ))}
 
       <Text style={styles.section}>By country</Text>
-      <Text style={styles.hint}>e.g. recharge:NP for Nepal reloads, billpayment:ID for Indonesian bills.</Text>
-      {ruleRows(countries, setCountries, 'recharge:NP')}
+      <Text style={styles.hint}>A different markup for one service in one country, e.g. Recharge in Nepal.</Text>
+      {ruleRows(countries, setCountries, countryRuleName)}
+      <CountryPicker onPick={(key) => addRule(countries, setCountries, key)} />
 
-      <Text style={styles.section}>By product code</Text>
-      <Text style={styles.hint}>The IIMMPACT product code - see the cost check below.</Text>
-      {ruleRows(products, setProducts, 'Product code')}
+      <Text style={styles.section}>By product</Text>
+      <Text style={styles.hint}>A different markup for one product - an operator, biller or voucher.</Text>
+      {ruleRows(products, setProducts, productName)}
+      <ProductPicker catalog={catalog} taken={products.map((r) => r.key)} onPick={(code) => addRule(products, setProducts, code)} />
 
       {needPin && (
         <TextInput style={[styles.input, styles.pinInput]} value={pin} onChangeText={setPin} placeholder="Your PIN" secureTextEntry keyboardType="number-pad" />
@@ -152,15 +178,14 @@ export default function MarkupSettingsCard({ pricing }) {
         {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>Save markups</Text>}
       </TouchableOpacity>
 
-      <CostCheck pricing={pricing} draft={draft} />
+      <CostCheck pricing={pricing} draft={draft} catalog={catalog} />
     </View>
   );
 }
 
 // What IIMMPACT really charges for one product: the catalogue's own rate
 // against the cost it recorded on MySheba's recent orders.
-function CostCheck({ pricing, draft }) {
-  const [catalog, setCatalog] = useState(null);
+function CostCheck({ pricing, draft, catalog }) {
   const [query, setQuery] = useState('');
   const [product, setProduct] = useState(null);
   const [amount, setAmount] = useState('');
@@ -171,15 +196,7 @@ function CostCheck({ pricing, draft }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
 
-  useEffect(() => { getIimmpactCatalog().then(setCatalog).catch(() => {}); }, []);
-
-  const matches = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q || product) return [];
-    return Object.values(catalog?.products || {})
-      .filter((p) => p && (String(p.name || '').toLowerCase().includes(q) || String(p.code || '').toLowerCase().includes(q)))
-      .slice(0, 8);
-  }, [catalog, query, product]);
+  const matches = useMemo(() => (product ? [] : searchProducts(catalog, query)), [catalog, query, product]);
 
   const check = async () => {
     if (!product || busy) return;
@@ -251,6 +268,87 @@ function CostCheck({ pricing, draft }) {
   );
 }
 
+// Products whose name, code or category matches the search, best first.
+function searchProducts(catalog, query, limit = 8) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return [];
+  return Object.values(catalog?.products || {})
+    .filter((p) => p && p.code && [p.name, p.code, p.category].some((v) => String(v || '').toLowerCase().includes(q)))
+    .sort((a, b) => Number(!String(a.name || '').toLowerCase().startsWith(q)) - Number(!String(b.name || '').toLowerCase().startsWith(q)))
+    .slice(0, limit);
+}
+
+// "+ Add product": search the IIMMPACT catalogue and tap a product.
+function ProductPicker({ catalog, taken, onPick }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const matches = useMemo(() => searchProducts(catalog, query), [catalog, query]);
+  if (!open) {
+    return (
+      <TouchableOpacity onPress={() => setOpen(true)}>
+        <Text style={styles.addText}>+ Add product</Text>
+      </TouchableOpacity>
+    );
+  }
+  return (
+    <View style={styles.pickerBox}>
+      <TextInput style={[styles.input, styles.wide]} value={query} onChangeText={setQuery} autoFocus
+        placeholder={catalog ? 'Search, e.g. Digi, Shell, TNB, Nepal' : 'Loading products...'} />
+      {matches.map((p) => {
+        const added = taken.includes(p.code);
+        return (
+          <TouchableOpacity key={p.code} style={styles.match} disabled={added}
+            onPress={() => { onPick(p.code); setQuery(''); setOpen(false); }}>
+            <Text style={[styles.matchText, added && styles.dim]}>
+              {p.name} <Text style={styles.dimText}>({p.code}){added ? ' - already added' : ''}</Text>
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+      {!!query.trim() && !!catalog && !matches.length && <Text style={styles.hint}>No product matches.</Text>}
+      <TouchableOpacity onPress={() => { setOpen(false); setQuery(''); }}>
+        <Text style={styles.cancelText}>Cancel</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+// "+ Add country rule": tap a service, then a country.
+function CountryPicker({ onPick }) {
+  const [open, setOpen] = useState(false);
+  const [service, setService] = useState('recharge');
+  if (!open) {
+    return (
+      <TouchableOpacity onPress={() => setOpen(true)}>
+        <Text style={styles.addText}>+ Add country rule</Text>
+      </TouchableOpacity>
+    );
+  }
+  return (
+    <View style={styles.pickerBox}>
+      <Text style={styles.pickerLabel}>Service</Text>
+      <View style={styles.chipRow}>
+        {MARKUP_SERVICES.map((s) => (
+          <TouchableOpacity key={s} onPress={() => setService(s)} style={[styles.chip, service === s && styles.chipActive]}>
+            <Text style={[styles.chipText, service === s && styles.chipTextActive]}>{SHORT[s] || s}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <Text style={styles.pickerLabel}>Country</Text>
+      <View style={styles.chipRow}>
+        {COUNTRY_LIST.map((c) => (
+          <TouchableOpacity key={c.code} style={styles.chip} onPress={() => { onPick(`${service}:${c.code}`); setOpen(false); }}>
+            <Text style={styles.chipText}>{c.flag} {c.name}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <TouchableOpacity onPress={() => setOpen(false)}>
+        <Text style={styles.cancelText}>Cancel</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 function Line({ label, value, strong, warn }) {
   return (
     <View style={styles.line}>
@@ -271,9 +369,12 @@ const styles = StyleSheet.create({
   ruleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 },
   serviceLabel: { flex: 1, fontSize: 12, fontWeight: '600' },
   input: { width: 64, borderWidth: 1, borderColor: '#d6dde5', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, fontSize: 13 },
-  keyInput: { flex: 1, width: undefined },
   wide: { width: '100%', marginBottom: 4 },
   pinInput: { width: '100%', marginTop: 10 },
+  ruleLabel: { fontSize: 12, fontWeight: '700' },
+  pickerBox: { borderWidth: 1, borderColor: '#eef2f6', borderRadius: 10, padding: 10, marginVertical: 6 },
+  pickerLabel: { fontSize: 11, fontWeight: '800', opacity: 0.6, marginTop: 2 },
+  cancelText: { color: '#4a5a6a', fontWeight: '700', fontSize: 12, paddingTop: 8 },
   removeBtn: { paddingHorizontal: 6, paddingVertical: 4 },
   removeText: { color: '#c0392b', fontWeight: '800' },
   addText: { color: '#0E7A79', fontWeight: '800', fontSize: 12, paddingVertical: 6 },
