@@ -26,7 +26,8 @@ export function canTransferTo(senderRole, senderUid, recipient) {
   // A dealer funds only the customers who belong to them.
   if (senderRole === 'dealer') return role === 'customer' && !!senderUid && recipient.dealerId === senderUid;
   if (senderRole === 'admin') return role === 'dealer';
-  if (senderRole === 'superadmin') return role === 'admin' || role === 'dealer';
+  // Any active account, customers included, from the superadmin's own balance.
+  if (senderRole === 'superadmin') return !!role;
   return false;
 }
 
@@ -39,6 +40,6 @@ export function eligibleRecipients(senderRole, senderUid, accounts) {
 export function recipientHint(senderRole) {
   if (senderRole === 'dealer') return 'You can send to customers assigned to you.';
   if (senderRole === 'admin') return 'You can send to dealers.';
-  if (senderRole === 'superadmin') return 'You can send to admins and dealers.';
+  if (senderRole === 'superadmin') return 'You can send to any user.';
   return 'Your account cannot send wallet money.';
 }

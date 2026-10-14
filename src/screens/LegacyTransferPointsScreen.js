@@ -61,8 +61,8 @@ export default function LegacyTransferPointsScreen() {
 
   // Only the accounts this sender is actually allowed to send to. The pool
   // from subscribeManageableUsers is everyone they can MANAGE, which is a
-  // wider set than everyone they can FUND - a superadmin manages customers
-  // but may only fund admins and dealers. Listing the rest meant picking one,
+  // wider set than everyone they can FUND for an admin or a dealer (a
+  // superadmin may fund anyone they manage). Listing the rest meant picking one,
   // typing an amount, entering a security PIN, and only then being refused.
   const recipients = useMemo(
     () => eligibleRecipients(myRole, authUser?.uid, users),

@@ -113,7 +113,8 @@ export default function ApiProviderManagementScreen() {
       Alert.alert('Testing purchase access','Sending IIMMPACT a purchase for a product that does not exist. Nothing is bought or charged.');
       const r=await apiService.probeIimmpactPurchase(item.id);
       const lines=(r?.results||[]).map((x)=>`${x.label}\n→ HTTP ${x.status}${x.message?`: ${x.message}`:''}${x.body?`\n${x.body}`:''}${Object.keys(x.headers||{}).length?`\n${Object.entries(x.headers).map(([k,v])=>`${k}: ${v}`).join('\n')}`:''}`);
-      Alert.alert('Purchase access',[r?.verdict||'',...lines].filter(Boolean).join('\n\n'));
+      const who=r?.providers?[`Tested: ${r.providers.tested}`,`Purchases use: ${r.providers.purchasesUse}`,`Catalogue uses: ${r.providers.catalogueUses}`,...(r.providers.otherIimmpactLike||[]).map((x)=>`Other IIMMPACT record (not HMAC): ${x}`)].join('\n'):'';
+      Alert.alert('Purchase access',[r?.verdict||'',who,...lines].filter(Boolean).join('\n\n'));
     }catch(e){Alert.alert('Purchase access test failed',e.message||'Unable to run the test.');}
   };
   const testApi=async(item)=>{

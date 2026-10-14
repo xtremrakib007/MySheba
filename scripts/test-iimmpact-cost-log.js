@@ -50,3 +50,20 @@ function fakeDb() {
   assert.strictEqual(findBiller(billers, '779264').category, undefined);
   console.log('JomPAY biller names: PASS');
 }
+
+// Purchases route through the fixed-IP connector only when one is named.
+{
+  const { egressOptions } = require('../functions/egress');
+  const before = process.env.IIMMPACT_VPC_CONNECTOR;
+  delete process.env.IIMMPACT_VPC_CONNECTOR;
+  assert.deepStrictEqual(egressOptions(), {}, 'unset: functions unchanged');
+  process.env.IIMMPACT_VPC_CONNECTOR = 'mysheba-connector';
+  assert.deepStrictEqual(egressOptions(), { vpcConnector: 'mysheba-connector', vpcConnectorEgressSettings: 'ALL_TRAFFIC' });
+  if (before === undefined) delete process.env.IIMMPACT_VPC_CONNECTOR; else process.env.IIMMPACT_VPC_CONNECTOR = before;
+  const fs = require('fs');
+  const wallet = fs.readFileSync(require('path').join(__dirname, '..', 'functions/walletService.js'), 'utf8');
+  for (const name of ['chargeRecharge', 'chargeIimmpactProduct', 'chargeBillPayment', 'chargeInternetPackage']) {
+    assert.ok(new RegExp(`exports\\.${name}=onCall\\(\\{ enforceAppCheck: ENFORCE_APP_CHECK, \\.\\.\\.egressOptions\\(\\) \\}`).test(wallet), name + ' uses the egress options');
+  }
+  console.log('Fixed-IP egress option: PASS');
+}

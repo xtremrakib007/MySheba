@@ -83,7 +83,10 @@ const expect = (label, got, want) => {
 console.log('\nThe rule as intended:');
 expect('superadmin -> admin', client('superadmin', ME, { role: 'admin' }), true);
 expect('superadmin -> dealer', client('superadmin', ME, { role: 'dealer' }), true);
-expect('superadmin -> customer is NOT allowed', client('superadmin', ME, { role: 'customer' }), false);
+// A superadmin funds any user from their own balance, customers included.
+expect('superadmin -> customer', client('superadmin', ME, { role: 'customer' }), true);
+expect('superadmin -> reseller', client('superadmin', ME, { role: 'reseller' }), true);
+expect('superadmin -> an account with no role is NOT allowed', client('superadmin', ME, {}), false);
 expect('admin -> dealer', client('admin', ME, { role: 'dealer' }), true);
 expect('admin -> customer is NOT allowed', client('admin', ME, { role: 'customer' }), false);
 expect('admin -> admin is NOT allowed', client('admin', ME, { role: 'admin' }), false);

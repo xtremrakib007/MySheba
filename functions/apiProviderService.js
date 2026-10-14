@@ -22,6 +22,7 @@ const providerReach = require('./providerReach');
 const catalogMirror = require('./iimmpactCatalogMirror');
 const costLog = require('./iimmpactCostLog');
 const iimmpactJwt = require('./iimmpactJwt');
+const { egressOptions } = require('./egress');
 const optionsMirror = require('./iimmpactOptionsMirror');
 const jompayBillers = require('./jompayBillers');
 
@@ -1785,7 +1786,7 @@ exports._test = { isPrivateIp, resolveExecutionMode, pinnedLookup, validateBaseU
  * the refusal is the API (a 400 means the key may buy), the key or account
  * (403 from the API), or a gateway/WAF in front of it.
  */
-exports.probeIimmpactPurchase = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, timeoutSeconds: 60 }, async (request) => {
+exports.probeIimmpactPurchase = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, timeoutSeconds: 60, ...egressOptions() }, async (request) => {
   const db = admin.firestore();
   await assertSuperadmin(db, request);
   await checkVelocity(db, request.auth.uid, 'getIimmpactCostCheck', { ip: getClientIp(request) });
@@ -1815,6 +1816,23 @@ exports.probeIimmpactPurchase = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, tim
       return { label, status: 0, message: String(error?.message || error).slice(0, 300), body: '', headers: {} };
     }
   };
+  // Which record each path picks - the purchase chooses among every active
+  // IIMMPACT record by country and priority, the catalogue by its own rule -
+  // and a second, older record would sign purchases with a different key.
+  const describe = (p) => (p ? `${p.name || p.id} (${p.id}) • ${p.authType} • ${p.baseUrl} • key ${String(p.apiKey || '').slice(0, 10)}…` : 'none');
+  const active = (await db.collection(COLLECTION).where('active', '==', true).limit(100).get()).docs
+    .map((d) => ({ id: d.id, ...(d.data() || {}) }));
+  const hmac = active.filter((p) => p.authType === 'iimmpactHmac');
+  const forMy = hmac.filter((p) => providerReach.isSpecificFor(p, 'MY'));
+  const purchasePick = [...(forMy.length ? forMy : hmac.filter((p) => providerReach.isGlobal(p)))].sort((x, y) => Number(y.priority || 0) - Number(x.priority || 0))[0] || null;
+  const cataloguePick = await findActiveIimmpactProviderForCountry(db, 'MY');
+  if (purchasePick) Object.assign(purchasePick, await providerSecretService.getCredentials(purchasePick));
+  const providers = {
+    tested: describe(provider),
+    purchasesUse: describe(purchasePick),
+    catalogueUses: describe(cataloguePick),
+    otherIimmpactLike: active.filter((p) => p.authType !== 'iimmpactHmac' && /iimmpact/i.test(`${p.name} ${p.baseUrl}`)).map(describe),
+  };
   const results = [];
   results.push(await send('GET /v2/balance (should be 200)', { method: 'GET', path: '/v2/balance' }));
   results.push(await send('POST /v2/topup as a purchase (fake product)'));
@@ -1830,7 +1848,8 @@ exports.probeIimmpactPurchase = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, tim
         : topup.status === 401
           ? 'IIMMPACT does not accept the signature/key for /v2/topup.'
           : 'Unexpected answer - send these results.';
-  return { verdict, results, checkedAt: Date.now() };
+  const samePick = purchasePick && cataloguePick && purchasePick.id === cataloguePick.id;
+  return { verdict: samePick ? verdict : `Purchases use a DIFFERENT IIMMPACT record than the catalogue - fix or deactivate the other record. ${verdict}`, providers, results, checkedAt: Date.now() };
 });
 
 exports.testApiProvider = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
