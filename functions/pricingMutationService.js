@@ -208,7 +208,9 @@ function cleanValue(key, value) {
 }
 
 exports.savePricingSettings = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async request => {
-  enforceRequestEnvelope(request, { maxBytes: 512 * 1024 });
+  // Pricing documents are large by nature (a commission per product and role,
+  // up to 5000 catalogue prices); cleanValue below bounds every one of them.
+  enforceRequestEnvelope(request, { maxBytes: 512 * 1024, maxKeys: 40000, maxArrayLength: 5000 });
   if (!request.auth?.uid) throw new HttpsError('unauthenticated','Sign in required.');
   requireRecentAuth(request);
   const uid=request.auth.uid;

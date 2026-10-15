@@ -104,4 +104,18 @@ for (const bad of [
 ]) {
   assert.throws(() => cleanCommissionRules({ ...full, products: bad }), `accepted ${JSON.stringify(bad)}`);
 }
+// The save must get past the request guard: a commission per product and
+// role is thousands of fields (the default limit of 160 refused a handful).
+const fs = require('fs');
+const { enforceRequestEnvelope } = require('../functions/securityGateway');
+const many = {};
+for (let i = 0; i < 2000; i++) many['P' + i] = Object.fromEntries(['customer', 'retail', 'reseller', 'dealer', 'admin'].map((r) => [r, { type: 'percent', value: 1.25 }]));
+const bigSave = { data: { key: 'commissionRules', value: { ...full, products: many } } };
+assert.throws(() => enforceRequestEnvelope(bigSave), /too many fields|too large/, 'other callables keep the small limits');
+const pricingSrc = fs.readFileSync(path.join(__dirname, '../functions/pricingMutationService.js'), 'utf8');
+const opts = pricingSrc.match(/enforceRequestEnvelope\(request, (\{[^}]*\})\)/);
+assert.ok(opts, 'savePricingSettings checks the envelope');
+const pricingOpts = new Function('return ' + opts[1])();
+enforceRequestEnvelope(bigSave, pricingOpts);
+assert.ok(Object.keys(cleanCommissionRules(bigSave.data.value).products).length === 2000);
 console.log('role commission: ok');
