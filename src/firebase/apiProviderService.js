@@ -337,6 +337,11 @@ const pricingSaveFn = httpsCallable(functions, 'savePricingSettings');
 const costCheckFn = httpsCallable(functions, 'getIimmpactCostCheck');
 
 /** Superadmin: replaces MySheba's markup rules (settings/pricing.markups). */
+/** Superadmin: the commission rules, including per-role ones (byRole). */
+export async function saveCommissionRules(rules) {
+  await pricingSaveFn({ key: 'commissionRules', value: rules });
+}
+
 export async function saveMarkups(markups) {
   await pricingSaveFn({ key: 'markups', value: markups });
 }

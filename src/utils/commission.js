@@ -70,6 +70,16 @@ export function resolveCommission(settings, { service, amount, role, payload } =
   const override = catalogOverride(settings, payload, roleKey);
   const overrideRule = override?.commissions?.[roleKey];
   if (overrideRule) return Math.round(ruleValue(overrideRule, value) * 100) / 100;
+  // Per role (commissionRules.byRole.<role>.<service>, set in the superadmin
+  // app). Rules used to be one value for everyone, so a customer earned the
+  // same commission as a retailer; a customer now earns nothing on these
+  // services unless a superadmin sets a customer rule.
+  const PER_ROLE_SERVICES = ['recharge', 'internet', 'billpayment'];
+  if (PER_ROLE_SERVICES.includes(service)) {
+    const roleRule = rules.byRole && rules.byRole[roleKey] && rules.byRole[roleKey][service];
+    if (roleRule && typeof roleRule === 'object') return Math.round(ruleValue(roleRule, value) * 100) / 100;
+    if (roleKey === 'customer' || roleKey === 'user') return 0;
+  }
   if (service === 'billpayment') return Math.round(tierFee(rules.billTiers, value) * 100) / 100;
   if (service === 'recharge') return Math.round(ruleValue(rules.recharge, value) * 100) / 100;
   if (service === 'internet') return Math.round(ruleValue(rules.internet, value) * 100) / 100;

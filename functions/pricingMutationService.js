@@ -72,7 +72,26 @@ function cleanCommissionRules(v) {
     billTiers: tiers(v.billTiers, 'Bill commission'),
     remittanceTiers: tiers(v.remittanceTiers, 'Remittance fee'),
     touchNGoFeePercent: finite(v.touchNGoFeePercent, 'Touch n Go fee percent', 0, MAX_PERCENT),
+    ...(v.byRole !== undefined ? { byRole: cleanRoleCommissions(v.byRole) } : {}),
   };
+}
+// commissionRules.byRole: { retail: { recharge: { type, value }, ... }, ... }
+const ROLE_COMMISSION_SERVICES = ['recharge', 'internet', 'billpayment'];
+function cleanRoleCommissions(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) throw new HttpsError('invalid-argument', 'Role commissions are invalid.');
+  const out = {};
+  for (const [role, byService] of Object.entries(v)) {
+    if (!ROLES.includes(role)) throw new HttpsError('invalid-argument', 'Unknown commission role: ' + String(role).slice(0, 20));
+    if (!byService || typeof byService !== 'object' || Array.isArray(byService)) throw new HttpsError('invalid-argument', role + ' commissions are invalid.');
+    const row = {};
+    for (const [service, r] of Object.entries(byService)) {
+      if (!ROLE_COMMISSION_SERVICES.includes(service)) throw new HttpsError('invalid-argument', 'Unknown commission service: ' + String(service).slice(0, 30));
+      if (r === null || r === undefined) continue;
+      row[service] = rule(r, role + ' ' + service + ' commission');
+    }
+    if (Object.keys(row).length) out[role] = row;
+  }
+  return out;
 }
 function cleanCatalog(list) {
   if (!Array.isArray(list) || list.length > 5000) throw new HttpsError('invalid-argument','Catalog pricing is invalid.');
@@ -186,6 +205,12 @@ exports.savePricingSettings = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
   // replace the whole field; the other keys keep their existing merge.
   const writeOptions = key === 'markups' ? { mergeFields: [key, 'updatedBy', 'updatedAt'] } : { merge: true };
   let publicValue = value;
+  if (key === 'commissionRules') {
+    // Written whole so a role rule the superadmin removed is really gone; a
+    // save that does not mention byRole (the admin web's older editor) keeps
+    // the stored one.
+    if (value.byRole === undefined && before.commissionRules && before.commissionRules.byRole) value.byRole = before.commissionRules.byRole;
+  }
   if (key === 'catalogProductPricing') {
     // settings/pricing is readable by every signed-in user (the app prices
     // from it), so MySheba's provider cost stays out of it: costs are kept in
@@ -196,8 +221,8 @@ exports.savePricingSettings = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
     publicValue = value.map(({ costPrice, ...entry }) => { costs[entry.id] = Number(costPrice) || 0; return entry; });
     await db.collection('settings').doc('pricingPrivate').set({ catalogCosts: costs, updatedBy: uid, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { mergeFields: ['catalogCosts', 'updatedBy', 'updatedAt'] });
   }
-  await ref.set({[key]:publicValue,updatedBy:uid,updatedAt:admin.firestore.FieldValue.serverTimestamp()},key === 'catalogProductPricing' ? { mergeFields: [key, 'updatedBy', 'updatedAt'] } : writeOptions);
+  await ref.set({[key]:publicValue,updatedBy:uid,updatedAt:admin.firestore.FieldValue.serverTimestamp()},(key === 'catalogProductPricing' || key === 'commissionRules') ? { mergeFields: [key, 'updatedBy', 'updatedAt'] } : writeOptions);
   await logAudit({action:'pricing_settings_changed',targetUid:null,performedBy:uid,performedByRole:'superadmin',details:{key,before:before[key] ?? null,after:value,reason:String(request.data?.reason||'').slice(0,200)}});
   return {ok:true,key};
 });
-exports._test = { cleanMarkups };
+exports._test = { cleanMarkups, cleanCommissionRules };
