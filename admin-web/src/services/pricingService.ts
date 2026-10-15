@@ -54,7 +54,14 @@ export interface CommissionRules {
   billTiers: CommissionTier[];
   remittanceTiers: CommissionTier[];
   touchNGoFeePercent: number;
+  // Per role and per product (functions/commissionService.js): a customer
+  // earns nothing unless one of these sets a value for them.
+  byRole?: Partial<Record<PricingRole, Partial<Record<RoleCommissionService, CommissionRule>>>>;
+  products?: Record<string, Partial<Record<PricingRole, CommissionRule>>>;
 }
+export interface CommissionRule { type: 'fixed' | 'percent'; value: number }
+export const ROLE_COMMISSION_SERVICES = ['recharge', 'internet', 'billpayment'] as const;
+export type RoleCommissionService = (typeof ROLE_COMMISSION_SERVICES)[number];
 
 // MySheba's markup on the provider price - see functions/markupService.js.
 // The most specific rule wins: product, then service in a country, then service.
