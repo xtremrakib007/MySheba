@@ -1,5 +1,6 @@
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const admin = require('firebase-admin');
+const { readCommissionPayee, payPendingCommission } = require('./commissionCredit');
 const providerSecretService = require('./providerSecretService');
 
 if (!admin.apps.length) admin.initializeApp();
@@ -117,7 +118,10 @@ async function settle(txRef, provider, providerStatus, message, timedOut = false
         tx.update(txRef, { apiExecution, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
         return 'already-final';
       }
+      // The commission recorded at purchase is paid now the order is confirmed.
+      const payee = await readCommissionPayee(tx, db, order);
       tx.update(txRef, {
+        ...payPendingCommission(tx, db, txRef, order, payee),
         status: 'completed',
         apiExecution,
         completedAt: order.completedAt || admin.firestore.FieldValue.serverTimestamp(),

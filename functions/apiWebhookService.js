@@ -8,8 +8,7 @@ const { matchesCallbackRequest } = require('./callbackMatch');
 const { webhookProviderId, webhookPayload, webhookEndpointUrl } = require('./webhookRequest');
 const costLog = require('./iimmpactCostLog');
 const { voucherFromCallback } = require('./voucherDelivery');
-const { addWalletLedgerEntry } = require('./walletLedgerService');
-const { addCommissionLedgerEntry } = require('./commissionService');
+const { readCommissionPayee, payPendingCommission } = require('./commissionCredit');
 
 const COLLECTION = 'api_webhooks';
 const PROVIDERS = 'api_providers';
@@ -362,14 +361,11 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
         const voucher = voucherFromCallback(body, provider.responsePinPath || '');
         const hasPin = pinSnap.exists && !!pinSnap.data()?.pin;
         const delivered = hasPin || !!voucher;
-        const commission = Number(order.commissionAmount || 0);
-        const customerId = String(order.customerId || '');
-        const payCommission = delivered && order.commissionStatus === 'pending' && commission > 0 && !!customerId;
-        const userRef = payCommission ? db.collection('users').doc(customerId) : null;
-        const userSnap = userRef ? await tx.get(userRef) : null;
+        // A voucher earns its commission only once the customer has it.
+        const payee = delivered ? await readCommissionPayee(tx, db, order) : null;
         if (!hasPin && voucher) {
           tx.set(pinRef, {
-            transactionId: txRef.id, customerId, operator: order.operator || null, country: order.country || null,
+            transactionId: txRef.id, customerId: String(order.customerId || ''), operator: order.operator || null, country: order.country || null,
             productCode: order.productCode || null, subproductCode: order.subproductCode || null, productName: order.productName || null,
             amount: Number(order.amount || 0), currency: 'MYR', pin: voucher.pin || voucher.secret,
             deliveryLink: voucher.deliveryLink || null, deliveryNote: voucher.deliveryNote || null, expiry: voucher.expiry || null,
@@ -379,19 +375,16 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
         }
         const update = { status: 'completed', apiExecution, completedAt: order.completedAt || admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() };
         if (delivered) update.rechargePinAvailable = true;
-        if (userSnap && userSnap.exists) {
-          const before = Number(userSnap.data()?.walletBalance || 0);
-          const after = Math.round((before + commission) * 100) / 100;
-          const currency = order.walletCurrency || order.currency || 'MYR';
-          tx.update(userRef, { walletBalance: after });
-          addWalletLedgerEntry(tx, db, { uid: customerId, direction: 'credit', type: 'service_commission', currency, amount: commission, balanceBefore: before, balanceAfter: after, relatedTransactionId: txRef.id, idempotencyKey: txRef.id + ':commission', source: 'service_commission', createdAt: admin.firestore.FieldValue.serverTimestamp() });
-          addCommissionLedgerEntry(tx, db, { uid: customerId, role: order.customerRole, service: 'Recharge PIN', amount: commission, currency, transactionId: txRef.id, balanceBefore: before, balanceAfter: after });
-          update.commissionStatus = 'earned';
-          update.commissionEarnedAt = admin.firestore.FieldValue.serverTimestamp();
-        }
+        Object.assign(update, payPendingCommission(tx, db, txRef, order, payee, { service: 'Recharge PIN' }));
         tx.update(txRef, update);
       } else {
-        tx.update(txRef, { status: 'completed', apiExecution, completedAt: order.completedAt || admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+        // Reload, Internet, Bill, Marketplace: the commission recorded at
+        // purchase is paid now that the provider has confirmed the order.
+        const payee = await readCommissionPayee(tx, db, order);
+        tx.update(txRef, {
+          status: 'completed', apiExecution, completedAt: order.completedAt || admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          ...payPendingCommission(tx, db, txRef, order, payee),
+        });
       }
     } else if (matchesStatus(status, config.processingStatus)) {
       if (order.apiRefunded !== true && order.status !== 'failed' && order.status !== 'completed') tx.update(txRef, { status: 'processing', apiExecution, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
