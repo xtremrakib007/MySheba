@@ -9,6 +9,8 @@ const { executeConfiguredApi, resolveExecutionMode, providersForService, resolve
 const { getWalletCurrencyAndFx, baseToWallet } = require('./walletCurrencyService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
 const { applyMarkup } = require('./markupService');
+const { resolveCommission, addCommissionLedgerEntry } = require('./commissionService');
+const { addWalletLedgerEntry } = require('./walletLedgerService');
 // One session per platform: a phone and a browser can both be signed in,
 // two phones cannot. See functions/sessionSlots.js.
 const { sessionMatches } = require('./sessionSlots');
@@ -225,6 +227,10 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, ...eg
   try { walletFx = await getWalletCurrencyAndFx(db, userSnap.data()); } catch (fxErr) { throw new HttpsError('failed-precondition', fxErr.message || 'Wallet currency is not configured.'); }
   const walletCost = baseToWallet(cost, walletFx);
   if (!Number.isFinite(cost) || cost <= 0 || !Number.isSafeInteger(Math.round(cost * 100))) throw new HttpsError('failed-precondition', 'Recharge PIN price is invalid.');
+  // Commission on a voucher: only what the superadmin set for this product and
+  // role (commissionRules.products), paid once the voucher is delivered.
+  const commissionBase = resolveCommission(pricing, { service: 'rechargePin', amount: denomination, role: callerRole, payload: { raw: dispatchRaw } });
+  const walletCommission = commissionBase > 0 && commissionBase < cost ? baseToWallet(commissionBase, walletFx) : 0;
 
   const reserved = await db.runTransaction(async tx => {
     const pinRef = db.collection('rechargePins').doc(txRef.id);
@@ -262,7 +268,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, ...eg
     tx.create(txRef, {
       service: PIN_SERVICE, customerId: uid, customerRole: callerRole, customerPhone: user.data().phone || '',
       operator, productCode: dispatchRaw.productCode || null, subproductCode: dispatchRaw.subproductCode || null, productName: displayName || null, country, amount: denomination, total: denomination, denominationCurrency: 'MYR', currency: walletFx.currency, walletCurrency: walletFx.currency, cost: walletCost, walletCost, baseCostMyr: cost, fxRate: walletFx.sellRate, fxRateType: 'sell', fxRateSource: walletFx.rateSource,
-      tierDiscountPercent: discount, markupAmount: marked.markup, executionMode: 'api', status: 'processing', rechargePinAvailable: false,
+      tierDiscountPercent: discount, markupAmount: marked.markup, commissionAmount: walletCommission, commissionStatus: walletCommission > 0 ? 'pending' : 'none', executionMode: 'api', status: 'processing', rechargePinAvailable: false,
       apiRefunded: false, raw: dispatchRaw,
       createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
@@ -306,6 +312,24 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, ...eg
       apiExecution: { status: 'accepted', providerId: api.providerId, providerName: api.providerName, responseId: api.responseId || null, message: api.message || null, serialNumber: api.serialNumber || null, providerSucceeded: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
+    if (walletCommission > 0) {
+      // The voucher is delivered; a failed credit is logged for support and
+      // never turns a delivered voucher into an error.
+      try {
+        await db.runTransaction(async tx => {
+          const [uSnap, tSnap] = await Promise.all([tx.get(profileRef), tx.get(txRef)]);
+          if (!uSnap.exists || !tSnap.exists || tSnap.data()?.commissionStatus !== 'pending') return;
+          const before = Number(uSnap.data()?.walletBalance || 0);
+          const after = Math.round((before + walletCommission) * 100) / 100;
+          tx.update(profileRef, { walletBalance: after });
+          addWalletLedgerEntry(tx, db, { uid, direction: 'credit', type: 'service_commission', currency: walletFx.currency, amount: walletCommission, balanceBefore: before, balanceAfter: after, relatedTransactionId: txRef.id, idempotencyKey: requestId + ':commission', source: 'service_commission', createdAt: admin.firestore.FieldValue.serverTimestamp() });
+          addCommissionLedgerEntry(tx, db, { uid, role: callerRole, service: PIN_SERVICE, amount: walletCommission, currency: walletFx.currency, transactionId: txRef.id, balanceBefore: before, balanceAfter: after });
+          tx.update(txRef, { commissionStatus: 'earned', commissionEarnedAt: admin.firestore.FieldValue.serverTimestamp() });
+        });
+      } catch (commissionErr) {
+        console.error('Recharge PIN commission credit failed', txRef.id, commissionErr?.message || commissionErr);
+      }
+    }
     return { id: txRef.id, cost: walletCost, baseCostMyr: reserved.baseCostMyr, pin: voucherPin, deliveryLink: api.deliveryLink || null, deliveryNote: api.deliveryNote || null, expiry: api.expiry || null, serialNumber: api.serialNumber || null, operator, productCode: dispatchRaw.productCode, subproductCode: dispatchRaw.subproductCode, productName: displayName, country, amount: denomination, currency: walletFx.currency, fxRate: walletFx.sellRate };
   } catch (e) {
     const unavailable = String(e?.code || '') === 'unavailable';

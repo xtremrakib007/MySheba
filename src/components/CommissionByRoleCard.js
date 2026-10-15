@@ -3,6 +3,8 @@ import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet 
 import { auth } from '../firebase/config';
 import * as authService from '../firebase/authService';
 import * as apiProviderService from '../firebase/apiProviderService';
+import { getIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
+import { ProductPicker } from './MarkupSettingsCard';
 
 // Superadmin: who earns commission, and how much, per role.
 //
@@ -24,6 +26,17 @@ const DEFAULT_RULES = {
   touchNGoFeePercent: 0.5,
 };
 
+// commissionRules.products: { DI: { retail: { type, value }, ... } } as rows
+// [{ code, type, roles: { retail: '1.5' } }]; one type per product.
+const toProductRows = (products) => Object.entries(products || {}).map(([code, byRole]) => {
+  const rules = Object.values(byRole || {});
+  return {
+    code,
+    type: rules[0]?.type === 'fixed' ? 'fixed' : 'percent',
+    roles: Object.fromEntries(Object.entries(byRole || {}).map(([r, rule]) => [r, String(rule?.value ?? '')])),
+  };
+});
+
 const toForm = (byRole) => Object.fromEntries(ROLES.map((role) => [role, Object.fromEntries(SERVICES.map((s) => {
   const r = byRole?.[role]?.[s.key];
   return [s.key, r && r.value !== undefined ? String(r.value) : ''];
@@ -31,15 +44,24 @@ const toForm = (byRole) => Object.fromEntries(ROLES.map((role) => [role, Object.
 
 export default function CommissionByRoleCard({ pricing }) {
   const saved = pricing?.commissionRules || {};
-  const savedKey = JSON.stringify(saved.byRole || {});
+  const savedKey = JSON.stringify([saved.byRole || {}, saved.products || {}]);
   const [form, setForm] = useState(() => toForm(saved.byRole));
+  const [productRows, setProductRows] = useState(() => toProductRows(saved.products));
+  const [catalog, setCatalog] = useState(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [needPin, setNeedPin] = useState(false);
   const [pin, setPin] = useState('');
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { setForm(toForm(saved.byRole)); }, [savedKey]);
+  useEffect(() => { setForm(toForm(saved.byRole)); setProductRows(toProductRows(saved.products)); }, [savedKey]);
+  useEffect(() => { getIimmpactCatalog().then(setCatalog).catch(() => {}); }, []);
+
+  const productName = (code) => {
+    const p = catalog?.products?.[code] || Object.values(catalog?.products || {}).find((x) => x?.code === code);
+    return p?.name ? `${p.name} (${code})` : code;
+  };
+  const updateRow = (index, patch) => setProductRows((rows) => rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
 
   const general = (key) => {
     const r = key === 'billpayment' ? null : saved[key];
@@ -63,13 +85,26 @@ export default function CommissionByRoleCard({ pricing }) {
         byRole[role] = { ...(byRole[role] || {}), [s.key]: { type: s.type, value } };
       }
     }
+    const products = {};
+    for (const row of productRows) {
+      for (const role of ROLES) {
+        const raw = String(row.roles?.[role] ?? '').trim();
+        if (raw === '') continue;
+        const value = Number(raw);
+        if (!Number.isFinite(value) || value < 0 || (row.type === 'percent' && value > 100)) {
+          setMessage(`${productName(row.code)} ${role}: enter a number${row.type === 'percent' ? ' from 0 to 100' : ' of 0 or more'}.`);
+          return;
+        }
+        products[row.code] = { ...(products[row.code] || {}), [role]: { type: row.type, value } };
+      }
+    }
     setSaving(true); setMessage('');
     try {
       if (needPin) {
         await authService.reauthenticate(pin);
         await auth.currentUser?.getIdToken(true);
       }
-      await apiProviderService.saveCommissionRules({ ...DEFAULT_RULES, ...saved, byRole });
+      await apiProviderService.saveCommissionRules({ ...DEFAULT_RULES, ...saved, byRole, products });
       setNeedPin(false); setPin('');
       setMessage('Saved. New commissions apply to the next order.');
     } catch (e) {
@@ -81,7 +116,7 @@ export default function CommissionByRoleCard({ pricing }) {
 
   return (
     <View style={styles.card}>
-      <Text style={styles.title}>🤝 Commission by role</Text>
+      <Text style={styles.title}>🤝 Commission by role & product</Text>
       <Text style={styles.hint}>
         What each kind of user earns back on an order. Recharge and Internet are a % of the amount; Bill is RM per bill.
         Leave a box empty to use the general rule ({general('recharge')} recharge, {general('internet')} internet, {general('billpayment')}).
@@ -101,6 +136,37 @@ export default function CommissionByRoleCard({ pricing }) {
           ))}
         </View>
       ))}
+
+      <Text style={styles.section}>By product / operator</Text>
+      <Text style={styles.hint}>
+        A commission for one operator or product, e.g. Digi, Celcom, TNB, Unifi, a game voucher. It beats the table above for that product,
+        and works for Reload, Internet, Bill and Vouchers. Vouchers earn commission only from this list. Leave a role empty to use the table above.
+      </Text>
+      {productRows.map((row, index) => (
+        <View key={row.code} style={styles.productBox}>
+          <View style={styles.productHead}>
+            <Text style={styles.productName} numberOfLines={2}>{productName(row.code)}</Text>
+            {['percent', 'fixed'].map((t) => (
+              <TouchableOpacity key={t} onPress={() => updateRow(index, { type: t })} style={[styles.chip, row.type === t && styles.chipActive]}>
+                <Text style={[styles.chipText, row.type === t && styles.chipTextActive]}>{t === 'percent' ? '%' : 'RM'}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity onPress={() => setProductRows((rows) => rows.filter((_, i) => i !== index))}><Text style={styles.remove}>✕</Text></TouchableOpacity>
+          </View>
+          <View style={styles.roleWrap}>
+            {ROLES.map((role) => (
+              <View key={role} style={styles.roleCell}>
+                <Text style={styles.roleSmall}>{role[0].toUpperCase() + role.slice(1)}</Text>
+                <TextInput style={styles.input} keyboardType="decimal-pad" value={row.roles?.[role] ?? ''} placeholder="-"
+                  onChangeText={(v) => updateRow(index, { roles: { ...row.roles, [role]: v } })} />
+              </View>
+            ))}
+          </View>
+        </View>
+      ))}
+      <ProductPicker catalog={catalog} taken={productRows.map((r) => r.code)}
+        onPick={(code) => setProductRows((rows) => (rows.some((r) => r.code === code) ? rows : [...rows, { code, type: 'percent', roles: {} }]))} />
+
       {!!needPin && <TextInput style={[styles.input, styles.pin]} value={pin} onChangeText={setPin} placeholder="Your PIN" secureTextEntry keyboardType="number-pad" />}
       {!!message && <Text style={styles.message}>{message}</Text>}
       <TouchableOpacity style={[styles.save, saving && styles.dim]} onPress={save} disabled={saving}>
@@ -125,4 +191,16 @@ const styles = StyleSheet.create({
   save: { backgroundColor: '#0E7A79', borderRadius: 10, paddingVertical: 11, alignItems: 'center', marginTop: 10 },
   saveText: { color: '#fff', fontWeight: '800' },
   dim: { opacity: 0.5 },
+  section: { fontSize: 14, fontWeight: '800', marginTop: 16, marginBottom: 4 },
+  productBox: { borderWidth: 1, borderColor: '#eef2f6', borderRadius: 10, padding: 10, marginBottom: 8 },
+  productHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  productName: { flex: 1, fontSize: 13, fontWeight: '700' },
+  chip: { borderWidth: 1, borderColor: '#d6dde5', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 4 },
+  chipActive: { backgroundColor: '#0E7A79', borderColor: '#0E7A79' },
+  chipText: { fontSize: 12, fontWeight: '700' },
+  chipTextActive: { color: '#fff' },
+  remove: { fontSize: 16, color: '#b3261e', paddingHorizontal: 6 },
+  roleWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  roleCell: { width: '31%' },
+  roleSmall: { fontSize: 10.5, fontWeight: '700', opacity: 0.6, marginBottom: 2 },
 });

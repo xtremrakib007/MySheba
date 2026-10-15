@@ -73,6 +73,7 @@ function cleanCommissionRules(v) {
     remittanceTiers: tiers(v.remittanceTiers, 'Remittance fee'),
     touchNGoFeePercent: finite(v.touchNGoFeePercent, 'Touch n Go fee percent', 0, MAX_PERCENT),
     ...(v.byRole !== undefined ? { byRole: cleanRoleCommissions(v.byRole) } : {}),
+    ...(v.products !== undefined ? { products: cleanProductCommissions(v.products) } : {}),
   };
 }
 // commissionRules.byRole: { retail: { recharge: { type, value }, ... }, ... }
@@ -90,6 +91,27 @@ function cleanRoleCommissions(v) {
       row[service] = rule(r, role + ' ' + service + ' commission');
     }
     if (Object.keys(row).length) out[role] = row;
+  }
+  return out;
+}
+// commissionRules.products: { DI: { retail: { type, value }, customer: ... }, ... }
+// keyed by the IIMMPACT product code (Digi = DI), the same code markups use.
+const PRODUCT_CODE_RE = /^[A-Za-z0-9_.:-]{1,100}$/;
+function cleanProductCommissions(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) throw new HttpsError('invalid-argument', 'Product commissions are invalid.');
+  const entries = Object.entries(v);
+  if (entries.length > 2000) throw new HttpsError('invalid-argument', 'Too many product commissions.');
+  const out = {};
+  for (const [code, byRole] of entries) {
+    if (!PRODUCT_CODE_RE.test(code)) throw new HttpsError('invalid-argument', 'Invalid product code: ' + String(code).slice(0, 40));
+    if (!byRole || typeof byRole !== 'object' || Array.isArray(byRole)) throw new HttpsError('invalid-argument', code + ' commissions are invalid.');
+    const row = {};
+    for (const [role, r] of Object.entries(byRole)) {
+      if (!ROLES.includes(role)) throw new HttpsError('invalid-argument', 'Unknown commission role: ' + String(role).slice(0, 20));
+      if (r === null || r === undefined) continue;
+      row[role] = rule(r, code + ' ' + role + ' commission');
+    }
+    if (Object.keys(row).length) out[code] = row;
   }
   return out;
 }
@@ -210,6 +232,7 @@ exports.savePricingSettings = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, asy
     // save that does not mention byRole (the admin web's older editor) keeps
     // the stored one.
     if (value.byRole === undefined && before.commissionRules && before.commissionRules.byRole) value.byRole = before.commissionRules.byRole;
+    if (value.products === undefined && before.commissionRules && before.commissionRules.products) value.products = before.commissionRules.products;
   }
   if (key === 'catalogProductPricing') {
     // settings/pricing is readable by every signed-in user (the app prices
