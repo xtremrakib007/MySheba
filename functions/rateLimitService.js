@@ -18,6 +18,8 @@ const DEFAULT_LIMITS = {
   support_ticket_create: { max: 8, windowMinutes: 60 },
   chargeService: { max: 30, windowMinutes: 10 },
   rechargePin: { max: 10, windowMinutes: 10 },
+  // Reading a voucher back (History, or waiting on one being issued).
+  getRechargePin: { max: 60, windowMinutes: 10 },
   reconcileTransaction: { max: 20, windowMinutes: 10 },
   transactionComplete: { max: 5, windowMinutes: 10 },
   testApiProvider: { max: 5, windowMinutes: 15 },

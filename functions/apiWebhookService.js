@@ -7,6 +7,9 @@ const { parseAllowedIps, isAllowedSource, callbackSourceIp } = require('./webhoo
 const { matchesCallbackRequest } = require('./callbackMatch');
 const { webhookProviderId, webhookPayload, webhookEndpointUrl } = require('./webhookRequest');
 const costLog = require('./iimmpactCostLog');
+const { voucherFromCallback } = require('./voucherDelivery');
+const { addWalletLedgerEntry } = require('./walletLedgerService');
+const { addCommissionLedgerEntry } = require('./commissionService');
 
 const COLLECTION = 'api_webhooks';
 const PROVIDERS = 'api_providers';
@@ -350,6 +353,43 @@ exports.apiWebhook = onRequest({ region: REGION, timeoutSeconds: 30 }, async (re
       // Cancel must not undo the refund or mark the order completed again.
       if (order.apiRefunded === true || order.status === 'failed') {
         tx.update(txRef, { apiExecution, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      } else if (order.service === 'Recharge PIN') {
+        // A voucher accepted as processing arrives here. Without saving it the
+        // order read "completed" while the customer had no PIN to use - the
+        // purchase reply never carried one, and nothing else stores it.
+        const pinRef = db.collection('rechargePins').doc(txRef.id);
+        const pinSnap = await tx.get(pinRef);
+        const voucher = voucherFromCallback(body, provider.responsePinPath || '');
+        const hasPin = pinSnap.exists && !!pinSnap.data()?.pin;
+        const delivered = hasPin || !!voucher;
+        const commission = Number(order.commissionAmount || 0);
+        const customerId = String(order.customerId || '');
+        const payCommission = delivered && order.commissionStatus === 'pending' && commission > 0 && !!customerId;
+        const userRef = payCommission ? db.collection('users').doc(customerId) : null;
+        const userSnap = userRef ? await tx.get(userRef) : null;
+        if (!hasPin && voucher) {
+          tx.set(pinRef, {
+            transactionId: txRef.id, customerId, operator: order.operator || null, country: order.country || null,
+            productCode: order.productCode || null, subproductCode: order.subproductCode || null, productName: order.productName || null,
+            amount: Number(order.amount || 0), currency: 'MYR', pin: voucher.pin || voucher.secret,
+            deliveryLink: voucher.deliveryLink || null, deliveryNote: voucher.deliveryNote || null, expiry: voucher.expiry || null,
+            serialNumber: voucher.serialNumber || null, source: 'webhook',
+            createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+        const update = { status: 'completed', apiExecution, completedAt: order.completedAt || admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+        if (delivered) update.rechargePinAvailable = true;
+        if (userSnap && userSnap.exists) {
+          const before = Number(userSnap.data()?.walletBalance || 0);
+          const after = Math.round((before + commission) * 100) / 100;
+          const currency = order.walletCurrency || order.currency || 'MYR';
+          tx.update(userRef, { walletBalance: after });
+          addWalletLedgerEntry(tx, db, { uid: customerId, direction: 'credit', type: 'service_commission', currency, amount: commission, balanceBefore: before, balanceAfter: after, relatedTransactionId: txRef.id, idempotencyKey: txRef.id + ':commission', source: 'service_commission', createdAt: admin.firestore.FieldValue.serverTimestamp() });
+          addCommissionLedgerEntry(tx, db, { uid: customerId, role: order.customerRole, service: 'Recharge PIN', amount: commission, currency, transactionId: txRef.id, balanceBefore: before, balanceAfter: after });
+          update.commissionStatus = 'earned';
+          update.commissionEarnedAt = admin.firestore.FieldValue.serverTimestamp();
+        }
+        tx.update(txRef, update);
       } else {
         tx.update(txRef, { status: 'completed', apiExecution, completedAt: order.completedAt || admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
       }
