@@ -15,6 +15,7 @@ import {
   type RolePriceKey,
 } from '../services/pricingService';
 import MarkupSection from './MarkupSection';
+import CommissionByRoleSection from './CommissionByRoleSection';
 
 const ROLE_LABELS: Record<PricingRole, string> = {
   customer: 'Customer',
@@ -120,7 +121,9 @@ export default function PricingPage() {
     setPricing((prev) => ({ ...prev, catalogProductPricing: [...prev.catalogProductPricing.filter((x) => x.id !== entry.id), entry] }));
     setCatalogDraft({ id: '', service: catalogDraft.service, country: catalogDraft.country, operator: '', productId: '', productName: '', costPrice: 0, currency: catalogDraft.currency, active: true, prices: { customer: 0, retail: 0, reseller: 0, dealer: 0, admin: 0 }, commissions: { customer: { type: 'fixed', value: 0 }, retail: { type: 'fixed', value: 0 }, reseller: { type: 'fixed', value: 0 }, dealer: { type: 'fixed', value: 0 }, admin: { type: 'fixed', value: 0 } } });
   }
-  async function saveCommissionRules() { try { await guarded(() => updatePricing('commissionRules' as keyof PricingSettings, commissionDraft as any)); } catch { return; } setPricing((prev) => ({ ...prev, commissionRules: commissionDraft })); }
+  // The general rules only: leaving byRole and products out makes the server
+  // keep the saved ones, which the Commission by role & product section edits.
+  async function saveCommissionRules() { const { byRole: _r, products: _p, ...general } = commissionDraft; try { await guarded(() => updatePricing('commissionRules' as keyof PricingSettings, general as any)); } catch { return; } setPricing((prev) => ({ ...prev, commissionRules: { ...prev.commissionRules, ...general } })); }
   async function removeCatalog(id: string) {
     try { await guarded(() => deleteCatalogProductPrice(id)); } catch { return; }
     setPricing((prev) => ({ ...prev, catalogProductPricing: prev.catalogProductPricing.filter((x) => x.id !== id) }));
@@ -179,6 +182,9 @@ export default function PricingPage() {
         </Section> : null}
         {isSuperadmin ? <Section title="Markups — MySheba price on every service (superadmin only)">
           <MarkupSection markups={pricing.markups} onSaved={(markups) => setPricing((prev) => ({ ...prev, markups }))} />
+        </Section> : null}
+        {isSuperadmin ? <Section title="Commission by role & product (superadmin only)">
+          <CommissionByRoleSection rules={pricing.commissionRules} onSaved={(rules) => { setPricing((prev) => ({ ...prev, commissionRules: rules })); setCommissionDraft((d) => ({ ...d, byRole: rules.byRole, products: rules.products })); }} />
         </Section> : null}
         {isSuperadmin ? <Section title="Commission & Fee Rules (superadmin only)">
           <p className="pb-3 text-xs text-[var(--color-ink-soft)]">Provider prices remain unchanged. These rules only determine commissions or the special Touch ’n Go fee.</p>
