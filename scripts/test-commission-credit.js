@@ -48,5 +48,12 @@ function fakeDb(users) {
   assert.strictEqual((webhook.match(/payPendingCommission\(/g) || []).length, 2, 'webhook: voucher and every other service');
   assert.ok(/outcome === 'completed'[\s\S]{0,300}payPendingCommission\(/.test(read('transactionService.js')), 'reconcile pays it');
   assert.ok(/payPendingCommission\(/.test(read('successTopupPoller.js')), 'Success TopUp poller pays it');
+  // Every purchase review shows the commission the server will pay, not a
+  // hard-coded 0 (the Marketplace review) or nothing (the voucher review).
+  const screen = (f) => fs.readFileSync(path.join(__dirname, '../src/screens', f), 'utf8');
+  for (const f of ['RechargePinScreen.js', 'IimmpactProductScreen.js', 'ConfirmTransactionScreen.js']) {
+    assert.ok(/resolveCommission\(pricing,/.test(screen(f)), f + ' shows the configured commission');
+  }
+  assert.ok(!/\['Commission amount', formatMoney\(0\)\]/.test(screen('IimmpactProductScreen.js')), 'no hard-coded 0 commission');
   console.log('commission credit: ok');
 })().catch((e) => { console.error(e); process.exit(1); });
