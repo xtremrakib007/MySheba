@@ -1,6 +1,7 @@
-import React from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet, Share } from 'react-native';
-import { printTransactionReceipt } from '../utils/printService';
+import React, { useRef } from 'react';
+import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { printTransactionReceipt, buildTransactionReceiptHtml } from '../utils/printService';
+import { ReceiptCapture, shareReceiptImage } from './ReceiptImage';
 import { useApp } from '../context/AppContext';
 import { radius } from '../theme/theme';
 import { showAlert } from '../utils/appAlert';
@@ -16,6 +17,7 @@ export default function ResultModal() {
   const styles = createStyles(colors);
   const { resultModal, closeResult, goHome, submitService, submitting, serviceData, profile } = useApp();
   const { visible, kind, txId, service, details, amount, total, createdAt } = resultModal;
+  const captureRef = useRef(null);
   if (!visible) return null;
 
   const finishAndHome = () => { closeResult(); goHome(); };
@@ -32,20 +34,20 @@ export default function ResultModal() {
     createdAt,
     customerPhone: profile?.phone || '',
   };
+  // Shared as a receipt photo. The face value only - never what the buyer
+  // paid, which for a retailer is their cost.
+  const receiptRowsList = [
+    ['Service', service || ''],
+    ['Details', receiptTx.details || ''],
+    ['Amount', amount != null && amount !== '' ? `MYR ${Number(amount || 0).toFixed(2)}` : ''],
+    ['Status', isTravel ? 'INQUIRY RECEIVED' : 'PENDING'],
+    ['Date', createdAt ? new Date(createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ''],
+    ['Reference', txId || ''],
+  ];
   const shareReceipt = async () => {
-    const lines = [
-      'MySheba Transaction Receipt',
-      `Service: ${service || ''}`,
-      details ? `Details: ${details}` : '',
-      txId ? `Transaction ID: ${txId}` : '',
-      amount != null ? `Amount: MYR ${Number(amount || 0).toFixed(2)}` : '',
-      total != null ? `Total charged: MYR ${Number(total || 0).toFixed(2)}` : '',
-      `Status: ${isTravel ? 'INQUIRY RECEIVED' : 'PENDING'}`,
-      dateStr ? `Date: ${dateStr}` : '',
-      'This receipt does not include provider cost or commission.',
-    ].filter(Boolean);
-    try { await Share.share({ message: lines.join('\n'), title: 'MySheba Receipt' }); }
-    catch (e) { /* Share sheet cancelled or unavailable. */ }
+    try {
+      await shareReceiptImage(captureRef, { fileName: `MySheba-receipt-${String(txId || '').slice(0, 12)}`, html: buildTransactionReceiptHtml(receiptTx, profile || {}) });
+    } catch (e) { showAlert('Share', e?.message || 'Could not share this receipt.'); }
   };
   const printReceipt = async () => {
     try { await printTransactionReceipt(receiptTx, profile || {}); }
@@ -98,6 +100,7 @@ export default function ResultModal() {
           <TouchableOpacity style={[styles.btn,styles.btnOutline]} onPress={printReceipt}><Text style={[styles.btnText,styles.btnOutlineText]}>Print</Text></TouchableOpacity>
           <TouchableOpacity style={[styles.btn,styles.btnOutline]} onPress={shareReceipt}><Text style={[styles.btnText,styles.btnOutlineText]}>Share</Text></TouchableOpacity>
         </View>
+        <ReceiptCapture ref={captureRef} subtitle="Transaction Receipt" rows={receiptRowsList} />
         <View style={styles.btnRow}>
           {!isTravel && <TouchableOpacity style={[styles.btn,styles.btnOutline,submitting&&styles.btnDisabled]} onPress={sendAgain} disabled={submitting}><Text style={[styles.btnText,styles.btnOutlineText]}>{submitting?'Sending…':'Send Again'}</Text></TouchableOpacity>}
           <TouchableOpacity style={[styles.btn,styles.btnPrimary]} onPress={finishAndHome}><Text style={styles.btnText}>Return to Home</Text></TouchableOpacity>

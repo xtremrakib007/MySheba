@@ -98,7 +98,23 @@ assert(!receiptDocument({ subtitle: nasty, rowsHtml: '', blocks: [] }).includes(
 console.log('A top-up has a receipt at all');
 const modal = read('src/components/TransactionDetailModal.js');
 assert(/type === 'tx' \|\| type === 'topup'/.test(modal), 'the Print button must appear on a top-up');
-assert(/function topupReceiptHtml\(/.test(modal), 'and have a receipt to print');
+assert(/function topupReceiptData\(/.test(modal), 'and have a receipt to print');
+
+console.log('A receipt shows the face value, never what the buyer paid');
+// A retailer hands the receipt to their own customer; `total` is the
+// retailer's price, i.e. their cost.
+const orderReceipt = modal.slice(modal.indexOf('function orderReceiptData('), modal.indexOf('function receiptHtmlFrom('));
+assert(orderReceipt.length > 100, 'the order receipt builder exists');
+assert(!/item\.total|\.cost\b|commission|profit/i.test(orderReceipt.replace(/\/\/.*$/gm, '')), 'an order receipt must not print the price paid, cost or commission');
+assert(/\['Amount', Number\.isFinite\(face\)/.test(modal), 'it prints the face value');
+assert(!/Total paid/.test(read('src/utils/printService.js')), 'the general receipt has no "Total paid" row');
+
+console.log('Share sends a receipt photo, not text');
+for (const file of ['src/components/TransactionDetailModal.js', 'src/components/ResultModal.js', 'src/components/TransferReceiptModal.js', 'src/components/RemittanceReceipt.js', 'src/screens/IimmpactProductScreen.js']) {
+  const src = read(file);
+  assert(/shareReceiptImage\(/.test(src), `${file} shares the receipt as an image`);
+  assert(!/Share\.share\(/.test(src), `${file} no longer shares receipt text`);
+}
 // Both amounts: they differ on a currency conversion, and a rejected request
 // credited nothing. One of them alone cannot be checked against a bank
 // statement.

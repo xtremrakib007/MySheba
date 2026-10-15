@@ -1,15 +1,13 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Modal, View, Text, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system';
 import { receiptDocument, receiptRows, highlightBlock } from '../utils/receiptHtml';
 import { printHtml } from '../utils/printService';
 import { showAlert } from '../utils/appAlert';
+import { ReceiptCapture, shareReceiptImage } from './ReceiptImage';
 
 // A wallet transfer's receipt, shown the moment the server accepts it: the
 // same receipt layout orders and top-ups print (utils/receiptHtml.js), with
-// Print and Share (as a PDF file, so it can go to WhatsApp, email or Drive).
+// Print and Share (as a receipt photo, for WhatsApp, email or Drive).
 
 const money = (amount, currency) => `${currency || 'MYR'} ${Number(amount || 0).toFixed(2)}`;
 
@@ -34,6 +32,7 @@ export function transferReceiptHtml(r) {
 
 export default function TransferReceiptModal({ receipt, onClose }) {
   const [busy, setBusy] = useState('');
+  const captureRef = useRef(null);
   if (!receipt) return null;
 
   const print = async () => {
@@ -46,13 +45,7 @@ export default function TransferReceiptModal({ receipt, onClose }) {
   const share = async () => {
     setBusy('share');
     try {
-      if (!(await Sharing.isAvailableAsync())) throw new Error('Sharing is not available on this device.');
-      const { uri } = await Print.printToFileAsync({ html: transferReceiptHtml(receipt), base64: false });
-      // A readable file name instead of expo-print's random one.
-      const dest = `${FileSystem.cacheDirectory}MySheba-transfer-${String(receipt.transferId || Date.now()).slice(0, 12)}.pdf`;
-      await FileSystem.deleteAsync(dest, { idempotent: true });
-      await FileSystem.copyAsync({ from: uri, to: dest });
-      await Sharing.shareAsync(dest, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: 'Share receipt' });
+      await shareReceiptImage(captureRef, { fileName: `MySheba-transfer-${String(receipt.transferId || Date.now()).slice(0, 12)}`, html: transferReceiptHtml(receipt) });
     } catch (err) {
       showAlert('Share', err?.message || 'Could not share this receipt.');
     } finally { setBusy(''); }
@@ -93,6 +86,7 @@ export default function TransferReceiptModal({ receipt, onClose }) {
             </TouchableOpacity>
           </View>
           <TouchableOpacity style={styles.done} onPress={onClose}><Text style={styles.doneText}>Done</Text></TouchableOpacity>
+          <ReceiptCapture ref={captureRef} subtitle="Wallet Transfer Receipt" rows={[['Status', 'COMPLETED'], ...rows]} highlight={{ label: 'AMOUNT', value: money(receipt.amount, receipt.currency) }} />
         </View>
       </View>
     </Modal>
