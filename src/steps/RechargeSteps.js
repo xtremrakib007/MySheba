@@ -14,6 +14,7 @@ import * as apiProviderService from '../firebase/apiProviderService';
 import { rechargeProductsFromCatalog, internationalRechargeCountries } from '../data/iimmpactRecharge';
 import { getIimmpactCatalog, useIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
 import { iimmpactCustomerPrice, canPriceTypedAmount } from '../utils/iimmpactPrice';
+import { flooredPrice } from '../utils/rateFloor';
 import { applyMarkup } from '../utils/markup';
 import DenominationGrid from '../components/DenominationGrid';
 import { denominationItems, amountItems, optionPrice } from '../utils/denominations';
@@ -165,6 +166,10 @@ export default function RechargeStep({ step }) {
 
   // What the customer pays for a provider price: MySheba's markup for this
   // service, destination and product - the same rule the server charges by.
+  // An international reload's price, raised to its face value at MySheba's
+  // rate when IIMMPACT's is below it; Malaysia is priced as IIMMPACT says.
+  const atLeastRate = (price, face) => (String(serviceData.country || '').toUpperCase() === 'MY' ? price : flooredPrice(price, face, serviceData.country, rates));
+  const optionFace = (option) => Number(option?.denomination ?? option?.amount);
   const customerPrice = (amount) => applyMarkup(pricing, { service: 'recharge', country: serviceData.country, productCode: serviceData.productCode, amount, role: profile?.role }).amount;
 
   if (step === 0) {
@@ -221,7 +226,9 @@ export default function RechargeStep({ step }) {
         const face = Number(clean);
         const rule = typedAmountField.validation || {};
         const inRange = face > 0 && !(rule.min != null && face < Number(rule.min)) && !(rule.max != null && face > Number(rule.max));
-        const price = inRange && priceable ? iimmpactCustomerPrice(face, product) : 0;
+        // Never below the face value at MySheba's own rate - the server charges
+        // the same (functions/rateFloor.js).
+        const price = inRange && priceable ? atLeastRate(iimmpactCustomerPrice(face, product), face) : 0;
         updateServiceData({
           fieldValues: { ...(serviceData.fieldValues || {}), [typedAmountField.id]: clean, [accountFieldId]: String(serviceData.phone || ''), phone: String(serviceData.phone || '') },
           amount: price > 0 ? price : null,
@@ -243,9 +250,9 @@ export default function RechargeStep({ step }) {
         {optionsLoading && <Text style={styles.catalogInfo}>Loading amounts…</Text>}
         {optionsUnavailable && !optionsLoading && !!pricingField?.id && <Text style={styles.catalogInfo}>No amounts are available for this operator right now. Please try again shortly.</Text>}
         {!!pricingField?.id && <DenominationGrid
-          items={denominationItems(iimmpactOptions, { product, payFor: customerPrice })}
+          items={denominationItems(iimmpactOptions, { product, payFor: (price, option) => customerPrice(atLeastRate(price, optionFace(option))) })}
           selectedKey={serviceData.selectedOptions?.[pricingField.id]?.code}
-          onSelect={({ option, value }) => updateServiceData({ selectedOptions: { ...(serviceData.selectedOptions || {}), [pricingField.id]: option }, fieldValues: { ...(serviceData.fieldValues || {}), [accountFieldId]: String(serviceData.phone || ''), phone: String(serviceData.phone || '') }, amount: optionPrice(option) > 0 ? optionPrice(option) : Number(option?.denomination || 0), package: value, subproductCode: String(option.code || '') })}
+          onSelect={({ option, value }) => updateServiceData({ selectedOptions: { ...(serviceData.selectedOptions || {}), [pricingField.id]: option }, fieldValues: { ...(serviceData.fieldValues || {}), [accountFieldId]: String(serviceData.phone || ''), phone: String(serviceData.phone || '') }, amount: atLeastRate(optionPrice(option) > 0 ? optionPrice(option) : Number(option?.denomination || 0), optionFace(option)), package: value, subproductCode: String(option.code || '') })}
         />}
         {!pricingField?.id && !typedAmountField && <DenominationGrid
           items={amountItems(denominations, { payFor: customerPrice })}

@@ -47,7 +47,8 @@ export function denominationItems(options, { product, payFor = (price) => price,
       : Number.isFinite(face) ? `RM ${money(face)}` : (label || s(option?.code) || 'Amount');
     const restates = !label || AMOUNT_ONLY.test(label) || label === value;
     const caption = [restates ? '' : label, s(option?.validity)].filter(Boolean).join(' • ');
-    const pay = Number.isFinite(price) ? Math.round(Number(payFor(price)) * 100) / 100 : NaN;
+    // payFor gets the option too, for a price that depends on its face value.
+    const pay = Number.isFinite(price) ? Math.round(Number(payFor(price, option)) * 100) / 100 : NaN;
     return {
       key: keyOf ? keyOf(option, index) : s(option?.code) || String(index),
       value,

@@ -24,6 +24,7 @@ const { sessionMatches } = require('./sessionSlots');
 const { requireConsent } = require('./consentRecord');
 const { addWalletLedgerEntry } = require('./walletLedgerService');
 const { resolveCommission, touchNGoFee, addCommissionLedgerEntry, tierFee } = require('./commissionService');
+const { flooredPrice } = require('./rateFloor');
 const { applyMarkup } = require('./markupService');
 
 const DEFAULT_PRICING={dealerEarningPercent:1.5,webviewAccessCost:2,webviewSubmitCost:2,paymentSuccessCost:3,webviewAccessWindowHours:1,notepadCost:0,myDocumentsCost:0,salaryOtCost:0,moduleSubscriptionDays:30};
@@ -118,9 +119,12 @@ async function resolvePackagePricing(db, service, payload) {
     if (['option-required', 'option-not-found', 'field-dependency-missing', 'field-required'].includes(found.error)) throw new HttpsError('failed-precondition', 'That IIMMPACT recharge option or required field is missing. Please reload the product and try again.');
     if (found.error === 'options-unavailable') throw new HttpsError('unavailable', 'IIMMPACT recharge options could not be confirmed. Please try again.');
     if (found.error) throw new HttpsError('failed-precondition', 'IIMMPACT could not validate this recharge. Please review the product and number.');
+    // Never below the face value at MySheba's own rate (functions/rateFloor.js):
+    // IIMMPACT's catalogue price for some destinations is far under cost.
+    const sellAmount = requestedCountry === 'MY' ? found.sellAmount : flooredPrice(found.sellAmount, found.providerAmount, requestedCountry, await getRates(db));
     const submitted = Number(clean.amount);
-    if (Number.isFinite(submitted) && Math.abs(submitted - found.sellAmount) > 0.01) throw new HttpsError('failed-precondition', 'This recharge price has changed. Please review the amount.');
-    return { ...payload, amount: undefined, total: undefined, raw: { ...clean, amount: found.sellAmount, providerAmount: found.providerAmount, packageCostAmount: found.providerAmount, productCode: found.productCode, operatorCode: found.productCode, productName: found.productName, accountNumber: found.accountNumber, operator: found.productName, package: found.productName, subproductCode: found.subproductCode || clean.subproductCode || '', optionCode: found.optionCode || '', extras: found.extras || {}, processingTime: found.processingTime || '' } };
+    if (Number.isFinite(submitted) && Math.abs(submitted - sellAmount) > 0.01) throw new HttpsError('failed-precondition', 'This recharge price has changed. Please review the amount.');
+    return { ...payload, amount: undefined, total: undefined, raw: { ...clean, amount: sellAmount, providerAmount: found.providerAmount, packageCostAmount: found.providerAmount, productCode: found.productCode, operatorCode: found.productCode, productName: found.productName, accountNumber: found.accountNumber, operator: found.productName, package: found.productName, subproductCode: found.subproductCode || clean.subproductCode || '', optionCode: found.optionCode || '', extras: found.extras || {}, processingTime: found.processingTime || '' } };
   }
   if (!label) return payload;
   // packageCostAmount is what gets SENT to the provider as the amount, and it
