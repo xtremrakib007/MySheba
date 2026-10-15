@@ -301,7 +301,9 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     // walletService pays none on these, so the page must not promise any.
     assert.strictEqual(client.resolveCommission(settings, { service: 'remittance', amount: 500, role: 'customer', payload: { raw: {} } }), 0);
     assert.strictEqual(client.resolveCommission(settings, { service: 'billpayment', amount: 40, role: 'customer', payload: { raw: { provider: "Touch 'n Go eWallet" } } }), 0);
-    assert.strictEqual(client.resolveCommission(settings, { service: 'recharge', amount: 50, role: 'customer', payload: { raw: {} } }), 0.5);
+    assert.strictEqual(client.resolveCommission(settings, { service: 'recharge', amount: 50, role: 'retail', payload: { raw: {} } }), 0.5);
+    // A customer earns nothing unless commissionRules.byRole.customer says so.
+    assert.strictEqual(client.resolveCommission(settings, { service: 'recharge', amount: 50, role: 'customer', payload: { raw: {} } }), 0);
   });
 
   await test('Bill Payment lists every IIMMPACT biller with its product code', () => {

@@ -10,6 +10,7 @@ import HeaderDecor from '../components/HeaderDecor';
 import { subscribeManageableUsers } from '../firebase/userManagementService';
 import { transferPoints, subscribeMyTransfers } from '../firebase/pointTransferService';
 import * as pinVault from '../firebase/pinVault';
+import TransferReceiptModal from '../components/TransferReceiptModal';
 import { isBiometricAvailable, authenticateWithBiometric } from '../firebase/biometricAuth';
 
 const ROLE_LABEL = { customer: 'Customer', dealer: 'Dealer', reseller: 'Reseller', admin: 'Admin', superadmin: 'Super Admin' };
@@ -22,6 +23,7 @@ export default function LegacyTransferPointsScreen() {
   const { colors, brandGradient } = useTheme();
   const styles = createStyles(colors);
   const { goBackOrHome, profile, authUser, pricing, requireSecurityPin, biometricEnabled } = useApp();
+  const [receipt, setReceipt] = useState(null);
   const myRole = profile?.role;
   const myBalance = typeof profile?.walletBalance === 'number' ? profile.walletBalance : 0;
   const isDealerTier = myRole === 'dealer';
@@ -121,7 +123,7 @@ export default function LegacyTransferPointsScreen() {
     if (!/^\d{4,8}$/.test(pinToSend)) return showAlert('MySheba', 'Enter your 4-8 digit security PIN.');
     setBusy(true);
     try {
-      await transferPoints({
+      const result = await transferPoints({
         to: { uid: target.id, name: target.name || target.phone || '', role: target.role },
         amount,
         note,
@@ -133,7 +135,12 @@ export default function LegacyTransferPointsScreen() {
       if (biometricEnabled === true && authUser?.uid && !pinOverride) {
         await pinVault.rememberPin(authUser.uid, pinToSend);
       }
-      showAlert('MySheba', `${fmt(amount)} sent to ${target.name || target.phone || 'user'}.`);
+      // A receipt that can be printed or shared, instead of a bare alert.
+      setReceipt({
+        transferId: result?.transferId || '', amount, currency: 'MYR', note: note || '',
+        recipientName: target.name || '', recipientPhone: target.phone || '',
+        senderName: profile?.name || '', at: Date.now(),
+      });
       setTarget(null);
       setSecurityPin('');
     } catch (err) {
@@ -210,6 +217,7 @@ export default function LegacyTransferPointsScreen() {
           </Modal>
         </>
       )}
+      <TransferReceiptModal receipt={receipt} onClose={() => setReceipt(null)} />
     </View>
   );
 }

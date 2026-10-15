@@ -1,5 +1,5 @@
-import React from 'react';
-import { Modal, View, Text, TouchableOpacity, ScrollView, Linking, Image, StyleSheet, Share } from 'react-native';
+import React, { useRef } from 'react';
+import { Modal, View, Text, TouchableOpacity, ScrollView, Linking, Image, StyleSheet } from 'react-native';
 import * as Print from 'expo-print';
 import { showAlert } from '../utils/appAlert';
 import { radius } from '../theme/theme';
@@ -11,6 +11,7 @@ import * as supportTicketService from '../firebase/supportTicketService';
 import { useApp } from '../context/AppContext';
 import { buildReceiptHtml } from './RemittanceReceipt';
 import { receiptDocument, receiptRows, imageBlock, highlightBlock } from '../utils/receiptHtml';
+import { ReceiptCapture, shareReceiptImage } from './ReceiptImage';
 import { statusBadge } from '../theme/statusBadges';
 import { txFailureReason } from '../utils/txFailure';
 
@@ -36,7 +37,7 @@ function formatDate(ts) {
  * an address is text somebody typed, and one unescaped one turns a receipt into
  * whatever they wrote.
  */
-function orderReceiptHtml(item, pinOverride) {
+function orderReceiptData(item, pinOverride) {
   const raw = item.raw || {};
   const currency = txCurrency(item);
   // Only these two services carry a collection PIN at all.
@@ -44,9 +45,17 @@ function orderReceiptHtml(item, pinOverride) {
   // collectionPin first: completeTransaction deletes the live pin, so on a
   // completed order it is the only copy left.
   const pin = requiresCollectionPin ? (pinOverride || item.collectionPin || item.pin || '') : '';
-  return receiptDocument({
+  // The face value - what was bought, e.g. a RM5 reload - never what the
+  // buyer paid: a retailer hands this receipt to their own customer, and
+  // `total` is the retailer's price (their cost). Cost, commission and profit
+  // are never on a receipt.
+  const faceCurrency = String(raw.currency || item.denominationCurrency || currency).toUpperCase();
+  const face = Number(item.amount ?? raw.amount);
+  return {
     subtitle: 'Transaction Receipt',
-    rowsHtml: receiptRows([
+    highlight: pin ? { label: 'COLLECTION PIN', value: pin } : null,
+    images: [['TRANSFER RECEIPT', item.receiptUrl], ['PASSPORT PHOTO', raw.passportUrl]],
+    rows: [
       ['Service', item.service],
       ['Order ID', item.id],
       ['Customer', item.customerPhone || item.customerId || ''],
@@ -55,7 +64,8 @@ function orderReceiptHtml(item, pinOverride) {
       ['Country', raw.country || item.country || ''],
       ['Package', raw.package || item.package || ''],
       ['Package ID', raw.packageId || item.packageId || ''],
-      ['Amount', txAmount(item.total, currency)],
+      ['Amount', Number.isFinite(face) && face > 0 ? txAmount(face, faceCurrency) : ''],
+      ['Serial number', item.apiExecution?.serialNumber || raw.serialNumber || ''],
       ['Status', String(item.status || '').toUpperCase()],
       ['Transaction ID', raw.trxid || raw.transactionId || item.trxid || item.transactionId || ''],
       ['Provider', raw.provider || item.provider || ''],
@@ -80,13 +90,20 @@ function orderReceiptHtml(item, pinOverride) {
       ['Wallet Number', raw.receiverWalletNumber || ''],
       ['Created', formatDate(item.createdAt)],
       ['Updated', formatDate(item.updatedAt)],
-      ['Completed By', item.completedByName || item.operatorName || ''],
-    ]),
-    blocks: [
-      highlightBlock('COLLECTION PIN', pin),
-      imageBlock('TRANSFER RECEIPT', item.receiptUrl),
-      imageBlock('PASSPORT PHOTO', raw.passportUrl),
     ],
+  };
+}
+
+/** A receipt's data as the printable HTML document. */
+function receiptHtmlFrom(data) {
+  return receiptDocument({
+    subtitle: data.subtitle,
+    rowsHtml: receiptRows(data.rows),
+    blocks: [
+      data.highlight ? highlightBlock(data.highlight.label, data.highlight.value) : '',
+      ...(data.images || []).map(([label, url]) => imageBlock(label, url)),
+    ],
+    footer: data.footer,
   });
 }
 
@@ -102,12 +119,12 @@ function orderReceiptHtml(item, pinOverride) {
  * bank statement. Who approved it is on here for the same reason: a credit with
  * nobody's name against it is not something a dispute can be opened about.
  */
-function topupReceiptHtml(item) {
+function topupReceiptData(item) {
   const currency = txCurrency(item);
   const status = String(item.status || 'pending').toUpperCase();
-  return receiptDocument({
+  return {
     subtitle: 'Wallet Top-Up Receipt',
-    rowsHtml: receiptRows([
+    rows: [
       ['Top-up ID', item.id],
       ['Status', status],
       ['Method', topupService.METHODS[item.method] || item.method],
@@ -122,12 +139,12 @@ function topupReceiptHtml(item) {
       ['Approved by', item.completedByName || ''],
       ['Completed', formatDate(item.completedAt)],
       ['Reject reason', item.status === 'rejected' ? (item.rejectReason || '') : ''],
-    ]),
-    blocks: [imageBlock('PAYMENT RECEIPT', item.receiptUrl)],
+    ],
+    images: [['PAYMENT RECEIPT', item.receiptUrl]],
     footer: item.status === 'approved'
       ? 'Please keep this receipt for your records.'
       : `This top-up is ${status.toLowerCase()}. It is not proof that the wallet was credited.`,
-  });
+  };
 }
 
 /** One label/value line inside the modal body. */
@@ -152,7 +169,8 @@ function formatTxCopy(tx) {
     `Service: ${tx.service || ''}`,
     `Customer: ${tx.customerPhone || 'Unknown'}`,
     `Details: ${tx.details || ''}`,
-    `Amount: ${txAmount(tx.total, currency)}`,
+    // Face value, as on the printed receipt - never what the buyer paid.
+    `Amount: ${txAmount(Number(tx.amount ?? tx.raw?.amount) > 0 ? Number(tx.amount ?? tx.raw?.amount) : tx.total, String(tx.raw?.currency || tx.denominationCurrency || currency).toUpperCase())}`,
     `Status: ${(tx.status || '').toUpperCase()}`,
   ].join('\n');
 }
@@ -378,6 +396,8 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
   const { profile, authUser } = useApp();
   const [pinOverride, setPinOverride] = React.useState('');
   React.useEffect(() => { setPinOverride(''); }, [item?.id, item?.pin]);
+  // The off-screen receipt card Share captures as a photo.
+  const captureRef = useRef(null);
 
   const styles = createStyles(colors);
   if (!item) return null;
@@ -394,6 +414,7 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
     : type === 'topup' ? formatTopupCopy(item)
     : type === 'supportTicket' ? formatTicketCopy(item)
     : formatTxCopy(item);
+  const receiptData = type === 'topup' ? topupReceiptData(item) : type === 'tx' ? orderReceiptData(item, pinOverride) : null;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -420,17 +441,20 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
               <>
                 <TouchableOpacity style={styles.printBtn} onPress={async () => {
                   try {
-                    // Customer receipt builders intentionally whitelist customer-safe fields.
-                    // Cost price, commission and profit are not part of either receipt.
-                    const html = type === 'topup' ? topupReceiptHtml(item) : orderReceiptHtml(item, pinOverride);
-                    await Print.printAsync({ html });
+                    // Customer-safe receipts: face value only, never cost or commission.
+                    await Print.printAsync({ html: receiptHtmlFrom(receiptData) });
                   } catch (err) { showAlert('Printer', err?.message || 'Printing is not available on this device.'); }
                 }}>
                   <Text style={styles.printText}>🖨 Print</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.printBtn} onPress={() => Share.share({ title: 'MySheba Receipt', message: copyValue }).catch(() => {})}>
+                <TouchableOpacity style={styles.printBtn} onPress={async () => {
+                  try {
+                    await shareReceiptImage(captureRef, { fileName: `MySheba-receipt-${String(item.id || '').slice(0, 12)}`, html: receiptHtmlFrom(receiptData) });
+                  } catch (err) { showAlert('Share', err?.message || 'Could not share this receipt.'); }
+                }}>
                   <Text style={styles.printText}>↗ Share</Text>
                 </TouchableOpacity>
+                <ReceiptCapture ref={captureRef} subtitle={receiptData.subtitle} rows={receiptData.rows} highlight={receiptData.highlight} footer={receiptData.footer} />
               </>
             )}
             <CopyButton value={copyValue} label="Copy Details" />

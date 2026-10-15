@@ -1,6 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, Alert, ActivityIndicator, Image, Share, BackHandler, Linking } from 'react-native';
-import { printTransactionReceipt } from '../utils/printService';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, Alert, ActivityIndicator, Image, BackHandler, Linking } from 'react-native';
+import { printTransactionReceipt, buildTransactionReceiptHtml } from '../utils/printService';
+import { ReceiptCapture, shareReceiptImage } from '../components/ReceiptImage';
+import { receiptDocument, receiptRows } from '../utils/receiptHtml';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
@@ -119,6 +121,14 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
 
   const { catalog, error: loadError } = useIimmpactCatalog();
   const [voucher, setVoucher] = useState(null);
+  // The receipt Share captures as a photo: the order just placed, or the voucher.
+  const [shareCard, setShareCard] = useState(null);
+  const captureRef = useRef(null);
+  const shareCardNow = (card) => {
+    setShareCard(card);
+    // Rendered on the next frame, then captured.
+    setTimeout(() => shareReceiptImage(captureRef, { fileName: card.fileName, html: card.html }).catch((e) => Alert.alert('Share', e?.message || 'Could not share.')), 120);
+  };
 
   // A refresh that fails while a saved catalogue is drawn is not an error.
   useEffect(() => { if (!catalog && loadError) setError(loadError); }, [catalog, loadError]);
@@ -387,8 +397,9 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
         id: String(result?.id || ''),
         service: purchase.productName,
         details: purchase.accountNumber,
-        amount: purchase.sellAmount,
-        total: purchase.sellAmount,
+        // The product's face value; what the buyer paid stays off the receipt.
+        amount: purchase.amount,
+        total: purchase.amount,
         status: 'pending',
         customerPhone: profile?.phone || '',
         createdAt: new Date(),
@@ -396,11 +407,11 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
       setReviewing(false);
       Alert.alert('Order submitted', 'Transaction ' + tx.id + ' has been accepted. The final status will update when the provider responds.', [
         { text: 'Print', onPress: () => printTransactionReceipt(tx, profile || {}).catch((e) => Alert.alert('Print receipt', e?.message || 'Could not print receipt.')) },
-        { text: 'Share', onPress: () => Share.share({ title: 'MySheba Receipt', message: [
-          'MySheba Transaction Receipt', 'Service: ' + tx.service, 'Account: ' + tx.details,
-          'Transaction ID: ' + tx.id, 'Amount: MYR ' + Number(tx.amount).toFixed(2),
-          'Status: PENDING', 'Provider cost and commission are not included.',
-        ].join('\n') }).catch(() => {}) },
+        { text: 'Share', onPress: () => shareCardNow({
+          subtitle: 'Transaction Receipt', fileName: 'MySheba-receipt-' + String(tx.id).slice(0, 12),
+          html: buildTransactionReceiptHtml(tx, profile || {}),
+          rows: [['Service', tx.service], ['Account', tx.details], ['Amount', 'MYR ' + Number(tx.amount).toFixed(2)], ['Status', 'PENDING'], ['Reference', tx.id], ['Date', new Date().toLocaleString()]],
+        }) },
         { text: 'OK', onPress: goBackOrHome },
       ]);
       setPendingPurchase(null);
@@ -483,7 +494,7 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
             {!!voucher.expiry && <Text style={st.muted}>Expires: {voucher.expiry}</Text>}
             {!!voucher.deliveryNote && <Text style={st.muted}>{voucher.deliveryNote}</Text>}
             <Text style={st.muted}>Keep this voucher private. Transaction {String(voucher.id || '')}</Text>
-            <TouchableOpacity style={st.voucherShare} onPress={() => Share.share({ title: 'MySheba Voucher', message: [voucher.productName, voucher.pin || '', voucher.serialNumber && voucher.serialNumber !== voucher.pin ? 'Serial no: ' + voucher.serialNumber : '', voucher.deliveryLink || ''].filter(Boolean).join('\n') }).catch(() => {})}>
+            <TouchableOpacity style={st.voucherShare} onPress={() => shareCardNow({ subtitle: 'Digital Voucher', fileName: 'MySheba-voucher-' + String(voucher.id || '').slice(0, 12), highlight: voucher.pin ? { label: 'PIN', value: voucher.pin } : null, footer: 'Keep this voucher private.', rows: [['Product', voucher.productName], ['Serial no', voucher.serialNumber && voucher.serialNumber !== voucher.pin ? voucher.serialNumber : ''], ['Link', voucher.deliveryLink || ''], ['Expires', voucher.expiry || ''], ['Transaction', String(voucher.id || '')]], html: receiptDocument({ subtitle: 'Digital Voucher', rowsHtml: receiptRows([['PIN', voucher.pin || ''], ...[['Product', voucher.productName], ['Serial no', voucher.serialNumber && voucher.serialNumber !== voucher.pin ? voucher.serialNumber : ''], ['Link', voucher.deliveryLink || ''], ['Expires', voucher.expiry || ''], ['Transaction', String(voucher.id || '')]]]), footer: 'Keep this voucher private.' }) })}>
               <Text style={st.buySmall}>Share voucher</Text>
             </TouchableOpacity>
           </View>
@@ -623,6 +634,7 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
           </>
         )}
       </ScrollView>
+      {!!shareCard && <ReceiptCapture ref={captureRef} subtitle={shareCard.subtitle} rows={shareCard.rows} highlight={shareCard.highlight} footer={shareCard.footer} />}
     </View>
   );
 }

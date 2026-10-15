@@ -95,8 +95,9 @@ export function buildTransactionReceiptHtml(tx = {}, profile = {}) {
     row('Service', tx.service),
     row('Details', tx.details),
     row('Customer', tx.customerPhone || profile.phone),
+    // The face value only. What the buyer paid is their price - for a
+    // retailer, their cost - and a receipt is handed to their customer.
     row('Amount', money(tx.amount)),
-    row('Total paid', money(tx.total != null ? tx.total : tx.amount)),
     row('Status', (tx.rejected ? 'rejected' : tx.status || 'pending').toUpperCase()),
     row('Reference', tx.id),
     row('Date', formatWhen(tx.createdAt)),

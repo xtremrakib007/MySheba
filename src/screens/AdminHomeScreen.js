@@ -26,6 +26,7 @@ import * as paymentSettingsService from '../firebase/paymentSettingsService';
 import * as internetPricingService from '../firebase/internetPricingService';
 import ApiPackagePricingCard from '../components/ApiPackagePricingCard';
 import MarkupSettingsCard from '../components/MarkupSettingsCard';
+import CommissionByRoleCard from '../components/CommissionByRoleCard';
 import WalletFundingSwitchCard from '../components/WalletFundingSwitchCard';
 import * as bannerService from '../firebase/bannerService';
 import * as announcementService from '../firebase/announcementService';
@@ -815,6 +816,7 @@ export default function AdminHomeScreen() {
           <View>
             {profile?.role === 'superadmin' && <WalletFundingSwitchCard />}
             {profile?.role === 'superadmin' && <MarkupSettingsCard pricing={pricing} />}
+            {profile?.role === 'superadmin' && <CommissionByRoleCard pricing={pricing} />}
             <View style={styles.card}>
               <Text style={styles.cardTitle}>🏷️ Earning &amp; Margin Settings</Text>
               {PRICING_FIELDS.map((r) => (

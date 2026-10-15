@@ -10,6 +10,7 @@ import { findWalletRecipient, walletTransfer } from '../firebase/walletTransferS
 import * as pinVault from '../firebase/pinVault';
 import { isBiometricAvailable, authenticateWithBiometric } from '../firebase/biometricAuth';
 import LegacyTransferPointsScreen from './LegacyTransferPointsScreen';
+import TransferReceiptModal from '../components/TransferReceiptModal';
 
 const ZERO_DECIMAL_CURRENCIES = new Set(['IDR', 'KHR', 'MMK']);
 function walletCurrency(profile) {
@@ -36,6 +37,7 @@ export default function TransferPointsScreen() {
   const [recipientQuery, setRecipientQuery] = useState('');
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
+  const [receipt, setReceipt] = useState(null);
   const [recipient, setRecipient] = useState(null);
   const [busy, setBusy] = useState(false);
   const [reviewing, setReviewing] = useState(false);
@@ -115,13 +117,20 @@ export default function TransferPointsScreen() {
       if (biometricEnabled === true && authUser?.uid && !pinOverride) {
         await pinVault.rememberPin(authUser.uid, pinToSend);
       }
+      // Captured before the form is cleared, for the printable receipt.
+      setReceipt({
+        transferId: result?.transferId || '', amount: result?.amount ?? value, currency: result?.currency || currency,
+        recipientAmount: result?.recipientAmount, recipientCurrency: result?.recipientCurrency,
+        recipientName: result?.recipient?.name || recipient?.name || '', recipientPhone: recipient?.phoneMasked || recipient?.phone || '',
+        note: note || '', senderName: profile?.name || '', at: Date.now(),
+      });
       setConfirmVisible(false);
       setRecipient(null);
       setRecipientQuery('');
       setAmount('');
       setNote('');
       setSecurityPin('');
-      showAlert('Transfer Successful', `${fmt(result.amount, result.currency || currency)} sent to ${result.recipient?.name || 'the recipient'}.`);
+
     } catch (err) {
       // A stored PIN the server rejects is a stale one - the PIN was changed
       // on another device and this copy is wrong. Drop it rather than let the
@@ -251,6 +260,7 @@ export default function TransferPointsScreen() {
           </View>
         </View>
       </Modal>
+      <TransferReceiptModal receipt={receipt} onClose={() => setReceipt(null)} />
     </View>
   );
 }
