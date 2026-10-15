@@ -1,3 +1,4 @@
+const { readCommissionPayee, payPendingCommission } = require('./commissionCredit');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { hasCapability } = require('./accessControl');
@@ -257,7 +258,10 @@ exports.reconcileUnknownTransaction = onCall({ enforceAppCheck: ENFORCE_APP_CHEC
     const customerId = typeof order.customerId === 'string' ? order.customerId : '';
     if (!customerId) throw new HttpsError('failed-precondition', 'Customer information is missing. Reconciliation is required.');
     if (outcome === 'completed') {
+      // Confirmed by finance: the order earns the commission it recorded.
+      const payee = await readCommissionPayee(tx, db, order);
       tx.update(ref, {
+        ...payPendingCommission(tx, db, ref, order, payee),
         status: 'completed',
         providerReference,
         reconciled: true,
