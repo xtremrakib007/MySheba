@@ -18,16 +18,16 @@ function walk(value, state, depth = 0) {
     return;
   }
   if (Array.isArray(value)) {
-    if (value.length > MAX_ARRAY_LENGTH) throw new HttpsError('invalid-argument', 'Request contains an oversized list.');
+    if (value.length > state.maxArray) throw new HttpsError('invalid-argument', 'Request contains an oversized list.');
     state.keys += value.length;
-    if (state.keys > MAX_KEYS) throw new HttpsError('invalid-argument', 'Request contains too many fields.');
+    if (state.keys > state.maxKeys) throw new HttpsError('invalid-argument', 'Request contains too many fields.');
     for (const item of value) walk(item, state, depth + 1);
     return;
   }
   if (typeof value !== 'object') throw new HttpsError('invalid-argument', 'Request contains an unsupported value.');
   const keys = Object.keys(value);
   state.keys += keys.length;
-  if (state.keys > MAX_KEYS) throw new HttpsError('invalid-argument', 'Request contains too many fields.');
+  if (state.keys > state.maxKeys) throw new HttpsError('invalid-argument', 'Request contains too many fields.');
   for (const key of keys) {
     if (DANGEROUS_KEYS.has(key)) throw new HttpsError('invalid-argument', 'Request contains an invalid field.');
     if (key.length > 200) throw new HttpsError('invalid-argument', 'Request contains an oversized field name.');
@@ -35,8 +35,13 @@ function walk(value, state, depth = 0) {
   }
 }
 
+// options.maxKeys / maxArrayLength raise the field and list limits for a
+// callable whose own validator bounds a large document (savePricingSettings:
+// a commission per product and role is several thousand fields).
 function enforceRequestEnvelope(request, options = {}) {
   const maxBytes = Number(options.maxBytes) || MAX_REQUEST_BYTES;
+  const maxKeys = Number(options.maxKeys) || MAX_KEYS;
+  const maxArray = Number(options.maxArrayLength) || MAX_ARRAY_LENGTH;
   let serialized;
   try {
     serialized = JSON.stringify(request?.data ?? null);
@@ -46,7 +51,7 @@ function enforceRequestEnvelope(request, options = {}) {
   if (Buffer.byteLength(serialized, 'utf8') > maxBytes) {
     throw new HttpsError('invalid-argument', 'Request payload is too large.');
   }
-  walk(request?.data ?? null, { keys: 0 });
+  walk(request?.data ?? null, { keys: 0, maxKeys, maxArray });
 }
 
 module.exports = { enforceRequestEnvelope, MAX_REQUEST_BYTES };
