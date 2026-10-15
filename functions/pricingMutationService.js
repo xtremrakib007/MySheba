@@ -64,8 +64,13 @@ function tiers(v, label) {
   }
   return out;
 }
+const COMMISSION_FIELDS = new Set(['recharge', 'internet', 'billTiers', 'remittanceTiers', 'touchNGoFeePercent', 'byRole', 'products']);
 function cleanCommissionRules(v) {
   if (!v || typeof v !== 'object') throw new HttpsError('invalid-argument','Commission rules are invalid.');
+  // Refused, not dropped: dropping a field it did not know is how an older
+  // server answered "saved" while throwing per-product commissions away.
+  const unknown = Object.keys(v).find((k) => !COMMISSION_FIELDS.has(k));
+  if (unknown) throw new HttpsError('invalid-argument', 'Unknown commission setting: ' + String(unknown).slice(0, 40));
   return {
     recharge: rule(v.recharge, 'Recharge commission'),
     internet: rule(v.internet, 'Internet commission'),

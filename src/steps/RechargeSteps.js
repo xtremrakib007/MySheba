@@ -176,7 +176,9 @@ export default function RechargeStep({ step }) {
     return (<View><FormLabel>Select Country</FormLabel><View style={styles.grid3}>{destinations.map((c) => (<CountrySelectCard key={c.code} code={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr }); nextStep(); }} />))}</View></View>);
   }
   if (step === 1) {
-    return (<View><FormLabel>Enter Mobile Number</FormLabel><FormInput placeholder="Enter number" placeholderTextColor={isDark ? '#9AA6BA' : '#777777'} keyboardType="phone-pad" value={serviceData.phone || ''} onChangeText={(v) => updateServiceData({ phone: v })} style={styles.phoneInput} /></View>);
+    // The same field as Internet's number step (InternetSteps.js), so both
+    // flows look alike.
+    return (<View><FormLabel>Enter Mobile Number</FormLabel><FormInput placeholder="Mobile number" keyboardType="phone-pad" value={serviceData.phone || ''} onChangeText={(v) => updateServiceData({ phone: v })} /></View>);
   }
   if (step === 2) {
     const list = OPERATOR_LIST;

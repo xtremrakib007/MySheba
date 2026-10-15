@@ -148,6 +148,33 @@ export async function fetchPricing(): Promise<PricingSettings> {
   return { ...DEFAULT_PRICING, ...data, markups: { services: markups.services || {}, countries: markups.countries || {}, products: markups.products || {}, prices: markups.prices || {} }, catalogProductPricing: Array.isArray(data.catalogProductPricing) ? data.catalogProductPricing : [], commissionRules: { ...DEFAULT_PRICING.commissionRules, ...(data.commissionRules || {}), recharge: { ...DEFAULT_PRICING.commissionRules.recharge, ...(data.commissionRules?.recharge || {}) }, internet: { ...DEFAULT_PRICING.commissionRules.internet, ...(data.commissionRules?.internet || {}) }, billTiers: Array.isArray(data.commissionRules?.billTiers) ? data.commissionRules.billTiers : DEFAULT_PRICING.commissionRules.billTiers, remittanceTiers: Array.isArray(data.commissionRules?.remittanceTiers) ? data.commissionRules.remittanceTiers : DEFAULT_PRICING.commissionRules.remittanceTiers } };
 }
 
+const GENERAL_COMMISSION_FIELDS = ['recharge', 'internet', 'billTiers', 'remittanceTiers', 'touchNGoFeePercent'] as const;
+
+/** The fields savePricingSettings accepts for commissionRules, nothing else. */
+export function commissionPayload(rules: CommissionRules, extra: Pick<CommissionRules, 'byRole' | 'products'> = {}): CommissionRules {
+  const out: any = {};
+  for (const k of GENERAL_COMMISSION_FIELDS) out[k] = (rules as any)[k] ?? (DEFAULT_PRICING.commissionRules as any)[k];
+  if (extra.byRole !== undefined) out.byRole = extra.byRole;
+  if (extra.products !== undefined) out.products = extra.products;
+  return out;
+}
+
+/**
+ * Saves commissionRules and reads them back. A server deployed before
+ * per-role / per-product commissions existed answered "ok" and dropped them,
+ * so the page said Saved and showed nothing the next time it opened.
+ */
+export async function saveCommissionRules(rules: CommissionRules): Promise<void> {
+  await updatePricing('commissionRules', rules as unknown as PricingSettings['commissionRules']);
+  if (rules.byRole === undefined && rules.products === undefined) return;
+  const snap = await getDoc(SETTINGS_DOC);
+  const stored = (snap.exists() ? (snap.data() as any)?.commissionRules : null) || {};
+  const count = (m: any) => Object.values(m || {}).reduce((n: number, byKey: any) => n + Object.keys(byKey || {}).length, 0);
+  const missing = count(rules.byRole) !== count(stored.byRole) ? 'commissions by role'
+    : count(rules.products) !== count(stored.products) ? 'commissions by product' : '';
+  if (missing) throw new Error(`The server did not keep the ${missing}. Its Cloud Functions are out of date: deploy them (firebase deploy --only functions), then save again.`);
+}
+
 export async function updatePricing(key: keyof PricingSettings, value: PricingSettings[keyof PricingSettings]): Promise<void> {
   const fn = httpsCallable(functions, 'savePricingSettings');
   await fn({ key: String(key), value });

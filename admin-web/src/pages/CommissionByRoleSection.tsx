@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ROLE_LABELS,
-  updatePricing,
+  saveCommissionRules,
+  commissionPayload,
   type CommissionRule,
   type CommissionRules,
   type PricingRole,
-  type PricingSettings,
 } from '../services/pricingService';
 import { commissionProductGroups, loadCatalog } from '../services/catalogMirror';
 
@@ -89,10 +89,10 @@ export default function CommissionByRoleSection({ rules, onSaved }: { rules: Com
         productRules[row.code] = { ...(productRules[row.code] || {}), [role]: { type: row.type, value: v } };
       }
     }
-    const next: CommissionRules = { ...rules, byRole, products: productRules };
+    const next: CommissionRules = commissionPayload(rules, { byRole, products: productRules });
     setSaving(true); setMessage('');
     try {
-      await updatePricing('commissionRules', next as unknown as PricingSettings['commissionRules']);
+      await saveCommissionRules(next);
       onSaved(next);
       setMessage('Saved. New commissions apply to the next order.');
     } catch (err) {

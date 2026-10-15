@@ -6,6 +6,7 @@ import {
   ROLE_PRICE_ROLES,
   fetchPricing,
   updatePricing,
+  commissionPayload,
   updateRolePrice,
   saveCatalogProductPrice,
   deleteCatalogProductPrice,
@@ -123,7 +124,7 @@ export default function PricingPage() {
   }
   // The general rules only: leaving byRole and products out makes the server
   // keep the saved ones, which the Commission by role & product section edits.
-  async function saveCommissionRules() { const { byRole: _r, products: _p, ...general } = commissionDraft; try { await guarded(() => updatePricing('commissionRules' as keyof PricingSettings, general as any)); } catch { return; } setPricing((prev) => ({ ...prev, commissionRules: { ...prev.commissionRules, ...general } })); }
+  async function saveCommissionRules() { const general = commissionPayload(commissionDraft); try { await guarded(() => updatePricing('commissionRules' as keyof PricingSettings, general as any)); } catch { return; } setPricing((prev) => ({ ...prev, commissionRules: { ...prev.commissionRules, ...general } })); }
   async function removeCatalog(id: string) {
     try { await guarded(() => deleteCatalogProductPrice(id)); } catch { return; }
     setPricing((prev) => ({ ...prev, catalogProductPricing: prev.catalogProductPricing.filter((x) => x.id !== id) }));
