@@ -101,6 +101,7 @@ const RECHARGE_RATE_FIELDS = [
   { key: 'rechargeNP', label: 'Recharge/Internet — NPR' }, { key: 'rechargeID', label: 'Recharge/Internet — IDR' },
   { key: 'rechargePK', label: 'Recharge/Internet — PKR' }, { key: 'rechargeMM', label: 'Recharge/Internet — MMK' },
   { key: 'rechargePH', label: 'Recharge/Internet — PHP' }, { key: 'rechargeKH', label: 'Recharge/Internet — KHR' },
+  { key: 'rechargeTH', label: 'Recharge/Internet — THB' },
 ];
 
 // Tiles that open a screen of their own rather than an AdminHomeScreen tab.

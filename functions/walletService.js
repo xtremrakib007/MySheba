@@ -24,11 +24,12 @@ const { sessionMatches } = require('./sessionSlots');
 const { requireConsent } = require('./consentRecord');
 const { addWalletLedgerEntry } = require('./walletLedgerService');
 const { resolveCommission, touchNGoFee, addCommissionLedgerEntry, tierFee } = require('./commissionService');
+const { flooredPrice } = require('./rateFloor');
 const { applyMarkup } = require('./markupService');
 
 const DEFAULT_PRICING={dealerEarningPercent:1.5,webviewAccessCost:2,webviewSubmitCost:2,paymentSuccessCost:3,webviewAccessWindowHours:1,notepadCost:0,myDocumentsCost:0,salaryOtCost:0,moduleSubscriptionDays:30};
 const DEFAULT_RATES={mobileBanking:110.5,BD_ACC:30.26,BD_CASH:30.11,NP:37.65,PK:67.79,PH:15.05,LK:81.99,IN:23.5,ID:230,MM:966,remittanceFee:7,rechargeBD:30.26,rechargeIN:23.5,rechargeNP:37.65,rechargeID:230,rechargePK:67.79,rechargeMM:966,rechargePH:15.05,rechargeKH:900};
-const RECHARGE_RATE_KEYS={BD:'rechargeBD',IN:'rechargeIN',NP:'rechargeNP',ID:'rechargeID',PK:'rechargePK',MM:'rechargeMM',PH:'rechargePH',KH:'rechargeKH'};
+const RECHARGE_RATE_KEYS={BD:'rechargeBD',IN:'rechargeIN',NP:'rechargeNP',ID:'rechargeID',PK:'rechargePK',MM:'rechargeMM',PH:'rechargePH',KH:'rechargeKH',TH:'rechargeTH'};
 const SESSION_ID_RE=/^[A-Za-z0-9_-]{16,128}$/;
 const DEVICE_ID_RE=/^[A-Za-z0-9-]{16,100}$/;
 const REQUEST_ID_RE=/^[A-Za-z0-9_-]{16,128}$/;
@@ -118,9 +119,12 @@ async function resolvePackagePricing(db, service, payload) {
     if (['option-required', 'option-not-found', 'field-dependency-missing', 'field-required'].includes(found.error)) throw new HttpsError('failed-precondition', 'That IIMMPACT recharge option or required field is missing. Please reload the product and try again.');
     if (found.error === 'options-unavailable') throw new HttpsError('unavailable', 'IIMMPACT recharge options could not be confirmed. Please try again.');
     if (found.error) throw new HttpsError('failed-precondition', 'IIMMPACT could not validate this recharge. Please review the product and number.');
+    // Never below the face value at MySheba's own rate (functions/rateFloor.js):
+    // IIMMPACT's catalogue price for some destinations is far under cost.
+    const sellAmount = requestedCountry === 'MY' ? found.sellAmount : flooredPrice(found.sellAmount, found.providerAmount, requestedCountry, await getRates(db));
     const submitted = Number(clean.amount);
-    if (Number.isFinite(submitted) && Math.abs(submitted - found.sellAmount) > 0.01) throw new HttpsError('failed-precondition', 'This recharge price has changed. Please review the amount.');
-    return { ...payload, amount: undefined, total: undefined, raw: { ...clean, amount: found.sellAmount, providerAmount: found.providerAmount, packageCostAmount: found.providerAmount, productCode: found.productCode, operatorCode: found.productCode, productName: found.productName, accountNumber: found.accountNumber, operator: found.productName, package: found.productName, subproductCode: found.subproductCode || clean.subproductCode || '', optionCode: found.optionCode || '', extras: found.extras || {}, processingTime: found.processingTime || '' } };
+    if (Number.isFinite(submitted) && Math.abs(submitted - sellAmount) > 0.01) throw new HttpsError('failed-precondition', 'This recharge price has changed. Please review the amount.');
+    return { ...payload, amount: undefined, total: undefined, raw: { ...clean, amount: sellAmount, providerAmount: found.providerAmount, packageCostAmount: found.providerAmount, productCode: found.productCode, operatorCode: found.productCode, productName: found.productName, accountNumber: found.accountNumber, operator: found.productName, package: found.productName, subproductCode: found.subproductCode || clean.subproductCode || '', optionCode: found.optionCode || '', extras: found.extras || {}, processingTime: found.processingTime || '' } };
   }
   if (!label) return payload;
   // packageCostAmount is what gets SENT to the provider as the amount, and it

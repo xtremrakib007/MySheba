@@ -285,6 +285,7 @@ export const RECHARGE_RATE_KEYS = {
   MM: 'rechargeMM',
   PH: 'rechargePH',
   KH: 'rechargeKH',
+  TH: 'rechargeTH',
 };
 
 /** 1 MYR = <rate> <local currency> for Recharge/Internet, from the live rates doc. */
