@@ -119,7 +119,7 @@ export default function MarkupSettingsCard({ pricing }) {
       const msg = String(e?.message || 'Could not save markups.');
       if (/recent authentication/i.test(msg)) {
         setNeedPin(true);
-        setMessage('For your security, enter your PIN and tap Save again.');
+        setMessage('For your security, enter the password you sign in with (not your transaction PIN) and tap Save again.');
       } else {
         setMessage(msg);
       }
@@ -220,7 +220,7 @@ export default function MarkupSettingsCard({ pricing }) {
       <ProductPicker catalog={catalog} taken={[]} onPick={(code) => setPrices([...prices, { code, amount: '', roles: {} }])} />
 
       {needPin && (
-        <TextInput style={[styles.input, styles.pinInput]} value={pin} onChangeText={setPin} placeholder="Your PIN" secureTextEntry keyboardType="number-pad" />
+        <TextInput style={[styles.input, styles.pinInput]} value={pin} onChangeText={setPin} placeholder="Your login password" secureTextEntry autoCapitalize="none" autoCorrect={false} textContentType="password" autoComplete="password" />
       )}
       {!!message && <Text style={styles.message}>{message}</Text>}
       <TouchableOpacity style={[styles.saveBtn, saving && styles.dim]} onPress={save} disabled={saving}>

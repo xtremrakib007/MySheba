@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BackHandler, View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Image, Linking } from 'react-native';
+import { BackHandler, View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Image, Linking, ActivityIndicator } from 'react-native';
 import * as Print from 'expo-print';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
@@ -8,7 +8,7 @@ import HeaderDecor from '../components/HeaderDecor';
 import { showAlert } from '../utils/appAlert';
 import { rechargePinBrands } from '../data/countries';
 import { getOperatorBrand } from '../data/operatorBrand';
-import { purchaseRechargePin } from '../firebase/rechargePinService';
+import { purchaseRechargePin, waitForRechargePin } from '../firebase/rechargePinService';
 import * as apiProviderService from '../firebase/apiProviderService';
 import { radius, tileGrid } from '../theme/theme';
 import { Tile } from '../components/ServiceGrid';
@@ -76,6 +76,7 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
   const [amount, setAmount] = useState(null);
   const [busy, setBusy] = useState(false);
   const [voucher, setVoucher] = useState(null);
+  const [issuing, setIssuing] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
   // The purchase being reviewed on the full confirmation page, or null.
   const [review, setReview] = useState(null);
@@ -202,7 +203,14 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
       });
       setReview(null);
       if (result?.pending) {
-        showAlert('Voucher', 'Your order ' + String(result.id || '') + ' was accepted and the voucher is being issued. It will appear in History once the provider releases it.');
+        // The provider accepted the order and releases the PIN a moment
+        // later. Wait for it here instead of sending the customer to History.
+        setIssuing(String(result.id || ''));
+        try {
+          const issued = await waitForRechargePin(result.id);
+          if (issued) setVoucher({ ...result, ...issued, productName: issued.productName || result.productName });
+          else showAlert('Voucher', 'Your order ' + String(result.id || '') + ' was accepted and the voucher is still being issued. Open it in History and tap Show PIN once it is completed.');
+        } finally { setIssuing(''); }
         return;
       }
       setVoucher(result);
@@ -342,6 +350,12 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
       {/* Only once there is something to buy: on a category or product grid the
           tiles are the action, and an inert Next under them read as broken. */}
       {(!!product || !!operator) && <TouchableOpacity disabled={busy || (product ? !selectedOption : !(amount > 0))} onPress={buy} style={styles.buy}><Text style={styles.buyText}>{busy ? 'Processing…' : 'Next'}</Text></TouchableOpacity>}
+
+      {!!issuing && <View style={styles.voucher}>
+        <ActivityIndicator />
+        <Text style={styles.voucherTitle}>Issuing your voucher…</Text>
+        <Text style={styles.warning}>Payment done. The PIN appears here as soon as the provider releases it. Order {issuing}</Text>
+      </View>}
 
       {!!(voucher?.pin || voucher?.deliveryLink || voucher?.serialNumber) && <View style={styles.voucher}>
         <Text style={styles.voucherTitle}>Voucher Ready</Text>

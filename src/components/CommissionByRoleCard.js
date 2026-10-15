@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { auth } from '../firebase/config';
 import * as authService from '../firebase/authService';
 import * as apiProviderService from '../firebase/apiProviderService';
 import { getIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
-import { ProductPicker } from './MarkupSettingsCard';
+import { commissionProductGroups } from '../utils/commissionProducts';
 
 // Superadmin: who earns commission, and how much, per role.
 //
@@ -13,6 +13,7 @@ import { ProductPicker } from './MarkupSettingsCard';
 // functions/commissionService.js) are per role: an empty box uses the general
 // rule, except for a customer, who earns nothing unless a value is set here.
 const ROLES = ['customer', 'retail', 'reseller', 'dealer', 'admin'];
+const SHORT_ROLE = { customer: 'Cust', retail: 'Retail', reseller: 'Resell', dealer: 'Dealer', admin: 'Admin' };
 const SERVICES = [
   { key: 'recharge', label: 'Recharge', type: 'percent', unit: '%' },
   { key: 'internet', label: 'Internet', type: 'percent', unit: '%' },
@@ -61,7 +62,22 @@ export default function CommissionByRoleCard({ pricing }) {
     const p = catalog?.products?.[code] || Object.values(catalog?.products || {}).find((x) => x?.code === code);
     return p?.name ? `${p.name} (${code})` : code;
   };
-  const updateRow = (index, patch) => setProductRows((rows) => rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+  // Every product in the catalogue, by category, each with its own boxes - a
+  // product with no row yet gets one the moment a box is typed in.
+  const rowFor = (code) => productRows.find((r) => r.code === code) || { code, type: 'percent', roles: {} };
+  const setRow = (code, patch) => setProductRows((rows) => {
+    const existing = rows.find((r) => r.code === code);
+    if (existing) return rows.map((r) => (r.code === code ? { ...r, ...patch } : r));
+    return [...rows, { code, type: 'percent', roles: {}, ...patch }];
+  });
+  const [filter, setFilter] = useState('');
+  const [openGroups, setOpenGroups] = useState({});
+  const isSet = (code) => Object.values(rowFor(code).roles || {}).some((v) => String(v ?? '').trim() !== '');
+  const groups = useMemo(
+    () => commissionProductGroups(catalog, productRows.filter((r) => isSet(r.code)).map((r) => r.code), filter),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [catalog, productRows, filter],
+  );
 
   const general = (key) => {
     const r = key === 'billpayment' ? null : saved[key];
@@ -109,7 +125,7 @@ export default function CommissionByRoleCard({ pricing }) {
       setMessage('Saved. New commissions apply to the next order.');
     } catch (e) {
       const msg = String(e?.message || 'Could not save commissions.');
-      if (/recent authentication/i.test(msg)) { setNeedPin(true); setMessage('For your security, enter your PIN and tap Save again.'); }
+      if (/recent authentication/i.test(msg)) { setNeedPin(true); setMessage('For your security, enter the password you sign in with (not your transaction PIN) and tap Save again.'); }
       else setMessage(msg);
     } finally { setSaving(false); }
   };
@@ -139,35 +155,50 @@ export default function CommissionByRoleCard({ pricing }) {
 
       <Text style={styles.section}>By product / operator</Text>
       <Text style={styles.hint}>
-        A commission for one operator or product, e.g. Digi, Celcom, TNB, Unifi, a game voucher. It beats the table above for that product,
-        and works for Reload, Internet, Bill and Vouchers. Vouchers earn commission only from this list. Leave a role empty to use the table above.
+        Every product, by category: tap a category to open it. A value here beats the table above for that product, for Reload, Internet,
+        Bill and Vouchers. Vouchers earn commission only from this list. Leave a role empty to use the table above.
       </Text>
-      {productRows.map((row, index) => (
-        <View key={row.code} style={styles.productBox}>
-          <View style={styles.productHead}>
-            <Text style={styles.productName} numberOfLines={2}>{productName(row.code)}</Text>
-            {['percent', 'fixed'].map((t) => (
-              <TouchableOpacity key={t} onPress={() => updateRow(index, { type: t })} style={[styles.chip, row.type === t && styles.chipActive]}>
-                <Text style={[styles.chipText, row.type === t && styles.chipTextActive]}>{t === 'percent' ? '%' : 'RM'}</Text>
-              </TouchableOpacity>
-            ))}
-            <TouchableOpacity onPress={() => setProductRows((rows) => rows.filter((_, i) => i !== index))}><Text style={styles.remove}>✕</Text></TouchableOpacity>
+      <TextInput style={[styles.input, styles.search]} value={filter} onChangeText={setFilter}
+        placeholder={catalog ? 'Filter, e.g. Digi, Shell, TNB, Nepal' : 'Loading products...'} />
+      {groups.map(({ label: category, items: list }) => {
+        const open = !!filter.trim() || !!openGroups[category];
+        const setCount = list.filter((p) => isSet(p.code)).length;
+        return (
+          <View key={category} style={styles.group}>
+            <TouchableOpacity style={styles.groupHead} onPress={() => setOpenGroups((g) => ({ ...g, [category]: !g[category] }))}>
+              <Text style={styles.groupTitle}>{open ? '▾' : '▸'} {category}</Text>
+              <Text style={styles.groupCount}>{list.length} products{setCount ? ` · ${setCount} set` : ''}</Text>
+            </TouchableOpacity>
+            {open && list.map((p) => {
+              const row = rowFor(p.code);
+              return (
+                <View key={p.code} style={[styles.productBox, isSet(p.code) && styles.productSet]}>
+                  <View style={styles.productHead}>
+                    <Text style={styles.productName} numberOfLines={2}>{p.name} <Text style={styles.code}>({p.code})</Text></Text>
+                    {['percent', 'fixed'].map((t) => (
+                      <TouchableOpacity key={t} onPress={() => setRow(p.code, { type: t })} style={[styles.chip, row.type === t && styles.chipActive]}>
+                        <Text style={[styles.chipText, row.type === t && styles.chipTextActive]}>{t === 'percent' ? '%' : 'RM'}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <View style={styles.roleLine}>
+                    {ROLES.map((role) => (
+                      <View key={role} style={styles.roleCellSmall}>
+                        <Text style={styles.roleSmall}>{SHORT_ROLE[role]}</Text>
+                        <TextInput style={[styles.input, styles.inputSmall]} keyboardType="decimal-pad" value={row.roles?.[role] ?? ''} placeholder="-"
+                          onChangeText={(v) => setRow(p.code, { roles: { ...row.roles, [role]: v } })} />
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              );
+            })}
           </View>
-          <View style={styles.roleWrap}>
-            {ROLES.map((role) => (
-              <View key={role} style={styles.roleCell}>
-                <Text style={styles.roleSmall}>{role[0].toUpperCase() + role.slice(1)}</Text>
-                <TextInput style={styles.input} keyboardType="decimal-pad" value={row.roles?.[role] ?? ''} placeholder="-"
-                  onChangeText={(v) => updateRow(index, { roles: { ...row.roles, [role]: v } })} />
-              </View>
-            ))}
-          </View>
-        </View>
-      ))}
-      <ProductPicker catalog={catalog} taken={productRows.map((r) => r.code)}
-        onPick={(code) => setProductRows((rows) => (rows.some((r) => r.code === code) ? rows : [...rows, { code, type: 'percent', roles: {} }]))} />
+        );
+      })}
+      {!!catalog && !groups.length && <Text style={styles.hint}>No product matches.</Text>}
 
-      {!!needPin && <TextInput style={[styles.input, styles.pin]} value={pin} onChangeText={setPin} placeholder="Your PIN" secureTextEntry keyboardType="number-pad" />}
+      {!!needPin && <TextInput style={[styles.input, styles.pin]} value={pin} onChangeText={setPin} placeholder="Your login password" secureTextEntry autoCapitalize="none" autoCorrect={false} textContentType="password" autoComplete="password" />}
       {!!message && <Text style={styles.message}>{message}</Text>}
       <TouchableOpacity style={[styles.save, saving && styles.dim]} onPress={save} disabled={saving}>
         {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>Save commissions</Text>}
@@ -199,8 +230,15 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: '#0E7A79', borderColor: '#0E7A79' },
   chipText: { fontSize: 12, fontWeight: '700' },
   chipTextActive: { color: '#fff' },
-  remove: { fontSize: 16, color: '#b3261e', paddingHorizontal: 6 },
-  roleWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
-  roleCell: { width: '31%' },
+  roleLine: { flexDirection: 'row', gap: 4, marginTop: 6 },
+  roleCellSmall: { flex: 1 },
+  inputSmall: { paddingHorizontal: 4, paddingVertical: 5, fontSize: 12, textAlign: 'center' },
+  search: { width: '100%', marginBottom: 6 },
+  group: { borderTopWidth: 1, borderTopColor: '#eef2f6' },
+  groupHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10 },
+  groupTitle: { fontSize: 13.5, fontWeight: '800' },
+  groupCount: { fontSize: 11, opacity: 0.6 },
+  productSet: { borderColor: '#0E7A79' },
+  code: { fontSize: 11, fontWeight: '400', opacity: 0.6 },
   roleSmall: { fontSize: 10.5, fontWeight: '700', opacity: 0.6, marginBottom: 2 },
 });

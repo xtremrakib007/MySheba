@@ -435,11 +435,16 @@ exports.getRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (r
   const profileSnap = await db.collection('users').doc(uid).get();
   if (!profileSnap.exists || !active(profileSnap.data())) throw new HttpsError('permission-denied', 'Your account is not active.');
   requireSessionMatch(request, profileSnap.data());
-  await checkVelocity(db, uid, 'rechargePin', { ip: getClientIp(request) });
+  // Its own bucket: reading a PIN back must not use up the purchase limit.
+  await checkVelocity(db, uid, 'getRechargePin', { ip: getClientIp(request) });
   const txSnap = await db.collection('transactions').doc(transactionId).get();
   if (!txSnap.exists || txSnap.data()?.customerId !== uid || txSnap.data()?.service !== PIN_SERVICE) throw new HttpsError('not-found', 'Recharge PIN transaction not found.');
   if (txSnap.data()?.status !== 'completed' || txSnap.data()?.rechargePinAvailable !== true) throw new HttpsError('failed-precondition', 'This Recharge PIN is not available yet.');
   const pinSnap = await db.collection('rechargePins').doc(transactionId).get();
   if (!pinSnap.exists || pinSnap.data()?.customerId !== uid) throw new HttpsError('not-found', 'Recharge PIN is unavailable. Contact support if you were charged.');
-  return { id: transactionId, operator: pinSnap.data()?.operator || txSnap.data()?.operator || '', amount: Number(pinSnap.data()?.amount || txSnap.data()?.amount || 0), currency: txSnap.data()?.currency || 'MYR', fxRate: Number(txSnap.data()?.fxRate || 1), pin: pinSnap.data()?.pin || '' };
+  return { id: transactionId, operator: pinSnap.data()?.operator || txSnap.data()?.operator || '', amount: Number(pinSnap.data()?.amount || txSnap.data()?.amount || 0), currency: txSnap.data()?.currency || 'MYR', fxRate: Number(txSnap.data()?.fxRate || 1), pin: pinSnap.data()?.pin || '',
+    // Everything the purchase screen shows, so History can show the same.
+    deliveryLink: pinSnap.data()?.deliveryLink || null, deliveryNote: pinSnap.data()?.deliveryNote || null, expiry: pinSnap.data()?.expiry || null,
+    serialNumber: pinSnap.data()?.serialNumber || null, productName: pinSnap.data()?.productName || txSnap.data()?.productName || null,
+    productCode: pinSnap.data()?.productCode || null, country: pinSnap.data()?.country || txSnap.data()?.country || null };
 });

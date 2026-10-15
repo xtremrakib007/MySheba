@@ -1,5 +1,5 @@
-import React, { useRef } from 'react';
-import { Modal, View, Text, TouchableOpacity, ScrollView, Linking, Image, StyleSheet } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { Modal, View, Text, TouchableOpacity, ScrollView, Linking, Image, StyleSheet, ActivityIndicator } from 'react-native';
 import * as Print from 'expo-print';
 import { showAlert } from '../utils/appAlert';
 import { radius } from '../theme/theme';
@@ -14,6 +14,8 @@ import { receiptDocument, receiptRows, imageBlock, highlightBlock } from '../uti
 import { ReceiptCapture, shareReceiptImage } from './ReceiptImage';
 import { statusBadge } from '../theme/statusBadges';
 import { txFailureReason } from '../utils/txFailure';
+import { auth } from '../firebase/config';
+import { getRechargePin } from '../firebase/rechargePinService';
 
 
 const TYPE_ICON = { flight: '✈️', bus: '🚌', train: '🚂' };
@@ -147,6 +149,48 @@ function topupReceiptData(item) {
   };
 }
 
+/**
+ * A voucher's PIN, read back on request (functions getRechargePin): it is
+ * never stored on the transaction, so History had no way to show it. Only
+ * the buyer can read it.
+ */
+function VoucherPin({ item }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+  const [voucher, setVoucher] = useState(null);
+  const [busy, setBusy] = useState(false);
+  if (item.service !== 'Recharge PIN' || item.status !== 'completed') return null;
+  if (!auth.currentUser || item.customerId !== auth.currentUser.uid) return null;
+  const reveal = async () => {
+    setBusy(true);
+    try { setVoucher(await getRechargePin(item.id)); }
+    catch (err) { showAlert('Voucher', err?.message || 'Could not load this voucher.'); }
+    finally { setBusy(false); }
+  };
+  if (!voucher) {
+    return (
+      <TouchableOpacity style={styles.pinBlock} onPress={reveal} disabled={busy}>
+        {busy ? <ActivityIndicator /> : <Text style={styles.pinLabel}>🔑 SHOW VOUCHER PIN</Text>}
+      </TouchableOpacity>
+    );
+  }
+  const secret = voucher.pin || voucher.deliveryLink || '';
+  return (
+    <View style={styles.pinBlock}>
+      <Text style={styles.pinLabel}>VOUCHER PIN</Text>
+      {!!secret && (
+        <View style={styles.pinRow}>
+          <Text style={styles.pinValue} selectable onPress={voucher.pin ? undefined : () => Linking.openURL(secret).catch(() => {})}>{secret}</Text>
+          <CopyButton value={secret} label="Copy PIN" />
+        </View>
+      )}
+      {!!voucher.serialNumber && voucher.serialNumber !== voucher.pin && <Text style={styles.rowLabel} selectable>Serial no: {voucher.serialNumber}</Text>}
+      {!!voucher.expiry && <Text style={styles.rowLabel}>Expires: {voucher.expiry}</Text>}
+      {!!voucher.deliveryNote && <Text style={styles.rowLabel}>{voucher.deliveryNote}</Text>}
+    </View>
+  );
+}
+
 /** One label/value line inside the modal body. */
 function Row({ label, value }) {
   const {
@@ -276,6 +320,7 @@ function TxBody({ item, showCost, pinOverride }) {
           </View>
         </View>
       )}
+      <VoucherPin item={item} />
       <Row label="Order ID" value={item.id} />
       <Row label="Created" value={formatDate(item.createdAt)} />
       <Row label="Updated" value={formatDate(item.updatedAt)} />

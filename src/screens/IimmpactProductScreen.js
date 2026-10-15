@@ -8,7 +8,7 @@ import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import HeaderDecor from '../components/HeaderDecor';
 import * as api from '../firebase/apiProviderService';
-import { purchaseRechargePin } from '../firebase/rechargePinService';
+import { purchaseRechargePin, waitForRechargePin } from '../firebase/rechargePinService';
 import DenominationGrid from '../components/DenominationGrid';
 import { denominationItems } from '../utils/denominations';
 import { useIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
@@ -121,6 +121,7 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
 
   const { catalog, error: loadError } = useIimmpactCatalog();
   const [voucher, setVoucher] = useState(null);
+  const [issuing, setIssuing] = useState('');
   // The receipt Share captures as a photo: the order just placed, or the voucher.
   const [shareCard, setShareCard] = useState(null);
   const captureRef = useRef(null);
@@ -361,7 +362,14 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
         setReviewing(false);
         setPendingPurchase(null);
         if (result?.pending) {
-          Alert.alert('Order accepted', 'Order ' + String(result.id || '') + ' was accepted and the voucher is being issued. It will appear in History once the provider releases it.', [{ text: 'OK', onPress: goBackOrHome }]);
+          // Wait for the provider to release the PIN rather than sending the
+          // customer to History for it.
+          setIssuing(String(result.id || ''));
+          try {
+            const issued = await waitForRechargePin(result.id);
+            if (issued) setVoucher({ ...result, ...issued, productName: issued.productName || purchase.productName });
+            else Alert.alert('Order accepted', 'Order ' + String(result.id || '') + ' was accepted and the voucher is still being issued. Open it in History and tap Show PIN once it is completed.', [{ text: 'OK', onPress: goBackOrHome }]);
+          } finally { setIssuing(''); }
         } else {
           setVoucher({ ...result, productName: result?.productName || purchase.productName });
         }
@@ -484,6 +492,13 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
       </LinearGradient>
 
       <ScrollView contentContainerStyle={st.body} keyboardShouldPersistTaps="handled">
+        {!!issuing && (
+          <View style={st.voucher}>
+            <ActivityIndicator />
+            <Text style={st.voucherTitle}>Issuing your voucher…</Text>
+            <Text style={st.muted}>Payment done. The PIN appears here as soon as the provider releases it. Order {issuing}</Text>
+          </View>
+        )}
         {!!voucher && (voucher.pin || voucher.deliveryLink || voucher.serialNumber) && (
           <View style={st.voucher}>
             <Text style={st.voucherTitle}>Voucher Ready</Text>
