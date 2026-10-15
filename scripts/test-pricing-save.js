@@ -55,7 +55,7 @@ const save = (key, value) => savePricingSettings.run({ auth: { uid: 'u1', token:
   await assert.rejects(save('commissionRules', { ...general, productz: {} }), /Unknown commission setting/);
 
   // The app's read-back check (src/firebase/apiProviderService.js).
-  const code = (await esbuild.build({ stdin: { contents: "export { commissionRulesMissing } from './src/firebase/apiProviderService.js';", resolveDir: path.join(__dirname, '..') },
+  const code = (await esbuild.build({ stdin: { contents: "export { commissionRulesMissing } from '../src/firebase/apiProviderService.js';", resolveDir: __dirname },
     bundle: true, format: 'cjs', write: false, logLevel: 'silent', external: ['firebase/*', '@react-native-async-storage/*', 'react-native', 'expo-*'],
     plugins: [{ name: 'stub', setup(b) { b.onResolve({ filter: /\.\/config$/ }, () => ({ path: 'config', namespace: 'stub' })); b.onLoad({ filter: /.*/, namespace: 'stub' }, () => ({ contents: 'export const functions={}, db={}, auth={};' })); } }],
   })).outputFiles[0].text;
