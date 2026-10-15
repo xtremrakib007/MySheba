@@ -6,7 +6,7 @@
 // order. The customer pays whichever is higher. The server keeps an identical
 // copy in functions/rateFloor.js; a test holds them together.
 
-export const RECHARGE_RATE_KEYS = { BD: 'rechargeBD', IN: 'rechargeIN', NP: 'rechargeNP', ID: 'rechargeID', PK: 'rechargePK', MM: 'rechargeMM', PH: 'rechargePH', KH: 'rechargeKH' };
+export const RECHARGE_RATE_KEYS = { BD: 'rechargeBD', IN: 'rechargeIN', NP: 'rechargeNP', ID: 'rechargeID', PK: 'rechargePK', MM: 'rechargeMM', PH: 'rechargePH', KH: 'rechargeKH', TH: 'rechargeTH' };
 
 /** Face amount in the destination currency, converted to MYR at MySheba's rate; 0 when no rate applies. */
 export function rateFloorMyr(face, country, rates) {

@@ -86,6 +86,7 @@ const RECHARGE_RATE_FIELDS = [
   { key: 'rechargeMM', label: '🇲🇲 Recharge/Internet - MMK' },
   { key: 'rechargePH', label: '🇵🇭 Recharge/Internet - PHP' },
   { key: 'rechargeKH', label: '🇰🇭 Recharge/Internet - KHR' },
+  { key: 'rechargeTH', label: '🇹🇭 Recharge/Internet - THB' },
 ];
 
 const PRICING_FIELDS = [

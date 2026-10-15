@@ -876,7 +876,7 @@ const PACKAGE_CHARGE_KINDS = { Internet: 'internet', 'Offer Packs': 'offerpacks'
  * Returns null for a package it cannot price, so the caller can fall back to
  * showing the catalogue price rather than a wrong one or a blank.
  */
-const QUOTE_RATE_KEYS = { BD: 'rechargeBD', IN: 'rechargeIN', NP: 'rechargeNP', ID: 'rechargeID', PK: 'rechargePK', MM: 'rechargeMM', PH: 'rechargePH', KH: 'rechargeKH' };
+const QUOTE_RATE_KEYS = { BD: 'rechargeBD', IN: 'rechargeIN', NP: 'rechargeNP', ID: 'rechargeID', PK: 'rechargePK', MM: 'rechargeMM', PH: 'rechargePH', KH: 'rechargeKH', TH: 'rechargeTH' };
 
 /**
  * The exchange rate the CHARGE would use for one country.

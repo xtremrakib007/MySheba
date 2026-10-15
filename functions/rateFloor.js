@@ -6,7 +6,7 @@
 // order. The customer pays whichever is higher. The app keeps an identical
 // copy in src/utils/rateFloor.js; a test holds them together.
 
-const RECHARGE_RATE_KEYS = { BD: 'rechargeBD', IN: 'rechargeIN', NP: 'rechargeNP', ID: 'rechargeID', PK: 'rechargePK', MM: 'rechargeMM', PH: 'rechargePH', KH: 'rechargeKH' };
+const RECHARGE_RATE_KEYS = { BD: 'rechargeBD', IN: 'rechargeIN', NP: 'rechargeNP', ID: 'rechargeID', PK: 'rechargePK', MM: 'rechargeMM', PH: 'rechargePH', KH: 'rechargeKH', TH: 'rechargeTH' };
 
 /** Face amount in the destination currency, converted to MYR at MySheba's rate; 0 when no rate applies. */
 function rateFloorMyr(face, country, rates) {
