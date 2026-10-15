@@ -16,6 +16,7 @@ import ConfirmReview, { formatMoney } from '../components/ConfirmReview';
 import { catalogCategories } from '../components/iimmpactTiles';
 import { isPinServed, treeCategoryIndex } from '../data/pinCategories';
 import { applyMarkup } from '../utils/markup';
+import { resolveCommission } from '../utils/commission';
 import { radius } from '../theme/theme';
 
 const norm = (v) => String(v || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
@@ -442,6 +443,15 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
     // with MySheba's markup on top.
     const providerSell = Number(pendingPurchase.sellAmount || 0);
     const sell = customerPrice(providerSell);
+    // What the server credits back once the order completes: the commission
+    // set for this product and role (functions/commissionService.js). It used
+    // to read 0 here whatever was configured.
+    const pinBuy = isPin(selectedProduct);
+    const earned = resolveCommission(pricing, {
+      service: pinBuy ? 'rechargePin' : 'iimmpact', amount: providerSell, role: String(profile?.role || 'customer'),
+      payload: { raw: { productCode: pendingPurchase.productCode || selectedProduct?.code } },
+    });
+    const commission = earned > 0 && earned < sell ? earned : 0;
     return <ConfirmReview
       title={'Confirm ' + (pendingPurchase.productName || 'Purchase')}
       details={[
@@ -453,12 +463,14 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
       ]}
       prices={[
         ['Selling / transaction amount', formatMoney(sell)],
-        ['Commission amount', formatMoney(0)],
+        ['Commission amount', commission > 0 ? '- ' + formatMoney(commission) : formatMoney(0)],
         ['Wallet balance before', formatMoney(balance, walletCurrency)],
-        ['Wallet balance after (estimated)', formatMoney(balance - sell, walletCurrency)],
+        ['Wallet balance after (estimated)', formatMoney(balance - sell + commission, walletCurrency)],
       ]}
       total={formatMoney(sell, walletCurrency)}
-      note="Final charges and provider results are validated by the server. Printed and shared receipts include customer-facing details only."
+      note={commission > 0
+        ? `${formatMoney(sell, walletCurrency)} is taken when you pay, and the ${formatMoney(commission)} commission is credited back to your wallet once the order completes.`
+        : 'Final charges and provider results are validated by the server. Printed and shared receipts include customer-facing details only.'}
       busy={busy}
       onEdit={() => { if (!busy) setReviewing(false); }}
       onConfirm={confirmBuy}
@@ -506,7 +518,7 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
             {!!voucher.pin && <Text selectable style={st.voucherPin}>{voucher.pin}</Text>}
             {!!voucher.serialNumber && voucher.serialNumber !== voucher.pin && <Text selectable style={st.muted}>Serial no: {voucher.serialNumber}</Text>}
             {!!voucher.deliveryLink && <Text selectable style={st.voucherLink} onPress={() => Linking.openURL(voucher.deliveryLink).catch(() => {})}>{voucher.deliveryLink}</Text>}
-            {!!voucher.expiry && <Text style={st.muted}>Expires: {voucher.expiry}</Text>}
+            {Number(voucher.commission) > 0 && <Text style={st.muted}>Commission {Number(voucher.commission).toFixed(2)} credited to your wallet.</Text>}{!!voucher.expiry && <Text style={st.muted}>Expires: {voucher.expiry}</Text>}
             {!!voucher.deliveryNote && <Text style={st.muted}>{voucher.deliveryNote}</Text>}
             <Text style={st.muted}>Keep this voucher private. Transaction {String(voucher.id || '')}</Text>
             <TouchableOpacity style={st.voucherShare} onPress={() => shareCardNow({ subtitle: 'Digital Voucher', fileName: 'MySheba-voucher-' + String(voucher.id || '').slice(0, 12), highlight: voucher.pin ? { label: 'PIN', value: voucher.pin } : null, footer: 'Keep this voucher private.', rows: [['Product', voucher.productName], ['Serial no', voucher.serialNumber && voucher.serialNumber !== voucher.pin ? voucher.serialNumber : ''], ['Link', voucher.deliveryLink || ''], ['Expires', voucher.expiry || ''], ['Transaction', String(voucher.id || '')]], html: receiptDocument({ subtitle: 'Digital Voucher', rowsHtml: receiptRows([['PIN', voucher.pin || ''], ...[['Product', voucher.productName], ['Serial no', voucher.serialNumber && voucher.serialNumber !== voucher.pin ? voucher.serialNumber : ''], ['Link', voucher.deliveryLink || ''], ['Expires', voucher.expiry || ''], ['Transaction', String(voucher.id || '')]]]), footer: 'Keep this voucher private.' }) })}>

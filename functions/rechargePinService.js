@@ -293,7 +293,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, ...eg
         apiExecution: { status: 'processing', providerId: api.providerId, providerName: api.providerName, responseId: api.responseId || null, message: api.message || null, providerSucceeded: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      return { id: txRef.id, pending: true, cost: walletCost, baseCostMyr: reserved.baseCostMyr, pin: null, operator, productCode: dispatchRaw.productCode, productName: displayName, country, amount: denomination, currency: walletFx.currency, fxRate: walletFx.sellRate };
+      return { id: txRef.id, pending: true, cost: walletCost, commission: walletCommission, baseCostMyr: reserved.baseCostMyr, pin: null, operator, productCode: dispatchRaw.productCode, productName: displayName, country, amount: denomination, currency: walletFx.currency, fxRate: walletFx.sellRate };
     }
     if (!voucherSecret) throw new HttpsError('unavailable', 'The Recharge PIN provider completed but no voucher PIN or delivery link could be recovered. Please contact support before retrying.');
     // A delivery link is not a PIN; it is shown as the link it is.
@@ -330,7 +330,7 @@ exports.purchaseRechargePin = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, ...eg
         console.error('Recharge PIN commission credit failed', txRef.id, commissionErr?.message || commissionErr);
       }
     }
-    return { id: txRef.id, cost: walletCost, baseCostMyr: reserved.baseCostMyr, pin: voucherPin, deliveryLink: api.deliveryLink || null, deliveryNote: api.deliveryNote || null, expiry: api.expiry || null, serialNumber: api.serialNumber || null, operator, productCode: dispatchRaw.productCode, subproductCode: dispatchRaw.subproductCode, productName: displayName, country, amount: denomination, currency: walletFx.currency, fxRate: walletFx.sellRate };
+    return { id: txRef.id, cost: walletCost, commission: walletCommission, baseCostMyr: reserved.baseCostMyr, pin: voucherPin, deliveryLink: api.deliveryLink || null, deliveryNote: api.deliveryNote || null, expiry: api.expiry || null, serialNumber: api.serialNumber || null, operator, productCode: dispatchRaw.productCode, subproductCode: dispatchRaw.subproductCode, productName: displayName, country, amount: denomination, currency: walletFx.currency, fxRate: walletFx.sellRate };
   } catch (e) {
     const unavailable = String(e?.code || '') === 'unavailable';
     if (unavailable || providerSucceeded) {

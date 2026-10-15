@@ -17,6 +17,7 @@ import { getIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
 import { denominationItems } from '../utils/denominations';
 import ConfirmReview, { formatMoney } from '../components/ConfirmReview';
 import { applyMarkup } from '../utils/markup';
+import { resolveCommission } from '../utils/commission';
 import { pinProducts, categorizePinProducts } from '../data/pinCategories';
 
 // Recharge PIN is currently a Malaysia-only product. Keep this list
@@ -246,6 +247,10 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
     const marked = priced.amount;
     // A set price for this role is the whole price, as the server charges it.
     const deduction = priced.fixedPrice ? marked : Math.round(marked * (Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1) * 100) / 100;
+    // The commission set for this voucher and role, credited back once the
+    // voucher is delivered - as functions/rechargePinService.js pays it.
+    const earned = resolveCommission(pricing, { service: 'rechargePin', amount: review.liveAmount, role, payload: { raw: { productCode: product?.code || '' } } });
+    const commission = earned > 0 && earned < deduction ? earned : 0;
     const walletCurrency = profile?.walletCurrency || 'MYR';
     const balance = Number(profile?.walletBalance ?? profile?.balance ?? 0);
     const categoryTitle = categorizedProducts.find((item) => item.id === selectedCategory)?.title || '';
@@ -261,11 +266,14 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
       ]}
       prices={[
         ['Selling / transaction amount', formatMoney(marked, review.currency)],
+        ['Commission amount', commission > 0 ? '- ' + formatMoney(commission) : formatMoney(0)],
         ['Wallet balance before', formatMoney(balance, walletCurrency)],
-        ['Wallet balance after (estimated)', formatMoney(balance - deduction, walletCurrency)],
+        ['Wallet balance after (estimated)', formatMoney(balance - deduction + commission, walletCurrency)],
       ]}
       total={formatMoney(deduction, walletCurrency)}
-      note="Tier discounts and the final charge are applied by the server. If the provider refuses the order, the amount is returned to your wallet."
+      note={commission > 0
+        ? `The ${formatMoney(commission)} commission is credited back to your wallet once the voucher is delivered. Tier discounts and the final charge are applied by the server; if the provider refuses the order, the amount is returned.`
+        : 'Tier discounts and the final charge are applied by the server. If the provider refuses the order, the amount is returned to your wallet.'}
       busy={busy}
       onEdit={() => { if (!busy) setReview(null); }}
       onConfirm={() => completePurchase(review.liveAmount)}
@@ -363,7 +371,7 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
         {!!voucher.pin && <Text selectable style={styles.pin}>{voucher.pin}</Text>}
         {!!voucher.serialNumber && voucher.serialNumber !== voucher.pin && <Text selectable style={styles.warning}>Serial no: {voucher.serialNumber}</Text>}
         {!!voucher.deliveryLink && <Text selectable style={styles.link} onPress={() => Linking.openURL(voucher.deliveryLink).catch(() => {})}>{voucher.deliveryLink}</Text>}
-        {!!voucher.expiry && <Text style={styles.warning}>Expires: {voucher.expiry}</Text>}{!!voucher.deliveryNote && <Text style={styles.warning}>{voucher.deliveryNote}</Text>}
+        {Number(voucher.commission) > 0 && <Text style={styles.warning}>Commission {Number(voucher.commission).toFixed(2)} credited to your wallet.</Text>}{!!voucher.expiry && <Text style={styles.warning}>Expires: {voucher.expiry}</Text>}{!!voucher.deliveryNote && <Text style={styles.warning}>{voucher.deliveryNote}</Text>}
         <Text style={styles.warning}>Keep this voucher private. It is shown only after successful provider fulfillment.</Text>
         <TouchableOpacity onPress={printVoucher} style={styles.print}><Text style={styles.printText}>🖨 Print Voucher</Text></TouchableOpacity>
       </View>}
