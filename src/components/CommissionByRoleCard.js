@@ -120,7 +120,10 @@ export default function CommissionByRoleCard({ pricing }) {
         await authService.reauthenticate(pin);
         await auth.currentUser?.getIdToken(true);
       }
-      await apiProviderService.saveCommissionRules({ ...DEFAULT_RULES, ...saved, byRole, products });
+      // Only the fields the server accepts, so an old leftover field in the
+      // saved document can never make the save fail.
+      const generalRules = Object.fromEntries(Object.keys(DEFAULT_RULES).map((k) => [k, saved[k] !== undefined ? saved[k] : DEFAULT_RULES[k]]));
+      await apiProviderService.saveCommissionRules({ ...generalRules, byRole, products });
       setNeedPin(false); setPin('');
       setMessage('Saved. New commissions apply to the next order.');
     } catch (e) {

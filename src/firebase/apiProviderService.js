@@ -336,11 +336,31 @@ export async function listSuccessTopUpCatalogForAdmin({ operator, operatorName, 
 const pricingSaveFn = httpsCallable(functions, 'savePricingSettings');
 const costCheckFn = httpsCallable(functions, 'getIimmpactCostCheck');
 
-/** Superadmin: replaces MySheba's markup rules (settings/pricing.markups). */
-/** Superadmin: the commission rules, including per-role ones (byRole). */
+/**
+ * Superadmin: the commission rules, per role (byRole) and per product
+ * (products). Read back after saving: a server deployed before those fields
+ * existed answered "ok" while silently dropping them, so the screen said
+ * Saved and the values were gone the next time it opened.
+ */
 export async function saveCommissionRules(rules) {
   await pricingSaveFn({ key: 'commissionRules', value: rules });
+  const snap = await getDoc(doc(db, 'settings', 'pricing'));
+  const stored = (snap.exists() && snap.data()?.commissionRules) || {};
+  const missing = commissionRulesMissing(rules, stored);
+  if (missing) {
+    throw new Error(`The server did not keep the ${missing}. Its Cloud Functions are out of date: deploy them (firebase deploy --only functions), then save again.`);
+  }
 }
+
+/** What of `sent` (byRole / products) is absent from `stored`, or '' when all of it was kept. */
+export function commissionRulesMissing(sent, stored) {
+  const count = (m) => Object.values(m || {}).reduce((n, byKey) => n + Object.keys(byKey || {}).length, 0);
+  if (count(sent?.byRole) !== count(stored?.byRole)) return 'commissions by role';
+  if (count(sent?.products) !== count(stored?.products)) return 'commissions by product';
+  return '';
+}
+
+/** Superadmin: replaces MySheba's markup rules (settings/pricing.markups). */
 
 export async function saveMarkups(markups) {
   await pricingSaveFn({ key: 'markups', value: markups });
