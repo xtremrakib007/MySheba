@@ -11,7 +11,7 @@ import * as topupService from '../firebase/topupService';
 // is a transfer down from it - so a deposit names the bank, the bank's own
 // reference and a receipt, and each reference can be used once. The server
 // (functions/superadminDepositService.js) checks all of that, plus a sign-in
-// from the last 15 minutes, which is what the PIN box is for.
+// from the last 15 minutes, which is what the password box is for.
 const MAX = 50000;
 
 export default function SuperadminDepositModal({ visible, onClose }) {
@@ -63,7 +63,7 @@ export default function SuperadminDepositModal({ visible, onClose }) {
       const msg = String(e?.message || 'Could not record this deposit.');
       if (/recent authentication/i.test(msg)) {
         setNeedPin(true);
-        setMessage('For your security, enter your PIN and tap Record again.');
+        setMessage('For your security, enter the password you sign in with (not your transaction PIN) and tap Record again.');
       } else {
         setMessage(msg);
       }
@@ -105,7 +105,7 @@ export default function SuperadminDepositModal({ visible, onClose }) {
                 </TouchableOpacity>
                 {!!receiptUri && <Image source={{ uri: receiptUri }} style={styles.preview} resizeMode="contain" />}
                 {!!needPin && (
-                  <TextInput style={styles.input} value={pin} onChangeText={setPin} placeholder="Your PIN" secureTextEntry keyboardType="number-pad" />
+                  <TextInput style={styles.input} value={pin} onChangeText={setPin} placeholder="Your login password" secureTextEntry autoCapitalize="none" autoCorrect={false} textContentType="password" autoComplete="password" />
                 )}
                 {!!message && <Text style={styles.message}>{message}</Text>}
                 <TouchableOpacity style={[styles.primary, (!valid || busy) && styles.dim]} onPress={submit} disabled={!valid || busy}>

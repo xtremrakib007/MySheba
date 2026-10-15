@@ -109,7 +109,7 @@ export default function CommissionByRoleCard({ pricing }) {
       setMessage('Saved. New commissions apply to the next order.');
     } catch (e) {
       const msg = String(e?.message || 'Could not save commissions.');
-      if (/recent authentication/i.test(msg)) { setNeedPin(true); setMessage('For your security, enter your PIN and tap Save again.'); }
+      if (/recent authentication/i.test(msg)) { setNeedPin(true); setMessage('For your security, enter the password you sign in with (not your transaction PIN) and tap Save again.'); }
       else setMessage(msg);
     } finally { setSaving(false); }
   };
@@ -167,7 +167,7 @@ export default function CommissionByRoleCard({ pricing }) {
       <ProductPicker catalog={catalog} taken={productRows.map((r) => r.code)}
         onPick={(code) => setProductRows((rows) => (rows.some((r) => r.code === code) ? rows : [...rows, { code, type: 'percent', roles: {} }]))} />
 
-      {!!needPin && <TextInput style={[styles.input, styles.pin]} value={pin} onChangeText={setPin} placeholder="Your PIN" secureTextEntry keyboardType="number-pad" />}
+      {!!needPin && <TextInput style={[styles.input, styles.pin]} value={pin} onChangeText={setPin} placeholder="Your login password" secureTextEntry autoCapitalize="none" autoCorrect={false} textContentType="password" autoComplete="password" />}
       {!!message && <Text style={styles.message}>{message}</Text>}
       <TouchableOpacity style={[styles.save, saving && styles.dim]} onPress={save} disabled={saving}>
         {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>Save commissions</Text>}
