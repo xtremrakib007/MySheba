@@ -70,6 +70,15 @@ export function resolveCommission(settings, { service, amount, role, payload } =
   const override = catalogOverride(settings, payload, roleKey);
   const overrideRule = override?.commissions?.[roleKey];
   if (overrideRule) return Math.round(ruleValue(overrideRule, value) * 100) / 100;
+  // Per product and role (commissionRules.products.<code>.<role>, set in the
+  // superadmin app): one operator or product, e.g. Digi (DI), earns its own
+  // commission. The code is the IIMMPACT product code the markup uses too.
+  const raw = payload?.raw || {};
+  const code = String(raw.productCode || raw.operatorCode || payload?.productCode || '').trim();
+  const productRule = code && rules.products && rules.products[code] && rules.products[code][roleKey];
+  if (productRule && typeof productRule === 'object' && service !== 'remittance' && service !== 'mobilebanking') {
+    return Math.round(ruleValue(productRule, value) * 100) / 100;
+  }
   // Per role (commissionRules.byRole.<role>.<service>, set in the superadmin
   // app). Rules used to be one value for everyone, so a customer earned the
   // same commission as a retailer; a customer now earns nothing on these

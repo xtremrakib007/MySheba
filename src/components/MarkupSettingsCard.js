@@ -328,7 +328,7 @@ function searchProducts(catalog, query, limit = 8) {
 }
 
 // "+ Add product": search the IIMMPACT catalogue and tap a product.
-function ProductPicker({ catalog, taken, onPick }) {
+export function ProductPicker({ catalog, taken, onPick }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const matches = useMemo(() => searchProducts(catalog, query), [catalog, query]);

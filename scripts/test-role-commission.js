@@ -62,4 +62,46 @@ for (const bad of [
 ]) {
   assert.throws(() => cleanCommissionRules({ ...full, byRole: bad }), `accepted ${JSON.stringify(bad)}`);
 }
+
+// Per product (commissionRules.products.<code>.<role>): beats the role table,
+// covers every service but payouts, and is the only commission on vouchers.
+const withProducts = { commissionRules: { ...withRoles.commissionRules, products: {
+  DI: { retail: { type: 'percent', value: 3 }, customer: { type: 'percent', value: 0.2 } },
+  TNB: { dealer: { type: 'fixed', value: 0.5 } },
+  GOOGLEPLAY: { retail: { type: 'fixed', value: 0.4 } },
+} } };
+const pay = (code) => ({ raw: { productCode: code } });
+const productCases = [
+  ['retail', 'recharge', 100, pay('DI'), 3],
+  ['customer', 'recharge', 100, pay('DI'), 0.2],
+  ['dealer', 'recharge', 100, pay('DI'), 2],          // no DI rule for dealer: general
+  ['retail', 'recharge', 100, pay('CEL'), 1.5],       // another operator: role table
+  ['dealer', 'billpayment', 80, pay('TNB'), 0.5],
+  ['retail', 'rechargePin', 50, pay('GOOGLEPLAY'), 0.4],
+  ['customer', 'rechargePin', 50, pay('GOOGLEPLAY'), 0],
+  ['retail', 'rechargePin', 50, pay('OTHER'), 0],     // vouchers: product rules only
+];
+for (const [role, service, amount, payload, want] of productCases) {
+  const s = server.resolveCommission(withProducts, { service, amount, role, payload });
+  const c = client.resolveCommission(withProducts, { service, amount, role, payload });
+  assert.strictEqual(s, want, `server ${role} ${service} ${payload.raw.productCode}: ${s} != ${want}`);
+  assert.strictEqual(c, s, `app and server disagree for ${role} ${service} ${payload.raw.productCode}`);
+}
+// A product rule never touches a payout (remittance keeps its own tiers).
+assert.strictEqual(server.resolveCommission(withProducts, { service: 'remittance', amount: 500, role: 'retail', payload: pay('DI') }),
+  server.resolveCommission(withRoles, { service: 'remittance', amount: 500, role: 'retail', payload: pay('DI') }));
+// operatorCode works when productCode is absent (Internet sends both).
+assert.strictEqual(server.resolveCommission(withProducts, { service: 'internet', amount: 100, role: 'retail', payload: { raw: { operatorCode: 'DI' } } }), 3);
+
+const cleanedProducts = cleanCommissionRules({ ...full, products: withProducts.commissionRules.products });
+assert.deepStrictEqual(cleanedProducts.products.TNB, { dealer: { type: 'fixed', value: 0.5 } });
+for (const bad of [
+  { 'bad code!': { retail: { type: 'percent', value: 1 } } },
+  { DI: { superadmin: { type: 'percent', value: 1 } } },
+  { DI: { retail: { type: 'percent', value: 101 } } },
+  { DI: { retail: { type: 'bonus', value: 1 } } },
+  { DI: [] },
+]) {
+  assert.throws(() => cleanCommissionRules({ ...full, products: bad }), `accepted ${JSON.stringify(bad)}`);
+}
 console.log('role commission: ok');
