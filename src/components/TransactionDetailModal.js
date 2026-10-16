@@ -1,6 +1,5 @@
 import React, { useRef, useState } from 'react';
 import { Modal, View, Text, TouchableOpacity, ScrollView, Linking, Image, StyleSheet, ActivityIndicator } from 'react-native';
-import * as Print from 'expo-print';
 import { showAlert } from '../utils/appAlert';
 import { radius } from '../theme/theme';
 import { useTheme } from "../theme/ThemeContext";
@@ -14,6 +13,7 @@ import { receiptDocument, receiptRows, imageBlock, highlightBlock } from '../uti
 import { ReceiptCapture, shareReceiptImage } from './ReceiptImage';
 import { statusBadge } from '../theme/statusBadges';
 import { txFailureReason } from '../utils/txFailure';
+import { printHtml } from '../utils/printService';
 import { auth } from '../firebase/config';
 import { getRechargePin } from '../firebase/rechargePinService';
 
@@ -487,7 +487,7 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
                 <TouchableOpacity style={styles.printBtn} onPress={async () => {
                   try {
                     // Customer-safe receipts: face value only, never cost or commission.
-                    await Print.printAsync({ html: receiptHtmlFrom(receiptData) });
+                    await printHtml(receiptHtmlFrom(receiptData));
                   } catch (err) { showAlert('Printer', err?.message || 'Printing is not available on this device.'); }
                 }}>
                   <Text style={styles.printText}>🖨 Print</Text>

@@ -10,6 +10,8 @@
 import { Platform } from 'react-native';
 import * as Print from 'expo-print';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getThermalPrinter, printBytes } from './bluetoothPrinter';
+import { htmlToReceipt, receiptToEscPos, PAPER_COLUMNS } from './escpos';
 
 const STORAGE_KEY = 'mysheba:defaultPrinter';
 
@@ -47,10 +49,17 @@ export async function selectDefaultPrinter() {
 }
 
 /**
- * Prints HTML through the device. Uses the remembered printer when there is
- * one; otherwise the OS shows its own print dialog.
+ * Prints HTML through the device. A Bluetooth thermal printer chosen in the
+ * Printer screen gets the receipt directly, laid out for its paper
+ * (utils/escpos.js); otherwise the remembered printer (iOS) or the OS print
+ * dialog is used.
  */
 export async function printHtml(html) {
+  const thermal = await getThermalPrinter();
+  if (thermal) {
+    await printBytes(thermal, receiptToEscPos(htmlToReceipt(html), { columns: PAPER_COLUMNS[thermal.paper] || PAPER_COLUMNS[58] }));
+    return;
+  }
   const printer = canSelectPrinter ? await getDefaultPrinter() : null;
   await Print.printAsync(printer ? { html, printerUrl: printer.url } : { html });
 }
