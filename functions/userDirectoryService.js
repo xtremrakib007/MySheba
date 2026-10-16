@@ -158,11 +158,14 @@ exports.listUserDirectory = onCall({ enforceAppCheck: false }, async (request) =
     };
   }
 
+  // Every role this caller can create or manage (functions/userManagement.js
+  // ROLE_PERMISSIONS). Retail, support and finance were missing, so those
+  // accounts existed but never appeared in the superadmin's or admin's list.
   let allowedRoles;
   if (caller.role === 'superadmin') {
-    allowedRoles = ['admin', 'dealer', 'reseller', 'customer'];
+    allowedRoles = ['admin', 'dealer', 'reseller', 'retail', 'support', 'finance', 'customer'];
   } else {
-    allowedRoles = ['dealer', 'reseller', 'customer'];
+    allowedRoles = ['dealer', 'reseller', 'retail', 'support', 'finance', 'customer'];
   }
 
   if (type !== 'managed' && type !== 'unassigned') {

@@ -199,7 +199,7 @@ export default function UserManagementScreen() {
   const [assignedResellerId, setAssignedResellerId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [expanded, setExpanded] = useState({ unassigned: false, admins: false, dealers: false, resellers: false, customers: false });
+  const [expanded, setExpanded] = useState({ unassigned: false, admins: false, dealers: false, resellers: false, retail: false, customers: false });
   const toggleSection = (key) => setExpanded((e) => ({ ...e, [key]: !e[key] }));
   const isSearching = searchTerm.trim().length > 0;
   const isExpanded = (key) => isSearching || expanded[key];
@@ -410,6 +410,7 @@ export default function UserManagementScreen() {
   const adminList = visibleUsers.filter((u) => u.role === 'admin' && matchesSearch(u, term));
   const dealerList = visibleUsers.filter((u) => u.role === 'dealer' && matchesSearch(u, term));
   const resellerList = visibleUsers.filter((u) => u.role === 'reseller' && matchesSearch(u, term));
+  const retailList = visibleUsers.filter((u) => u.role === 'retail' && matchesSearch(u, term));
   // Without a section of their own, a support or finance account appeared in
   // no list at all - created, and then invisible to the person who created it.
   const staffList = visibleUsers.filter((u) => (u.role === 'support' || u.role === 'finance') && matchesSearch(u, term));
@@ -572,6 +573,18 @@ export default function UserManagementScreen() {
               emptyText={isSearching ? 'No matches in this section.' : 'No resellers yet.'}
             >
               {resellerList.map((u) => <UserCard key={u.id} u={u} onManage={setManageTarget} actionCount={actionsFor(u).length} />)}
+            </Section>
+
+            {/* Retail accounts had no section, so they appeared nowhere. */}
+            <Section
+              title="Retail"
+              count={retailList.length}
+              expanded={isExpanded('retail')}
+              onToggle={() => toggleSection('retail')}
+              isEmpty={retailList.length === 0}
+              emptyText={isSearching ? 'No matches in this section.' : 'No retail accounts yet.'}
+            >
+              {retailList.map((u) => <UserCard key={u.id} u={u} onManage={setManageTarget} actionCount={actionsFor(u).length} />)}
             </Section>
 
             <Section
