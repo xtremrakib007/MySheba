@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
+import { useTheme } from '../theme/ThemeContext';
 import { auth } from '../firebase/config';
 import * as authService from '../firebase/authService';
 import * as apiProviderService from '../firebase/apiProviderService';
@@ -42,6 +43,7 @@ const countryName = (cc) => {
 const money = (n, currency = 'MYR') => (Number.isFinite(Number(n)) ? `${currency} ${Number(n).toFixed(2)}` : '-');
 
 export default function MarkupSettingsCard({ pricing }) {
+  const styles = useStyles();
   const saved = pricing?.markups || {};
   const [services, setServices] = useState({});
   const [countries, setCountries] = useState([]);
@@ -235,6 +237,7 @@ export default function MarkupSettingsCard({ pricing }) {
 // What IIMMPACT really charges for one product: the catalogue's own rate
 // against the cost it recorded on MySheba's recent orders.
 function CostCheck({ pricing, draft, catalog }) {
+  const styles = useStyles();
   const [query, setQuery] = useState('');
   const [product, setProduct] = useState(null);
   const [amount, setAmount] = useState('');
@@ -329,6 +332,7 @@ function searchProducts(catalog, query, limit = 8) {
 
 // "+ Add product": search the IIMMPACT catalogue and tap a product.
 export function ProductPicker({ catalog, taken, onPick }) {
+  const styles = useStyles();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const matches = useMemo(() => searchProducts(catalog, query), [catalog, query]);
@@ -364,6 +368,7 @@ export function ProductPicker({ catalog, taken, onPick }) {
 
 // "+ Add country rule": tap a service, then a country.
 function CountryPicker({ onPick }) {
+  const styles = useStyles();
   const [open, setOpen] = useState(false);
   const [service, setService] = useState('recharge');
   if (!open) {
@@ -399,6 +404,7 @@ function CountryPicker({ onPick }) {
 }
 
 function Line({ label, value, strong, warn }) {
+  const styles = useStyles();
   return (
     <View style={styles.line}>
       <Text style={styles.lineLabel}>{label}</Text>
@@ -407,50 +413,56 @@ function Line({ label, value, strong, warn }) {
   );
 }
 
-const styles = StyleSheet.create({
-  card: { backgroundColor: '#fff', borderRadius: 14, padding: 14, marginTop: 12 },
-  cardTitle: { fontSize: 16, fontWeight: '800', marginBottom: 6 },
-  hint: { fontSize: 12, opacity: 0.7, lineHeight: 18, marginBottom: 8 },
-  section: { fontSize: 13, fontWeight: '800', marginTop: 14, marginBottom: 4 },
+// Colours from the app theme, so the card reads in dark mode too.
+const createStyles = (c) => StyleSheet.create({
+  card: { backgroundColor: c.card, borderRadius: 14, padding: 14, marginTop: 12 },
+  cardTitle: { fontSize: 16, fontWeight: '800', marginBottom: 6, color: c.text },
+  hint: { fontSize: 12, opacity: 0.7, lineHeight: 18, marginBottom: 8, color: c.text },
+  section: { fontSize: 13, fontWeight: '800', marginTop: 14, marginBottom: 4, color: c.text },
   headRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 },
-  headText: { fontSize: 11, fontWeight: '800', opacity: 0.6 },
+  headText: { fontSize: 11, fontWeight: '800', opacity: 0.6, color: c.text },
   colHead: { width: 64, textAlign: 'center' },
   ruleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 },
-  serviceLabel: { flex: 1, fontSize: 12, fontWeight: '600' },
-  input: { width: 64, borderWidth: 1, borderColor: '#d6dde5', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, fontSize: 13 },
+  serviceLabel: { flex: 1, fontSize: 12, fontWeight: '600', color: c.text },
+  input: { width: 64, borderWidth: 1, borderColor: c.border, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, fontSize: 13, color: c.text, backgroundColor: c.inputBg },
   wide: { width: '100%', marginBottom: 4 },
   pinInput: { width: '100%', marginTop: 10 },
-  ruleLabel: { fontSize: 12, fontWeight: '700' },
-  priceBox: { borderWidth: 1, borderColor: '#eef2f6', borderRadius: 10, padding: 8, marginVertical: 4 },
-  priceAt: { fontSize: 11, fontWeight: '700', opacity: 0.6 },
+  ruleLabel: { fontSize: 12, fontWeight: '700', color: c.text },
+  priceBox: { borderWidth: 1, borderColor: c.divider, borderRadius: 10, padding: 8, marginVertical: 4 },
+  priceAt: { fontSize: 11, fontWeight: '700', opacity: 0.6, color: c.text },
   roleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
   roleCell: { alignItems: 'center' },
-  roleLabel: { fontSize: 10.5, fontWeight: '700', opacity: 0.7, marginBottom: 2 },
+  roleLabel: { fontSize: 10.5, fontWeight: '700', opacity: 0.7, marginBottom: 2, color: c.text },
   roleInput: { width: 58 },
-  pickerBox: { borderWidth: 1, borderColor: '#eef2f6', borderRadius: 10, padding: 10, marginVertical: 6 },
-  pickerLabel: { fontSize: 11, fontWeight: '800', opacity: 0.6, marginTop: 2 },
-  cancelText: { color: '#4a5a6a', fontWeight: '700', fontSize: 12, paddingTop: 8 },
+  pickerBox: { borderWidth: 1, borderColor: c.divider, borderRadius: 10, padding: 10, marginVertical: 6 },
+  pickerLabel: { fontSize: 11, fontWeight: '800', opacity: 0.6, marginTop: 2, color: c.text },
+  cancelText: { color: c.textSecondary, fontWeight: '700', fontSize: 12, paddingTop: 8 },
   removeBtn: { paddingHorizontal: 6, paddingVertical: 4 },
   removeText: { color: '#c0392b', fontWeight: '800' },
   addText: { color: '#0E7A79', fontWeight: '800', fontSize: 12, paddingVertical: 6 },
-  message: { fontSize: 12, color: '#8a6d00', marginTop: 8 },
+  message: { fontSize: 12, color: c.textSecondary, marginTop: 8 },
   saveBtn: { backgroundColor: '#0E7A79', borderRadius: 10, paddingVertical: 11, alignItems: 'center', marginTop: 10 },
   checkBtn: { marginTop: 0, paddingHorizontal: 18 },
   saveText: { color: '#fff', fontWeight: '800' },
   dim: { opacity: 0.5 },
-  costBox: { marginTop: 16, borderTopWidth: 1, borderTopColor: '#eef2f6', paddingTop: 4 },
-  match: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#eef2f6' },
-  matchText: { fontSize: 13, fontWeight: '600' },
+  costBox: { marginTop: 16, borderTopWidth: 1, borderTopColor: c.divider, paddingTop: 4 },
+  match: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: c.divider },
+  matchText: { fontSize: 13, fontWeight: '600', color: c.text },
   dimText: { opacity: 0.6, fontWeight: '400' },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 6 },
-  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: '#d6dde5' },
+  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: c.border },
   chipActive: { backgroundColor: '#0E7A79', borderColor: '#0E7A79' },
-  chipText: { fontSize: 12, fontWeight: '700', color: '#4a5a6a' },
+  chipText: { fontSize: 12, fontWeight: '700', color: c.textSecondary },
   chipTextActive: { color: '#fff' },
-  line: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: '#f3f5f8' },
-  lineLabel: { flex: 1, fontSize: 12, opacity: 0.75 },
-  lineValue: { fontSize: 12, fontWeight: '600', flexShrink: 1, textAlign: 'right' },
+  line: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: c.divider },
+  lineLabel: { flex: 1, fontSize: 12, opacity: 0.75, color: c.text },
+  lineValue: { fontSize: 12, fontWeight: '600', flexShrink: 1, textAlign: 'right', color: c.text },
   strong: { fontWeight: '800' },
   warn: { color: '#c0392b' },
-  recentText: { fontSize: 11, opacity: 0.75, paddingVertical: 2 },
+  recentText: { fontSize: 11, opacity: 0.75, paddingVertical: 2, color: c.text },
 });
+function useStyles() {
+  const { colors } = useTheme();
+  return useMemo(() => createStyles(colors), [colors]);
+}
+

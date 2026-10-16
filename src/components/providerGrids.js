@@ -60,6 +60,11 @@ function mobileTiles() {
     // Starts at the country: the destination is the first thing it asks.
     // Malaysia is not a destination here - it is Prepaid Reload.
     { key: 'mobile_international', name: 'International Reload', art: 'photoRemittance', kind: 'seededService', service: 'recharge', seed: { internationalOnly: true }, startStep: 0 },
+    // Internet packages for a number abroad - Bangladesh (Success TopUp) and
+    // the rest. The Internet tile above is Malaysia's; without this a user in
+    // Malaysia had no way to buy a Bangladeshi package once the old Internet
+    // Packages tile gave way to these.
+    { key: 'mobile_international_internet', name: 'International Internet', art: 'photoInternet', kind: 'seededService', service: 'internet', seed: { internationalOnly: true }, startStep: 0 },
   ];
 }
 
@@ -213,7 +218,8 @@ export function providerHomeTiles({ country }) {
   const provider = providerFor(country);
   const groups = provider === SUCCESS_TOPUP ? successTopUpGroupList() : MY_GROUPS;
   return groups.flatMap((group) => {
-    // Mobile's four (Prepaid Reload, PIN, Internet, International Reload)
+    // Mobile's five (Prepaid Reload, PIN, Internet, International Reload,
+    // International Internet)
     // sit on the home page itself rather than one tap away inside a Mobile
     // tile. parentKey keeps the superadmin's grid switch for Mobile in force
     // over all four.

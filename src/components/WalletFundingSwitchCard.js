@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, Switch, Alert, StyleSheet } from 'react-native';
+import { useTheme } from '../theme/ThemeContext';
 import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 
@@ -16,6 +17,7 @@ const POLICY_VERSION = 'MY-LAUNCH-WALLET-COMPLIANCE-1.0';
 const REF = () => doc(db, 'settings', 'walletCompliance');
 
 export default function WalletFundingSwitchCard() {
+  const styles = useStyles();
   const [policy, setPolicy] = useState({ partnerConfigured: false, publicFundingEnabled: false, p2pEnabled: true });
   const [saving, setSaving] = useState(false);
 
@@ -95,13 +97,19 @@ export default function WalletFundingSwitchCard() {
   );
 }
 
-const styles = StyleSheet.create({
-  card: { backgroundColor: '#fff', borderRadius: 14, padding: 14, marginTop: 12 },
-  title: { fontSize: 16, fontWeight: '800', marginBottom: 4 },
-  status: { fontSize: 12.5, fontWeight: '800', marginBottom: 6 },
-  hint: { fontSize: 12, opacity: 0.7, lineHeight: 18, marginBottom: 8 },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#eef2f6' },
-  label: { flex: 1, fontSize: 13, fontWeight: '600' },
+// Colours from the app theme, so the card reads in dark mode too.
+const createStyles = (c) => StyleSheet.create({
+  card: { backgroundColor: c.card, borderRadius: 14, padding: 14, marginTop: 12 },
+  title: { fontSize: 16, fontWeight: '800', marginBottom: 4, color: c.text },
+  status: { fontSize: 12.5, fontWeight: '800', marginBottom: 6, color: c.text },
+  hint: { fontSize: 12, opacity: 0.7, lineHeight: 18, marginBottom: 8, color: c.text },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: c.divider },
+  label: { flex: 1, fontSize: 13, fontWeight: '600', color: c.text },
   off: { color: '#b3261e', fontWeight: '800', fontSize: 12.5, paddingTop: 8 },
   dim: { opacity: 0.4 },
 });
+function useStyles() {
+  const { colors } = useTheme();
+  return useMemo(() => createStyles(colors), [colors]);
+}
+
