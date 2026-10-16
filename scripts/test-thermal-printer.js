@@ -63,4 +63,27 @@ for (const f of ['src/components/TransactionDetailModal.js', 'src/screens/Rechar
 const base = JSON.parse(fs.readFileSync(path.join(ROOT, 'app.base.json'), 'utf8')).expo.android;
 assert.ok(base.permissions.includes('android.permission.BLUETOOTH_CONNECT'));
 for (const p of ['ACCESS_FINE_LOCATION', 'BLUETOOTH_SCAN']) assert.ok(base.blockedPermissions.includes('android.permission.' + p), p + ' is not requested');
+// Receipts written without a table: remittance (<span>label</span><b>value</b>)
+// and the invoice (the same, plus class="label"/"value" blocks).
+const remit = escpos.htmlToReceipt('<div class="meta"><div><span>Transaction ID</span><b>abc123</b></div><div><span>PIN</span><b class="pin">4821</b></div></div><h2>SENDER DETAILS</h2><div class="row"><span>Senders Name</span><b>Karim</b></div>');
+assert.deepStrictEqual(remit.lines.filter((l) => l.type === 'row').map((l) => [l.label, l.value]), [['Transaction ID', 'abc123'], ['PIN', '4821'], ['Senders Name', 'Karim']]);
+const remitBytes = String.fromCharCode(...escpos.receiptToEscPos(remit, { columns: 32 }));
+assert.ok(/\x1d!\x014821/.test(remitBytes), 'a collection PIN prints large');
+assert.ok(/\x1bE\x01SENDER DETAILS/.test(remitBytes), 'a heading prints bold');
+const invoice = escpos.htmlToReceipt(require('../functions/invoiceDocument').renderInvoiceHtml({ number: 'INV-1', amount: 350, currency: 'MYR', kind: 'expense', status: 'approved' }));
+assert.ok(invoice.lines.some((l) => l.type === 'row' && l.label === 'Invoice' && l.value === 'INV-1'), 'invoice number as a row');
+
+// Every receipt screen prints through printService (so the thermal printer gets it).
+const uses = (f, re) => re.test(fs.readFileSync(path.join(ROOT, f), 'utf8'));
+for (const [f, re] of [
+  ['src/components/TransferReceiptModal.js', /printHtml\(/],
+  ['src/components/RemittanceReceipt.js', /printHtml\(/],
+  ['src/components/ResultModal.js', /printTransactionReceipt\(/],
+  ['src/components/TransactionDetailModal.js', /printHtml\(receiptHtmlFrom/],
+  ['src/components/TransactionDetailModal.js', /printVoucher\(/],
+  ['src/screens/IimmpactProductScreen.js', /printVoucher\(\{ \.\.\.voucher/],
+  ['src/screens/IimmpactProductScreen.js', /printTransactionReceipt\(/],
+  ['src/screens/RechargePinScreen.js', /printVoucherSlip\(/],
+  ['src/screens/InvoicesScreen.js', /printHtml\(/],
+]) assert.ok(uses(f, re), f + ' prints through printService');
 console.log('thermal printer: ok');

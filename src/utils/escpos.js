@@ -57,6 +57,11 @@ export function htmlToReceipt(html) {
     // thermal slip; its heading goes with it rather than standing alone.
     .replace(/<div[^>]*>\s*<b>[^<]*<\/b>\s*<br\s*\/?>\s*<img[^>]*>\s*<\/div>/gi, '')
     .replace(/<img[^>]*>/gi, '');
+  const asRow = (label, value) => `\n\u0001${stripTags(label)}\u0002${stripTags(value)}\n`;
+  // Label/value pairs written without a table: <span>Label</span><b>Value</b>
+  // (remittance receipt, invoice) and class="label" / class="value" blocks.
+  s = s.replace(/<span\b[^>]*>([^<]*)<\/span>\s*<b\b[^>]*>([^<]*)<\/b>/gi, (_, label, value) => asRow(label, value));
+  s = s.replace(/<div class="label">([^<]*)<\/div>\s*<div class="value">([^<]*)<\/div>/gi, (_, label, value) => asRow(label, value));
   // Table rows become one marked line each.
   s = s.replace(/<tr[^>]*>([\s\S]*?)<\/tr>/gi, (_, inner) => {
     const cells = [];
@@ -128,7 +133,11 @@ export function receiptToEscPos(receipt, { columns = PAPER_COLUMNS[58] } = {}) {
       const label = toAscii(line.label);
       const value = toAscii(line.value);
       align(0);
-      if (label.length + 1 + value.length <= columns) {
+      if (/\bpin\b/i.test(label) && value && value !== '-' && value.length <= columns) {
+        // A PIN is what the slip is for: its own large line.
+        align(1); raw(label);
+        bold(true); size(0x01); raw(value); size(0); bold(false);
+      } else if (label.length + 1 + value.length <= columns) {
         raw(label + ' '.repeat(columns - label.length - value.length) + value);
       } else {
         bold(true); for (const l of wrap(label, columns)) raw(l); bold(false);
@@ -139,8 +148,11 @@ export function receiptToEscPos(receipt, { columns = PAPER_COLUMNS[58] } = {}) {
       for (const l of wrap(line.text, columns)) raw(l);
       size(0); bold(false);
     } else {
-      align(1);
+      // A heading in capitals (SENDER DETAILS) prints bold.
+      const heading = /[A-Z]/.test(line.text) && line.text === line.text.toUpperCase();
+      align(1); if (heading) bold(true);
       for (const l of wrap(line.text, columns)) raw(l);
+      if (heading) bold(false);
     }
   }
   align(1); rule();

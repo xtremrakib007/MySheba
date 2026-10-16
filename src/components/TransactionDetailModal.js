@@ -13,7 +13,7 @@ import { receiptDocument, receiptRows, imageBlock, highlightBlock } from '../uti
 import { ReceiptCapture, shareReceiptImage } from './ReceiptImage';
 import { statusBadge } from '../theme/statusBadges';
 import { txFailureReason } from '../utils/txFailure';
-import { printHtml } from '../utils/printService';
+import { printHtml, printVoucher } from '../utils/printService';
 import { auth } from '../firebase/config';
 import { getRechargePin } from '../firebase/rechargePinService';
 
@@ -187,6 +187,9 @@ function VoucherPin({ item }) {
       {!!voucher.serialNumber && voucher.serialNumber !== voucher.pin && <Text style={styles.rowLabel} selectable>Serial no: {voucher.serialNumber}</Text>}
       {!!voucher.expiry && <Text style={styles.rowLabel}>Expires: {voucher.expiry}</Text>}
       {!!voucher.deliveryNote && <Text style={styles.rowLabel}>{voucher.deliveryNote}</Text>}
+      <TouchableOpacity onPress={() => printVoucher({ ...voucher, productName: voucher.productName || item.productName || item.operator, id: item.id }).catch((e) => showAlert('Print voucher', e?.message || 'Could not print this voucher.'))}>
+        <Text style={styles.pinLabel}>🖨 PRINT VOUCHER</Text>
+      </TouchableOpacity>
     </View>
   );
 }
