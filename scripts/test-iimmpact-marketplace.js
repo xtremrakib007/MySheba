@@ -348,10 +348,10 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     const home = Array.from(grids.providerHomeTiles({ country: 'MY' }));
     assert.deepStrictEqual(home.map((t) => t.name), ['Prepaid Reload', 'PIN', 'Internet', 'International Reload', 'International Internet', 'Bills', 'Vouchers', 'Games', 'E-Wallet']);
     assert.ok(home.every((t) => t.provider === 'iimmpact' && /^photo/.test(t.art)), 'every tile has a picture');
-    const mobile = home.slice(0, 4);
+    const mobile = home.slice(0, 5);
     assert.ok(mobile.every((t) => t.parentKey === 'grp_mobile'), "the Mobile switch still governs Mobile's tiles");
-    assert.deepStrictEqual(mobile.map((t) => t.kind), ['seededService', 'pinCategory', 'seededService', 'seededService'], 'each opens its own flow directly');
-    assert.ok(home.slice(4).every((t) => t.kind === 'providerGroup'), 'the other groups stay groups');
+    assert.deepStrictEqual(mobile.map((t) => t.kind), ['seededService', 'pinCategory', 'seededService', 'seededService', 'seededService'], 'each opens its own flow directly');
+    assert.ok(home.slice(5).every((t) => t.kind === 'providerGroup'), 'the other groups stay groups');
   });
 
   await test('Mobile: Prepaid Reload, PIN, Internet, International Reload, International Internet', () => {
