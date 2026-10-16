@@ -344,9 +344,9 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
   const group = (key) => grids.providerGroup({ provider: 'iimmpact', groupKey: key, catalog: WALLETS });
   const names = (key) => Array.from(group(key).tiles).map((t) => t.name);
 
-  await test("a Malaysian home leads with Mobile's four tiles, then Bills, Vouchers, Games and E-Wallet", () => {
+  await test("a Malaysian home leads with Mobile's five tiles, then Bills, Vouchers, Games and E-Wallet", () => {
     const home = Array.from(grids.providerHomeTiles({ country: 'MY' }));
-    assert.deepStrictEqual(home.map((t) => t.name), ['Prepaid Reload', 'PIN', 'Internet', 'International Reload', 'Bills', 'Vouchers', 'Games', 'E-Wallet']);
+    assert.deepStrictEqual(home.map((t) => t.name), ['Prepaid Reload', 'PIN', 'Internet', 'International Reload', 'International Internet', 'Bills', 'Vouchers', 'Games', 'E-Wallet']);
     assert.ok(home.every((t) => t.provider === 'iimmpact' && /^photo/.test(t.art)), 'every tile has a picture');
     const mobile = home.slice(0, 4);
     assert.ok(mobile.every((t) => t.parentKey === 'grp_mobile'), "the Mobile switch still governs Mobile's tiles");
@@ -354,8 +354,8 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     assert.ok(home.slice(4).every((t) => t.kind === 'providerGroup'), 'the other groups stay groups');
   });
 
-  await test('Mobile: Prepaid Reload, PIN, Internet, International Reload', () => {
-    assert.deepStrictEqual(names('grp_mobile'), ['Prepaid Reload', 'PIN', 'Internet', 'International Reload']);
+  await test('Mobile: Prepaid Reload, PIN, Internet, International Reload, International Internet', () => {
+    assert.deepStrictEqual(names('grp_mobile'), ['Prepaid Reload', 'PIN', 'Internet', 'International Reload', 'International Internet']);
     const [prepaid, pin, internet, intl] = Array.from(group('grp_mobile').tiles);
     assert.deepStrictEqual([prepaid.service, prepaid.startStep, prepaid.seed.country], ['recharge', 1, 'MY']);
     assert.deepStrictEqual([pin.kind, pin.pinCategory], ['pinCategory', 'mobile']);
@@ -721,6 +721,19 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
     assert.strictEqual(intl.seed.internationalOnly, true);
     const src = fs.readFileSync(path.join(ROOT, 'src/steps/RechargeSteps.js'), 'utf8');
     assert.ok(/internationalOnly\s*\?\s*countries\.filter\(\(c\) => c\.code !== 'MY'/.test(src), 'the country step leaves Malaysia out');
+  });
+
+  await test('International Internet sells packages abroad (Bangladesh included), not Malaysia', () => {
+    const tiles = Array.from(grids.providerGroup({ provider: 'iimmpact', groupKey: 'grp_mobile', catalog: null }).tiles);
+    const intl = tiles.find((t) => t.key === 'mobile_international_internet');
+    assert.ok(intl, 'the Mobile group has an International Internet tile');
+    assert.strictEqual(intl.service, 'internet');
+    assert.strictEqual(intl.seed.internationalOnly, true);
+    assert.strictEqual(intl.startStep, 0, 'it starts at the country');
+    const home = Array.from(grids.providerHomeTiles({ country: 'MY' })).map((t) => t.key);
+    assert.ok(home.includes('mobile_international_internet'), 'a Malaysian home screen shows it');
+    const src = fs.readFileSync(path.join(ROOT, 'src/steps/InternetSteps.js'), 'utf8');
+    assert.ok(/internationalOnly\s*\?\s*countries\.filter\(\(c\) => c\.code !== 'MY' && \(internetOperators\[c\.code\]/.test(src), 'the country step leaves Malaysia out');
   });
 
   await test('International Bills does not offer Malaysia', () => {

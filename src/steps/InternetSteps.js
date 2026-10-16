@@ -112,7 +112,12 @@ export default function InternetStep({ step }) {
   });
 
   if (step === 0) {
-    return <View><FormLabel>Select Country</FormLabel><Grid3>{countries.map((c) => <CountrySelectCard key={c.code} code={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr, operator: null, package: null, amount: null }); nextStep(); }} />)}</Grid3></View>;
+    // International Internet lists destinations abroad that sell packages;
+    // Malaysia's packages are the Internet tile's.
+    const destinations = serviceData.internationalOnly
+      ? countries.filter((c) => c.code !== 'MY' && (internetOperators[c.code] || []).length > 0)
+      : countries;
+    return <View><FormLabel>Select Country</FormLabel><Grid3>{destinations.map((c) => <CountrySelectCard key={c.code} code={c.code} flag={c.flag} name={c.name} selected={serviceData.country === c.code} onPress={() => { updateServiceData({ country: c.code, currency: c.curr, operator: null, package: null, amount: null }); nextStep(); }} />)}</Grid3></View>;
   }
 
   if (step === 1) {
@@ -195,6 +200,7 @@ export function noPlansMessage(reason, operator, phone) {
 
 export function validateStep(step, serviceData) {
   if (step === 0 && !serviceData.country) return 'Please select a country.';
+  if (step === 0 && serviceData.internationalOnly && String(serviceData.country).toUpperCase() === 'MY') return 'Malaysian packages are under Internet.';
   if (step === 2 && !serviceData.operator) return 'Please select an operator.';
   if (step === 1 && !(serviceData.phone || '').trim()) return 'Please enter a mobile number.';
   if (step === 3 && !serviceData.package) return 'Please select a package.';
