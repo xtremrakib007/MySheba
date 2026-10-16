@@ -10,6 +10,9 @@
 import { Platform } from 'react-native';
 import * as Print from 'expo-print';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getThermalPrinter, printBytes } from './bluetoothPrinter';
+import { htmlToReceipt, receiptToEscPos, PAPER_COLUMNS } from './escpos';
+import { receiptDocument, receiptRows, highlightBlock } from './receiptHtml';
 
 const STORAGE_KEY = 'mysheba:defaultPrinter';
 
@@ -47,10 +50,17 @@ export async function selectDefaultPrinter() {
 }
 
 /**
- * Prints HTML through the device. Uses the remembered printer when there is
- * one; otherwise the OS shows its own print dialog.
+ * Prints HTML through the device. A Bluetooth thermal printer chosen in the
+ * Printer screen gets the receipt directly, laid out for its paper
+ * (utils/escpos.js); otherwise the remembered printer (iOS) or the OS print
+ * dialog is used.
  */
 export async function printHtml(html) {
+  const thermal = await getThermalPrinter();
+  if (thermal) {
+    await printBytes(thermal, receiptToEscPos(htmlToReceipt(html), { columns: PAPER_COLUMNS[thermal.paper] || PAPER_COLUMNS[58] }));
+    return;
+  }
   const printer = canSelectPrinter ? await getDefaultPrinter() : null;
   await Print.printAsync(printer ? { html, printerUrl: printer.url } : { html });
 }
@@ -156,4 +166,35 @@ export async function printTestPage() {
       <p style="font-size:12px;color:#667085">${esc(new Date().toLocaleString())}</p>
       <p style="margin-top:26px;font-size:13px">If you can read this, printing works on this device.</p>
     </body></html>`);
+}
+
+/**
+ * A voucher slip - the PIN (or delivery link) large, with what it is for -
+ * printed the same way from the PIN Generator, a Marketplace voucher and
+ * History's Show PIN, on a thermal printer or through the print dialog.
+ */
+export function voucherReceiptHtml(v = {}) {
+  const currency = v.currency || 'MYR';
+  const amount = Number(v.amount);
+  return receiptDocument({
+    subtitle: 'Digital Voucher',
+    rowsHtml: receiptRows([
+      ['Product', v.productName || v.operator || ''],
+      ['Country', v.countryName || v.country || ''],
+      ['Value', Number.isFinite(amount) && amount > 0 ? `${currency} ${amount.toFixed(2)}` : ''],
+      ['Serial no', v.serialNumber && v.serialNumber !== v.pin ? v.serialNumber : ''],
+      ['Expires', v.expiry || ''],
+      ['Transaction', v.id || ''],
+    ]),
+    blocks: [
+      highlightBlock('PIN', v.pin || ''),
+      !v.pin && v.deliveryLink ? highlightBlock('VOUCHER LINK', v.deliveryLink) : '',
+      v.deliveryNote ? `<p>${String(v.deliveryNote).replace(/[<>&]/g, '')}</p>` : '',
+    ],
+    footer: 'Keep this voucher private.',
+  });
+}
+
+export async function printVoucher(v) {
+  await printHtml(voucherReceiptHtml(v));
 }

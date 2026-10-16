@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, Alert, ActivityIndicator, Image, BackHandler, Linking } from 'react-native';
-import { printTransactionReceipt, buildTransactionReceiptHtml } from '../utils/printService';
+import { printTransactionReceipt, buildTransactionReceiptHtml, printVoucher } from '../utils/printService';
 import { ReceiptCapture, shareReceiptImage } from '../components/ReceiptImage';
 import { receiptDocument, receiptRows } from '../utils/receiptHtml';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -523,6 +523,9 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
             <Text style={st.muted}>Keep this voucher private. Transaction {String(voucher.id || '')}</Text>
             <TouchableOpacity style={st.voucherShare} onPress={() => shareCardNow({ subtitle: 'Digital Voucher', fileName: 'MySheba-voucher-' + String(voucher.id || '').slice(0, 12), highlight: voucher.pin ? { label: 'PIN', value: voucher.pin } : null, footer: 'Keep this voucher private.', rows: [['Product', voucher.productName], ['Serial no', voucher.serialNumber && voucher.serialNumber !== voucher.pin ? voucher.serialNumber : ''], ['Link', voucher.deliveryLink || ''], ['Expires', voucher.expiry || ''], ['Transaction', String(voucher.id || '')]], html: receiptDocument({ subtitle: 'Digital Voucher', rowsHtml: receiptRows([['PIN', voucher.pin || ''], ...[['Product', voucher.productName], ['Serial no', voucher.serialNumber && voucher.serialNumber !== voucher.pin ? voucher.serialNumber : ''], ['Link', voucher.deliveryLink || ''], ['Expires', voucher.expiry || ''], ['Transaction', String(voucher.id || '')]]]), footer: 'Keep this voucher private.' }) })}>
               <Text style={st.buySmall}>Share voucher</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={st.voucherShare} onPress={() => printVoucher({ ...voucher, currency: 'MYR' }).catch((e) => Alert.alert('Print voucher', e?.message || 'Could not print this voucher.'))}>
+              <Text style={st.buySmall}>🖨 Print voucher</Text>
             </TouchableOpacity>
           </View>
         )}

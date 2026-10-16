@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { BackHandler, View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Image, Linking, ActivityIndicator } from 'react-native';
-import * as Print from 'expo-print';
+import { printVoucher as printVoucherSlip } from '../utils/printService';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
@@ -226,15 +226,11 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
       const currency = CURRENCY_BY_COUNTRY[voucher.country || country] || voucher.currency || '';
       const value = Number(voucher.amount || amount || 0);
       const secret = voucher.pin || voucher.deliveryLink || '';
-      await Print.printAsync({ html:
-        '<html><body style="font-family:Arial;padding:16px;text-align:center">' +
-        '<h2>MySheba</h2><h3>Digital Voucher</h3><hr/>' +
-        '<p><b>Country:</b> ' + escapeHtml(IIMMPACT_COUNTRIES.find(([c]) => c === (voucher.country || country))?.[1] || country) + '</p>' +
-        '<p><b>Product:</b> ' + escapeHtml(voucher.productName || product?.name || '') + '</p>' +
-        '<p><b>Value:</b> ' + escapeHtml(currency) + ' ' + value.toFixed(2) + '</p>' +
-        '<div style="margin:22px 0;font-size:18px;word-break:break-all"><b>' + escapeHtml(secret) + '</b></div>' +
-        '<p>Keep this voucher private.</p><p style="font-size:10px">Transaction: ' + escapeHtml(voucher.id) + '</p>' +
-        '</body></html>'
+      await printVoucherSlip({
+        ...voucher,
+        productName: voucher.productName || product?.name || '',
+        countryName: IIMMPACT_COUNTRIES.find(([c]) => c === (voucher.country || country))?.[1] || country,
+        currency, amount: value, deliveryLink: secret === voucher.deliveryLink ? voucher.deliveryLink : '', pin: voucher.pin || '',
       });
     } catch (err) { showAlert('Printer', err?.message || 'Could not open the system printer.'); }
   };
