@@ -784,7 +784,7 @@ export default function AdminHomeScreen() {
               <Text style={styles.cardTitle}>💱 Rate Management</Text>
               {RATE_FIELDS.map((r) => (
                 <View key={r.key} style={styles.rateRow}>
-                  <Text style={{ flex: 1 }}>{r.label}</Text>
+                  <Text style={styles.rowLabel}>{r.label}</Text>
                   <Text style={styles.rateValue}>{rates[r.key]}</Text>
                   <TouchableOpacity style={styles.editBtn} onPress={() => setEditRateKey(r.key)}>
                     <Text style={styles.editBtnText}>Edit</Text>
@@ -797,7 +797,7 @@ export default function AdminHomeScreen() {
               <Text style={styles.cardTitle}>🔄 Recharge / Internet Package Rates</Text>
               {RECHARGE_RATE_FIELDS.map((r) => (
                 <View key={r.key} style={styles.rateRow}>
-                  <Text style={{ flex: 1 }}>{r.label}</Text>
+                  <Text style={styles.rowLabel}>{r.label}</Text>
                   <Text style={styles.rateValue}>{rates[r.key]}</Text>
                   <TouchableOpacity style={styles.editBtn} onPress={() => setEditRateKey(r.key)}>
                     <Text style={styles.editBtnText}>Edit</Text>
@@ -822,7 +822,7 @@ export default function AdminHomeScreen() {
               <Text style={styles.cardTitle}>🏷️ Earning &amp; Margin Settings</Text>
               {PRICING_FIELDS.map((r) => (
                 <View key={r.key} style={styles.rateRow}>
-                  <Text style={{ flex: 1 }}>{r.label}</Text>
+                  <Text style={styles.rowLabel}>{r.label}</Text>
                   <Text style={styles.rateValue}>{pricing[r.key]}%</Text>
                   <TouchableOpacity style={styles.editBtn} onPress={() => setEditPricingKey(r.key)}>
                     <Text style={styles.editBtnText}>Edit</Text>
@@ -840,7 +840,7 @@ export default function AdminHomeScreen() {
               <Text style={styles.cardTitle}>🔒 Feature Costs</Text>
               {POINT_COST_FIELDS.map((r) => (
                 <View key={r.key} style={styles.rateRow}>
-                  <Text style={{ flex: 1 }}>{r.label}</Text>
+                  <Text style={styles.rowLabel}>{r.label}</Text>
                   <Text style={styles.rateValue}>{pricing[r.key]} pts</Text>
                   <TouchableOpacity style={styles.editBtn} onPress={() => setEditPointCostKey(r.key)}>
                     <Text style={styles.editBtnText}>Edit</Text>
@@ -849,7 +849,7 @@ export default function AdminHomeScreen() {
               ))}
               {ACCESS_WINDOW_FIELDS.map((r) => (
                 <View key={r.key} style={styles.rateRow}>
-                  <Text style={{ flex: 1 }}>{r.label}</Text>
+                  <Text style={styles.rowLabel}>{r.label}</Text>
                   <Text style={styles.rateValue}>{pricing[r.key]} hrs</Text>
                   <TouchableOpacity style={styles.editBtn} onPress={() => setEditPointCostKey(r.key)}>
                     <Text style={styles.editBtnText}>Edit</Text>
@@ -873,7 +873,7 @@ export default function AdminHomeScreen() {
               <Text style={styles.cardTitle}>📶 Recharge &amp; Package Multipliers</Text>
               {RECHARGE_PRICING_FIELDS.map((r) => (
                 <View key={r.key} style={styles.rateRow}>
-                  <Text style={{ flex: 1 }}>{r.label}</Text>
+                  <Text style={styles.rowLabel}>{r.label}</Text>
                   <Text style={styles.rateValue}>{pricing[r.key] != null ? pricing[r.key] : 1}×</Text>
                   <TouchableOpacity style={styles.editBtn} onPress={() => setEditPricingKey(r.key)}>
                     <Text style={styles.editBtnText}>Edit</Text>
@@ -892,7 +892,7 @@ export default function AdminHomeScreen() {
               <Text style={styles.cardTitle}>📝 Notepad / Documents / Salary &amp; OT</Text>
               {MODULE_SUBSCRIPTION_COST_FIELDS.map((r) => (
                 <View key={r.key} style={styles.rateRow}>
-                  <Text style={{ flex: 1 }}>{r.label}</Text>
+                  <Text style={styles.rowLabel}>{r.label}</Text>
                   <Text style={styles.rateValue}>{pricing[r.key]} pts</Text>
                   <TouchableOpacity style={styles.editBtn} onPress={() => setEditPointCostKey(r.key)}>
                     <Text style={styles.editBtnText}>Edit</Text>
@@ -901,7 +901,7 @@ export default function AdminHomeScreen() {
               ))}
               {MODULE_SUBSCRIPTION_DAYS_FIELDS.map((r) => (
                 <View key={r.key} style={styles.rateRow}>
-                  <Text style={{ flex: 1 }}>{r.label}</Text>
+                  <Text style={styles.rowLabel}>{r.label}</Text>
                   <Text style={styles.rateValue}>{pricing[r.key]} days</Text>
                   <TouchableOpacity style={styles.editBtn} onPress={() => setEditPointCostKey(r.key)}>
                     <Text style={styles.editBtnText}>Edit</Text>
@@ -968,7 +968,7 @@ export default function AdminHomeScreen() {
               {getMergedPackages(pricingOperator, internetPricing[pricingOperator]).map((p) => (
                 <View key={p.id} style={styles.rateRow}>
                   <View style={{ flex: 1 }}>
-                    <Text>{p.name}{p.isCustom ? '  •  added' : ''}</Text>
+                    <Text style={styles.plainText}>{p.name}{p.isCustom ? '  •  added' : ''}</Text>
                     <Text style={styles.txDetail}>{p.data} • {p.valid}</Text>
                   </View>
                   <Text style={styles.rateValue}>MYR {p.price}</Text>
@@ -993,7 +993,7 @@ export default function AdminHomeScreen() {
             <Text style={styles.cardTitle}>☎️ Support Contact Numbers</Text>
             {SUPPORT_FIELDS.map((r) => (
               <View key={r.key} style={styles.rateRow}>
-                <Text style={{ flex: 1 }}>{r.label}</Text>
+                <Text style={styles.rowLabel}>{r.label}</Text>
                 <Text style={styles.rateValue}>{supportContact[r.key] || 'Not set'}</Text>
                 <TouchableOpacity style={styles.editBtn} onPress={() => setEditSupportKey(r.key)}>
                   <Text style={styles.editBtnText}>Edit</Text>
@@ -1017,7 +1017,7 @@ export default function AdminHomeScreen() {
                   <View key={acc.id} style={styles.rateRow}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.rateValue}>{acc.bankName}</Text>
-                      <Text>{acc.accountNumber}</Text>
+                      <Text style={styles.plainText}>{acc.accountNumber}</Text>
                       <Text style={{ fontSize: 11, color: '#999' }}>{acc.accountHolder}</Text>
                     </View>
                     {!!(profile && profile.role === 'superadmin') && (
@@ -1049,7 +1049,7 @@ export default function AdminHomeScreen() {
               {PAYMENT_FIELDS.map((r) => (
                 <View key={r.key} style={styles.rateRow}>
                   <View style={{ flex: 1 }}>
-                    <Text>{r.label}</Text>
+                    <Text style={styles.plainText}>{r.label}</Text>
                     {!!paymentSettings[r.key] && (
                       <CopyButton value={paymentSettings[r.key]} label="Copy" />
                     )}
@@ -1114,7 +1114,7 @@ export default function AdminHomeScreen() {
                     <View key={code} style={styles.card}>
                       <Text style={styles.cardTitle}>{c ? `${c.flag} ${c.name}` : code}</Text>
                       <View style={styles.rateRow}>
-                        <Text style={{ flex: 1 }}>Layout</Text>
+                        <Text style={styles.rowLabel}>Layout</Text>
                         <TouchableOpacity
                           style={styles.editBtn}
                         >
@@ -1126,7 +1126,7 @@ export default function AdminHomeScreen() {
                         { key: 'showBanners', label: 'Banners module' },
                       ].map((row) => (
                         <View key={row.key} style={styles.rateRow}>
-                          <Text style={{ flex: 1 }}>{row.label}</Text>
+                          <Text style={styles.rowLabel}>{row.label}</Text>
                           <Text style={styles.rateValue}>{mod[row.key] !== false ? 'ON' : 'OFF'}</Text>
                           <TouchableOpacity
                             style={styles.editBtn}
@@ -1555,6 +1555,9 @@ function createStyles(colors) {
       elevation: 2,
     },
     cardTitle: { fontWeight: '700', fontSize: 14, marginBottom: 10, color: colors.text },
+    // Row labels and plain values: the theme's text colour, so they read in dark mode.
+    rowLabel: { flex: 1, color: colors.text },
+    plainText: { color: colors.text },
     rateRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
     rateValue: { fontWeight: '700', marginHorizontal: 8, color: colors.text },
     editBtn: { backgroundColor: colors.primary, paddingVertical: 7, paddingHorizontal: 14, borderRadius: radius.md },

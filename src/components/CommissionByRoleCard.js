@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
+import { useTheme } from '../theme/ThemeContext';
 import { auth } from '../firebase/config';
 import * as authService from '../firebase/authService';
 import * as apiProviderService from '../firebase/apiProviderService';
@@ -44,6 +45,7 @@ const toForm = (byRole) => Object.fromEntries(ROLES.map((role) => [role, Object.
 }))]));
 
 export default function CommissionByRoleCard({ pricing }) {
+  const styles = useStyles();
   const saved = pricing?.commissionRules || {};
   const savedKey = JSON.stringify([saved.byRole || {}, saved.products || {}]);
   const [form, setForm] = useState(() => toForm(saved.byRole));
@@ -210,38 +212,44 @@ export default function CommissionByRoleCard({ pricing }) {
   );
 }
 
-const styles = StyleSheet.create({
-  card: { backgroundColor: '#fff', borderRadius: 14, padding: 14, marginTop: 12 },
-  title: { fontSize: 16, fontWeight: '800', marginBottom: 6 },
-  hint: { fontSize: 12, opacity: 0.7, lineHeight: 18, marginBottom: 8 },
+// Colours from the app theme, so the card reads in dark mode too.
+const createStyles = (c) => StyleSheet.create({
+  card: { backgroundColor: c.card, borderRadius: 14, padding: 14, marginTop: 12 },
+  title: { fontSize: 16, fontWeight: '800', marginBottom: 6, color: c.text },
+  hint: { fontSize: 12, opacity: 0.7, lineHeight: 18, marginBottom: 8, color: c.text },
   headRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 },
-  head: { fontSize: 10.5, fontWeight: '800', opacity: 0.6 },
+  head: { fontSize: 10.5, fontWeight: '800', opacity: 0.6, color: c.text },
   col: { width: 74, textAlign: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 },
-  role: { flex: 1, fontSize: 13, fontWeight: '700' },
-  input: { borderWidth: 1, borderColor: '#d6dde5', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 6, fontSize: 13 },
+  role: { flex: 1, fontSize: 13, fontWeight: '700', color: c.text },
+  input: { borderWidth: 1, borderColor: c.border, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 6, fontSize: 13, color: c.text, backgroundColor: c.inputBg },
   pin: { width: '100%', marginTop: 10 },
-  message: { fontSize: 12, color: '#8a6d00', marginTop: 8 },
+  message: { fontSize: 12, color: c.textSecondary, marginTop: 8 },
   save: { backgroundColor: '#0E7A79', borderRadius: 10, paddingVertical: 11, alignItems: 'center', marginTop: 10 },
   saveText: { color: '#fff', fontWeight: '800' },
   dim: { opacity: 0.5 },
-  section: { fontSize: 14, fontWeight: '800', marginTop: 16, marginBottom: 4 },
-  productBox: { borderWidth: 1, borderColor: '#eef2f6', borderRadius: 10, padding: 10, marginBottom: 8 },
+  section: { fontSize: 14, fontWeight: '800', marginTop: 16, marginBottom: 4, color: c.text },
+  productBox: { borderWidth: 1, borderColor: c.divider, borderRadius: 10, padding: 10, marginBottom: 8 },
   productHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  productName: { flex: 1, fontSize: 13, fontWeight: '700' },
-  chip: { borderWidth: 1, borderColor: '#d6dde5', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 4 },
+  productName: { flex: 1, fontSize: 13, fontWeight: '700', color: c.text },
+  chip: { borderWidth: 1, borderColor: c.border, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 4 },
   chipActive: { backgroundColor: '#0E7A79', borderColor: '#0E7A79' },
-  chipText: { fontSize: 12, fontWeight: '700' },
+  chipText: { fontSize: 12, fontWeight: '700', color: c.textSecondary },
   chipTextActive: { color: '#fff' },
   roleLine: { flexDirection: 'row', gap: 4, marginTop: 6 },
   roleCellSmall: { flex: 1 },
   inputSmall: { paddingHorizontal: 4, paddingVertical: 5, fontSize: 12, textAlign: 'center' },
   search: { width: '100%', marginBottom: 6 },
-  group: { borderTopWidth: 1, borderTopColor: '#eef2f6' },
+  group: { borderTopWidth: 1, borderTopColor: c.divider },
   groupHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10 },
-  groupTitle: { fontSize: 13.5, fontWeight: '800' },
-  groupCount: { fontSize: 11, opacity: 0.6 },
+  groupTitle: { fontSize: 13.5, fontWeight: '800', color: c.text },
+  groupCount: { fontSize: 11, opacity: 0.6, color: c.text },
   productSet: { borderColor: '#0E7A79' },
-  code: { fontSize: 11, fontWeight: '400', opacity: 0.6 },
-  roleSmall: { fontSize: 10.5, fontWeight: '700', opacity: 0.6, marginBottom: 2 },
+  code: { fontSize: 11, fontWeight: '400', opacity: 0.6, color: c.text },
+  roleSmall: { fontSize: 10.5, fontWeight: '700', opacity: 0.6, marginBottom: 2, color: c.text },
 });
+function useStyles() {
+  const { colors } = useTheme();
+  return useMemo(() => createStyles(colors), [colors]);
+}
+
