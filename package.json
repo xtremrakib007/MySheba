@@ -142,6 +142,7 @@
     "expo-secure-store": "~14.2.4",
     "expo-sharing": "~13.1.5",
     "expo-status-bar": "~2.2.3",
+    "expo-system-ui": "~5.0.11",
     "expo-updates": "~0.28.18",
     "firebase": "^12.4.0",
     "react": "19.0.0",

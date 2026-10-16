@@ -140,7 +140,8 @@
       ],
       "./plugins/withRemoveUnusedPermissions",
       "./plugins/withFixNotificationColorMerge",
-      "./plugins/withDisablePredictiveBack"
+      "./plugins/withDisablePredictiveBack",
+      "./plugins/withLightOnlyAndroid"
     ],
     "extra": {
       "eas": {
