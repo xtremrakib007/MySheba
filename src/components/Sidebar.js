@@ -61,6 +61,7 @@ const COMMON_GROUPS = [
     { key: 'profile', icon: 'profile', label: 'Profile' },
     { key: 'myAccount', icon: 'myAccount', label: 'My Account' },
     { key: 'settings', icon: 'settings', label: 'Settings' },
+    { key: 'printer', icon: 'printer', label: 'Printer' },
   ] },
   { title: 'Work & Documents', icon: 'profile', color: 'primary', items: [
     { key: 'salaryDashboard', icon: 'salary', label: 'Salary & OT' },

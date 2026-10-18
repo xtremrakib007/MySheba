@@ -4,6 +4,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db, functions } from './config';
 import { getSessionProof } from './deviceSessionService';
 import { forgetIimmpactOptionsOn } from './apiProviderService';
+import { settleWithin, expectedTransactionId } from './orderSubmit';
 
 const purchaseFn = httpsCallable(functions, 'purchaseRechargePin');
 
@@ -16,12 +17,12 @@ function requestId() {
 // productCode/subproductCode only point at what was chosen; accountNumber is
 // the Malaysian mobile number IIMMPACT validates the order against, and
 // fieldValues/selectedOptions answer any other field the product declares.
-export async function purchaseRechargePin({ operator = '', amount, country = 'MY', productCode = '', subproductCode = '', productName = '', accountNumber = '', fieldValues = {}, selectedOptions = {} }) {
+export async function purchaseRechargePin({ operator = '', amount, country = 'MY', productCode = '', subproductCode = '', productName = '', accountNumber = '', fieldValues = {}, selectedOptions = {}, requestId: givenRequestId = '' }) {
   const session = await getSessionProof();
   try {
     const { data } = await purchaseFn({
       operator, amount, country, productCode, subproductCode, productName, accountNumber, fieldValues, selectedOptions,
-      requestId: requestId(), ...session
+      requestId: givenRequestId || requestId(), ...session
     });
     return data;
   } catch (error) {
@@ -30,6 +31,21 @@ export async function purchaseRechargePin({ operator = '', amount, country = 'MY
     forgetIimmpactOptionsOn(error, productCode);
     throw error;
   }
+}
+
+/**
+ * purchaseRechargePin without holding the customer on the review page. Resolves
+ * `{ settled: true, value }` when the server answered within the quick window,
+ * else `{ settled: false, id, done }`: `id` is the order the server is writing
+ * (functions/rechargePinService.js names it uid|recharge-pin|requestId) and
+ * `done` the purchase, still running.
+ */
+export async function submitRechargePin(args) {
+  const id = requestId();
+  const expectedId = await expectedTransactionId('recharge-pin', id);
+  const done = purchaseRechargePin({ ...args, requestId: id });
+  const quick = await settleWithin(done);
+  return quick.settled ? quick : { settled: false, id: expectedId, done };
 }
 
 // The server checks this device's session before handing a PIN back; without

@@ -269,9 +269,21 @@ exports.onTransactionUpdated = onDocumentUpdated('transactions/{id}', async even
   } else if (a.status === 'processing') {
     title = '🔄 Order accepted';
     body = `${a.service} is being processed.`;
+  } else if (a.status === 'completed' && a.rechargePinAvailable === true) {
+    // The PIN itself never goes in a push; the customer reads it in History.
+    title = '🔑 Your PIN is ready';
+    body = `${a.service}: open History and tap Show PIN.`;
   } else if (a.status === 'completed') {
     title = '✅ Order completed';
     body = `${a.service} has been completed.`;
+  } else if (a.status === 'failed') {
+    title = '❌ Order failed';
+    body = a.apiRefunded === true
+      ? `${a.service} could not be completed. Your wallet has been refunded.`
+      : `${a.service} could not be completed.`;
+  } else if (a.status === 'unknown') {
+    title = '⏳ Order under review';
+    body = `${a.service} is taking longer than usual. We are checking it with the provider.`;
   }
 
   await notifyUser(

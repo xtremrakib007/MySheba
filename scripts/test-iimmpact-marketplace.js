@@ -565,6 +565,7 @@ const overflow = NATIVE.filter((key) => key.startsWith('pinCategory') || key ===
         } };
       }
       if (id === './config') return { functions: {}, db: {} };
+      if (id === './deviceSessionService') return { getSessionProof: async () => ({ sessionId: 's', deviceId: 'd' }) };
       if (id === 'firebase/firestore') {
         // MySheba's saved amount lists (iimmpactOptionsMirror), by document id.
         return {

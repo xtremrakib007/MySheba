@@ -6,6 +6,7 @@ import { db, functions, auth } from './config';
 import { logActivity } from './logService';
 import { getSessionProof, callWithSessionProof } from './deviceSessionService';
 import { consentPayload } from '../utils/consentPolicy';
+import { QUICK_SUBMIT_MS, settleWithin, expectedTransactionId, serviceKey } from './orderSubmit';
 
 const COLLECTION = 'transactions';
 const QUEUE_COLLECTION = 'transactionQueue';
@@ -34,6 +35,22 @@ export async function createTransaction(payload, customer) {
     ? consentPayload('remittance') : undefined;
   try { const { data } = await fn({ payload, customer, requestId, ...session, ...(consent ? { consent } : {}) }); logActivity('transaction_submitted', { service: payload.service, amount: payload.amount || 0, cost: data.cost }); return data.id; }
   catch (err) { throw new Error(err.message || 'Could not submit this order right now.'); }
+}
+
+/**
+ * createTransaction that does not hold the customer on the confirm page while
+ * the provider works. Resolves `{ id, background }`: `background` is true
+ * when the server had not answered within QUICK_SUBMIT_MS, and `id` is then
+ * the reference the server is writing (orderSubmit.expectedTransactionId).
+ * `done` is the call itself, still running, for a late error to be shown.
+ */
+export async function submitTransaction(payload, customer, { waitMs = QUICK_SUBMIT_MS } = {}) {
+  if (!CHARGEABLE_SERVICE_FNS[payload.service]) throw new Error('Unsupported transaction service.');
+  const requestId = payload.requestId || createRequestId(); payload.requestId = requestId;
+  const expectedId = await expectedTransactionId(serviceKey(payload.service), requestId);
+  const done = createTransaction(payload, customer);
+  const quick = await settleWithin(done, waitMs);
+  return quick.settled ? { id: quick.value, background: false, done } : { id: expectedId, background: true, done };
 }
 
 export function subscribeBroadcastTransactions(callback, onError) {
