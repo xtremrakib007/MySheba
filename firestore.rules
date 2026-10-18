@@ -27,6 +27,15 @@ service cloud.firestore {
     function roleCaps(r) { return exists(accessDoc()) ? roleCapsFrom(get(accessDoc()).data.get('roleDefaults', {}), r) : builtInCaps(r); }
     function overrideAllows(o, cap, r) { return !(cap in o.get('revoke', [])) && (cap in roleCaps(r) || cap in o.get('grant', [])); }
     function staffCan(p, cap) { return profileActive(p) && (p.get('role', null) == 'superadmin' || (p.get('role', null) in ['admin', 'support', 'finance'] && (exists(overrideDoc()) ? overrideAllows(get(overrideDoc()).data, cap, p.get('role', null)) : cap in roleCaps(p.get('role', null))))); }
+    // The Profile screen's own details (mobile, passport no., company, address, passport
+    // copy): plain text of a sane length, and a passport copy only as a file in this
+    // user's own passport-copies/ folder. Money, role, verification and country stay
+    // server-only.
+    function textOk(d, k, max) { return !(k in d) || d[k] == null || (d[k] is string && d[k].size() <= max); }
+    function personalFieldsValid(d, uid) { return textOk(d, 'mobileNumber', 32) && textOk(d, 'passportNumber', 32) && textOk(d, 'companyName', 120) && textOk(d, 'address', 300)
+      && (!('passportCopyType' in d) || d.passportCopyType == null || d.passportCopyType in ['pdf', 'image'])
+      && (!('passportCopyUrl' in d) || d.passportCopyUrl == null || (d.passportCopyUrl is string && d.passportCopyUrl.size() <= 2000
+        && d.passportCopyUrl.matches('^https://firebasestorage[.]googleapis[.]com/v0/b/[^/]+/o/passport-copies%2F' + uid + '%2F.*'))); }
     function can(cap) { return signedIn() && exists(userDoc()) && staffCan(myProfile(), cap); }
     function myDealerScope() { return request.auth.uid; }
     function canHandleTransaction(s) { return can('orders') || (isDealerTier() && s == 'Mobile Banking') || (isReseller() && s in ['Recharge', 'Internet', 'Bill Payment', 'Remittance']); }
@@ -89,7 +98,7 @@ service cloud.firestore {
     // Audit trail written by adminTopUpPoints.
     match /pointTopUps/{id} { allow read: if can('finance'); allow write: if false; }
     match /verificationRequests/{uid} { allow read: if activeProfile() && (request.auth.uid == uid || can('users')); allow create, update, delete: if false; }
-    match /users/{uid} { allow read: if activeProfile() && (request.auth.uid == uid || can('users') || can('finance')); allow create: if false; allow update: if activeProfile() && request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','firstName','lastName','avatarUrl','lastSeenAnnouncementAt','pushToken','pushTokenPlatform','pushTokenUpdatedAt','fcmToken','fcmTokenUpdatedAt','notifPrefs']); allow delete: if false;
+    match /users/{uid} { allow read: if activeProfile() && (request.auth.uid == uid || can('users') || can('finance')); allow create: if false; allow update: if activeProfile() && request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','firstName','lastName','avatarUrl','lastSeenAnnouncementAt','pushToken','pushTokenPlatform','pushTokenUpdatedAt','fcmToken','fcmTokenUpdatedAt','notifPrefs','mobileNumber','passportNumber','companyName','address','passportCopyUrl','passportCopyType']) && personalFieldsValid(request.resource.data, uid); allow delete: if false;
       match /receivers/{receiverId} { allow read, create, update, delete: if activeProfile() && request.auth.uid == uid; }
       match /friends/{friendId} { allow read, create, update, delete: if activeProfile() && request.auth.uid == uid; }
       match /workLogs/{workLogId} { allow read: if activeProfile() && (request.auth.uid == uid || can('users')); allow create, update, delete: if false; }
