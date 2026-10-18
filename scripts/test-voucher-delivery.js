@@ -30,5 +30,10 @@ assert.ok(/getRechargePin'\)\(\{ transactionId, \.\.\.session \}\)/.test(client)
 for (const screen of ['src/screens/RechargePinScreen.js', 'src/screens/IimmpactProductScreen.js']) {
   assert.ok(fs.readFileSync(path.join(__dirname, '..', screen), 'utf8').includes('waitForRechargePin('), screen + ' waits for a pending voucher');
 }
-assert.ok(fs.readFileSync(path.join(__dirname, '../src/components/TransactionDetailModal.js'), 'utf8').includes('<VoucherPin item={item} />'), 'History shows the PIN');
+const detail = fs.readFileSync(path.join(__dirname, '../src/components/TransactionDetailModal.js'), 'utf8');
+assert.ok(detail.includes('<VoucherPin item={item} voucherState={voucherState} />'), 'History shows the PIN');
+// Read as soon as the receipt opens, not behind a tap, and printed/shared on it.
+assert.ok(/function useVoucher[\s\S]*?useEffect[\s\S]*?getRechargePin\(id\)/.test(detail), 'the receipt loads the PIN when it opens');
+assert.ok(!detail.includes('SHOW VOUCHER PIN'), 'no tap is needed to see the PIN');
+assert.ok(detail.includes("orderReceiptData(item, pinOverride, voucherState.voucher)") && detail.includes("'VOUCHER PIN'"), 'the printed and shared receipt carries the PIN');
 console.log('voucher delivery: ok');

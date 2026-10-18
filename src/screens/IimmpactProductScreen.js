@@ -372,7 +372,7 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
             try {
               const issued = await waitForRechargePin(result.id);
               if (issued) setVoucher({ ...result, ...issued, productName: issued.productName || purchase.productName });
-              else Alert.alert('Order accepted', 'Order ' + String(result.id || '') + ' was accepted and the voucher is still being issued. You will get a notification when it is ready - open it in History and tap Show PIN.', [{ text: 'OK', onPress: goBackOrHome }]);
+              else Alert.alert('Order accepted', 'Order ' + String(result.id || '') + ' was accepted and the voucher is still being issued. You will get a notification when it is ready - open it in History to see the PIN.', [{ text: 'OK', onPress: goBackOrHome }]);
             } finally { setIssuing(''); }
           } else {
             setVoucher({ ...result, productName: result?.productName || purchase.productName });

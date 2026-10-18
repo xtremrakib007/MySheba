@@ -171,7 +171,7 @@ export async function printTestPage() {
 /**
  * A voucher slip - the PIN (or delivery link) large, with what it is for -
  * printed the same way from the PIN Generator, a Marketplace voucher and
- * History's Show PIN, on a thermal printer or through the print dialog.
+ * History's voucher PIN, on a thermal printer or through the print dialog.
  */
 export function voucherReceiptHtml(v = {}) {
   const currency = v.currency || 'MYR';

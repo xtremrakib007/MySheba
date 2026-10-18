@@ -197,7 +197,7 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
       try {
         const issued = await waitForRechargePin(result.id);
         if (issued) setVoucher({ ...result, ...issued, productName: issued.productName || result.productName });
-        else showAlert('Voucher', 'Your order ' + String(result.id || '') + ' was accepted and the voucher is still being issued. You will get a notification when it is ready - open it in History and tap Show PIN.');
+        else showAlert('Voucher', 'Your order ' + String(result.id || '') + ' was accepted and the voucher is still being issued. You will get a notification when it is ready - open it in History to see the PIN.');
       } finally { setIssuing(''); }
       return;
     }

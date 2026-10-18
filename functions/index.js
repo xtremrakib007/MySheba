@@ -272,7 +272,7 @@ exports.onTransactionUpdated = onDocumentUpdated('transactions/{id}', async even
   } else if (a.status === 'completed' && a.rechargePinAvailable === true) {
     // The PIN itself never goes in a push; the customer reads it in History.
     title = '🔑 Your PIN is ready';
-    body = `${a.service}: open History and tap Show PIN.`;
+    body = `${a.service}: open it in History to see the PIN.`;
   } else if (a.status === 'completed') {
     title = '✅ Order completed';
     body = `${a.service} has been completed.`;
