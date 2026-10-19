@@ -220,6 +220,22 @@ await check('admin CANNOT read private pricing costs', 'deny', () => getDoc(doc(
 await check('superadmin reads private pricing costs', 'allow', () => getDoc(doc(as('super1'), 'settings/pricingPrivate')));
 await check('superadmin CANNOT write private pricing costs from a client', 'deny', () => setDoc(doc(as('super1'), 'settings/pricingPrivate'), { catalogCosts: {} }));
 
+// Profile screen: a user edits their own personal details; money, role,
+// verification and country stay server-only.
+const myPassportUrl = 'https://firebasestorage.googleapis.com/v0/b/demo.appspot.com/o/passport-copies%2Fcustomer1%2F1700000000.jpg?alt=media&token=abc';
+await check('customer saves own mobile number', 'allow', () => updateDoc(doc(as('customer1'), 'users/customer1'), { mobileNumber: '01712345678' }));
+await check('customer saves own passport number', 'allow', () => updateDoc(doc(as('customer1'), 'users/customer1'), { passportNumber: 'BN0123456' }));
+await check('customer saves own company and address', 'allow', () => updateDoc(doc(as('customer1'), 'users/customer1'), { companyName: 'Satu Sdn Bhd', address: 'Jalan 1, KL' }));
+await check('customer saves own passport copy', 'allow', () => updateDoc(doc(as('customer1'), 'users/customer1'), { passportCopyUrl: myPassportUrl, passportCopyType: 'image' }));
+await check("customer CANNOT point passport copy at another user's file", 'deny', () => updateDoc(doc(as('customer1'), 'users/customer1'), { passportCopyUrl: myPassportUrl.replace('customer1', 'customer2') }));
+await check('customer CANNOT point passport copy at another site', 'deny', () => updateDoc(doc(as('customer1'), 'users/customer1'), { passportCopyUrl: 'https://evil.example/x.jpg' }));
+await check('customer CANNOT save an oversized address', 'deny', () => updateDoc(doc(as('customer1'), 'users/customer1'), { address: 'x'.repeat(301) }));
+await check('customer CANNOT save a non-text mobile number', 'deny', () => updateDoc(doc(as('customer1'), 'users/customer1'), { mobileNumber: { a: 1 } }));
+await check("customer CANNOT edit another user's details", 'deny', () => updateDoc(doc(as('customer2'), 'users/customer1'), { address: 'x' }));
+await check('customer CANNOT change own country', 'deny', () => updateDoc(doc(as('customer1'), 'users/customer1'), { country: 'BD' }));
+await check('customer CANNOT change own wallet balance with a profile edit', 'deny', () => updateDoc(doc(as('customer1'), 'users/customer1'), { address: 'x', walletBalance: 999 }));
+await check('customer CANNOT change own role with a profile edit', 'deny', () => updateDoc(doc(as('customer1'), 'users/customer1'), { companyName: 'x', role: 'superadmin' }));
+
 console.log(`\n${results.length - failed}/${results.length} rule behaviours correct`);
 await env.cleanup();
 process.exit(failed ? 1 : 0);

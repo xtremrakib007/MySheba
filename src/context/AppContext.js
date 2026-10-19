@@ -897,7 +897,9 @@ export function AppProvider({ children }) {
   // Keep this list centralized so a hidden menu item cannot be bypassed by
   // calling setScreen('...') directly.
   const SCREEN_ROLES = {
-    customerHome: ['customer'],
+    // Retail lands on the customer home (utils/homeScreen.js); without it here
+    // the guard refused it and bounced them, so Home never opened.
+    customerHome: ['customer', 'retail'],
     dealerHome: ['dealer'],
     resellerHome: ['reseller'],
     adminHome: ['admin', 'superadmin'],
@@ -2833,7 +2835,10 @@ export function AppProvider({ children }) {
         // An IIMMPACT biller's answers go to the provider in its own shape: the
         // extras its fulfillment map names, and the chosen plan.
         const raw = currentService === "billpayment" ? { ...serviceData, ...billOrderFields(serviceData) } : serviceData;
-        const id = await transactionService.createTransaction(
+        // Waits only a few seconds: a provider that is still working leaves
+        // the order running on the server, the result page says it is
+        // processing, History follows it live and a push says how it ended.
+        const { id, background, done } = await transactionService.submitTransaction(
           { ...payload, raw },
           {
             uid: authUser ? authUser.uid : null,
@@ -2842,6 +2847,12 @@ export function AppProvider({ children }) {
             resellerId: profile ? profile.resellerId : null,
           },
         );
+        if (background) {
+          done.catch((err) => {
+            forgetIimmpactOptionsOn(err, serviceData?.productCode);
+            showAlert("MySheba", err.message || "Your order could not be submitted. Please try again.");
+          });
+        }
         if (currentService === "remittance" && authUser?.uid) {
           await maybeSaveReceiver(serviceData, authUser.uid);
         }

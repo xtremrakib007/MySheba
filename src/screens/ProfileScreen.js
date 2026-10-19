@@ -10,7 +10,6 @@ import { useTheme } from "../theme/ThemeContext";
 import HeaderDecor from '../components/HeaderDecor';
 import CopyButton from '../components/CopyButton';
 import VerifiedBadge from '../components/VerifiedBadge';
-import CountryModal from '../components/CountryModal';
 import { countries } from '../data/countries';
 import * as authService from '../firebase/authService';
 import { uploadAvatar, uploadPassportCopy } from '../firebase/mediaUpload';
@@ -56,8 +55,6 @@ export default function ProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [uploadingPassport, setUploadingPassport] = useState(false);
-  const [countryModalVisible, setCountryModalVisible] = useState(false);
-  const [savingCountry, setSavingCountry] = useState(false);
 
   const { firstName, lastName } = splitName(profile);
   const initial = firstName ? firstName.trim().charAt(0).toUpperCase() : '?';
@@ -95,32 +92,6 @@ export default function ProfileScreen() {
       showAlert('MySheba', err.message || 'Could not save that. Please try again.');
     } finally {
       setSaving(false);
-    }
-  };
-
-  // Next Update PRD §2 - country/region selector. Same simple
-  // authService.updateUserFields path every other self-service field on
-  // this screen uses (see FIELDS/saveField above) - no dedicated Cloud
-  // Function needed since `country` isn't one of the frozen fields
-  // firestore.rules protects on users/{uid}.
-  //
-  // PRD §2 also says this is "subject to any applicable verification/
-  // business rules" - reviewed and left unrestricted: nothing elsewhere in
-  // the app keys balances, pricing, or eligibility off profile.country in
-  // a way a change could exploit (remittance/recharge destinations are
-  // chosen per-transaction, not from this field; verified/business-profile
-  // status are unrelated flags), so there's no rule to enforce here today.
-  // Revisit if a future feature ties a country-scoped balance or business
-  // rule to this field.
-  const selectCountry = async (code) => {
-    if (!authUser || code === profile?.country) return;
-    setSavingCountry(true);
-    try {
-      await authService.updateUserFields(authUser.uid, { country: code });
-    } catch (err) {
-      showAlert('MySheba', err.message || 'Could not save that. Please try again.');
-    } finally {
-      setSavingCountry(false);
     }
   };
 
@@ -337,14 +308,10 @@ const result = await ImagePicker.launchImageLibraryAsync({
                 return c ? `${c.flag} ${c.name}` : (profile?.country || 'Malaysia');
               })()}
             </Text>
-            {savingCountry ? (
-              <ActivityIndicator size="small" color={colors.primary} />
-            ) : (
-              <TouchableOpacity onPress={() => setCountryModalVisible(true)}>
-                <Text style={styles.editLink}>Change</Text>
-              </TouchableOpacity>
-            )}
           </View>
+          {/* Server-controlled (firestore.rules): the country decides which country's
+              services and settings an account gets, so support changes it. */}
+          <Text style={styles.fieldNote}>To change your country, contact support.</Text>
         </View>
 
         <View style={styles.card}>
@@ -362,12 +329,6 @@ const result = await ImagePicker.launchImageLibraryAsync({
           <Text style={styles.fieldNote}>Used to sign in - contact support to change this.</Text>
         </View>
       </ScrollView>
-      <CountryModal
-        visible={countryModalVisible}
-        onClose={() => setCountryModalVisible(false)}
-        value={profile?.country || 'MY'}
-        onSelect={selectCountry}
-      />
     </View>
   );
 }

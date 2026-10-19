@@ -8,7 +8,7 @@ import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import HeaderDecor from '../components/HeaderDecor';
 import * as api from '../firebase/apiProviderService';
-import { purchaseRechargePin, waitForRechargePin } from '../firebase/rechargePinService';
+import { submitRechargePin, waitForRechargePin } from '../firebase/rechargePinService';
 import DenominationGrid from '../components/DenominationGrid';
 import { denominationItems } from '../utils/denominations';
 import { useIimmpactCatalog } from '../firebase/iimmpactCatalogStore';
@@ -18,6 +18,8 @@ import { isPinServed, treeCategoryIndex } from '../data/pinCategories';
 import { applyMarkup } from '../utils/markup';
 import { resolveCommission } from '../utils/commission';
 import { radius } from '../theme/theme';
+import CopyButton from '../components/CopyButton';
+import { settleWithin, expectedTransactionId } from '../firebase/orderSubmit';
 
 const norm = (v) => String(v || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
 const pathValue = (obj, path) => String(path || '').split('.').filter(Boolean).reduce((v, key) => v == null ? undefined : v[key], obj);
@@ -346,7 +348,7 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
     setBusy(true);
     if (isPin(selectedProduct)) {
       try {
-        const result = await purchaseRechargePin({
+        const order = await submitRechargePin({
           country: 'MY',
           amount: purchase.sellAmount,
           productCode: purchase.productCode,
@@ -362,18 +364,32 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
         });
         setReviewing(false);
         setPendingPurchase(null);
-        if (result?.pending) {
-          // Wait for the provider to release the PIN rather than sending the
-          // customer to History for it.
-          setIssuing(String(result.id || ''));
-          try {
-            const issued = await waitForRechargePin(result.id);
-            if (issued) setVoucher({ ...result, ...issued, productName: issued.productName || purchase.productName });
-            else Alert.alert('Order accepted', 'Order ' + String(result.id || '') + ' was accepted and the voucher is still being issued. Open it in History and tap Show PIN once it is completed.', [{ text: 'OK', onPress: goBackOrHome }]);
-          } finally { setIssuing(''); }
-        } else {
-          setVoucher({ ...result, productName: result?.productName || purchase.productName });
+        const deliver = async (result) => {
+          if (result?.pending) {
+            // Wait for the provider to release the PIN rather than sending the
+            // customer to History for it.
+            setIssuing(String(result.id || ''));
+            try {
+              const issued = await waitForRechargePin(result.id);
+              if (issued) setVoucher({ ...result, ...issued, productName: issued.productName || purchase.productName });
+              else Alert.alert('Order accepted', 'Order ' + String(result.id || '') + ' was accepted and the voucher is still being issued. You will get a notification when it is ready - open it in History to see the PIN.', [{ text: 'OK', onPress: goBackOrHome }]);
+            } finally { setIssuing(''); }
+          } else {
+            setVoucher({ ...result, productName: result?.productName || purchase.productName });
+          }
+        };
+        if (!order.settled) {
+          // Still with the provider: off the review page now, the PIN lands
+          // here (or in History, with a notification) when it is issued.
+          setIssuing(order.id);
+          setBusy(false);
+          order.done.then(deliver, (err) => {
+            setIssuing('');
+            Alert.alert('Order failed', err?.message || 'Unable to complete this purchase.');
+          });
+          return;
         }
+        await deliver(order.value);
       } catch (e) {
         Alert.alert('Order failed', e?.message || 'Unable to complete this purchase.');
       } finally {
@@ -383,7 +399,8 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
     }
     try {
       const requestId = 'ms_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 12);
-      const result = await api.chargeIimmpactProduct({
+      const expectedId = await expectedTransactionId('iimmpact', requestId);
+      const charge = api.chargeIimmpactProduct({
         requestId,
         amount: purchase.sellAmount,
         total: purchase.sellAmount,
@@ -402,6 +419,11 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
           remarks: purchase.productName.slice(0, 200),
         },
       }, { uid: profile?.id || '', phone: profile?.phone || '' });
+      // A few seconds at most here: a provider still working leaves the order
+      // running on the server, History follows it and a push says how it ended.
+      const quick = await settleWithin(charge);
+      if (!quick.settled) charge.catch((e) => Alert.alert('Order failed', e?.message || 'Unable to complete this purchase.'));
+      const result = quick.settled ? quick.value : { id: expectedId };
       const tx = {
         id: String(result?.id || ''),
         service: purchase.productName,
@@ -508,7 +530,7 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
           <View style={st.voucher}>
             <ActivityIndicator />
             <Text style={st.voucherTitle}>Issuing your voucher…</Text>
-            <Text style={st.muted}>Payment done. The PIN appears here as soon as the provider releases it. Order {issuing}</Text>
+            <Text style={st.muted}>Order submitted. The PIN appears here as soon as it is issued - you can leave this page: you will get a notification and it will be in History. Order {issuing}</Text>
           </View>
         )}
         {!!voucher && (voucher.pin || voucher.deliveryLink || voucher.serialNumber) && (
@@ -516,6 +538,7 @@ export default function IimmpactProductScreen({ category, productCode = '' }) {
             <Text style={st.voucherTitle}>Voucher Ready</Text>
             <Text style={st.muted}>{voucher.productName} • MYR {Number(voucher.amount || 0).toFixed(2)}</Text>
             {!!voucher.pin && <Text selectable style={st.voucherPin}>{voucher.pin}</Text>}
+            {!!voucher.pin && <View style={{ alignItems: 'center', marginTop: 6 }}><CopyButton value={voucher.pin} label="Copy PIN" /></View>}
             {!!voucher.serialNumber && voucher.serialNumber !== voucher.pin && <Text selectable style={st.muted}>Serial no: {voucher.serialNumber}</Text>}
             {!!voucher.deliveryLink && <Text selectable style={st.voucherLink} onPress={() => Linking.openURL(voucher.deliveryLink).catch(() => {})}>{voucher.deliveryLink}</Text>}
             {Number(voucher.commission) > 0 && <Text style={st.muted}>Commission {Number(voucher.commission).toFixed(2)} credited to your wallet.</Text>}{!!voucher.expiry && <Text style={st.muted}>Expires: {voucher.expiry}</Text>}

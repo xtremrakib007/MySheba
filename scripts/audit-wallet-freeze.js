@@ -29,6 +29,10 @@ const EXEMPT = {
   'successTopupPoller.js': 'the poller refunds a cancelled recharge',
   'rejectionService.js': 'rejecting an order refunds it',
   'transactionService.js': 'settling an uncertain transaction refunds it',
+  // Settling the price of an order the freeze check already let through at
+  // charge time: the commission is part of what that order cost.
+  'commissionCredit.js': 'credits the commission of an order charged before the freeze',
+  'commissionReversalService.js': 'takes back a commission when its order is reversed',
   // Not movement at all.
   'customerRegistration.js': 'a new account starts at zero',
   'userManagement.js': 'a created account starts at zero',

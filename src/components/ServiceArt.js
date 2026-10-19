@@ -314,6 +314,15 @@ const ART = {
     {s('M24 5v6M24 37v6M5 24h6M37 24h6M10.6 10.6l4.2 4.2M33.2 33.2l4.2 4.2M37.4 10.6l-4.2 4.2M14.8 33.2l-4.2 4.2', c)}
   </>),
 
+  // Thermal receipt printer: body, paper feeding out the top, a slip below.
+  printer: (c) => (<>
+    {box(15, 6, 18, 10, c, 2)}
+    {box(6, 16, 36, 16, c, 4)}
+    {box(14, 28, 20, 14, c, 2)}
+    {s('M18 34h12M18 38h8', c)}
+    {dot(35, 22, 1.8, c)}
+  </>),
+
   apiManagement: (c) => (<>
     {ring(11, 12, 5, c)}
     {ring(37, 12, 5, c)}

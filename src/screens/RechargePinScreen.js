@@ -8,7 +8,7 @@ import HeaderDecor from '../components/HeaderDecor';
 import { showAlert } from '../utils/appAlert';
 import { rechargePinBrands } from '../data/countries';
 import { getOperatorBrand } from '../data/operatorBrand';
-import { purchaseRechargePin, waitForRechargePin } from '../firebase/rechargePinService';
+import { submitRechargePin, waitForRechargePin } from '../firebase/rechargePinService';
 import * as apiProviderService from '../firebase/apiProviderService';
 import { radius, tileGrid } from '../theme/theme';
 import { Tile } from '../components/ServiceGrid';
@@ -19,6 +19,7 @@ import ConfirmReview, { formatMoney } from '../components/ConfirmReview';
 import { applyMarkup } from '../utils/markup';
 import { resolveCommission } from '../utils/commission';
 import { pinProducts, categorizePinProducts } from '../data/pinCategories';
+import CopyButton from '../components/CopyButton';
 
 // Recharge PIN is currently a Malaysia-only product. Keep this list
 // intentionally limited so the screen cannot show unrelated country products.
@@ -187,11 +188,27 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
     setReview({ liveAmount, currency });
   };
 
+  // A voucher the provider has accepted: show it, or wait for it to be issued.
+  const deliverVoucher = async (result) => {
+    if (result?.pending) {
+      // The provider accepted the order and releases the PIN a moment
+      // later. Wait for it here instead of sending the customer to History.
+      setIssuing(String(result.id || ''));
+      try {
+        const issued = await waitForRechargePin(result.id);
+        if (issued) setVoucher({ ...result, ...issued, productName: issued.productName || result.productName });
+        else showAlert('Voucher', 'Your order ' + String(result.id || '') + ' was accepted and the voucher is still being issued. You will get a notification when it is ready - open it in History to see the PIN.');
+      } finally { setIssuing(''); }
+      return;
+    }
+    setVoucher(result);
+  };
+
   const completePurchase = async (liveAmount) => {
     if (busy) return;
     setBusy(true);
     try {
-      const result = await purchaseRechargePin({
+      const order = await submitRechargePin({
         country,
         operator,
         amount: liveAmount,
@@ -203,18 +220,18 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
         selectedOptions: pinPricingId && selectedOption?.code ? { [pinPricingId]: { code: String(selectedOption.code) } } : {},
       });
       setReview(null);
-      if (result?.pending) {
-        // The provider accepted the order and releases the PIN a moment
-        // later. Wait for it here instead of sending the customer to History.
-        setIssuing(String(result.id || ''));
-        try {
-          const issued = await waitForRechargePin(result.id);
-          if (issued) setVoucher({ ...result, ...issued, productName: issued.productName || result.productName });
-          else showAlert('Voucher', 'Your order ' + String(result.id || '') + ' was accepted and the voucher is still being issued. Open it in History and tap Show PIN once it is completed.');
-        } finally { setIssuing(''); }
+      if (!order.settled) {
+        // Still with the provider: off the review page now, the PIN lands
+        // here (or in History, with a notification) when it is issued.
+        setIssuing(order.id);
+        setBusy(false);
+        order.done.then(deliverVoucher, (err) => {
+          setIssuing('');
+          showAlert('Voucher', err?.message || 'Could not purchase the voucher.');
+        });
         return;
       }
-      setVoucher(result);
+      await deliverVoucher(order.value);
     } catch (err) {
       showAlert('Voucher', err?.message || 'Could not purchase the voucher.');
     } finally { setBusy(false); }
@@ -358,13 +375,14 @@ export default function RechargePinScreen({ initialCategory = null } = {}) {
       {!!issuing && <View style={styles.voucher}>
         <ActivityIndicator />
         <Text style={styles.voucherTitle}>Issuing your voucher…</Text>
-        <Text style={styles.warning}>Payment done. The PIN appears here as soon as the provider releases it. Order {issuing}</Text>
+        <Text style={styles.warning}>Order submitted. The PIN appears here as soon as it is issued - you can leave this page: you will get a notification and it will be in History. Order {issuing}</Text>
       </View>}
 
       {!!(voucher?.pin || voucher?.deliveryLink || voucher?.serialNumber) && <View style={styles.voucher}>
         <Text style={styles.voucherTitle}>Voucher Ready</Text>
         <Text style={styles.voucherMeta}>{voucher.productName || product?.name} • {CURRENCY_BY_COUNTRY[voucher.country || country] || ''} {Number(voucher.amount || amount).toFixed(2)}</Text>
         {!!voucher.pin && <Text selectable style={styles.pin}>{voucher.pin}</Text>}
+        {!!voucher.pin && <View style={{ alignItems: 'center', marginTop: 6 }}><CopyButton value={voucher.pin} label="Copy PIN" /></View>}
         {!!voucher.serialNumber && voucher.serialNumber !== voucher.pin && <Text selectable style={styles.warning}>Serial no: {voucher.serialNumber}</Text>}
         {!!voucher.deliveryLink && <Text selectable style={styles.link} onPress={() => Linking.openURL(voucher.deliveryLink).catch(() => {})}>{voucher.deliveryLink}</Text>}
         {Number(voucher.commission) > 0 && <Text style={styles.warning}>Commission {Number(voucher.commission).toFixed(2)} credited to your wallet.</Text>}{!!voucher.expiry && <Text style={styles.warning}>Expires: {voucher.expiry}</Text>}{!!voucher.deliveryNote && <Text style={styles.warning}>{voucher.deliveryNote}</Text>}

@@ -2,6 +2,7 @@ import { httpsCallable } from 'firebase/functions';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { doc, getDoc } from 'firebase/firestore';
 import { functions, db } from './config';
+import { getSessionProof } from './deviceSessionService';
 
 const listFn = httpsCallable(functions, 'listApiProviders');
 const saveFn = httpsCallable(functions, 'saveApiProvider');
@@ -109,7 +110,11 @@ export async function getIimmpactFullCatalogForUser(country = 'MY') {
 
 export async function chargeIimmpactProduct(payload, customer = {}) {
   try {
-    return (await chargeIimmpactProductFn({ payload, customer })).data || {};
+    // functions/chargeGuards.js reads requestId at the top level and
+    // walletService checks this device's session; without either the charge
+    // was refused before it reached the provider.
+    const session = await getSessionProof();
+    return (await chargeIimmpactProductFn({ payload, customer, requestId: payload?.requestId, ...session })).data || {};
   } catch (error) {
     forgetIimmpactOptionsOn(error, payload?.raw?.productCode);
     throw error;

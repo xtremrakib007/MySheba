@@ -39,7 +39,7 @@ function formatDate(ts) {
  * an address is text somebody typed, and one unescaped one turns a receipt into
  * whatever they wrote.
  */
-function orderReceiptData(item, pinOverride) {
+function orderReceiptData(item, pinOverride, voucher) {
   const raw = item.raw || {};
   const currency = txCurrency(item);
   // Only these two services carry a collection PIN at all.
@@ -47,6 +47,9 @@ function orderReceiptData(item, pinOverride) {
   // collectionPin first: completeTransaction deletes the live pin, so on a
   // completed order it is the only copy left.
   const pin = requiresCollectionPin ? (pinOverride || item.collectionPin || item.pin || '') : '';
+  // A voucher's PIN is never on the transaction; it is on the receipt once
+  // the modal has read it back (useVoucher).
+  const voucherSecret = voucher ? (voucher.pin || voucher.deliveryLink || '') : '';
   // The face value - what was bought, e.g. a RM5 reload - never what the
   // buyer paid: a retailer hands this receipt to their own customer, and
   // `total` is the retailer's price (their cost). Cost, commission and profit
@@ -55,7 +58,7 @@ function orderReceiptData(item, pinOverride) {
   const face = Number(item.amount ?? raw.amount);
   return {
     subtitle: 'Transaction Receipt',
-    highlight: pin ? { label: 'COLLECTION PIN', value: pin } : null,
+    highlight: pin ? { label: 'COLLECTION PIN', value: pin } : voucherSecret ? { label: voucher.pin ? 'VOUCHER PIN' : 'VOUCHER LINK', value: voucherSecret } : null,
     images: [['TRANSFER RECEIPT', item.receiptUrl], ['PASSPORT PHOTO', raw.passportUrl]],
     rows: [
       ['Service', item.service],
@@ -67,7 +70,8 @@ function orderReceiptData(item, pinOverride) {
       ['Package', raw.package || item.package || ''],
       ['Package ID', raw.packageId || item.packageId || ''],
       ['Amount', Number.isFinite(face) && face > 0 ? txAmount(face, faceCurrency) : ''],
-      ['Serial number', item.apiExecution?.serialNumber || raw.serialNumber || ''],
+      ['Serial number', item.apiExecution?.serialNumber || raw.serialNumber || (voucher?.serialNumber && voucher.serialNumber !== voucher.pin ? voucher.serialNumber : '')],
+      ['Expires', voucher?.expiry || ''],
       ['Status', String(item.status || '').toUpperCase()],
       ['Transaction ID', raw.trxid || raw.transactionId || item.trxid || item.transactionId || ''],
       ['Provider', raw.provider || item.provider || ''],
@@ -149,29 +153,43 @@ function topupReceiptData(item) {
   };
 }
 
+const isOwnVoucher = (item) => !!item && item.service === 'Recharge PIN' && item.status === 'completed'
+  && !!auth.currentUser && item.customerId === auth.currentUser.uid;
+
 /**
- * A voucher's PIN, read back on request (functions getRechargePin): it is
- * never stored on the transaction, so History had no way to show it. Only
- * the buyer can read it.
+ * A voucher's PIN, read back as soon as the receipt opens (functions
+ * getRechargePin): it is never stored on the transaction, and making the
+ * buyer tap for it hid it behind a button. Re-read when the order turns
+ * completed while the receipt is open. Only the buyer can read it.
  */
-function VoucherPin({ item }) {
+function useVoucher(item) {
+  const [state, setState] = useState({ voucher: null, loading: false, error: '' });
+  const own = isOwnVoucher(item);
+  const id = item?.id;
+  React.useEffect(() => {
+    if (!own) { setState({ voucher: null, loading: false, error: '' }); return undefined; }
+    let live = true;
+    setState({ voucher: null, loading: true, error: '' });
+    getRechargePin(id).then(
+      (v) => { if (live) setState({ voucher: v || null, loading: false, error: '' }); },
+      (err) => { if (live) setState({ voucher: null, loading: false, error: err?.message || 'Could not load this voucher.' }); },
+    );
+    return () => { live = false; };
+  }, [own, id]);
+  return state;
+}
+
+function VoucherPin({ item, voucherState }) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
-  const [voucher, setVoucher] = useState(null);
-  const [busy, setBusy] = useState(false);
-  if (item.service !== 'Recharge PIN' || item.status !== 'completed') return null;
-  if (!auth.currentUser || item.customerId !== auth.currentUser.uid) return null;
-  const reveal = async () => {
-    setBusy(true);
-    try { setVoucher(await getRechargePin(item.id)); }
-    catch (err) { showAlert('Voucher', err?.message || 'Could not load this voucher.'); }
-    finally { setBusy(false); }
-  };
+  if (!isOwnVoucher(item) || !voucherState) return null;
+  const { voucher, loading, error } = voucherState;
   if (!voucher) {
     return (
-      <TouchableOpacity style={styles.pinBlock} onPress={reveal} disabled={busy}>
-        {busy ? <ActivityIndicator /> : <Text style={styles.pinLabel}>🔑 SHOW VOUCHER PIN</Text>}
-      </TouchableOpacity>
+      <View style={styles.pinBlock}>
+        <Text style={styles.pinLabel}>VOUCHER PIN</Text>
+        {loading ? <ActivityIndicator /> : <Text style={styles.rowLabel}>{error || 'The voucher could not be read.'}</Text>}
+      </View>
     );
   }
   const secret = voucher.pin || voucher.deliveryLink || '';
@@ -264,7 +282,7 @@ function formatTicketCopy(t) {
   return lines.join('\n');
 }
 
-function TxBody({ item, showCost, pinOverride }) {
+function TxBody({ item, showCost, pinOverride, voucherState }) {
   const currency = txCurrency(item);
   const {
     colors
@@ -323,7 +341,7 @@ function TxBody({ item, showCost, pinOverride }) {
           </View>
         </View>
       )}
-      <VoucherPin item={item} />
+      <VoucherPin item={item} voucherState={voucherState} />
       <Row label="Order ID" value={item.id} />
       <Row label="Created" value={formatDate(item.createdAt)} />
       <Row label="Updated" value={formatDate(item.updatedAt)} />
@@ -443,6 +461,7 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
   const { colors } = useTheme();
   const { profile, authUser } = useApp();
   const [pinOverride, setPinOverride] = React.useState('');
+  const voucherState = useVoucher(type === 'tx' ? item : null);
   React.useEffect(() => { setPinOverride(''); }, [item?.id, item?.pin]);
   // The off-screen receipt card Share captures as a photo.
   const captureRef = useRef(null);
@@ -462,7 +481,7 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
     : type === 'topup' ? formatTopupCopy(item)
     : type === 'supportTicket' ? formatTicketCopy(item)
     : formatTxCopy(item);
-  const receiptData = type === 'topup' ? topupReceiptData(item) : type === 'tx' ? orderReceiptData(item, pinOverride) : null;
+  const receiptData = type === 'topup' ? topupReceiptData(item) : type === 'tx' ? orderReceiptData(item, pinOverride, voucherState.voucher) : null;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -481,7 +500,7 @@ export default function TransactionDetailModal({ visible, type, item, onClose, s
             {type === 'inquiry' ? <InquiryBody item={item} />
               : type === 'topup' ? <TopupBody item={item} />
               : type === 'supportTicket' ? <TicketBody item={item} />
-              : <TxBody item={item} showCost={showCost} pinOverride={pinOverride} />}
+              : <TxBody item={item} showCost={showCost} pinOverride={pinOverride} voucherState={voucherState} />}
           </ScrollView>
 
           <View style={styles.footer}>
