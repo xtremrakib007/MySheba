@@ -108,7 +108,8 @@
     "test:statusbadges": "node scripts/test-status-badges.js",
     "test:photoicons": "node scripts/test-photo-icons.js",
     "test:registration": "node scripts/test-registration.js",
-    "test:webviewspeed": "node scripts/test-webview-speed.js"
+    "test:webviewspeed": "node scripts/test-webview-speed.js",
+    "test:wallettransfersecurity": "node scripts/test-wallet-transfer-session-guard.js"
   },
   "dependencies": {
     "@notifee/react-native": "^9.1.8",

@@ -2,8 +2,24 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const walletTransferService = require('./walletTransferService');
 const { ENFORCE_APP_CHECK } = require('./appCheckPolicy');
+const { sessionMatches } = require('./sessionSlots');
+const { enforceRequestEnvelope } = require('./securityGateway');
 
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
+const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
+const DEVICE_ID_RE = /^[A-Za-z0-9-]{16,100}$/;
+
+function requireActiveSession(request, profile) {
+  const sessionId = request.data?.sessionId;
+  const deviceId = request.data?.deviceId;
+  if (typeof sessionId !== 'string' || !SESSION_ID_RE.test(sessionId)
+      || typeof deviceId !== 'string' || !DEVICE_ID_RE.test(deviceId)) {
+    throw new HttpsError('failed-precondition', 'Your secure session is missing. Please sign in again.');
+  }
+  if (!sessionMatches(profile, { sessionId, deviceId })) {
+    throw new HttpsError('permission-denied', 'This device session is no longer active. Please sign in again.');
+  }
+}
 
 function requireAuth(request) {
   if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
@@ -19,14 +35,28 @@ function getRequestId(request) {
 }
 
 exports.walletTransfer = onCall({ enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
+  enforceRequestEnvelope(request, { maxBytes: 16 * 1024 });
   const uid = requireAuth(request);
   const requestId = getRequestId(request);
   const db = admin.firestore();
+  const userRef = db.collection('users').doc(uid);
   const opRef = db.collection('walletOperations').doc(`${uid}_walletTransfer_${requestId}`);
 
   let existing = null;
   await db.runTransaction(async (tx) => {
+    // Validate the live account and device session in the same transaction as
+    // the idempotency lookup. Otherwise a revoked session could replay a
+    // completed request (or recover an in-flight transfer) without reaching
+    // walletTransferService, where the normal session guard lives.
+    const userSnap = await tx.get(userRef);
     const snap = await tx.get(opRef);
+    if (!userSnap.exists) throw new HttpsError('not-found', 'Account not found.');
+    const profile = userSnap.data() || {};
+    if (profile.suspended === true || profile.inactive === true || profile.disabled === true
+        || profile.active === false || profile.mergedInto != null) {
+      throw new HttpsError('permission-denied', 'Your account is not active.');
+    }
+    requireActiveSession(request, profile);
     if (snap.exists) {
       existing = snap.data();
       return;
